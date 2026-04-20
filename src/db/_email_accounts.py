@@ -13,13 +13,18 @@ import json
 import time
 from typing import Any
 
-from db._core import get_db
-
-
 DEFAULT_IMAP_PORT = 993
 DEFAULT_SMTP_PORT = 465
 VALID_ROLES = ("inbox", "outbox", "both")
 VALID_ACCOUNT_TYPES = ("agent", "operator")
+
+
+def _get_db():
+    # Resolve the DB connector lazily so test suites that reload db._core with a
+    # temporary NEXO_HOME do not keep talking to a stale shared connection.
+    from db._core import get_db
+
+    return get_db()
 
 
 def _row_to_dict(row) -> dict:
@@ -95,7 +100,7 @@ def add_email_account(
     resolved_is_default = bool(existing.get("is_default")) if is_default is None else bool(is_default)
     if clean_account_type != "operator":
         resolved_is_default = False
-    conn = get_db()
+    conn = _get_db()
     now = time.strftime("%Y-%m-%d %H:%M:%S")
     # Audit H2: when the caller does not pass `metadata` explicitly,
     # an upsert would otherwise wipe whatever the operator (or another
@@ -173,7 +178,7 @@ def list_email_accounts(
         raise ValueError(
             f"account_type must be one of {VALID_ACCOUNT_TYPES}, got {account_type!r}"
         )
-    conn = get_db()
+    conn = _get_db()
     clauses: list[str] = []
     params: list[Any] = []
     if not include_disabled:
@@ -192,7 +197,7 @@ def list_email_accounts(
 
 
 def get_email_account(label: str) -> dict | None:
-    conn = get_db()
+    conn = _get_db()
     row = conn.execute(
         "SELECT * FROM email_accounts WHERE label = ?",
         (label,),
@@ -200,9 +205,24 @@ def get_email_account(label: str) -> dict | None:
     return _row_to_dict(row) if row else None
 
 
+def get_email_account_by_id(account_id: int | str | None) -> dict | None:
+    try:
+        clean_id = int(account_id or 0)
+    except Exception:
+        return None
+    if clean_id <= 0:
+        return None
+    conn = _get_db()
+    row = conn.execute(
+        "SELECT * FROM email_accounts WHERE id = ?",
+        (clean_id,),
+    ).fetchone()
+    return _row_to_dict(row) if row else None
+
+
 def get_primary_email_account() -> dict | None:
     """Most-recently-updated enabled agent account. Returns None if table empty."""
-    conn = get_db()
+    conn = _get_db()
     row = conn.execute(
         "SELECT * FROM email_accounts WHERE enabled = 1 "
         "AND COALESCE(account_type, 'agent') = 'agent' "
@@ -213,7 +233,7 @@ def get_primary_email_account() -> dict | None:
 
 def get_default_operator_email_account() -> dict | None:
     """Return the explicit default operator mailbox, if any."""
-    conn = get_db()
+    conn = _get_db()
     row = conn.execute(
         "SELECT * FROM email_accounts "
         "WHERE enabled = 1 AND COALESCE(account_type, 'agent') = 'operator' "
@@ -223,20 +243,48 @@ def get_default_operator_email_account() -> dict | None:
     return _row_to_dict(row) if row else None
 
 
-def set_email_account_enabled(label: str, enabled: bool) -> bool:
-    conn = get_db()
-    cur = conn.execute(
-        "UPDATE email_accounts SET enabled = ?, updated_at = datetime('now') "
-        "WHERE label = ?",
-        (1 if enabled else 0, label),
-    )
+def set_email_account_enabled(
+    label: str | None = None,
+    enabled: bool = True,
+    account_id: int | str | None = None,
+) -> bool:
+    conn = _get_db()
+    if account_id is not None:
+        try:
+            clean_id = int(account_id)
+        except Exception:
+            clean_id = 0
+        if clean_id > 0:
+            cur = conn.execute(
+                "UPDATE email_accounts SET enabled = ?, updated_at = datetime('now') "
+                "WHERE id = ?",
+                (1 if enabled else 0, clean_id),
+            )
+        else:
+            cur = conn.execute("SELECT 0 WHERE 1=0")
+    else:
+        cur = conn.execute(
+            "UPDATE email_accounts SET enabled = ?, updated_at = datetime('now') "
+            "WHERE label = ?",
+            (1 if enabled else 0, label),
+        )
     conn.commit()
     return cur.rowcount > 0
 
 
-def remove_email_account(label: str) -> bool:
-    conn = get_db()
-    cur = conn.execute("DELETE FROM email_accounts WHERE label = ?", (label,))
+def remove_email_account(label: str | None = None, account_id: int | str | None = None) -> bool:
+    conn = _get_db()
+    if account_id is not None:
+        try:
+            clean_id = int(account_id)
+        except Exception:
+            clean_id = 0
+        if clean_id > 0:
+            cur = conn.execute("DELETE FROM email_accounts WHERE id = ?", (clean_id,))
+        else:
+            cur = conn.execute("SELECT 0 WHERE 1=0")
+    else:
+        cur = conn.execute("DELETE FROM email_accounts WHERE label = ?", (label,))
     conn.commit()
     return cur.rowcount > 0
 
@@ -245,6 +293,7 @@ __all__ = [
     "add_email_account",
     "list_email_accounts",
     "get_email_account",
+    "get_email_account_by_id",
     "get_primary_email_account",
     "get_default_operator_email_account",
     "set_email_account_enabled",

@@ -7,14 +7,37 @@ import os
 import sys
 from datetime import datetime
 from pathlib import Path
-from paths import coordination_dir, logs_dir
+
+
+def _bootstrap_nexo_code(default_repo_src: Path) -> Path:
+    nexo_home = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+    raw_env = os.environ.get("NEXO_CODE", "")
+    candidates: list[Path] = []
+    if raw_env:
+        raw = Path(raw_env).expanduser()
+        candidates.extend([raw, raw / "core"])
+    candidates.extend([default_repo_src, nexo_home / "core", nexo_home])
+    seen: set[str] = set()
+    for candidate in candidates:
+        key = str(candidate)
+        if key in seen:
+            continue
+        seen.add(key)
+        if (candidate / "paths.py").is_file() or (candidate / "server.py").is_file() or (candidate / "cli.py").is_file():
+            if str(candidate) not in sys.path:
+                sys.path.insert(0, str(candidate))
+            return candidate
+    fallback = candidates[0]
+    if str(fallback) not in sys.path:
+        sys.path.insert(0, str(fallback))
+    return fallback
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 _script_dir = Path(__file__).resolve().parent
 _repo_src = _script_dir.parent
-NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(_repo_src) if (_repo_src / "server.py").exists() else str(NEXO_HOME)))
-if str(NEXO_CODE) not in sys.path:
-    sys.path.insert(0, str(NEXO_CODE))
+NEXO_CODE = _bootstrap_nexo_code(_repo_src)
+
+from paths import coordination_dir, logs_dir
 
 import db as nexo_db
 

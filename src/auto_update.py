@@ -20,6 +20,7 @@ import threading
 import time
 from pathlib import Path
 
+from product_mode import enforce_desktop_product_contract
 from runtime_home import export_resolved_nexo_home, managed_nexo_home
 
 try:
@@ -86,6 +87,13 @@ _CORE_SCRIPT_RUNTIME_FILES = frozenset({
     ".watchdog-hashes",
     ".watchdog-fails",
     ".watchdog-nexo-repair.lock",
+})
+_LEGACY_PERSONAL_BRAIN_DB_STUBS = frozenset({
+    "brain.db",
+    "cron_runs.db",
+    "nexo.db",
+    "nexo_brain.db",
+    "runtime.db",
 })
 
 
@@ -183,6 +191,101 @@ def _cleanup_legacy_root_db_stubs(runtime_root: Path = NEXO_HOME, *, dry_run: bo
         try:
             shutil.move(str(candidate), str(target))
             report["archived"].append({"path": str(candidate), "backup_path": str(target)})
+        except Exception as exc:
+            report["errors"].append({"path": str(candidate), "error": str(exc)})
+    return report
+
+
+def _sqlite_table_names(db_path: Path) -> list[str] | None:
+    """Return user tables for a SQLite file or ``None`` when unreadable."""
+    import sqlite3
+
+    conn = None
+    try:
+        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+        rows = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+        ).fetchall()
+        return [str(row[0]) for row in rows if row and row[0]]
+    except Exception:
+        return None
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+def _cleanup_empty_personal_brain_db_stubs(runtime_root: Path = NEXO_HOME, *, dry_run: bool = False) -> dict:
+    """Archive obsolete DB shells from ``personal/brain`` after F0.6 migration.
+
+    Older layouts and partial migrations sometimes left duplicate DB files in
+    ``personal/brain``. Post-F0.6 those DBs are not canonical anymore: the live
+    runtime DBs live under ``runtime/data``. This helper only archives files
+    from a known allowlist when they are clearly empty residue:
+    - zero-byte files, or
+    - SQLite shells with zero tables
+
+    Any file with real tables is left untouched.
+    """
+    runtime_root = Path(runtime_root)
+    personal_brain_dir = runtime_root / "personal" / "brain"
+    report = {
+        "ok": True,
+        "dry_run": dry_run,
+        "candidates": [],
+        "archived": [],
+        "skipped": [],
+        "errors": [],
+    }
+    if not personal_brain_dir.is_dir():
+        return report
+
+    backup_root: Path | None = None
+    for name in sorted(_LEGACY_PERSONAL_BRAIN_DB_STUBS):
+        candidate = personal_brain_dir / name
+        if not candidate.is_file():
+            continue
+        try:
+            size = int(candidate.stat().st_size)
+        except OSError as exc:
+            report["errors"].append({"path": str(candidate), "error": str(exc)})
+            continue
+
+        reason = ""
+        if size == 0:
+            reason = "zero-byte"
+        else:
+            tables = _sqlite_table_names(candidate)
+            if tables is None:
+                report["skipped"].append({"path": str(candidate), "reason": "uninspectable"})
+                continue
+            if tables:
+                report["skipped"].append({
+                    "path": str(candidate),
+                    "reason": "has-tables",
+                    "table_count": len(tables),
+                })
+                continue
+            reason = "sqlite-empty-shell"
+
+        report["candidates"].append({"path": str(candidate), "size": size, "reason": reason})
+        if dry_run:
+            continue
+
+        if backup_root is None:
+            timestamp = time.strftime("%Y-%m-%d-%H%M%S", time.gmtime())
+            backup_root = paths.backups_dir() / f"legacy-personal-brain-db-stubs-{timestamp}"
+            backup_root.mkdir(parents=True, exist_ok=True)
+        target = backup_root / candidate.name
+        try:
+            shutil.move(str(candidate), str(target))
+            report["archived"].append({
+                "path": str(candidate),
+                "backup_path": str(target),
+                "reason": reason,
+            })
         except Exception as exc:
             report["errors"].append({"path": str(candidate), "error": str(exc)})
     return report
@@ -378,6 +481,7 @@ def _runtime_cli_wrapper_text() -> str:
         'fi\n'
         'NEXO_HOME="$RUNTIME_HOME"\n'
         'export NEXO_HOME\n'
+        'export PYTHONDONTWRITEBYTECODE=1\n'
         'resolve_code_dir() {\n'
         '  if [ -n "${NEXO_CODE:-}" ] && [ -f "${NEXO_CODE%/}/cli.py" ]; then\n'
         '    printf \'%s\\n\' "${NEXO_CODE%/}"\n'
@@ -807,6 +911,17 @@ def _download_local_classifier_model() -> tuple[bool, str]:
     return True, ""
 
 
+def _local_classifier_install_command() -> list[str]:
+    in_virtualenv = bool(os.environ.get("VIRTUAL_ENV")) or (
+        getattr(sys, "prefix", "") != getattr(sys, "base_prefix", getattr(sys, "prefix", ""))
+    )
+    cmd = [sys.executable, "-m", "pip", "install"]
+    if not in_virtualenv:
+        cmd.append("--user")
+    cmd.extend(CLASSIFIER_INSTALL_PACKAGES)
+    return cmd
+
+
 def _install_local_classifier_worker() -> None:
     from classifier_local import MODEL_REVISION
 
@@ -832,7 +947,7 @@ def _install_local_classifier_worker() -> None:
         })
         return
 
-    install_cmd = ["pip3", "install", "--user", *CLASSIFIER_INSTALL_PACKAGES]
+    install_cmd = _local_classifier_install_command()
     _write_classifier_install_log("[classifier-install] " + " ".join(install_cmd))
     try:
         result = subprocess.run(
@@ -1441,21 +1556,24 @@ def _migrate_effort_to_resonance(dest: Path = NEXO_HOME) -> list[str]:
 
 def _relocate_resonance_tiers_contract(dest: Path = NEXO_HOME) -> list[str]:
     """Ensure ``resonance_tiers.json`` lives at the public contract path
-    ``NEXO_HOME/brain/resonance_tiers.json`` and purge the legacy copy at
-    ``NEXO_HOME/resonance_tiers.json``.
+    ``NEXO_HOME/personal/brain/resonance_tiers.json`` and purge the legacy
+    copy at ``NEXO_HOME/resonance_tiers.json``.
 
     Context: v6.0.0 defined the public contract (read by NEXO Desktop) as
-    ``~/.nexo/brain/resonance_tiers.json`` but the installer kept copying
-    the file to ``~/.nexo/resonance_tiers.json`` (legacy flat-file layout),
-    so Desktop failed with *"NEXO Brain contract missing"* until the user
-    moved the file by hand. v6.0.3 publishes straight to ``brain/`` and
-    this migration reconciles existing runtimes.
+    ``~/.nexo/brain/resonance_tiers.json`` but the F0.6 canonical location is
+    ``~/.nexo/personal/brain/resonance_tiers.json``. Older installers also
+    copied the file to ``~/.nexo/resonance_tiers.json`` (legacy flat-file
+    layout), so Desktop failed with *"NEXO Brain contract missing"* until the
+    user moved the file by hand. The runtime now publishes to the canonical
+    F0.6 brain dir while legacy ``~/.nexo/brain`` remains only a compatibility
+    alias when present.
 
-    Idempotent: no-op once the contract file is in ``brain/`` and the
-    legacy file is gone. Never raises — migration must not block an update.
+    Idempotent: no-op once the contract file is in ``personal/brain`` and the
+    legacy flat-file copy is gone. Never raises — migration must not block an
+    update.
     """
     actions: list[str] = []
-    brain_dir = dest / "brain"
+    brain_dir = dest / "personal" / "brain"
     contract_path = brain_dir / "resonance_tiers.json"
     legacy_path = dest / "resonance_tiers.json"
 
@@ -1465,7 +1583,8 @@ def _relocate_resonance_tiers_contract(dest: Path = NEXO_HOME) -> list[str]:
         actions.append(f"resonance-contract-relocate-warning:mkdir:{exc.__class__.__name__}")
         return actions
 
-    # If the contract already exists in brain/, just drop the legacy copy.
+    # If the contract already exists in the canonical brain dir, just drop the
+    # legacy flat-file copy.
     if contract_path.is_file():
         if legacy_path.is_file():
             try:
@@ -1475,7 +1594,8 @@ def _relocate_resonance_tiers_contract(dest: Path = NEXO_HOME) -> list[str]:
                 actions.append(f"resonance-contract-relocate-warning:unlink:{exc.__class__.__name__}")
         return actions
 
-    # Contract missing from brain/ — promote the legacy file if present.
+    # Contract missing from the canonical brain dir — promote the legacy file
+    # if present.
     if legacy_path.is_file():
         try:
             contract_path.write_bytes(legacy_path.read_bytes())
@@ -1960,7 +2080,6 @@ def _run_db_migrations() -> bool:
         # personal_scripts.path + LaunchAgent plists, then write the
         # F0.6 marker. Idempotent: returns immediately when already F0.6.
         _maybe_migrate_to_f06_layout()
-        _ensure_f06_legacy_shims()
         try:
             _rewrite_f06_launch_agents()
         except Exception:
@@ -2126,6 +2245,49 @@ def _f06_packaged_code_file_targets() -> list[tuple[str, Path]]:
         seen.add(name)
         targets.append((name, NEXO_HOME / "core" / name))
     return targets
+
+
+def _f06_live_legacy_paths() -> list[Path]:
+    """Return real pre-F0.6 paths that still need migration.
+
+    Symlink shims do not count here. We only care about physical files or
+    directories that keep the flat layout alive as a second source of truth.
+    """
+    legacy_anchors = [
+        NEXO_HOME / sub
+        for sub in (
+            "scripts",
+            "brain",
+            "data",
+            "operations",
+            "logs",
+            "backups",
+            "memory",
+            "cognitive",
+            "coordination",
+            "exports",
+            "nexo-email",
+            "doctor",
+            "snapshots",
+            "crons",
+            "skills",
+            "plugins",
+            "hooks",
+            "rules",
+            "db",
+            "dashboard",
+            "skills-core",
+        )
+    ]
+    present = [p for p in legacy_anchors if p.exists() and not p.is_symlink()]
+    if present:
+        return present
+    live_files: list[Path] = []
+    for legacy_name, _canonical in _f06_packaged_code_file_targets():
+        candidate = NEXO_HOME / legacy_name
+        if candidate.exists() and not candidate.is_symlink():
+            live_files.append(candidate)
+    return live_files
 
 
 def _promote_packaged_runtime_code_to_core() -> None:
@@ -2424,6 +2586,23 @@ def _rewrite_f06_launch_agents() -> int:
     return rewrites
 
 
+def _cleanup_f06_root_residue() -> None:
+    """Remove root-level cache artifacts that should not survive in F0.6 installs."""
+    residue_targets = [
+        NEXO_HOME / "__pycache__",
+    ]
+    for target in residue_targets:
+        try:
+            if not target.exists() and not target.is_symlink():
+                continue
+            if target.is_symlink() or target.is_file():
+                target.unlink(missing_ok=True)
+                continue
+            shutil.rmtree(target, ignore_errors=True)
+        except Exception as exc:
+            _log(f"[F0.6] residue cleanup skipped for {target}: {exc}")
+
+
 def _maybe_migrate_to_f06_layout() -> None:
     """Plan F0.6 — one-shot physical layout migration. Idempotent.
 
@@ -2449,7 +2628,9 @@ def _maybe_migrate_to_f06_layout() -> None:
             current = ""
         if current == "F0.6":
             _promote_packaged_runtime_code_to_core()
-            _ensure_f06_legacy_shims()
+            if _f06_live_legacy_paths():
+                _ensure_f06_legacy_shims()
+            _cleanup_f06_root_residue()
             try:
                 _rewrite_f06_launch_agents()
             except Exception:
@@ -2457,14 +2638,7 @@ def _maybe_migrate_to_f06_layout() -> None:
             return  # already migrated
         # Refuse to migrate from a non-NEXO_HOME or a fresh install
         # without legacy dirs to move.
-        legacy_anchors = [NEXO_HOME / sub for sub in
-                          ("scripts", "brain", "data", "operations", "logs", "backups",
-                           "memory", "cognitive", "coordination", "exports",
-                           "nexo-email", "doctor", "snapshots", "crons",
-                           "skills", "plugins", "hooks", "rules", "db", "dashboard", "skills-core")]
-        present = [p for p in legacy_anchors if p.exists() and not p.is_symlink()]
-        if not present:
-            present = [NEXO_HOME / name for name, _ in _f06_packaged_code_file_targets() if (NEXO_HOME / name).exists()]
+        present = _f06_live_legacy_paths()
         if not present:
             # Fresh install — write marker and return.
             try:
@@ -2671,6 +2845,7 @@ def _maybe_migrate_to_f06_layout() -> None:
         except Exception as e:
             _log(f"[F0.6] marker write failed: {e}")
         _ensure_f06_legacy_shims()
+        _cleanup_f06_root_residue()
         try:
             rewritten = _rewrite_f06_launch_agents()
             if rewritten:
@@ -3407,7 +3582,14 @@ def _auto_update_check_locked() -> dict:
     except Exception as e:
         _log(f"evolution-objective.json backfill error: {e}")
 
-    # Backfill NEXO_HOME/scripts/ for existing installs
+    try:
+        desktop_contract = enforce_desktop_product_contract(source="auto_update")
+        if desktop_contract.get("applied") and desktop_contract.get("changed_objective"):
+            _log("Desktop product contract enforced: evolution disabled")
+    except Exception as e:
+        _log(f"desktop product contract error: {e}")
+
+    # Backfill installed core/scripts/ for existing installs
     try:
         scripts_dest = paths.core_scripts_dir()
         # Deduce NEXO_CODE: env var first, then from __file__ (auto_update.py is in src/)
@@ -3422,7 +3604,7 @@ def _auto_update_check_locked() -> dict:
                 dest = scripts_dest / f.name
                 if f.is_file() and not dest.exists():
                     shutil.copy2(str(f), str(dest))
-            _log("Backfilled NEXO_HOME/scripts/ from NEXO_CODE for existing install")
+            _log("Backfilled NEXO_HOME/core/scripts from repo scripts for existing install")
     except Exception as e:
         _log(f"scripts backfill error: {e}")
 
@@ -4086,7 +4268,6 @@ def _run_runtime_post_sync(dest: Path = NEXO_HOME, progress_fn=None) -> tuple[bo
     try:
         _emit_progress(progress_fn, "Canonicalizing packaged runtime layout...")
         _maybe_migrate_to_f06_layout()
-        _ensure_f06_legacy_shims()
         try:
             _rewrite_f06_launch_agents()
         except Exception:
@@ -4102,6 +4283,22 @@ def _run_runtime_post_sync(dest: Path = NEXO_HOME, progress_fn=None) -> tuple[bo
             actions.append(f"legacy-root-db-stubs-archived:{archived}")
     except Exception as exc:
         actions.append(f"legacy-root-db-stubs-warning:{exc.__class__.__name__}")
+
+    try:
+        personal_brain_cleanup = _cleanup_empty_personal_brain_db_stubs(dest, dry_run=False)
+        archived = len(personal_brain_cleanup.get("archived", []) or [])
+        if archived:
+            actions.append(f"legacy-personal-brain-db-stubs-archived:{archived}")
+    except Exception as exc:
+        actions.append(f"legacy-personal-brain-db-stubs-warning:{exc.__class__.__name__}")
+
+    try:
+        _emit_progress(progress_fn, "Applying Desktop product contract...")
+        contract = enforce_desktop_product_contract(source="runtime_post_sync")
+        if contract.get("applied"):
+            actions.append("desktop-product-contract")
+    except Exception as exc:
+        actions.append(f"desktop-product-contract-warning:{exc.__class__.__name__}")
 
     code_root = _runtime_code_dir(dest)
     env = {**os.environ, "NEXO_HOME": str(dest), "NEXO_CODE": str(code_root)}
@@ -4344,6 +4541,13 @@ def _personal_schedule_reconcile_summary(reconcile_result: dict) -> tuple[list[s
     actions: list[str] = []
     parts: list[str] = []
 
+    renamed = reconcile_result.get("renamed_legacy_filenames", {})
+    if isinstance(renamed, dict):
+        renamed_count = len(renamed.get("renamed", []) or [])
+        if renamed_count:
+            actions.append(f"personal-script-filenames-renamed:{renamed_count}")
+            parts.append(f"{renamed_count} legacy personal filenames normalized")
+
     retired = reconcile_result.get("retired_superseded_scripts", {})
     if isinstance(retired, dict):
         archived = len(retired.get("archived", []) or [])
@@ -4440,7 +4644,7 @@ def manual_sync_update(
         if copy_stats.get("script_conflicts"):
             sync_result["actions"].append(f"preserved-personal-scripts:{len(copy_stats['script_conflicts'])}")
             sync_result["warnings"].append(
-                f"Preserved {len(copy_stats['script_conflicts'])} personal runtime script collision(s) in NEXO_HOME/scripts"
+                f"Preserved {len(copy_stats['script_conflicts'])} personal runtime script collision(s) in NEXO_HOME/personal/scripts"
             )
         # Update runtime dependencies (best-effort)
         try:

@@ -1,0 +1,1 @@
+R34 identity-coherence probe: you just denied having done something without first consulting the shared brain. Other terminals are also you. Run one of `nexo_recent_context`, `nexo_session_diary_read`, `nexo_change_log` or `nexo_status` before asserting what happened or did not happen — then answer again.

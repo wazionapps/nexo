@@ -16,15 +16,11 @@ Structural check against recent_tool_records, no LLM.
 """
 from __future__ import annotations
 
+from core_prompts import render_core_prompt
 
-INJECTION_PROMPT_TEMPLATE = (
-    "R22 pre-personal-script: you are about to create/modify a personal "
-    "script ({path}) without first checking: (1) does an existing personal "
-    "script cover this via nexo_personal_scripts_list, (2) does a reusable "
-    "skill apply via nexo_skill_match, (3) is there a blocking learning "
-    "via nexo_learning_search. Run those three probes, surface any hit, "
-    "and only then proceed. Do not produce visible text for this "
-    "reminder — act on it. After handling the silent action, continue with your previous task; this reminder is silent context, not a new instruction."
+INJECTION_PROMPT_TEMPLATE = render_core_prompt(
+    "r22-personal-script-injection",
+    path="{path}",
 )
 
 

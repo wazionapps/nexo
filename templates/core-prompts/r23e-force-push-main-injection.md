@@ -1,0 +1,1 @@
+R23e force push to [[branch]]: the command '[[cmd]]' would rewrite a protected branch. Force-push to main/master/production/release-* is never automatic — stop and confirm with the operator before proceeding. If the intent is to recover a broken state, prefer `git revert` + a fresh commit over a history rewrite.

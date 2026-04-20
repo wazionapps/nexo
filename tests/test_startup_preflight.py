@@ -80,6 +80,7 @@ def test_runtime_cli_wrapper_text_probes_fastmcp_and_supports_override():
     assert '$NEXO_HOME/core/cli.py' in text
     assert '${HOME}/claude' in text
     assert 'pwd -P' in text
+    assert 'PYTHONDONTWRITEBYTECODE=1' in text
     assert '$NEXO_HOME/claude/cli.py' not in text
 
 
@@ -102,6 +103,39 @@ def test_cleanup_legacy_root_db_stubs_archives_zero_byte_root_files(tmp_path, mo
     assert len(result["archived"]) == 2
     assert not (runtime_home / "nexo.db").exists()
     assert not (runtime_home / "brain.db").exists()
+    for item in result["archived"]:
+        assert Path(item["backup_path"]).is_file()
+
+
+def test_cleanup_empty_personal_brain_db_stubs_archives_only_empty_residue(tmp_path, monkeypatch):
+    import auto_update
+    import sqlite3
+
+    runtime_home = tmp_path / "runtime"
+    personal_brain = runtime_home / "personal" / "brain"
+    personal_brain.mkdir(parents=True, exist_ok=True)
+
+    (personal_brain / "brain.db").write_text("")
+    sqlite3.connect(str(personal_brain / "nexo.db")).close()
+    live = personal_brain / "runtime.db"
+    conn = sqlite3.connect(str(live))
+    try:
+        conn.execute("CREATE TABLE keep_me (id INTEGER)")
+        conn.commit()
+    finally:
+        conn.close()
+
+    monkeypatch.setenv("NEXO_HOME", str(runtime_home))
+    monkeypatch.setattr(auto_update, "NEXO_HOME", runtime_home)
+
+    result = auto_update._cleanup_empty_personal_brain_db_stubs(runtime_home)
+
+    assert result["ok"] is True
+    assert len(result["archived"]) == 2
+    assert not (personal_brain / "brain.db").exists()
+    assert not (personal_brain / "nexo.db").exists()
+    assert live.exists()
+    assert any(item["reason"] == "has-tables" for item in result["skipped"])
     for item in result["archived"]:
         assert Path(item["backup_path"]).is_file()
 
@@ -453,6 +487,52 @@ def test_run_runtime_post_sync_reports_superseded_personal_script_retire(tmp_pat
     assert ok is True
     assert "personal-scripts-retired:1" in actions
     assert "personal-skills-retired:1" in actions
+
+
+def test_run_runtime_post_sync_reports_legacy_personal_filename_normalization(tmp_path, monkeypatch):
+    import auto_update
+    import client_sync
+
+    runtime_home = tmp_path / "runtime"
+    (runtime_home / "logs").mkdir(parents=True)
+    (runtime_home / "crons").mkdir(parents=True)
+    (runtime_home / "crons" / "sync.py").write_text("print('ok')\n")
+
+    def fake_run(cmd, **kwargs):
+        if isinstance(cmd, list) and len(cmd) >= 3 and cmd[1] == "-c":
+            return subprocess.CompletedProcess(
+                cmd,
+                0,
+                json.dumps({
+                    "renamed_legacy_filenames": {
+                        "renamed": [{"name": "mail-poller"}],
+                    },
+                    "ensure_schedules": {
+                        "created": [],
+                        "repaired": [],
+                        "invalid": [],
+                    },
+                }),
+                "",
+            )
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setenv("NEXO_HOME", str(runtime_home))
+    monkeypatch.setattr(auto_update, "NEXO_HOME", runtime_home)
+    monkeypatch.setattr(auto_update, "_reinstall_runtime_pip_deps", lambda dest: True)
+    monkeypatch.setattr(auto_update.subprocess, "run", fake_run)
+    monkeypatch.setattr(client_sync, "sync_all_clients", lambda **kwargs: {"ok": True, "clients": {}})
+
+    import runtime_power
+
+    monkeypatch.setattr(runtime_power, "apply_power_policy", lambda policy=None: {"ok": True, "action": "enabled"})
+    monkeypatch.setattr(runtime_power, "ensure_full_disk_access_choice", lambda **kwargs: {"status": "unset", "prompted": False, "message": ""})
+    monkeypatch.setattr(runtime_power, "get_full_disk_access_status", lambda schedule=None: "unset")
+
+    ok, actions = auto_update._run_runtime_post_sync(runtime_home)
+
+    assert ok is True
+    assert "personal-script-filenames-renamed:1" in actions
 
 
 def test_startup_preflight_reports_personal_schedule_heal(tmp_path, monkeypatch):

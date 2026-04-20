@@ -18,3 +18,18 @@ def test_memory_export_writes_markdown_bundle(tmp_path):
     assert (target / "README.md").is_file()
     assert (target / "claims.md").is_file()
     assert (target / "media.md").is_file()
+
+
+def test_memory_export_defaults_to_runtime_exports_dir(tmp_path, monkeypatch):
+    import os
+    from plugins.memory_export import handle_memory_export
+
+    monkeypatch.setenv("NEXO_HOME", str(tmp_path / ".nexo"))
+    result = handle_memory_export()
+
+    assert "Memory export written to" in result
+    export_root = tmp_path / ".nexo" / "runtime" / "exports" / "memory"
+    assert export_root.is_dir()
+    generated = sorted(export_root.iterdir())
+    assert generated, "expected a timestamped export directory under runtime/exports/memory"
+    assert (generated[-1] / "README.md").is_file()

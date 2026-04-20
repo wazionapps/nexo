@@ -2,6 +2,8 @@
 
 import os
 
+import paths
+
 NEXO_HOME = os.environ.get("NEXO_HOME", os.path.expanduser("~/.nexo"))
 
 
@@ -11,16 +13,16 @@ class StorageRouter:
 
     def nexo_db_path(self) -> str:
         if self.tenant_id == "default":
-            data_dir = os.path.join(NEXO_HOME, "data")
-            os.makedirs(data_dir, exist_ok=True)
-            return os.path.join(data_dir, "nexo.db")
+            data_dir = paths.data_dir()
+            data_dir.mkdir(parents=True, exist_ok=True)
+            return str(data_dir / "nexo.db")
         return os.path.join(NEXO_HOME, "tenants", self.tenant_id, "nexo.db")
 
     def cognitive_db_path(self) -> str:
         if self.tenant_id == "default":
-            data_dir = os.path.join(NEXO_HOME, "data")
-            os.makedirs(data_dir, exist_ok=True)
-            return os.path.join(data_dir, "cognitive.db")
+            cognitive_dir = paths.cognitive_dir()
+            cognitive_dir.mkdir(parents=True, exist_ok=True)
+            return str(cognitive_dir / "cognitive.db")
         return os.path.join(NEXO_HOME, "tenants", self.tenant_id, "cognitive.db")
 
 

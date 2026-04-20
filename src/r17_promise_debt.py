@@ -18,24 +18,11 @@ twins at the end of the tranche).
 """
 from __future__ import annotations
 
+from core_prompts import render_core_prompt
 
-CLASSIFIER_QUESTION = (
-    "Does the assistant message below explicitly promise a FUTURE action "
-    "it has not yet executed? Answer yes if the assistant says it will do, "
-    "create, send, implement, run, check, or perform something later or "
-    "next. Answer no for status reports, summaries, questions, clarifying "
-    "statements, or present-tense execution reports (where the action has "
-    "already happened)."
-)
+CLASSIFIER_QUESTION = render_core_prompt("r17-promise-debt-question")
 
-INJECTION_PROMPT_TEMPLATE = (
-    "R17 promise-debt: your last message promised a future action but no "
-    "tool call matching that promise happened in the next two turns. If "
-    "the action is still pending, execute it NOW — promise without "
-    "execution opens operational debt (learning #38 / #29 Fase A R29). "
-    "If the promise was a misstatement, correct it explicitly in the next "
-    "message. Do not produce visible text for this reminder — act on it. After handling the silent action, continue with your previous task; this reminder is silent context, not a new instruction."
-)
+INJECTION_PROMPT_TEMPLATE = render_core_prompt("r17-promise-debt-injection")
 
 DEFAULT_WINDOW_TOOL_CALLS = 2
 

@@ -53,6 +53,10 @@ def _resolve_runtime_root() -> Path:
 
 RUNTIME_ROOT = _resolve_runtime_root()
 SOURCE_ROOT = RUNTIME_ROOT / "src" if (RUNTIME_ROOT / "src" / "db").is_dir() else RUNTIME_ROOT
+if str(SOURCE_ROOT) not in sys.path:
+    sys.path.insert(0, str(SOURCE_ROOT))
+
+import paths
 
 
 # ── Version helpers ──────────────────────────────────────────────
@@ -100,17 +104,17 @@ def get_target_version() -> str:
 def backup_databases() -> str:
     """Backup all .db files before migration. Returns backup dir path."""
     ts = datetime.now().strftime("%Y%m%d-%H%M%S")
-    backup_dir = NEXO_HOME / "backups" / f"pre-migrate-{ts}"
+    backup_dir = paths.backups_dir() / f"pre-migrate-{ts}"
     backup_dir.mkdir(parents=True, exist_ok=True)
 
-    data_dir = NEXO_HOME / "data"
+    data_dir = paths.data_dir()
     if data_dir.exists():
         for db_file in data_dir.glob("*.db*"):
             shutil.copy2(db_file, backup_dir / db_file.name)
-    # Also check legacy db/ location
-    legacy_db_dir = NEXO_HOME / "db"
-    if legacy_db_dir.exists():
-        for db_file in legacy_db_dir.glob("*.db*"):
+    # Also check the legacy flat data/ location during transition.
+    legacy_data_dir = paths.legacy_data_dir()
+    if legacy_data_dir != data_dir and legacy_data_dir.exists():
+        for db_file in legacy_data_dir.glob("*.db*"):
             if not (backup_dir / db_file.name).exists():
                 shutil.copy2(db_file, backup_dir / db_file.name)
 
@@ -126,13 +130,25 @@ def backup_databases() -> str:
 
 def ensure_nexo_home_dirs():
     """Create all required NEXO_HOME subdirectories."""
-    dirs = [
-        "db", "brain", "logs", "operations", "coordination",
-        "scripts", "hooks", "plugins", "backups", "memory",
-        "docs", "projects", "learnings", "agents", "skills",
+    required_dirs = [
+        paths.core_db_dir(allow_legacy_fallback=False),
+        paths.brain_dir(),
+        paths.logs_dir(),
+        paths.operations_dir(),
+        paths.coordination_dir(),
+        paths.core_scripts_dir(),
+        paths.core_hooks_dir(),
+        paths.personal_plugins_dir(),
+        paths.backups_dir(),
+        paths.memory_dir(),
+        paths.personal_skills_dir(),
+        NEXO_HOME / "docs",
+        NEXO_HOME / "projects",
+        NEXO_HOME / "learnings",
+        NEXO_HOME / "agents",
     ]
-    for d in dirs:
-        (NEXO_HOME / d).mkdir(parents=True, exist_ok=True)
+    for target in required_dirs:
+        target.mkdir(parents=True, exist_ok=True)
 
 
 def run_db_schema_migrations():

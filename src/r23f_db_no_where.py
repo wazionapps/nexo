@@ -9,13 +9,12 @@ from __future__ import annotations
 
 import re
 
+from core_prompts import render_core_prompt
 
-INJECTION_PROMPT_TEMPLATE = (
-    "R23f destructive SQL without WHERE: the command '{cmd}' contains a "
-    "{verb} statement with no WHERE clause against a production DB. "
-    "Abort. If the intent is a full wipe, run it interactively against "
-    "the DB console with explicit operator confirmation, not via the "
-    "enforcement wrapper."
+INJECTION_PROMPT_TEMPLATE = render_core_prompt(
+    "r23f-db-no-where-injection",
+    cmd="{cmd}",
+    verb="{verb}",
 )
 
 # Simple SQL heuristic. Looks for DELETE FROM <tbl> or UPDATE <tbl> SET

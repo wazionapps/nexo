@@ -885,10 +885,7 @@ def _load_session_tone() -> str | None:
     Returns a human-readable instruction block that tells the agent HOW to behave
     emotionally in this session, based on yesterday's analysis.
     """
-    import os
-    from pathlib import Path
-    nexo_home = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
-    tone_file = nexo_home / "operations" / "session-tone.json"
+    tone_file = paths.operations_dir() / "session-tone.json"
 
     if not tone_file.exists():
         return None

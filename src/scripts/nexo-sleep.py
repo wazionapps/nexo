@@ -38,6 +38,7 @@ if str(NEXO_CODE) not in sys.path:
 
 from agent_runner import AutomationBackendUnavailableError, run_automation_prompt
 from constants import AUTOMATION_SUBPROCESS_TIMEOUT
+from core_prompts import render_core_prompt
 import paths
 try:
     from client_preferences import resolve_user_model as _resolve_user_model
@@ -417,31 +418,16 @@ The wrapper will handle the actual DB cleanup safely.""")
 
     tasks_str = "\n\n".join(tasks)
 
-    prompt = f"""FIRST: Call nexo_startup(task='deep-sleep nightly maintenance') to register this session.
-
-You are NEXO Sleep — the nightly brain maintenance process.
-Like a human brain during sleep: consolidate important memories, discard noise,
-detect conflicts, prepare state for tomorrow.
-Use nexo_learning_add, nexo_followup_create, nexo_session_diary_write and other MCP tools directly.
-
-BRAIN STATE:
-- {len(state['learnings'])} active learnings
-- {state['memory_md_lines']} lines in MEMORY.md (limit: 200)
-- {len(state['preferences'])} preferences
-- {state['feedback_count']} feedback files
-- {state['claude_mem_old']} old observations (>60d)
-
-{tasks_str}
-
-ABSOLUTE RULES:
-- NEVER delete legal entity info (LLC, SLU, EIN, NIF, project)
-- NEVER delete credentials, tokens, API keys, secrets
-- NEVER delete rules marked CRITICAL or MAX PRIORITY
-- NEVER delete infrastructure info (servers, repos, deploys)
-- When in doubt, DON'T delete
-
-Write a summary to {COORD_DIR}/sleep-report.md when done.
-Execute without asking."""
+    prompt = render_core_prompt(
+        "sleep",
+        learnings_count=len(state["learnings"]),
+        memory_md_lines=state["memory_md_lines"],
+        preferences_count=len(state["preferences"]),
+        feedback_count=state["feedback_count"],
+        old_observations_count=state["claude_mem_old"],
+        tasks_block=tasks_str,
+        sleep_report_file=COORD_DIR / "sleep-report.md",
+    )
 
     log("Stage B: Invoking automation backend — dreaming...")
     try:

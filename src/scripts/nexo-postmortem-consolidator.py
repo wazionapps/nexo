@@ -38,6 +38,7 @@ sys.path.insert(0, str(NEXO_CODE))
 
 from agent_runner import AutomationBackendUnavailableError, run_automation_prompt
 from constants import AUTOMATION_SUBPROCESS_TIMEOUT
+from core_prompts import render_core_prompt
 import paths
 
 try:
@@ -141,11 +142,26 @@ def collect_data() -> dict:
     conn = sqlite3.connect(str(NEXO_DB))
     conn.row_factory = sqlite3.Row
 
-    # Today's diaries with self-critique
+    # Today's diaries with self-critique.
+    # Filter mirrors db._episodic.read_session_diary(include_automated=False):
+    # keep human-interactive sessions, plus auto-close diaries that captured
+    # real activity (heartbeats > 0, not Minimal). Drops the [auto-close]
+    # placeholder entries that scheduled jobs (deep-sleep, daily-synthesis)
+    # generate without ever calling nexo_session_diary_write — they have no
+    # self-critique to promote and only burn LLM input tokens here.
     rows = conn.execute(
         "SELECT id, session_id, summary, self_critique, user_signals, "
         "mental_state, domain, created_at "
-        "FROM session_diary WHERE date(created_at) = ? ORDER BY created_at",
+        "FROM session_diary WHERE date(created_at) = ? "
+        "AND NOT ("
+        "  COALESCE(source, '') = 'auto-close' "
+        "  AND ("
+        "    COALESCE(self_critique, '') LIKE '[auto-close]%' "
+        "    OR COALESCE(mental_state, '') LIKE '%0 heartbeats%' "
+        "    OR COALESCE(mental_state, '') LIKE '%Minimal diary%'"
+        "  )"
+        ") "
+        "ORDER BY created_at",
         (TODAY_STR,)
     ).fetchall()
     data["diaries"] = [dict(r) for r in rows]
@@ -191,66 +207,18 @@ def consolidate_with_cli(data: dict) -> bool:
     if len(diaries_json) > 12000:
         diaries_json = diaries_json[:12000] + "\n... (truncated)"
 
-    prompt = f"""FIRST: Call nexo_startup(task='nightly postmortem consolidation') to register this session.
-
-You are NEXO's nightly consolidator. Your job is to review the self-critiques
-from today and decide which deserve to become permanent rules. Use nexo_learning_add for permanent rules and nexo_followup_create for action items.
-
-DATE: {data['date']}
-SESSIONS TODAY: {len(data['diaries'])} total, {len(diaries_with_critique)} with self-critique
-
-DIARIES WITH SELF-CRITIQUE:
-{diaries_json}
-
-EXISTING POSTMORTEM FEEDBACKS ({len(data['existing_feedbacks'])}):
-{json.dumps(data['existing_feedbacks'][:30], ensure_ascii=False)}
-
-RECENT PERMANENT RULES:
-{json.dumps(data['history_summary'].get('recent_rules', []), ensure_ascii=False)}
-
-INSTRUCTIONS:
-
-1. Read each self_critique and understand its MEANING (don't count words).
-
-2. PROMOTE to permanent feedback ONLY IF:
-   - A pattern appears in 2+ different sessions of the day (by meaning, not literal text)
-   - Or the user explicitly corrected (user_signals contains correction)
-   - And the self-critique contains a CONCRETE ACTION that prevents a future error
-   - And a similar feedback does NOT already exist in the existing ones
-
-3. DO NOT promote if:
-   - It's a negative response ("Nothing happened", "clean session")
-   - It's generic without concrete action
-   - A feedback covering the same topic already exists
-
-4. For each rule to promote, create the file with Write en {MEMORY_DIR}/:
-   Nombre: feedback_postmortem_[slug_descriptivo].md
-   Formato:
-   ---
-   name: [descriptive title]
-   description: Behavioral rule extracted from self-critique — recurring pattern
-   type: feedback
-   ---
-
-   [Clear description of the pattern and rule]
-
-   **Why:** [Why this matters — with evidence from sessions]
-   **How to apply:** [When and how to apply this rule]
-
-5. Write the daily summary en $NEXO_HOME/coordination/postmortem-daily.md:
-   # Post-Mortem Daily — {data['date']}
-   Sessions: X | Self-critiques: Y | Promoted: Z
-
-   ## Today's self-critiques (summary)
-   [Lista breve]
-
-   ## Promoted to permanent memory
-   [What you promoted and why]
-
-   ## Discarded (and why)
-   [What you did NOT promote and the reason]
-
-Execute without asking."""
+    prompt = render_core_prompt(
+        "postmortem-consolidator",
+        date=data["date"],
+        session_total=len(data["diaries"]),
+        sessions_with_critique=len(diaries_with_critique),
+        diaries_json=diaries_json,
+        existing_feedback_count=len(data["existing_feedbacks"]),
+        existing_feedbacks_json=json.dumps(data["existing_feedbacks"][:30], ensure_ascii=False),
+        recent_rules_json=json.dumps(data["history_summary"].get("recent_rules", []), ensure_ascii=False),
+        memory_dir=MEMORY_DIR,
+        postmortem_daily_file=paths.coordination_dir() / "postmortem-daily.md",
+    )
 
     log(f"Stage 2: Invoking automation backend with {len(diaries_with_critique)} critiques...")
     try:

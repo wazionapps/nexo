@@ -14,6 +14,7 @@ import sqlite3
 import time
 from datetime import datetime, date, timedelta
 from pathlib import Path
+from core_prompts import render_core_prompt
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(NEXO_HOME)))
@@ -230,7 +231,7 @@ def dry_run_restore_test() -> bool:
 
     test_file.write_text("modified_content")
 
-    # Find restore script: NEXO_CODE/scripts/ first, then NEXO_HOME/scripts/
+    # Find restore script: repo scripts/ first, then installed core/scripts/.
     _nexo_code = Path(os.environ.get("NEXO_CODE", ""))
     restore_script = None
     for candidate in [_nexo_code / "scripts" / "nexo-snapshot-restore.sh",
@@ -290,11 +291,11 @@ def build_evolution_prompt(week_data: dict, objective: dict) -> str:
     max_auto = max_auto_changes(total)
     if mode == "review":
         mode_desc = "review-only, nothing executes automatically"
-        safe_zones = "~/.nexo/scripts/, ~/.nexo/plugins/, ~/.nexo/brain/"
+        safe_zones = "~/.nexo/personal/scripts/, ~/.nexo/personal/plugins/, ~/.nexo/personal/brain/"
         immutable_files = "db.py, server.py, plugin_loader.py, storage_router.py, cognitive.py, knowledge_graph.py, tools_*.py, nexo-watchdog.sh, evolution_cycle.py, CLAUDE.md, AGENTS.md"
     elif mode == "managed":
         mode_desc = f"owner-managed, max {max_auto} auto-applied changes with rollback and followups"
-        safe_zones = "~/.nexo/scripts/, ~/.nexo/plugins/, ~/.nexo/brain/, NEXO_CODE/src, repo bin/docs/templates/tests"
+        safe_zones = "~/.nexo/personal/scripts/, ~/.nexo/personal/plugins/, ~/.nexo/personal/brain/, NEXO_CODE/src, repo bin/docs/templates/tests"
         immutable_files = "db.py, server.py, plugin_loader.py, storage_router.py, nexo-watchdog.sh, evolution_cycle.py, CLAUDE.md, AGENTS.md, personality.md, user-profile.md"
     elif mode == "public_core":
         mode_desc = "public core contribution via isolated checkout and Draft PR"
@@ -302,82 +303,25 @@ def build_evolution_prompt(week_data: dict, objective: dict) -> str:
         immutable_files = "personal runtime, ~/.nexo/**, local DBs/logs, CLAUDE.md, AGENTS.md, user-profile.md"
     else:
         mode_desc = f"public auto, max {max_auto} auto-applied changes in personal safe zones"
-        safe_zones = "~/.nexo/scripts/, ~/.nexo/plugins/"
+        safe_zones = "~/.nexo/personal/scripts/, ~/.nexo/personal/plugins/"
         immutable_files = "db.py, server.py, plugin_loader.py, storage_router.py, cognitive.py, knowledge_graph.py, tools_*.py, nexo-watchdog.sh, evolution_cycle.py, CLAUDE.md, AGENTS.md"
 
-    prompt = f"""You are NEXO Evolution — the weekly self-improvement cycle.
-
-YOUR JOB: Analyze the past week and propose concrete improvements to NEXO's codebase.
-
-WEEK SUMMARY:
-- {stats['learnings_this_week']} new learnings
-- {stats['decisions_this_week']} decisions made
-- {stats['changes_this_week']} code changes deployed
-- {stats['diaries_this_week']} session diaries
-- {stats['evolution_history']} past evolution proposals
-- Current scores: {json.dumps(stats['current_scores'])}
-
-MODE: {mode} ({mode_desc})
-CYCLE: #{total + 1}
-
-INVESTIGATE using these tools:
-1. Bash: sqlite3 {NEXO_DB} "SELECT category, title FROM learnings WHERE created_at > {time.time() - 7*86400} ORDER BY created_at DESC LIMIT 30"
-2. Bash: sqlite3 {NEXO_DB} "SELECT area, COUNT(*) as cnt FROM error_repetitions GROUP BY area ORDER BY cnt DESC LIMIT 10"
-3. Read ~/.nexo/coordination/daily-synthesis.md — today's context
-4. Read ~/.nexo/coordination/postmortem-daily.md — self-critique patterns
-5. Read ~/.nexo/logs/self-audit-summary.json — system health
-6. Glob ~/.nexo/scripts/*.py — existing scripts
-7. Glob ~/.nexo/plugins/*.py — existing plugins
-
-LOOK FOR:
-- Repeated errors that guard isn't preventing
-- Scripts or processes that are failing or underperforming
-- Missing functionality that session diaries keep asking for
-- Redundant code or config that could be simplified
-- Patterns in self-critique that suggest systemic issues
-
-SAFETY:
-- Safe zones for this mode: {safe_zones}
-- IMMUTABLE files (never touch in this mode): {immutable_files}
-- Every change needs: what file, what to change, why, risk, how to verify
-- AUTO changes must be deterministic. If the edit is ambiguous, risky, or needs human taste, mark it as "propose".
-- In managed mode, failed AUTO changes will be rolled back automatically and turned into followups with evidence.
-
-OUTPUT FORMAT (JSON):
-{{
-  "analysis": "one paragraph summary of what you found",
-  "dimension_scores": {{
-    "episodic_memory": 0,
-    "autonomy": 0,
-    "proactivity": 0,
-    "self_improvement": 0,
-    "agi": 0
-  }},
-  "score_evidence": {{
-    "episodic_memory": "why this score changed or stayed flat",
-    "autonomy": "why this score changed or stayed flat",
-    "proactivity": "why this score changed or stayed flat",
-    "self_improvement": "why this score changed or stayed flat",
-    "agi": "why this score changed or stayed flat"
-  }},
-  "patterns": [{{"type": "...", "description": "...", "frequency": "..."}}],
-  "proposals": [
-    {{
-      "classification": "auto" or "propose",
-      "dimension": "reliability|proactivity|efficiency|safety|learning",
-      "action": "what to do",
-      "reasoning": "why",
-      "scope": "local",
-      "changes": [{{"file": "path", "operation": "create|replace|append", "search": "text to find", "content": "new text"}}]
-    }}
-  ]
-}}
-
-Always include all five canonical keys in `dimension_scores` and `score_evidence`.
-Scores must be integers in the 0-100 range and reflect the current week, not targets.
-Max 3 proposals. Quality over quantity. If nothing needs improving, say so."""
-
-    return prompt
+    return render_core_prompt(
+        "evolution-weekly",
+        learnings_this_week=stats["learnings_this_week"],
+        decisions_this_week=stats["decisions_this_week"],
+        changes_this_week=stats["changes_this_week"],
+        diaries_this_week=stats["diaries_this_week"],
+        evolution_history=stats["evolution_history"],
+        current_scores_json=json.dumps(stats["current_scores"]),
+        mode=mode,
+        mode_desc=mode_desc,
+        cycle_number=total + 1,
+        nexo_db=NEXO_DB,
+        week_cutoff_ts=time.time() - 7 * 86400,
+        safe_zones=safe_zones,
+        immutable_files=immutable_files,
+    )
 
 
 def build_public_contribution_prompt(
@@ -414,39 +358,12 @@ needs the same change and port it if necessary. If the repo is already correct,
 make the smallest validating change that captures the same gap.
 """
 
-    return f"""You are NEXO Public Evolution.
-
-You are running inside an isolated checkout of the public NEXO repository.
-Your job is to make one technically coherent improvement to the public core and
-prepare it for a Draft PR.
-
-STRICT RULES:
-- Work only inside this repository checkout: {repo_root}
-- You may modify only public core surfaces: src/, bin/, tests/, templates/, hooks/, migrations/, .claude-plugin/
-- Do not read or use ~/.nexo, local DBs, personal scripts, emails, logs, prompts, secrets, or any user-identifying paths
-- Do not push, open PRs, or change git remotes yourself
-- Do not touch README, website, gh-pages, changelog, or release metadata in this mode
-- Focus on one concrete improvement only
-- Run validation for the files you touched
-
-What to do:
-1. Inspect the repo and find a real, self-contained improvement in reliability, install/update behavior, cron recovery, diagnostics, hooks, tests, or other core infrastructure.
-2. Implement the change directly in this checkout.
-3. Run the smallest relevant validation commands.
-4. Return ONLY valid JSON with this shape:
-
-{{
-  "title": "type: short title",
-  "problem": "what was wrong",
-  "summary": "what you changed",
-  "tests": ["command 1", "command 2"],
-  "risks": ["risk 1", "risk 2"]
-}}
-
-Cycle: #{cycle_number}
-Quality over quantity. One strong improvement is better than three weak ones.
-{queued_section}
-"""
+    return render_core_prompt(
+        "evolution-public-contribution",
+        repo_root=repo_root,
+        cycle_number=cycle_number,
+        queued_section=queued_section,
+    )
 
 
 def build_public_pr_review_prompt(
@@ -470,45 +387,16 @@ def build_public_pr_review_prompt(
     if len(trimmed_diff) > 80000:
         trimmed_diff = trimmed_diff[:80000] + "\n\n[diff truncated by NEXO]"
 
-    return f"""You are NEXO Public Evolution Review.
-
-You are reviewing another opt-in public evolution PR. You must NOT merge, rebase,
-push, or edit the PR. Your only job is to decide whether it deserves an approval
-or whether it should receive a review comment without approval.
-
-STRICT RULES:
-- Review only this PR:
-  - Number: #{pr_number}
-  - Author: {author}
-  - URL: {url}
-- Base the review only on the provided title, body, file list, and diff
-- Do not assume hidden context
-- If confidence is not strong, choose `comment`, not `approve`
-- If the diff is too incomplete, too risky, or too ambiguous, choose `skip`
-- Never suggest merge authority; maintainers decide that later
-- Keep the review concise, technical, and useful
-
-PR TITLE:
-{title}
-
-PR BODY:
-{body or "(empty)"}
-
-FILES CHANGED:
-{rendered_files}
-
-DIFF:
-```diff
-{trimmed_diff or "(empty diff)"}
-```
-
-Return ONLY valid JSON:
-{{
-  "decision": "approve|comment|skip",
-  "summary": "one-line verdict",
-  "body": "the exact markdown text to post as the review body"
-}}
-"""
+    return render_core_prompt(
+        "evolution-public-pr-review",
+        pr_number=pr_number,
+        author=author,
+        url=url,
+        title=title,
+        body=body or "(empty)",
+        rendered_files=rendered_files,
+        trimmed_diff=trimmed_diff or "(empty diff)",
+    )
 
 
 def max_auto_changes(total_evolutions: int) -> int:

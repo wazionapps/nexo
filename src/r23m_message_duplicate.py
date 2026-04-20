@@ -11,12 +11,13 @@ from __future__ import annotations
 
 import time
 
+from core_prompts import render_core_prompt
 
-INJECTION_PROMPT_TEMPLATE = (
-    "R23m duplicate message: the outbound to '{thread}' is "
-    "{similarity}% identical to one sent {age_sec}s ago. Confirm "
-    "this is intentional before sending — most duplicate sends are "
-    "re-runs of the same tool call."
+INJECTION_PROMPT_TEMPLATE = render_core_prompt(
+    "r23m-message-duplicate-injection",
+    thread="{thread}",
+    similarity="{similarity}",
+    age_sec="{age_sec}",
 )
 
 DEFAULT_WINDOW_SEC = 15 * 60

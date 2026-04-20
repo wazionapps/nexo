@@ -11,13 +11,12 @@ from __future__ import annotations
 
 import re
 
+from core_prompts import render_core_prompt
 
-INJECTION_PROMPT_TEMPLATE = (
-    "R23j global install without explicit request: '{cmd}' installs "
-    "'{pkg}' globally. Prefer a project-scoped install (venv, nvm, "
-    "`--save`, local brew cask) unless the operator asked for a global "
-    "tool. If the operator explicitly asked, retry after saying "
-    "`yes install globally` or equivalent."
+INJECTION_PROMPT_TEMPLATE = render_core_prompt(
+    "r23j-global-install-injection",
+    cmd="{cmd}",
+    pkg="{pkg}",
 )
 
 

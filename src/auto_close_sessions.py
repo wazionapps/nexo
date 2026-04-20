@@ -10,6 +10,7 @@ import json
 import os
 import sys
 import datetime
+from pathlib import Path
 
 # Ensure imports work both from ``src/auto_close_sessions.py`` and from the
 # packaged runtime copy under ``core/scripts/auto_close_sessions.py``.
@@ -27,10 +28,26 @@ from db import (
     get_orphan_sessions, read_checkpoint, write_session_diary, now_epoch,
     SESSION_STALE_SECONDS,
 )
+try:
+    import paths
+except ModuleNotFoundError as exc:
+    if getattr(exc, "name", "") != "paths":
+        raise
+
+    class _PathsFallback:
+        @staticmethod
+        def operations_dir():
+            return Path(os.environ.get("NEXO_HOME", os.path.expanduser("~/.nexo"))) / "operations"
+
+        @staticmethod
+        def coordination_dir():
+            return Path(os.environ.get("NEXO_HOME", os.path.expanduser("~/.nexo"))) / "coordination"
+
+    paths = _PathsFallback()
 
 NEXO_HOME = os.environ.get("NEXO_HOME", os.path.expanduser("~/.nexo"))
-LOG_DIR = os.path.join(NEXO_HOME, "operations", "tool-logs")
-AUTO_CLOSE_LOG = os.path.join(NEXO_HOME, "coordination", "auto-close.log")
+LOG_DIR = str(paths.operations_dir() / "tool-logs")
+AUTO_CLOSE_LOG = str(paths.coordination_dir() / "auto-close.log")
 
 
 def get_tool_log_summary(sid: str) -> str:

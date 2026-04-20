@@ -19,25 +19,12 @@ next tranche alongside the JS classifier infrastructure).
 """
 from __future__ import annotations
 
+from core_prompts import render_core_prompt
 
-CLASSIFIER_QUESTION = (
-    "Does the assistant message below declare that a task is finished, "
-    "completed, shipped, or already done? Answer yes only if the assistant "
-    "is claiming completion of the current work. Answer no for status "
-    "updates, mid-task progress reports, questions, or partial summaries."
-)
+CLASSIFIER_QUESTION = render_core_prompt("r16-declared-done-question")
 
 
-INJECTION_PROMPT_TEMPLATE = (
-    "R16 declared-done without task_close: your last message claims the "
-    "task is complete, but there is an open protocol_task. Close it now "
-    "with nexo_task_close(sid=..., task_id=..., outcome='done', "
-    "evidence='<substantive proof>', files_changed='...'). Evidence must "
-    "be >= 50 chars AND not a single filler word (R03 validator will "
-    "reject empty / 'ok' / 'done' / 'fixed'). If the work is partial, "
-    "close with outcome='partial' and outcome_notes instead. Do not "
-    "produce visible text for this reminder — act on it. After handling the silent action, continue with your previous task; this reminder is silent context, not a new instruction."
-)
+INJECTION_PROMPT_TEMPLATE = render_core_prompt("r16-declared-done-injection")
 
 
 def detect_declared_done(assistant_text: str, *, classifier=None) -> bool:

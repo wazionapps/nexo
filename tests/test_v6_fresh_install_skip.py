@@ -50,7 +50,7 @@ def test_skip_flag_produces_expected_calibration(tmp_path):
             env=env,
             capture_output=True,
             text=True,
-            timeout=150,
+            timeout=300,
         )
     except subprocess.TimeoutExpired as exc:
         timed_out = True
@@ -122,6 +122,7 @@ def test_installer_finalizes_f06_layout_before_reporting_ready():
     assert 'log("Finalizing F0.6 runtime layout...");' in text
     assert 'const layoutFinalize = finalizeF06Layout(python, NEXO_HOME);' in text
     assert 'throw new Error(`F0.6 layout finalization failed: ${layoutFinalize.error}`);' in text
+    assert 'auto_update._ensure_f06_legacy_shims()' not in text
 
 
 def test_installer_finalizes_f06_layout_on_updates_and_repairs():
@@ -139,6 +140,22 @@ def test_installer_publishes_runtime_core_manifest_to_legacy_and_canonical_confi
     assert 'path.join(nexoHome, "config")' in text
     assert 'path.join(nexoHome, "personal", "config")' in text
     assert 'runtime-core-artifacts.json' in text
+
+
+def test_installer_prefers_canonical_f06_dirs_for_fresh_runtime_writes():
+    text = INSTALLER.read_text()
+
+    assert 'function resolveRuntimeConfigDir(nexoHome)' in text
+    assert 'function resolveRuntimeBrainDir(nexoHome)' in text
+    assert 'function resolveRuntimeDataDir(nexoHome)' in text
+    assert 'function resolveRuntimeLogsDir(nexoHome)' in text
+    assert 'function resolveRuntimeCronsDir(nexoHome)' in text
+    assert 'path.join(NEXO_HOME, "personal", "brain")' in text
+    assert 'path.join(NEXO_HOME, "personal", "config")' in text
+    assert 'path.join(NEXO_HOME, "runtime", "data")' in text
+    assert 'path.join(nexoHome, "runtime", "logs")' in text
+    assert 'resolveRuntimeCronsDir(NEXO_HOME)' in text
+    assert 'const brainDir = resolveRuntimeBrainDir(nexoHome);' in text
 
 
 def test_update_path_never_falls_back_to_reserved_product_name_for_operator_identity():

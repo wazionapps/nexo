@@ -11,15 +11,12 @@ owned by the caller (HeadlessEnforcer).
 """
 from __future__ import annotations
 
+from core_prompts import render_core_prompt
 
-INJECTION_PROMPT_TEMPLATE = (
-    "R19 pre-Write on project '{project}' without Grep: the project is "
-    "flagged require_grep=true (shared-state hygiene — learning #144) "
-    "and the recent tool history has no Grep call covering the function "
-    "or constant about to change. BEFORE writing '{path}', run Grep "
-    "for the symbol(s) you are introducing / modifying to confirm no "
-    "other caller breaks. Do not produce visible text for this "
-    "reminder — act on it. After handling the silent action, continue with your previous task; this reminder is silent context, not a new instruction."
+INJECTION_PROMPT_TEMPLATE = render_core_prompt(
+    "r19-project-grep-injection",
+    project="{project}",
+    path="{path}",
 )
 
 

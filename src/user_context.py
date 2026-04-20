@@ -4,6 +4,8 @@ import json
 import os
 from pathlib import Path
 
+from paths import brain_dir
+
 _ctx = None
 DEFAULT_ASSISTANT_NAME = "Nova"
 
@@ -12,12 +14,7 @@ class UserContext:
 
     def __init__(self):
         nexo_home = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
-        try:
-            from paths import brain_dir
-
-            cal_path = brain_dir() / "calibration.json"
-        except Exception:
-            cal_path = nexo_home / "brain" / "calibration.json"
+        cal_path = brain_dir() / "calibration.json"
         ver_path = nexo_home / "version.json"
 
         self.assistant_name = DEFAULT_ASSISTANT_NAME

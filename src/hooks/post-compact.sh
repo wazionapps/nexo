@@ -5,10 +5,18 @@
 set -uo pipefail
 
 NEXO_HOME="${NEXO_HOME:-$HOME/.nexo}"
-NEXO_DB="$NEXO_HOME/data/nexo.db"
-mkdir -p "$NEXO_HOME/data"
+DATA_DIR="$NEXO_HOME/runtime/data"
+if [ ! -d "$DATA_DIR" ] && [ -d "$NEXO_HOME/data" ]; then
+    DATA_DIR="$NEXO_HOME/data"
+fi
+OPERATIONS_DIR="$NEXO_HOME/runtime/operations"
+if [ ! -d "$OPERATIONS_DIR" ] && [ -d "$NEXO_HOME/operations" ]; then
+    OPERATIONS_DIR="$NEXO_HOME/operations"
+fi
+NEXO_DB="$DATA_DIR/nexo.db"
+mkdir -p "$DATA_DIR" "$OPERATIONS_DIR"
 TODAY=$(date +%Y-%m-%d)
-LOG_FILE="$NEXO_HOME/operations/tool-logs/${TODAY}.jsonl"
+LOG_FILE="$OPERATIONS_DIR/tool-logs/${TODAY}.jsonl"
 LOG_LINES=0
 if [ -f "$LOG_FILE" ]; then
     LOG_LINES=$(wc -l < "$LOG_FILE" | tr -d ' ')
@@ -120,7 +128,7 @@ if [ -f "$NEXO_DB" ]; then
             BLOCK="$BLOCK\n**Session tasks so far:** $TASKS_SEEN"
         fi
 
-        BLOCK="$BLOCK\n**Tool logs:** ${NEXO_HOME}/operations/tool-logs/${TODAY}.jsonl ($LOG_LINES entries)"
+        BLOCK="$BLOCK\n**Tool logs:** ${OPERATIONS_DIR}/tool-logs/${TODAY}.jsonl ($LOG_LINES entries)"
         BLOCK="$BLOCK\n\n**POST-COMPACTION INSTRUCTIONS:**"
         BLOCK="$BLOCK\n1. Call nexo_heartbeat with the SID above to reconnect with the session"
         BLOCK="$BLOCK\n2. If you need specific lost data, query tool logs with jq"

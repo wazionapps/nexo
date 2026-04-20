@@ -27,6 +27,37 @@ import subprocess
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
+
+
+def _bootstrap_nexo_code(default_repo_src: Path) -> Path:
+    nexo_home = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+    raw_env = os.environ.get("NEXO_CODE", "")
+    candidates: list[Path] = []
+    if raw_env:
+        raw = Path(raw_env).expanduser()
+        candidates.extend([raw, raw / "core"])
+    candidates.extend([default_repo_src, nexo_home / "core", nexo_home])
+    seen: set[str] = set()
+    for candidate in candidates:
+        key = str(candidate)
+        if key in seen:
+            continue
+        seen.add(key)
+        if (candidate / "paths.py").is_file() or (candidate / "server.py").is_file() or (candidate / "cli.py").is_file():
+            if str(candidate) not in sys.path:
+                sys.path.insert(0, str(candidate))
+            return candidate
+    fallback = candidates[0]
+    if str(fallback) not in sys.path:
+        sys.path.insert(0, str(fallback))
+    return fallback
+
+NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+# Auto-detect: if running from repo (src/scripts/), use src/ as NEXO_CODE
+_script_dir = Path(__file__).resolve().parent
+_repo_src = _script_dir.parent  # src/scripts/ -> src/
+NEXO_CODE = _bootstrap_nexo_code(_repo_src)
+
 from paths import (
     brain_dir,
     config_dir,
@@ -38,16 +69,9 @@ from paths import (
     snapshots_dir,
 )
 
-NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
-# Auto-detect: if running from repo (src/scripts/), use src/ as NEXO_CODE
-_script_dir = Path(__file__).resolve().parent
-_repo_src = _script_dir.parent  # src/scripts/ -> src/
-NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(_repo_src) if (_repo_src / "server.py").exists() else str(NEXO_HOME)))
-if str(NEXO_CODE) not in sys.path:
-    sys.path.insert(0, str(NEXO_CODE))
-
 from agent_runner import AutomationBackendUnavailableError, run_automation_prompt
 from constants import AUTOMATION_SUBPROCESS_TIMEOUT
+from core_prompts import render_core_prompt
 import db as nexo_db
 from public_evolution_queue import queue_public_port_candidate
 
@@ -949,7 +973,16 @@ def check_evolution_health():
     if failures >= 2:
         finding("WARN", "evolution", f"{failures} consecutive failures — circuit breaker at 3")
     if not obj.get("evolution_enabled", True):
-        finding("ERROR", "evolution", f"Evolution DISABLED: {obj.get('disabled_reason', 'unknown')}")
+        reason = str(obj.get("disabled_reason") or "unknown")
+        disabled_by = str(obj.get("disabled_by") or "").strip().lower()
+        try:
+            from product_mode import DESKTOP_EVOLUTION_DISABLED_REASON
+        except Exception:
+            DESKTOP_EVOLUTION_DISABLED_REASON = "Disabled by NEXO Desktop product contract"
+        if disabled_by == "desktop_product" or reason == DESKTOP_EVOLUTION_DISABLED_REASON:
+            finding("INFO", "evolution", "Evolution disabled by desktop product contract")
+        else:
+            finding("ERROR", "evolution", f"Evolution DISABLED: {reason}")
 
 
 def check_disk_space():
@@ -2035,48 +2068,14 @@ def interpret_findings(raw_findings: list) -> bool:
 
     findings_json = json.dumps(raw_findings, ensure_ascii=False, indent=1)
 
-    prompt = f"""FIRST: Call nexo_startup(task='daily self-audit') to register this session.
-
-You are NEXO's morning self-audit interpreter. The mechanical checks found
-{len(errors)} errors and {len(warns)} warnings. Your job is to UNDERSTAND what's
-actually wrong, not just list findings.
-
-CRITICAL — SEARCH BEFORE CREATING LEARNINGS:
-Before calling nexo_learning_add, you MUST call nexo_learning_search with keywords
-from the finding's area and topic. If a matching active learning already exists:
-  - Call nexo_learning_update(id=<existing_id>, ...) to refresh it with the new
-    evidence/date instead of creating a duplicate.
-  - Only use nexo_learning_add (with supersedes_id=<old_id>) when the existing
-    learning is materially wrong or outdated, not just to add another observation.
-If no existing learning matches, then nexo_learning_add is appropriate.
-The same applies to nexo_followup_create — search existing followups first.
-
-RAW FINDINGS:
-{findings_json}
-
-Write an actionable audit report to {LOG_DIR}/self-audit-interpreted.md:
-
-# NEXO Self-Audit — {datetime.now().strftime('%Y-%m-%d')}
-
-## Critical (needs immediate action)
-[Group related findings, identify ROOT CAUSE, suggest specific fix]
-
-## Warnings (should address today)
-[Same: group, root cause, specific action]
-
-## Observations
-[Trends, things getting worse, things improving]
-
-## Recommended Actions (priority order)
-1. [Most important action with specific command/steps]
-2. ...
-
-Be specific. "Fix the DB" is useless. "Archive learnings >90 days in category X
-via sqlite3 nexo.db 'UPDATE...'" is useful.
-
-Also write the machine-readable summary to {LOG_DIR}/self-audit-summary.json.
-
-    Execute without asking."""
+    prompt = render_core_prompt(
+        "daily-self-audit",
+        errors_count=len(errors),
+        warns_count=len(warns),
+        findings_json=findings_json,
+        log_dir=LOG_DIR,
+        audit_date=datetime.now().strftime('%Y-%m-%d'),
+    )
 
     log("Stage B: Invoking automation backend for interpretation...")
     try:

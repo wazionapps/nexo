@@ -33,9 +33,9 @@ def _seed_db(path: Path) -> None:
 @pytest.fixture
 def backup_env(tmp_path, monkeypatch):
     nexo_home = tmp_path / "nexo_home"
-    (nexo_home / "data").mkdir(parents=True)
-    (nexo_home / "backups").mkdir(parents=True)
-    _seed_db(nexo_home / "data" / "nexo.db")
+    (nexo_home / "runtime" / "data").mkdir(parents=True)
+    (nexo_home / "runtime" / "backups").mkdir(parents=True)
+    _seed_db(nexo_home / "runtime" / "data" / "nexo.db")
 
     monkeypatch.setenv("NEXO_HOME", str(nexo_home))
     # Keep the window short enough for deterministic tests but long enough to
@@ -48,7 +48,7 @@ def backup_env(tmp_path, monkeypatch):
     backup_mod._reset_rate_limit_state_for_tests()
     return {
         "home": nexo_home,
-        "backups": nexo_home / "backups",
+        "backups": nexo_home / "runtime" / "backups",
         "mod": backup_mod,
     }
 
@@ -109,6 +109,14 @@ def test_rate_limit_state_is_tool_local(backup_env):
     # restore should still be allowed — separate counter
     restore = backup_env["mod"].handle_backup_restore("nexo-2026-01-01-0000.db")
     assert restore.startswith("DB restaurada desde")
+
+
+def test_backup_plugin_uses_runtime_paths_after_f06(backup_env):
+    result = backup_env["mod"].handle_backup_now()
+    assert result.startswith("Backup created:"), result
+    created = sorted(backup_env["backups"].glob("nexo-*.db"))
+    assert created
+    assert all(str(path).startswith(str(backup_env["home"] / "runtime" / "backups")) for path in created)
 
 
 # ── Export bundle rate limit ────────────────────────────────────────

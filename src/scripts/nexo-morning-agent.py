@@ -54,6 +54,7 @@ from automation_controls import (
     get_send_reply_script_path,
 )
 from client_preferences import resolve_automation_backend, resolve_client_runtime_profile
+from core_prompts import render_core_prompt
 import db as nexo_db
 from paths import data_dir, logs_dir, operations_dir
 from runtime_home import export_resolved_nexo_home
@@ -237,25 +238,13 @@ def build_prompt(context: dict, *, extra_instructions_block: str = "") -> str:
     extra_block = extra_instructions_block.strip()
     extra_section = f"\n{extra_block}\n" if extra_block else ""
     context_json = json.dumps(context, indent=2, ensure_ascii=False)
-    return (
-        f"You are {assistant_name}, preparing the daily morning briefing email for {operator_name}.\n\n"
-        "Write the email using ONLY the facts present in the structured context below.\n"
-        f"Use the operator's preferred language: {operator_language}.\n"
-        "If the language value is invalid or unclear, use English.\n\n"
-        "Hard rules:\n"
-        "- Do not invent achievements, blockers, meetings, messages, or external events.\n"
-        "- Do not mention source files, JSON, MCP, prompts, or internal implementation.\n"
-        "- Keep the tone calm, competent, and operator-facing.\n"
-        "- Prioritise what changed recently, what is due now, what is blocked, and what deserves focus today.\n"
-        "- If activity was quiet, say so plainly instead of padding.\n"
-        "- Mention operator decisions only when the context actually supports them.\n"
-        "- Keep the email concise: roughly 180-350 words.\n"
-        "- Use short sections and bullets when useful.\n"
-        f"{extra_section}"
-        "Return ONLY a valid JSON object with this exact shape:\n"
-        '{\n  "subject": "string",\n  "body": "string"\n}\n\n'
-        "Structured context:\n"
-        f"{context_json}\n"
+    return render_core_prompt(
+        "morning-agent",
+        assistant_name=assistant_name,
+        operator_name=operator_name,
+        operator_language=operator_language,
+        extra_section=extra_section,
+        context_json=context_json,
     )
 
 
@@ -305,10 +294,7 @@ def generate_briefing(prompt: str) -> tuple[str, str]:
         env=env,
         timeout=CLI_TIMEOUT,
         output_format="json",
-        append_system_prompt=(
-            "Return raw JSON only. No markdown fences. No commentary. "
-            "No tool calls unless absolutely unavoidable."
-        ),
+        append_system_prompt=render_core_prompt("morning-agent-json-output"),
         allowed_tools="Read,Glob,Grep",
         bare_mode=True,
     )

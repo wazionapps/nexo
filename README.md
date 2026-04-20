@@ -18,13 +18,13 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.1.1` is the current packaged-runtime line. It hotfixes the post-F0.6 updater path after `7.1.0`: packaged installs no longer confuse `~/.nexo/core` with a mutable source repo, and source-sync/update flows now replace compatibility shims safely instead of failing on `db` / `cognitive` / `skills-core` / root-file conflicts. The companion NEXO Desktop client (v0.22.1, closed-source distributed separately) embeds the same hotfix so fresh installs and in-app repairs start from the corrected updater baseline.
+Version `7.1.2` is the current packaged-runtime line. It consolidates the prompt catalog migration that had already landed above `7.1.1`, fixes lazy-loading gaps that still affected standalone runtime paths (`agent_runner`, email account DB access, and Deep Sleep extract), and refreshes the public release surfaces so the open-source Brain and the companion Desktop client describe the same shipped contract again. The companion NEXO Desktop client (v0.22.2, closed-source distributed separately) embeds the same release line for its guided bootstrap and repair flow.
 
 Previously in `7.0.1`: hotfix over v7.0.0 (db._core.DB_PATH was only caller still hardcoded to legacy ~/.nexo/data/nexo.db; every shared-DB command silently returned empty results post-migration). Previously in `7.0.0`: **BREAKING — Plan Consolidado fase F0.6**: physical separation of the runtime tree into `~/.nexo/{core,personal,runtime}/`. The flat layout (`~/.nexo/scripts/`, `brain/`, `data/`, `operations/`, ...) is gone. Operators on v6.x are auto-migrated on first `nexo update`; fresh installs land directly in the new tree. New `paths.py` helpers are transition-aware.
 
 Previously in `6.5.0`: Plan Consolidado fase F0.2: operators can now `nexo scripts enable|disable|status <name>` any personal automation. The cron wrapper honours the flag at every tick (`exit 0` with `summary='[disabled]'` while the LaunchAgent stays loaded). The companion NEXO Desktop client (a closed-source product, distributed separately) wires the same toggle into its Automatizaciones panel. See [CHANGELOG](CHANGELOG.md) for the full diff.
 
-> **About NEXO Desktop.** NEXO Desktop is a separate closed-source companion app distributed at [systeam.es/nexo-desktop](https://systeam.es/nexo-desktop) — its source does not live in this repo. When release notes mention Desktop they describe a coordinated client release that consumes the Brain's CLI / MCP contract; the Brain itself is fully usable on its own (terminal, Codex, Claude Code, or any MCP client).
+> **About NEXO Desktop.** NEXO Desktop is a separate closed-source companion app distributed at [systeam.es/nexo-desktop](https://systeam.es/nexo-desktop) — its source does not live in this repo. When release notes mention Desktop they describe a coordinated client release that consumes the Brain's CLI / MCP contract; the Brain itself is fully usable on its own (terminal, Codex, Claude Code, or any MCP client). If you want the product edition rather than the open-source Brain alone, contact `info@wazion.com` and ask about NEXO Desktop.
 
 
 Previously in `6.4.0`: Plan Consolidado fase F1 — multi-tenant email accounts (`email_accounts` table, `nexo email setup` interactive wizard, `nexo email add --password-stdin --json` for machine consumers, idempotent migrator from legacy `~/.nexo/nexo-email/config.json`).
@@ -70,6 +70,7 @@ Previously in `5.5.3`: CLAUDE.md CORE teaches the model to trust the Protocol En
 Start here:
 - [5-minute quickstart](docs/quickstart-5-minutes.md)
 - [Workflow quickstart](docs/workflows-quickstart.md)
+- [Runtime templates](docs/runtime-templates.md)
 - [Recent memory fallbacks + live system catalog](docs/recent-memory-fallbacks-and-system-catalog.md)
 - [Supported client guides](docs/integrations/cursor.md)
 - [Docker setup](docs/docker-setup.md)

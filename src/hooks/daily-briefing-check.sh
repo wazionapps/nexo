@@ -6,8 +6,13 @@
 # Frequency: Monday, Wednesday, Friday (3x/week)
 
 NEXO_HOME="${NEXO_HOME:-$HOME/.nexo}"
-BRIEFING_FILE="$NEXO_HOME/operations/.briefing-last-sent"
-FLAG_FILE="$NEXO_HOME/operations/.briefing-pending"
+OPERATIONS_DIR="$NEXO_HOME/runtime/operations"
+if [ ! -d "$OPERATIONS_DIR" ] && [ -d "$NEXO_HOME/operations" ]; then
+    OPERATIONS_DIR="$NEXO_HOME/operations"
+fi
+mkdir -p "$OPERATIONS_DIR"
+BRIEFING_FILE="$OPERATIONS_DIR/.briefing-last-sent"
+FLAG_FILE="$OPERATIONS_DIR/.briefing-pending"
 TODAY=$(date +%Y-%m-%d)
 HOUR=$(date +%H)
 DOW=$(date +%u)  # 1=Monday, 7=Sunday

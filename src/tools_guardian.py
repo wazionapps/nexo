@@ -31,6 +31,7 @@ import time
 from pathlib import Path
 
 from guardian_config import CORE_RULES, VALID_MODES
+from paths import config_dir, logs_dir
 
 
 class GuardianOverrideError(ValueError):
@@ -41,13 +42,11 @@ VALID_TTLS = {"1h": 3600, "24h": 86400, "session": 12 * 3600}
 
 
 def _override_path() -> Path:
-    nexo_home = os.environ.get("NEXO_HOME") or str(Path.home() / ".nexo")
-    return Path(nexo_home) / "config" / "guardian-runtime-overrides.json"
+    return config_dir() / "guardian-runtime-overrides.json"
 
 
 def _log_path() -> Path:
-    nexo_home = os.environ.get("NEXO_HOME") or str(Path.home() / ".nexo")
-    return Path(nexo_home) / "logs" / "guardian-overrides.log"
+    return logs_dir() / "guardian-overrides.log"
 
 
 def _load_existing(path: Path) -> dict:

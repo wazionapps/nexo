@@ -68,7 +68,7 @@ _build_monitors_from_manifest() {
     return
   fi
   python3 -c "
-import json, sys, platform
+import json, os, sys, platform
 
 nexo_home = '$NEXO_HOME'
 is_mac = platform.system() == 'Darwin'
@@ -77,6 +77,16 @@ schedule_file = '$CONFIG_DIR/schedule.json'
 logs_dir = '$LOG_DIR'
 optionals = {}
 automation_default = True
+runtime_code = os.environ.get('NEXO_CODE') or os.path.join(nexo_home, 'core')
+
+if runtime_code and runtime_code not in sys.path:
+    sys.path.insert(0, runtime_code)
+
+try:
+    from product_mode import is_cron_blocked
+except Exception:
+    def is_cron_blocked(_cron_id):
+        return False
 
 with open('$MANIFEST_FILE') as f:
     data = json.load(f)
@@ -99,6 +109,8 @@ except Exception:
 
 for c in data.get('crons', []):
     cid = c['id']
+    if is_cron_blocked(cid):
+        continue
     optional_key = c.get('optional')
     if optional_key == 'automation':
         optional_enabled = optionals.get(optional_key, automation_default)
@@ -126,10 +138,13 @@ for c in data.get('crons', []):
     run_at_load = bool(c.get('run_at_load') or (c.get('run_on_boot') and 'interval_seconds' in c and not c.get('keep_alive')))
 
     # Derive max_stale_secs and schedule_desc from schedule config
+    proc_grep = str(c.get('proc_grep') or '').strip()
+
     if c.get('keep_alive'):
         max_stale = 0
         schedule_desc = 'KeepAlive'
-        proc_grep = c.get('script', '').split('/')[-1]
+        if not proc_grep:
+            proc_grep = c.get('script', '').split('/')[-1]
     elif 'interval_seconds' in c:
         iv = c['interval_seconds']
         # Allow 2x the interval before WARN
@@ -140,7 +155,7 @@ for c in data.get('crons', []):
             schedule_desc = f'Every {iv // 60} min'
         if run_at_load:
             schedule_desc += ' + boot'
-        proc_grep = ''
+        proc_grep = proc_grep or ''
     elif 'schedule' in c:
         s = c['schedule']
         h = s.get('hour', 0)
@@ -152,15 +167,15 @@ for c in data.get('crons', []):
         else:
             schedule_desc = f'Daily {h}:{m:02d}'
             max_stale = 90000  # ~25h
-        proc_grep = ''
+        proc_grep = proc_grep or ''
     elif run_at_load:
         max_stale = 0
         schedule_desc = 'RunAtLoad once'
-        proc_grep = ''
+        proc_grep = proc_grep or ''
     else:
         max_stale = 0
         schedule_desc = 'unknown'
-        proc_grep = ''
+        proc_grep = proc_grep or ''
 
     mon_type = 'core' if c.get('core') else 'personal'
 
@@ -174,21 +189,12 @@ while IFS= read -r line; do
 done < <(_build_monitors_from_manifest)
 
 # Personal (non-manifest) monitors — add yours below.
-# These are NOT in manifest.json and won't be synced by cron-sync.
+# Core jobs now come entirely from crons/manifest.json; only true personal
+# extras should live here.
 PERSONAL_MONITORS=(
   # "My Service|com.nexo.my-service|$NEXO_HOME/runtime/logs/my-service.log||3600||Every 30 min|personal"
 )
 MONITORS+=("${PERSONAL_MONITORS[@]+"${PERSONAL_MONITORS[@]}"}")
-
-# Cron jobs to check (NAME|SCRIPT|CHECK_PATH|MAX_STALE_SECS|SCHEDULE)
-# Core cron monitors are loaded from manifest above.
-# Maintainer-only monitors go here (guarded by NEXO_MAINTAINER env var).
-CRON_MONITORS=()
-if [ "${NEXO_MAINTAINER:-}" = "1" ]; then
-  CRON_MONITORS+=(
-    "Backup|$NEXO_DIR/core/scripts/nexo-backup.sh|$BACKUP_DIR/|7200|Hourly"
-  )
-fi
 
 # Error patterns to search in stderr logs (last 50 lines)
 ERROR_PATTERNS="Traceback|Error:|CRITICAL|FATAL|ModuleNotFoundError|PermissionError|FileNotFoundError|ConnectionRefused|Errno|Operation not permitted|SyntaxError|sqlite3\\.OperationalError"

@@ -1,0 +1,1 @@
+Does the assistant message below explicitly promise a FUTURE action it has not yet executed? Answer yes if the assistant says it will do, create, send, implement, run, check, or perform something later or next. Answer no for status reports, summaries, questions, clarifying statements, or present-tense execution reports (where the action has already happened).

@@ -35,14 +35,27 @@ CODE_ROOT = Path(os.environ.get("NEXO_CODE") or (Path(__file__).resolve().parent
 if str(CODE_ROOT) not in sys.path:
     sys.path.insert(0, str(CODE_ROOT))
 
-LEGACY_PATH = NEXO_HOME / "nexo-email" / "config.json"
+import paths
+
+LEGACY_PATH_CANDIDATES = (
+    paths.nexo_email_dir() / "config.json",
+    NEXO_HOME / "nexo-email" / "config.json",
+)
+
+
+def _legacy_path() -> Path:
+    for candidate in LEGACY_PATH_CANDIDATES:
+        if candidate.exists():
+            return candidate
+    return LEGACY_PATH_CANDIDATES[0]
 
 
 def _load_legacy() -> dict | None:
-    if not LEGACY_PATH.exists():
+    legacy_path = _legacy_path()
+    if not legacy_path.exists():
         return None
     try:
-        return json.loads(LEGACY_PATH.read_text())
+        return json.loads(legacy_path.read_text())
     except Exception as exc:
         print(f"✗ legacy config unparseable: {exc}", file=sys.stderr)
         return None
@@ -65,7 +78,7 @@ def main(argv: list[str]) -> int:
 
     legacy = _load_legacy()
     if legacy is None:
-        print(f"(nada que migrar — {LEGACY_PATH} no existe)")
+        print(f"(nothing to migrate — {_legacy_path()} does not exist)")
         return 0
 
     from db import init_db
@@ -84,7 +97,7 @@ def main(argv: list[str]) -> int:
     operator_email = legacy.get("operator_email", "")
     escalation_email = legacy.get("escalation_email", "")
     trusted = legacy.get("trusted_domains", []) or []
-    francisco = legacy.get("francisco_emails", []) or []
+    legacy_operator_aliases = legacy.get("francisco_emails", []) or []
 
     metadata = {
         "sender_policy": legacy.get("sender_policy", "open"),
@@ -96,7 +109,7 @@ def main(argv: list[str]) -> int:
         "automation_task_profile": legacy.get("automation_task_profile", "deep"),
         "max_process_time": legacy.get("max_process_time"),
         "sent_folder": legacy.get("sent_folder", "INBOX.Sent"),
-        "operator_aliases": francisco,
+        "operator_aliases": legacy_operator_aliases,
     }
 
     cred_service = "email"
@@ -127,7 +140,7 @@ def main(argv: list[str]) -> int:
     if existing and not args.force:
         existing_metadata = existing.get("metadata") if isinstance(existing.get("metadata"), dict) else {}
         merged_aliases: list[str] = []
-        for candidate in [*(existing_metadata.get("operator_aliases") or []), *francisco]:
+        for candidate in [*(existing_metadata.get("operator_aliases") or []), *legacy_operator_aliases]:
             value = str(candidate or "").strip().lower()
             if value and value not in merged_aliases:
                 merged_aliases.append(value)
@@ -183,14 +196,17 @@ def main(argv: list[str]) -> int:
         )
         print(f"✓ Cuenta agente '{args.label}' migrada ({account.get('email')}).")
         print(f"  Password guardada en credentials[{cred_service}/{cred_key}].")
-        print(f"  Metadata: operator_aliases={len(francisco)}, trusted_domains={len(trusted)}.")
+        print(
+            "  Metadata: "
+            f"operator_aliases={len(legacy_operator_aliases)}, trusted_domains={len(trusted)}."
+        )
 
     existing_operator_rows = list_email_accounts(include_disabled=True, account_type="operator")
     existing_operator_emails = {
         str(row.get("email") or "").strip().lower() for row in existing_operator_rows if row.get("email")
     }
     operator_candidates: list[str] = []
-    for candidate in [operator_email, escalation_email, *francisco]:
+    for candidate in [operator_email, escalation_email, *legacy_operator_aliases]:
         value = str(candidate or "").strip().lower()
         if value and value not in operator_candidates:
             operator_candidates.append(value)
@@ -222,8 +238,11 @@ def main(argv: list[str]) -> int:
         )
         created_operator_rows += 1
 
-    print(f"  Operator inboxes creados: {created_operator_rows}.")
-    print(f"  Legacy JSON intacto en {LEGACY_PATH} (borrarlo tras verificar con `nexo email test {args.label}`).")
+    print(f"  Operator inboxes created: {created_operator_rows}.")
+    print(
+        "  Legacy JSON kept at "
+        f"{_legacy_path()} (delete it after verifying with `nexo email test {args.label}`)."
+    )
     return 0
 
 

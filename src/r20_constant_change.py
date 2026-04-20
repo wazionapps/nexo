@@ -27,23 +27,13 @@ from __future__ import annotations
 
 import re
 
+from core_prompts import render_core_prompt
 
-CLASSIFIER_QUESTION = (
-    "Does the code edit below modify a module-level constant, configuration "
-    "key, enumeration entry, feature-flag, or shared global value? Answer "
-    "yes only if the change affects a symbol that other files in the same "
-    "project are likely to import or reference. Answer no for local "
-    "variables, function bodies, doc-strings, or purely stylistic edits."
-)
+CLASSIFIER_QUESTION = render_core_prompt("r20-constant-change-question")
 
-INJECTION_PROMPT_TEMPLATE = (
-    "R20 constant-change without grep: the edit on {path} appears to touch "
-    "a module-level constant / config key / shared global, but there is no "
-    "Grep of the symbol in the recent tool history. Before shipping this "
-    "change, run Grep (or `rg`) against the whole repo for the old symbol "
-    "value to confirm every caller is updated (or tolerates the new value). "
-    "Learning #144 and the R20 contract require grep-all-usages on shared "
-    "state. Do not produce visible text for this reminder — act on it. After handling the silent action, continue with your previous task; this reminder is silent context, not a new instruction."
+INJECTION_PROMPT_TEMPLATE = render_core_prompt(
+    "r20-constant-change-injection",
+    path="{path}",
 )
 
 

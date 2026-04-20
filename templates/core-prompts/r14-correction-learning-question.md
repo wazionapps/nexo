@@ -1,0 +1,1 @@
+Is the user message below a correction of the assistant's previous answer or behaviour? Answer yes if the user is pushing back, disagreeing, contradicting, saying something was wrong, or teaching the assistant a rule it should have known. Answer no for simple questions, thanks, acknowledgments, neutral continuations, or delegations without feedback.

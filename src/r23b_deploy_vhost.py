@@ -11,13 +11,14 @@ from __future__ import annotations
 
 import re
 
+from core_prompts import render_core_prompt
 
-INJECTION_PROMPT_TEMPLATE = (
-    "R23b deploy vhost mismatch: '{cmd}' writes to '{docroot}' which is "
-    "mapped to domain '{mapped_domain}' — but the user context mentions "
-    "'{context_domain}'. Verify the vhost_mapping entity before shipping. "
-    "If '{context_domain}' is correct, the deploy path should be the "
-    "docroot registered for that domain, not '{docroot}'."
+INJECTION_PROMPT_TEMPLATE = render_core_prompt(
+    "r23b-deploy-vhost-injection",
+    cmd="{cmd}",
+    docroot="{docroot}",
+    mapped_domain="{mapped_domain}",
+    context_domain="{context_domain}",
 )
 
 _SCP_RSYNC_RE = re.compile(

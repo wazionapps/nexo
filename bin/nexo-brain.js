@@ -318,6 +318,50 @@ function syncRuntimePackageMetadata(repoRoot = path.join(__dirname, ".."), runti
   }
 }
 
+function resolveRuntimeConfigDir(nexoHome) {
+  const canonical = path.join(nexoHome, "personal", "config");
+  const legacy = path.join(nexoHome, "config");
+  if (fs.existsSync(canonical)) return canonical;
+  if (fs.existsSync(legacy)) return legacy;
+  return canonical;
+}
+
+function resolveRuntimeBrainDir(nexoHome) {
+  const canonical = path.join(nexoHome, "personal", "brain");
+  const legacy = path.join(nexoHome, "brain");
+  if (fs.existsSync(canonical)) return canonical;
+  if (fs.existsSync(legacy)) return legacy;
+  return canonical;
+}
+
+function resolveRuntimeDataDir(nexoHome) {
+  const canonical = path.join(nexoHome, "runtime", "data");
+  const legacy = path.join(nexoHome, "data");
+  if (fs.existsSync(canonical)) return canonical;
+  if (fs.existsSync(legacy)) return legacy;
+  return canonical;
+}
+
+function resolveRuntimeLogsDir(nexoHome) {
+  const canonical = path.join(nexoHome, "runtime", "logs");
+  const legacy = path.join(nexoHome, "logs");
+  if (fs.existsSync(canonical)) return canonical;
+  if (fs.existsSync(legacy)) return legacy;
+  return canonical;
+}
+
+function resolveRuntimeCronsDir(nexoHome) {
+  const canonical = path.join(nexoHome, "runtime", "crons");
+  const legacy = path.join(nexoHome, "crons");
+  if (fs.existsSync(canonical)) return canonical;
+  if (fs.existsSync(legacy)) return legacy;
+  return canonical;
+}
+
+function resolveRuntimeSchedulePath(nexoHome) {
+  return path.join(resolveRuntimeConfigDir(nexoHome), "schedule.json");
+}
+
 function finalizeF06Layout(python, nexoHome = NEXO_HOME) {
   try {
     const result = spawnSync(
@@ -327,7 +371,6 @@ function finalizeF06Layout(python, nexoHome = NEXO_HOME) {
         [
           "import auto_update",
           "auto_update._maybe_migrate_to_f06_layout()",
-          "auto_update._ensure_f06_legacy_shims()",
           "auto_update._rewrite_f06_launch_agents()",
         ].join("; "),
       ],
@@ -418,7 +461,7 @@ function getCoreRuntimePackages() {
 // getCoreRuntimeFlatFiles for that reason) but data contracts with a stable
 // path that external clients read. Keep in sync with docs/contracts/.
 function publishBrainContracts(srcDir = path.join(__dirname, "..", "src"), nexoHome = NEXO_HOME) {
-  const brainDir = path.join(nexoHome, "brain");
+  const brainDir = resolveRuntimeBrainDir(nexoHome);
   fs.mkdirSync(brainDir, { recursive: true });
   const contracts = ["resonance_tiers.json"];
   contracts.forEach((name) => {
@@ -458,7 +501,7 @@ function resolveLaunchAgentPath(home) {
 
 function setupKeychainPassFile(nexoHome) {
   if (process.platform !== "darwin") return;
-  const configDir = path.join(nexoHome, "config");
+  const configDir = resolveRuntimeConfigDir(nexoHome);
   const passFile = path.join(configDir, ".keychain-pass");
   if (fs.existsSync(passFile)) return; // already set up
   fs.mkdirSync(configDir, { recursive: true });
@@ -528,7 +571,7 @@ function detectFullDiskAccessReasons(nexoHome) {
     reasons.push(`NEXO_HOME is inside a protected macOS folder: ${nexoHome}`);
   }
 
-  const logsDir = path.join(nexoHome, "logs");
+  const logsDir = resolveRuntimeLogsDir(nexoHome);
   if (fs.existsSync(logsDir)) {
     const candidates = fs.readdirSync(logsDir).filter((name) => name.endsWith("-stderr.log"));
     for (const name of candidates) {
@@ -586,25 +629,25 @@ async function maybeConfigureFullDiskAccess(schedule, useDefaults, pythonPath = 
   schedule.full_disk_access_reasons = reasons;
 
   if (process.platform !== "darwin" || !reasons.length) {
-    fs.writeFileSync(path.join(NEXO_HOME, "config", "schedule.json"), JSON.stringify(schedule, null, 2));
+    fs.writeFileSync(resolveRuntimeSchedulePath(NEXO_HOME), JSON.stringify(schedule, null, 2));
     return schedule;
   }
 
   if (current === "granted") {
     const probe = probeFullDiskAccess(NEXO_HOME);
     if (probe.granted) {
-      fs.writeFileSync(path.join(NEXO_HOME, "config", "schedule.json"), JSON.stringify(schedule, null, 2));
+      fs.writeFileSync(resolveRuntimeSchedulePath(NEXO_HOME), JSON.stringify(schedule, null, 2));
       return schedule;
     }
     schedule.full_disk_access_status = "later";
   } else if (current === "declined") {
-    fs.writeFileSync(path.join(NEXO_HOME, "config", "schedule.json"), JSON.stringify(schedule, null, 2));
+    fs.writeFileSync(resolveRuntimeSchedulePath(NEXO_HOME), JSON.stringify(schedule, null, 2));
     return schedule;
   }
 
   if (useDefaults || !process.stdin.isTTY || !process.stdout.isTTY) {
     schedule.full_disk_access_status = current === "granted" ? "later" : current || "unset";
-    fs.writeFileSync(path.join(NEXO_HOME, "config", "schedule.json"), JSON.stringify(schedule, null, 2));
+    fs.writeFileSync(resolveRuntimeSchedulePath(NEXO_HOME), JSON.stringify(schedule, null, 2));
     return schedule;
   }
 
@@ -640,7 +683,7 @@ async function maybeConfigureFullDiskAccess(schedule, useDefaults, pythonPath = 
     schedule.full_disk_access_status = "declined";
   }
 
-  fs.writeFileSync(path.join(NEXO_HOME, "config", "schedule.json"), JSON.stringify(schedule, null, 2));
+  fs.writeFileSync(resolveRuntimeSchedulePath(NEXO_HOME), JSON.stringify(schedule, null, 2));
   return schedule;
 }
 
@@ -737,7 +780,7 @@ function _manifestHookEntries() {
 
 function _hookCommand(hook, hooksDir, nexoHome) {
   // Resolve handler path under the installed runtime. hooksDir points to
-  // ~/.nexo/hooks, which is the copy of src/hooks/ at install time.
+  // the canonical installed hook tree (preferably ~/.nexo/core/hooks).
   const handlerFile = path.basename(hook.handler);
   const runtimePath = path.join(hooksDir, handlerFile);
   return `NEXO_HOME=${nexoHome} python3 ${runtimePath}`;
@@ -795,7 +838,7 @@ function registerAllCoreHooks(settings, hooksDir, nexoHome) {
 
   // Ensure operations dir exists for any hook that wants to drop a file there
   // (session-start.py writes .session-start-ts here).
-  fs.mkdirSync(path.join(nexoHome, "operations"), { recursive: true });
+  fs.mkdirSync(path.join(nexoHome, "runtime", "operations"), { recursive: true });
 
   const manifestEntries = _manifestHookEntries();
   const registrations = [];
@@ -909,7 +952,7 @@ function registerAllCoreHooks(settings, hooksDir, nexoHome) {
  * NEVER overwrites an existing schedule.json (user customization).
  */
 function loadOrCreateSchedule(nexoHome) {
-  const configDir = path.join(nexoHome, "config");
+  const configDir = resolveRuntimeConfigDir(nexoHome);
   fs.mkdirSync(configDir, { recursive: true });
   const scheduleFile = path.join(configDir, "schedule.json");
 
@@ -986,6 +1029,71 @@ function getDefaultSchedule(timezone) {
       "followup-hygiene": { day: "sunday", hour: 5, minute: 0 },
     },
   };
+}
+
+function writeDesktopProductMode(nexoHome) {
+  if (String(process.env.NEXO_DESKTOP_MANAGED || "").trim() !== "1") return;
+  const configDir = resolveRuntimeConfigDir(nexoHome);
+  fs.mkdirSync(configDir, { recursive: true });
+  const target = path.join(configDir, "product-mode.json");
+  let createdAt = new Date().toISOString();
+  if (fs.existsSync(target)) {
+    try {
+      const existing = JSON.parse(fs.readFileSync(target, "utf8"));
+      if (existing && typeof existing === "object" && existing.created_at) {
+        createdAt = existing.created_at;
+      }
+    } catch (_) {}
+  }
+  fs.writeFileSync(target, JSON.stringify({
+    desktop_managed: true,
+    product_mode: "desktop_closed_product",
+    disabled_features: ["evolution"],
+    source: "desktop",
+    created_at: createdAt,
+    updated_at: new Date().toISOString(),
+  }, null, 2));
+}
+
+function ensureEvolutionObjectiveForCurrentProductMode(nexoHome) {
+  const brainDir = resolveRuntimeBrainDir(nexoHome);
+  fs.mkdirSync(brainDir, { recursive: true });
+  const evoObjectivePath = path.join(brainDir, "evolution-objective.json");
+  const desktopManaged = String(process.env.NEXO_DESKTOP_MANAGED || "").trim() === "1";
+  let payload = null;
+  if (fs.existsSync(evoObjectivePath)) {
+    try {
+      payload = JSON.parse(fs.readFileSync(evoObjectivePath, "utf8"));
+    } catch (_) {
+      payload = null;
+    }
+  }
+  if (!payload || typeof payload !== "object") {
+    payload = {
+      objective: "Improve operational excellence and reduce repeated errors",
+      focus_areas: ["error_prevention", "proactivity", "memory_quality"],
+      evolution_enabled: true,
+      evolution_mode: "auto",
+      dimensions: {
+        episodic_memory: { current: 0, target: 90 },
+        autonomy: { current: 0, target: 80 },
+        proactivity: { current: 0, target: 70 },
+        self_improvement: { current: 0, target: 60 },
+        agi: { current: 0, target: 20 },
+      },
+      total_evolutions: 0,
+      consecutive_failures: 0,
+      created_at: new Date().toISOString(),
+    };
+  }
+  if (desktopManaged) {
+    payload.evolution_enabled = false;
+    payload.disabled_reason = "Disabled by NEXO Desktop product contract";
+    payload.disabled_by = "desktop_product";
+    payload.desktop_managed = true;
+  }
+  fs.writeFileSync(evoObjectivePath, JSON.stringify(payload, null, 2));
+  return evoObjectivePath;
 }
 
 function normalizePublicContributionConfig(config = {}) {
@@ -1448,7 +1556,7 @@ async function maybeConfigurePowerPolicy(schedule, useDefaults) {
     schedule.power_policy = "disabled";
   }
   schedule.power_policy_version = 2;
-  fs.writeFileSync(path.join(NEXO_HOME, "config", "schedule.json"), JSON.stringify(schedule, null, 2));
+  fs.writeFileSync(resolveRuntimeSchedulePath(NEXO_HOME), JSON.stringify(schedule, null, 2));
   return schedule;
 }
 
@@ -1471,13 +1579,13 @@ async function maybeConfigurePublicContribution(schedule, useDefaults) {
   const current = normalizePublicContributionConfig((schedule && schedule.public_contribution) || {});
   if (current.mode && current.mode !== "unset") {
     schedule.public_contribution = current;
-    fs.writeFileSync(path.join(NEXO_HOME, "config", "schedule.json"), JSON.stringify(schedule, null, 2));
+    fs.writeFileSync(resolveRuntimeSchedulePath(NEXO_HOME), JSON.stringify(schedule, null, 2));
     return schedule;
   }
 
   if (useDefaults || !process.stdin.isTTY || !process.stdout.isTTY) {
     schedule.public_contribution = current;
-    fs.writeFileSync(path.join(NEXO_HOME, "config", "schedule.json"), JSON.stringify(schedule, null, 2));
+    fs.writeFileSync(resolveRuntimeSchedulePath(NEXO_HOME), JSON.stringify(schedule, null, 2));
     return schedule;
   }
 
@@ -1526,7 +1634,7 @@ async function maybeConfigurePublicContribution(schedule, useDefaults) {
   }
 
   schedule.public_contribution = current;
-  fs.writeFileSync(path.join(NEXO_HOME, "config", "schedule.json"), JSON.stringify(schedule, null, 2));
+  fs.writeFileSync(resolveRuntimeSchedulePath(NEXO_HOME), JSON.stringify(schedule, null, 2));
   return schedule;
 }
 
@@ -1561,12 +1669,12 @@ const DAY_MAP = {
 function installAllProcesses(platform, pythonPath, nexoHome, schedule, launchAgentsDir, enabledOptionals = {}) {
   const home = require("os").homedir();
   const nexoCode = nexoHome;
-  const logsDir = path.join(nexoHome, "logs");
+  const logsDir = path.join(nexoHome, "runtime", "logs");
   fs.mkdirSync(logsDir, { recursive: true });
 
-  // Resolve script path: "root" means NEXO_HOME directly, "scripts" means NEXO_HOME/scripts/
+  // Resolve script path against the canonical runtime code tree.
   function scriptPath(proc) {
-    const dir = proc.scriptDir === "root" ? nexoHome : path.join(nexoHome, "scripts");
+    const dir = proc.scriptDir === "root" ? runtimeCodeDir(nexoHome) : runtimeScriptsDir(nexoHome);
     return path.join(dir, proc.script);
   }
 
@@ -1916,7 +2024,7 @@ async function main() {
 
         // Update hooks (entire directory)
         const hooksSrc = path.join(srcDir, "hooks");
-        const hooksDest = path.join(NEXO_HOME, "hooks");
+        const hooksDest = path.join(NEXO_HOME, "core", "hooks");
         if (fs.existsSync(hooksSrc)) {
           copyDirRec(hooksSrc, hooksDest);
           // Make .sh files executable
@@ -1931,14 +2039,16 @@ async function main() {
         coreFlatFiles.forEach((f) => {
           const src = path.join(srcDir, f);
           if (fs.existsSync(src)) {
-            fs.copyFileSync(src, path.join(NEXO_HOME, f));
+            const dest = path.join(NEXO_HOME, "core", f);
+            fs.mkdirSync(path.dirname(dest), { recursive: true });
+            fs.copyFileSync(src, dest);
           }
         });
         // Update core packages (db/, cognitive/) — full directory copy
         getCoreRuntimePackages().forEach(pkg => {
           const pkgSrc = path.join(srcDir, pkg);
           if (fs.existsSync(pkgSrc)) {
-            copyDirRec(pkgSrc, path.join(NEXO_HOME, pkg));
+            copyDirRec(pkgSrc, path.join(NEXO_HOME, "core", pkg));
           }
         });
         // Publish Brain contracts to ~/.nexo/brain/ (read by NEXO Desktop et al.)
@@ -1971,7 +2081,7 @@ async function main() {
 
         // Update plugins (all .py files in plugins/)
         const pluginsSrc = path.join(srcDir, "plugins");
-        const pluginsDest = path.join(NEXO_HOME, "plugins");
+        const pluginsDest = path.join(NEXO_HOME, "core", "plugins");
         fs.mkdirSync(pluginsDest, { recursive: true });
         if (fs.existsSync(pluginsSrc)) {
           fs.readdirSync(pluginsSrc).filter(f => f.endsWith(".py") && !isDuplicateArtifactName(f, pluginsSrc)).forEach((f) => {
@@ -1982,7 +2092,7 @@ async function main() {
 
         // Update dashboard (recursive — includes static/, templates/)
         const dashSrc = path.join(srcDir, "dashboard");
-        const dashDest = path.join(NEXO_HOME, "dashboard");
+        const dashDest = path.join(NEXO_HOME, "core", "dashboard");
         if (fs.existsSync(dashSrc)) {
           copyDirRec(dashSrc, dashDest);
           log("  Dashboard updated.");
@@ -1990,7 +2100,7 @@ async function main() {
 
         // Update rules (directory with core-rules.json, __init__.py, migrate.py)
         const rulesSrc = path.join(srcDir, "rules");
-        const rulesDest = path.join(NEXO_HOME, "rules");
+        const rulesDest = path.join(NEXO_HOME, "core", "rules");
         if (fs.existsSync(rulesSrc)) {
           copyDirRec(rulesSrc, rulesDest);
           log("  Rules updated.");
@@ -1998,7 +2108,7 @@ async function main() {
 
         // Update crons (manifest.json + sync.py — needed by catchup & watchdog)
         const cronsMigSrc = path.join(srcDir, "crons");
-        const cronsMigDest = path.join(NEXO_HOME, "crons");
+        const cronsMigDest = path.join(NEXO_HOME, "runtime", "crons");
         if (fs.existsSync(cronsMigSrc)) {
           copyDirRec(cronsMigSrc, cronsMigDest);
           log("  Crons updated.");
@@ -2006,7 +2116,7 @@ async function main() {
 
         // Update scripts (all .py, .sh files + subdirectories like deep-sleep/)
         const scriptsSrc = path.join(srcDir, "scripts");
-        const scriptsDest = path.join(NEXO_HOME, "scripts");
+        const scriptsDest = path.join(NEXO_HOME, "core", "scripts");
         if (fs.existsSync(scriptsSrc)) {
           copyDirRec(scriptsSrc, scriptsDest);
           // Make .sh files executable
@@ -2023,7 +2133,7 @@ async function main() {
           try { settings = JSON.parse(fs.readFileSync(CLAUDE_SETTINGS, "utf8")); } catch {}
         }
         if (!settings.hooks) settings.hooks = {};
-        const migHooksDest = path.join(NEXO_HOME, "hooks");
+        const migHooksDest = path.join(NEXO_HOME, "core", "hooks");
         registerAllCoreHooks(settings, migHooksDest, NEXO_HOME);
         fs.mkdirSync(path.dirname(CLAUDE_SETTINGS), { recursive: true });
         fs.writeFileSync(CLAUDE_SETTINGS, JSON.stringify(settings, null, 2));
@@ -2037,7 +2147,7 @@ async function main() {
         migSchedule = await maybeConfigureFullDiskAccess(migSchedule, useDefaults, migPython);
         let migOptionals = {};
         try {
-          const optFile = path.join(NEXO_HOME, "config", "optionals.json");
+          const optFile = path.join(resolveRuntimeConfigDir(NEXO_HOME), "optionals.json");
           if (fs.existsSync(optFile)) migOptionals = JSON.parse(fs.readFileSync(optFile, "utf8"));
         } catch {}
         installAllProcesses(platform, migPython, NEXO_HOME, migSchedule, LAUNCH_AGENTS, migOptionals);
@@ -2057,20 +2167,19 @@ async function main() {
           throw new Error(`F0.6 layout finalization failed: ${migLayoutFinalize.error}`);
         }
 
-        // Save updated CLAUDE.md template as reference (don't overwrite user's)
+        // Keep the rendered template in-memory for version tracking, but do
+        // not drop a loose reference file in NEXO_HOME root.
         const templateSrc = path.join(__dirname, "..", "templates", "CLAUDE.md.template");
         if (fs.existsSync(templateSrc)) {
           const operatorName = installed.operator_name || DEFAULT_ASSISTANT_NAME;
           let claudeMd = fs.readFileSync(templateSrc, "utf8")
             .replace(/\{\{NAME\}\}/g, operatorName)
             .replace(/\{\{NEXO_HOME\}\}/g, NEXO_HOME);
-          fs.writeFileSync(path.join(NEXO_HOME, "CLAUDE.md.updated"), claudeMd);
-          log(`  Updated CLAUDE.md template saved to ~/.nexo/CLAUDE.md.updated`);
 
           // Update CLAUDE.md version tracker (auto_update.py will handle section migration on next server start)
           const migClaudeMdVerMatch = claudeMd.match(/nexo-claude-md-version:\s*([\d.]+)/);
           if (migClaudeMdVerMatch) {
-            const migDataDir = path.join(NEXO_HOME, "data");
+            const migDataDir = resolveRuntimeDataDir(NEXO_HOME);
             fs.mkdirSync(migDataDir, { recursive: true });
             // Don't write the version yet — let auto_update.py detect the diff and migrate sections
             // Only write if no version file exists (first time with version tracking)
@@ -2130,7 +2239,7 @@ async function main() {
       }
 
       // Same version — backfill crons/ if missing (for installs before crons was shipped)
-      const cronsDest = path.join(NEXO_HOME, "crons");
+      const cronsDest = resolveRuntimeCronsDir(NEXO_HOME);
       const cronsSrc = path.join(__dirname, "..", "src", "crons");
       if (fs.existsSync(cronsSrc)) {
         const copyDirRec2 = (src, dest) => {
@@ -2164,7 +2273,7 @@ async function main() {
       }
 
       // Same version — refresh packaged core skills/templates/runtime helpers too.
-      const skillsCoreDest = path.join(NEXO_HOME, "skills-core");
+      const skillsCoreDest = path.join(NEXO_HOME, "core", "skills");
       const skillsCoreSrc = path.join(__dirname, "..", "src", "skills");
       if (fs.existsSync(skillsCoreSrc)) {
         const copyDirRec3 = (src, dest) => {
@@ -2183,8 +2292,9 @@ async function main() {
 
       ["skills_runtime.py"].forEach((fname) => {
         const srcFile = path.join(__dirname, "..", "src", fname);
-        const destFile = path.join(NEXO_HOME, fname);
+        const destFile = path.join(NEXO_HOME, "core", fname);
         if (fs.existsSync(srcFile)) {
+          fs.mkdirSync(path.dirname(destFile), { recursive: true });
           fs.copyFileSync(srcFile, destFile);
         }
       });
@@ -2615,10 +2725,11 @@ async function main() {
     calibrated_at: new Date().toISOString(),
   };
   // Ensure NEXO_HOME and brain dir exist before writing calibration
+  const runtimeBrainDir = resolveRuntimeBrainDir(NEXO_HOME);
   fs.mkdirSync(NEXO_HOME, { recursive: true });
-  fs.mkdirSync(path.join(NEXO_HOME, "brain"), { recursive: true });
+  fs.mkdirSync(runtimeBrainDir, { recursive: true });
   fs.writeFileSync(
-    path.join(NEXO_HOME, "brain", "calibration.json"),
+    path.join(runtimeBrainDir, "calibration.json"),
     JSON.stringify(calibration, null, 2)
   );
 
@@ -2672,7 +2783,7 @@ async function main() {
   // Persist the updated calibration (auto_install may have changed post-write above).
   try {
     fs.writeFileSync(
-      path.join(NEXO_HOME, "brain", "calibration.json"),
+      path.join(runtimeBrainDir, "calibration.json"),
       JSON.stringify(calibration, null, 2)
     );
   } catch (_) {}
@@ -2683,10 +2794,9 @@ async function main() {
     // the heavy bootstrap (client installs, pip, scan, LaunchAgents) so the
     // smoke does not sit on long dependency timeouts inside sandboxes.
     try {
-      const canonicalBrainDir = path.join(NEXO_HOME, "personal", "brain");
-      fs.mkdirSync(canonicalBrainDir, { recursive: true });
+      fs.mkdirSync(runtimeBrainDir, { recursive: true });
       fs.writeFileSync(
-        path.join(canonicalBrainDir, "calibration.json"),
+        path.join(runtimeBrainDir, "calibration.json"),
         JSON.stringify(calibration, null, 2)
       );
     } catch (_) {}
@@ -2746,40 +2856,33 @@ async function main() {
   const dirs = [
     NEXO_HOME,
     path.join(NEXO_HOME, "bin"),
-    path.join(NEXO_HOME, "plugins"),
-    path.join(NEXO_HOME, "scripts"),
-    path.join(NEXO_HOME, "skills"),
-    path.join(NEXO_HOME, "skills-core"),
-    path.join(NEXO_HOME, "skills-runtime"),
-    path.join(NEXO_HOME, "logs"),
-    path.join(NEXO_HOME, "backups"),
-    path.join(NEXO_HOME, "coordination"),
-    path.join(NEXO_HOME, "brain"),
-    path.join(NEXO_HOME, "config"),
-    path.join(NEXO_HOME, "operations"),
+    path.join(NEXO_HOME, "core"),
+    path.join(NEXO_HOME, "core", "plugins"),
+    path.join(NEXO_HOME, "core", "scripts"),
+    path.join(NEXO_HOME, "core", "skills"),
+    path.join(NEXO_HOME, "core", "hooks"),
+    path.join(NEXO_HOME, "core", "rules"),
+    path.join(NEXO_HOME, "core", "dashboard"),
+    path.join(NEXO_HOME, "personal"),
+    path.join(NEXO_HOME, "personal", "brain"),
+    path.join(NEXO_HOME, "personal", "config"),
+    path.join(NEXO_HOME, "personal", "skills"),
+    path.join(NEXO_HOME, "runtime"),
+    path.join(NEXO_HOME, "runtime", "data"),
+    path.join(NEXO_HOME, "runtime", "logs"),
+    path.join(NEXO_HOME, "runtime", "backups"),
+    path.join(NEXO_HOME, "runtime", "coordination"),
+    path.join(NEXO_HOME, "runtime", "operations"),
+    path.join(NEXO_HOME, "runtime", "crons"),
   ];
   dirs.forEach((d) => fs.mkdirSync(d, { recursive: true }));
 
-  // Create default evolution-objective.json in brain/ if it doesn't exist
-  const evoObjectivePath = path.join(NEXO_HOME, "brain", "evolution-objective.json");
-  if (!fs.existsSync(evoObjectivePath)) {
-    fs.writeFileSync(evoObjectivePath, JSON.stringify({
-      objective: "Improve operational excellence and reduce repeated errors",
-      focus_areas: ["error_prevention", "proactivity", "memory_quality"],
-      evolution_enabled: true,
-      evolution_mode: "auto",
-      dimensions: {
-        episodic_memory: { current: 0, target: 90 },
-        autonomy: { current: 0, target: 80 },
-        proactivity: { current: 0, target: 70 },
-        self_improvement: { current: 0, target: 60 },
-        agi: { current: 0, target: 20 },
-      },
-      total_evolutions: 0,
-      consecutive_failures: 0,
-      created_at: new Date().toISOString(),
-    }, null, 2));
-    log("  Created default evolution-objective.json in brain/");
+  writeDesktopProductMode(NEXO_HOME);
+  const evoObjectivePath = ensureEvolutionObjectiveForCurrentProductMode(NEXO_HOME);
+  if (String(process.env.NEXO_DESKTOP_MANAGED || "").trim() === "1") {
+    log("  Desktop product contract detected — evolution disabled.");
+  } else if (fs.existsSync(evoObjectivePath)) {
+    log("  Ensured evolution-objective.json in brain/");
   }
 
   // Write version file for auto-update tracking
@@ -2825,7 +2928,9 @@ async function main() {
   coreFiles.forEach((f) => {
     const src = path.join(srcDir, f);
     if (fs.existsSync(src)) {
-      fs.copyFileSync(src, path.join(NEXO_HOME, f));
+      const dest = path.join(NEXO_HOME, "core", f);
+      fs.mkdirSync(path.dirname(dest), { recursive: true });
+      fs.copyFileSync(src, dest);
     }
   });
 
@@ -2840,6 +2945,7 @@ async function main() {
     `RUNTIME_HOME="${NEXO_HOME}"`,
     'NEXO_HOME="$RUNTIME_HOME"',
     'export NEXO_HOME',
+    'export PYTHONDONTWRITEBYTECODE=1',
     'resolve_code_dir() {',
     '  if [ -n "${NEXO_CODE:-}" ] && [ -f "${NEXO_CODE%/}/cli.py" ]; then',
     '    printf \'%s\\n\' "${NEXO_CODE%/}"',
@@ -2924,24 +3030,24 @@ async function main() {
   getCoreRuntimePackages().forEach(pkg => {
     const pkgSrc = path.join(srcDir, pkg);
     if (fs.existsSync(pkgSrc)) {
-      copyDirRecursive(pkgSrc, path.join(NEXO_HOME, pkg));
+      copyDirRecursive(pkgSrc, path.join(NEXO_HOME, "core", pkg));
     }
   });
 
   log("Copying plugins, scripts, and templates...");
   // Plugins (all .py files in plugins/)
-  fs.mkdirSync(path.join(NEXO_HOME, "plugins"), { recursive: true });
+  fs.mkdirSync(path.join(NEXO_HOME, "core", "plugins"), { recursive: true });
   if (fs.existsSync(pluginsSrcDir)) {
     fs.readdirSync(pluginsSrcDir).filter(f => f.endsWith(".py") && !isDuplicateArtifactName(f, pluginsSrcDir)).forEach((f) => {
-      fs.copyFileSync(path.join(pluginsSrcDir, f), path.join(NEXO_HOME, "plugins", f));
+      fs.copyFileSync(path.join(pluginsSrcDir, f), path.join(NEXO_HOME, "core", "plugins", f));
     });
   }
 
   // Scripts (all files + subdirectories like deep-sleep/)
   if (fs.existsSync(scriptsSrcDir)) {
-    copyDirRecursive(scriptsSrcDir, path.join(NEXO_HOME, "scripts"));
+    copyDirRecursive(scriptsSrcDir, path.join(NEXO_HOME, "core", "scripts"));
     // Make .sh files executable
-    const scriptsDest = path.join(NEXO_HOME, "scripts");
+    const scriptsDest = path.join(NEXO_HOME, "core", "scripts");
     fs.readdirSync(scriptsDest).filter(f => f.endsWith(".sh")).forEach(f => {
       fs.chmodSync(path.join(scriptsDest, f), "755");
     });
@@ -2950,28 +3056,28 @@ async function main() {
 
   // Core skills are shipped separately from personal skills.
   if (fs.existsSync(skillsSrcDir)) {
-    copyDirRecursive(skillsSrcDir, path.join(NEXO_HOME, "skills-core"));
+    copyDirRecursive(skillsSrcDir, path.join(NEXO_HOME, "core", "skills"));
     log("  Core skills installed.");
   }
 
   // Dashboard (recursive — includes static/, templates/)
   const dashSrcDir = path.join(srcDir, "dashboard");
   if (fs.existsSync(dashSrcDir)) {
-    copyDirRecursive(dashSrcDir, path.join(NEXO_HOME, "dashboard"));
+    copyDirRecursive(dashSrcDir, path.join(NEXO_HOME, "core", "dashboard"));
     log("  Dashboard installed.");
   }
 
   // Rules directory
   const rulesSrcDir = path.join(srcDir, "rules");
   if (fs.existsSync(rulesSrcDir)) {
-    copyDirRecursive(rulesSrcDir, path.join(NEXO_HOME, "rules"));
+    copyDirRecursive(rulesSrcDir, path.join(NEXO_HOME, "core", "rules"));
     log("  Rules installed.");
   }
 
   // Crons directory (manifest.json + sync.py — needed by catchup & watchdog)
   const cronsSrcDir = path.join(srcDir, "crons");
   if (fs.existsSync(cronsSrcDir)) {
-    copyDirRecursive(cronsSrcDir, path.join(NEXO_HOME, "crons"));
+    copyDirRecursive(cronsSrcDir, path.join(NEXO_HOME, "runtime", "crons"));
     log("  Crons installed.");
   }
 
@@ -3001,7 +3107,7 @@ async function main() {
   // Hooks directory
   const hooksSrcDir = path.join(srcDir, "hooks");
   if (fs.existsSync(hooksSrcDir)) {
-    const hooksDest = path.join(NEXO_HOME, "hooks");
+    const hooksDest = path.join(NEXO_HOME, "core", "hooks");
     copyDirRecursive(hooksSrcDir, hooksDest);
     // Make .sh files executable
     fs.readdirSync(hooksDest).filter(f => f.endsWith(".sh")).forEach(f => {
@@ -3028,7 +3134,7 @@ I am ${operatorName}, a cognitive co-operator. Not an assistant — an operation
 - Give long explanations when a short answer suffices
 - Repeat mistakes I've already logged
 `;
-  fs.writeFileSync(path.join(NEXO_HOME, "brain", "personality.md"), personality);
+  fs.writeFileSync(path.join(resolveRuntimeBrainDir(NEXO_HOME), "personality.md"), personality);
 
   // Deep scan (P9) — comprehensive environment analysis
   const profileData = {
@@ -3517,15 +3623,15 @@ I am ${operatorName}, a cognitive co-operator. Not an assistant — an operation
 
     // Save full profile
     fs.writeFileSync(
-      path.join(NEXO_HOME, "brain", "profile.json"),
+      path.join(resolveRuntimeBrainDir(NEXO_HOME), "profile.json"),
       JSON.stringify(profileData, null, 2)
     );
-    log(`Saved to ~/.nexo/brain/profile.json`);
+    log(`Saved to ${path.join(resolveRuntimeBrainDir(NEXO_HOME), "profile.json")}`);
 
   } else {
     // No scan — save minimal profile
     fs.writeFileSync(
-      path.join(NEXO_HOME, "brain", "profile.json"),
+      path.join(resolveRuntimeBrainDir(NEXO_HOME), "profile.json"),
       JSON.stringify(profileData, null, 2)
     );
     log(lang === "es" ? "Sin problema. Iré aprendiéndote sobre la marcha." : "No problem. I'll learn about you as we go.");
@@ -3552,7 +3658,7 @@ ${doScan ? `- Stack: ${Object.keys(profileData.code.languages || {}).slice(0, 5)
 ## Work patterns
 (${operatorName} will observe and record these)
 `;
-  fs.writeFileSync(path.join(NEXO_HOME, "brain", "user-profile.md"), profileMd);
+  fs.writeFileSync(path.join(resolveRuntimeBrainDir(NEXO_HOME), "user-profile.md"), profileMd);
 
   console.log("");
 
@@ -3647,7 +3753,7 @@ ${doScan ? `- Stack: ${Object.keys(profileData.code.languages || {}).slice(0, 5)
   log("Setting up automated processes...");
   let schedule = loadOrCreateSchedule(NEXO_HOME);
   schedule = applyClientSetupToSchedule(schedule, clientSetup);
-  fs.writeFileSync(path.join(NEXO_HOME, "config", "schedule.json"), JSON.stringify(schedule, null, 2));
+  fs.writeFileSync(resolveRuntimeSchedulePath(NEXO_HOME), JSON.stringify(schedule, null, 2));
   schedule = await maybeConfigurePowerPolicy(schedule, useDefaults);
   schedule = await maybeConfigurePublicContribution(schedule, useDefaults);
   schedule = await maybeConfigureFullDiskAccess(schedule, useDefaults, python);
@@ -3662,7 +3768,7 @@ ${doScan ? `- Stack: ${Object.keys(profileData.code.languages || {}).slice(0, 5)
 
   // Persist optional process preferences for auto-update
   try {
-    const configDir = path.join(NEXO_HOME, "config");
+    const configDir = resolveRuntimeConfigDir(NEXO_HOME);
     fs.mkdirSync(configDir, { recursive: true });
     const optFile = path.join(configDir, "optionals.json");
     fs.writeFileSync(optFile, JSON.stringify(enabledOptionals, null, 2));
@@ -3769,7 +3875,7 @@ See ~/.nexo/ for configuration.
   // Write initial CLAUDE.md version tracker
   const claudeMdVersionMatch = claudeMd.match(/nexo-claude-md-version:\s*([\d.]+)/);
   if (claudeMdVersionMatch) {
-    const dataDir = path.join(NEXO_HOME, "data");
+    const dataDir = resolveRuntimeDataDir(NEXO_HOME);
     fs.mkdirSync(dataDir, { recursive: true });
     fs.writeFileSync(path.join(dataDir, "claude_md_version.txt"), claudeMdVersionMatch[1]);
     log(`CLAUDE.md version tracker initialized: v${claudeMdVersionMatch[1]}`);

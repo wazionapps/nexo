@@ -1,6 +1,7 @@
 """Tests for runtime power policy helpers."""
 import os
 import sys
+import types
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
 
@@ -119,6 +120,56 @@ def test_apply_macos_power_policy_reports_missing_helper(tmp_path, monkeypatch):
     assert result["ok"] is False
     assert result["action"] == "missing-helper"
     assert "caffeinate" in result["message"]
+
+
+def test_apply_macos_power_policy_uses_manifest_sync(tmp_path, monkeypatch):
+    import runtime_power
+
+    helper = tmp_path / "caffeinate"
+    helper.write_text("")
+    plist_path = tmp_path / "LaunchAgents" / "com.nexo.prevent-sleep.plist"
+    plist_path.parent.mkdir(parents=True)
+
+    monkeypatch.setattr(runtime_power, "MACOS_CAFFEINATE_PATH", helper)
+    monkeypatch.setattr(runtime_power, "LAUNCH_AGENTS_DIR", plist_path.parent)
+    monkeypatch.setattr(runtime_power, "_sync_core_crons_for_power_policy", lambda: plist_path.write_text("<plist/>"))
+
+    details = runtime_power.describe_power_policy("always_on", system="Darwin")
+    result = runtime_power._apply_macos_power_policy("always_on", details=details)
+
+    assert result["ok"] is True
+    assert result["action"] == "enabled"
+    assert result["plist_path"] == str(plist_path)
+
+
+def test_apply_linux_power_policy_uses_manifest_sync(tmp_path, monkeypatch):
+    import runtime_power
+
+    helper = tmp_path / "systemd-inhibit"
+    helper.write_text("")
+    helper.chmod(0o755)
+    service_path = tmp_path / ".config" / "systemd" / "user" / "nexo-prevent-sleep.service"
+    service_path.parent.mkdir(parents=True)
+
+    monkeypatch.setenv("PATH", f"{tmp_path}:{os.environ.get('PATH', '')}")
+    monkeypatch.setattr(runtime_power, "LINUX_SYSTEMD_USER_DIR", service_path.parent)
+    monkeypatch.setattr(runtime_power, "_sync_core_crons_for_power_policy", lambda: service_path.write_text("[Service]\n"))
+
+    details = runtime_power.describe_power_policy("always_on", system="Linux")
+    result = runtime_power._apply_linux_power_policy("always_on", details=details)
+
+    assert result["ok"] is True
+    assert result["action"] == "enabled"
+    assert result["service_path"] == str(service_path)
+
+
+def test_sync_core_crons_for_power_policy_is_noop_when_sync_surface_missing(monkeypatch):
+    import runtime_power
+
+    fake_crons = types.ModuleType("crons")
+    monkeypatch.setitem(sys.modules, "crons", fake_crons)
+
+    runtime_power._sync_core_crons_for_power_policy()
 
 
 def test_detect_full_disk_access_reasons_flags_protected_runtime(tmp_path, monkeypatch):

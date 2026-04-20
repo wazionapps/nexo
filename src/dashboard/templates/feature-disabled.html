@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block title %}{{ disabled_title or "Feature disabled" }}{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto space-y-6 animate-fade-in">
+  <section class="card border border-amber-500/20 bg-amber-500/5 rounded-2xl p-6">
+    <div class="flex items-start gap-4">
+      <div class="w-11 h-11 rounded-2xl bg-amber-500/15 text-amber-300 flex items-center justify-center text-xl">!</div>
+      <div class="space-y-2">
+        <p class="text-[11px] font-mono uppercase tracking-[0.28em] text-amber-300/80">
+          Product contract
+        </p>
+        <h1 class="text-2xl font-semibold text-slate-100">
+          {{ disabled_title or "Feature disabled" }}
+        </h1>
+        <p class="text-sm leading-6 text-slate-300">
+          {{ disabled_detail or "This feature is currently disabled on this installation." }}
+        </p>
+        <p class="text-xs text-slate-500">
+          Disabled feature: <code>{{ disabled_feature or "unknown" }}</code>
+        </p>
+      </div>
+    </div>
+  </section>
+</div>
+{% endblock %}

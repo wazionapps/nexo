@@ -29,14 +29,15 @@ import threading
 import time
 from typing import Any
 
+from paths import logs_dir
+
 
 DEFAULT_MAX_BYTES = 10 * 1024 * 1024  # 10 MB per file before rotation
 _LOCK = threading.Lock()
 
 
 def _telemetry_path() -> pathlib.Path:
-    home = pathlib.Path(os.environ.get("NEXO_HOME") or (pathlib.Path.home() / ".nexo"))
-    return home / "logs" / "guardian-telemetry.ndjson"
+    return logs_dir() / "guardian-telemetry.ndjson"
 
 
 def _rotate_if_needed(path: pathlib.Path, max_bytes: int) -> None:

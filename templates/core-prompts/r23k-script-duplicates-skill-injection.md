@@ -1,0 +1,1 @@
+R23k script duplicates skill: the personal script '[[script]]' overlaps an existing skill '[[skill]]' (similarity=[[score]]). Prefer `nexo_skill_apply skill_id=[[skill_id]]` or extend the skill instead of cloning as a personal script — skills are shared and evolve with the brain.

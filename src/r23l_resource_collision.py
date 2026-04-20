@@ -11,13 +11,14 @@ from __future__ import annotations
 
 import re
 
+from core_prompts import render_core_prompt
 
-INJECTION_PROMPT_TEMPLATE = (
-    "R23l resource collision: '{cmd}' tries to create {resource_type} "
-    "'{name}', but an entity with that name already exists "
-    "(registered as type={existing_type}). If this is intentional reuse, "
-    "delete or rename the existing record first; otherwise pick a "
-    "distinct name."
+INJECTION_PROMPT_TEMPLATE = render_core_prompt(
+    "r23l-resource-collision-injection",
+    cmd="{cmd}",
+    resource_type="{resource_type}",
+    name="{name}",
+    existing_type="{existing_type}",
 )
 
 

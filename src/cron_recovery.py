@@ -8,6 +8,7 @@ import plistlib
 import sqlite3
 import contextlib
 import hashlib
+import platform
 import socket
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -32,6 +33,68 @@ def _load_json(path: Path, default):
     except Exception:
         pass
     return default
+
+
+def _normalize_platform_name(system: str | None = None) -> str:
+    value = str(system or os.environ.get("NEXO_PLATFORM") or platform.system()).strip().lower()
+    if value.startswith("darwin") or value.startswith("mac"):
+        return "darwin"
+    if value.startswith("linux"):
+        return "linux"
+    return value
+
+
+def _normalize_power_policy_name(value: str | None) -> str:
+    return str(value or "unset").strip().lower().replace("-", "_")
+
+
+def _cron_platform_enabled(cron: dict, *, system: str | None = None) -> bool:
+    allowed = cron.get("platforms")
+    if allowed is None:
+        allowed = cron.get("platform")
+    if not allowed:
+        return True
+    if isinstance(allowed, str):
+        values = [allowed]
+    elif isinstance(allowed, (list, tuple, set)):
+        values = list(allowed)
+    else:
+        return True
+    current = _normalize_platform_name(system)
+    normalized = {_normalize_platform_name(str(item)) for item in values if str(item).strip()}
+    return not normalized or current in normalized
+
+
+def is_cron_enabled(
+    cron: dict,
+    *,
+    optionals: dict[str, bool] | None = None,
+    schedule_data: dict | None = None,
+    system: str | None = None,
+) -> bool:
+    optionals = optionals or {}
+    schedule_data = schedule_data or {}
+
+    optional_key = cron.get("optional")
+    automation_default = bool(schedule_data.get("automation_enabled", True))
+    if optional_key == "automation":
+        optional_enabled = optionals.get(optional_key, automation_default)
+    else:
+        optional_enabled = optionals.get(optional_key, False)
+    if optional_key and not optional_enabled:
+        return False
+
+    if not _cron_platform_enabled(cron, system=system):
+        return False
+
+    required_power_policy = cron.get("requires_power_policy")
+    if required_power_policy:
+        current_policy = _normalize_power_policy_name(schedule_data.get("power_policy"))
+        expected_policy = _normalize_power_policy_name(required_power_policy)
+        if current_policy != expected_policy:
+            return False
+
+    return True
 
 
 def _schedule_machine_id() -> str:
@@ -88,6 +151,10 @@ def load_enabled_crons() -> list[dict]:
         from automation_controls import apply_core_automation_overrides
     except Exception:
         apply_core_automation_overrides = None
+    try:
+        from product_mode import filter_blocked_crons
+    except Exception:
+        filter_blocked_crons = None
 
     manifest_candidates = [
         paths.crons_dir() / "manifest.json",
@@ -97,7 +164,9 @@ def load_enabled_crons() -> list[dict]:
     if not isinstance(optionals, dict):
         optionals = {}
     schedule_data = _load_json(SCHEDULE_FILE, {})
-    automation_default = bool(schedule_data.get("automation_enabled", True)) if isinstance(schedule_data, dict) else True
+    if not isinstance(schedule_data, dict):
+        schedule_data = {}
+    platform_name = _normalize_platform_name()
 
     for manifest_path in manifest_candidates:
         if not manifest_path.is_file():
@@ -109,14 +178,19 @@ def load_enabled_crons() -> list[dict]:
 
         enabled = []
         for cron in data.get("crons", []):
-            optional_key = cron.get("optional")
-            if optional_key == "automation":
-                optional_enabled = optionals.get(optional_key, automation_default)
-            else:
-                optional_enabled = optionals.get(optional_key, False)
-            if optional_key and not optional_enabled:
+            if not is_cron_enabled(
+                cron,
+                optionals=optionals,
+                schedule_data=schedule_data,
+                system=platform_name,
+            ):
                 continue
             enabled.append(dict(cron))
+        if callable(filter_blocked_crons):
+            try:
+                enabled = filter_blocked_crons(enabled)
+            except Exception:
+                pass
         if callable(apply_core_automation_overrides):
             try:
                 return apply_core_automation_overrides(enabled)

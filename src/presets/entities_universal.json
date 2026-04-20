@@ -109,8 +109,8 @@
       "aliases": [],
       "metadata": {
         "old": "~/claude/hooks",
-        "canonical": "~/.nexo/hooks",
-        "note": "Pre-v6 runtime lived under ~/claude/*; canonical runtime is ~/.nexo/*"
+        "canonical": "~/.nexo/personal/hooks",
+        "note": "Pre-v6 runtime lived under ~/claude/*; operator-owned hooks now live under ~/.nexo/personal/*."
       }
     },
     {
@@ -119,7 +119,7 @@
       "aliases": [],
       "metadata": {
         "old": "~/claude/scripts",
-        "canonical": "~/.nexo/scripts"
+        "canonical": "~/.nexo/personal/scripts"
       }
     },
     {
@@ -128,7 +128,70 @@
       "aliases": [],
       "metadata": {
         "old": "~/claude/brain",
-        "canonical": "~/.nexo/brain"
+        "canonical": "~/.nexo/personal/brain"
+      }
+    },
+    {
+      "type": "legacy_path",
+      "name": "flat_nexo_scripts_to_personal",
+      "aliases": [],
+      "metadata": {
+        "old": "~/.nexo/scripts",
+        "canonical": "~/.nexo/personal/scripts"
+      }
+    },
+    {
+      "type": "legacy_path",
+      "name": "flat_nexo_brain_to_personal",
+      "aliases": [],
+      "metadata": {
+        "old": "~/.nexo/brain",
+        "canonical": "~/.nexo/personal/brain"
+      }
+    },
+    {
+      "type": "legacy_path",
+      "name": "flat_nexo_config_to_personal",
+      "aliases": [],
+      "metadata": {
+        "old": "~/.nexo/config",
+        "canonical": "~/.nexo/personal/config"
+      }
+    },
+    {
+      "type": "legacy_path",
+      "name": "flat_nexo_data_to_runtime",
+      "aliases": [],
+      "metadata": {
+        "old": "~/.nexo/data",
+        "canonical": "~/.nexo/runtime/data"
+      }
+    },
+    {
+      "type": "legacy_path",
+      "name": "flat_nexo_logs_to_runtime",
+      "aliases": [],
+      "metadata": {
+        "old": "~/.nexo/logs",
+        "canonical": "~/.nexo/runtime/logs"
+      }
+    },
+    {
+      "type": "legacy_path",
+      "name": "flat_nexo_operations_to_runtime",
+      "aliases": [],
+      "metadata": {
+        "old": "~/.nexo/operations",
+        "canonical": "~/.nexo/runtime/operations"
+      }
+    },
+    {
+      "type": "legacy_path",
+      "name": "flat_nexo_exports_to_runtime",
+      "aliases": [],
+      "metadata": {
+        "old": "~/.nexo/exports",
+        "canonical": "~/.nexo/runtime/exports"
       }
     },
     {

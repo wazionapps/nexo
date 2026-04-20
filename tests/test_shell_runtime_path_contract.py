@@ -50,3 +50,43 @@ def test_watchdog_uses_runtime_paths_and_personal_config() -> None:
     assert "schedule_file = '$CONFIG_DIR/schedule.json'" in text
     assert "stdout_log = logs_dir + '/' + cid + '-stdout.log'" in text
     assert 'COG_DB="$DATA_DIR/cognitive.db"' in text
+
+
+def test_compaction_and_tool_log_hooks_use_runtime_layout() -> None:
+    capture = _read("src/hooks/capture-tool-logs.sh")
+    assert 'OPERATIONS_DIR="$NEXO_HOME/runtime/operations"' in capture
+    assert 'DATA_DIR="$NEXO_HOME/runtime/data"' in capture
+    assert 'LOG_DIR="$OPERATIONS_DIR/tool-logs"' in capture
+    assert 'COUNTER_DIR="$OPERATIONS_DIR/counters"' in capture
+    assert 'NEXO_DB="$DATA_DIR/nexo.db"' in capture
+
+    pre_compact = _read("src/hooks/pre-compact.sh")
+    assert 'DATA_DIR="$NEXO_HOME/runtime/data"' in pre_compact
+    assert 'OPERATIONS_DIR="$NEXO_HOME/runtime/operations"' in pre_compact
+    assert 'NEXO_DB="$DATA_DIR/nexo.db"' in pre_compact
+    assert 'LOG_FILE="$OPERATIONS_DIR/tool-logs/${TODAY}.jsonl"' in pre_compact
+
+    post_compact = _read("src/hooks/post-compact.sh")
+    assert 'DATA_DIR="$NEXO_HOME/runtime/data"' in post_compact
+    assert 'OPERATIONS_DIR="$NEXO_HOME/runtime/operations"' in post_compact
+    assert 'NEXO_DB="$DATA_DIR/nexo.db"' in post_compact
+    assert 'LOG_FILE="$OPERATIONS_DIR/tool-logs/${TODAY}.jsonl"' in post_compact
+
+
+def test_auxiliary_hooks_use_runtime_or_core_locations_first() -> None:
+    briefing = _read("src/hooks/daily-briefing-check.sh")
+    assert 'OPERATIONS_DIR="$NEXO_HOME/runtime/operations"' in briefing
+    assert 'BRIEFING_FILE="$OPERATIONS_DIR/.briefing-last-sent"' in briefing
+    assert 'FLAG_FILE="$OPERATIONS_DIR/.briefing-pending"' in briefing
+
+    inbox = _read("src/hooks/inbox-hook.sh")
+    assert 'DATA_DIR="$NEXO_HOME/runtime/data"' in inbox
+    assert 'DB="$DATA_DIR/nexo.db"' in inbox
+
+    heartbeat_user = _read("src/hooks/heartbeat-user-msg.sh")
+    assert 'elif [ -f "$NEXO_HOME/core/hooks/heartbeat-enforcement.py" ]; then' in heartbeat_user
+    assert 'HELPER="$NEXO_HOME/core/hooks/heartbeat-enforcement.py"' in heartbeat_user
+
+    heartbeat_posttool = _read("src/hooks/heartbeat-posttool.sh")
+    assert 'elif [ -f "$NEXO_HOME/core/hooks/heartbeat-enforcement.py" ]; then' in heartbeat_posttool
+    assert 'HELPER="$NEXO_HOME/core/hooks/heartbeat-enforcement.py"' in heartbeat_posttool

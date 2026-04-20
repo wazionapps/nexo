@@ -12,6 +12,7 @@ import paths
 from db import create_protocol_debt, get_db
 from plugins.guard import _load_conditioned_learnings, _normalize_path_token
 from protocol_settings import get_protocol_strictness
+from product_mode import core_writes_allowed, is_protected_runtime_core_path
 
 READ_LIKE_TOOLS = {"Read"}
 WRITE_LIKE_TOOLS = {"Edit", "MultiEdit", "Write"}
@@ -520,6 +521,44 @@ def _collect_automation_live_repo_blocks(
     return blocks
 
 
+def _collect_runtime_core_write_blocks(
+    conn,
+    *,
+    sid: str,
+    tool_name: str,
+    files: list[str],
+) -> list[dict]:
+    if core_writes_allowed():
+        return []
+    blocks: list[dict] = []
+    for filepath in files:
+        if not is_protected_runtime_core_path(filepath):
+            continue
+        debt = _ensure_protocol_debt(
+            conn,
+            session_id=sid,
+            task_id="",
+            debt_type="runtime_core_write_blocked",
+            severity="error",
+            evidence=(
+                f"{tool_name} attempted on protected runtime core path {filepath}. "
+                "Install-time core files must be changed through the source repo/release flow, "
+                "not by editing ~/.nexo/core in place."
+            ),
+            file_token=filepath,
+        )
+        blocks.append(
+            {
+                "file": filepath,
+                "task_id": "",
+                "debt_id": debt.get("id"),
+                "debt_type": "runtime_core_write_blocked",
+                "reason_code": "runtime_core_protected",
+            }
+        )
+    return blocks
+
+
 def _read_claude_session_id_from_coordination() -> str:
     """Fallback claude_session_id when Claude Code's PreToolUse payload omits it.
 
@@ -595,6 +634,23 @@ def process_pre_tool_event(payload: dict) -> dict:
             "operation": op,
             "strictness": strictness,
             "blocks": automation_blocks,
+            "status": "blocked",
+        }
+
+    core_blocks = _collect_runtime_core_write_blocks(
+        conn,
+        sid=sid,
+        tool_name=tool_name,
+        files=files,
+    )
+    if core_blocks:
+        return {
+            "ok": True,
+            "session_id": sid,
+            "tool_name": tool_name,
+            "operation": op,
+            "strictness": strictness,
+            "blocks": core_blocks,
             "status": "blocked",
         }
 
@@ -903,6 +959,11 @@ def format_pretool_block_message(result: dict) -> str:
             lines.append(
                 f"- {file_note}: automation sessions cannot write to the live NEXO repo. "
                 "Use an isolated checkout/worktree or the public contribution Draft PR flow."
+            )
+        elif item.get("reason_code") == "runtime_core_protected":
+            lines.append(
+                f"- {file_note}: `~/.nexo/core` is a protected install surface. "
+                "Route the change through the source repo + release/update flow instead of editing the live installed core."
             )
         elif item.get("reason_code") == "guard_unacknowledged":
             lines.append(

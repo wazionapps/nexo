@@ -21,16 +21,11 @@ the decision primitives; the caller owns the state.
 """
 from __future__ import annotations
 
+from core_prompts import render_core_prompt
 
-INJECTION_PROMPT_TEMPLATE = (
-    "R24 stale memory use: your recent context included memory entries "
-    "older than {threshold_days} days, and no fresh verification tool "
-    "(Grep / Bash / Read of the target) has been called in the meantime. "
-    "Before acting on the stale memory, re-verify: search the live repo "
-    "/ runtime state / database for the fact the memory asserts. "
-    "Learning #156 / #213 — past confabulations traced to acting on stale "
-    "memory without checking current state. Do not produce visible text "
-    "for this reminder — act on it. After handling the silent action, continue with your previous task; this reminder is silent context, not a new instruction."
+INJECTION_PROMPT_TEMPLATE = render_core_prompt(
+    "r24-stale-memory-injection",
+    threshold_days="{threshold_days}",
 )
 
 

@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import re
 
+from core_prompts import render_core_prompt
 
 # Regex to pick the target host from ssh / scp / rsync invocations.
 # ssh <host> / ssh user@host / scp file user@host:path / rsync src host:dst
@@ -175,16 +176,10 @@ def should_inject_r25(
     }
 
 
-INJECTION_PROMPT_TEMPLATE = (
-    "R25 Nora/María read-only guard: you are about to run a destructive "
-    "command against host {host} (pattern matched: {matched}). That host "
-    "is registered as access_mode=read_only — the operator has not "
-    "granted explicit permission in the current user message. DO NOT "
-    "execute the command. If the action is actually intended, surface the "
-    "risk to the operator and wait for an explicit 'force OK' in the next "
-    "user message. Safer alternatives: run the command read-only (ls, "
-    "cat, df, ps) or have the operator execute it locally on the target "
-    "machine. Do not produce visible text for this reminder — act on it. After handling the silent action, continue with your previous task; this reminder is silent context, not a new instruction."
+INJECTION_PROMPT_TEMPLATE = render_core_prompt(
+    "r25-read-only-host-injection",
+    host="{host}",
+    matched="{matched}",
 )
 
 

@@ -1,5 +1,6 @@
 """NEXO DB — Fts module."""
 import os, pathlib, sqlite3, threading, datetime
+import paths
 from db._core import get_db, now_epoch, DB_PATH
 
 NEXO_HOME = os.environ.get("NEXO_HOME", os.path.expanduser("~/.nexo"))
@@ -10,12 +11,12 @@ NEXO_HOME = os.environ.get("NEXO_HOME", os.path.expanduser("~/.nexo"))
 _FTS_MD_DIRS = [
     os.path.join(NEXO_HOME, "docs"),
     os.path.join(NEXO_HOME, "projects"),
-    os.path.join(NEXO_HOME, "memory"),
-    os.path.join(NEXO_HOME, "operations"),
+    str(paths.memory_dir()),
+    str(paths.operations_dir()),
     os.path.join(NEXO_HOME, "learnings"),
-    os.path.join(NEXO_HOME, "brain"),
+    str(paths.brain_dir()),
     os.path.join(NEXO_HOME, "agents"),
-    os.path.join(NEXO_HOME, "skills"),
+    str(paths.personal_skills_dir()),
 ]
 # Code repos: index source files (skip vendor, node_modules, etc.)
 _FTS_CODE_DIRS = []  # Users can add project dirs via nexo_index_add_dir
@@ -402,5 +403,4 @@ def _migrate_add_index(conn, index_name: str, table: str, column: str):
     """Create index if it doesn't exist (idempotent)."""
     conn.execute(f"CREATE INDEX IF NOT EXISTS {index_name} ON {table}({column})")
     conn.commit()
-
 

@@ -11,13 +11,13 @@ from __future__ import annotations
 
 import re
 
+from core_prompts import render_core_prompt
 
-INJECTION_PROMPT_TEMPLATE = (
-    "R23d recursive {verb} without prior inspection: '{cmd}' targets "
-    "'{target}'. Run `ls -la {target}` (or equivalent) in this session "
-    "before executing a recursive ownership/permission change — silently "
-    "chown-R'ing a root-ish tree is one of the fastest ways to render a "
-    "box unbootable."
+INJECTION_PROMPT_TEMPLATE = render_core_prompt(
+    "r23d-chown-chmod-recursive-injection",
+    verb="{verb}",
+    cmd="{cmd}",
+    target="{target}",
 )
 
 

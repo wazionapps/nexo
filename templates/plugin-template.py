@@ -1,6 +1,6 @@
 """Personal NEXO MCP plugin scaffold.
 
-This file lives in NEXO_HOME/plugins/ and is loaded by the NEXO MCP server.
+This file lives in NEXO_HOME/personal/plugins/ and is loaded by the NEXO MCP server.
 Edit the handler below to implement your personal capability.
 
 If this plugin ever needs an autonomous model call, route it through the
@@ -26,7 +26,7 @@ def handle_example_tool(payload_json: str = "{}") -> str:
 
     return json.dumps({
         "ok": True,
-        "message": "Personal plugin scaffold created. Edit this handler in NEXO_HOME/plugins.",
+        "message": "Personal plugin scaffold created. Edit this handler in NEXO_HOME/personal/plugins.",
         "payload": payload,
     }, ensure_ascii=False)
 
@@ -35,6 +35,6 @@ TOOLS = [
     (
         handle_example_tool,
         "nexo_example_tool",
-        "Example personal MCP tool scaffold. Edit it in NEXO_HOME/plugins.",
+        "Example personal MCP tool scaffold. Edit it in NEXO_HOME/personal/plugins.",
     ),
 ]

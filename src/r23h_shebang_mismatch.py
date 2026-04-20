@@ -15,12 +15,13 @@ import os
 import re
 import shutil
 
+from core_prompts import render_core_prompt
 
-INJECTION_PROMPT_TEMPLATE = (
-    "R23h shebang mismatch: '{script}' declares interpreter '{shebang}' "
-    "but the shell resolves it to '{actual}'. Align versions before "
-    "running — interpreter drift produces the hardest-to-diagnose "
-    "runtime bugs."
+INJECTION_PROMPT_TEMPLATE = render_core_prompt(
+    "r23h-shebang-mismatch-injection",
+    script="{script}",
+    shebang="{shebang}",
+    actual="{actual}",
 )
 
 

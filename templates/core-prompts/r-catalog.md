@@ -1,0 +1,1 @@
+R-CATALOG pre-create probe: about to call [[tool]] without having consulted the live inventory in this turn. Run one of `nexo_system_catalog(query=...)`, `nexo_skill_match`, `nexo_tool_explain`, `nexo_learning_search` or `nexo_guard_check` first to avoid duplicating an existing artefact.

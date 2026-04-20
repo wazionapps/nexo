@@ -1,0 +1,1 @@
+Does the code edit below modify a module-level constant, configuration key, enumeration entry, feature-flag, or shared global value? Answer yes only if the change affects a symbol that other files in the same project are likely to import or reference. Answer no for local variables, function bodies, doc-strings, or purely stylistic edits.

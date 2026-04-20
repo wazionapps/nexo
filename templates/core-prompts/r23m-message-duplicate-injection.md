@@ -1,0 +1,1 @@
+R23m duplicate message: the outbound to '[[thread]]' is [[similarity]]% identical to one sent [[age_sec]]s ago. Confirm this is intentional before sending — most duplicate sends are re-runs of the same tool call.

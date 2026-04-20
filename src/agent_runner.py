@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import tempfile
 import time
+from functools import lru_cache
 from pathlib import Path
 
 try:
@@ -29,6 +30,7 @@ from client_preferences import (
     resolve_client_runtime_profile,
     resolve_terminal_client,
 )
+from core_prompts import render_core_prompt
 
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
@@ -39,13 +41,6 @@ MODEL_PRICING_USD_PER_1M = {
     "gpt-5.4": {"input": 1.25, "cached_input": 0.125, "output": 10.0},
     "gpt-5.4-mini": {"input": 0.25, "cached_input": 0.025, "output": 2.0},
 }
-INTERACTIVE_STARTUP_PROMPT = (
-    "Start as NEXO for this session now. Use the managed bootstrap already installed "
-    "for this client, run nexo_startup and nexo_heartbeat for this first turn, then "
-    "reply with one concise startup status in the user's language."
-)
-
-
 class AgentRunnerError(RuntimeError):
     """Base exception for runner failures."""
 
@@ -438,10 +433,15 @@ def _codex_interactive_launch_flags() -> list[str]:
     return ["--sandbox", "danger-full-access", "--ask-for-approval", "never"]
 
 
+@lru_cache(maxsize=1)
+def _interactive_startup_prompt_text() -> str:
+    return render_core_prompt("interactive-startup")
+
+
 def _interactive_startup_prompt(client: str) -> str:
     client_key = normalize_client_key(client)
     if client_key in {CLIENT_CLAUDE_CODE, CLIENT_CODEX}:
-        return INTERACTIVE_STARTUP_PROMPT
+        return _interactive_startup_prompt_text()
     return ""
 
 
@@ -1206,6 +1206,7 @@ def probe_automation_backend(
     backend: str | None = None,
     cwd: str | os.PathLike[str] | None = None,
     timeout: int = 60,
+    caller: str = "automation_probe",
 ) -> dict:
     selected_backend = backend or resolve_automation_backend()
     if selected_backend == BACKEND_NONE:
@@ -1221,6 +1222,7 @@ def probe_automation_backend(
             cwd=cwd,
             timeout=timeout,
             output_format="text",
+            caller=caller,
         )
     except AutomationBackendUnavailableError as exc:
         return {

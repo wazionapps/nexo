@@ -29,16 +29,39 @@ import os
 import sqlite3
 import sys
 from pathlib import Path
-from paths import data_dir
+
+
+def _bootstrap_nexo_code(default_repo_src: Path) -> Path:
+    nexo_home = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+    raw_env = os.environ.get("NEXO_CODE", "")
+    candidates: list[Path] = []
+    if raw_env:
+        raw = Path(raw_env).expanduser()
+        candidates.extend([raw, raw / "core"])
+    candidates.extend([default_repo_src, nexo_home / "core", nexo_home])
+    seen: set[str] = set()
+    for candidate in candidates:
+        key = str(candidate)
+        if key in seen:
+            continue
+        seen.add(key)
+        if (candidate / "paths.py").is_file() or (candidate / "server.py").is_file() or (candidate / "cli.py").is_file():
+            if str(candidate) not in sys.path:
+                sys.path.insert(0, str(candidate))
+            return candidate
+    fallback = candidates[0]
+    if str(fallback) not in sys.path:
+        sys.path.insert(0, str(fallback))
+    return fallback
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
-NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(Path(__file__).resolve().parents[1])))
-if str(NEXO_CODE) not in sys.path:
-    sys.path.insert(0, str(NEXO_CODE))
+NEXO_CODE = _bootstrap_nexo_code(Path(__file__).resolve().parents[1])
 
+from paths import data_dir
 DB_PATH = data_dir() / "nexo.db"
 
 from agent_runner import AutomationBackendUnavailableError, run_automation_prompt
+from core_prompts import render_core_prompt
 
 try:
     from client_preferences import resolve_user_model as _resolve_user_model
@@ -47,9 +70,7 @@ except Exception:
     _USER_MODEL = ""
 
 NEXO_DB = DB_PATH
-JSON_ONLY_SYSTEM_PROMPT = (
-    "Return exactly one valid JSON object. No markdown fences. No prose outside JSON."
-)
+JSON_ONLY_SYSTEM_PROMPT = render_core_prompt("json-object-only")
 
 
 def get_all_learnings(category: str | None = None) -> list[dict]:
@@ -130,31 +151,12 @@ def validate_finding(finding: str, category: str | None = None) -> dict:
         for l in learnings
     ]
 
-    prompt = f"""You are a finding deduplication engine. Compare a new finding against existing learnings and determine if it's already known.
-
-NEW FINDING:
-{finding}
-
-EXISTING LEARNINGS ({len(learnings_ref)} total):
-{json.dumps(learnings_ref, indent=1, ensure_ascii=False)}
-
-Respond with ONLY valid JSON:
-{{
-  "known": true/false,
-  "confidence": 0.0-1.0,
-  "matching_learnings": [
-    {{"id": <learning_id>, "title": "<title>", "similarity": 0.0-1.0}}
-  ],
-  "recommendation": "<one line: KNOWN/LIKELY KNOWN/POSSIBLY RELATED/NEW>"
-}}
-
-Rules:
-- confidence >= 0.7 and same root cause = known: true
-- confidence 0.55-0.7 and related topic = known: true, say LIKELY KNOWN
-- confidence < 0.55 = known: false
-- Max 5 matching_learnings, sorted by similarity descending
-- If the finding describes the SAME bug/issue/pattern as a learning, it's known even if worded differently
-- Be strict: different symptoms of different bugs are NOT the same even if they mention the same file"""
+    prompt = render_core_prompt(
+        "learning-validator",
+        finding=finding,
+        learnings_total=len(learnings_ref),
+        learnings_json=json.dumps(learnings_ref, indent=1, ensure_ascii=False),
+    )
 
     try:
         result = run_automation_prompt(

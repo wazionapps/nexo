@@ -1,5 +1,39 @@
 # Changelog
 
+## [7.1.2] - 2026-04-20
+
+Patch release coordinated with NEXO Desktop v0.22.2. This line turns the
+post-`7.1.1` working tree into a coherent public release: prompt templates are
+fully centralised under the core prompt catalog, standalone runtime paths stop
+eager-loading prompt or DB state too early, and the product-facing runtime line
+is now published with the same surface story the code actually ships.
+
+### Fixed
+
+- Prompt rendering is now fully catalog-driven across startup, enforcement,
+  project, and followup surfaces. The remaining inline prompt fragments were
+  migrated into the shared prompt catalog so the runtime stops carrying prompt
+  drift across clients and automations.
+- `src/agent_runner.py` now resolves the interactive startup prompt lazily.
+  Standalone automation entrypoints that only need the execution helpers no
+  longer fail just because the full prompt stack was imported too early.
+- `src/db/_email_accounts.py` now resolves the live DB handle lazily from
+  `db._core` instead of pinning a stale connection at import time. That closes
+  the runtime/test drift where email-account operations could read an outdated
+  SQLite handle after environment or runtime-root reloads.
+- `src/scripts/deep-sleep/extract.py` now passes the correct JSON system prompt
+  variable into the automation call instead of referencing a dead name.
+- Public release surfaces (`README`, `llms.txt`, website, changelog, blog, and
+  release-facing integration artifacts) are refreshed for the coordinated
+  `7.1.2` / `0.22.2` line instead of advertising the older hotfix release while
+  newer runtime behavior was already sitting above the tag.
+
+### Verification
+
+- `1754 passed, 3 skipped, 1 xfailed, 5 xpassed`
+- `bash scripts/check_no_personal_data.sh` OK
+- `python3 scripts/verify_release_readiness.py --ci` OK
+
 ## [7.1.1] - 2026-04-20
 
 Hotfix over v7.1.0. The packaged updater path was still mixing two runtime
@@ -19,6 +53,11 @@ shimmed paths), causing `FileExistsError` / "same file" failures during update.
 - `tests/test_startup_preflight.py` now covers packaged-runtime detection plus
   symlink/file replacement for package dirs, core-skill shims, root Python
   modules, script/plugin shims, and runtime-tree restore.
+- Local classifier auto-install now targets the same Python interpreter that
+  runs NEXO itself. Inside the managed runtime/venv it installs with
+  `sys.executable -m pip` instead of a generic `pip3`, preventing
+  cross-interpreter drift where dependencies landed in Python 3.9 while the
+  active Brain runtime was already on Python 3.12.
 
 ### Verification
 

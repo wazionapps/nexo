@@ -2168,6 +2168,84 @@
       },
       "triggers_after": []
     },
+    "nexo_automations_list": {
+      "description": "List operator-facing automations",
+      "category": "personal",
+      "source": "plugin:personal_scripts",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_automation_status": {
+      "description": "Read composed status for one automation",
+      "category": "personal",
+      "source": "plugin:personal_scripts",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_automation_enable": {
+      "description": "Enable one operator-facing automation",
+      "category": "personal",
+      "source": "plugin:personal_scripts",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_automation_disable": {
+      "description": "Disable one operator-facing automation",
+      "category": "personal",
+      "source": "plugin:personal_scripts",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_automation_instructions": {
+      "description": "Set or clear operator extra instructions for an automation",
+      "category": "personal",
+      "source": "plugin:personal_scripts",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_automation_schedule": {
+      "description": "Set or clear an automation cadence override",
+      "category": "personal",
+      "source": "plugin:personal_scripts",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
     "nexo_plugin_list": {
       "description": "List loaded plugins and tools",
       "category": "plugin",

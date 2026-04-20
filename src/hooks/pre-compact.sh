@@ -7,10 +7,18 @@ set -uo pipefail
 
 HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
 NEXO_HOME="${NEXO_HOME:-$HOME/.nexo}"
-NEXO_DB="$NEXO_HOME/data/nexo.db"
-mkdir -p "$NEXO_HOME/data"
+DATA_DIR="$NEXO_HOME/runtime/data"
+if [ ! -d "$DATA_DIR" ] && [ -d "$NEXO_HOME/data" ]; then
+    DATA_DIR="$NEXO_HOME/data"
+fi
+OPERATIONS_DIR="$NEXO_HOME/runtime/operations"
+if [ ! -d "$OPERATIONS_DIR" ] && [ -d "$NEXO_HOME/operations" ]; then
+    OPERATIONS_DIR="$NEXO_HOME/operations"
+fi
+NEXO_DB="$DATA_DIR/nexo.db"
+mkdir -p "$DATA_DIR" "$OPERATIONS_DIR"
 TODAY=$(date +%Y-%m-%d)
-LOG_FILE="$NEXO_HOME/operations/tool-logs/${TODAY}.jsonl"
+LOG_FILE="$OPERATIONS_DIR/tool-logs/${TODAY}.jsonl"
 LOG_LINES=0
 if [ -f "$LOG_FILE" ]; then
     LOG_LINES=$(wc -l < "$LOG_FILE" | tr -d ' ')
@@ -164,6 +172,6 @@ fi
 
 cat << HOOKEOF
 {
-  "systemMessage": "CONTEXT IS ABOUT TO BE COMPRESSED.\n\nOBLIGATORY ACTIONS BEFORE COMPACTION:\n1. Save critical state via MCP: nexo_checkpoint_save with current task, active files, decisions, errors, next step, and reasoning thread.\n2. If there is work in progress without a commit, save data via nexo_entity_create, nexo_preference_set, nexo_learning_add, nexo_followup_create.\n3. PERSISTENT TOOL LOGS: ${NEXO_HOME}/operations/tool-logs/${TODAY}.jsonl has ${LOG_LINES} entries.\n4. After compaction, the PostCompact hook will re-inject a Core Memory Block with the checkpoint.\n5. MCP tools (nexo_*) preserve all state — use them to recover context.\n6. EMERGENCY DIARY: An automatic diary was written by the pre-compact hook. The LLM can still write a better one via nexo_session_diary_write."
+  "systemMessage": "CONTEXT IS ABOUT TO BE COMPRESSED.\n\nOBLIGATORY ACTIONS BEFORE COMPACTION:\n1. Save critical state via MCP: nexo_checkpoint_save with current task, active files, decisions, errors, next step, and reasoning thread.\n2. If there is work in progress without a commit, save data via nexo_entity_create, nexo_preference_set, nexo_learning_add, nexo_followup_create.\n3. PERSISTENT TOOL LOGS: ${OPERATIONS_DIR}/tool-logs/${TODAY}.jsonl has ${LOG_LINES} entries.\n4. After compaction, the PostCompact hook will re-inject a Core Memory Block with the checkpoint.\n5. MCP tools (nexo_*) preserve all state — use them to recover context.\n6. EMERGENCY DIARY: An automatic diary was written by the pre-compact hook. The LLM can still write a better one via nexo_session_diary_write."
 }
 HOOKEOF

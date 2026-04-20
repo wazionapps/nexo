@@ -21,6 +21,7 @@ if str(NEXO_CODE) not in sys.path:
     sys.path.insert(0, str(NEXO_CODE))
 
 from agent_runner import AutomationBackendUnavailableError, run_automation_prompt
+from core_prompts import render_core_prompt
 try:
     from client_preferences import resolve_user_model as _resolve_user_model
     _USER_MODEL = _resolve_user_model()
@@ -170,30 +171,12 @@ def smart_check(action_description: str, context: str = "") -> dict:
         except Exception:
             pass
 
-    prompt = f"""You are a context deduplication engine for NEXO operations.
-
-PROPOSED ACTION:
-{action_description}
-
-ADDITIONAL CONTEXT:
-{context or "None"}
-
-RECENT ACTIONS (last 7 days):
-{json.dumps(list(recent_actions.values()), indent=1, default=str, ensure_ascii=False)}
-
-Respond with ONLY valid JSON:
-{{
-  "redundant": true/false,
-  "confidence": 0.0-1.0,
-  "reason": "<one line explanation>",
-  "matching_action": "<identifier of matching action if redundant, else null>"
-}}
-
-Rules:
-- Same recipient + same intent within 72h = redundant
-- Same file modification with same content = redundant
-- Similar but different scope (e.g. different recipients) = NOT redundant
-- When in doubt, say not redundant (false negatives are cheaper than false positives)"""
+    prompt = render_core_prompt(
+        "check-context",
+        action_description=action_description,
+        additional_context=context or "None",
+        recent_actions_json=json.dumps(list(recent_actions.values()), indent=1, default=str, ensure_ascii=False),
+    )
 
     try:
         result = run_automation_prompt(
@@ -201,7 +184,7 @@ Rules:
             caller="check_context",
             timeout=300,
             output_format="text",
-            append_system_prompt="Return exactly one valid JSON object.",
+            append_system_prompt=render_core_prompt("json-object-only"),
             allowed_tools="Read,Write,Edit,Glob,Grep,Bash,mcp__nexo__*",
         )
         if result.returncode == 0:

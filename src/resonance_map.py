@@ -50,6 +50,8 @@ import os
 from pathlib import Path
 from typing import Tuple
 
+from paths import brain_dir, config_dir
+
 
 # ---------------------------------------------------------------------------
 # Tier → (claude_model, claude_effort, codex_model, codex_effort)
@@ -67,13 +69,15 @@ from typing import Tuple
 TIERS = ("maximo", "alto", "medio", "bajo")
 
 # Resolution order for the contract file:
-#   1) ~/.nexo/brain/resonance_tiers.json  (v6.0.3+ public contract path, shared
-#      with NEXO Desktop and any external client)
-#   2) Legacy NEXO_HOME/resonance_tiers.json (pre-v6.0.3 runtime layout)
-#   3) Package source src/resonance_tiers.json (dev checkouts / tests)
+#   1) ~/.nexo/personal/brain/resonance_tiers.json  (F0.6 canonical path,
+#      shared with NEXO Desktop and any external client)
+#   2) ~/.nexo/brain/resonance_tiers.json            (legacy public alias)
+#   3) Legacy NEXO_HOME/resonance_tiers.json         (pre-v6.0.3 flat layout)
+#   4) Package source src/resonance_tiers.json       (dev checkouts / tests)
 def _resolve_resonance_path() -> Path:
     nexo_home = os.environ.get("NEXO_HOME") or str(Path.home() / ".nexo")
     candidates = [
+        Path(nexo_home) / "personal" / "brain" / "resonance_tiers.json",
         Path(nexo_home) / "brain" / "resonance_tiers.json",
         Path(nexo_home) / "resonance_tiers.json",
         Path(__file__).resolve().parent / "resonance_tiers.json",
@@ -211,6 +215,7 @@ SYSTEM_OWNED_CALLERS: dict[str, str] = {
 
     # ---- Defensive / consistency tasks ------------------------------------
     "immune/scan":                      "medio",
+    "automation_probe":                "bajo",
     "learning_validator":               "medio",
     "outcome_checker":                  "medio",
     "check_context":                    "medio",
@@ -234,7 +239,7 @@ SYSTEM_OWNED_CALLERS: dict[str, str] = {
 
     # ---- Personal scripts (operators' own LaunchAgents) -------------------
     # Francisco + Maria ship the same set of personal scripts via
-    # ~/.nexo/scripts (installed per-user, not through the core manifest).
+    # ~/.nexo/personal/scripts (installed per-user, not through the core manifest).
     # They all call into mcp__nexo__* so they cannot run under --bare.
     "personal/email-monitor":           "alto",   # answer real user emails, quality matters
     "personal/github-monitor":          "alto",   # reason about issues/PRs, not mechanical
@@ -249,7 +254,7 @@ ALL_REGISTERED_CALLERS: frozenset[str] = frozenset(
 
 
 # v6.0.2 — Reserved caller prefix for user-owned personal scripts that live
-# outside this repo (``~/.nexo/scripts/``). Callers matching this prefix
+# outside this repo (``~/.nexo/personal/scripts/``). Callers matching this prefix
 # bypass the registry entirely: they cannot be required to register because
 # they ship with each operator's own install. Instead, the script passes
 # either an explicit ``tier`` (semantic) or a ``reasoning_effort`` (direct
@@ -289,13 +294,8 @@ def _load_user_default_resonance() -> str:
     valid tier — callers should treat empty as "no preference".
     """
     import json as _json
-    import os as _os
-    from pathlib import Path as _Path
-
-    home = _Path(_os.environ.get("NEXO_HOME", str(_Path.home() / ".nexo")))
-
     # calibration.json (Desktop UI writes here)
-    cal_path = home / "brain" / "calibration.json"
+    cal_path = brain_dir() / "calibration.json"
     try:
         if cal_path.exists():
             cal = _json.loads(cal_path.read_text())
@@ -308,7 +308,7 @@ def _load_user_default_resonance() -> str:
         pass
 
     # schedule.json (CLI legacy)
-    sched_path = home / "config" / "schedule.json"
+    sched_path = config_dir() / "schedule.json"
     try:
         if sched_path.exists():
             sched = _json.loads(sched_path.read_text())

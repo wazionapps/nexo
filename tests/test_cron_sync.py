@@ -50,7 +50,7 @@ def test_build_plist_runs_from_runtime_root(tmp_path, monkeypatch):
     assert plist["ProgramArguments"][0] == "/bin/bash"
     assert plist["ProgramArguments"][2] == "auto-close-sessions"
     assert plist["ProgramArguments"][4] == str(runtime_root / "core" / "scripts" / "auto_close_sessions.py")
-    assert plist["EnvironmentVariables"]["NEXO_CODE"] == str(runtime_root)
+    assert plist["EnvironmentVariables"]["NEXO_CODE"] == str(runtime_root / "core")
     assert plist["EnvironmentVariables"]["NEXO_SOURCE_CODE"] == str(source_root)
     assert plist["EnvironmentVariables"]["NEXO_MANAGED_CORE_CRON"] == "1"
 
@@ -140,6 +140,41 @@ def test_build_plist_supports_keep_alive_jobs(tmp_path, monkeypatch):
     assert plist["RunAtLoad"] is True
     assert plist["KeepAlive"] is True
     assert plist["ProgramArguments"][4] == str(runtime_root / "core" / "scripts" / "nexo-personal-daemon.sh")
+
+
+def test_build_plist_supports_watch_paths(tmp_path, monkeypatch):
+    from crons import sync as cron_sync
+
+    source_root = tmp_path / "repo-src"
+    runtime_root = tmp_path / "nexo-home"
+    (source_root / "scripts").mkdir(parents=True)
+    (runtime_root / "runtime" / "logs").mkdir(parents=True)
+
+    script = source_root / "scripts" / "nexo-tcc-approve.sh"
+    script.write_text("#!/bin/bash\nexit 0\n")
+    script.chmod(0o755)
+    wrapper = source_root / "scripts" / "nexo-cron-wrapper.sh"
+    wrapper.write_text("#!/bin/bash\nexit 0\n")
+    wrapper.chmod(0o755)
+
+    monkeypatch.setattr(cron_sync, "SOURCE_ROOT", source_root)
+    monkeypatch.setattr(cron_sync, "RUNTIME_ROOT", runtime_root)
+    monkeypatch.setenv("NEXO_HOME", str(runtime_root))
+    monkeypatch.setattr(cron_sync, "NEXO_HOME", runtime_root)
+    monkeypatch.setattr(cron_sync, "LOG_DIR", runtime_root / "runtime" / "logs")
+
+    plist = cron_sync.build_plist(
+        {
+            "id": "tcc-approve",
+            "script": "scripts/nexo-tcc-approve.sh",
+            "type": "shell",
+            "run_at_load": True,
+            "watch_paths": ["~/.local/share/claude/versions"],
+        }
+    )
+
+    assert plist["RunAtLoad"] is True
+    assert plist["WatchPaths"] == [str(Path.home() / ".local" / "share" / "claude" / "versions")]
 
 
 def test_build_plist_supports_interval_jobs_that_also_run_at_load(tmp_path, monkeypatch):
@@ -281,6 +316,37 @@ def test_load_manifest_applies_core_automation_interval_override(tmp_path, monke
     assert email_monitor["interval_seconds"] == 300
     assert email_monitor["_schedule_source"] == "override"
     assert watchdog["interval_seconds"] == 1800
+
+
+def test_load_manifest_filters_platforms_and_power_policy(tmp_path, monkeypatch):
+    from crons import sync as cron_sync
+
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(
+        """
+{
+  "crons": [
+    {"id": "watchdog", "script": "scripts/nexo-watchdog.sh", "interval_seconds": 1800, "core": true},
+    {"id": "tcc-approve", "script": "scripts/nexo-tcc-approve.sh", "type": "shell", "run_at_load": true, "platforms": ["darwin"], "core": true},
+    {"id": "prevent-sleep", "script": "scripts/nexo-prevent-sleep.sh", "type": "shell", "keep_alive": true, "requires_power_policy": "always_on", "core": true}
+  ]
+}
+""".strip()
+    )
+    nexo_home = tmp_path / "nexo-home"
+    (nexo_home / "config").mkdir(parents=True)
+    (nexo_home / "config" / "optionals.json").write_text("{}")
+    (nexo_home / "config" / "schedule.json").write_text('{"power_policy":"disabled"}')
+
+    monkeypatch.setattr(cron_sync, "MANIFEST", manifest)
+    monkeypatch.setenv("NEXO_HOME", str(nexo_home))
+    monkeypatch.setattr(cron_sync, "NEXO_HOME", nexo_home)
+    monkeypatch.setattr(cron_sync, "OPTIONALS_FILE", nexo_home / "config" / "optionals.json")
+    monkeypatch.setattr(cron_sync, "SCHEDULE_FILE", nexo_home / "config" / "schedule.json")
+    monkeypatch.setattr(cron_sync.platform, "system", lambda: "Darwin")
+
+    crons = cron_sync.load_manifest()
+    assert [cron["id"] for cron in crons] == ["watchdog", "tcc-approve"]
 
 
 def test_plist_needs_update_when_runtime_env_changes(tmp_path):
@@ -548,3 +614,145 @@ def test_sync_removes_legacy_core_wrapper_launchagent_not_in_manifest(tmp_path, 
     cron_sync.sync()
 
     assert removed == ["com.nexo.watchdog.plist"]
+
+
+def test_sync_removes_legacy_direct_core_launchagent_not_in_manifest(tmp_path, monkeypatch):
+    from crons import sync as cron_sync
+
+    launch_agents_dir = tmp_path / "LaunchAgents"
+    nexo_home = tmp_path / "nexo-home"
+    source_root = tmp_path / "repo-src"
+    launch_agents_dir.mkdir(parents=True)
+    (nexo_home / "runtime" / "logs").mkdir(parents=True)
+    (nexo_home / "core" / "scripts").mkdir(parents=True)
+
+    plist_path = launch_agents_dir / "com.nexo.evolution.plist"
+    with plist_path.open("wb") as fh:
+        plistlib.dump(
+            {
+                "Label": "com.nexo.evolution",
+                "ProgramArguments": [
+                    "/opt/homebrew/bin/python3",
+                    str(nexo_home / "core" / "scripts" / "nexo-evolution-run.py"),
+                ],
+                "EnvironmentVariables": {
+                    "NEXO_HOME": str(nexo_home),
+                    "PATH": "/opt/homebrew/bin:/usr/bin:/bin",
+                },
+            },
+            fh,
+        )
+
+    removed: list[str] = []
+    monkeypatch.setattr(cron_sync.platform, "system", lambda: "Darwin")
+    monkeypatch.setattr(cron_sync, "LAUNCH_AGENTS_DIR", launch_agents_dir)
+    monkeypatch.setenv("NEXO_HOME", str(nexo_home))
+    monkeypatch.setattr(cron_sync, "NEXO_HOME", nexo_home)
+    monkeypatch.setattr(cron_sync, "SOURCE_ROOT", source_root)
+    monkeypatch.setattr(cron_sync, "LOG_DIR", nexo_home / "runtime" / "logs")
+    monkeypatch.setattr(cron_sync, "MANIFEST", tmp_path / "manifest.json")
+    monkeypatch.setattr(cron_sync, "load_manifest", lambda: [])
+    monkeypatch.setattr(cron_sync, "_cleanup_retired_core_files", lambda: None)
+    monkeypatch.setattr(cron_sync, "_refresh_runtime_manifest", lambda: None)
+    monkeypatch.setattr(cron_sync, "_sync_watchdog_hash_registry", lambda: None)
+    monkeypatch.setattr(cron_sync, "unload_plist", lambda path, dry_run: removed.append(path.name))
+
+    cron_sync.sync()
+
+    assert removed == ["com.nexo.evolution.plist"]
+
+
+def test_sync_removes_manifest_gated_core_launchagent_when_disabled(tmp_path, monkeypatch):
+    from crons import sync as cron_sync
+
+    launch_agents_dir = tmp_path / "LaunchAgents"
+    nexo_home = tmp_path / "nexo-home"
+    source_root = tmp_path / "repo-src"
+    launch_agents_dir.mkdir(parents=True)
+    (nexo_home / "runtime" / "logs").mkdir(parents=True)
+    (nexo_home / "core" / "scripts").mkdir(parents=True)
+
+    plist_path = launch_agents_dir / "com.nexo.prevent-sleep.plist"
+    with plist_path.open("wb") as fh:
+        plistlib.dump(
+            {
+                "Label": "com.nexo.prevent-sleep",
+                "ProgramArguments": [
+                    "/bin/bash",
+                    str(nexo_home / "core" / "scripts" / "nexo-prevent-sleep.sh"),
+                ],
+                "EnvironmentVariables": {
+                    "NEXO_HOME": str(nexo_home),
+                    "PATH": "/opt/homebrew/bin:/usr/bin:/bin",
+                },
+                "RunAtLoad": True,
+                "KeepAlive": True,
+            },
+            fh,
+        )
+
+    removed: list[str] = []
+    monkeypatch.setattr(cron_sync.platform, "system", lambda: "Darwin")
+    monkeypatch.setattr(cron_sync, "LAUNCH_AGENTS_DIR", launch_agents_dir)
+    monkeypatch.setenv("NEXO_HOME", str(nexo_home))
+    monkeypatch.setattr(cron_sync, "NEXO_HOME", nexo_home)
+    monkeypatch.setattr(cron_sync, "SOURCE_ROOT", source_root)
+    monkeypatch.setattr(cron_sync, "LOG_DIR", nexo_home / "runtime" / "logs")
+    monkeypatch.setattr(cron_sync, "MANIFEST", tmp_path / "manifest.json")
+    monkeypatch.setattr(cron_sync, "load_manifest", lambda: [])
+    monkeypatch.setattr(cron_sync, "_cleanup_retired_core_files", lambda: None)
+    monkeypatch.setattr(cron_sync, "_refresh_runtime_manifest", lambda: None)
+    monkeypatch.setattr(cron_sync, "_sync_watchdog_hash_registry", lambda: None)
+    monkeypatch.setattr(cron_sync, "unload_plist", lambda path, dry_run: removed.append(path.name))
+
+    cron_sync.sync()
+
+    assert removed == ["com.nexo.prevent-sleep.plist"]
+
+
+def test_sync_linux_supports_keep_alive_services(tmp_path, monkeypatch):
+    from crons import sync as cron_sync
+
+    home = tmp_path / "home"
+    unit_dir = home / ".config" / "systemd" / "user"
+    runtime_root = tmp_path / "nexo-home"
+    source_root = tmp_path / "repo-src"
+    (source_root / "scripts").mkdir(parents=True)
+    (runtime_root / "runtime" / "logs").mkdir(parents=True)
+
+    script = source_root / "scripts" / "nexo-dashboard.sh"
+    script.write_text("#!/bin/bash\nwhile true; do sleep 60; done\n")
+    script.chmod(0o755)
+    wrapper = source_root / "scripts" / "nexo-cron-wrapper.sh"
+    wrapper.write_text("#!/bin/bash\nexit 0\n")
+    wrapper.chmod(0o755)
+
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
+    monkeypatch.setattr(cron_sync.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(cron_sync, "SOURCE_ROOT", source_root)
+    monkeypatch.setattr(cron_sync, "RUNTIME_ROOT", runtime_root)
+    monkeypatch.setattr(cron_sync, "NEXO_HOME", runtime_root)
+    monkeypatch.setattr(cron_sync, "LOG_DIR", runtime_root / "runtime" / "logs")
+    monkeypatch.setattr(cron_sync, "load_manifest", lambda: [
+        {"id": "dashboard", "script": "scripts/nexo-dashboard.sh", "type": "shell", "keep_alive": True}
+    ])
+
+    calls = []
+
+    def fake_run(args, **kwargs):
+        calls.append(args)
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+    monkeypatch.setattr(cron_sync.subprocess, "run", fake_run)
+
+    cron_sync.sync_linux()
+
+    service_path = unit_dir / "nexo-dashboard.service"
+    timer_path = unit_dir / "nexo-dashboard.timer"
+    assert service_path.is_file()
+    assert not timer_path.exists()
+    assert any(
+        args[:4] == ["systemctl", "--user", "enable", "--now"] and args[4] == "nexo-dashboard.service"
+        for args in calls
+    )

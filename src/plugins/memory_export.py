@@ -11,6 +11,7 @@ import cognitive
 import claim_graph
 import compaction_memory
 import media_memory
+import paths
 import user_state_model
 from db import get_db
 from memory_backends import get_backend, list_backends
@@ -69,7 +70,11 @@ def handle_memory_export(format: str = "markdown", output_dir: str = "") -> str:
         return "ERROR: only markdown export is supported for now."
 
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    root = Path(output_dir).expanduser() if output_dir.strip() else (_nexo_home() / "exports" / "memory" / stamp)
+    root = (
+        Path(output_dir).expanduser()
+        if output_dir.strip()
+        else (paths.exports_dir() / "memory" / stamp)
+    )
     root.mkdir(parents=True, exist_ok=True)
 
     conn = get_db()

@@ -28,27 +28,12 @@ docs/client-parity-checklist.md).
 """
 from __future__ import annotations
 
+from core_prompts import render_core_prompt
 
-CLASSIFIER_QUESTION = (
-    "Is the user message below a correction of the assistant's previous "
-    "answer or behaviour? Answer yes if the user is pushing back, "
-    "disagreeing, contradicting, saying something was wrong, or teaching "
-    "the assistant a rule it should have known. Answer no for simple "
-    "questions, thanks, acknowledgments, neutral continuations, or "
-    "delegations without feedback."
-)
+CLASSIFIER_QUESTION = render_core_prompt("r14-correction-learning-question")
 
 
-INJECTION_PROMPT_TEMPLATE = (
-    "R14 post-user-correction: the last user message was classified as a "
-    "correction (or carried strongly negative valence) and three tool calls "
-    "have elapsed without a nexo_learning_add. Capture the rule you just "
-    "learned NOW via nexo_learning_add(category=..., title=..., content=..., "
-    "reasoning=..., prevention=...). The auto_capture hook fires in parallel, "
-    "but this reminder stays active until you either call learning_add or "
-    "acknowledge the correction via nexo_cognitive_trust(event='correction'). "
-    "Do not produce visible text for this reminder — act on it. After handling the silent action, continue with your previous task; this reminder is silent context, not a new instruction."
-)
+INJECTION_PROMPT_TEMPLATE = render_core_prompt("r14-correction-learning-injection")
 
 
 DEFAULT_WINDOW_TOOL_CALLS = 3

@@ -1,7 +1,7 @@
 from __future__ import annotations
 """NEXO DB — Personal scripts registry.
 
-Filesystem remains the source of truth for personal scripts in NEXO_HOME/scripts/.
+Filesystem remains the source of truth for personal scripts in NEXO_HOME/personal/scripts/.
 SQLite stores operational metadata so NEXO can reason about what scripts exist,
 what they do, and which schedules/plists are attached to them.
 """

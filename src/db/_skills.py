@@ -34,8 +34,8 @@ def _resolve_core_skills_dir() -> Path:
 
     In development NEXO_CODE points at repo/src, so core skills live in src/skills.
     In packaged installs the runtime wrapper points NEXO_CODE at NEXO_HOME, so core
-    skills must live in a dedicated skills-core/ directory to avoid colliding with
-    personal skills in NEXO_HOME/skills.
+    skills must live in a dedicated core/skills directory to avoid colliding with
+    personal skills in NEXO_HOME/personal/skills.
     """
     try:
         if NEXO_CODE.resolve() == NEXO_HOME.resolve():
@@ -1472,7 +1472,7 @@ def collect_skill_improvement_candidates() -> list[dict]:
 
 
 def materialize_personal_skill_definition(skill_data: dict) -> dict:
-    """Write a personal skill definition to NEXO_HOME/skills and sync it into DB."""
+    """Write a personal skill definition to NEXO_HOME/personal/skills and sync it into DB."""
     _ensure_skill_dirs()
     skill_id = str(skill_data.get("id", "")).strip()
     name = str(skill_data.get("name", "")).strip()

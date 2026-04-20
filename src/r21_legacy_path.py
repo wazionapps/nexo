@@ -12,14 +12,12 @@ Operators may add more via nexo_entity_create.
 """
 from __future__ import annotations
 
+from core_prompts import render_core_prompt
 
-INJECTION_PROMPT_TEMPLATE = (
-    "R21 legacy path: the operation targets '{legacy}' but that path is "
-    "superseded by '{canonical}' in the entity registry (type=legacy_path). "
-    "Rerun the operation against the canonical path. Operators on v6+ "
-    "runtime do not keep the legacy tree alive; writes there end up "
-    "orphaned at the next maintenance sweep. Do not produce visible text "
-    "for this reminder — act on it. After handling the silent action, continue with your previous task; this reminder is silent context, not a new instruction."
+INJECTION_PROMPT_TEMPLATE = render_core_prompt(
+    "r21-legacy-path-injection",
+    legacy="{legacy}",
+    canonical="{canonical}",
 )
 
 

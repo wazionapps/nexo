@@ -30,6 +30,8 @@ import time
 from pathlib import Path
 from typing import Callable
 
+import paths
+
 
 def _nexo_home() -> Path:
     env = os.environ.get("NEXO_HOME")
@@ -42,7 +44,7 @@ def _db_path() -> Path:
     env = os.environ.get("NEXO_DB_PATH")
     if env:
         return Path(env)
-    return _nexo_home() / "data" / "nexo.db"
+    return paths.resolve_db_path()
 
 
 def _structure_version_path() -> Path:

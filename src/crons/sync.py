@@ -32,7 +32,7 @@ if str(_runtime_root) not in sys.path:
     sys.path.insert(0, str(_runtime_root))
 
 import paths
-from cron_recovery import resolve_declared_schedule, should_run_at_load
+from cron_recovery import is_cron_enabled, resolve_declared_schedule, should_run_at_load
 try:
     from runtime_power import resolve_launchagent_path
 except ImportError:
@@ -77,6 +77,13 @@ def _runtime_scripts_dir() -> Path:
     return new
 
 
+def _runtime_code_dir() -> Path:
+    packaged = RUNTIME_ROOT / "core"
+    if packaged.exists() or not (RUNTIME_ROOT / "server.py").exists():
+        return packaged
+    return RUNTIME_ROOT
+
+
 def _runtime_crons_dir() -> Path:
     new = RUNTIME_ROOT / "runtime" / "crons"
     legacy = RUNTIME_ROOT / "crons"
@@ -104,6 +111,12 @@ def _sync_watchdog_hash_registry():
                     continue
                 file_path, expected_hash = line.split("|", 1)
                 if file_path:
+                    candidate = Path(file_path)
+                    try:
+                        if candidate.resolve(strict=False) == watchdog_path.resolve(strict=False):
+                            continue
+                    except Exception:
+                        pass
                     entries[file_path] = expected_hash
         import hashlib
         entries[str(watchdog_path)] = hashlib.sha256(watchdog_path.read_bytes()).hexdigest()
@@ -144,6 +157,10 @@ def load_manifest() -> list[dict]:
         from automation_controls import apply_core_automation_overrides
     except Exception:
         apply_core_automation_overrides = None
+    try:
+        from product_mode import filter_blocked_crons
+    except Exception:
+        filter_blocked_crons = None
 
     with open(MANIFEST) as f:
         data = json.load(f)
@@ -156,24 +173,30 @@ def load_manifest() -> list[dict]:
         except Exception as e:
             log(f"WARNING: could not read optionals.json: {e}")
 
-    automation_default = True
+    schedule_data: dict = {}
     if SCHEDULE_FILE.is_file():
         try:
-            schedule_data = json.loads(SCHEDULE_FILE.read_text())
-            automation_default = bool(schedule_data.get("automation_enabled", True))
+            loaded = json.loads(SCHEDULE_FILE.read_text())
+            if isinstance(loaded, dict):
+                schedule_data = loaded
         except Exception:
             pass
 
     filtered = []
     for cron in crons:
-        optional_key = cron.get("optional")
-        if optional_key == "automation":
-            enabled = enabled_optionals.get(optional_key, automation_default)
-        else:
-            enabled = enabled_optionals.get(optional_key, False)
-        if optional_key and not enabled:
+        if not is_cron_enabled(
+            cron,
+            optionals=enabled_optionals,
+            schedule_data=schedule_data,
+            system=platform.system(),
+        ):
             continue
         filtered.append(cron)
+    if callable(filter_blocked_crons):
+        try:
+            filtered = filter_blocked_crons(filtered)
+        except Exception as e:
+            log(f"WARNING: could not filter product-blocked crons: {e}")
     if callable(apply_core_automation_overrides):
         try:
             return apply_core_automation_overrides(filtered)
@@ -320,7 +343,7 @@ def build_plist(cron: dict) -> dict:
             "PATH": resolve_launchagent_path(),
             "HOME": str(Path.home()),
             "NEXO_HOME": str(NEXO_HOME),
-            "NEXO_CODE": str(RUNTIME_ROOT),
+            "NEXO_CODE": str(_runtime_code_dir()),
             "NEXO_SOURCE_CODE": str(SOURCE_ROOT),
             "NEXO_MANAGED_CORE_CRON": "1",
             "PYTHONUNBUFFERED": "1",
@@ -334,6 +357,11 @@ def build_plist(cron: dict) -> dict:
     else:
         if should_run_at_load(cron):
             plist["RunAtLoad"] = True
+    if cron.get("watch_paths"):
+        plist["WatchPaths"] = [
+            str(Path(str(path)).expanduser()) if str(path).startswith("~") else str(path)
+            for path in cron.get("watch_paths", [])
+        ]
     if "interval_seconds" in cron and not cron.get("keep_alive"):
         plist["StartInterval"] = cron["interval_seconds"]
     elif "schedule" in cron and not cron.get("keep_alive"):
@@ -380,6 +408,8 @@ def plist_needs_update(existing_path: Path, new_plist: dict) -> bool:
         return True
     if existing.get("KeepAlive") != new_plist.get("KeepAlive"):
         return True
+    if existing.get("WatchPaths") != new_plist.get("WatchPaths"):
+        return True
     if existing.get("EnvironmentVariables") != new_plist.get("EnvironmentVariables"):
         return True
     return False
@@ -418,6 +448,36 @@ def _plist_is_personal(existing: dict) -> bool:
     return env.get(PERSONAL_CRON_MANAGED_ENV) == "1" or bool(env.get(PERSONAL_CRON_ID_ENV))
 
 
+def _core_launchagent_roots() -> tuple[Path, ...]:
+    roots: list[Path] = []
+    for root in (
+        SOURCE_ROOT / "scripts",
+        RUNTIME_ROOT / "core" / "scripts",
+        RUNTIME_ROOT / "scripts",
+        paths.core_scripts_dir(),
+    ):
+        normalized = root.expanduser()
+        if normalized not in roots:
+            roots.append(normalized)
+    return tuple(roots)
+
+
+def _program_arguments_point_to_core(existing: dict) -> bool:
+    args = existing.get("ProgramArguments", []) or []
+    for arg in args:
+        try:
+            candidate = Path(str(arg)).expanduser()
+        except Exception:
+            continue
+        for root in _core_launchagent_roots():
+            try:
+                candidate.relative_to(root)
+                return True
+            except ValueError:
+                continue
+    return False
+
+
 def _plist_is_core(existing: dict) -> bool:
     """Return True when a LaunchAgent should be treated as a core cron."""
     env = existing.get("EnvironmentVariables", {}) or {}
@@ -425,6 +485,9 @@ def _plist_is_core(existing: dict) -> bool:
         return False
 
     if env.get(CORE_CRON_MANAGED_ENV) == "1":
+        return True
+
+    if _program_arguments_point_to_core(existing):
         return True
 
     args = existing.get("ProgramArguments", [])
@@ -536,20 +599,25 @@ def sync_linux(dry_run: bool = False):
         stdout_log = LOG_DIR / f"{cron_id}-stdout.log"
         stderr_log = LOG_DIR / f"{cron_id}-stderr.log"
 
+        service_type = "simple" if cron.get("keep_alive") else "oneshot"
+        restart_block = "Restart=always\nRestartSec=5\n" if cron.get("keep_alive") else ""
+        install_block = "\n[Install]\nWantedBy=default.target\n" if cron.get("keep_alive") else ""
         service_content = f"""[Unit]
 Description=NEXO: {cron.get('description', cron_id)}
 
 [Service]
-Type=oneshot
+Type={service_type}
 ExecStart={exec_cmd}
 Environment=NEXO_HOME={NEXO_HOME}
-Environment=NEXO_CODE={SOURCE_ROOT}
+Environment=NEXO_CODE={_runtime_code_dir()}
 Environment=HOME={Path.home()}
 StandardOutput=append:{stdout_log}
 StandardError=append:{stderr_log}
-"""
+{restart_block}{install_block}"""
 
-        if cron.get("run_at_load"):
+        if cron.get("keep_alive"):
+            timer_spec = ""
+        elif cron.get("run_at_load"):
             timer_spec = "OnBootSec=0"
         elif "interval_seconds" in cron:
             timer_spec = f"OnUnitActiveSec={cron['interval_seconds']}s\nOnBootSec=60s"
@@ -566,6 +634,15 @@ StandardError=append:{stderr_log}
             log(f"  SKIP {cron_id}: no schedule or interval")
             continue
 
+        if dry_run:
+            log(f"  DRY-RUN: would install {cron_id}")
+            continue
+
+        service_path.write_text(service_content)
+        if cron.get("keep_alive"):
+            log(f"  Installed keep_alive service: {cron_id}")
+            continue
+
         timer_content = f"""[Unit]
 Description=NEXO timer: {cron.get('description', cron_id)}
 
@@ -576,23 +653,15 @@ Persistent=true
 [Install]
 WantedBy=timers.target
 """
-
-        if dry_run:
-            log(f"  DRY-RUN: would install {cron_id}")
-            continue
-
-        service_path.write_text(service_content)
         timer_path.write_text(timer_content)
         log(f"  Installed: {cron_id}")
 
     if not dry_run:
         subprocess.run(["systemctl", "--user", "daemon-reload"], capture_output=True)
         for cron in manifest_crons:
-            subprocess.run(
-                ["systemctl", "--user", "enable", "--now", f"nexo-{cron['id']}.timer"],
-                capture_output=True
-            )
-        log("systemd timers enabled.")
+            unit = f"nexo-{cron['id']}.service" if cron.get("keep_alive") else f"nexo-{cron['id']}.timer"
+            subprocess.run(["systemctl", "--user", "enable", "--now", unit], capture_output=True)
+        log("systemd units enabled.")
 
     log("Sync complete.")
 

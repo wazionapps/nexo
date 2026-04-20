@@ -25,8 +25,10 @@ def _detect_nexo_home() -> Path:
     inferred_home = helper_path.parent.parent
     if (
         helper_path.parent.name == "templates"
-        and (inferred_home / "scripts").is_dir()
-        and (inferred_home / "config").is_dir()
+        and (
+            ((inferred_home / "core" / "scripts").is_dir() and (inferred_home / "personal" / "config").is_dir())
+            or ((inferred_home / "scripts").is_dir() and (inferred_home / "config").is_dir())
+        )
     ):
         return inferred_home
 
@@ -47,13 +49,29 @@ DEFAULT_NEXO_TIMEOUT_SECONDS = max(15, int(os.environ.get("NEXO_HELPER_TIMEOUT",
 
 
 def _load_schedule() -> dict:
-    schedule_path = NEXO_HOME / "config" / "schedule.json"
-    if not schedule_path.is_file():
-        return {}
-    try:
-        return json.loads(schedule_path.read_text())
-    except Exception:
-        return {}
+    candidates = [
+        NEXO_HOME / "personal" / "config" / "schedule.json",
+        NEXO_HOME / "config" / "schedule.json",
+    ]
+    for schedule_path in candidates:
+        if not schedule_path.is_file():
+            continue
+        try:
+            return json.loads(schedule_path.read_text())
+        except Exception:
+            return {}
+    return {}
+
+
+def _resolve_core_runner(script_name: str) -> Path:
+    candidates = [
+        NEXO_HOME / "core" / "scripts" / script_name,
+        NEXO_HOME / "scripts" / script_name,
+    ]
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    return candidates[0]
 
 
 def _resolve_automation_backend() -> str:
@@ -215,12 +233,12 @@ def run_automation_text(
     scripts. The runtime routes the call through the selected backend and its
     configured model profile.
 
-    Personal scripts (those living in ``~/.nexo/scripts/``) should pass
+    Personal scripts (those living in ``~/.nexo/personal/scripts/``) should pass
     ``caller="personal/<descriptive-id>"`` and optionally ``tier="alto"``
     (or another canonical tier) to pick their resonance without editing the
     NEXO Brain repo. See ``docs/personal-scripts-guide.md`` for the rules.
     """
-    runner = NEXO_HOME / "scripts" / "nexo-agent-run.py"
+    runner = _resolve_core_runner("nexo-agent-run.py")
     if not runner.exists():
         raise RuntimeError(f"Automation runner not found: {runner}")
 
@@ -278,11 +296,11 @@ def run_automation_json(
     """Run the configured backend and return a parsed JSON object.
 
     v6.0.2 adds ``caller`` and ``tier`` kwargs so personal scripts
-    (``~/.nexo/scripts/``) can identify themselves and pick a resonance
+    (``~/.nexo/personal/scripts/``) can identify themselves and pick a resonance
     without registering in the core repo. See
     ``docs/personal-scripts-guide.md``.
     """
-    runner = NEXO_HOME / "scripts" / "nexo-agent-run.py"
+    runner = _resolve_core_runner("nexo-agent-run.py")
     if not runner.exists():
         raise RuntimeError(f"Automation runner not found: {runner}")
 
