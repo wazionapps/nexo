@@ -911,6 +911,17 @@ def _download_local_classifier_model() -> tuple[bool, str]:
     return True, ""
 
 
+def _local_classifier_install_command() -> list[str]:
+    in_virtualenv = bool(os.environ.get("VIRTUAL_ENV")) or (
+        getattr(sys, "prefix", "") != getattr(sys, "base_prefix", getattr(sys, "prefix", ""))
+    )
+    cmd = [sys.executable, "-m", "pip", "install"]
+    if not in_virtualenv:
+        cmd.append("--user")
+    cmd.extend(CLASSIFIER_INSTALL_PACKAGES)
+    return cmd
+
+
 def _install_local_classifier_worker() -> None:
     from classifier_local import MODEL_REVISION
 
@@ -936,7 +947,7 @@ def _install_local_classifier_worker() -> None:
         })
         return
 
-    install_cmd = ["pip3", "install", "--user", *CLASSIFIER_INSTALL_PACKAGES]
+    install_cmd = _local_classifier_install_command()
     _write_classifier_install_log("[classifier-install] " + " ".join(install_cmd))
     try:
         result = subprocess.run(

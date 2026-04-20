@@ -40,6 +40,8 @@ def test_skip_when_already_installed(monkeypatch, tmp_path):
 def test_install_runs_when_missing(monkeypatch, tmp_path):
     au = _reload_auto_update(monkeypatch, tmp_path)
     calls: list[list[str]] = []
+    monkeypatch.setenv("VIRTUAL_ENV", "/tmp/nexo-venv")
+    monkeypatch.setattr(au.sys, "executable", "/tmp/nexo-venv/bin/python")
     probe_results = iter([
         (False, {}, ["transformers", "torch"]),
         (False, {}, ["transformers", "torch"]),
@@ -59,9 +61,10 @@ def test_install_runs_when_missing(monkeypatch, tmp_path):
 
     assert calls
     assert calls[0] == [
-        "pip3",
+        "/tmp/nexo-venv/bin/python",
+        "-m",
+        "pip",
         "install",
-        "--user",
         "transformers",
         "torch",
         "sentencepiece",
@@ -115,3 +118,23 @@ def test_state_file_path_lives_in_runtime(monkeypatch, tmp_path):
     au = _reload_auto_update(monkeypatch, tmp_path)
     expected = tmp_path / "runtime" / "operations" / "classifier-install-state.json"
     assert au._classifier_install_state_path() == expected
+
+
+def test_install_command_uses_user_site_outside_virtualenv(monkeypatch, tmp_path):
+    monkeypatch.delenv("VIRTUAL_ENV", raising=False)
+    au = _reload_auto_update(monkeypatch, tmp_path)
+    monkeypatch.setattr(au.sys, "executable", "/usr/bin/python3")
+    monkeypatch.setattr(au.sys, "prefix", "/usr")
+    monkeypatch.setattr(au.sys, "base_prefix", "/usr")
+
+    assert au._local_classifier_install_command() == [
+        "/usr/bin/python3",
+        "-m",
+        "pip",
+        "install",
+        "--user",
+        "transformers",
+        "torch",
+        "sentencepiece",
+        "sentence-transformers",
+    ]
