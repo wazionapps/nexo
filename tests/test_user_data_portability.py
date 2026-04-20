@@ -240,5 +240,5 @@ def test_import_user_bundle_bypasses_export_rate_limit_for_safety_backup(portabi
     result = mod.import_user_bundle(str(archive_path))
     assert result["ok"] is True
     assert export_calls == [False]
-    assert result["warning_codes"] == ["no_sections"]
+    assert result["warning_codes"] == ["bundle_older", "no_sections"]
     assert "init_db" in calls
