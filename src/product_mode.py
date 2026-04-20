@@ -30,23 +30,24 @@ def product_mode_path() -> Path:
 
 def _desktop_install_markers(home: Path | None = None) -> list[Path]:
     base = Path(home) if home is not None else Path.home()
-    if sys.platform == "darwin":
-        return [
-            Path("/Applications/NEXO Desktop.app"),
-            base / "Applications" / "NEXO Desktop.app",
-            base / "Library" / "Application Support" / "NEXO Desktop",
-        ]
-    if os.name == "nt":
-        local = Path(os.environ.get("LOCALAPPDATA", str(base / "AppData" / "Local")))
-        roaming = Path(os.environ.get("APPDATA", str(base / "AppData" / "Roaming")))
-        return [
-            local / "Programs" / "NEXO Desktop",
-            roaming / "NEXO Desktop",
-        ]
-    return [
+    markers: list[Path] = [
+        base / "Applications" / "NEXO Desktop.app",
+        base / "Library" / "Application Support" / "NEXO Desktop",
         base / ".local" / "share" / "NEXO Desktop",
         base / ".config" / "NEXO Desktop",
     ]
+    if home is None and sys.platform == "darwin":
+        markers.insert(0, Path("/Applications/NEXO Desktop.app"))
+    if os.name == "nt":
+        local = Path(os.environ.get("LOCALAPPDATA", str(base / "AppData" / "Local")))
+        roaming = Path(os.environ.get("APPDATA", str(base / "AppData" / "Roaming")))
+        markers.extend(
+            [
+                local / "Programs" / "NEXO Desktop",
+                roaming / "NEXO Desktop",
+            ]
+        )
+    return markers
 
 
 def desktop_product_install_detected(home: Path | None = None) -> bool:
