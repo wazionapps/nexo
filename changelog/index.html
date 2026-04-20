@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.1.1 hotfixes the packaged updater path after F0.6 so compatibility shims and packaged/runtime mode detection no longer break real updates.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.1.2 closes the prompt/runtime release gap by centralising the prompt catalog, fixing lazy runtime loading, and aligning the public release surfaces with the shipped line.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.1.1 hotfixes the packaged updater path after F0.6 so compatibility shims and packaged/runtime mode detection no longer break real updates.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.1.2 closes the prompt/runtime release gap by centralising the prompt catalog, fixing lazy runtime loading, and aligning the public release surfaces with the shipped line.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.1.1 hotfixes the packaged updater path after F0.6 so compatibility shims and packaged/runtime mode detection no longer break real updates.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.1.2 closes the prompt/runtime release gap by centralising the prompt catalog, fixing lazy runtime loading, and aligning the public release surfaces with the shipped line.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.1.1 hotfixes the packaged updater path after F0.6 so compatibility shims and packaged/runtime mode detection no longer break real updates.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.1.2 closes the prompt/runtime release gap by centralising the prompt catalog, fixing lazy runtime loading, and aligning the public release surfaces with the shipped line.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -87,19 +87,23 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v7.1.1 live</span>
-                    <span class="page-chip">Updater hotfix</span>
-                    <span class="page-chip">Packaged installs</span>
-                    <span class="page-chip">F0.6 shim-safe</span>
+                    <span class="page-chip">v7.1.2 live</span>
+                    <span class="page-chip">Prompt catalog</span>
+                    <span class="page-chip">Lazy runtime loading</span>
+                    <span class="page-chip">Public surface parity</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v711" class="btn btn-primary">Start with v7.1.1</a>
-                    <a href="#v710" class="btn btn-secondary">See v7.1.0</a>
+                    <a href="#v712" class="btn btn-primary">Start with v7.1.2</a>
+                    <a href="#v711" class="btn btn-secondary">See v7.1.1</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
             </div>
             <div class="page-visual">
                 <div class="page-stack">
+                    <div class="page-stack-card">
+                        <strong>v7.1.2</strong>
+                        <span>Patch release: the shared prompt catalog is now the single source of truth, standalone runtime paths lazy-load prompt/DB state correctly, and the public release surfaces finally describe the shipped runtime line again.</span>
+                    </div>
                     <div class="page-stack-card">
                         <strong>v7.1.1</strong>
                         <span>Hotfix: packaged installs no longer mis-detect <code>~/.nexo/core</code> as a mutable repo, and F0.6 compatibility shims stop breaking update replay and rollback.</span>
@@ -168,6 +172,16 @@
 <section class="section-compact" style="background:rgba(124,58,237,0.08);">
     <div class="container desktop-disclaimer" style="max-width:860px;font-size:13px;line-height:1.55;">
         <p><strong>Sobre NEXO Desktop.</strong> NEXO Desktop es un cliente acompa&ntilde;ante closed-source distribuido aparte en <a href="https://systeam.es/nexo-desktop">systeam.es/nexo-desktop</a>. Cuando una entrada de changelog menciona "NEXO Desktop" se refiere a una versi&oacute;n coordinada de ese cliente que consume el contrato CLI/MCP del Brain. El c&oacute;digo de Desktop no vive en este repo; el Brain (AGPL-3.0) es 100% usable por s&iacute; solo desde terminal, Codex, Claude Code, o cualquier cliente MCP.</p>
+    </div>
+</section>
+
+<section id="v712" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.1.2 <span style="opacity:.5;font-weight:400;">&mdash; April 20, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">Prompt catalog + runtime consistency release</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            Patch over <code>v7.1.1</code>. The remaining startup, enforcement, project, and followup prompt fragments are now centralized under the shared prompt catalog; <code>agent_runner.py</code> and <code>db/_email_accounts.py</code> stop eager-loading prompt or DB state too early; <code>deep-sleep/extract.py</code> now passes the correct JSON system prompt; and the public release surfaces are refreshed so the open-source Brain and the coordinated Desktop line describe the same shipped runtime again.
+        </p>
     </div>
 </section>
 
