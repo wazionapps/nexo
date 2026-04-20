@@ -45,8 +45,12 @@ def test_prompt_catalog_dir_exists_and_contains_automation_prompts():
     assert (core_prompts.PROMPTS_DIR / "r16-declared-done-question.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "r17-promise-debt-injection.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "r17-promise-debt-question.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "r18-followup-autocomplete-injection.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "r19-project-grep-injection.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "r20-constant-change-injection.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "r20-constant-change-question.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "r21-legacy-path-injection.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "r22-personal-script-injection.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "sleep.md").is_file()
 
 
@@ -161,8 +165,12 @@ def test_render_core_prompt_supports_enforcer_and_startup_templates():
     r16_injection = core_prompts.render_core_prompt("r16-declared-done-injection")
     r17_question = core_prompts.render_core_prompt("r17-promise-debt-question")
     r17_injection = core_prompts.render_core_prompt("r17-promise-debt-injection")
+    r18 = core_prompts.render_core_prompt("r18-followup-autocomplete-injection", count="2", items="- 11")
+    r19 = core_prompts.render_core_prompt("r19-project-grep-injection", project="nexo", path="src/main.py")
     r20_question = core_prompts.render_core_prompt("r20-constant-change-question")
     r20_injection = core_prompts.render_core_prompt("r20-constant-change-injection", path="src/foo.py")
+    r21 = core_prompts.render_core_prompt("r21-legacy-path-injection", legacy="~/claude", canonical="~/.nexo")
+    r22 = core_prompts.render_core_prompt("r22-personal-script-injection", path="personal/scripts/foo.py")
     startup = core_prompts.render_core_prompt("interactive-startup")
 
     assert "Respond with EXACTLY ONE WORD: yes OR no." in strict
@@ -177,8 +185,12 @@ def test_render_core_prompt_supports_enforcer_and_startup_templates():
     assert "nexo_task_close" in r16_injection
     assert "explicitly promise a FUTURE action" in r17_question
     assert "promise without execution opens operational debt" in r17_injection
+    assert "matches 2 active followup" in r18
+    assert "project 'nexo' without Grep" in r19
     assert "module-level constant, configuration key" in r20_question
     assert "src/foo.py" in r20_injection
+    assert "~/claude" in r21
+    assert "personal/scripts/foo.py" in r22
     assert "run nexo_startup and nexo_heartbeat" in startup
 
 
