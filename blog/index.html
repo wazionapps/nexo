@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Blog — NEXO Brain</title>
-    <meta name="description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.1.3 packaged-runtime closure release and the 7.1.2 prompt/runtime consistency patch.">
+    <meta name="description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.1.4 packaged updater hotfix and the earlier 7.1.3 packaged-runtime closure release.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/blog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/blog/">
     <meta property="og:title" content="Blog — NEXO Brain">
-    <meta property="og:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.1.3 packaged-runtime closure release and the 7.1.2 prompt/runtime consistency patch.">
+    <meta property="og:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.1.4 packaged updater hotfix and the earlier 7.1.3 packaged-runtime closure release.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Blog — NEXO Brain">
-    <meta name="twitter:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.1.3 packaged-runtime closure release and the 7.1.2 prompt/runtime consistency patch.">
+    <meta name="twitter:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.1.4 packaged updater hotfix and the earlier 7.1.3 packaged-runtime closure release.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Blog — NEXO Brain",
-        "description": "Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.1.3 packaged-runtime closure release and the 7.1.2 prompt/runtime consistency patch.",
+        "description": "Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.1.4 packaged updater hotfix and the earlier 7.1.3 packaged-runtime closure release.",
         "url": "https://nexo-brain.com/blog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -134,7 +134,7 @@
                     <span class="page-chip">Shared brain product notes</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="/blog/nexo-7-1-3/" class="btn btn-primary">Read latest release</a>
+                    <a href="/blog/nexo-7-1-4/" class="btn btn-primary">Read latest release</a>
                     <a href="/changelog/" class="btn btn-secondary">Latest release notes</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -145,22 +145,22 @@
                 <div class="blog-featured-meta">
                     <span class="compare-chip">April 20, 2026</span>
                     <span class="compare-chip">Patch release</span>
-                    <span class="compare-chip">Packaged runtime closure</span>
+                    <span class="compare-chip">Packaged updater hotfix</span>
                 </div>
-                <h2>NEXO 7.1.3: patch — packaged Desktop runtime closes the loop</h2>
-                <p>v7.1.3 packages the final post-7.1.2 fixes that were already proven locally above the last tag: Desktop-managed Brain updates can reuse bundled npm, portable restores are inspectable before import, packaged product-mode detection is tighter, and the public release story catches up with the shipped runtime again.</p>
+                <h2>NEXO 7.1.4: patch — packaged updater verification order fix</h2>
+                <p>v7.1.4 closes the last rollout regression discovered on a real Desktop-managed machine: packaged updates now restore the runtime layout before import verification, so root shim files are back in place before the updater health-check runs.</p>
                 <div class="hero-actions" style="justify-content:flex-start;margin-bottom:18px;">
-                    <a href="/blog/nexo-7-1-3/" class="btn btn-primary">Open article</a>
-                    <a href="/changelog/#v713" class="btn btn-secondary">Open changelog</a>
+                    <a href="/blog/nexo-7-1-4/" class="btn btn-primary">Open article</a>
+                    <a href="/changelog/#v714" class="btn btn-secondary">Open changelog</a>
                 </div>
                 <div class="blog-mini-stack">
                     <div class="blog-mini-card">
                         <strong>Companion view</strong>
-                        <span><a href="/changelog/#v713">See the full v7.1.3 changelog</a></span>
+                        <span><a href="/changelog/#v714">See the full v7.1.4 changelog</a></span>
                     </div>
                     <div class="blog-mini-card">
                         <strong>Previous release</strong>
-                        <span><a href="/blog/nexo-7-1-2/">NEXO 7.1.2: patch — prompt catalog + runtime consistency</a>.</span>
+                        <span><a href="/blog/nexo-7-1-3/">NEXO 7.1.3: patch — packaged Desktop runtime closes the loop</a>.</span>
                     </div>
                 </div>
             </div>
@@ -172,6 +172,13 @@
 <section class="section-flush-top">
     <div class="container">
         <div class="blog-grid">
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 20, 2026</div>
+                <h2><a href="/blog/nexo-7-1-4/">NEXO 7.1.4: patch — packaged updater verification order fix</a></h2>
+                <p>Patch over v7.1.3. Packaged Desktop-managed updates now finalize the runtime layout before verifying imports, so root shim files are restored before the updater health-check executes.</p>
+                <a href="/blog/nexo-7-1-4/" class="read-more">Read more &rarr;</a>
+            </div>
 
             <div class="blog-card">
                 <div class="blog-card-date">April 20, 2026</div>
