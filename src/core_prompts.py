@@ -39,7 +39,8 @@ def render_core_prompt(name: str, /, **values: object) -> str:
     if missing:
         raise KeyError(f"Missing values for core prompt '{name}': {', '.join(missing)}")
 
-    return _TOKEN_RE.sub(lambda match: str(values[match.group(1)]), template)
+    rendered = _TOKEN_RE.sub(lambda match: str(values[match.group(1)]), template)
+    return rendered.rstrip("\n")
 
 
 __all__ = [

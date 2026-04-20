@@ -22,16 +22,22 @@ def test_prompt_catalog_dir_exists_and_contains_automation_prompts():
     assert (core_prompts.PROMPTS_DIR / "drive-signal-classifier-system.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "drive-signal-classifier-user.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "email-monitor.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "enforcement-classifier-retry.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "enforcement-classifier-strict.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "evolution-public-contribution.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "evolution-public-pr-review.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "evolution-weekly.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "followup-runner.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "immune-triage.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "interactive-startup.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "json-object-only.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "learning-validator.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "morning-agent.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "morning-agent-json-output.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "postmortem-consolidator.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "r-catalog.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "r34-identity-coherence-probe.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "r34-identity-coherence-question.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "sleep.md").is_file()
 
 
@@ -131,6 +137,22 @@ def test_render_core_prompt_supports_json_and_drive_classifier_templates():
     assert "cannot_comply" in deep_sleep_json
     assert "one of exactly five labels: anomaly, pattern, gap, opportunity, none" in drive_system
     assert "ROAS dropped 35% after yesterday's deploy." in drive_user
+
+
+def test_render_core_prompt_supports_enforcer_and_startup_templates():
+    strict = core_prompts.render_core_prompt("enforcement-classifier-strict")
+    retry = core_prompts.render_core_prompt("enforcement-classifier-retry")
+    catalog = core_prompts.render_core_prompt("r-catalog", tool="nexo_followup_create")
+    r34_probe = core_prompts.render_core_prompt("r34-identity-coherence-probe")
+    r34_question = core_prompts.render_core_prompt("r34-identity-coherence-question")
+    startup = core_prompts.render_core_prompt("interactive-startup")
+
+    assert "Respond with EXACTLY ONE WORD: yes OR no." in strict
+    assert "Emit 'yes' or 'no' and stop." in retry
+    assert "nexo_followup_create" in catalog
+    assert "shared brain" in r34_probe
+    assert "past-tense denial" in r34_question
+    assert "run nexo_startup and nexo_heartbeat" in startup
 
 
 def test_render_core_prompt_supports_evolution_templates():

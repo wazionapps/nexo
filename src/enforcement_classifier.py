@@ -40,24 +40,15 @@ import time
 from typing import Callable
 
 from call_model_raw import ClassifierUnavailableError, call_model_raw
+from core_prompts import render_core_prompt
 
 
 _logger = logging.getLogger("nexo.enforcement_classifier")
 
 
-_STRICT_SYSTEM_PROMPT = (
-    "You are a binary classifier for the NEXO Protocol Enforcer. "
-    "Respond with EXACTLY ONE WORD: yes OR no. "
-    "No explanation. No preface. No punctuation. No quotes. "
-    "Only 'yes' or 'no', lowercase, no surrounding text."
-)
+_STRICT_SYSTEM_PROMPT = render_core_prompt("enforcement-classifier-strict")
 
-_RETRY_SYSTEM_PROMPT = (
-    "Your previous response was not valid. "
-    "Answer with only the single word 'yes' or the single word 'no'. "
-    "Any other output is rejected. Do not explain. Do not apologise. "
-    "Do not repeat the question. Emit 'yes' or 'no' and stop."
-)
+_RETRY_SYSTEM_PROMPT = render_core_prompt("enforcement-classifier-retry")
 
 _PARSER_REGEX = re.compile(r"^\s*(yes|no)\b", flags=re.IGNORECASE)
 

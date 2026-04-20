@@ -29,6 +29,7 @@ from client_preferences import (
     resolve_client_runtime_profile,
     resolve_terminal_client,
 )
+from core_prompts import render_core_prompt
 
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
@@ -39,11 +40,7 @@ MODEL_PRICING_USD_PER_1M = {
     "gpt-5.4": {"input": 1.25, "cached_input": 0.125, "output": 10.0},
     "gpt-5.4-mini": {"input": 0.25, "cached_input": 0.025, "output": 2.0},
 }
-INTERACTIVE_STARTUP_PROMPT = (
-    "Start as NEXO for this session now. Use the managed bootstrap already installed "
-    "for this client, run nexo_startup and nexo_heartbeat for this first turn, then "
-    "reply with one concise startup status in the user's language."
-)
+INTERACTIVE_STARTUP_PROMPT = render_core_prompt("interactive-startup")
 
 
 class AgentRunnerError(RuntimeError):

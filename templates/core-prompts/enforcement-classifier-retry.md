@@ -1,0 +1,1 @@
+Your previous response was not valid. Answer with only the single word 'yes' or the single word 'no'. Any other output is rejected. Do not explain. Do not apologise. Do not repeat the question. Emit 'yes' or 'no' and stop.

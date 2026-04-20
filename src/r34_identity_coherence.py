@@ -28,6 +28,8 @@ from __future__ import annotations
 import re
 from typing import Callable, Iterable, Optional
 
+from core_prompts import render_core_prompt
+
 
 # Shared-brain tools that count as "you checked before speaking".
 SHARED_BRAIN_TOOLS = frozenset({
@@ -58,13 +60,8 @@ DENIAL_PATTERNS = [
 ]
 
 
-INJECTION_PROMPT = (
-    "R34 identity-coherence probe: you just denied having done something "
-    "without first consulting the shared brain. Other terminals are also "
-    "you. Run one of `nexo_recent_context`, `nexo_session_diary_read`, "
-    "`nexo_change_log` or `nexo_status` before asserting what happened "
-    "or did not happen — then answer again."
-)
+INJECTION_PROMPT = render_core_prompt("r34-identity-coherence-probe")
+CLASSIFIER_QUESTION = render_core_prompt("r34-identity-coherence-question")
 
 
 def _denial_match(message: str) -> Optional[str]:
@@ -107,13 +104,8 @@ def should_inject_r34(
         return True, INJECTION_PROMPT, matched
     # LLM disambiguation — reuses T4 infra. The engine passes a lambda
     # that calls enforcement_classifier.classify under the hood.
-    question = (
-        "Is this message a past-tense denial of an action that might "
-        "actually have been performed in another terminal of the same "
-        "shared NEXO Brain? Answer yes or no."
-    )
     try:
-        verdict = bool(classifier(question, message))
+        verdict = bool(classifier(CLASSIFIER_QUESTION, message))
     except Exception:
         # Fail-closed: if the classifier errors, do not inject (avoids
         # noisy false positives on regex-only matches when the LLM is
@@ -126,6 +118,7 @@ def should_inject_r34(
 
 __all__ = [
     "DENIAL_PATTERNS",
+    "CLASSIFIER_QUESTION",
     "INJECTION_PROMPT",
     "SHARED_BRAIN_TOOLS",
     "should_inject_r34",

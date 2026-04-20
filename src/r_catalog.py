@@ -24,6 +24,8 @@ from __future__ import annotations
 
 from typing import Iterable
 
+from core_prompts import render_core_prompt
+
 
 DISCOVERY_TOOLS = frozenset({
     "nexo_system_catalog",
@@ -34,13 +36,7 @@ DISCOVERY_TOOLS = frozenset({
     "nexo_guard_check",
 })
 
-INJECTION_PROMPT = (
-    "R-CATALOG pre-create probe: about to call {tool} without having "
-    "consulted the live inventory in this turn. Run one of "
-    "`nexo_system_catalog(query=...)`, `nexo_skill_match`, "
-    "`nexo_tool_explain`, `nexo_learning_search` or `nexo_guard_check` "
-    "first to avoid duplicating an existing artefact."
-)
+INJECTION_PROMPT = render_core_prompt("r-catalog", tool="{tool}")
 
 
 def _is_trigger_tool(tool_name) -> bool:

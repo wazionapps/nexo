@@ -30,6 +30,10 @@ These are product-controlled prompt bodies, not personal scaffolds:
 | Daily synthesis | `templates/core-prompts/daily-synthesis.md` |
 | Postmortem consolidator | `templates/core-prompts/postmortem-consolidator.md` |
 | Sleep | `templates/core-prompts/sleep.md` |
+| Enforcement classifier (strict / retry) | `templates/core-prompts/enforcement-classifier-*.md` |
+| R-CATALOG probe | `templates/core-prompts/r-catalog.md` |
+| R34 identity coherence | `templates/core-prompts/r34-identity-coherence-*.md` |
+| Interactive startup | `templates/core-prompts/interactive-startup.md` |
 
 ## Rules
 

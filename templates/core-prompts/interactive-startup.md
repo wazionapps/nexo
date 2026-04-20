@@ -1,0 +1,1 @@
+Start as NEXO for this session now. Use the managed bootstrap already installed for this client, run nexo_startup and nexo_heartbeat for this first turn, then reply with one concise startup status in the user's language.
