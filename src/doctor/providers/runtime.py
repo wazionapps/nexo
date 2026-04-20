@@ -837,6 +837,7 @@ def _enabled_optionals() -> dict[str, bool]:
 def _enabled_manifest_crons() -> list[dict]:
     manifest_candidates = [
         paths.crons_dir() / "manifest.json",
+        NEXO_HOME / "crons" / "manifest.json",
         NEXO_CODE / "crons" / "manifest.json",
     ]
     optionals = _enabled_optionals()
@@ -865,7 +866,7 @@ def _enabled_manifest_crons() -> list[dict]:
                 cron,
                 optionals=optionals,
                 schedule_data=schedule,
-                system=platform.system(),
+                system=os.environ.get("NEXO_PLATFORM") or platform.system(),
             ):
                 continue
             enabled.append(cron)
