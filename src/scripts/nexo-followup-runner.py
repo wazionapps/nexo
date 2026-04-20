@@ -185,15 +185,13 @@ def _llm_requires_operator_attention(text: str, operator_name: str = "") -> bool
         return None
     clean_operator = " ".join(str(operator_name or "").split()).strip()
     subject = clean_operator if clean_operator else "the operator"
-    question = (
-        f"Does this pending item clearly require {subject} to intervene with "
-        "input, approval, a reply, or a decision before the automation can continue?"
+    question = render_core_prompt(
+        "followup-runner-operator-attention-question",
+        subject=subject,
     )
-    context = (
-        "Answer yes only when the operator must decide, approve, reply, or provide missing input. "
-        "Answer no when the automation can continue on its own or the item is mainly waiting on an external party. "
-        "Treat references in any language as normal task text; do not depend on literal keyword matching.\n\n"
-        f"Pending item:\n{clean_text}"
+    context = render_core_prompt(
+        "followup-runner-operator-attention-context",
+        pending_item=clean_text,
     )
     try:
         from enforcement_classifier import ClassifierUnavailableError, classify

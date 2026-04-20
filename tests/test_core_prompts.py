@@ -28,6 +28,8 @@ def test_prompt_catalog_dir_exists_and_contains_automation_prompts():
     assert (core_prompts.PROMPTS_DIR / "evolution-public-pr-review.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "evolution-weekly.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "followup-runner.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "followup-runner-operator-attention-context.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "followup-runner-operator-attention-question.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "immune-triage.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "interactive-startup.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "json-object-only.md").is_file()
@@ -106,6 +108,18 @@ def test_render_core_prompt_supports_catchup_and_immune_templates():
     assert "You are the NEXO Immune System triage analyst." in immune
     assert "/tmp/immune-triage.md" in immune
     assert '{"FAIL": 1, "WARN": 2}' in immune
+
+    followup_question = core_prompts.render_core_prompt(
+        "followup-runner-operator-attention-question",
+        subject="Laura",
+    )
+    followup_context = core_prompts.render_core_prompt(
+        "followup-runner-operator-attention-context",
+        pending_item="Laura still needs to approve the quote.",
+    )
+    assert "require Laura to intervene" in followup_question
+    assert "Laura still needs to approve the quote." in followup_context
+    assert "do not depend on literal keyword matching" in followup_context
 
     audit = core_prompts.render_core_prompt(
         "daily-self-audit",

@@ -25,7 +25,7 @@ These are product-controlled prompt bodies, not personal scaffolds:
 | Template | Path |
 |---|---|
 | Email monitor | `templates/core-prompts/email-monitor.md` |
-| Followup runner | `templates/core-prompts/followup-runner.md` |
+| Followup runner | `templates/core-prompts/followup-runner.md`, `followup-runner-operator-attention-*.md` |
 | Morning agent | `templates/core-prompts/morning-agent.md` |
 | Daily synthesis | `templates/core-prompts/daily-synthesis.md` |
 | Postmortem consolidator | `templates/core-prompts/postmortem-consolidator.md` |
