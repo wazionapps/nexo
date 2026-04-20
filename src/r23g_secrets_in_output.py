@@ -12,12 +12,12 @@ from __future__ import annotations
 
 import re
 
+from core_prompts import render_core_prompt
 
-INJECTION_PROMPT_TEMPLATE = (
-    "R23g secrets reaching output stream: '{cmd}' is likely to expose "
-    "credentials ({reason}). Redact before logging/emailing, or route "
-    "the value through `nexo_credential_get` so the secret stays behind "
-    "the secret manager boundary."
+INJECTION_PROMPT_TEMPLATE = render_core_prompt(
+    "r23g-secrets-in-output-injection",
+    cmd="{cmd}",
+    reason="{reason}",
 )
 
 

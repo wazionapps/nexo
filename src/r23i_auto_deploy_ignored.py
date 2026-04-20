@@ -12,13 +12,12 @@ from __future__ import annotations
 
 import re
 
+from core_prompts import render_core_prompt
 
-INJECTION_PROMPT_TEMPLATE = (
-    "R23i auto-deploy after recent push: project '{project}' has "
-    "auto_deploy=true and you just pushed. The edit you are about to "
-    "make to '{path}' will be overwritten on the next deploy unless "
-    "you also commit+push it. Either commit the change or disable "
-    "auto-deploy temporarily."
+INJECTION_PROMPT_TEMPLATE = render_core_prompt(
+    "r23i-auto-deploy-ignored-injection",
+    project="{project}",
+    path="{path}",
 )
 
 

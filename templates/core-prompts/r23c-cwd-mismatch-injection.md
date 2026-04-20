@@ -1,0 +1,1 @@
+R23c destructive command in unexpected cwd: '[[cmd]]' runs inside '[[cwd]]'. You are currently discussing project '[[project]]' whose local_path is '[[expected]]'. Confirm the cwd is correct before proceeding — a destructive verb executed in the wrong tree is the most common source of accidental damage.

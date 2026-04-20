@@ -18,13 +18,14 @@ from __future__ import annotations
 import os
 import re
 
+from core_prompts import render_core_prompt
 
-INJECTION_PROMPT_TEMPLATE = (
-    "R23c destructive command in unexpected cwd: '{cmd}' runs inside "
-    "'{cwd}'. You are currently discussing project '{project}' whose "
-    "local_path is '{expected}'. Confirm the cwd is correct before "
-    "proceeding — a destructive verb executed in the wrong tree is the "
-    "most common source of accidental damage."
+INJECTION_PROMPT_TEMPLATE = render_core_prompt(
+    "r23c-cwd-mismatch-injection",
+    cmd="{cmd}",
+    cwd="{cwd}",
+    project="{project}",
+    expected="{expected}",
 )
 
 

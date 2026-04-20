@@ -8,13 +8,12 @@ from __future__ import annotations
 
 import re
 
+from core_prompts import render_core_prompt
 
-INJECTION_PROMPT_TEMPLATE = (
-    "R23e force push to {branch}: the command '{cmd}' would rewrite a "
-    "protected branch. Force-push to main/master/production/release-* is "
-    "never automatic — stop and confirm with the operator before proceeding. "
-    "If the intent is to recover a broken state, prefer `git revert` + a "
-    "fresh commit over a history rewrite."
+INJECTION_PROMPT_TEMPLATE = render_core_prompt(
+    "r23e-force-push-main-injection",
+    branch="{branch}",
+    cmd="{cmd}",
 )
 
 # Matches `git push [options] [remote] BRANCH` where --force or -f appears

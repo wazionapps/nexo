@@ -1,0 +1,1 @@
+R23b deploy vhost mismatch: '[[cmd]]' writes to '[[docroot]]' which is mapped to domain '[[mapped_domain]]' — but the user context mentions '[[context_domain]]'. Verify the vhost_mapping entity before shipping. If '[[context_domain]]' is correct, the deploy path should be the docroot registered for that domain, not '[[docroot]]'.

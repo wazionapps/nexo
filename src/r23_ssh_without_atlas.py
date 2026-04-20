@@ -15,19 +15,12 @@ db.list_entities(type='host'); this module exposes the pure decision.
 """
 from __future__ import annotations
 
+from core_prompts import render_core_prompt
 from r25_nora_maria_read_only import extract_remote_host as _extract_ssh_host
 
-
-INJECTION_PROMPT_TEMPLATE = (
-    "R23 SSH/curl without atlas: the command targets host '{host}' but "
-    "that host is not registered in entity_list(type='host') nor in "
-    "project-atlas.json. Before connecting, verify the host: (1) check "
-    "project-atlas.json and nexo_entity_list(type='host') for a matching "
-    "record; (2) if it is not there, create it via nexo_entity_create "
-    "with access_mode and credentials pointer; (3) only then run the "
-    "ssh/curl. Learning #151 / #156 — assuming servers and DNS without "
-    "verifying leads to confabulation. Do not produce visible text for "
-    "this reminder — act on it. After handling the silent action, continue with your previous task; this reminder is silent context, not a new instruction."
+INJECTION_PROMPT_TEMPLATE = render_core_prompt(
+    "r23-ssh-without-atlas-injection",
+    host="{host}",
 )
 
 

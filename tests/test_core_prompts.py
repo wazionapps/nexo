@@ -51,6 +51,21 @@ def test_prompt_catalog_dir_exists_and_contains_automation_prompts():
     assert (core_prompts.PROMPTS_DIR / "r20-constant-change-question.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "r21-legacy-path-injection.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "r22-personal-script-injection.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "r23-ssh-without-atlas-injection.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "r23b-deploy-vhost-injection.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "r23c-cwd-mismatch-injection.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "r23d-chown-chmod-recursive-injection.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "r23e-force-push-main-injection.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "r23f-db-no-where-injection.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "r23g-secrets-in-output-injection.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "r23h-shebang-mismatch-injection.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "r23i-auto-deploy-ignored-injection.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "r23j-global-install-injection.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "r23k-script-duplicates-skill-injection.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "r23l-resource-collision-injection.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "r23m-message-duplicate-injection.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "r24-stale-memory-injection.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "r25-read-only-host-injection.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "sleep.md").is_file()
 
 
@@ -171,6 +186,21 @@ def test_render_core_prompt_supports_enforcer_and_startup_templates():
     r20_injection = core_prompts.render_core_prompt("r20-constant-change-injection", path="src/foo.py")
     r21 = core_prompts.render_core_prompt("r21-legacy-path-injection", legacy="~/claude", canonical="~/.nexo")
     r22 = core_prompts.render_core_prompt("r22-personal-script-injection", path="personal/scripts/foo.py")
+    r23 = core_prompts.render_core_prompt("r23-ssh-without-atlas-injection", host="srv.example.com")
+    r23b = core_prompts.render_core_prompt("r23b-deploy-vhost-injection", cmd="scp dist", docroot="/srv/www/a", mapped_domain="a.com", context_domain="b.com")
+    r23c = core_prompts.render_core_prompt("r23c-cwd-mismatch-injection", cmd="rm -rf build", cwd="/tmp", project="nexo", expected="/repo/nexo")
+    r23d = core_prompts.render_core_prompt("r23d-chown-chmod-recursive-injection", verb="chmod", cmd="chmod -R 777 /var/www", target="/var/www")
+    r23e = core_prompts.render_core_prompt("r23e-force-push-main-injection", branch="main", cmd="git push --force origin main")
+    r23f = core_prompts.render_core_prompt("r23f-db-no-where-injection", cmd="DELETE FROM users", verb="DELETE")
+    r23g = core_prompts.render_core_prompt("r23g-secrets-in-output-injection", cmd="printenv", reason="dumps env")
+    r23h = core_prompts.render_core_prompt("r23h-shebang-mismatch-injection", script="tool.py", shebang="/usr/bin/env python3.11", actual="/usr/local/bin/python3.14")
+    r23i = core_prompts.render_core_prompt("r23i-auto-deploy-ignored-injection", project="nexo", path="/repo/nexo/src/x.py")
+    r23j = core_prompts.render_core_prompt("r23j-global-install-injection", cmd="npm install -g foo", pkg="foo")
+    r23k = core_prompts.render_core_prompt("r23k-script-duplicates-skill-injection", script="deploy-audit", skill="release operator", score="0.88", skill_id="42")
+    r23l = core_prompts.render_core_prompt("r23l-resource-collision-injection", cmd="whmapi1 createacct username=demo", resource_type="cpanel_account", name="demo", existing_type="user")
+    r23m = core_prompts.render_core_prompt("r23m-message-duplicate-injection", thread="patricia@example.com", similarity="97", age_sec="42")
+    r24 = core_prompts.render_core_prompt("r24-stale-memory-injection", threshold_days="7")
+    r25 = core_prompts.render_core_prompt("r25-read-only-host-injection", host="maria", matched="rm")
     startup = core_prompts.render_core_prompt("interactive-startup")
 
     assert "Respond with EXACTLY ONE WORD: yes OR no." in strict
@@ -191,6 +221,21 @@ def test_render_core_prompt_supports_enforcer_and_startup_templates():
     assert "src/foo.py" in r20_injection
     assert "~/claude" in r21
     assert "personal/scripts/foo.py" in r22
+    assert "srv.example.com" in r23
+    assert "mapped to domain 'a.com'" in r23b
+    assert "project 'nexo'" in r23c
+    assert "chmod -R 777 /var/www" in r23d
+    assert "protected branch" in r23e
+    assert "production DB" in r23f
+    assert "nexo_credential_get" in r23g
+    assert "tool.py" in r23h
+    assert "auto_deploy=true" in r23i
+    assert "foo" in r23j
+    assert "skill_id=42" in r23k
+    assert "existing record first" in r23l
+    assert "97% identical" in r23m
+    assert "older than 7 days" in r24
+    assert "access_mode=read_only" in r25
     assert "run nexo_startup and nexo_heartbeat" in startup
 
 

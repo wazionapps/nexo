@@ -1,0 +1,1 @@
+R23f destructive SQL without WHERE: the command '[[cmd]]' contains a [[verb]] statement with no WHERE clause against a production DB. Abort. If the intent is a full wipe, run it interactively against the DB console with explicit operator confirmation, not via the enforcement wrapper.

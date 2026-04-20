@@ -31,7 +31,7 @@ These are product-controlled prompt bodies, not personal scaffolds:
 | Postmortem consolidator | `templates/core-prompts/postmortem-consolidator.md` |
 | Sleep | `templates/core-prompts/sleep.md` |
 | Enforcement classifier (strict / retry) | `templates/core-prompts/enforcement-classifier-*.md` |
-| Rule prompts R14 / R15 / R16 / R17 / R18 / R19 / R20 / R21 / R22 | `templates/core-prompts/r14-*.md`, `r15-*.md`, `r16-*.md`, `r17-*.md`, `r18-*.md`, `r19-*.md`, `r20-*.md`, `r21-*.md`, `r22-*.md` |
+| Rule prompts R14 / R15 / R16 / R17 / R18 / R19 / R20 / R21 / R22 / R23* / R24 / R25 | `templates/core-prompts/r14-*.md`, `r15-*.md`, `r16-*.md`, `r17-*.md`, `r18-*.md`, `r19-*.md`, `r20-*.md`, `r21-*.md`, `r22-*.md`, `r23*.md`, `r24-*.md`, `r25-*.md` |
 | R-CATALOG probe | `templates/core-prompts/r-catalog.md` |
 | R34 identity coherence | `templates/core-prompts/r34-identity-coherence-*.md` |
 | Interactive startup | `templates/core-prompts/interactive-startup.md` |

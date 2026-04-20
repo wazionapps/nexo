@@ -1,0 +1,1 @@
+R23h shebang mismatch: '[[script]]' declares interpreter '[[shebang]]' but the shell resolves it to '[[actual]]'. Align versions before running — interpreter drift produces the hardest-to-diagnose runtime bugs.

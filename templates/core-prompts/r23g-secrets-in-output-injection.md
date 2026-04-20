@@ -1,0 +1,1 @@
+R23g secrets reaching output stream: '[[cmd]]' is likely to expose credentials ([[reason]]). Redact before logging/emailing, or route the value through `nexo_credential_get` so the secret stays behind the secret manager boundary.

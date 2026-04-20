@@ -1,0 +1,1 @@
+R23j global install without explicit request: '[[cmd]]' installs '[[pkg]]' globally. Prefer a project-scoped install (venv, nvm, `--save`, local brew cask) unless the operator asked for a global tool. If the operator explicitly asked, retry after saying `yes install globally` or equivalent.

@@ -1,0 +1,1 @@
+R23i auto-deploy after recent push: project '[[project]]' has auto_deploy=true and you just pushed. The edit you are about to make to '[[path]]' will be overwritten on the next deploy unless you also commit+push it. Either commit the change or disable auto-deploy temporarily.

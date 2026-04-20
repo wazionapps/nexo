@@ -1,0 +1,1 @@
+R23l resource collision: '[[cmd]]' tries to create [[resource_type]] '[[name]]', but an entity with that name already exists (registered as type=[[existing_type]]). If this is intentional reuse, delete or rename the existing record first; otherwise pick a distinct name.
