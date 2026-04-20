@@ -19,6 +19,11 @@ shimmed paths), causing `FileExistsError` / "same file" failures during update.
 - `tests/test_startup_preflight.py` now covers packaged-runtime detection plus
   symlink/file replacement for package dirs, core-skill shims, root Python
   modules, script/plugin shims, and runtime-tree restore.
+- Local classifier auto-install now targets the same Python interpreter that
+  runs NEXO itself. Inside the managed runtime/venv it installs with
+  `sys.executable -m pip` instead of a generic `pip3`, preventing
+  cross-interpreter drift where dependencies landed in Python 3.9 while the
+  active Brain runtime was already on Python 3.12.
 
 ### Verification
 
