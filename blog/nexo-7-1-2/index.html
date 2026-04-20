@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.1.2: patch — prompt catalog + runtime consistency</title>
+<meta name="description" content="NEXO Brain v7.1.2 patch over v7.1.1. Prompt rendering is fully centralised, standalone runtime paths lazy-load correctly, and the public release surfaces finally match the shipped runtime line again.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-1-2/">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.1.2: patch — prompt catalog + runtime consistency","datePublished":"2026-04-20","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head><body><main><article style="max-width:760px;margin:80px auto;padding:0 24px;line-height:1.75;">
+<h1>NEXO 7.1.2 — prompt catalog + runtime consistency</h1>
+<p><em>Published 2026-04-20. Patch over v7.1.1.</em></p>
+<p>The hotfix line was already stable enough to update packaged installs again, but the public release still lagged behind the real runtime tree. The working branch above <code>7.1.1</code> had already centralised the remaining startup, enforcement, project, and followup prompt fragments, tightened product-facing runtime helpers, and fixed a couple of lazy-loading edges that still showed up in standalone execution paths and tests.</p>
+<h2>What changed</h2>
+<p>The shared prompt catalog is now the single source of truth for the remaining prompt surfaces that used to live half inline and half in templates. <code>agent_runner.py</code> resolves the interactive startup prompt lazily, <code>db/_email_accounts.py</code> resolves the live DB handle lazily from <code>db._core</code>, and <code>deep-sleep/extract.py</code> now passes the correct JSON system prompt variable into its automation call.</p>
+<h2>Why it matters</h2>
+<p>This closes a subtler kind of drift: not only runtime vs source-sync, but also shipped code vs public narrative. Operators now get a release that matches the runtime they are actually about to install, and standalone helpers stop failing just because prompt or DB state was imported too early.</p>
+<h2>Verification</h2>
+<p>The release line was validated with the full Brain suite green (<code>1754 passed, 3 skipped, 1 xfailed, 5 xpassed</code>), repository privacy checks green, and the public release-readiness validator green before publication.</p>
+</article></main></body></html>

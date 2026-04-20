@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import tempfile
 import time
+from functools import lru_cache
 from pathlib import Path
 
 try:
@@ -40,9 +41,6 @@ MODEL_PRICING_USD_PER_1M = {
     "gpt-5.4": {"input": 1.25, "cached_input": 0.125, "output": 10.0},
     "gpt-5.4-mini": {"input": 0.25, "cached_input": 0.025, "output": 2.0},
 }
-INTERACTIVE_STARTUP_PROMPT = render_core_prompt("interactive-startup")
-
-
 class AgentRunnerError(RuntimeError):
     """Base exception for runner failures."""
 
@@ -435,10 +433,15 @@ def _codex_interactive_launch_flags() -> list[str]:
     return ["--sandbox", "danger-full-access", "--ask-for-approval", "never"]
 
 
+@lru_cache(maxsize=1)
+def _interactive_startup_prompt_text() -> str:
+    return render_core_prompt("interactive-startup")
+
+
 def _interactive_startup_prompt(client: str) -> str:
     client_key = normalize_client_key(client)
     if client_key in {CLIENT_CLAUDE_CODE, CLIENT_CODEX}:
-        return INTERACTIVE_STARTUP_PROMPT
+        return _interactive_startup_prompt_text()
     return ""
 
 

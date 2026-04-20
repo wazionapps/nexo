@@ -231,7 +231,7 @@ def analyze_session(
                 caller="deep-sleep/extract",
                 timeout=120,
                 output_format="text",
-                append_system_prompt=JSON_SYSTEM_PROMPT,
+                append_system_prompt=json_system_prompt,
             )
             if convert_result.returncode == 0:
                 parsed = extract_json_from_response(convert_result.stdout)
