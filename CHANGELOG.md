@@ -1,5 +1,30 @@
 # Changelog
 
+## [7.1.4] - 2026-04-20
+
+Patch release coordinated with NEXO Desktop v0.22.4. This line closes the
+last packaged-update hole discovered during real-machine rollout: Desktop-
+managed installs could still verify imports before the packaged runtime layout
+had recreated the root shim files, which made `nexo update` fail on otherwise
+healthy installs.
+
+### Fixed
+
+- `src/plugins/update.py` now finalizes the packaged runtime layout before
+  running the post-update `import server` verification. That restores the
+  root-level compatibility shims first, so packaged installs stop tripping
+  their own health-check during update replay.
+- Added an explicit regression test for the packaged updater ordering, so the
+  layout-finalize step must stay ahead of import verification in future
+  releases.
+- Public release surfaces are refreshed again so the open-source Brain and the
+  coordinated Desktop client describe the same `7.1.4` / `0.22.4` shipped line.
+
+### Verification
+
+- `13 passed` via `pytest -q tests/test_packaged_update_runtime.py`
+- `python3 scripts/verify_release_readiness.py --ci`
+
 ## [7.1.3] - 2026-04-20
 
 Patch release coordinated with NEXO Desktop v0.22.3. This line turns the

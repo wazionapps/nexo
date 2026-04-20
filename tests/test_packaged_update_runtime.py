@@ -324,6 +324,51 @@ def test_handle_packaged_update_uses_desktop_managed_npm_runtime(monkeypatch):
     assert captured["env"]["ELECTRON_RUN_AS_NODE"] == "1"
 
 
+def test_handle_packaged_update_finalizes_layout_before_import_verification(monkeypatch):
+    from plugins import update
+
+    versions = iter(["7.1.2", "7.1.3"])
+    call_order = []
+
+    monkeypatch.setattr(update, "_read_version", lambda: next(versions))
+    monkeypatch.setattr(update, "_backup_databases", lambda: ("backup-dir", None))
+    monkeypatch.setattr(update, "_backup_code_tree", lambda: ("code-backup", None))
+    monkeypatch.setattr(update, "_reinstall_pip_deps", lambda: None)
+    monkeypatch.setattr(update, "_run_migrations", lambda: None)
+    monkeypatch.setattr(
+        update,
+        "_finalize_packaged_runtime_layout",
+        lambda: (call_order.append("finalize") or True, None),
+    )
+    monkeypatch.setattr(
+        update,
+        "_verify_import",
+        lambda: (call_order.append("verify") or None),
+    )
+    monkeypatch.setattr(update, "_sync_packaged_crons", lambda progress_fn=None: (True, None))
+    monkeypatch.setattr(update, "_sync_hooks_to_home", lambda: None)
+    monkeypatch.setattr(update, "_cleanup_retired_runtime_files", lambda: [])
+    monkeypatch.setattr(update, "_update_runtime_dependencies", lambda progress_fn=None: [])
+    monkeypatch.setattr(update, "_sync_packaged_clients", lambda: (True, None))
+    monkeypatch.setattr(
+        update,
+        "_reload_launch_agents_after_bump",
+        lambda: {"scanned": 1, "reloaded": 1, "errors": []},
+    )
+
+    def fake_run(args, **kwargs):
+        if args == ["npm", "update", "-g", "nexo-brain"]:
+            return mock.Mock(returncode=0, stdout="", stderr="")
+        raise AssertionError(f"unexpected subprocess call: {args}")
+
+    monkeypatch.setattr(update.subprocess, "run", fake_run)
+
+    result = update._handle_packaged_update(include_clis=False)
+
+    assert "UPDATE SUCCESSFUL (packaged install)" in result
+    assert call_order[:2] == ["finalize", "verify"]
+
+
 def test_packaged_installer_discovers_root_python_modules_for_migration():
     installer = REPO_ROOT / "bin" / "nexo-brain.js"
     text = installer.read_text(encoding="utf-8")

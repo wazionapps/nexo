@@ -1129,16 +1129,19 @@ def _handle_packaged_update(progress_fn=None, *, include_clis: bool = True) -> s
         if regression:
             errors.append(f"post-migration wipe: {regression}")
 
-    # Verify server can still import
-    _emit_progress(progress_fn, "Verifying runtime import health...")
-    verify_err = _verify_import()
-    if verify_err:
-        errors.append(f"verification: {verify_err}")
-
     _emit_progress(progress_fn, "Canonicalizing packaged runtime layout...")
     layout_ok, layout_error = _finalize_packaged_runtime_layout()
     if not layout_ok:
         errors.append(f"layout finalize: {layout_error}")
+
+    # Verify server can still import after the packaged layout has been
+    # restored. Packaged npm updates may temporarily replace the root-level
+    # shim files that `import server` relies on, so verification must run
+    # after `_finalize_packaged_runtime_layout()` recreates them.
+    _emit_progress(progress_fn, "Verifying runtime import health...")
+    verify_err = _verify_import()
+    if verify_err:
+        errors.append(f"verification: {verify_err}")
 
     hook_sync_warning = None
     cron_sync_warning = None
