@@ -1206,6 +1206,7 @@ def probe_automation_backend(
     backend: str | None = None,
     cwd: str | os.PathLike[str] | None = None,
     timeout: int = 60,
+    caller: str = "automation_probe",
 ) -> dict:
     selected_backend = backend or resolve_automation_backend()
     if selected_backend == BACKEND_NONE:
@@ -1221,6 +1222,7 @@ def probe_automation_backend(
             cwd=cwd,
             timeout=timeout,
             output_format="text",
+            caller=caller,
         )
     except AutomationBackendUnavailableError as exc:
         return {

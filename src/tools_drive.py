@@ -11,6 +11,7 @@ import re
 import subprocess
 import time
 import unicodedata
+from core_prompts import render_core_prompt
 
 from db import (
     create_drive_signal, reinforce_drive_signal, get_drive_signals,
@@ -265,19 +266,10 @@ def _llm_classify_signal(text: str) -> dict:
     except Exception as exc:
         return {"available": False, "label": None, "reason": f"runner_unavailable:{exc}"}
 
-    json_system_prompt = (
-        "You classify operational text into one of exactly five labels: "
-        "anomaly, pattern, gap, opportunity, none. "
-        "Return ONLY a valid JSON object with keys: label, confidence, reason. "
-        "confidence must be a number from 0 to 1. "
-        "Use anomaly for unexpected changes/degradation, pattern for recurrence, "
-        "gap for missing knowledge/documentation/blocker, opportunity for improvement/automation/benchmark gaps, "
-        "none when the text is normal progress without a useful signal."
-    )
-    prompt = (
-        "Classify this NEXO Drive signal candidate.\n\n"
-        f"TEXT:\n{text.strip()[:3000]}\n\n"
-        "Return JSON only."
+    json_system_prompt = render_core_prompt("drive-signal-classifier-system")
+    prompt = render_core_prompt(
+        "drive-signal-classifier-user",
+        text=text.strip()[:3000],
     )
 
     try:

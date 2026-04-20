@@ -11,11 +11,13 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
-NEXO_HOME = os.environ.get("NEXO_HOME", os.path.expanduser("~/.nexo"))
-_data_dir = os.path.join(NEXO_HOME, "data")
-os.makedirs(_data_dir, exist_ok=True)
+import paths
 
-COGNITIVE_DB = os.path.join(_data_dir, "cognitive.db")
+NEXO_HOME = os.environ.get("NEXO_HOME", os.path.expanduser("~/.nexo"))
+_cognitive_dir = paths.cognitive_dir()
+_cognitive_dir.mkdir(parents=True, exist_ok=True)
+
+COGNITIVE_DB = str(_cognitive_dir / "cognitive.db")
 EMBEDDING_DIM = 768
 LAMBDA_STM = 0.004126   # half-life = ln(2) / (7 * 24) ≈ 7 days
 LAMBDA_LTM = 0.000481  # half-life = ln(2) / (60 * 24) ≈ 60 days

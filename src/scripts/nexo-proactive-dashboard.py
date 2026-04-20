@@ -19,6 +19,33 @@ import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
+
+def _bootstrap_nexo_code(default_repo_src: Path) -> Path:
+    nexo_home = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+    raw_env = os.environ.get("NEXO_CODE", "")
+    candidates: list[Path] = []
+    if raw_env:
+        raw = Path(raw_env).expanduser()
+        candidates.extend([raw, raw / "core"])
+    candidates.extend([default_repo_src, nexo_home / "core", nexo_home])
+    seen: set[str] = set()
+    for candidate in candidates:
+        key = str(candidate)
+        if key in seen:
+            continue
+        seen.add(key)
+        if (candidate / "paths.py").is_file() or (candidate / "server.py").is_file() or (candidate / "cli.py").is_file():
+            if str(candidate) not in sys.path:
+                sys.path.insert(0, str(candidate))
+            return candidate
+    fallback = candidates[0]
+    if str(fallback) not in sys.path:
+        sys.path.insert(0, str(fallback))
+    return fallback
+
+
+NEXO_CODE = _bootstrap_nexo_code(Path(__file__).resolve().parents[1])
+
 import paths
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
