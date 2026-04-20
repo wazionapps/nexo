@@ -11,6 +11,7 @@ import tarfile
 import tempfile
 import threading
 import time
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -73,6 +74,32 @@ def _runtime_version() -> str:
         except Exception:
             continue
     return "?"
+
+
+def _parse_version_tuple(value: str) -> tuple[int, ...] | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    parts: list[int] = []
+    for token in text.split("."):
+        match = re.match(r"^(\d+)", token.strip())
+        if not match:
+            return None
+        parts.append(int(match.group(1)))
+    return tuple(parts) if parts else None
+
+
+def _version_relation(bundle_version: str, current_version: str) -> str:
+    bundle_tuple = _parse_version_tuple(bundle_version)
+    current_tuple = _parse_version_tuple(current_version)
+    if not bundle_tuple or not current_tuple:
+        return "unknown"
+    width = max(len(bundle_tuple), len(current_tuple))
+    bundle_norm = bundle_tuple + (0,) * (width - len(bundle_tuple))
+    current_norm = current_tuple + (0,) * (width - len(current_tuple))
+    if bundle_norm == current_norm:
+        return "match"
+    return "bundle_newer" if bundle_norm > current_norm else "bundle_older"
 
 
 def _sqlite_backup(src: Path, dest: Path) -> None:
@@ -183,6 +210,56 @@ def _safe_extract(archive_path: Path, dest_dir: Path) -> None:
             target.chmod(member.mode & 0o777)
 
 
+def _stage_bundle(archive_path: Path) -> tuple[Path, Path, dict]:
+    STAGING_DIR.mkdir(parents=True, exist_ok=True)
+    stage_dir = Path(tempfile.mkdtemp(prefix="nexo-import-", dir=str(STAGING_DIR)))
+    try:
+        _safe_extract(archive_path, stage_dir)
+        bundle_root = stage_dir / "bundle"
+        manifest_path = bundle_root / "manifest.json"
+        if not manifest_path.is_file():
+            raise ValueError("bundle manifest missing")
+        manifest = json.loads(manifest_path.read_text())
+        if manifest.get("kind") != "nexo-user-data-bundle":
+            raise ValueError(f"unsupported bundle kind: {manifest.get('kind', 'unknown')}")
+        return stage_dir, bundle_root, manifest
+    except Exception:
+        shutil.rmtree(stage_dir, ignore_errors=True)
+        raise
+
+
+def _inspect_manifest(manifest: dict, archive_path: Path) -> dict:
+    current_version = _runtime_version()
+    bundle_version = str(manifest.get("version") or "?")
+    section_names = sorted(
+        str(name).strip()
+        for name in (manifest.get("sections") or {}).keys()
+        if str(name).strip()
+    )
+    warning_codes: list[str] = []
+    relation = _version_relation(bundle_version, current_version)
+    if relation == "bundle_newer":
+        warning_codes.append("bundle_newer")
+    elif relation == "bundle_older":
+        warning_codes.append("bundle_older")
+    elif relation == "unknown" and bundle_version != current_version:
+        warning_codes.append("version_unknown")
+    if not section_names:
+        warning_codes.append("no_sections")
+    return {
+        "ok": True,
+        "path": str(archive_path),
+        "kind": str(manifest.get("kind") or ""),
+        "bundle_version": bundle_version,
+        "current_version": current_version,
+        "created_at": str(manifest.get("created_at") or ""),
+        "section_names": section_names,
+        "section_count": len(section_names),
+        "version_relation": relation,
+        "warning_codes": warning_codes,
+    }
+
+
 def _load_personal_scripts() -> tuple[list[dict], list[dict]]:
     from script_registry import classify_scripts_dir, discover_personal_schedules
 
@@ -196,10 +273,11 @@ def _load_personal_scripts() -> tuple[list[dict], list[dict]]:
     return scripts, schedules
 
 
-def export_user_bundle(output_path: str = "") -> dict:
-    err = _check_export_rate_limit()
-    if err is not None:
-        return {"ok": False, "error": err, "rate_limited": True}
+def export_user_bundle(output_path: str = "", *, enforce_rate_limit: bool = True) -> dict:
+    if enforce_rate_limit:
+        err = _check_export_rate_limit()
+        if err is not None:
+            return {"ok": False, "error": err, "rate_limited": True}
     output = Path(output_path).expanduser() if output_path.strip() else (EXPORTS_DIR / f"nexo-user-data-{_now_stamp()}.tar.gz")
     output.parent.mkdir(parents=True, exist_ok=True)
     STAGING_DIR.mkdir(parents=True, exist_ok=True)
@@ -286,35 +364,42 @@ def export_user_bundle(output_path: str = "") -> dict:
         shutil.rmtree(stage_dir, ignore_errors=True)
 
 
+def inspect_user_bundle(bundle_path: str) -> dict:
+    archive_path = Path(bundle_path).expanduser()
+    if not archive_path.is_file():
+        return {"ok": False, "error": f"bundle not found: {archive_path}", "path": str(archive_path)}
+
+    stage_dir: Path | None = None
+    try:
+        stage_dir, _bundle_root, manifest = _stage_bundle(archive_path)
+        return _inspect_manifest(manifest, archive_path)
+    except Exception as exc:
+        return {"ok": False, "error": str(exc), "path": str(archive_path)}
+    finally:
+        if stage_dir is not None:
+            shutil.rmtree(stage_dir, ignore_errors=True)
+
+
 def import_user_bundle(bundle_path: str) -> dict:
     archive_path = Path(bundle_path).expanduser()
     if not archive_path.is_file():
         return {"ok": False, "error": f"bundle not found: {archive_path}"}
 
+    inspection = inspect_user_bundle(str(archive_path))
+    if not inspection.get("ok"):
+        return inspection
+
     backups_dir = paths.backups_dir()
     backups_dir.mkdir(parents=True, exist_ok=True)
     safety_backup = backups_dir / f"pre-import-user-data-{_now_stamp()}.tar.gz"
-    safety_result = export_user_bundle(str(safety_backup))
+    safety_result = export_user_bundle(str(safety_backup), enforce_rate_limit=False)
     if not safety_result.get("ok"):
         return {"ok": False, "error": "failed to create safety backup", "safety_backup": str(safety_backup)}
 
-    STAGING_DIR.mkdir(parents=True, exist_ok=True)
-    stage_dir = Path(tempfile.mkdtemp(prefix="nexo-import-", dir=str(STAGING_DIR)))
+    stage_dir: Path | None = None
 
     try:
-        _safe_extract(archive_path, stage_dir)
-        bundle_root = stage_dir / "bundle"
-        manifest_path = bundle_root / "manifest.json"
-        if not manifest_path.is_file():
-            return {"ok": False, "error": "bundle manifest missing", "safety_backup": str(safety_backup)}
-
-        manifest = json.loads(manifest_path.read_text())
-        if manifest.get("kind") != "nexo-user-data-bundle":
-            return {
-                "ok": False,
-                "error": f"unsupported bundle kind: {manifest.get('kind', 'unknown')}",
-                "safety_backup": str(safety_backup),
-            }
+        stage_dir, bundle_root, manifest = _stage_bundle(archive_path)
 
         restored: dict[str, dict] = {}
 
@@ -368,6 +453,9 @@ def import_user_bundle(bundle_path: str) -> dict:
             "path": str(archive_path),
             "kind": manifest.get("kind"),
             "bundle_version": manifest.get("version"),
+            "current_version": inspection.get("current_version"),
+            "version_relation": inspection.get("version_relation"),
+            "warning_codes": inspection.get("warning_codes", []),
             "safety_backup": str(safety_backup),
             "restored": restored,
             "skill_sync": skill_sync_result,
@@ -382,4 +470,5 @@ def import_user_bundle(bundle_path: str) -> dict:
             "safety_backup": str(safety_backup),
         }
     finally:
-        shutil.rmtree(stage_dir, ignore_errors=True)
+        if stage_dir is not None:
+            shutil.rmtree(stage_dir, ignore_errors=True)

@@ -167,3 +167,78 @@ def test_import_user_bundle_restores_personal_f06_artifacts_and_reconciles(porta
     assert (home / "personal" / "config" / "guardian.json").read_text() == '{"mode":"soft"}\n'
     assert (home / "personal" / "lib" / "helper.py").read_text() == "VALUE = 2\n"
     assert (home / "personal" / "overrides" / "local.patch").read_text() == "patch\n"
+
+
+def test_inspect_user_bundle_reports_version_relation_and_sections(portability_env, tmp_path):
+    home = portability_env["home"]
+    mod = portability_env["mod"]
+    (home / "version.json").write_text('{"version":"7.1.2"}\n')
+
+    bundle_root = tmp_path / "bundle"
+    bundle_root.mkdir(parents=True)
+    (bundle_root / "manifest.json").write_text(json.dumps({
+        "kind": "nexo-user-data-bundle",
+        "version": "7.0.0",
+        "created_at": "2026-04-20T00:00:00+00:00",
+        "sections": {
+            "brain": {"path": "brain"},
+            "personal-config": {"path": "personal-config"},
+        },
+    }) + "\n")
+    archive_path = tmp_path / "inspect-bundle.tgz"
+    with tarfile.open(archive_path, "w:gz") as tar:
+        tar.add(bundle_root, arcname="bundle")
+
+    result = mod.inspect_user_bundle(str(archive_path))
+    assert result["ok"] is True
+    assert result["bundle_version"] == "7.0.0"
+    assert result["current_version"] == "7.1.2"
+    assert result["version_relation"] == "bundle_older"
+    assert result["section_count"] == 2
+    assert result["section_names"] == ["brain", "personal-config"]
+    assert "bundle_older" in result["warning_codes"]
+
+
+def test_import_user_bundle_bypasses_export_rate_limit_for_safety_backup(portability_env, monkeypatch, tmp_path):
+    home = portability_env["home"]
+    mod = portability_env["mod"]
+
+    bundle_root = tmp_path / "bundle"
+    bundle_root.mkdir(parents=True)
+    (bundle_root / "manifest.json").write_text(json.dumps({
+        "kind": "nexo-user-data-bundle",
+        "version": "7.1.2",
+        "created_at": "2026-04-20T00:00:00+00:00",
+        "sections": {},
+    }) + "\n")
+    archive_path = tmp_path / "portable-bundle.tgz"
+    with tarfile.open(archive_path, "w:gz") as tar:
+        tar.add(bundle_root, arcname="bundle")
+
+    export_calls: list[bool] = []
+
+    def _fake_export(output_path: str = "", *, enforce_rate_limit: bool = True):
+        export_calls.append(enforce_rate_limit)
+        return {"ok": True, "path": output_path}
+
+    calls: list[object] = []
+    fake_db = types.ModuleType("db")
+    fake_db.init_db = lambda: calls.append("init_db")
+    fake_db.sync_skill_directories = lambda: calls.append("sync_skills") or {"synced": 0, "ids": [], "issues": []}
+    fake_db.retire_superseded_personal_skills = lambda dry_run=False: calls.append(("retire_skills", dry_run)) or {"retired": []}
+
+    fake_script_registry = types.ModuleType("script_registry")
+    fake_script_registry.classify_scripts_dir = lambda: {"entries": []}
+    fake_script_registry.discover_personal_schedules = lambda: []
+    fake_script_registry.retire_superseded_personal_scripts = lambda dry_run=False: calls.append(("retire_scripts", dry_run)) or {"archived": []}
+    fake_script_registry.reconcile_personal_scripts = lambda dry_run=False: calls.append(("reconcile_scripts", dry_run)) or {"ok": True}
+
+    monkeypatch.setattr(mod, "export_user_bundle", _fake_export)
+    monkeypatch.setitem(sys.modules, "db", fake_db)
+    monkeypatch.setitem(sys.modules, "script_registry", fake_script_registry)
+
+    result = mod.import_user_bundle(str(archive_path))
+    assert result["ok"] is True
+    assert export_calls == [False]
+    assert result["warning_codes"] == ["no_sections"]
+    assert "init_db" in calls
