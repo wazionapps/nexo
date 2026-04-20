@@ -50,6 +50,8 @@ import os
 from pathlib import Path
 from typing import Tuple
 
+from paths import brain_dir, config_dir
+
 
 # ---------------------------------------------------------------------------
 # Tier → (claude_model, claude_effort, codex_model, codex_effort)
@@ -292,13 +294,8 @@ def _load_user_default_resonance() -> str:
     valid tier — callers should treat empty as "no preference".
     """
     import json as _json
-    import os as _os
-    from pathlib import Path as _Path
-
-    home = _Path(_os.environ.get("NEXO_HOME", str(_Path.home() / ".nexo")))
-
     # calibration.json (Desktop UI writes here)
-    cal_path = home / "brain" / "calibration.json"
+    cal_path = brain_dir() / "calibration.json"
     try:
         if cal_path.exists():
             cal = _json.loads(cal_path.read_text())
@@ -311,7 +308,7 @@ def _load_user_default_resonance() -> str:
         pass
 
     # schedule.json (CLI legacy)
-    sched_path = home / "config" / "schedule.json"
+    sched_path = config_dir() / "schedule.json"
     try:
         if sched_path.exists():
             sched = _json.loads(sched_path.read_text())
