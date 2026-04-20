@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.1.3: patch — packaged Desktop runtime closes the loop</title>
+<meta name="description" content="NEXO Brain v7.1.3 patch over v7.1.2. Desktop-managed Brain updates can reuse bundled npm, portable restores are inspectable before import, packaged product-mode detection is tighter, and the public release surfaces stay aligned with the shipped runtime line.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-1-3/">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.1.3: patch — packaged Desktop runtime closes the loop","datePublished":"2026-04-20","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head><body><main><article style="max-width:760px;margin:80px auto;padding:0 24px;line-height:1.75;">
+<h1>NEXO 7.1.3 — packaged Desktop runtime closes the loop</h1>
+<p><em>Published 2026-04-20. Patch over v7.1.2.</em></p>
+<p>The <code>7.1.2</code> line was already the honest public release for the prompt/runtime work, but the packaged Desktop branch above that tag still carried a few product-critical fixes that were only proven locally. This coordinated patch turns that proven branch into the public runtime line: packaged Brain repair/update can reuse Desktop's bundled npm runtime, portable restores stop being blind imports, and the public story catches up with the shipped product/runtime state again.</p>
+<h2>What changed</h2>
+<p>Packaged update flows now know how to reuse the app-bundled npm runtime instead of assuming the machine already has a separate npm install. <code>src/user_data_portability.py</code> now inspects bundles before import, reports version and section compatibility metadata, and keeps the safety-backup path outside the normal export rate-limit. <code>src/auto_update.py</code> and <code>src/product_mode.py</code> also tighten the packaged/F0.6 path so Desktop-managed installs detect product mode more reliably during finalisation and update replay.</p>
+<h2>Why it matters</h2>
+<p>This is the difference between "the code works on our machines" and "the shipped product line is actually self-contained". Operators who install Desktop without separate developer tooling should still be able to repair/update Brain, inspect a backup before restoring it, and trust the public docs/changelog/site to describe the exact runtime line they are about to run.</p>
+<h2>Verification</h2>
+<p>The coordinated Brain line was validated with the targeted packaged-update / portability regression subset green (<code>33 passed</code>) plus the full public release-readiness validator green (<code>174 passed</code>, public surfaces OK, website OK, client parity OK).</p>
+</article></main></body></html>

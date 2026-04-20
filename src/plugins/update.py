@@ -129,8 +129,8 @@ def _ensure_managed_venv(runtime_root: Path = NEXO_HOME) -> str | None:
 def _find_npm_pkg_src() -> Path | None:
     """Locate the nexo-brain npm package's src/ directory for requirements.txt."""
     try:
-        result = subprocess.run(
-            ["npm", "root", "-g"],
+        result = _run_npm(
+            ["root", "-g"],
             capture_output=True, text=True, timeout=10,
         )
         if result.returncode == 0:
@@ -140,6 +140,26 @@ def _find_npm_pkg_src() -> Path | None:
     except Exception:
         pass
     return None
+
+
+def _npm_command_parts() -> tuple[list[str], dict[str, str]]:
+    """Return the npm invocation, preferring Desktop's managed runtime when present."""
+    desktop_node = str(os.environ.get("NEXO_DESKTOP_NODE", "")).strip()
+    bundled_npm_cli = str(os.environ.get("NEXO_DESKTOP_NPM_CLI", "")).strip()
+    env = dict(os.environ)
+    if desktop_node and bundled_npm_cli and Path(desktop_node).exists():
+        env["ELECTRON_RUN_AS_NODE"] = "1"
+        return [desktop_node, bundled_npm_cli], env
+    return ["npm"], env
+
+
+def _run_npm(args: list[str], **kwargs):
+    cmd, env = _npm_command_parts()
+    extra_env = kwargs.pop("env", None)
+    merged_env = dict(env)
+    if extra_env:
+        merged_env.update(extra_env)
+    return subprocess.run([*cmd, *args], env=merged_env, **kwargs)
 
 
 def _runtime_code_root(runtime_root: Path | None = None) -> Path:
@@ -497,8 +517,8 @@ def _validate_npm_name(name: str) -> bool:
 def _get_npm_global_version(package_name: str) -> str | None:
     """Return the currently installed global npm package version, or None."""
     try:
-        result = subprocess.run(
-            ["npm", "list", "-g", package_name, "--json", "--depth=0"],
+        result = _run_npm(
+            ["list", "-g", package_name, "--json", "--depth=0"],
             capture_output=True, text=True, timeout=15,
         )
         # npm list returns exit 1 with valid JSON for peer dep issues;
@@ -521,8 +541,8 @@ def _get_npm_global_version(package_name: str) -> str | None:
 def _get_npm_registry_version(package_name: str) -> str | None:
     """Return the latest version of a package from the npm registry."""
     try:
-        result = subprocess.run(
-            ["npm", "view", package_name, "version"],
+        result = _run_npm(
+            ["view", package_name, "version"],
             capture_output=True, text=True, timeout=15,
         )
         if result.returncode == 0 and result.stdout.strip():
@@ -593,8 +613,8 @@ def _update_runtime_dependencies(progress_fn=None) -> list[dict]:
             # Install it
             _emit_progress(progress_fn, f"Installing {name}...")
             try:
-                r = subprocess.run(
-                    ["npm", "install", "-g", name],
+                r = _run_npm(
+                    ["install", "-g", name],
                     capture_output=True, text=True, timeout=120,
                 )
                 if r.returncode == 0:
@@ -638,8 +658,8 @@ def _update_runtime_dependencies(progress_fn=None) -> list[dict]:
         # Update
         _emit_progress(progress_fn, f"Updating {name} {old_version} -> {latest_version or 'latest'}...")
         try:
-            r = subprocess.run(
-                ["npm", "update", "-g", name],
+            r = _run_npm(
+                ["update", "-g", name],
                 capture_output=True, text=True, timeout=120,
             )
             if r.returncode == 0:
@@ -876,8 +896,8 @@ def _rollback_npm_package(target_version: str) -> str | None:
     from our own pre-update backup — no need for postinstall migration.
     """
     try:
-        result = subprocess.run(
-            ["npm", "install", "-g", f"nexo-brain@{target_version}"],
+        result = _run_npm(
+            ["install", "-g", f"nexo-brain@{target_version}"],
             capture_output=True, text=True, timeout=120,
             env={**os.environ, "NEXO_SKIP_POSTINSTALL": "1", "NEXO_HOME": str(NEXO_HOME)},
         )
@@ -1049,8 +1069,8 @@ def _handle_packaged_update(progress_fn=None, *, include_clis: bool = True) -> s
     # 3. Run npm update (postinstall.js will migrate NEXO_HOME in-place)
     try:
         _emit_progress(progress_fn, "Downloading and applying the latest npm package...")
-        result = subprocess.run(
-            ["npm", "update", "-g", "nexo-brain"],
+        result = _run_npm(
+            ["update", "-g", "nexo-brain"],
             capture_output=True, text=True, timeout=120,
             env={**os.environ, "NEXO_HOME": str(NEXO_HOME)},
         )

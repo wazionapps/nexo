@@ -18,6 +18,7 @@ def test_prompt_catalog_dir_exists_and_contains_automation_prompts():
     assert (core_prompts.PROMPTS_DIR / "check-context.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "daily-synthesis.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "daily-self-audit.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "deep-sleep-extract-json-conversion.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "deep-sleep-extract-json-output.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "drive-signal-classifier-system.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "drive-signal-classifier-user.md").is_file()
@@ -37,6 +38,7 @@ def test_prompt_catalog_dir_exists_and_contains_automation_prompts():
     assert (core_prompts.PROMPTS_DIR / "morning-agent.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "morning-agent-json-output.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "postmortem-consolidator.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "r13-pre-edit-guard-injection.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "r14-correction-learning-injection.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "r14-correction-learning-question.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "r15-project-context-injection.md").is_file()
@@ -69,6 +71,10 @@ def test_prompt_catalog_dir_exists_and_contains_automation_prompts():
     assert (core_prompts.PROMPTS_DIR / "r24-stale-memory-injection.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "r25-read-only-host-injection.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "sleep.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "t4-r15-project-context-gate.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "t4-r23e-force-push-gate.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "t4-r23f-db-no-where-gate.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "t4-r23h-shebang-mismatch-gate.md").is_file()
 
 
 def test_render_core_prompt_replaces_named_tokens():
@@ -163,6 +169,10 @@ def test_render_core_prompt_supports_learning_validator_and_context_dedup_templa
 def test_render_core_prompt_supports_json_and_drive_classifier_templates():
     json_only = core_prompts.render_core_prompt("json-object-only")
     morning_json = core_prompts.render_core_prompt("morning-agent-json-output")
+    conversion = core_prompts.render_core_prompt(
+        "deep-sleep-extract-json-conversion",
+        analysis="The operator corrected two protocol misses.",
+    )
     deep_sleep_json = core_prompts.render_core_prompt(
         "deep-sleep-extract-json-output",
         session_id="session-123",
@@ -175,6 +185,8 @@ def test_render_core_prompt_supports_json_and_drive_classifier_templates():
 
     assert "Return exactly one valid JSON object." in json_only
     assert "Return raw JSON only." in morning_json
+    assert "The operator corrected two protocol misses." in conversion
+    assert "protocol_summary" in conversion
     assert "session-123" in deep_sleep_json
     assert "cannot_comply" in deep_sleep_json
     assert "one of exactly five labels: anomaly, pattern, gap, opportunity, none" in drive_system
@@ -186,6 +198,12 @@ def test_render_core_prompt_supports_enforcer_and_startup_templates():
     retry = core_prompts.render_core_prompt("enforcement-classifier-retry")
     r14_question = core_prompts.render_core_prompt("r14-correction-learning-question")
     r14_injection = core_prompts.render_core_prompt("r14-correction-learning-injection")
+    r13 = core_prompts.render_core_prompt(
+        "r13-pre-edit-guard-injection",
+        tool_name="Edit",
+        path_str="/repo/src/foo.py",
+        first_file="/repo/src/foo.py",
+    )
     r15 = core_prompts.render_core_prompt("r15-project-context-injection", project="nexo-desktop")
     catalog = core_prompts.render_core_prompt("r-catalog", tool="nexo_followup_create")
     r34_probe = core_prompts.render_core_prompt("r34-identity-coherence-probe")
@@ -219,6 +237,7 @@ def test_render_core_prompt_supports_enforcer_and_startup_templates():
 
     assert "Respond with EXACTLY ONE WORD: yes OR no." in strict
     assert "Emit 'yes' or 'no' and stop." in retry
+    assert "nexo_guard_check(files='/repo/src/foo.py')" in r13
     assert "teaching the assistant a rule it should have known" in r14_question
     assert "nexo_learning_add" in r14_injection
     assert "nexo-desktop" in r15

@@ -7,23 +7,26 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from t4_llm_gate import (  # noqa: E402
-    PROMPTS,
+    PROMPT_TEMPLATE_NAMES,
     build_prompt,
     classify_with_llm,
 )
 
 
-def test_prompts_cover_four_rules():
-    assert set(PROMPTS.keys()) == {"R15", "R23e", "R23f", "R23h"}
-    for p in PROMPTS.values():
-        assert len(p["positives"]) >= 3
-        assert len(p["negatives"]) >= 3
+def test_prompt_templates_cover_four_rules():
+    assert PROMPT_TEMPLATE_NAMES == {
+        "R15": "t4-r15-project-context-gate",
+        "R23e": "t4-r23e-force-push-gate",
+        "R23f": "t4-r23f-db-no-where-gate",
+        "R23h": "t4-r23h-shebang-mismatch-gate",
+    }
 
 
 def test_build_prompt_includes_instruction_span_examples():
     out = build_prompt("R23e", span="git push --force origin main")
     assert "Decide whether the proposed" in out
     assert "git push --force origin main" in out
+    assert "Examples:" in out
     assert 'Answer exactly "yes" or "no".' in out
 
 

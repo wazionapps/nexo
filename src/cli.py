@@ -4,6 +4,7 @@
 Entry points:
   nexo chat [PATH]
   nexo export [PATH] [--json]
+  nexo import-inspect PATH [--json]
   nexo import PATH [--json]
   nexo scripts list [--all] [--json]
   nexo scripts create NAME [--runtime python|shell] [--description TEXT]
@@ -854,6 +855,27 @@ def _import_bundle(args):
         print(f"  Safety backup: {result['safety_backup']}")
         print(f"  Personal scripts restored: {script_count}")
         print(f"  Sections: {', '.join(sorted(restored))}")
+    return 0 if result.get("ok") else 1
+
+
+def _inspect_bundle(args):
+    from user_data_portability import inspect_user_bundle
+
+    result = inspect_user_bundle(args.path)
+    if args.json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    else:
+        if not result.get("ok"):
+            print(result.get("error", "Inspect failed"), file=sys.stderr)
+            return 1
+        sections = result.get("section_names", [])
+        print(f"Bundle ready: {result['path']}")
+        print(f"  Bundle version: {result.get('bundle_version', '?')}")
+        print(f"  Current runtime: {result.get('current_version', '?')}")
+        print(f"  Sections: {', '.join(sections) if sections else '(none)'}")
+        warnings = result.get("warning_codes", [])
+        if warnings:
+            print(f"  Warnings: {', '.join(warnings)}")
     return 0 if result.get("ok") else 1
 
 
@@ -2321,6 +2343,7 @@ def _print_help():
 Commands:
   nexo chat [path] [--client claude_code|codex]      Launch a NEXO terminal client
   nexo export [path]                                 Export a portable user-data bundle
+  nexo import-inspect PATH                           Inspect a portable user-data bundle
   nexo import PATH                                   Import a portable user-data bundle
   nexo doctor [--tier boot|runtime|deep|all] [--fix]   System diagnostics
   nexo scripts list|create|classify|sync|reconcile|ensure-schedules|schedules|schedule|run|doctor|call|unschedule|remove
@@ -2363,6 +2386,11 @@ def main():
     export_parser = sub.add_parser("export", help="Export a portable user-data bundle")
     export_parser.add_argument("path", nargs="?", default="", help="Output bundle path (default: NEXO_HOME/exports/...)")
     export_parser.add_argument("--json", action="store_true", help="JSON output")
+
+    # -- import inspect --
+    inspect_parser = sub.add_parser("import-inspect", help="Inspect a portable user-data bundle")
+    inspect_parser.add_argument("path", help="Bundle path created by `nexo export`")
+    inspect_parser.add_argument("--json", action="store_true", help="JSON output")
 
     # -- import --
     import_parser = sub.add_parser("import", help="Import a portable user-data bundle")
@@ -2822,6 +2850,8 @@ def main():
         return _chat(args)
     elif args.command == "export":
         return _export_bundle(args)
+    elif args.command == "import-inspect":
+        return _inspect_bundle(args)
     elif args.command == "import":
         return _import_bundle(args)
     elif args.command == "update":

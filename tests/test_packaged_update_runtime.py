@@ -255,6 +255,7 @@ def test_handle_packaged_update_reloads_launchagents_after_successful_bump(monke
     monkeypatch.setattr(update, "_sync_packaged_crons", lambda progress_fn=None: (True, None))
     monkeypatch.setattr(update, "_sync_hooks_to_home", lambda: None)
     monkeypatch.setattr(update, "_cleanup_retired_runtime_files", lambda: [])
+    monkeypatch.setattr(update, "_update_runtime_dependencies", lambda progress_fn=None: [])
     monkeypatch.setattr(update, "_sync_packaged_clients", lambda: (True, None))
     monkeypatch.setattr(
         update,
@@ -269,7 +270,7 @@ def test_handle_packaged_update_reloads_launchagents_after_successful_bump(monke
 
     monkeypatch.setattr(update.subprocess, "run", fake_run)
 
-    result = update._handle_packaged_update()
+    result = update._handle_packaged_update(include_clis=False)
 
     assert "UPDATE SUCCESSFUL (packaged install)" in result
     assert "Version: 5.3.6 -> 5.3.7" in result
@@ -277,6 +278,50 @@ def test_handle_packaged_update_reloads_launchagents_after_successful_bump(monke
     assert "Hooks: synced to NEXO_HOME" in result
     assert "Clients: configured client targets synced" in result
     assert "LaunchAgents: reloaded 3/3" in result
+
+
+def test_handle_packaged_update_uses_desktop_managed_npm_runtime(monkeypatch):
+    from plugins import update
+
+    versions = iter(["7.1.1", "7.1.2"])
+    desktop_node = "/Applications/NEXO Desktop.app/Contents/MacOS/NEXO Desktop"
+    bundled_npm_cli = "/Applications/NEXO Desktop.app/Contents/Resources/app.asar.unpacked/node_modules/npm/bin/npm-cli.js"
+
+    monkeypatch.setenv("NEXO_DESKTOP_NODE", desktop_node)
+    monkeypatch.setenv("NEXO_DESKTOP_NPM_CLI", bundled_npm_cli)
+    monkeypatch.setattr(update, "_read_version", lambda: next(versions))
+    monkeypatch.setattr(update, "_backup_databases", lambda: ("backup-dir", None))
+    monkeypatch.setattr(update, "_backup_code_tree", lambda: ("code-backup", None))
+    monkeypatch.setattr(update, "_reinstall_pip_deps", lambda: None)
+    monkeypatch.setattr(update, "_run_migrations", lambda: None)
+    monkeypatch.setattr(update, "_verify_import", lambda: None)
+    monkeypatch.setattr(update, "_finalize_packaged_runtime_layout", lambda: (True, None))
+    monkeypatch.setattr(update, "_sync_packaged_crons", lambda progress_fn=None: (True, None))
+    monkeypatch.setattr(update, "_sync_hooks_to_home", lambda: None)
+    monkeypatch.setattr(update, "_cleanup_retired_runtime_files", lambda: [])
+    monkeypatch.setattr(update, "_update_runtime_dependencies", lambda progress_fn=None: [])
+    monkeypatch.setattr(update, "_sync_packaged_clients", lambda: (True, None))
+    monkeypatch.setattr(
+        update,
+        "_reload_launch_agents_after_bump",
+        lambda: {"scanned": 1, "reloaded": 1, "errors": []},
+    )
+    monkeypatch.setattr(update.Path, "exists", lambda self: str(self) == desktop_node)
+
+    captured = {}
+
+    def fake_run(args, **kwargs):
+        captured["args"] = args
+        captured["env"] = kwargs.get("env", {})
+        return mock.Mock(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(update.subprocess, "run", fake_run)
+
+    result = update._handle_packaged_update(include_clis=False)
+
+    assert "UPDATE SUCCESSFUL (packaged install)" in result
+    assert captured["args"] == [desktop_node, bundled_npm_cli, "update", "-g", "nexo-brain"]
+    assert captured["env"]["ELECTRON_RUN_AS_NODE"] == "1"
 
 
 def test_packaged_installer_discovers_root_python_modules_for_migration():
@@ -295,3 +340,13 @@ def test_packaged_installer_syncs_runtime_package_metadata():
     assert 'function syncRuntimePackageMetadata(repoRoot = path.join(__dirname, ".."), runtimeHome = NEXO_HOME)' in text
     assert 'fs.copyFileSync(pkgSrc, path.join(runtimeHome, "package.json"));' in text
     assert text.count('syncRuntimePackageMetadata(path.join(__dirname, ".."), NEXO_HOME);') >= 3
+
+
+def test_auto_update_falls_back_to_core_product_mode_when_root_shim_is_missing():
+    auto_update = REPO_ROOT / "src" / "auto_update.py"
+    text = auto_update.read_text(encoding="utf-8")
+
+    assert 'if getattr(exc, "name", "") != "product_mode":' in text
+    assert '_core_runtime = Path(__file__).resolve().parent / "core"' in text
+    assert 'sys.path.insert(0, core_path)' in text
+    assert text.count("from product_mode import enforce_desktop_product_contract") >= 2

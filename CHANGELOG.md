@@ -1,5 +1,36 @@
 # Changelog
 
+## [7.1.3] - 2026-04-20
+
+Patch release coordinated with NEXO Desktop v0.22.3. This line turns the
+post-`7.1.2` packaged/Desktop branch into a coherent public release: packaged
+Desktop-managed updates can bootstrap their own npm runtime, portable restore
+stops being a blind import, and the Brain release line now includes the final
+runtime/product fixes that were already proven locally above the last tag.
+
+### Fixed
+
+- Packaged update flows can now reuse the Desktop-bundled npm runtime instead
+  of assuming a separately installed global npm. That keeps the Desktop product
+  contract self-contained on Macs that only have the shipped app/runtime.
+- `src/user_data_portability.py` now exposes bundle inspection metadata before
+  restore, returns version/section compatibility info during import, and keeps
+  the safety-backup path out of the normal export rate-limit.
+- `src/auto_update.py` tolerates the transient absence of the legacy
+  `product_mode` shim during F0.6 finalisation, and `src/product_mode.py`
+  tightens Desktop install detection across explicit-home installs so product
+  mode stops drifting on real packaged machines.
+- Runtime template/docs/tests are kept aligned with the remaining prompt
+  catalog work, including the deep-sleep conversion fallback, the R13 pre-edit
+  guard prompt, and the T4 gate templates that now live in the shared catalog.
+- Public release surfaces are refreshed again so the open-source Brain and the
+  coordinated Desktop client describe the same `7.1.3` / `0.22.3` shipped line.
+
+### Verification
+
+- `33 passed` on the merge-conflict / packaged-update / portability regression subset
+- `174 passed` via `python3 scripts/verify_release_readiness.py --ci`
+
 ## [7.1.2] - 2026-04-20
 
 Patch release coordinated with NEXO Desktop v0.22.2. This line turns the
