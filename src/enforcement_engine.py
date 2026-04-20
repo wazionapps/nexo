@@ -16,6 +16,7 @@ import time
 from pathlib import Path
 import re
 import paths
+from core_prompts import render_core_prompt
 
 try:
     from r13_pre_edit_guard import should_inject_r13, ToolCallRecord, WATCHED_WRITE_TOOLS
@@ -524,15 +525,11 @@ class HeadlessEnforcer:
         if tag is None:
             return
         path_str = ", ".join(files) if files else "(unknown target)"
-        prompt = (
-            "R13 pre-Edit guard: a write-class tool (" + tool_name + ") is about "
-            "to touch " + path_str + " without a recent nexo_guard_check on that "
-            "path. Execute nexo_guard_check(files='" + (files[0] if files else "") + "') "
-            "first, review any blocking learnings, then acknowledge via "
-            "nexo_task_acknowledge_guard before the next edit. Do not produce "
-            "visible text for this reminder — act on it. After handling the silent "
-            "action, continue with your previous task; this reminder is silent "
-            "context, not a new instruction."
+        prompt = render_core_prompt(
+            "r13-pre-edit-guard-injection",
+            tool_name=tool_name,
+            path_str=path_str,
+            first_file=(files[0] if files else ""),
         )
         if mode == "shadow":
             _logger.info("[R13 SHADOW] would inject: tag=%s files=%s", tag, files)

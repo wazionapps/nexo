@@ -219,12 +219,9 @@ def analyze_session(
         # Fallback: if Claude returned text instead of JSON, ask a short conversion call
         if not parsed and len(output.strip()) > 50:
             print(f"    Got text instead of JSON ({len(output)} chars). Converting...")
-            convert_prompt = (
-                f"Convert the following analysis into the exact JSON schema required. "
-                f"Return ONLY the JSON object, nothing else.\n\n"
-                f"Analysis:\n{output[:8000]}\n\n"
-                f"Required schema: session_id, findings[], emotional_timeline[], "
-                f"abandoned_projects[], skill_candidates[], productivity_score, protocol_summary"
+            convert_prompt = render_core_prompt(
+                "deep-sleep-extract-json-conversion",
+                analysis=output[:8000],
             )
             convert_result = run_automation_prompt(
                 convert_prompt,
