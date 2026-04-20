@@ -14,12 +14,12 @@ import shutil
 import sqlite3
 import threading
 import time
+from pathlib import Path
 
+import paths
 from db import get_db
 
 NEXO_HOME = os.environ.get("NEXO_HOME", os.path.expanduser("~/.nexo"))
-DB_PATH = os.path.join(NEXO_HOME, "data", "nexo.db")
-BACKUP_DIR = os.path.join(NEXO_HOME, "backups")
 
 RETENTION_DAYS = 7
 
@@ -66,6 +66,14 @@ def _reset_rate_limit_state_for_tests() -> None:
             _last_call_ts[key] = 0.0
 
 
+def _db_path() -> Path:
+    return paths.db_path()
+
+
+def _backup_dir() -> Path:
+    return paths.backups_dir()
+
+
 def handle_backup_now() -> str:
     """Create an immediate backup of the NEXO database.
 
@@ -75,14 +83,15 @@ def handle_backup_now() -> str:
     if err is not None:
         return err
 
-    os.makedirs(BACKUP_DIR, exist_ok=True)
+    backup_dir = _backup_dir()
+    backup_dir.mkdir(parents=True, exist_ok=True)
     timestamp = time.strftime("%Y-%m-%d-%H%M")
-    dest = os.path.join(BACKUP_DIR, f"nexo-{timestamp}.db")
+    dest = backup_dir / f"nexo-{timestamp}.db"
 
     # Use SQLite backup API for consistency
-    src_conn = sqlite3.connect(DB_PATH)
+    src_conn = sqlite3.connect(str(_db_path()))
     try:
-        dst_conn = sqlite3.connect(dest)
+        dst_conn = sqlite3.connect(str(dest))
         try:
             src_conn.backup(dst_conn)
         finally:
@@ -90,16 +99,17 @@ def handle_backup_now() -> str:
     finally:
         src_conn.close()
 
-    size_kb = os.path.getsize(dest) / 1024
+    size_kb = dest.stat().st_size / 1024
     _cleanup_old()
-    return f"Backup created: {os.path.basename(dest)} ({size_kb:.0f} KB)"
+    return f"Backup created: {dest.name} ({size_kb:.0f} KB)"
 
 
 def handle_backup_list() -> str:
     """List available backups with dates and sizes."""
-    if not os.path.isdir(BACKUP_DIR):
+    backup_dir = _backup_dir()
+    if not backup_dir.is_dir():
         return "No backups."
-    files = sorted(glob.glob(os.path.join(BACKUP_DIR, "nexo-*.db")), reverse=True)
+    files = sorted(glob.glob(str(backup_dir / "nexo-*.db")), reverse=True)
     if not files:
         return "No backups."
     lines = [f"BACKUPS ({len(files)}):"]
@@ -127,15 +137,16 @@ def handle_backup_restore(filename: str) -> str:
     if err is not None:
         return err
 
-    src = os.path.join(BACKUP_DIR, filename)
-    if not os.path.isfile(src):
+    backup_dir = _backup_dir()
+    src = backup_dir / filename
+    if not src.is_file():
         return f"Backup not found: {filename}"
 
     # Create safety backup first
-    safety = os.path.join(BACKUP_DIR, f"nexo-pre-restore-{time.strftime('%Y%m%d%H%M%S')}.db")
-    src_conn = sqlite3.connect(DB_PATH)
+    safety = backup_dir / f"nexo-pre-restore-{time.strftime('%Y%m%d%H%M%S')}.db"
+    src_conn = sqlite3.connect(str(_db_path()))
     try:
-        dst_conn = sqlite3.connect(safety)
+        dst_conn = sqlite3.connect(str(safety))
         try:
             src_conn.backup(dst_conn)
         finally:
@@ -144,9 +155,9 @@ def handle_backup_restore(filename: str) -> str:
         src_conn.close()
 
     # Restore
-    restore_conn = sqlite3.connect(src)
+    restore_conn = sqlite3.connect(str(src))
     try:
-        target_conn = sqlite3.connect(DB_PATH)
+        target_conn = sqlite3.connect(str(_db_path()))
         try:
             restore_conn.backup(target_conn)
         finally:
@@ -163,7 +174,7 @@ def handle_backup_restore(filename: str) -> str:
             pass
         db._shared_conn = None
 
-    return f"DB restaurada desde {filename}. Safety backup: {os.path.basename(safety)}"
+    return f"DB restaurada desde {filename}. Safety backup: {safety.name}"
 
 
 def _cleanup_old():
@@ -173,12 +184,13 @@ def _cleanup_old():
     `nexo-pre-restore-*.db` safety snapshots created by handle_backup_restore.
     Failures are swallowed — housekeeping must never interrupt the caller.
     """
-    if not os.path.isdir(BACKUP_DIR):
+    backup_dir = _backup_dir()
+    if not backup_dir.is_dir():
         return
     cutoff = time.time() - (RETENTION_DAYS * 86400)
     # glob `nexo-*.db` matches both the hourly pattern and pre-restore
     # snapshots, so a single loop prunes both with a single pass.
-    for f in glob.glob(os.path.join(BACKUP_DIR, "nexo-*.db")):
+    for f in glob.glob(str(backup_dir / "nexo-*.db")):
         try:
             if os.path.getmtime(f) < cutoff:
                 os.remove(f)
