@@ -86,7 +86,12 @@ def _data_dir() -> str:
 
 
 def _backup_dir() -> str:
-    return os.path.join(_resolved_nexo_home(), "backups")
+    try:
+        import paths
+
+        return str(paths.backups_dir())
+    except Exception:
+        return os.path.join(_resolved_nexo_home(), "runtime", "backups")
 
 
 def _allow_fresh_db_on_corruption() -> bool:
@@ -865,6 +870,7 @@ def nexo_followup_create(
     priority: str = "medium",
     internal: str = "",
     owner: str = "",
+    exception: str = "",
 ) -> str:
     """Create a new agent followup (autonomous task).
 
@@ -882,10 +888,15 @@ def nexo_followup_create(
                   auto-classify by ID prefix.
         owner: 'user' | 'waiting' | 'agent' | 'shared'. Leave empty
                for auto-classification.
+        exception: Reason this followup should be allowed even under an
+                   active autonomy mandate (NF-DS-45569A27). Valid only
+                   for the three pre-approved cases: >1GB download,
+                   credential the operator must physically enter, or a
+                   presence-dependent session with María/Nora.
     """
     return handle_followup_create(
         id, description, date, verification, reasoning, recurrence, priority,
-        internal, owner,
+        internal, owner, exception=exception,
     )
 
 
@@ -1338,7 +1349,7 @@ def nexo_task_frequency() -> str:
 
 @mcp.tool
 def nexo_plugin_load(filename: str) -> str:
-    """Load or reload a plugin. Searches repo plugins/ first, then NEXO_HOME/plugins/.
+    """Load or reload a plugin. Searches repo plugins/ first, then NEXO_HOME/personal/plugins/.
 
     Args:
         filename: Plugin filename (e.g., 'entities.py').

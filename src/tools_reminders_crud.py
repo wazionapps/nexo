@@ -10,6 +10,7 @@ from db import (
     find_decisions_by_context_ref, update_decision_outcome,
     set_linked_outcomes_met,
 )
+from autonomy_mandate import check_followup_against_mandate
 
 
 # ── R01 (Fase 2 Protocol Enforcer) dedup threshold ────────────────────
@@ -351,6 +352,7 @@ def handle_followup_create(
     internal: str = '',
     owner: str = '',
     force: str = '',
+    exception: str = '',
 ) -> str:
     """Create a new NEXO followup. id must start with 'NF'.
 
@@ -374,6 +376,21 @@ def handle_followup_create(
     """
     if not id.startswith('NF'):
         return f"ERROR: Followup ID must start with 'NF' (received: '{id}')."
+
+    # ── NF-DS-45569A27: autonomy-mandate guardrail ──
+    # Block procrastination-shaped followups (owner=user or date within 7
+    # days) when the operator has declared an active autonomy mandate.
+    # `exception='...'` or an exception keyword in `description` overrides
+    # it for the three allowed cases (>1GB download, credential entry,
+    # presence-dependent session with María/Nora).
+    mandate_error = check_followup_against_mandate(
+        owner=owner,
+        date=date,
+        description=description,
+        exception=exception,
+    )
+    if mandate_error:
+        return mandate_error
 
     # ── R01 (Fase 2 Protocol Enforcer): reject near-duplicate active followups ──
     force_flag = str(force or "").strip().lower() in {"1", "true", "yes", "on"}
