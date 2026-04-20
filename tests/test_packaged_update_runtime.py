@@ -340,3 +340,13 @@ def test_packaged_installer_syncs_runtime_package_metadata():
     assert 'function syncRuntimePackageMetadata(repoRoot = path.join(__dirname, ".."), runtimeHome = NEXO_HOME)' in text
     assert 'fs.copyFileSync(pkgSrc, path.join(runtimeHome, "package.json"));' in text
     assert text.count('syncRuntimePackageMetadata(path.join(__dirname, ".."), NEXO_HOME);') >= 3
+
+
+def test_auto_update_falls_back_to_core_product_mode_when_root_shim_is_missing():
+    auto_update = REPO_ROOT / "src" / "auto_update.py"
+    text = auto_update.read_text(encoding="utf-8")
+
+    assert 'if getattr(exc, "name", "") != "product_mode":' in text
+    assert '_core_runtime = Path(__file__).resolve().parent / "core"' in text
+    assert 'sys.path.insert(0, core_path)' in text
+    assert text.count("from product_mode import enforce_desktop_product_contract") >= 2

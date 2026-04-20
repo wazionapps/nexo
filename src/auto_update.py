@@ -20,7 +20,17 @@ import threading
 import time
 from pathlib import Path
 
-from product_mode import enforce_desktop_product_contract
+try:
+    from product_mode import enforce_desktop_product_contract
+except ModuleNotFoundError as exc:
+    if getattr(exc, "name", "") != "product_mode":
+        raise
+    _core_runtime = Path(__file__).resolve().parent / "core"
+    if _core_runtime.is_dir():
+        core_path = str(_core_runtime)
+        if core_path not in sys.path:
+            sys.path.insert(0, core_path)
+    from product_mode import enforce_desktop_product_contract
 from runtime_home import export_resolved_nexo_home, managed_nexo_home
 
 try:
