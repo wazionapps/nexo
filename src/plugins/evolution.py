@@ -42,6 +42,8 @@ def handle_evolution_status() -> str:
 
     from user_context import get_context
     lines = [f"{get_context().assistant_name} EVOLUTION STATUS:"]
+    if objective and objective.get("evolution_enabled") is False:
+        lines.append(f"  Disabled: {objective.get('disabled_reason', 'unknown')}")
     has_output = False
     for key, label in CANONICAL_DIMENSIONS.items():
         m = metrics.get(key)

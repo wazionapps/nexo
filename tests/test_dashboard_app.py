@@ -4,7 +4,12 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 import db
+import dashboard.app as dashboard_app
 from dashboard.app import app, _latest_periodic_summary, _protocol_explainability_snapshot, _summarize_engineering_loop
+
+
+def _db():
+    return dashboard_app._db()
 
 
 def test_latest_periodic_summary_reads_latest_label(monkeypatch, tmp_path):
@@ -65,6 +70,7 @@ def test_summarize_engineering_loop_surfaces_matters_drift_and_improvement():
 
 
 def test_protocol_explainability_snapshot_surfaces_runtime_state(isolated_db):
+    db = _db()
     task = db.create_protocol_task(
         "sid-1",
         "Ship explainability dashboard",
@@ -164,6 +170,7 @@ def test_dashboard_reminder_delete_is_soft_and_history_visible(isolated_db):
 
 
 def test_dashboard_move_preserves_source_as_deleted(isolated_db):
+    db = _db()
     client = TestClient(app)
 
     created = client.post(
@@ -229,7 +236,48 @@ def test_operations_page_exposes_deleted_and_history_filters():
     assert 'value="history"' in page.text
 
 
+def test_dashboard_hides_evolution_nav_when_desktop_managed(monkeypatch):
+    monkeypatch.setattr(
+        dashboard_app,
+        "_dashboard_runtime_flags",
+        lambda: {
+            "desktop_managed": True,
+            "disabled_features": ["evolution"],
+            "evolution_available": False,
+        },
+    )
+    client = TestClient(app)
+    page = client.get("/")
+    assert page.status_code == 200
+    assert 'data-page="evolution"' not in page.text
+
+
+def test_evolution_routes_return_disabled_when_desktop_managed(monkeypatch):
+    monkeypatch.setattr(
+        dashboard_app,
+        "_dashboard_runtime_flags",
+        lambda: {
+            "desktop_managed": True,
+            "disabled_features": ["evolution"],
+            "evolution_available": False,
+        },
+    )
+    client = TestClient(app)
+
+    page = client.get("/evolution")
+    assert page.status_code == 200
+    assert "Evolution disabled" in page.text
+    assert "Desktop-managed installs" in page.text
+
+    api = client.get("/api/evolution")
+    assert api.status_code == 403
+    payload = api.json()
+    assert payload["disabled"] is True
+    assert payload["feature"] == "evolution"
+
+
 def test_dashboard_recent_context_api_surfaces_hot_context(isolated_db):
+    db = _db()
     client = TestClient(app)
 
     db.capture_context_event(
@@ -310,6 +358,7 @@ def test_dashboard_reminder_update_requires_read_token(isolated_db):
 
 
 def test_dashboard_followup_move_requires_read_token(isolated_db):
+    db = _db()
     client = TestClient(app)
 
     fid = client.post(

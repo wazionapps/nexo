@@ -497,3 +497,33 @@ def test_process_pre_tool_event_does_not_treat_runtime_home_as_live_repo_when_no
         "SELECT COUNT(*) AS count FROM protocol_debt WHERE debt_type = 'automation_live_repo_write_blocked'"
     ).fetchone()
     assert debt["count"] == 0
+
+
+def test_process_pre_tool_event_blocks_runtime_core_write(guardrail_env, monkeypatch):
+    core_target = guardrail_env / "core" / "scripts" / "nexo-email-monitor.py"
+    core_target.parent.mkdir(parents=True, exist_ok=True)
+    core_target.write_text("#!/usr/bin/env python3\n")
+
+    monkeypatch.setenv("NEXO_HOME", str(guardrail_env))
+    db, hook_guardrails = _reload_guardrail_stack()
+    db.init_db()
+    monkeypatch.setattr(hook_guardrails, "get_protocol_strictness", lambda: "strict")
+    db.register_session(
+        "nexo-2010-3010",
+        "runtime core write",
+        external_session_id="claude-core-1",
+        session_client="claude_code",
+    )
+
+    result = hook_guardrails.process_pre_tool_event(
+        {
+            "session_id": "claude-core-1",
+            "tool_name": "Edit",
+            "tool_input": {"file_path": str(core_target)},
+        }
+    )
+
+    assert result["status"] == "blocked"
+    assert result["blocks"][0]["debt_type"] == "runtime_core_write_blocked"
+    message = hook_guardrails.format_pretool_block_message(result)
+    assert "~/.nexo/core" in message

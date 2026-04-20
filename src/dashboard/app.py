@@ -96,6 +96,60 @@ def _adaptive():
     return adaptive_mode
 
 
+def _dashboard_runtime_flags() -> dict:
+    flags = {
+        "desktop_managed": False,
+        "disabled_features": [],
+        "evolution_available": True,
+    }
+    try:
+        from product_mode import desktop_product_requested, load_product_mode
+
+        mode = load_product_mode()
+        disabled = []
+        raw_disabled = mode.get("disabled_features") if isinstance(mode, dict) else []
+        if isinstance(raw_disabled, (list, tuple, set)):
+            disabled = [
+                str(item).strip().lower()
+                for item in raw_disabled
+                if str(item).strip()
+            ]
+        desktop_managed = bool(desktop_product_requested())
+        if desktop_managed and "evolution" not in disabled:
+            disabled.append("evolution")
+        flags["desktop_managed"] = desktop_managed
+        flags["disabled_features"] = disabled
+        flags["evolution_available"] = "evolution" not in disabled
+    except Exception:
+        pass
+    return flags
+
+
+def _feature_disabled_response(feature: str, *, api: bool = False):
+    feature_name = str(feature or "").strip().lower()
+    if api:
+        return JSONResponse(
+            {
+                "ok": False,
+                "feature": feature_name,
+                "disabled": True,
+                "reason": "Disabled by NEXO Desktop product contract",
+            },
+            status_code=403,
+        )
+    title = f"{feature_name.title()} disabled"
+    detail = (
+        f"{feature_name.title()} is disabled on Desktop-managed installs. "
+        "Use the standalone Brain product if you need that subsystem."
+    )
+    return _render(
+        "feature-disabled.html",
+        disabled_feature=feature_name,
+        disabled_title=title,
+        disabled_detail=detail,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Pydantic models for request bodies
 # ---------------------------------------------------------------------------
@@ -431,6 +485,7 @@ def _render(name: str, **ctx) -> HTMLResponse:
     """Render a Jinja2 template with context."""
     try:
         tmpl = jinja_env.get_template(name)
+        ctx.setdefault("runtime_flags", _dashboard_runtime_flags())
         return HTMLResponse(tmpl.render(**ctx))
     except Exception as exc:
         import logging
@@ -507,6 +562,8 @@ async def page_plugins():
 # Advanced
 @app.get("/evolution", response_class=HTMLResponse)
 async def page_evolution():
+    if not _dashboard_runtime_flags().get("evolution_available", True):
+        return _feature_disabled_response("evolution")
     return _render("evolution.html")
 
 @app.get("/claims", response_class=HTMLResponse)
@@ -1646,6 +1703,8 @@ async def api_plugins():
 
 @app.get("/api/evolution")
 async def api_evolution():
+    if not _dashboard_runtime_flags().get("evolution_available", True):
+        return _feature_disabled_response("evolution", api=True)
     db = _db()
     conn = db.get_db()
     logs = [dict(r) for r in conn.execute("SELECT * FROM evolution_log ORDER BY created_at DESC LIMIT 50").fetchall()]
