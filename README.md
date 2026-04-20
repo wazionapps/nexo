@@ -24,7 +24,7 @@ Previously in `7.0.1`: hotfix over v7.0.0 (db._core.DB_PATH was only caller stil
 
 Previously in `6.5.0`: Plan Consolidado fase F0.2: operators can now `nexo scripts enable|disable|status <name>` any personal automation. The cron wrapper honours the flag at every tick (`exit 0` with `summary='[disabled]'` while the LaunchAgent stays loaded). The companion NEXO Desktop client (a closed-source product, distributed separately) wires the same toggle into its Automatizaciones panel. See [CHANGELOG](CHANGELOG.md) for the full diff.
 
-> **About NEXO Desktop.** NEXO Desktop is a separate closed-source companion app distributed at [systeam.es/nexo-desktop](https://systeam.es/nexo-desktop) — its source does not live in this repo. When release notes mention Desktop they describe a coordinated client release that consumes the Brain's CLI / MCP contract; the Brain itself is fully usable on its own (terminal, Codex, Claude Code, or any MCP client).
+> **About NEXO Desktop.** NEXO Desktop is a separate closed-source companion app distributed at [systeam.es/nexo-desktop](https://systeam.es/nexo-desktop) — its source does not live in this repo. When release notes mention Desktop they describe a coordinated client release that consumes the Brain's CLI / MCP contract; the Brain itself is fully usable on its own (terminal, Codex, Claude Code, or any MCP client). If you want the product edition rather than the open-source Brain alone, contact `info@wazion.com` and ask about NEXO Desktop.
 
 
 Previously in `6.4.0`: Plan Consolidado fase F1 — multi-tenant email accounts (`email_accounts` table, `nexo email setup` interactive wizard, `nexo email add --password-stdin --json` for machine consumers, idempotent migrator from legacy `~/.nexo/nexo-email/config.json`).
@@ -70,6 +70,7 @@ Previously in `5.5.3`: CLAUDE.md CORE teaches the model to trust the Protocol En
 Start here:
 - [5-minute quickstart](docs/quickstart-5-minutes.md)
 - [Workflow quickstart](docs/workflows-quickstart.md)
+- [Runtime templates](docs/runtime-templates.md)
 - [Recent memory fallbacks + live system catalog](docs/recent-memory-fallbacks-and-system-catalog.md)
 - [Supported client guides](docs/integrations/cursor.md)
 - [Docker setup](docs/docker-setup.md)
