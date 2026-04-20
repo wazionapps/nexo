@@ -1,6 +1,6 @@
 # Writing Personal Scripts for NEXO
 
-Personal scripts extend NEXO with custom automation. They live in `NEXO_HOME/scripts/`, use the stable CLI as their interface, and are registered in NEXO's personal script registry so updates and scheduling don't get confused with core jobs.
+Personal scripts extend NEXO with custom automation. They live in `NEXO_HOME/personal/scripts/`, use the stable CLI as their interface, and are registered in NEXO's personal script registry so updates and scheduling don't get confused with core jobs.
 
 If you are not sure whether you need a script, a skill, a plugin, or only a schedule, read [Personal Artifacts Manual](./personal-artifacts-manual.md) first. That document is the canonical decision guide.
 
@@ -8,7 +8,7 @@ If you are not sure whether you need a script, a skill, a plugin, or only a sche
 
 1. Copy the template:
    ```bash
-   cp $NEXO_HOME/templates/script-template.py $NEXO_HOME/scripts/my-script.py
+   cp $NEXO_HOME/templates/script-template.py $NEXO_HOME/personal/scripts/my-script.py
    ```
 
 2. Edit the metadata and logic.
@@ -32,7 +32,7 @@ If you are not sure whether you need a script, a skill, a plugin, or only a sche
 
 NEXO now tracks personal scripts as first-class entities:
 
-- Filesystem remains the source of truth: `NEXO_HOME/scripts/`
+- Filesystem remains the source of truth: `NEXO_HOME/personal/scripts/`
 - SQLite stores the registry: what the script is, where it lives, what runtime it uses, and what schedules are attached
 - Personal schedules are discovered from personal LaunchAgents/systemd timers and linked back to the script
 
@@ -123,7 +123,7 @@ nexo scripts reconcile
 
 This does three things in order:
 
-1. Classifies everything in `NEXO_HOME/scripts/`
+1. Classifies everything in `NEXO_HOME/personal/scripts/`
 2. Syncs personal scripts into the registry
 3. Creates or repairs any **declared personal schedules**
 
@@ -277,8 +277,8 @@ The `nexo scripts doctor` command checks for these violations.
 nexo scripts list              # List personal scripts
 nexo scripts list --all        # Include core/internal scripts
 nexo scripts list --json       # JSON output
-nexo scripts create NAME       # Create scaffold in NEXO_HOME/scripts
-nexo scripts classify          # Classify files in NEXO_HOME/scripts
+nexo scripts create NAME       # Create scaffold in NEXO_HOME/personal/scripts
+nexo scripts classify          # Classify files in NEXO_HOME/personal/scripts
 nexo scripts sync              # Sync registry from filesystem + personal LaunchAgents
 nexo scripts reconcile         # Sync and ensure declared schedules
 nexo scripts ensure-schedules  # Create/repair schedules declared in metadata

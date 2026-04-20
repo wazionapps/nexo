@@ -1,4 +1,4 @@
-"""NEXO Personal Plugins — scaffold persistent MCP tools in NEXO_HOME/plugins."""
+"""NEXO Personal Plugins — scaffold persistent MCP tools in NEXO_HOME/personal/plugins."""
 
 from __future__ import annotations
 
@@ -16,9 +16,13 @@ NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(Path(__file__).resolve().parent
 
 
 def _plugins_dir() -> Path:
-    path = paths.core_plugins_dir()
+    path = paths.personal_plugins_dir()
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def _core_plugin_path(filename: str) -> Path:
+    return paths.core_plugins_dir() / filename
 
 
 def _safe_slug(value: str) -> str:
@@ -68,11 +72,11 @@ def _render_plugin_template(*, plugin_stem: str, tool_name: str, description: st
     content = content.replace("handle_example_tool", handler_name)
     content = content.replace("nexo_example_tool", tool_name)
     content = content.replace(
-        "Personal plugin scaffold created. Edit this handler in NEXO_HOME/plugins.",
+        "Personal plugin scaffold created. Edit this handler in NEXO_HOME/personal/plugins.",
         description or f"Personal plugin scaffold for {plugin_stem}.",
     )
     content = content.replace(
-        "Example personal MCP tool scaffold. Edit it in NEXO_HOME/plugins.",
+        "Example personal MCP tool scaffold. Edit it in NEXO_HOME/personal/plugins.",
         description or f"Personal MCP tool scaffold for {plugin_stem}.",
     )
     return content
@@ -86,15 +90,21 @@ def handle_personal_plugin_create(
     script_runtime: str = "python",
     force: bool = False,
 ) -> str:
-    """Create a personal MCP plugin scaffold in NEXO_HOME/plugins.
+    """Create a personal MCP plugin scaffold in NEXO_HOME/personal/plugins.
 
-    Optionally also creates a companion script in NEXO_HOME/scripts.
+    Optionally also creates a companion script in NEXO_HOME/personal/scripts.
     """
     init_db()
     plugin_stem = _safe_slug(name)
     filename = f"{plugin_stem}.py"
     tool_name = (tool_name or f"nexo_{plugin_stem.replace('-', '_')}").strip()
     plugin_path = _plugins_dir() / filename
+    core_plugin_path = _core_plugin_path(filename)
+    if core_plugin_path.exists() and not force:
+        return json.dumps({
+            "ok": False,
+            "error": f"Personal plugin name collides with a core plugin identity: {filename}",
+        }, ensure_ascii=False)
     if plugin_path.exists() and not force:
         return json.dumps({
             "ok": False,
@@ -137,6 +147,6 @@ TOOLS = [
     (
         handle_personal_plugin_create,
         "nexo_personal_plugin_create",
-        "Create a persistent personal MCP plugin scaffold in NEXO_HOME/plugins, optionally with a companion script in NEXO_HOME/scripts.",
+        "Create a persistent personal MCP plugin scaffold in NEXO_HOME/personal/plugins, optionally with a companion script in NEXO_HOME/personal/scripts.",
     ),
 ]

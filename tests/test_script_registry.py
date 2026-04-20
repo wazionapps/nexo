@@ -29,6 +29,7 @@ from script_registry import (
     load_core_script_names,
     create_script,
     ensure_personal_schedules,
+    rename_legacy_personal_script_filenames,
     sync_personal_scripts,
     unschedule_personal_script,
     retire_superseded_personal_scripts,
@@ -388,7 +389,7 @@ class TestCoreFiltering:
         )
 
         report = classify_scripts_dir()
-        wake_entry = next(entry for entry in report["entries"] if entry["name"] == "nexo-wake-recovery")
+        wake_entry = next(entry for entry in report["entries"] if entry["name"] == "wake-recovery")
         assert wake_entry["classification"] == "personal"
         assert wake_entry["declared_schedule"]["schedule_type"] == "keep_alive"
         text = script.read_text()
@@ -498,6 +499,26 @@ class TestRegistrySync:
         assert entry["filename_prefixed"] is True
         assert entry["naming_policy"] == "preferred"
 
+    def test_create_script_strips_legacy_nexo_prefix_from_personal_filename(self, scripts_dir):
+        init_db()
+
+        result = create_script("nexo-mail-poller", description="legacy name", runtime="python")
+
+        assert result["name"] == "mail-poller"
+        assert result["filename"] == "ps-mail-poller.py"
+        assert os.path.basename(result["path"]) == "ps-mail-poller.py"
+
+    def test_classify_personal_prefixed_filename_without_metadata_uses_logical_name(self, scripts_dir):
+        script = scripts_dir / "ps-release-validate.sh"
+        script.write_text("#!/usr/bin/env bash\necho ok\n")
+        script.chmod(script.stat().st_mode | stat.S_IXUSR)
+
+        report = classify_scripts_dir()
+        entry = next(item for item in report["entries"] if item["path"] == str(script))
+
+        assert entry["classification"] == "personal"
+        assert entry["name"] == "release-validate"
+
     def test_classify_scripts_dir_ignores_personal_shadow_of_core_logical_name(self, scripts_dir):
         core_dir = scripts_dir.parent / "core" / "scripts"
         core_dir.mkdir(parents=True, exist_ok=True)
@@ -557,6 +578,116 @@ class TestRegistrySync:
         archived = Path(result["archived"][0]["backup_path"])
         assert not shadow.exists()
         assert archived.is_file()
+
+    def test_rename_legacy_personal_script_filenames_normalizes_to_ps_prefix(self, scripts_dir, monkeypatch):
+        import script_registry
+
+        init_db()
+        script = scripts_dir / "nexo-mail-poller.py"
+        script.write_text(
+            "#!/usr/bin/env python3\n"
+            "# nexo: name=mail-poller\n"
+            "# nexo: description=Poll operator inbox\n"
+            "# nexo: runtime=python\n"
+            "# nexo: cron_id=mail-poller\n"
+            "# nexo: interval_seconds=300\n"
+            "# nexo: schedule_required=true\n"
+            "print('ok')\n"
+        )
+
+        sync_personal_scripts_registry(
+            [{
+                "name": "mail-poller",
+                "path": str(script),
+                "runtime": "python",
+                "description": "Poll operator inbox",
+                "metadata": {"name": "mail-poller", "runtime": "python"},
+            }],
+            [{
+                "cron_id": "mail-poller",
+                "script_path": str(script),
+                "schedule_type": "interval",
+                "schedule_value": "300",
+                "schedule_label": "every 300s",
+                "launchd_label": "com.nexo.mail-poller",
+                "plist_path": "/tmp/com.nexo.mail-poller.plist",
+                "enabled": True,
+                "description": "Mail poller schedule",
+            }],
+        )
+
+        monkeypatch.setattr(
+            script_registry,
+            "_discover_personal_schedule_records",
+            lambda: [{
+                "cron_id": "mail-poller",
+                "script_path": str(script),
+                "schedule_type": "interval",
+                "schedule_value": "300",
+                "schedule_label": "every 300s",
+                "launchd_label": "com.nexo.mail-poller",
+                "plist_path": "/tmp/com.nexo.mail-poller.plist",
+                "enabled": True,
+                "description": "Mail poller schedule",
+                "managed_marker": True,
+                "script_exists": True,
+                "script_within_scripts_dir": True,
+            }],
+        )
+        monkeypatch.setattr(
+            script_registry,
+            "_remove_schedule_file",
+            lambda **kwargs: {"cron_id": kwargs["cron_id"], "plist_path": kwargs["plist_path"], "deleted": True},
+        )
+
+        result = rename_legacy_personal_script_filenames()
+
+        normalized = scripts_dir / "ps-mail-poller.py"
+        assert result["ok"] is True
+        assert result["renamed"] == [{
+            "name": "mail-poller",
+            "old_path": str(script),
+            "new_path": str(normalized),
+        }]
+        assert result["unscheduled"] == [{
+            "cron_id": "mail-poller",
+            "plist_path": "/tmp/com.nexo.mail-poller.plist",
+            "deleted": True,
+        }]
+        assert not script.exists()
+        assert normalized.exists()
+        assert "# nexo: name=mail-poller" in normalized.read_text()
+        assert list_personal_script_schedules() == []
+
+    def test_rename_legacy_personal_script_filenames_skips_when_project_atlas_still_references_name(self, scripts_dir):
+        atlas_dir = scripts_dir.parent / "brain"
+        atlas_dir.mkdir(parents=True, exist_ok=True)
+        (atlas_dir / "project-atlas.json").write_text(json.dumps({
+            "projects": [{
+                "name": "legacy",
+                "script": "nexo-release-validate.sh",
+            }],
+        }))
+
+        script = scripts_dir / "nexo-release-validate.sh"
+        script.write_text(
+            "#!/usr/bin/env bash\n"
+            "# nexo: name=release-validate\n"
+            "# nexo: runtime=shell\n"
+            "echo ok\n"
+        )
+
+        result = rename_legacy_personal_script_filenames()
+
+        assert result["renamed"] == []
+        assert result["skipped"] == [{
+            "name": "release-validate",
+            "old_path": str(script),
+            "new_path": str(scripts_dir / "ps-release-validate.sh"),
+            "reason": "legacy filename still referenced by operator-owned artifacts",
+            "references": [str(atlas_dir / "project-atlas.json")],
+        }]
+        assert script.exists()
 
     @pytest.mark.xfail(reason="CI order-dependent db._core global state pollution — NF-TEST-SCRIPT-REGISTRY-POLLUTION", strict=False)
     def test_sync_personal_scripts_links_schedule(self, scripts_dir, monkeypatch):

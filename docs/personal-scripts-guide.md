@@ -4,7 +4,7 @@
 
 ## When to use this
 
-You are a NEXO session helping Francisco (or any operator) author a new script that lives in `~/.nexo/scripts/`. The script needs to call the LLM via `run_automation_prompt` / `run_automation_json`. Follow this guide so the script respects the v6+ protocol.
+You are a NEXO session helping Francisco (or any operator) author a new script that lives in `~/.nexo/personal/scripts/`. The script needs to call the LLM via `run_automation_prompt` / `run_automation_json`. Follow this guide so the script respects the v6+ protocol.
 
 If you are adding a caller that lives inside the `src/` tree of `wazionapps/nexo` itself, this guide does **not** apply — register the caller in `src/resonance_map.py::SYSTEM_OWNED_CALLERS` (or `USER_FACING_CALLERS` for interactive entry points) with a deliberate tier.
 

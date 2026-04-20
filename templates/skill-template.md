@@ -1,8 +1,9 @@
 # Skill Template
 
 Create a directory under one of:
-- `NEXO_HOME/skills/<slug>/`
+- `NEXO_HOME/personal/skills/<slug>/`
 - `src/skills/<slug>/`
+- `NEXO_HOME/core/skills/<slug>/` (installed runtime only)
 - `community/skills/<slug>/`
 
 Required files:

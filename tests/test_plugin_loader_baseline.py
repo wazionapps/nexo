@@ -142,6 +142,31 @@ class TestListAndRemovePlugins:
         assert total == 0
         assert loaded == ["alpha.py"]
 
+    def test_load_all_plugins_keeps_core_plugin_when_personal_shadow_exists(self, isolated_db, monkeypatch, tmp_path):
+        import plugin_loader
+
+        repo_plugins = tmp_path / "repo-plugins"
+        personal_plugins = tmp_path / "personal-plugins"
+        repo_plugins.mkdir()
+        personal_plugins.mkdir()
+        (repo_plugins / "crm.py").write_text("TOOLS = []\n", encoding="utf-8")
+        (personal_plugins / "crm.py").write_text("TOOLS = []\n", encoding="utf-8")
+
+        loaded: list[tuple[str, str | None]] = []
+
+        monkeypatch.setattr(plugin_loader, "PLUGINS_DIR", str(repo_plugins))
+        monkeypatch.setattr(plugin_loader, "PERSONAL_PLUGINS_DIR", str(personal_plugins))
+        monkeypatch.setattr(
+            plugin_loader,
+            "load_plugin",
+            lambda mcp, filename, plugins_dir=None: loaded.append((filename, plugins_dir)) or 0,
+        )
+
+        total = plugin_loader.load_all_plugins(_StubMCP())
+
+        assert total == 0
+        assert loaded == [("crm.py", str(repo_plugins))]
+
 
 # ── _PluginTimeout exception class ───────────────────────────────────────
 

@@ -49,13 +49,13 @@ Use this order:
 
 | Surface | Purpose | Lives in |
 |---|---|---|
-| Core plugins | Product MCP tools for all users | `src/plugins/` |
-| Personal plugins | Local runtime extensions/overrides | `NEXO_HOME/plugins/` |
-| Core skills | Product skill definitions | `src/skills/` in development, `NEXO_HOME/skills-core/` in packaged installs |
-| Personal skills | Local operator skills | `NEXO_HOME/skills/` |
-| Personal scripts | Local automation units | `NEXO_HOME/scripts/` |
+| Core plugins | Product MCP tools for all users | `src/plugins/` in source, `NEXO_HOME/core/plugins/` in installed runtimes |
+| Personal plugins | Local runtime extensions/overrides | `NEXO_HOME/personal/plugins/` |
+| Core skills | Product skill definitions | `src/skills/` in development, `NEXO_HOME/core/skills/` in packaged installs |
+| Personal skills | Local operator skills | `NEXO_HOME/personal/skills/` |
+| Personal scripts | Local automation units | `NEXO_HOME/personal/scripts/` |
 | Runtime-staged skill executables | Generated/executable runtime copies | `NEXO_HOME/skills-runtime/` |
-| Personal schedules | Registry + LaunchAgent/systemd artifacts attached to scripts | discovered from `NEXO_HOME/scripts/` metadata and registered by the scheduler |
+| Personal schedules | Registry + LaunchAgent/systemd artifacts attached to scripts | discovered from `NEXO_HOME/personal/scripts/` metadata and registered by the scheduler |
 | Product docs | Shared documentation for all users | repo `docs/` and `README.md` |
 
 ## Artifact Rules
@@ -102,7 +102,7 @@ Modes:
 
 Official path:
 
-1. Create a directory under `NEXO_HOME/skills/` for personal use.
+1. Create a directory under `NEXO_HOME/personal/skills/` for personal use.
 2. Add `skill.json` and `guide.md`.
 3. Add `script.py` or `script.sh` only if the skill truly needs execution.
 4. Sync with `nexo skills sync`.
@@ -122,7 +122,7 @@ Use a personal plugin when you need a new MCP tool available to the local NEXO r
 Official path:
 
 1. Scaffold with `nexo_personal_plugin_create(...)` or `templates/plugin-template.py`.
-2. Edit the file in `NEXO_HOME/plugins/`.
+2. Edit the file in `NEXO_HOME/personal/plugins/`.
 3. Load or reload with `nexo_plugin_load("filename.py")`.
 4. Verify with `nexo_plugin_list()`.
 
@@ -232,7 +232,7 @@ This matters especially for paired `.py` and `.sh` variants of the same logical 
 
 ### Personal script checklist
 
-- file is in `NEXO_HOME/scripts/`
+- file is in `NEXO_HOME/personal/scripts/`
 - metadata matches the real runtime behavior
 - `nexo scripts doctor NAME` passes
 - `nexo scripts reconcile` completes without drift
@@ -241,7 +241,7 @@ This matters especially for paired `.py` and `.sh` variants of the same logical 
 
 ### Skill checklist
 
-- skill lives in the right directory (`NEXO_HOME/skills/` for personal)
+- skill lives in the right directory (`NEXO_HOME/personal/skills/` for personal)
 - `skill.json` and `guide.md` exist
 - optional script uses stable CLI / helper path
 - `nexo skills sync` succeeds
@@ -250,7 +250,7 @@ This matters especially for paired `.py` and `.sh` variants of the same logical 
 
 ### Personal plugin checklist
 
-- file lives in `NEXO_HOME/plugins/`
+- file lives in `NEXO_HOME/personal/plugins/`
 - tool names are explicit and prefixed appropriately
 - `nexo_plugin_load(...)` succeeds
 - `nexo_plugin_list()` shows the plugin and tools
@@ -293,6 +293,7 @@ If any answer is "no", correct the plan before building.
 This manual is grounded in the current runtime behavior implemented in:
 
 - `docs/writing-scripts.md`
+- `docs/runtime-templates.md`
 - `docs/skills-v2.md`
 - `src/script_registry.py`
 - `src/plugins/schedule.py`
@@ -301,6 +302,7 @@ This manual is grounded in the current runtime behavior implemented in:
 - `src/plugin_loader.py`
 - `src/doctor/providers/runtime.py`
 - `templates/script-template.py`
+- `templates/email-template.md`
 - `templates/plugin-template.py`
 - `templates/skill-template.md`
 - `templates/skill-script-template.py`
