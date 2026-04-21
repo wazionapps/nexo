@@ -487,7 +487,7 @@ def test_task_close_opens_protocol_debt_when_done_without_evidence():
         )
     )
 
-    assert closed["status"] == "debt-open"
+    assert closed["status"] == "done_with_debts"
     debt_types = {item["debt_type"] for item in closed["open_debts"]}
     assert "claimed_done_without_evidence" in debt_types
     count = get_db().execute(
@@ -624,7 +624,7 @@ def test_high_stakes_action_close_opens_debt_without_cortex_evaluation():
         )
     )
 
-    assert closed["status"] == "debt-open"
+    assert closed["status"] == "done_with_debts"
     debt_types = {item["debt_type"] for item in closed["open_debts"]}
     assert "missing_cortex_evaluation" in debt_types
 

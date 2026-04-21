@@ -1367,6 +1367,16 @@ def handle_task_close(
 
     open_debts = list_protocol_debts(status="open", task_id=task_id, limit=20)
 
+    status = "clean"
+    next_action = "Task closed cleanly."
+    if open_debts:
+        if clean_outcome == "done":
+            status = "done_with_debts"
+            next_action = "Task closed as done, but resolve the open protocol debt next."
+        else:
+            status = "debt-open"
+            next_action = "Resolve the open protocol debt next."
+
     response = {
         "ok": True,
         "task_id": task_id,
@@ -1384,12 +1394,8 @@ def handle_task_close(
             }
             for debt in open_debts
         ],
-        "status": "clean" if not open_debts else "debt-open",
-        "next_action": (
-            "Do not claim completion yet. Resolve the open protocol debt first."
-            if open_debts else
-            "Task closed cleanly."
-        ),
+        "status": status,
+        "next_action": next_action,
     }
     return json.dumps(response, ensure_ascii=False, indent=2)
 
