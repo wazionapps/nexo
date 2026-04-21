@@ -40,6 +40,16 @@ class _StubMCP:
         self.added.append(tool)
 
 
+def _seed_plugin_row(filename: str, *, created_by: str = "repo", tool_names: str = "") -> None:
+    from db import get_db
+    conn = get_db()
+    conn.execute(
+        "INSERT INTO plugins (filename, tools_count, tool_names, loaded_at, created_by) VALUES (?, ?, ?, ?, ?)",
+        (filename, 0, tool_names, 0, created_by),
+    )
+    conn.commit()
+
+
 # ── Filename validation ──────────────────────────────────────────────────
 
 
@@ -121,6 +131,25 @@ class TestListAndRemovePlugins:
         result = remove_plugin(_StubMCP(), "non_existent")
         assert result == []
 
+    def test_list_plugins_prunes_stale_registry_rows(self, isolated_db, monkeypatch, tmp_path):
+        import plugin_loader
+
+        repo_plugins = tmp_path / "repo-plugins"
+        personal_plugins = tmp_path / "personal-plugins"
+        repo_plugins.mkdir()
+        personal_plugins.mkdir()
+        (repo_plugins / "alpha.py").write_text("TOOLS = []\n", encoding="utf-8")
+
+        monkeypatch.setattr(plugin_loader, "PLUGINS_DIR", str(repo_plugins))
+        monkeypatch.setattr(plugin_loader, "PERSONAL_PLUGINS_DIR", str(personal_plugins))
+
+        _seed_plugin_row("alpha.py")
+        _seed_plugin_row("alpha 2.py")
+
+        result = plugin_loader.list_plugins()
+
+        assert [entry["filename"] for entry in result] == ["alpha.py"]
+
     def test_load_all_plugins_skips_duplicate_copy_filenames(self, isolated_db, monkeypatch, tmp_path):
         import plugin_loader
 
@@ -141,6 +170,30 @@ class TestListAndRemovePlugins:
 
         assert total == 0
         assert loaded == ["alpha.py"]
+
+    def test_load_all_plugins_prunes_stale_registry_before_load(self, isolated_db, monkeypatch, tmp_path):
+        import plugin_loader
+
+        repo_plugins = tmp_path / "repo-plugins"
+        personal_plugins = tmp_path / "personal-plugins"
+        repo_plugins.mkdir()
+        personal_plugins.mkdir()
+        (repo_plugins / "alpha.py").write_text("TOOLS = []\n", encoding="utf-8")
+
+        loaded = []
+
+        monkeypatch.setattr(plugin_loader, "PLUGINS_DIR", str(repo_plugins))
+        monkeypatch.setattr(plugin_loader, "PERSONAL_PLUGINS_DIR", str(personal_plugins))
+        monkeypatch.setattr(plugin_loader, "load_plugin", lambda mcp, filename, plugins_dir=None: loaded.append(filename) or 0)
+
+        _seed_plugin_row("alpha.py")
+        _seed_plugin_row("alpha 2.py")
+
+        total = plugin_loader.load_all_plugins(_StubMCP())
+
+        assert total == 0
+        assert loaded == ["alpha.py"]
+        assert [entry["filename"] for entry in plugin_loader.list_plugins()] == ["alpha.py"]
 
     def test_load_all_plugins_keeps_core_plugin_when_personal_shadow_exists(self, isolated_db, monkeypatch, tmp_path):
         import plugin_loader

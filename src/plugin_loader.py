@@ -126,38 +126,74 @@ def verify_plugin_in_inventory(filename: str, plugin_path: str) -> tuple[bool, s
     return True, f"matched {sorted(intersection)}"
 
 
+def _collect_plugin_inventory() -> tuple[dict[str, tuple[str, str]], bool]:
+    """Return the canonical plugin inventory derived from the live filesystem.
+
+    The returned map is keyed by filename and already applies the same duplicate
+    and shadow rules used during startup, so it can safely act as the source of
+    truth for registry pruning.
+    """
+    plugin_map: dict[str, tuple[str, str]] = {}
+    scanned_any_dir = False
+
+    if os.path.isdir(PLUGINS_DIR):
+        scanned_any_dir = True
+        for filename in sorted(os.listdir(PLUGINS_DIR)):
+            if not filename.endswith(".py") or filename == "__init__.py":
+                continue
+            if is_duplicate_artifact_name(os.path.join(PLUGINS_DIR, filename)):
+                continue
+            plugin_map[filename] = (PLUGINS_DIR, "repo")
+
+    if os.path.isdir(PERSONAL_PLUGINS_DIR):
+        scanned_any_dir = True
+        for filename in sorted(os.listdir(PERSONAL_PLUGINS_DIR)):
+            if not filename.endswith(".py") or filename == "__init__.py":
+                continue
+            if is_duplicate_artifact_name(os.path.join(PERSONAL_PLUGINS_DIR, filename)):
+                continue
+            if filename in plugin_map:
+                print(
+                    f"[PLUGIN SHADOW SKIP] {filename}: personal plugin collides with packaged core filename; "
+                    "keeping core plugin canonical",
+                    file=sys.stderr,
+                )
+                continue
+            plugin_map[filename] = (PERSONAL_PLUGINS_DIR, "personal")
+
+    return plugin_map, scanned_any_dir
+
+
+def _prune_registry_to_inventory(plugin_filenames: set[str], *, scanned_any_dir: bool) -> int:
+    """Remove registry rows that no longer exist in the canonical plugin tree.
+
+    This keeps the SQLite plugin registry from acting as a stale second source
+    of truth after duplicate-copy cleanup, tree migrations, or shadow conflicts.
+    """
+    if not scanned_any_dir:
+        return 0
+
+    conn = get_db()
+    rows = conn.execute("SELECT filename FROM plugins").fetchall()
+    registered = {str(row["filename"]) for row in rows}
+    stale = sorted(registered - set(plugin_filenames))
+    if not stale:
+        return 0
+
+    placeholders = ",".join("?" for _ in stale)
+    conn.execute(f"DELETE FROM plugins WHERE filename IN ({placeholders})", stale)
+    conn.commit()
+    print(f"[PLUGIN REGISTRY] pruned stale rows: {', '.join(stale)}", file=sys.stderr)
+    return len(stale)
+
+
 def load_all_plugins(mcp) -> int:
     """Load all plugins from repo and personal directories at startup. Returns total tools loaded."""
     _ensure_src_in_path()
     total = 0
 
-    # Collect plugins: repo first, personal overrides
-    plugin_map = {}  # filename -> (dir_path, source_label)
-
-    # 1. Repo plugins (base)
-    if os.path.isdir(PLUGINS_DIR):
-        for f in sorted(os.listdir(PLUGINS_DIR)):
-            if f.endswith(".py") and f != "__init__.py":
-                if is_duplicate_artifact_name(os.path.join(PLUGINS_DIR, f)):
-                    continue
-                plugin_map[f] = (PLUGINS_DIR, "repo")
-
-    # 2. Personal plugins. Never let a personal file shadow a packaged core
-    # plugin at startup: creation already rejects that collision, and keeping
-    # the repo plugin canonical avoids hybrid installs with two sources of truth.
-    if os.path.isdir(PERSONAL_PLUGINS_DIR):
-        for f in sorted(os.listdir(PERSONAL_PLUGINS_DIR)):
-            if f.endswith(".py") and f != "__init__.py":
-                if is_duplicate_artifact_name(os.path.join(PERSONAL_PLUGINS_DIR, f)):
-                    continue
-                if f in plugin_map:
-                    print(
-                        f"[PLUGIN SHADOW SKIP] {f}: personal plugin collides with packaged core filename; "
-                        "keeping core plugin canonical",
-                        file=sys.stderr,
-                    )
-                    continue
-                plugin_map[f] = (PERSONAL_PLUGINS_DIR, "personal")
+    plugin_map, scanned_any_dir = _collect_plugin_inventory()
+    _prune_registry_to_inventory(set(plugin_map), scanned_any_dir=scanned_any_dir)
 
     # Load all in sorted order
     for f in sorted(plugin_map):
@@ -299,6 +335,8 @@ def remove_plugin(mcp, filename: str) -> list[str]:
 
 def list_plugins() -> list[dict]:
     """List all registered plugins with source info (repo/personal)."""
+    plugin_map, scanned_any_dir = _collect_plugin_inventory()
+    _prune_registry_to_inventory(set(plugin_map), scanned_any_dir=scanned_any_dir)
     conn = get_db()
     rows = conn.execute(
         "SELECT filename, tools_count, tool_names, loaded_at, created_by FROM plugins ORDER BY filename"
