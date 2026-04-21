@@ -3,6 +3,18 @@
   "version": "1.1.1",
   "cases": [
     {
+      "id": "startup-on-first-user-turn",
+      "seq": [
+        {
+          "op": "user",
+          "text": "Necesito revisar esto."
+        }
+      ],
+      "expect_rule_ids": [
+        "on_session_start"
+      ]
+    },
+    {
       "id": "R13-pre-edit-no-guard",
       "seq": [
         {
@@ -168,7 +180,9 @@
           }
         }
       ],
-      "expect_rule_ids": [],
+      "expect_rule_ids": [
+        "on_session_start"
+      ],
       "strict": true
     },
     {

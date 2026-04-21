@@ -559,6 +559,12 @@ class HeadlessEnforcer:
         except Exception as _r15_exc:  # noqa: BLE001
             _logger.warning("on_user_message_r15 failed: %s", _r15_exc)
 
+        # Session-start and periodic-by-message rules must be evaluated on the
+        # same user turn that increments the counters, otherwise headless
+        # sessions start cold and only inject startup/heartbeat reminders after
+        # the first assistant turn finishes.
+        self.check_periodic()
+
         # R14 correction detection is optional — if the module is absent the
         # rule is effectively off, but R15/R25 above still fired.
         if _detect_correction is None:
@@ -1804,7 +1810,7 @@ class HeadlessEnforcer:
         for entry in self._on_start:
             tool = entry["tool"]
             threshold = entry["rule"].get("threshold", 2)
-            if tool not in self.tools_called and self.tool_call_count >= threshold:
+            if tool not in self.tools_called and self.user_message_count >= threshold:
                 prompt = entry["enf"].get("inject_prompt", "")
                 if prompt:
                     self._enqueue(prompt, f"start:{tool}", rule_id="on_session_start")
