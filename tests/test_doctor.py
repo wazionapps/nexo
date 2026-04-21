@@ -901,6 +901,41 @@ class TestRuntimeChecks:
         assert check.fixed is True
         assert sync_kwargs["auto_install_missing_claude"] is True
 
+    def test_client_backend_preferences_flags_missing_desktop_managed_claude_runtime(self, nexo_home, monkeypatch):
+        from doctor.providers import runtime
+
+        schedule_file = nexo_home / "config" / "schedule.json"
+        schedule_file.parent.mkdir(parents=True, exist_ok=True)
+        schedule_file.write_text(json.dumps({
+            "interactive_clients": {
+                "claude_code": False,
+                "codex": True,
+                "claude_desktop": False,
+            },
+            "default_terminal_client": "codex",
+            "automation_enabled": False,
+            "automation_backend": "none",
+        }))
+
+        managed_prefix = nexo_home / "runtime" / "bootstrap" / "npm-global"
+
+        monkeypatch.setattr(runtime, "SCHEDULE_FILE", schedule_file)
+        monkeypatch.setattr(runtime.Path, "home", lambda: nexo_home)
+        monkeypatch.setattr(runtime, "detect_installed_clients", lambda user_home=None: {
+            "claude_code": {"installed": False, "path": ""},
+            "codex": {"installed": True, "path": "/tmp/fake-codex"},
+            "claude_desktop": {"installed": False, "path": ""},
+        })
+        monkeypatch.setattr(runtime, "_desktop_product_requested", lambda home=None: True)
+        monkeypatch.setattr(runtime, "_managed_claude_binary", lambda home=None: "")
+        monkeypatch.setattr(runtime, "_managed_claude_prefix", lambda home=None: managed_prefix)
+
+        check = runtime.check_client_backend_preferences()
+
+        assert check.status == "critical"
+        assert any("desktop-managed Claude runtime missing or drifted" in item for item in check.evidence)
+        assert any("npm-global" in item for item in check.repair_plan)
+
     def test_client_bootstrap_parity_warns_when_codex_bootstrap_missing(self, nexo_home, monkeypatch):
         from doctor.providers import runtime
 

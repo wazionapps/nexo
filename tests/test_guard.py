@@ -114,6 +114,25 @@ def test_handle_guard_check_does_not_promote_file_scoped_rules_to_universal_rule
     assert "Never edit guard.py directly" not in output
 
 
+def test_handle_guard_check_does_not_pull_unrelated_nexo_ops_universal_rules(guard_env):
+    db, guard = _reload_guard_stack()
+    db.init_db()
+
+    conn = db.get_db()
+    db.create_learning(
+        "nexo-ops",
+        "Cloudflare access must be verified before diagnosing Wrangler auth",
+        "SIEMPRE verify Cloudflare access before claiming Wrangler auth is the root cause.",
+        status="active",
+    )
+    conn.commit()
+
+    output = guard.handle_guard_check(files="/repo/src/doctor/providers/runtime.py", area="nexo")
+
+    assert "UNIVERSAL RULES" not in output
+    assert "Cloudflare access must be verified before diagnosing Wrangler auth" not in output
+
+
 def test_handle_guard_file_check_skips_file_scoped_rules_for_other_files(guard_env):
     db, guard = _reload_guard_stack()
     db.init_db()

@@ -78,6 +78,11 @@ def _is_trivial_evidence(text: str) -> tuple[bool, str]:
 
 ACTION_TASKS = {"edit", "execute", "delegate"}
 RESPONSE_TASKS = {"answer", "analyze"}
+_GUARD_TOUCH_DEBT_TYPES = {
+    "strict_protocol_write_without_guard_ack",
+    "conditioned_file_touch_without_guard_ack",
+    "write_without_file_guard_check",
+}
 HIGH_STAKES_KEYWORDS = {
     "medical",
     "legal",
@@ -1273,6 +1278,19 @@ def handle_task_close(
                 severity="error",
                 evidence="High-stakes action task closed without nexo_cortex_decide / persisted evaluation.",
                 debts=debts_created,
+            )
+
+    if task.get("guard_has_blocking") and not files_changed_list:
+        open_task_debts = list_protocol_debts(status="open", task_id=task_id, limit=200)
+        has_guard_touch_violation = any(
+            (debt.get("debt_type") or "") in _GUARD_TOUCH_DEBT_TYPES
+            for debt in open_task_debts
+        )
+        if not has_guard_touch_violation:
+            resolve_protocol_debts(
+                task_id=task_id,
+                debt_types=["unacknowledged_guard_blocking"],
+                resolution="Task closed without touching guarded files.",
             )
 
     task = close_protocol_task(

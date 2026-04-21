@@ -32,9 +32,9 @@ if (fs.existsSync(VERSION_FILE)) {
   // Run the main installer in --yes mode (non-interactive)
   // It will detect the existing version and do migration only
   // Let errors propagate so npm reports the failure correctly
-  const { execSync } = require("child_process");
+  const { execFileSync } = require("child_process");
   try {
-    execSync(`node ${path.join(__dirname, "nexo-brain.js")} --yes`, {
+    execFileSync(process.execPath, [path.join(__dirname, "nexo-brain.js"), "--yes"], {
       stdio: "inherit",
       env: { ...process.env, NEXO_POSTINSTALL: "1", NEXO_HOME: NEXO_HOME }
     });

@@ -30,6 +30,7 @@ from client_preferences import (
     resolve_client_runtime_profile,
     resolve_terminal_client,
 )
+from claude_cli import resolve_claude_cli as _shared_resolve_claude_cli
 from core_prompts import render_core_prompt
 
 
@@ -359,25 +360,7 @@ def _record_automation_run(
 
 
 def _resolve_claude_cli() -> str:
-    saved = paths.config_dir() / "claude-cli-path"
-    if saved.exists():
-        candidate = saved.read_text().strip()
-        if candidate and Path(candidate).exists():
-            return candidate
-    env_path = os.environ.get("CLAUDE_BIN", "").strip()
-    if env_path and Path(env_path).exists():
-        return env_path
-    discovered = shutil.which("claude")
-    if discovered:
-        return discovered
-    for candidate in (
-        Path.home() / ".local" / "bin" / "claude",
-        Path.home() / ".npm-global" / "bin" / "claude",
-        Path("/usr/local/bin/claude"),
-    ):
-        if candidate.exists():
-            return str(candidate)
-    return ""
+    return _shared_resolve_claude_cli()
 
 
 def _resolve_codex_cli() -> str:

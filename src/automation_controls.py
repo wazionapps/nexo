@@ -732,11 +732,12 @@ def get_operator_profile() -> dict[str, Any]:
     operator_accounts: list[dict] = []
 
     try:
+        from calibration_runtime import load_runtime_calibration
         from paths import brain_dir
 
         cal_path = brain_dir() / "calibration.json"
         if cal_path.exists():
-            payload = json.loads(cal_path.read_text())
+            payload = load_runtime_calibration(cal_path)
             user = payload.get("user") if isinstance(payload.get("user"), dict) else {}
             operator_name = (
                 str(user.get("name") or "").strip()

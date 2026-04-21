@@ -250,22 +250,33 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
                 w = r["weight"] or 0.5
                 result["learnings"].append({"id": r["id"], "category": r["category"], "rule": r["title"], "priority": pri, "weight": w})
 
-    # 4. Universal rules — only from matching area or nexo-ops (not ALL learnings)
-    universal_categories = {"nexo-ops"}
+    # 4. Universal rules — only from the explicitly requested area plus any
+    # truly global categories. Pulling `nexo-ops` into every guard check made
+    # unrelated prohibitions (for example a Cloudflare-specific learning)
+    # appear in blocked task summaries far outside their domain.
+    universal_categories = []
     if area:
-        universal_categories.add(area)
-    placeholders = ",".join("?" for _ in universal_categories)
-    rows = conn.execute(
-        f"SELECT id, category, title, content, priority FROM learnings WHERE "
-        f"category IN ({placeholders}) AND COALESCE(applies_to, '') = '' AND ("
-        f"content LIKE '%SIEMPRE%' OR content LIKE '%NUNCA%' OR content LIKE '%ANTES%' "
-        f"OR content LIKE '%always%' OR content LIKE '%never%')",
-        tuple(universal_categories)
-    ).fetchall()
-    for r in rows:
-        if r["id"] not in seen_ids:
-            seen_ids.add(r["id"])
-            result["universal_rules"].append({"id": r["id"], "rule": r["title"], "category": r["category"], "priority": r["priority"] or "medium"})
+        universal_categories.append(area)
+    universal_categories.extend(["universal", "global"])
+    # Keep order stable while deduplicating.
+    seen_categories = set()
+    universal_categories = [
+        category for category in universal_categories
+        if category and not (category in seen_categories or seen_categories.add(category))
+    ]
+    if universal_categories:
+        placeholders = ",".join("?" for _ in universal_categories)
+        rows = conn.execute(
+            f"SELECT id, category, title, content, priority FROM learnings WHERE "
+            f"category IN ({placeholders}) AND COALESCE(applies_to, '') = '' AND ("
+            f"content LIKE '%SIEMPRE%' OR content LIKE '%NUNCA%' OR content LIKE '%ANTES%' "
+            f"OR content LIKE '%always%' OR content LIKE '%never%')",
+            tuple(universal_categories)
+        ).fetchall()
+        for r in rows:
+            if r["id"] not in seen_ids:
+                seen_ids.add(r["id"])
+                result["universal_rules"].append({"id": r["id"], "rule": r["title"], "category": r["category"], "priority": r["priority"] or "medium"})
 
     # 5. DB schemas if files contain SQL keywords
     if include_schemas_bool and file_list:

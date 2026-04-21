@@ -279,6 +279,92 @@ def test_task_acknowledge_guard_resolves_guard_debt(monkeypatch):
     assert "Canonical file rule reviewed" in debt["resolution"]
 
 
+def test_task_close_resolves_guard_debt_when_no_file_changes_happened(monkeypatch):
+    from db import get_db
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    sid = _register_session("nexo-1005-2005b")
+    monkeypatch.setattr(
+        "plugins.protocol.handle_guard_check",
+        lambda **kwargs: "BLOCKING RULES (resolve BEFORE writing):\n  #41 [FILE RULE:/tmp/x]: Read the canonical rule first\n",
+    )
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Inspect guarded file but stop before editing",
+            task_type="edit",
+            area="nexo-ops",
+            files="/tmp/x",
+        )
+    )
+    closed = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="blocked",
+            evidence="Guard blocked the edit, no file was changed, and the task stops pending canonical review.",
+            change_summary="Stopped before editing guarded file",
+            change_why="Respect the blocking guard instead of forcing a write",
+            files_changed="[]",
+        )
+    )
+
+    assert closed["ok"] is True
+    assert closed["status"] == "clean"
+    debt = get_db().execute(
+        "SELECT status, resolution FROM protocol_debt WHERE task_id = ? AND debt_type = 'unacknowledged_guard_blocking'",
+        (opened["task_id"],),
+    ).fetchone()
+    assert debt["status"] == "resolved"
+    assert "without touching guarded files" in debt["resolution"]
+
+
+def test_task_close_keeps_guard_debt_open_when_guard_touch_violation_exists(monkeypatch):
+    from db import create_protocol_debt, get_db
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    sid = _register_session("nexo-1005-2005c")
+    monkeypatch.setattr(
+        "plugins.protocol.handle_guard_check",
+        lambda **kwargs: "BLOCKING RULES (resolve BEFORE writing):\n  #41 [FILE RULE:/tmp/x]: Read the canonical rule first\n",
+    )
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Attempt guarded edit incorrectly",
+            task_type="edit",
+            area="nexo-ops",
+            files="/tmp/x",
+        )
+    )
+    create_protocol_debt(
+        sid,
+        "conditioned_file_touch_without_guard_ack",
+        severity="error",
+        task_id=opened["task_id"],
+        evidence="write attempt hit guarded file before acknowledgement",
+    )
+    closed = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="blocked",
+            evidence="The task stops after a bad guarded touch attempt and still needs explicit acknowledgement.",
+            change_summary="Did not proceed after the bad guarded touch",
+            change_why="Guard discipline still needs explicit cleanup",
+            files_changed="[]",
+        )
+    )
+
+    assert closed["ok"] is True
+    debt = get_db().execute(
+        "SELECT status FROM protocol_debt WHERE task_id = ? AND debt_type = 'unacknowledged_guard_blocking'",
+        (opened["task_id"],),
+    ).fetchone()
+    assert debt["status"] == "open"
+    assert any(item["debt_type"] == "unacknowledged_guard_blocking" for item in closed["open_debts"])
+
+
 def test_protocol_debt_list_filters_by_type_and_severity():
     from db import create_protocol_debt
     from plugins.protocol import handle_protocol_debt_list

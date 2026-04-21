@@ -177,22 +177,22 @@ class TestStats:
 # ── Detection heuristic tests ────────────────────────────────────────
 
 class TestDetection:
-    def test_interactive_detection_defaults_to_local_classification(self, monkeypatch):
+    def test_local_classifier_confirms_mid_band_semantic_signal(self, monkeypatch):
         monkeypatch.setattr(
             tools_drive,
-            "_llm_classify_signal",
+            "_local_classify_signal",
             lambda text: {
                 "available": True,
                 "label": "opportunity",
                 "confidence": 0.91,
-                "reason": "model sees an automation opportunity",
-                "source": "llm",
+                "reason": "local model sees an automation opportunity",
+                "source": "local",
             },
         )
         monkeypatch.setattr(
             tools_drive,
             "_semantic_signal_scores",
-            lambda text: {"anomaly": 0.99, "pattern": 0.0, "gap": 0.0, "opportunity": 0.0},
+            lambda text: {"anomaly": 0.0, "pattern": 0.0, "gap": 0.0, "opportunity": 0.52},
         )
 
         result = detect_drive_signal(
@@ -203,9 +203,39 @@ class TestDetection:
         assert result is not None
         signal = get_drive_signal(result["id"])
         assert signal is not None
-        assert signal["signal_type"] == "anomaly"
+        assert signal["signal_type"] == "opportunity"
+
+    def test_local_classifier_none_blocks_fallback_when_confident(self, monkeypatch):
+        monkeypatch.setattr(
+            tools_drive,
+            "_local_classify_signal",
+            lambda text: {
+                "available": True,
+                "label": None,
+                "confidence": 0.93,
+                "reason": "local model sees routine status",
+                "source": "local",
+            },
+        )
+        monkeypatch.setattr(
+            tools_drive,
+            "_semantic_signal_scores",
+            lambda text: {"pattern": 0.52, "anomaly": 0.0, "gap": 0.0, "opportunity": 0.0},
+        )
+
+        result = detect_drive_signal(
+            "Otra vez revisé el dashboard y todo sigue bien",
+            source="heartbeat", source_id="test-sid-local-none",
+        )
+
+        assert result is None
 
     def test_llm_classification_is_primary_when_explicitly_enabled(self, monkeypatch):
+        monkeypatch.setattr(
+            tools_drive,
+            "_local_classify_signal",
+            lambda text: {"available": False, "label": None, "reason": "unavailable"},
+        )
         monkeypatch.setattr(
             tools_drive,
             "_llm_classify_signal",
@@ -220,7 +250,7 @@ class TestDetection:
         monkeypatch.setattr(
             tools_drive,
             "_semantic_signal_scores",
-            lambda text: {"anomaly": 0.99, "pattern": 0.0, "gap": 0.0, "opportunity": 0.0},
+            lambda text: {"anomaly": 0.52, "pattern": 0.0, "gap": 0.0, "opportunity": 0.0},
         )
 
         result = detect_drive_signal(
@@ -236,6 +266,11 @@ class TestDetection:
     def test_llm_none_blocks_fallback_when_confident(self, monkeypatch):
         monkeypatch.setattr(
             tools_drive,
+            "_local_classify_signal",
+            lambda text: {"available": False, "label": None, "reason": "unavailable"},
+        )
+        monkeypatch.setattr(
+            tools_drive,
             "_llm_classify_signal",
             lambda text: {
                 "available": True,
@@ -248,7 +283,7 @@ class TestDetection:
         monkeypatch.setattr(
             tools_drive,
             "_semantic_signal_scores",
-            lambda text: {"pattern": 0.98, "anomaly": 0.0, "gap": 0.0, "opportunity": 0.0},
+            lambda text: {"pattern": 0.52, "anomaly": 0.0, "gap": 0.0, "opportunity": 0.0},
         )
 
         result = detect_drive_signal(
@@ -259,6 +294,11 @@ class TestDetection:
         assert result is None
 
     def test_fallback_still_works_when_llm_is_unavailable(self, monkeypatch):
+        monkeypatch.setattr(
+            tools_drive,
+            "_local_classify_signal",
+            lambda text: {"available": False, "label": None, "reason": "unavailable"},
+        )
         monkeypatch.setattr(
             tools_drive,
             "_llm_classify_signal",

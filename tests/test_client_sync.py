@@ -631,6 +631,82 @@ def test_sync_codex_prefers_calibration_assistant_name_over_blank_version_value(
     assert "You are Nero" in bootstrap_text
 
 
+def test_ensure_claude_code_installed_desktop_managed_does_not_fallback_to_npx_or_global(monkeypatch, tmp_path):
+    import client_sync
+
+    home = tmp_path / "home"
+    desktop_node = tmp_path / "electron-node"
+    npm_cli = tmp_path / "npm-cli.js"
+    desktop_node.write_text("")
+    npm_cli.write_text("")
+    attempts = []
+
+    monkeypatch.setenv("NEXO_DESKTOP_MANAGED", "1")
+    monkeypatch.setenv("NEXO_DESKTOP_NODE", str(desktop_node))
+    monkeypatch.setenv("NEXO_DESKTOP_NPM_CLI", str(npm_cli))
+    monkeypatch.setattr(
+        client_sync,
+        "detect_installed_clients",
+        lambda user_home=None: {
+            "claude_code": {"installed": False, "path": "", "detected_by": "missing"},
+            "codex": {"installed": False, "path": "", "detected_by": "missing"},
+            "claude_desktop": {"installed": False, "path": "", "detected_by": "missing"},
+        },
+    )
+
+    def fake_run(cmd, **kwargs):
+        attempts.append(cmd)
+        return subprocess.CompletedProcess(cmd, 1, "", "install failed")
+
+    monkeypatch.setattr(client_sync.subprocess, "run", fake_run)
+
+    result = client_sync.ensure_claude_code_installed(user_home=home)
+
+    assert result["ok"] is False
+    assert result["action"] == "managed_install_failed"
+    assert attempts == [[
+        str(desktop_node),
+        str(npm_cli),
+        "install",
+        "-g",
+        "--prefix",
+        str(home / ".nexo" / "runtime" / "bootstrap" / "npm-global"),
+        "@anthropic-ai/claude-code",
+    ]]
+    assert "npx" not in " ".join(" ".join(cmd) for cmd in attempts)
+    assert "npm -g" not in result["error"]
+
+
+def test_ensure_claude_code_installed_desktop_managed_requires_bundled_runtime(monkeypatch, tmp_path):
+    import client_sync
+
+    home = tmp_path / "home"
+
+    monkeypatch.setenv("NEXO_DESKTOP_MANAGED", "1")
+    monkeypatch.delenv("NEXO_DESKTOP_NODE", raising=False)
+    monkeypatch.delenv("NEXO_DESKTOP_NPM_CLI", raising=False)
+    monkeypatch.setattr(
+        client_sync,
+        "detect_installed_clients",
+        lambda user_home=None: {
+            "claude_code": {"installed": False, "path": "", "detected_by": "missing"},
+            "codex": {"installed": False, "path": "", "detected_by": "missing"},
+            "claude_desktop": {"installed": False, "path": "", "detected_by": "missing"},
+        },
+    )
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("desktop-managed install should not call npx/npm-global fallbacks")
+
+    monkeypatch.setattr(client_sync.subprocess, "run", fail_if_called)
+
+    result = client_sync.ensure_claude_code_installed(user_home=home)
+
+    assert result["ok"] is False
+    assert result["action"] == "managed_install_failed"
+    assert "bundled Claude runtime" in result["error"]
+
+
 def test_sync_codex_falls_back_to_managed_config_when_cli_add_fails(tmp_path, monkeypatch):
     import client_sync
 

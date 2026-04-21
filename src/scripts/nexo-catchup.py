@@ -34,30 +34,6 @@ import paths
 
 HOME = Path.home()
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(HOME / ".nexo")))
-
-
-def _resolve_claude_cli() -> Path:
-    """Find claude CLI: saved path > PATH > common locations."""
-    saved = paths.config_dir() / "claude-cli-path"
-    if saved.exists():
-        p = Path(saved.read_text().strip())
-        if p.exists():
-            return p
-    import shutil
-    found = shutil.which("claude")
-    if found:
-        return Path(found)
-    for candidate in [
-        HOME / ".local" / "bin" / "claude",
-        HOME / ".npm-global" / "bin" / "claude",
-        Path("/usr/local/bin/claude"),
-    ]:
-        if candidate.exists():
-            return candidate
-    return HOME / ".local" / "bin" / "claude"  # last resort
-
-
-CLAUDE_CLI = _resolve_claude_cli()
 LOG_DIR = paths.logs_dir()
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 LOG_FILE = LOG_DIR / "catchup.log"

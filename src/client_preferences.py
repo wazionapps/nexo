@@ -3,6 +3,7 @@ from __future__ import annotations
 """Client and automation preference helpers stored in config/schedule.json."""
 
 import os
+import json
 import shutil
 import sys
 from pathlib import Path
@@ -72,6 +73,85 @@ def _codex_config_path(home: Path) -> Path:
 
 def _codex_bootstrap_path(home: Path) -> Path:
     return home / ".codex" / "AGENTS.md"
+
+
+def _desktop_product_requested(home: Path | None = None) -> bool:
+    if str(os.environ.get("NEXO_DESKTOP_MANAGED", "")).strip() == "1":
+        return True
+    explicit_home = home is not None
+    base = (home or _user_home()).expanduser()
+    mode_paths = (
+        base / ".nexo" / "personal" / "config" / "product-mode.json",
+        base / ".nexo" / "config" / "product-mode.json",
+    )
+    for mode_path in mode_paths:
+        try:
+            payload = json.loads(mode_path.read_text())
+        except Exception:
+            continue
+        if not isinstance(payload, dict):
+            continue
+        if payload.get("desktop_managed") is True:
+            return True
+        if str(payload.get("product_mode") or "").strip().lower() == "desktop_closed_product":
+            return True
+    desktop_markers = [
+        base / "Applications" / "NEXO Desktop.app",
+        base / "Library" / "Application Support" / "NEXO Desktop",
+        base / ".local" / "share" / "NEXO Desktop",
+        base / ".config" / "NEXO Desktop",
+    ]
+    if sys.platform == "darwin" and not explicit_home:
+        desktop_markers.insert(0, Path("/Applications/NEXO Desktop.app"))
+    for marker in desktop_markers:
+        try:
+            if marker.exists():
+                return True
+        except Exception:
+            continue
+    return False
+
+
+def _managed_claude_prefix(home: Path | None = None) -> Path:
+    explicit = str(os.environ.get("NEXO_CLAUDE_PREFIX", "")).strip()
+    if explicit:
+        return Path(explicit).expanduser()
+    return (home or _user_home()) / ".nexo" / "runtime" / "bootstrap" / "npm-global"
+
+
+def _path_within(candidate: Path, parent: Path) -> bool:
+    try:
+        candidate.expanduser().resolve(strict=False).relative_to(parent.expanduser().resolve(strict=False))
+        return True
+    except Exception:
+        return False
+
+
+def _managed_claude_binary(home: Path | None = None) -> str:
+    base = (home or _user_home()).expanduser()
+    managed_prefix = _managed_claude_prefix(base)
+    persisted_paths = [
+        base / ".nexo" / "config" / "claude-cli-path",
+        base / ".nexo" / "personal" / "config" / "claude-cli-path",
+    ]
+    candidates: list[Path] = []
+    for persisted in persisted_paths:
+        try:
+            raw = persisted.read_text(encoding="utf-8").strip()
+        except Exception:
+            raw = ""
+        if raw:
+            candidates.append(Path(raw))
+    candidates.append(managed_prefix / "bin" / "claude")
+    for candidate in candidates:
+        try:
+            if not candidate.exists():
+                continue
+        except Exception:
+            continue
+        if _path_within(candidate, managed_prefix):
+            return str(candidate)
+    return ""
 
 
 def _coerce_bool(value, default: bool) -> bool:
@@ -584,7 +664,10 @@ def _which_with_nvm(name: str, home: Path | None = None) -> str:
 def detect_installed_clients(user_home: str | os.PathLike[str] | None = None) -> dict[str, dict]:
     home = Path(user_home).expanduser() if user_home else _user_home()
 
-    claude_bin = os.environ.get("CLAUDE_BIN", "").strip() or _which_with_nvm("claude", home)
+    if _desktop_product_requested(home):
+        claude_bin = _managed_claude_binary(home)
+    else:
+        claude_bin = os.environ.get("CLAUDE_BIN", "").strip() or _which_with_nvm("claude", home)
     codex_bin = os.environ.get("CODEX_BIN", "").strip() or _which_with_nvm("codex", home)
 
     if sys.platform == "darwin":

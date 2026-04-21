@@ -180,6 +180,23 @@ def test_detect_installed_clients_finds_managed_bootstrap_claude_binary(monkeypa
     assert detected["claude_code"]["detected_by"] == "binary"
 
 
+def test_detect_installed_clients_ignores_global_claude_when_desktop_managed(monkeypatch, tmp_path):
+    import client_preferences
+
+    home = tmp_path / "home"
+
+    monkeypatch.setenv("NEXO_DESKTOP_MANAGED", "1")
+    monkeypatch.setattr(client_preferences.shutil, "which", lambda name: f"/usr/local/bin/{name}" if name == "claude" else None)
+    monkeypatch.setattr(client_preferences, "sys", type("SysStub", (), {"platform": "darwin"})())
+    monkeypatch.setattr(client_preferences, "os", type("OSStub", (), {"name": "posix", "environ": dict(os.environ)})())
+
+    detected = client_preferences.detect_installed_clients(home)
+
+    assert detected["claude_code"]["installed"] is False
+    assert detected["claude_code"]["path"] == ""
+    assert detected["claude_code"]["detected_by"] == "missing"
+
+
 def test_normalize_client_preferences_backfills_existing_codex_artifacts(tmp_path):
     import client_preferences
 

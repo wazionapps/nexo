@@ -36,6 +36,7 @@ New structure (post-F0.6):
         ├── data/              (nexo.db, *.db)
         ├── logs/
         ├── operations/
+        ├── state/             (lightweight runtime JSON state)
         ├── backups/
         ├── memory/
         ├── coordination/
@@ -275,6 +276,14 @@ def logs_dir() -> Path:
 def operations_dir() -> Path:
     new = runtime_dir() / "operations"
     legacy = home() / "operations"
+    if not new.exists() and legacy.exists():
+        return legacy
+    return new
+
+
+def runtime_state_dir() -> Path:
+    new = runtime_dir() / "state"
+    legacy = home() / "state"
     if not new.exists() and legacy.exists():
         return legacy
     return new

@@ -7,6 +7,7 @@ import os
 import re
 from pathlib import Path
 
+from calibration_runtime import load_runtime_calibration
 from client_preferences import (
     BACKEND_NONE,
     CLIENT_CLAUDE_CODE,
@@ -82,7 +83,7 @@ def _resolve_operator_name(nexo_home: Path, explicit: str = "") -> str:
     env_name = os.environ.get("NEXO_NAME", "").strip()
     if env_name:
         return env_name
-    calibration = _read_json_file(nexo_home / "personal" / "brain" / "calibration.json")
+    calibration = load_runtime_calibration(nexo_home / "personal" / "brain" / "calibration.json")
     user_payload = calibration.get("user")
     if isinstance(user_payload, dict):
         candidate = str(user_payload.get("assistant_name", "")).strip()

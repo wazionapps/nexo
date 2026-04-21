@@ -135,28 +135,6 @@ def _immutable_files_for_mode(mode: str) -> set[str]:
         return set(GLOBAL_IMMUTABLE_FILES)
     return set(GLOBAL_IMMUTABLE_FILES) | set(STANDARD_MODE_IMMUTABLE_FILES)
 
-# ── Automation backend pathing ───────────────────────────────────────────
-def _resolve_claude_cli() -> Path:
-    """Find claude CLI: saved path > PATH > common locations."""
-    import shutil as _shutil
-    saved = paths.config_dir() / "claude-cli-path"
-    if saved.exists():
-        p = Path(saved.read_text().strip())
-        if p.exists():
-            return p
-    found = _shutil.which("claude")
-    if found:
-        return Path(found)
-    for candidate in [
-        Path.home() / ".local" / "bin" / "claude",
-        Path.home() / ".npm-global" / "bin" / "claude",
-        Path("/usr/local/bin/claude"),
-    ]:
-        if candidate.exists():
-            return candidate
-    return Path.home() / ".local" / "bin" / "claude"
-
-CLAUDE_CLI = _resolve_claude_cli()
 PUBLIC_ALLOWED_PREFIXES = (
     "src/",
     "bin/",

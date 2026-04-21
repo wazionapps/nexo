@@ -25,6 +25,11 @@ from client_preferences import (
     normalize_client_preferences,
     resolve_client_runtime_profile,
 )
+from claude_cli import (
+    desktop_product_requested as _desktop_product_requested,
+    managed_claude_binary as _managed_claude_binary,
+    managed_claude_prefix as _managed_claude_prefix,
+)
 from cron_recovery import is_cron_enabled, resolve_declared_schedule, should_run_at_load
 from doctor.models import DoctorCheck, safe_check
 
@@ -1815,10 +1820,30 @@ def check_client_backend_preferences(fix: bool = False) -> DoctorCheck:
     severity = "info"
     status = "healthy"
 
+    if _desktop_product_requested(Path.home()):
+        managed_prefix = _managed_claude_prefix(Path.home())
+        managed_expected = managed_prefix / "bin" / "claude"
+        managed_path = _managed_claude_binary(Path.home())
+        if not managed_path:
+            status = "critical"
+            severity = "error"
+            evidence.append(
+                "desktop-managed Claude runtime missing or drifted "
+                f"(expected under `{managed_expected}`)"
+            )
+            repair_plan.append(
+                "Run `nexo update` or `nexo clients sync` from the Desktop-managed install "
+                "so the bundled Claude runtime is restored under "
+                "`~/.nexo/runtime/bootstrap/npm-global`"
+            )
+        else:
+            evidence.append(f"desktop-managed Claude runtime: {managed_path}")
+
     default_info = detected.get(default_terminal, {})
     if not default_info.get("installed"):
-        status = "degraded"
-        severity = "warn"
+        if status == "healthy":
+            status = "degraded"
+            severity = "warn"
         evidence.append(f"default terminal client `{default_terminal}` is selected but not installed")
         repair_plan.append(f"Install {default_terminal} or switch the default terminal client in schedule.json")
 
@@ -1827,19 +1852,22 @@ def check_client_backend_preferences(fix: bool = False) -> DoctorCheck:
             continue
         info = detected.get(client_key, {})
         if not info.get("installed"):
-            status = "degraded"
-            severity = "warn"
+            if status == "healthy":
+                status = "degraded"
+                severity = "warn"
             evidence.append(f"interactive client `{client_key}` is enabled but not installed")
 
     if automation_enabled:
         backend_info = detected.get(automation_backend, {})
         if automation_backend == "none":
-            status = "degraded"
-            severity = "warn"
+            if status == "healthy":
+                status = "degraded"
+                severity = "warn"
             evidence.append("automation is enabled but no automation backend is configured")
         elif not backend_info.get("installed"):
-            status = "degraded"
-            severity = "warn"
+            if status == "healthy":
+                status = "degraded"
+                severity = "warn"
             evidence.append(f"automation backend `{automation_backend}` is enabled but not installed")
             repair_plan.append(f"Install {automation_backend} or disable automation in schedule.json")
 
