@@ -2490,6 +2490,21 @@ def check_protocol_compliance() -> DoctorCheck:
                                 (active_cutoff,),
                             ).fetchall()
                         }
+                    live_guard_task_ids: set[str] = set()
+                    if {
+                        "task_id", "session_id", "status", "guard_has_blocking"
+                    }.issubset(protocol_task_cols):
+                        has_guard_ack = "guard_acknowledged" in protocol_task_cols
+                        for row in tasks:
+                            if str(row["status"] or "") != "open":
+                                continue
+                            if str(row["session_id"] or "") not in active_session_ids:
+                                continue
+                            if not bool(row["guard_has_blocking"]):
+                                continue
+                            if has_guard_ack and bool(row["guard_acknowledged"]):
+                                continue
+                            live_guard_task_ids.add(str(row["task_id"] or ""))
                     live_guard_debt = 0
                     if {"task_id", "session_id"}.issubset(protocol_debt_cols):
                         task_status_expr = "'' AS task_status"
@@ -2514,15 +2529,17 @@ def check_protocol_compliance() -> DoctorCheck:
                             severity = str(row["severity"] or "warn")
                             debt_type = str(row["debt_type"] or "unknown")
                             session_id = str(row["session_id"] or "")
+                            task_id = str(row["task_id"] or "")
                             task_status = str(row["task_status"] or "")
                             if (
                                 debt_type == "unacknowledged_guard_blocking"
                                 and task_status == "open"
                                 and session_id in active_session_ids
                             ):
-                                live_guard_debt += 1
+                                live_guard_task_ids.add(task_id or f"debt:{session_id}:{row['created_at']}")
                                 continue
                             debt_counter[(severity, debt_type)] = debt_counter.get((severity, debt_type), 0) + 1
+                        live_guard_debt = len(live_guard_task_ids)
                         debt_rows = [
                             {"severity": severity, "debt_type": debt_type, "total": total}
                             for (severity, debt_type), total in sorted(

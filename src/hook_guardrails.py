@@ -373,7 +373,7 @@ def register_claude_session_alias(conn, sid: str, claude_session_id: str) -> boo
 def _find_open_task_for_file(conn, sid: str, filepath: str) -> dict | None:
     target = _normalize_file_path(filepath)
     rows = conn.execute(
-        """SELECT task_id, files, guard_has_blocking, task_type, plan, unknowns,
+        """SELECT task_id, files, guard_has_blocking, guard_acknowledged, task_type, plan, unknowns,
                   verification_step, opened_with_guard, must_change_log, must_verify
            FROM protocol_tasks
            WHERE session_id = ? AND status = 'open'
@@ -393,7 +393,7 @@ def _find_open_task_for_file(conn, sid: str, filepath: str) -> dict | None:
 
 def _find_any_open_task(conn, sid: str) -> dict | None:
     row = conn.execute(
-        """SELECT task_id, files, guard_has_blocking, task_type, plan, unknowns,
+        """SELECT task_id, files, guard_has_blocking, guard_acknowledged, task_type, plan, unknowns,
                   verification_step, opened_with_guard, must_change_log, must_verify
            FROM protocol_tasks
            WHERE session_id = ? AND status = 'open'
@@ -457,18 +457,34 @@ def _find_open_debt(conn, *, session_id: str, task_id: str, debt_type: str, file
     return dict(row) if row else None
 
 
-def _find_task_guard_blocking_debt(conn, task_id: str) -> dict | None:
-    row = conn.execute(
-        """SELECT *
-           FROM protocol_debt
-           WHERE status = 'open'
-             AND task_id = ?
-             AND debt_type = 'unacknowledged_guard_blocking'
-           ORDER BY id DESC
-           LIMIT 1""",
-        (task_id,),
-    ).fetchone()
-    return dict(row) if row else None
+def _task_requires_guard_ack(task: dict | None) -> bool:
+    if not task:
+        return False
+    if not bool(task.get("guard_has_blocking")):
+        return False
+    return not bool(task.get("guard_acknowledged"))
+
+
+def _ensure_unacknowledged_guard_blocking_debt(
+    conn,
+    *,
+    session_id: str,
+    task_id: str,
+    filepath: str,
+    tool_name: str,
+) -> dict:
+    return _ensure_protocol_debt(
+        conn,
+        session_id=session_id,
+        task_id=task_id,
+        debt_type="unacknowledged_guard_blocking",
+        severity="error",
+        evidence=(
+            f"{tool_name} attempted on {filepath} before acknowledging blocking guard rules "
+            f"for task {task_id}."
+        ),
+        file_token=filepath,
+    )
 
 
 def _ensure_protocol_debt(
@@ -863,8 +879,14 @@ def process_pre_tool_event(payload: dict) -> dict:
             )
             continue
 
-        guard_debt = _find_task_guard_blocking_debt(conn, task["task_id"])
-        if guard_debt:
+        if _task_requires_guard_ack(task):
+            _ensure_unacknowledged_guard_blocking_debt(
+                conn,
+                session_id=sid,
+                task_id=task["task_id"],
+                filepath=filepath,
+                tool_name=tool_name,
+            )
             debt = _ensure_protocol_debt(
                 conn,
                 session_id=sid,
@@ -994,11 +1016,17 @@ def process_tool_event(payload: dict) -> dict:
             )
             continue
 
-        guard_debt = _find_task_guard_blocking_debt(conn, task["task_id"])
-        if guard_debt:
+        if _task_requires_guard_ack(task):
+            _ensure_unacknowledged_guard_blocking_debt(
+                conn,
+                session_id=sid,
+                task_id=task["task_id"],
+                filepath=filepath,
+                tool_name=tool_name,
+            )
             evidence = (
                 f"{tool_name} touched conditioned file {filepath} linked to learning IDs {learning_ids} "
-                f"before acknowledging blocking guard debt for task {task['task_id']}."
+                f"before acknowledging blocking guard rules for task {task['task_id']}."
             )
             debt = _ensure_protocol_debt(
                 conn,

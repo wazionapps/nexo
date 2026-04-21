@@ -460,6 +460,8 @@ def _m22_protocol_discipline_tables(conn):
             opened_with_guard INTEGER NOT NULL DEFAULT 0,
             opened_with_rules INTEGER NOT NULL DEFAULT 0,
             guard_has_blocking INTEGER NOT NULL DEFAULT 0,
+            guard_acknowledged INTEGER NOT NULL DEFAULT 0,
+            guard_acknowledged_at TEXT DEFAULT NULL,
             guard_summary TEXT DEFAULT '',
             must_verify INTEGER NOT NULL DEFAULT 0,
             must_change_log INTEGER NOT NULL DEFAULT 0,
@@ -494,6 +496,8 @@ def _m22_protocol_discipline_tables(conn):
     _migrate_add_index(conn, "idx_protocol_tasks_session", "protocol_tasks", "session_id")
     _migrate_add_index(conn, "idx_protocol_tasks_status", "protocol_tasks", "status")
     _migrate_add_index(conn, "idx_protocol_tasks_opened", "protocol_tasks", "opened_at")
+    _migrate_add_column(conn, "protocol_tasks", "guard_acknowledged", "INTEGER NOT NULL DEFAULT 0")
+    _migrate_add_column(conn, "protocol_tasks", "guard_acknowledged_at", "TEXT DEFAULT NULL")
     _migrate_add_index(conn, "idx_protocol_debt_session", "protocol_debt", "session_id")
     _migrate_add_index(conn, "idx_protocol_debt_task", "protocol_debt", "task_id")
     _migrate_add_index(conn, "idx_protocol_debt_status", "protocol_debt", "status")

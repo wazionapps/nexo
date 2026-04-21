@@ -160,7 +160,7 @@ def test_task_open_detects_high_stakes_from_cost_reputation_and_product_context(
     assert payload["decision_support"]["required"] is True
 
 
-def test_task_open_with_blocking_guard_creates_guard_debt(monkeypatch):
+def test_task_open_with_blocking_guard_sets_pending_ack_state_without_opening_debt(monkeypatch):
     from db import get_db
     from plugins.protocol import handle_task_open
 
@@ -183,12 +183,17 @@ def test_task_open_with_blocking_guard_creates_guard_debt(monkeypatch):
     assert payload["guard"]["blocking_rule_ids"] == [41]
     assert payload["next_action"] == "Resolve the blocking guard warnings before editing."
     assert payload["response_contract"]["next_action"] == payload["next_action"]
-    debt = get_db().execute(
-        "SELECT debt_type, status FROM protocol_debt WHERE task_id = ?",
+    row = get_db().execute(
+        "SELECT guard_has_blocking, guard_acknowledged FROM protocol_tasks WHERE task_id = ?",
         (payload["task_id"],),
     ).fetchone()
-    assert debt["debt_type"] == "unacknowledged_guard_blocking"
-    assert debt["status"] == "open"
+    assert row["guard_has_blocking"] == 1
+    assert row["guard_acknowledged"] == 0
+    debt_count = get_db().execute(
+        "SELECT COUNT(*) FROM protocol_debt WHERE task_id = ? AND debt_type = 'unacknowledged_guard_blocking'",
+        (payload["task_id"],),
+    ).fetchone()[0]
+    assert debt_count == 0
 
 
 def test_task_open_requires_files_for_edit_in_strict_mode(monkeypatch):
@@ -307,12 +312,17 @@ def test_task_acknowledge_guard_resolves_guard_debt(monkeypatch):
 
     assert acknowledged["ok"] is True
     assert acknowledged["acknowledged_rule_ids"] == [41]
+    row = get_db().execute(
+        "SELECT guard_acknowledged, guard_acknowledged_at FROM protocol_tasks WHERE task_id = ?",
+        (opened["task_id"],),
+    ).fetchone()
+    assert row["guard_acknowledged"] == 1
+    assert row["guard_acknowledged_at"] is not None
     debt = get_db().execute(
         "SELECT status, resolution FROM protocol_debt WHERE task_id = ? AND debt_type = 'unacknowledged_guard_blocking'",
         (opened["task_id"],),
     ).fetchone()
-    assert debt["status"] == "resolved"
-    assert "Canonical file rule reviewed" in debt["resolution"]
+    assert debt is None
 
 
 def test_task_close_resolves_guard_debt_when_no_file_changes_happened(monkeypatch):
@@ -347,12 +357,11 @@ def test_task_close_resolves_guard_debt_when_no_file_changes_happened(monkeypatc
 
     assert closed["ok"] is True
     assert closed["status"] == "clean"
-    debt = get_db().execute(
-        "SELECT status, resolution FROM protocol_debt WHERE task_id = ? AND debt_type = 'unacknowledged_guard_blocking'",
+    debt_count = get_db().execute(
+        "SELECT COUNT(*) FROM protocol_debt WHERE task_id = ? AND debt_type = 'unacknowledged_guard_blocking' AND status = 'open'",
         (opened["task_id"],),
-    ).fetchone()
-    assert debt["status"] == "resolved"
-    assert "without touching guarded files" in debt["resolution"]
+    ).fetchone()[0]
+    assert debt_count == 0
 
 
 def test_task_close_keeps_guard_debt_open_when_guard_touch_violation_exists(monkeypatch):
@@ -379,6 +388,13 @@ def test_task_close_keeps_guard_debt_open_when_guard_touch_violation_exists(monk
         severity="error",
         task_id=opened["task_id"],
         evidence="write attempt hit guarded file before acknowledgement",
+    )
+    create_protocol_debt(
+        sid,
+        "unacknowledged_guard_blocking",
+        severity="error",
+        task_id=opened["task_id"],
+        evidence="write attempt left the blocking guard unresolved",
     )
     closed = json.loads(
         handle_task_close(

@@ -159,6 +159,7 @@ from db._protocol import (
     VALID_TASK_TYPES,
     VALID_CLOSE_OUTCOMES,
     create_protocol_task, get_protocol_task, close_protocol_task,
+    set_protocol_task_guard_acknowledged,
     create_protocol_debt, resolve_protocol_debts, list_protocol_debts,
     protocol_compliance_summary,
     create_cortex_evaluation, get_cortex_evaluation, list_cortex_evaluations,

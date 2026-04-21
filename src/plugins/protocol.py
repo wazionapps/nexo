@@ -25,6 +25,7 @@ from db import (
     get_db,
     get_followups,
     get_protocol_task,
+    set_protocol_task_guard_acknowledged,
     list_workflow_goals,
     list_workflow_runs,
     list_protocol_debts,
@@ -1025,16 +1026,7 @@ def handle_task_open(
         ttl_hours=24,
     )
     blocking_rule_ids = _extract_guard_blocking_ids(guard_summary) if guard_has_blocking else []
-    if guard_has_blocking:
-        _record_debt(
-            task["session_id"],
-            task["task_id"],
-            "unacknowledged_guard_blocking",
-            severity="error",
-            evidence=_guard_excerpt(guard_summary),
-            debts=debts_created,
-        )
-    elif clean_type in ACTION_TASKS and (anticipatory_warnings or attention["status"] in {"split", "overloaded"}):
+    if not guard_has_blocking and clean_type in ACTION_TASKS and (anticipatory_warnings or attention["status"] in {"split", "overloaded"}):
         preventive_followup = _create_preventive_followup(
             clean_goal,
             attention=attention,
@@ -1549,6 +1541,18 @@ def handle_task_acknowledge_guard(
             ensure_ascii=False,
             indent=2,
         )
+    if task.get("guard_acknowledged"):
+        return json.dumps(
+            {
+                "ok": True,
+                "task_id": task_id,
+                "acknowledged_rule_ids": _extract_guard_blocking_ids(task.get("guard_summary") or ""),
+                "resolved_debts": 0,
+                "next_action": "Guard rules were already acknowledged for this task.",
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
 
     expected = _extract_guard_blocking_ids(task.get("guard_summary") or "")
     provided = sorted({int(item) for item in _parse_list(learning_ids) if str(item).strip().isdigit()})
@@ -1564,6 +1568,7 @@ def handle_task_acknowledge_guard(
             indent=2,
         )
 
+    set_protocol_task_guard_acknowledged(task_id, acknowledged=True)
     resolved = resolve_protocol_debts(
         task_id=task_id,
         debt_types=["unacknowledged_guard_blocking"],

@@ -139,13 +139,6 @@ def test_process_tool_event_records_debt_when_writing_before_guard_ack(guardrail
         guard_has_blocking=True,
         guard_summary="BLOCKING RULES (resolve BEFORE writing):\n  #41 [FILE RULE:/repo/src/plugins/guard.py]: Read the canonical rule first\n",
     )
-    db.create_protocol_debt(
-        sid,
-        "unacknowledged_guard_blocking",
-        severity="error",
-        task_id=task["task_id"],
-        evidence="Guard rule still unacknowledged for /repo/src/plugins/guard.py",
-    )
 
     result = hook_guardrails.process_tool_event(
         {
@@ -162,6 +155,11 @@ def test_process_tool_event_records_debt_when_writing_before_guard_ack(guardrail
     ).fetchone()
     assert debt["task_id"] == task["task_id"]
     assert debt["severity"] == "error"
+    generic_guard_debt = db.get_db().execute(
+        "SELECT task_id, severity FROM protocol_debt WHERE debt_type = 'unacknowledged_guard_blocking'"
+    ).fetchone()
+    assert generic_guard_debt["task_id"] == task["task_id"]
+    assert generic_guard_debt["severity"] == "error"
 
 
 def test_process_tool_event_warns_on_non_trivial_work_without_task_open(guardrail_env):
@@ -342,13 +340,6 @@ def test_process_pre_tool_event_learning_mode_explains_guard_ack_requirement(gua
         guard_has_blocking=True,
         guard_summary="BLOCKING RULES",
     )
-    db.create_protocol_debt(
-        sid,
-        "unacknowledged_guard_blocking",
-        severity="error",
-        task_id=task["task_id"],
-        evidence="Guard rule still unacknowledged for /repo/src/plugins/guard.py",
-    )
 
     result = hook_guardrails.process_pre_tool_event(
         {
@@ -388,13 +379,6 @@ def test_process_pre_tool_event_blocks_bash_write_until_guard_ack(guardrail_env,
         opened_with_guard=True,
         guard_has_blocking=True,
         guard_summary=f"BLOCKING RULES (resolve BEFORE writing):\n  #128 [FILE RULE:{target}]: Keep personal/core split\n",
-    )
-    db.create_protocol_debt(
-        sid,
-        "unacknowledged_guard_blocking",
-        severity="error",
-        task_id=task["task_id"],
-        evidence=f"Guard rule still unacknowledged for {target}",
     )
 
     result = hook_guardrails.process_pre_tool_event(
