@@ -38,6 +38,9 @@ def test_prompt_catalog_dir_exists_and_contains_automation_prompts():
     assert (core_prompts.PROMPTS_DIR / "followup-runner.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "followup-runner-operator-attention-context.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "followup-runner-operator-attention-question.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "heartbeat-diary-overdue.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "heartbeat-guard-reminder.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "heartbeat-learning-reminder.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "immune-triage.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "interactive-startup.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "json-object-only.md").is_file()
@@ -249,6 +252,13 @@ def test_render_core_prompt_supports_enforcer_and_startup_templates():
     codex_contract = core_prompts.render_core_prompt("codex-protocol-contract")
     server_instructions = core_prompts.render_core_prompt("server-mcp-instructions", assistant_name="Nero")
     inbox_reminder = core_prompts.render_core_prompt("post-tool-inbox-reminder", pending="3")
+    heartbeat_diary = core_prompts.render_core_prompt(
+        "heartbeat-diary-overdue",
+        heartbeat_count=14,
+        active_minutes=37,
+    )
+    heartbeat_guard = core_prompts.render_core_prompt("heartbeat-guard-reminder")
+    heartbeat_learning = core_prompts.render_core_prompt("heartbeat-learning-reminder")
     watchdog = core_prompts.render_core_prompt(
         "watchdog-repair",
         fail_details="[core] demo failure",
@@ -296,6 +306,10 @@ def test_render_core_prompt_supports_enforcer_and_startup_templates():
     assert "Nero — cognitive co-operator." in server_instructions
     assert "R26b silent enforcement" in server_instructions
     assert "3 unread inbox message(s)" in inbox_reminder
+    assert "14 heartbeats, 37min active" in heartbeat_diary
+    assert "nexo_session_diary_write" in heartbeat_diary
+    assert "nexo_guard_check" in heartbeat_guard
+    assert "nexo_learning_add" in heartbeat_learning
     assert "[core] demo failure" in watchdog
     assert "/Users/franciscoc/.nexo/runtime/logs/watchdog-repair-result.log" in watchdog
 

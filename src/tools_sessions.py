@@ -9,6 +9,7 @@ import secrets
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
+from core_prompts import render_core_prompt
 from db import (
     register_session, update_session, complete_session,
     get_active_sessions, clean_stale_sessions, search_sessions,
@@ -715,7 +716,13 @@ def _handle_heartbeat_inner(sid: str, task: str, context_hint: str = '') -> str:
         # DIARY_OVERDUE: >10 heartbeats OR >30 minutes, without a diary
         if not has_diary and (_hb_count > 10 or age_seconds >= 1800):
             parts.append("")
-            parts.append(f"⚠ DIARY_OVERDUE: {_hb_count} heartbeats, {int(age_seconds/60)}min active, no diary. Write nexo_session_diary_write NOW.")
+            parts.append(
+                render_core_prompt(
+                    "heartbeat-diary-overdue",
+                    heartbeat_count=_hb_count,
+                    active_minutes=int(age_seconds / 60),
+                )
+            )
 
     # Guard check reminder: if context_hint mentions code editing and no guard_check this session
     if context_hint and _hint_suggests_code_edit(context_hint):
@@ -725,7 +732,7 @@ def _handle_heartbeat_inner(sid: str, task: str, context_hint: str = '') -> str:
             ).fetchone()[0]
             if guard_used == 0:
                 parts.append("")
-                parts.append("⚠ GUARD REMINDER: You appear to be editing code but haven't called `nexo_guard_check` this session. Do it NOW before any edits.")
+                parts.append(render_core_prompt("heartbeat-guard-reminder"))
         except Exception:
             pass  # guard_log table may not exist in older installs
 
@@ -733,10 +740,7 @@ def _handle_heartbeat_inner(sid: str, task: str, context_hint: str = '') -> str:
         try:
             if not _recent_learning_capture_exists(conn, sid, window_seconds=300):
                 parts.append("")
-                parts.append(
-                    "⚠ LEARNING REMINDER: This looks like a user correction and no recent learning was captured. "
-                    "If it revealed a reusable pattern, write `nexo_learning_add` NOW."
-                )
+                parts.append(render_core_prompt("heartbeat-learning-reminder"))
         except Exception:
             pass  # Best-effort reminder only
 
