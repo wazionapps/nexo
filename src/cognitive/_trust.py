@@ -1,4 +1,5 @@
 """NEXO Cognitive — Trust scoring, sentiment, dissonance."""
+import os
 import re
 import numpy as np
 from datetime import datetime, timedelta, timezone
@@ -267,6 +268,72 @@ SENTIMENT_INTENTS = (
     "neutral",
 )
 
+_LOCAL_SENTIMENT_CONFIDENCE_THRESHOLD = float(
+    os.environ.get("NEXO_SENTIMENT_LOCAL_CONFIDENCE", "0.68")
+)
+_LOCAL_SENTIMENT_CACHE_TTL_SECONDS = int(
+    os.environ.get("NEXO_SENTIMENT_LOCAL_CACHE_TTL", "21600")
+)
+_LOCAL_SENTIMENT_CLASSIFIER = None
+_LOCAL_SENTIMENT_CACHE: dict[str, dict] = {}
+_LOCAL_SENTIMENT_LABELS = (
+    ("The user is correcting the assistant or saying the assistant is wrong", "correction"),
+    ("The user is acknowledging or confirming that the assistant helped", "acknowledgement"),
+    ("The user is asking a question or requesting clarification", "question"),
+    ("The user is giving an instruction or a direct task to execute", "instruction"),
+    ("The user needs immediate action because the situation is urgent", "urgency"),
+    ("The user is complaining or expressing frustration", "complaint"),
+    ("The user is praising the assistant or celebrating the result", "praise"),
+    ("The message is neutral and mostly informational", "neutral"),
+)
+
+
+def _local_sentiment_cache_key(text: str) -> str:
+    return " ".join((text or "").lower().split())[:600]
+
+
+def _local_classify_sentiment_intent(text: str) -> dict:
+    key = _local_sentiment_cache_key(text)
+    if len(key) < 12:
+        return {"available": False, "label": None, "reason": "text_too_short"}
+
+    import time
+
+    now = time.time()
+    cached = _LOCAL_SENTIMENT_CACHE.get(key)
+    if cached and cached.get("expires_at", 0) > now:
+        return {k: v for k, v in cached.items() if k != "expires_at"}
+
+    global _LOCAL_SENTIMENT_CLASSIFIER
+    try:
+        if _LOCAL_SENTIMENT_CLASSIFIER is None:
+            from classifier_local import LocalZeroShotClassifier
+
+            _LOCAL_SENTIMENT_CLASSIFIER = LocalZeroShotClassifier(
+                confidence_floor=_LOCAL_SENTIMENT_CONFIDENCE_THRESHOLD,
+            )
+        if not _LOCAL_SENTIMENT_CLASSIFIER.is_available():
+            return {"available": False, "label": None, "reason": "classifier_unavailable"}
+        label_texts = [label for label, _intent in _LOCAL_SENTIMENT_LABELS]
+        intent_by_label = {label: intent for label, intent in _LOCAL_SENTIMENT_LABELS}
+        result = _LOCAL_SENTIMENT_CLASSIFIER.classify(text, label_texts)
+        if result is None:
+            return {"available": False, "label": None, "reason": "classifier_failed"}
+        intent = intent_by_label.get(result.label)
+        payload = {
+            "available": intent in SENTIMENT_INTENTS,
+            "label": intent,
+            "confidence": float(result.confidence or 0.0),
+            "reason": "local_zero_shot",
+        }
+        _LOCAL_SENTIMENT_CACHE[key] = {
+            **payload,
+            "expires_at": now + _LOCAL_SENTIMENT_CACHE_TTL_SECONDS,
+        }
+        return payload
+    except Exception as exc:
+        return {"available": False, "label": None, "reason": f"classifier_error:{exc}"}
+
 
 def detect_sentiment(text: str) -> dict:
     """Analyze user's text for sentiment signals.
@@ -366,6 +433,29 @@ def detect_sentiment(text: str) -> dict:
         )
     )
 
+    semantic_override = False
+    local_intent = None
+    if (
+        len(text.strip()) >= 18
+        and (
+            not any([
+                correction_hits,
+                ack_hits,
+                instruction_hits,
+                question_hits,
+                urgency_hits,
+                positive_hits,
+            ])
+            or (sentiment == "negative" and not correction_hits and not question_hits)
+            or abs(pos_score - neg_score) <= 1
+        )
+    ):
+        local_result = _local_classify_sentiment_intent(text)
+        confidence = float(local_result.get("confidence", 0.0) or 0.0)
+        if local_result.get("available") and confidence >= _LOCAL_SENTIMENT_CONFIDENCE_THRESHOLD:
+            local_intent = local_result.get("label")
+            semantic_override = isinstance(local_intent, str)
+
     # Intent: prioritized enum — correction > question > instruction >
     # urgency > acknowledgement/praise > complaint > neutral.
     if is_correction:
@@ -384,6 +474,33 @@ def detect_sentiment(text: str) -> dict:
         intent = "complaint"
     else:
         intent = "neutral"
+
+    if semantic_override and local_intent in SENTIMENT_INTENTS:
+        intent = local_intent
+        if local_intent == "correction":
+            is_correction = True
+            sentiment = "negative"
+            intensity = max(float(intensity), 0.7)
+            guidance = "MODE: Ultra-concise. Zero explanations. Solve and show result."
+            valence = min(valence, -0.6)
+        elif local_intent == "urgency":
+            sentiment = "urgent"
+            intensity = max(float(intensity), 0.8)
+            guidance = "MODE: Immediate action. No preambles."
+            valence = min(valence, -0.2)
+        elif local_intent == "complaint":
+            sentiment = "negative"
+            intensity = max(float(intensity), 0.65)
+            guidance = "MODE: Concise. Less context, more direct action."
+            valence = min(valence, -0.45)
+        elif local_intent in {"acknowledgement", "praise"}:
+            sentiment = "positive"
+            intensity = max(float(intensity), 0.6)
+            if not guidance:
+                guidance = "MODE: Normal. Good time to suggest backlog ideas or improvements."
+            valence = max(valence, 0.45)
+        elif local_intent in {"question", "instruction"} and sentiment == "neutral":
+            intensity = max(float(intensity), 0.5)
 
     return {
         "sentiment": sentiment,
