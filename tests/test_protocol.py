@@ -228,6 +228,40 @@ def test_task_open_rejects_invalid_task_type():
     assert payload["valid_task_types"] == ["analyze", "answer", "delegate", "edit", "execute"]
 
 
+def test_task_open_extracts_plan_steps_from_goal_when_plan_field_is_empty():
+    from db import get_db
+    from plugins.protocol import handle_task_open
+
+    sid = _register_session("nexo-1005-2009")
+    payload = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal=(
+                "Prepare the guarded edit:\n"
+                "1. inspect the current file\n"
+                "2. patch the needed section\n"
+                "3. run the targeted verification"
+            ),
+            task_type="edit",
+            area="nexo-ops",
+            files="/tmp/x",
+            verification_step="run the targeted verification",
+        )
+    )
+
+    assert payload["ok"] is True
+    assert "No plan defined for action task" not in (payload.get("blocked_reason") or "")
+    row = get_db().execute(
+        "SELECT plan FROM protocol_tasks WHERE task_id = ?",
+        (payload["task_id"],),
+    ).fetchone()
+    assert json.loads(row["plan"]) == [
+        "inspect the current file",
+        "patch the needed section",
+        "run the targeted verification",
+    ]
+
+
 def test_confidence_check_rejects_invalid_task_type():
     from plugins.protocol import handle_confidence_check
 

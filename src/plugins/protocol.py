@@ -188,6 +188,11 @@ CLOSE_OUTCOME_ALIASES = {
     "completed": "done",
 }
 
+_GOAL_PLAN_LINE_RE = re.compile(
+    r"^\s*(?:[-*]\s+|\d+[.)]\s+|(?:paso|step)\s*\d+\s*:\s+)",
+    re.IGNORECASE,
+)
+
 
 def _parse_list(value) -> list[str]:
     if isinstance(value, list):
@@ -206,6 +211,29 @@ def _parse_list(value) -> list[str]:
             return [str(item).strip() for item in parsed if str(item).strip()]
         return [item.strip() for item in stripped.split(",") if item.strip()]
     return [str(value).strip()]
+
+
+def _extract_plan_from_goal(goal: str) -> list[str]:
+    """Lift explicit numbered/bulleted steps embedded in `goal`.
+
+    This is intentionally structural, not semantic: it only activates when
+    the goal already contains clear plan lines (e.g. `1. inspect`, `- patch`,
+    `Paso 2: verify`). It prevents `task_open` from complaining about a
+    missing plan when the caller already wrote one inside the goal text.
+    """
+    if not goal:
+        return []
+    extracted: list[str] = []
+    for raw_line in str(goal).splitlines():
+        if not raw_line.strip():
+            continue
+        match = _GOAL_PLAN_LINE_RE.match(raw_line)
+        if not match:
+            continue
+        step = raw_line[match.end():].strip()
+        if step:
+            extracted.append(step)
+    return extracted if len(extracted) >= 2 else []
 
 
 def _parse_bool(value) -> bool:
@@ -785,10 +813,14 @@ def handle_task_open(
             ensure_ascii=False,
             indent=2,
         )
+    plan_items = _parse_list(plan)
+    if not plan_items:
+        plan_items = _extract_plan_from_goal(clean_goal)
+
     state = {
         "goal": clean_goal,
         "task_type": clean_type,
-        "plan": _parse_list(plan),
+        "plan": plan_items,
         "known_facts": _parse_list(known_facts),
         "unknowns": _parse_list(unknowns),
         "constraints": _parse_list(constraints),
