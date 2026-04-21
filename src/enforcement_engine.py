@@ -51,6 +51,11 @@ except ImportError:  # pragma: no cover
     _detect_session_end_intent = None  # type: ignore
 
 try:
+    from guard_verbal_ack import detect_guard_verbal_ack as _detect_guard_verbal_ack
+except ImportError:  # pragma: no cover
+    _detect_guard_verbal_ack = None  # type: ignore
+
+try:
     from r25_nora_maria_read_only import (
         should_inject_r25 as _r25_should,
         INJECTION_PROMPT_TEMPLATE as _R25_PROMPT,
@@ -564,6 +569,11 @@ class HeadlessEnforcer:
         except Exception as _r15_exc:  # noqa: BLE001
             _logger.warning("on_user_message_r15 failed: %s", _r15_exc)
 
+        try:
+            self._maybe_acknowledge_guard_from_user_text(text or "")
+        except Exception as _guard_ack_exc:  # noqa: BLE001
+            _logger.warning("guard verbal-ack bridge failed: %s", _guard_ack_exc)
+
         if self._run_session_end_detection(text or "", detector=session_end_detector):
             return
 
@@ -622,6 +632,101 @@ class HeadlessEnforcer:
         if enqueued:
             _logger.info("implicit session-end intent detected; queued end-of-session prompts")
         return enqueued
+
+    def _decode_task_files(self, raw_files) -> list[str]:
+        if raw_files is None:
+            return []
+        value = raw_files
+        if isinstance(raw_files, str):
+            try:
+                value = json.loads(raw_files)
+            except Exception:
+                value = [raw_files]
+        if not isinstance(value, list):
+            return []
+        return [str(item).strip() for item in value if str(item).strip()]
+
+    def _single_guard_pending_task(self) -> dict | None:
+        if not self._session_id:
+            return None
+        try:
+            from db import get_db  # type: ignore
+        except Exception:
+            return None
+        try:
+            rows = get_db().execute(
+                """SELECT task_id, session_id, goal, task_type, files, guard_summary
+                   FROM protocol_tasks
+                   WHERE session_id = ?
+                     AND status = 'open'
+                     AND guard_has_blocking = 1
+                     AND guard_acknowledged = 0
+                   ORDER BY opened_at DESC, task_id DESC
+                   LIMIT 2""",
+                (self._session_id,),
+            ).fetchall()
+        except Exception as exc:  # noqa: BLE001
+            _logger.warning("guard verbal-ack task probe failed (%s)", exc)
+            return None
+        if len(rows) != 1:
+            return None
+        task = dict(rows[0])
+        if str(task.get("task_type") or "") not in {"edit", "execute", "delegate"}:
+            return None
+        files = self._decode_task_files(task.get("files"))
+        if len(files) != 1:
+            return None
+        task["decoded_files"] = files
+        task["single_file"] = files[0]
+        return task
+
+    def _maybe_acknowledge_guard_from_user_text(self, text: str, *, detector=None) -> bool:
+        message = (text or "").strip()
+        if not message:
+            return False
+        probe = detector if detector is not None else _detect_guard_verbal_ack
+        if probe is None:
+            return False
+        task = self._single_guard_pending_task()
+        if not task:
+            return False
+        try:
+            approved = bool(
+                probe(
+                    message,
+                    task_type=str(task.get("task_type") or ""),
+                    goal=str(task.get("goal") or ""),
+                    file_path=str(task.get("single_file") or ""),
+                    guard_summary=str(task.get("guard_summary") or ""),
+                )
+            )
+        except Exception as exc:  # noqa: BLE001
+            _logger.warning("guard verbal-ack detector failed (%s); staying silent", exc)
+            return False
+        if not approved:
+            return False
+        try:
+            from db import resolve_protocol_debts, set_protocol_task_guard_acknowledged  # type: ignore
+        except Exception as exc:  # noqa: BLE001
+            _logger.warning("guard verbal-ack DB bridge unavailable (%s)", exc)
+            return False
+        task_id = str(task.get("task_id") or "").strip()
+        if not task_id:
+            return False
+        set_protocol_task_guard_acknowledged(task_id, acknowledged=True)
+        resolved = resolve_protocol_debts(
+            task_id=task_id,
+            debt_types=["unacknowledged_guard_blocking"],
+            resolution=f"Explicit user approval detected in-session: {message[:240]}",
+        )
+        _logger.info(
+            "guard verbal-ack auto-applied sid=%s task=%s file=%s resolved=%s",
+            self._session_id,
+            task_id,
+            task.get("single_file") or "",
+            resolved,
+        )
+        return True
 
     def _advance_r14_window(self, tool_name: str):
         """Decrement the R14 window and enqueue the reminder when it expires.
