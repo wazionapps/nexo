@@ -133,6 +133,21 @@ def test_handle_guard_check_does_not_pull_unrelated_nexo_ops_universal_rules(gua
     assert "Cloudflare access must be verified before diagnosing Wrangler auth" not in output
 
 
+def test_handle_guard_check_blocks_installed_runtime_core_paths(guard_env):
+    db, guard = _reload_guard_stack()
+    db.init_db()
+
+    runtime_core_file = guard_env / "core" / "plugins" / "protocol.py"
+    runtime_core_file.parent.mkdir(parents=True, exist_ok=True)
+    runtime_core_file.write_text("# installed runtime core\n", encoding="utf-8")
+
+    output = guard.handle_guard_check(files=str(runtime_core_file), area="nexo-ops")
+
+    assert "BLOCKING RULES" in output
+    assert f"FILE RULE:{runtime_core_file}" in output
+    assert "Installed runtime core files are protected" in output
+
+
 def test_handle_guard_file_check_skips_file_scoped_rules_for_other_files(guard_env):
     db, guard = _reload_guard_stack()
     db.init_db()

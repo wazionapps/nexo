@@ -8,6 +8,7 @@ import os
 import re
 from datetime import datetime, timedelta
 from pathlib import Path
+import paths
 from db import get_db, find_similar_learnings, extract_keywords, search_learnings, search_changes
 
 
@@ -117,6 +118,16 @@ def _load_conditioned_learnings(conn, file_list: list[str]) -> dict[str, list[di
     return conditioned
 
 
+def _is_runtime_core_path(filepath: str) -> bool:
+    try:
+        candidate = Path(filepath).expanduser().resolve(strict=False)
+        core_root = paths.core_dir().resolve(strict=False)
+        candidate.relative_to(core_root)
+        return True
+    except Exception:
+        return False
+
+
 
 def _load_schema_cache() -> dict:
     """Load cached DB schemas from schema_cache.json."""
@@ -186,6 +197,19 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
     seen_ids = set()
     conditioned_blocking_seen = set()
     conditioned_by_file = _load_conditioned_learnings(conn, file_list) if file_list else {}
+
+    runtime_core_hits = [filepath for filepath in file_list if _is_runtime_core_path(filepath)]
+    for filepath in runtime_core_hits:
+        result["blocking_rules"].append({
+            "id": "runtime-core",
+            "rule": (
+                "Installed runtime core files are protected. Edit the source repo, validate there, "
+                "then ship the change through release/update instead of mutating ~/.nexo/core directly."
+            ),
+            "repetitions": 0,
+            "reason": "runtime_core_protected",
+            "file": filepath,
+        })
 
     # 1. File-conditioned learnings — explicit applies_to guardrails for target files
     hit_ids = []
@@ -452,7 +476,7 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
         lines.append("BLOCKING RULES (resolve BEFORE writing):")
         for r in result["blocking_rules"]:
             reason = r.get("reason", "repeated_error")
-            if reason == "file_conditioned":
+            if reason in {"file_conditioned", "runtime_core_protected"}:
                 lines.append(f"  #{r['id']} [FILE RULE:{r.get('file', '')}]: {r['rule']}")
             elif reason == "prohibition_keyword":
                 lines.append(f"  #{r['id']} [PROHIBIT]: {r['rule']}")
