@@ -342,7 +342,7 @@ Fuente del micro-patch: `~/Desktop/nexo-desktop-v0.16.2-micro-patch.md`. Ambos f
 - [ ] **T0.3.4** `npm run clean && npm run dist && npm run manifest -- --notes "..."`.
 - [ ] **T0.3.5** `scp "dist/NEXO Desktop-0.16.2-arm64.dmg" dist/update.json vicshop:/home/systeam/public_html/nexo-desktop/`.
 - [ ] **T0.3.6** `ssh vicshop "chown systeam:systeam ..."` (paths exactos en el doc).
-- [ ] **T0.3.7** Verificar: `curl -s https://systeam.es/nexo-desktop/update.json | python3 -m json.tool` → `"version":"0.16.2"` con sha256 nuevo.
+- [ ] **T0.3.7** Verificar: `curl -s https://nexo-desktop.com/downloads/update.json | python3 -m json.tool` → `"version":"0.16.2"` con sha256 nuevo.
 - [ ] **T0.3.8** Commit + tag `v0.16.2` + push main + push tag.
 
 ---
@@ -432,7 +432,7 @@ Al completar los bloques anteriores (o los que el usuario decida para una releas
 - [ ] **R.6** Build DMG Desktop. Subir `dist/NEXO Desktop-<ver>-arm64.dmg` + `update.json` + `update-beta.json` a `vicshop:/home/systeam/public_html/nexo-desktop/` via scp.
 - [ ] **R.7** GitHub release Desktop + PR a main.
 - [ ] **R.8** Release npm para Core si aplica.
-- [ ] **R.9** Verificar manifests públicos: `curl https://systeam.es/nexo-desktop/update.json`.
+- [ ] **R.9** Verificar manifests públicos: `curl https://nexo-desktop.com/downloads/update.json`.
 - [ ] **R.10** Notas de release en `nexo-brain.com/blog/` si cambios user-facing.
 
 ---
