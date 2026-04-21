@@ -181,6 +181,8 @@ def test_task_open_with_blocking_guard_creates_guard_debt(monkeypatch):
 
     assert payload["guard"]["has_blocking"] is True
     assert payload["guard"]["blocking_rule_ids"] == [41]
+    assert payload["next_action"] == "Resolve the blocking guard warnings before editing."
+    assert payload["response_contract"]["next_action"] == payload["next_action"]
     debt = get_db().execute(
         "SELECT debt_type, status FROM protocol_debt WHERE task_id = ?",
         (payload["task_id"],),

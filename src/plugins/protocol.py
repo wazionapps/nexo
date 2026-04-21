@@ -942,6 +942,10 @@ def handle_task_open(
     else:
         next_action = "Proceed with the task and close it with nexo_task_close before claiming completion."
 
+    if guard_has_blocking and isinstance(response_contract, dict):
+        response_contract = dict(response_contract)
+        response_contract["next_action"] = next_action
+
     response = {
         "ok": True,
         "task_id": task["task_id"],
