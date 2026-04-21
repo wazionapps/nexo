@@ -120,3 +120,61 @@ def test_guard_cross_check_accepts_task_alias(isolated_db):
     rendered = handle_guard_cross_check(task="Review duplicate plugin registry rows", area="nexo-ops")
 
     assert "CROSS-CHECK RESULTS: 1 findings" in rendered
+
+
+def test_personal_scripts_list_supports_limit_filter_source_and_summary(monkeypatch, isolated_db):
+    import plugins.personal_scripts as personal_scripts
+
+    monkeypatch.setattr(personal_scripts, "init_db", lambda: None)
+    monkeypatch.setattr(personal_scripts, "sync_personal_scripts", lambda: {"ok": True})
+    monkeypatch.setattr(
+        personal_scripts,
+        "list_personal_scripts",
+        lambda: [
+            {
+                "id": "ps-1",
+                "name": "alpha",
+                "description": "user python script",
+                "runtime": "python",
+                "origin": "user",
+                "path": "/tmp/alpha.py",
+                "has_schedule": True,
+            },
+            {
+                "id": "ps-2",
+                "name": "beta",
+                "description": "user shell script",
+                "runtime": "shell",
+                "origin": "user",
+                "path": "/tmp/beta.sh",
+                "has_schedule": False,
+            },
+            {
+                "id": "ps-3",
+                "name": "gamma",
+                "description": "core python script",
+                "runtime": "python",
+                "origin": "core",
+                "path": "/tmp/gamma.py",
+                "has_schedule": False,
+            },
+        ],
+    )
+
+    payload = json.loads(
+        personal_scripts.handle_personal_scripts_list(
+            limit=1,
+            filter_source="user",
+            filter_runtime="python",
+            summary=True,
+        )
+    )
+
+    assert payload["ok"] is True
+    assert payload["total"] == 1
+    assert payload["count"] == 1
+    assert payload["filters"]["origin"] == "user"
+    assert payload["filters"]["runtime"] == "python"
+    assert payload["summary"]["by_origin"] == {"user": 1}
+    assert payload["summary"]["by_runtime"] == {"python": 1}
+    assert payload["scripts"][0]["name"] == "alpha"

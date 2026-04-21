@@ -1,6 +1,7 @@
 """NEXO Personal Scripts — registry-backed management for user scripts."""
 
 import json
+from collections import Counter
 
 from db import init_db, list_personal_scripts, list_personal_script_schedules
 from plugins.schedule import handle_schedule_add
@@ -20,6 +21,28 @@ from script_registry import (
 )
 
 
+def _normalize_limit(value, default: int = 0, maximum: int = 500) -> int:
+    try:
+        parsed = int(value or default)
+    except (TypeError, ValueError):
+        parsed = default
+    return max(0, min(maximum, parsed))
+
+
+def _script_summary_row(script: dict) -> dict:
+    return {
+        "id": script["id"],
+        "name": script["name"],
+        "description": script.get("description", ""),
+        "runtime": script.get("runtime", "unknown"),
+        "origin": script.get("origin", "user"),
+        "path": script["path"],
+        "has_schedule": script.get("has_schedule", False),
+        "last_run_at": script.get("last_run_at", ""),
+        "last_exit_code": script.get("last_exit_code"),
+    }
+
+
 def handle_personal_scripts_sync() -> str:
     init_db()
     result = sync_personal_scripts()
@@ -30,24 +53,61 @@ def handle_personal_scripts_classify() -> str:
     return json.dumps(classify_scripts_dir(), ensure_ascii=False)
 
 
-def handle_personal_scripts_list(include_schedules: bool = True) -> str:
+def handle_personal_scripts_list(
+    include_schedules: bool = True,
+    limit: int | str = 0,
+    filter_runtime: str = "",
+    filter_origin: str = "",
+    filter_source: str = "",
+    summary: bool = False,
+) -> str:
     init_db()
     sync_personal_scripts()
     scripts = list_personal_scripts()
-    if include_schedules:
-        return json.dumps({"scripts": scripts}, ensure_ascii=False)
+    runtime_filter = str(filter_runtime or "").strip().lower()
+    origin_filter = str(filter_origin or filter_source or "").strip().lower()
+    if runtime_filter:
+        scripts = [script for script in scripts if str(script.get("runtime", "")).strip().lower() == runtime_filter]
+    if origin_filter:
+        scripts = [
+            script
+            for script in scripts
+            if str(script.get("origin") or script.get("source") or "user").strip().lower() == origin_filter
+        ]
 
-    simplified = []
-    for script in scripts:
-        simplified.append({
-            "id": script["id"],
-            "name": script["name"],
-            "description": script.get("description", ""),
-            "runtime": script.get("runtime", "unknown"),
-            "path": script["path"],
-            "has_schedule": script.get("has_schedule", False),
-        })
-    return json.dumps({"scripts": simplified}, ensure_ascii=False)
+    total = len(scripts)
+    limit_value = _normalize_limit(limit)
+    truncated = False
+    if limit_value:
+        truncated = total > limit_value
+        scripts = scripts[:limit_value]
+
+    if summary or not include_schedules:
+        rendered_scripts = [_script_summary_row(script) for script in scripts]
+    else:
+        rendered_scripts = scripts
+
+    runtime_counts = Counter(str(script.get("runtime", "unknown")) for script in scripts)
+    origin_counts = Counter(str(script.get("origin") or script.get("source") or "user") for script in scripts)
+    payload = {
+        "ok": True,
+        "total": total,
+        "count": len(rendered_scripts),
+        "limit": limit_value,
+        "truncated": truncated,
+        "filters": {
+            "runtime": runtime_filter,
+            "origin": origin_filter,
+        },
+        "summary": {
+            "total": total,
+            "shown": len(rendered_scripts),
+            "by_runtime": dict(sorted(runtime_counts.items())),
+            "by_origin": dict(sorted(origin_counts.items())),
+        },
+        "scripts": rendered_scripts,
+    }
+    return json.dumps(payload, ensure_ascii=False)
 
 
 def handle_personal_script_create(
