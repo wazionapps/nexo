@@ -1,5 +1,36 @@
 # Changelog
 
+## [7.1.5] - 2026-04-21
+
+Patch release coordinated with NEXO Desktop v0.22.5. This line hardens
+standalone/runtime-root maintenance paths and explicit-home product checks:
+direct catchup runs no longer die just because Claude CLI helpers are absent,
+isolated-home evaluations stop inheriting the operator's globally installed
+Desktop app, and legacy `nexo_doctor` callers stay compatible without an
+explicit `plane`.
+
+### Fixed
+
+- `src/scripts/nexo-catchup.py` now lazy-loads the `agent_runner` /
+  `claude_cli` stack only for the post-catchup assessment path, so runtime-root
+  executions and recovery flows keep working on lean installs that do not need
+  the interactive automation helpers.
+- `src/product_mode.py` now ignores global Desktop install markers when the
+  check is running against an explicit external/test home, preventing false
+  "Desktop installed" detections from the operator machine from contaminating
+  isolated runs.
+- `src/cli.py` now defaults `plane="installation_live"` for legacy
+  `nexo scripts call nexo_doctor` callers that omit the field, keeping the
+  direct plugin contract strict while preserving CLI compatibility.
+- Public release surfaces and integration artifacts are refreshed again so the
+  open-source Brain and the coordinated Desktop client describe the same
+  `7.1.5` / `0.22.5` shipped line.
+
+### Verification
+
+- `1854 passed, 3 skipped, 1 xfailed, 5 xpassed` via `pytest -q`
+- `python3 scripts/verify_release_readiness.py --ci`
+
 ## [7.1.4] - 2026-04-20
 
 Patch release coordinated with NEXO Desktop v0.22.4. This line closes the

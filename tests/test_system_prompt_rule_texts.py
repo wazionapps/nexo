@@ -7,13 +7,9 @@ import re
 
 
 def _system_prompt() -> str:
-    import server  # noqa: F401  — ensures mcp server module loads
-    # The prompt is injected as the docstring/body of the mcp server
-    # object; we read it directly from the source file so we don't need
-    # to spin up a live server during tests.
-    from pathlib import Path
-    path = Path(__file__).resolve().parents[1] / "src" / "server.py"
-    return path.read_text(encoding="utf-8")
+    from core_prompts import render_core_prompt
+
+    return render_core_prompt("server-mcp-instructions", assistant_name="Nero")
 
 
 def test_rule_headers_present():

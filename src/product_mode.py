@@ -24,19 +24,37 @@ def _now_iso() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime())
 
 
+def _resolved_user_home(home: Path | None = None) -> tuple[Path, bool]:
+    if home is not None:
+        return Path(home).expanduser(), True
+
+    env_home = Path(os.environ.get("HOME", str(Path.home()))).expanduser()
+    raw_nexo_home = str(os.environ.get("NEXO_HOME", "") or "").strip()
+    if not raw_nexo_home:
+        return env_home, False
+
+    nexo_home = Path(raw_nexo_home).expanduser()
+    candidate = nexo_home.parent
+    try:
+        explicit = candidate.resolve(strict=False) != env_home.resolve(strict=False)
+    except Exception:
+        explicit = True
+    return (candidate if explicit else env_home), explicit
+
+
 def product_mode_path() -> Path:
     return paths.config_dir() / PRODUCT_MODE_FILENAME
 
 
-def _desktop_install_markers(home: Path | None = None) -> list[Path]:
-    base = Path(home) if home is not None else Path.home()
+def _desktop_install_markers(home: Path | None = None, *, include_global_markers: bool = True) -> list[Path]:
+    base = Path(home) if home is not None else _resolved_user_home()[0]
     markers: list[Path] = [
         base / "Applications" / "NEXO Desktop.app",
         base / "Library" / "Application Support" / "NEXO Desktop",
         base / ".local" / "share" / "NEXO Desktop",
         base / ".config" / "NEXO Desktop",
     ]
-    if home is None and sys.platform == "darwin":
+    if include_global_markers and sys.platform == "darwin":
         markers.insert(0, Path("/Applications/NEXO Desktop.app"))
     if os.name == "nt":
         local = Path(os.environ.get("LOCALAPPDATA", str(base / "AppData" / "Local")))
@@ -51,7 +69,11 @@ def _desktop_install_markers(home: Path | None = None) -> list[Path]:
 
 
 def desktop_product_install_detected(home: Path | None = None) -> bool:
-    for candidate in _desktop_install_markers(home):
+    resolved_home, explicit_home = _resolved_user_home(home)
+    for candidate in _desktop_install_markers(
+        resolved_home,
+        include_global_markers=not explicit_home,
+    ):
         try:
             if candidate.exists():
                 return True

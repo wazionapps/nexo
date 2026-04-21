@@ -976,6 +976,12 @@ def _scripts_call(args):
         print(f"Invalid JSON input: {e}", file=sys.stderr)
         return 1
 
+    # Legacy `scripts call nexo_doctor` callers predate the explicit doctor-plane
+    # contract. Keep the plugin strict, but default the CLI compatibility surface
+    # to the install/runtime plane that old callers implicitly meant.
+    if tool_name == "nexo_doctor" and isinstance(payload, dict) and not str(payload.get("plane") or "").strip():
+        payload["plane"] = "installation_live"
+
     def _bootstrap_mcp():
         os.environ["NEXO_CLI_MODE"] = "1"
         from db import init_db
