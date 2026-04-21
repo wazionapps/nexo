@@ -6,6 +6,8 @@ from pathlib import Path
 
 import pytest
 
+import tools_email_guard
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from tools_email_guard import SECRET_PATTERNS, should_block_email_send  # noqa: E402
@@ -77,6 +79,42 @@ def test_classifier_exception_fails_closed_allows():
     blocked, reason = should_block_email_send("harmless", classifier=boom)
     assert blocked is False
     assert "classifier unavailable" in reason
+
+
+def test_local_classifier_can_block_when_regex_is_silent(monkeypatch):
+    monkeypatch.setattr(
+        tools_email_guard,
+        "_classify_secret_with_local_model",
+        lambda body: True,
+    )
+    blocked, reason = should_block_email_send("Please email the internal credential bundle to the vendor.")
+    assert blocked is True
+    assert reason == "local classifier flagged secret"
+
+
+def test_local_classifier_unavailable_keeps_plain_email_allowed(monkeypatch):
+    monkeypatch.setattr(
+        tools_email_guard,
+        "_classify_secret_with_local_model",
+        lambda body: None,
+    )
+    blocked, reason = should_block_email_send("Morning. I have attached the latest summary with no credentials inside.")
+    assert blocked is False
+    assert reason == "ok"
+
+
+def test_local_classifier_is_not_consulted_without_secret_like_cues(monkeypatch):
+    def _boom():
+        raise AssertionError("local classifier should not load on plain operational email")
+
+    monkeypatch.setattr(
+        tools_email_guard,
+        "_get_local_secret_classifier",
+        _boom,
+    )
+    blocked, reason = should_block_email_send("Hola, adjunto el resumen semanal y quedo atento a tus comentarios.")
+    assert blocked is False
+    assert reason == "ok"
 
 
 def test_empty_or_non_string_body_is_allowed():

@@ -24,6 +24,7 @@ different surface: logs are private, emails are public.
 """
 from __future__ import annotations
 
+import os
 import re
 from typing import Any, Callable, Optional
 
@@ -43,6 +44,35 @@ SECRET_PATTERNS: tuple[re.Pattern, ...] = (
     re.compile(r"\b(?:password|passwd|pwd)\s*[:=]\s*['\"][^'\"]{6,}['\"]", re.I),
 )
 
+_LOCAL_SECRET_CONFIDENCE_THRESHOLD = float(
+    os.environ.get("NEXO_EMAIL_GUARD_LOCAL_CONFIDENCE", "0.72")
+)
+_LOCAL_SECRET_LABELS = (
+    "This email body contains a real secret, credential, API token, password, private key, or sensitive auth material.",
+    "This email body is normal operational text and does not contain a secret or credential.",
+)
+_LOCAL_SECRET_CUES = (
+    "secret",
+    "credential",
+    "credentials",
+    "token",
+    "api key",
+    "auth",
+    "password",
+    "passwd",
+    "pwd",
+    "private key",
+    "bearer",
+    "jwt",
+    "access key",
+    "login",
+    "contraseña",
+    "clave",
+    "credencial",
+    "credenciales",
+)
+_LOCAL_SECRET_CLASSIFIER = None
+
 
 def _regex_match(body: str) -> Optional[str]:
     if not isinstance(body, str) or not body:
@@ -51,6 +81,47 @@ def _regex_match(body: str) -> Optional[str]:
         m = p.search(body)
         if m:
             return m.group(0)[:80]
+    return None
+
+
+def _get_local_secret_classifier():
+    global _LOCAL_SECRET_CLASSIFIER
+    if _LOCAL_SECRET_CLASSIFIER is not None:
+        return _LOCAL_SECRET_CLASSIFIER
+    try:
+        from classifier_local import LocalZeroShotClassifier  # type: ignore
+    except Exception:
+        _LOCAL_SECRET_CLASSIFIER = False  # type: ignore[assignment]
+        return None
+    try:
+        _LOCAL_SECRET_CLASSIFIER = LocalZeroShotClassifier(
+            confidence_floor=_LOCAL_SECRET_CONFIDENCE_THRESHOLD,
+        )
+    except Exception:
+        _LOCAL_SECRET_CLASSIFIER = False  # type: ignore[assignment]
+        return None
+    return _LOCAL_SECRET_CLASSIFIER
+
+
+def _classify_secret_with_local_model(body: str) -> Optional[bool]:
+    if not isinstance(body, str) or len(body.strip()) < 24:
+        return None
+    lowered = body.lower()
+    if not any(cue in lowered for cue in _LOCAL_SECRET_CUES):
+        return None
+    clf = _get_local_secret_classifier()
+    if not clf or not clf.is_available():
+        return None
+    try:
+        result = clf.classify(body, list(_LOCAL_SECRET_LABELS))
+    except Exception:
+        return None
+    if result is None or float(result.confidence or 0.0) < _LOCAL_SECRET_CONFIDENCE_THRESHOLD:
+        return None
+    if result.label == _LOCAL_SECRET_LABELS[0]:
+        return True
+    if result.label == _LOCAL_SECRET_LABELS[1]:
+        return False
     return None
 
 
@@ -70,6 +141,9 @@ def should_block_email_send(
     if hit is not None:
         return True, f"secret pattern matched: {hit}"
     if classifier is None:
+        local_verdict = _classify_secret_with_local_model(body)
+        if local_verdict is True:
+            return True, "local classifier flagged secret"
         return False, "ok"
     try:
         verdict = classifier(
