@@ -169,6 +169,14 @@ def _learning_matches_project_hint(entry: dict, project_hint: str) -> bool:
     return any(token in haystack for token in tokens)
 
 
+def _category_matches_area(category: str, area: str) -> bool:
+    clean_category = str(category or "").strip().lower()
+    clean_area = str(area or "").strip().lower()
+    if not clean_area:
+        return True
+    return clean_category in {clean_area, "universal", "global"}
+
+
 _PRIORITY_RANK = {
     "critical": 3,
     "high": 2,
@@ -386,18 +394,24 @@ def handle_guard_check(
         rows = conn.execute(query, params).fetchall()
         for r in rows:
             if r["id"] not in seen_ids:
+                entry = dict(r)
+                project_match = _learning_matches_project_hint(entry, project_hint)
+                if area and not _category_matches_area(r["category"], area):
+                    content_lower = str(r["content"] or "").strip().lower()
+                    exact_path_match = str(filepath or "").strip().lower() in content_lower
+                    if not exact_path_match and not project_match:
+                        continue
                 seen_ids.add(r["id"])
                 hit_ids.append(r["id"])
                 pri = r["priority"] or "medium"
                 w = r["weight"] or 0.5
-                entry = dict(r)
                 result["learnings"].append({
                     "id": r["id"],
                     "category": r["category"],
                     "rule": r["title"],
                     "priority": pri,
                     "weight": w,
-                    "project_match": _learning_matches_project_hint(entry, project_hint),
+                    "project_match": project_match,
                 })
 
     # 3. By area/category

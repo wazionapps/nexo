@@ -199,6 +199,27 @@ def test_handle_guard_check_project_hint_filters_unrelated_blocking_rules(guard_
     assert "Never deploy wazion storefront blindly" not in output
 
 
+def test_handle_guard_check_skips_cross_area_filename_matches_without_exact_path_or_project_hint(guard_env):
+    db, guard = _reload_guard_stack()
+    db.init_db()
+
+    conn = db.get_db()
+    db.create_learning(
+        "shopify",
+        "Do not edit settings_data.json blindly",
+        "Never edit settings_data.json blindly; verify the storefront backup first.",
+        status="active",
+    )
+    conn.commit()
+
+    output = guard.handle_guard_check(
+        files="/repo/personal/scripts/settings_data.json",
+        area="personal-scripts",
+    )
+
+    assert "Do not edit settings_data.json blindly" not in output
+
+
 def test_handle_guard_check_collapses_duplicate_blocking_rules_with_same_title(guard_env):
     db, guard = _reload_guard_stack()
     db.init_db()
