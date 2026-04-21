@@ -1085,3 +1085,24 @@ def test_score_never_exceeds_hundred_even_with_big_boosts():
         area_has_atlas_entry=True,
     )
     assert result["confidence"] <= 100
+
+
+def test_build_area_context_provides_builtin_personal_scripts_context():
+    import paths
+    from plugins.protocol import _build_area_context
+
+    result = _build_area_context("personal-scripts")
+
+    assert result["has_context"] is True
+    assert result["atlas_entry"]["project_key"] == "personal-scripts"
+    assert result["atlas_entry"]["locations"]["scripts_dir"] == str(paths.personal_scripts_dir())
+    assert result["atlas_entry"]["locations"]["registry_db"] == str(paths.brain_dir() / "personal_scripts.db")
+
+
+def test_build_area_context_accepts_personal_scripts_underscore_alias():
+    from plugins.protocol import _build_area_context
+
+    result = _build_area_context("personal_scripts")
+
+    assert result["has_context"] is True
+    assert result["atlas_entry"]["project_key"] == "personal-scripts"

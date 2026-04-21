@@ -15,6 +15,8 @@ def test_create_nexo_primitive_skill_is_present_with_canonical_links():
     assert skill_json["source_kind"] == "core"
     assert "create a new skill" in skill_json["trigger_patterns"]
     assert "create a new personal script" in skill_json["trigger_patterns"]
+    assert "crear una nueva skill" in skill_json["trigger_patterns"]
+    assert "crear un script personal" in skill_json["trigger_patterns"]
     assert "templates/script-template.py" in guide_md
     assert "docs/personal-artifacts-manual.md" in guide_md
     assert "SK-CREATE-NEXO-PRIMITIVE" in manual_md

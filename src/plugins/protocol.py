@@ -8,7 +8,9 @@ import os
 import re
 import secrets
 import time
+from pathlib import Path
 
+import paths
 from db import (
     VALID_TASK_TYPES,
     VALID_CLOSE_OUTCOMES,
@@ -558,6 +560,35 @@ ATLAS_PATH = os.path.join(
 )
 
 
+def _builtin_area_context(area: str) -> dict | None:
+    """Return atlas-like context for core runtime areas not modelled as projects.
+
+    Some areas are real product surfaces but do not belong in project-atlas
+    because they are shared runtime capabilities rather than business projects.
+    Personal scripts is the main example: the agent still needs a canonical
+    source of truth for paths and artifacts instead of getting `atlas_entry: null`.
+    """
+    clean_area = (area or "").strip().lower()
+    normalized = clean_area.replace("_", "-")
+    if normalized not in {"personal-scripts", "personal-script"}:
+        return None
+
+    scripts_dir = paths.personal_scripts_dir()
+    return {
+        "project_key": "personal-scripts",
+        "description": (
+            "User-owned runtime scripts. Keep custom automations here instead of "
+            "editing core shipped scripts or LaunchAgents directly."
+        ),
+        "locations": {
+            "scripts_dir": str(scripts_dir),
+            "registry_db": str(paths.brain_dir() / "personal_scripts.db"),
+            "launchagents_dir": str(Path.home() / "Library" / "LaunchAgents"),
+        },
+        "servers": {},
+    }
+
+
 def _build_area_context(area: str) -> dict:
     """Build a pre-reading context block for a known area.
 
@@ -569,22 +600,23 @@ def _build_area_context(area: str) -> dict:
         return {"has_context": False}
 
     # 1. Project-atlas lookup
-    atlas_entry = None
+    atlas_entry = _builtin_area_context(clean_area)
     try:
-        with open(ATLAS_PATH, "r", encoding="utf-8") as f:
-            atlas = json.load(f)
-        for key, entry in atlas.items():
-            if key == "_meta":
-                continue
-            aliases = [a.lower() for a in entry.get("aliases", [])]
-            if clean_area == key.lower() or clean_area in aliases:
-                atlas_entry = {
-                    "project_key": key,
-                    "description": entry.get("description", ""),
-                    "locations": entry.get("locations", {}),
-                    "servers": {k: {sk: sv for sk, sv in v.items() if sk != "credential_key"} for k, v in entry.get("servers", {}).items()} if isinstance(entry.get("servers"), dict) else {},
-                }
-                break
+        if atlas_entry is None:
+            with open(ATLAS_PATH, "r", encoding="utf-8") as f:
+                atlas = json.load(f)
+            for key, entry in atlas.items():
+                if key == "_meta":
+                    continue
+                aliases = [a.lower() for a in entry.get("aliases", [])]
+                if clean_area == key.lower() or clean_area in aliases:
+                    atlas_entry = {
+                        "project_key": key,
+                        "description": entry.get("description", ""),
+                        "locations": entry.get("locations", {}),
+                        "servers": {k: {sk: sv for sk, sv in v.items() if sk != "credential_key"} for k, v in entry.get("servers", {}).items()} if isinstance(entry.get("servers"), dict) else {},
+                    }
+                    break
     except Exception:
         pass
 
