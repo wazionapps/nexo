@@ -4,6 +4,7 @@ import importlib
 import re, time
 import sys
 from db._fts import fts_upsert, fts_search
+from db._semantic_similarity import hybrid_similarity_score
 
 
 def _core():
@@ -179,10 +180,16 @@ def extract_keywords(text: str) -> list[str]:
 
 
 def find_similar_learnings(new_id: int, title: str, content: str, category: str) -> list[tuple[int, float]]:
-    """Find learnings similar to the given one based on keyword overlap.
-    Returns list of (learning_id, similarity_score) tuples for matches > 0.3."""
-    keywords_new = set(extract_keywords(f"{title} {content}"))
-    if not keywords_new:
+    """Find learnings similar to the given one with semantic fallback.
+
+    The historical behaviour was pure keyword overlap, which missed obvious
+    paraphrases across languages/wording. We keep that deterministic path, but
+    opportunistically promote strong semantic matches when the local embedding
+    stack is available.
+    """
+    candidate_text = f"{title} {content}".strip()
+    keywords_new = set(extract_keywords(candidate_text))
+    if not keywords_new and not candidate_text:
         return []
     conn = _core().get_db()
     rows = conn.execute(
@@ -191,12 +198,17 @@ def find_similar_learnings(new_id: int, title: str, content: str, category: str)
     ).fetchall()
     results = []
     for row in rows:
-        keywords_existing = set(extract_keywords(f"{row['title']} {row['content']}"))
-        if not keywords_existing:
+        existing_text = f"{row['title']} {row['content']}".strip()
+        if not existing_text:
             continue
-        overlap = keywords_new & keywords_existing
-        union = keywords_new | keywords_existing
-        similarity = len(overlap) / len(union) if union else 0
+        similarity = hybrid_similarity_score(
+            candidate_text,
+            existing_text,
+            keyword_extractor=extract_keywords,
+            strong_semantic_threshold=0.84,
+            moderate_semantic_threshold=0.76,
+            moderate_keyword_floor=0.10,
+        )
         if similarity > 0.3:
             results.append((row['id'], round(similarity, 2)))
     results.sort(key=lambda x: x[1], reverse=True)

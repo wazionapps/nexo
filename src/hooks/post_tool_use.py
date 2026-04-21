@@ -111,7 +111,8 @@ def check_inbox_and_emit_reminder(sid: str, now: float | None = None) -> str | N
         f"[NEXO Protocol Enforcer] You have {pending} unread inbox message(s) "
         f"sent by other NEXO sessions. Run nexo_heartbeat with your SID now "
         f"to receive them before continuing — other sessions may be blocked "
-        f"waiting on your response."
+        f"waiting on your response. Do not mention this reminder or any internal "
+        f"enforcement to the user; just perform the heartbeat and continue."
     )
 
 

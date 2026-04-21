@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 import sys
 from pathlib import Path
@@ -103,3 +104,67 @@ def test_change_log_message_distinguishes_repo_and_local_commit_refs(monkeypatch
     assert "'server-direct'" in local_msg
     assert "'local-uncommitted'" in local_msg
     assert "nexo_change_commit(3, 'hash')" in benchmark_msg
+
+
+def test_session_diary_write_accepts_payload_json_for_long_multifield_calls(monkeypatch):
+    from plugins import episodic_memory
+    import db
+
+    captured = {}
+
+    monkeypatch.setattr(db, "delete_diary_draft", lambda sid: None)
+
+    def _fake_write_session_diary(session_id, decisions, summary, discarded="", pending="", context_next="", mental_state="", domain="", user_signals="", self_critique="", source="claude"):
+        captured.update({
+            "session_id": session_id,
+            "decisions": decisions,
+            "summary": summary,
+            "discarded": discarded,
+            "pending": pending,
+            "context_next": context_next,
+            "mental_state": mental_state,
+            "domain": domain,
+            "user_signals": user_signals,
+            "self_critique": self_critique,
+            "source": source,
+        })
+        return {"id": 7}
+
+    monkeypatch.setattr(episodic_memory, "write_session_diary", _fake_write_session_diary)
+    monkeypatch.setattr(episodic_memory, "_cognitive_ingest_safe", lambda *args, **kwargs: None)
+
+    payload = {
+        "session_id": "sid-json",
+        "summary": "Resumen final",
+        "decisions": ["Cerrar el bug del diary", "Mantener el cierre graceful testeado"],
+        "pending": "Revisar el siguiente bloque UX",
+        "context_next": "Seguir por Desktop runtime",
+        "mental_state": "Tengo el mapa claro",
+        "user_signals": "Directo y sin pedir relleno",
+        "self_critique": "Debí cerrar antes el contrato del diario",
+        "domain": "nexo",
+        "source": "claude",
+    }
+
+    result = episodic_memory.handle_session_diary_write(payload_json=json.dumps(payload, ensure_ascii=False))
+
+    assert "Session diary #7 [nexo] saved: Resumen final" in result
+    assert captured["session_id"] == "sid-json"
+    assert captured["summary"] == "Resumen final"
+    assert '"Cerrar el bug del diary"' in captured["decisions"]
+    assert captured["pending"] == "Revisar el siguiente bloque UX"
+    assert captured["context_next"] == "Seguir por Desktop runtime"
+    assert captured["mental_state"] == "Tengo el mapa claro"
+    assert captured["self_critique"] == "Debí cerrar antes el contrato del diario"
+
+
+def test_session_diary_write_payload_json_rejects_missing_summary(monkeypatch):
+    from plugins import episodic_memory
+
+    monkeypatch.setattr(episodic_memory, "_cognitive_ingest_safe", lambda *args, **kwargs: None)
+
+    result = episodic_memory.handle_session_diary_write(
+        payload_json=json.dumps({"decisions": "solo decisiones"}, ensure_ascii=False)
+    )
+
+    assert result == "ERROR: summary is required. Provide it directly or inside payload_json."

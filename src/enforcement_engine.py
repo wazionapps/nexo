@@ -46,6 +46,11 @@ except ImportError:  # pragma: no cover
     _R16_PROMPT = ""  # type: ignore
 
 try:
+    from session_end_intent import detect_session_end_intent as _detect_session_end_intent
+except ImportError:  # pragma: no cover
+    _detect_session_end_intent = None  # type: ignore
+
+try:
     from r25_nora_maria_read_only import (
         should_inject_r25 as _r25_should,
         INJECTION_PROMPT_TEMPLATE as _R25_PROMPT,
@@ -538,7 +543,7 @@ class HeadlessEnforcer:
         self._enqueue(prompt, tag, rule_id="R13_pre_edit_guard")
         _logger.info("[R13 %s] enqueued injection: tag=%s files=%s", mode.upper(), tag, files)
 
-    def on_user_message(self, text: str, *, correction_detector=None):
+    def on_user_message(self, text: str, *, correction_detector=None, session_end_detector=None):
         """Called when a new user message enters the stream.
 
         Runs the R14 correction detector. When a correction is detected we
@@ -558,6 +563,9 @@ class HeadlessEnforcer:
             self.on_user_message_r15(text or "")
         except Exception as _r15_exc:  # noqa: BLE001
             _logger.warning("on_user_message_r15 failed: %s", _r15_exc)
+
+        if self._run_session_end_detection(text or "", detector=session_end_detector):
+            return
 
         # Session-start and periodic-by-message rules must be evaluated on the
         # same user turn that increments the counters, otherwise headless
@@ -584,6 +592,36 @@ class HeadlessEnforcer:
         self._r14_correction_seen_for_turn = True
         _logger.info("[R14 %s] correction detected; window opened for %d tool calls",
                      mode.upper(), self._r14_window_remaining)
+
+    def _run_session_end_detection(self, text: str, *, detector=None) -> bool:
+        if not self._on_end:
+            return False
+        if _detect_session_end_intent is None and detector is None:
+            return False
+        probe = detector if detector is not None else _detect_session_end_intent
+        if probe is None:
+            return False
+        try:
+            should_close = bool(probe(text))
+        except Exception as exc:  # noqa: BLE001
+            _logger.warning("session-end detector failed (%s); staying silent", exc)
+            return False
+        if not should_close:
+            return False
+        enqueued = False
+        for entry in self._on_end:
+            if entry["enf"].get("level") != "must":
+                continue
+            prompt = entry["enf"].get("session_end_inject_prompt") or entry["enf"].get("inject_prompt", "")
+            if not prompt:
+                continue
+            before = len(self.injection_queue)
+            self._enqueue(prompt, f"session-end-intent:{entry['tool']}", rule_id="on_session_end")
+            if len(self.injection_queue) > before:
+                enqueued = True
+        if enqueued:
+            _logger.info("implicit session-end intent detected; queued end-of-session prompts")
+        return enqueued
 
     def _advance_r14_window(self, tool_name: str):
         """Decrement the R14 window and enqueue the reminder when it expires.
