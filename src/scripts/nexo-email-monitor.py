@@ -88,6 +88,7 @@ DEFAULT_AUTOMATION_TASK_PROFILE = "fast"
 CONCURRENT_THRESHOLD_MINUTES = 15
 MAX_CONCURRENT_SESSIONS = 2
 MAX_EMAIL_ATTEMPTS = 3
+DEFAULT_OPERATOR_LANGUAGE = "en"
 EMPTY_INBOX_BACKOFF_STEPS = (
     (12, 60 * 60),
     (6, 30 * 60),
@@ -1502,7 +1503,45 @@ def _get_operator_info():
     return (
         str(profile.get("operator_name") or "the operator"),
         str(profile.get("assistant_name") or DEFAULT_ASSISTANT_NAME),
+        str(profile.get("language") or DEFAULT_OPERATOR_LANGUAGE).strip() or DEFAULT_OPERATOR_LANGUAGE,
     )
+
+
+def _uses_spanish(language: str) -> bool:
+    normalized = str(language or "").strip().lower().replace("_", "-")
+    return normalized == "es" or normalized.startswith("es-")
+
+
+def _localized_operator_escalation_email(
+    *,
+    operator_name: str,
+    assistant_name: str,
+    operator_language: str,
+    exhausted_count: int,
+    details: str,
+) -> tuple[str, str]:
+    if _uses_spanish(operator_language):
+        subject = f"[NEXO] Emails que necesitan atención manual ({exhausted_count})"
+        body = (
+            f"Hola {operator_name},\n\n"
+            f"Los siguientes emails ya se han intentado {MAX_EMAIL_ATTEMPTS} veces "
+            f"sin completarse correctamente (la sesión cae antes de terminar):\n\n{details}\n\n"
+            "Los he marcado como `needs_interactive`. "
+            f"Abre {assistant_name} Desktop y pregúntale por ese email para resolverlo manualmente.\n\n"
+            f"— {assistant_name}"
+        )
+        return subject, body
+
+    subject = f"[NEXO] Emails requiring manual attention ({exhausted_count})"
+    body = (
+        f"Hello {operator_name},\n\n"
+        f"The following emails have already been attempted {MAX_EMAIL_ATTEMPTS} times "
+        f"without succeeding (the session dies before completion):\n\n{details}\n\n"
+        f"I marked them as `needs_interactive`. "
+        f"Open {assistant_name} Desktop and ask about the affected email so it can be resolved manually.\n\n"
+        f"— {assistant_name}"
+    )
+    return subject, body
 
 
 def _operator_aliases(config) -> list[str]:
@@ -1573,6 +1612,7 @@ def build_processing_prompt(
     config,
     operator_name: str,
     assistant_name: str,
+    operator_language: str,
     operator_email: str,
     operator_aliases_label: str,
     trusted_domains_label: str,
@@ -1628,6 +1668,7 @@ def build_processing_prompt(
         recent_hot_context=recent_hot_context,
         project_atlas_path=project_atlas_path,
         operator_name=operator_name,
+        operator_language=operator_language,
         email_db_path=EMAIL_DB_PATH,
         debt_sla_hours=DEBT_SLA_HOURS,
         zombie_timeout_hours=ZOMBIE_TIMEOUT_HOURS,
@@ -1650,7 +1691,7 @@ def launch_nexo(config, debt_block="", target_emails=None):
     """Launch NEXO through the configured automation backend to process emails.
     target_emails: optional list of dicts with message_id, subject, attempts."""
 
-    operator_name, assistant_name = _get_operator_info()
+    operator_name, assistant_name, operator_language = _get_operator_info()
     agent_email = str(config.get("email") or "").strip()
     operator_email = config.get("operator_email", "")
     operator_aliases = _operator_aliases(config)
@@ -1678,6 +1719,7 @@ def launch_nexo(config, debt_block="", target_emails=None):
         config=config,
         operator_name=operator_name,
         assistant_name=assistant_name,
+        operator_language=operator_language,
         operator_email=operator_email,
         operator_aliases_label=operator_aliases_label,
         trusted_domains_label=trusted_domains_label,
@@ -1816,7 +1858,7 @@ def _escalate_exhausted_emails(config, batch):
     _mark_needs_interactive(ids)
     log.info(f"Marked {len(ids)} email(s) as needs_interactive after exhausting retries")
 
-    operator_name, assistant_name = _get_operator_info()
+    operator_name, assistant_name, operator_language = _get_operator_info()
     operator_email = config.get("operator_email", "")
     if not operator_email:
         log.warning("No operator_email configured — cannot send escalation email")
@@ -1826,13 +1868,12 @@ def _escalate_exhausted_emails(config, batch):
         f"  - Subject: {e.get('subject', '?')} | From: {e.get('from_addr', '?')}"
         for e in exhausted
     )
-    body = (
-        f"Hello {operator_name},\n\n"
-        f"The following emails have already been attempted {MAX_EMAIL_ATTEMPTS} times "
-        f"without succeeding (the session dies before completion):\n\n{details}\n\n"
-        f"I marked them as `needs_interactive`. "
-        f"Open {assistant_name} Desktop and ask about them so they can be resolved manually.\n\n"
-        f"— {assistant_name}"
+    subject, body = _localized_operator_escalation_email(
+        operator_name=operator_name,
+        assistant_name=assistant_name,
+        operator_language=operator_language,
+        exhausted_count=len(exhausted),
+        details=details,
     )
     body_file = BASE_DIR / ".escalation-body.txt"
     body_file.write_text(body, encoding="utf-8")
@@ -1843,7 +1884,7 @@ def _escalate_exhausted_emails(config, batch):
             [
                 sys.executable, str(send_script),
                 "--to", f"{operator_name} <{operator_email}>",
-                "--subject", f"[NEXO] Emails requiring manual attention ({len(exhausted)})",
+                "--subject", subject,
                 "--body-file", str(body_file),
             ],
             timeout=30,

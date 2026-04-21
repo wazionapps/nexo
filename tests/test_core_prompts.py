@@ -102,17 +102,34 @@ def test_prompt_catalog_dir_exists_and_contains_automation_prompts():
 
 def test_render_core_prompt_replaces_named_tokens():
     prompt = core_prompts.render_core_prompt(
-        "morning-agent",
+        "email-monitor",
         assistant_name="Nova",
+        agent_mailbox="agent@example.com",
+        recent_hot_context="Recent memory: nothing pending.",
+        project_atlas_path=Path("/tmp/project-atlas.json"),
         operator_name="Laura",
         operator_language="en",
-        extra_section="",
-        context_json='{"ok": true}',
+        email_db_path=Path("/tmp/nexo-email.db"),
+        debt_sla_hours=3,
+        zombie_timeout_hours=2,
+        config_path=Path("/tmp/config.json"),
+        agent_email_label="agent@example.com",
+        send_reply_target="owner@example.com",
+        operator_aliases_label="owner@example.com",
+        python_executable="/usr/bin/python3",
+        send_reply_script=Path("/tmp/nexo-send-reply.py"),
+        trusted_domains_label="example.com",
+        routing_rules="No special routing rules.",
+        extra_instructions_block="",
+        target_block="",
+        interactive_block="",
+        debt_block="",
     )
 
-    assert "You are Nova, preparing the daily morning briefing email for Laura." in prompt
-    assert "Use the operator's preferred language: en." in prompt
-    assert '{"ok": true}' in prompt
+    assert "You are Nova" in prompt
+    assert "This is your mailbox (agent@example.com)." in prompt
+    assert "ALWAYS use the operator's preferred language: en." in prompt
+    assert "/tmp/project-atlas.json" in prompt
 
 
 def test_render_core_prompt_supports_catchup_and_immune_templates():

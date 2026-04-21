@@ -151,9 +151,10 @@ def test_email_monitor_defaults_to_neutral_assistant_name(tmp_path, monkeypatch)
 
     monkeypatch.setattr(module, "get_operator_profile", lambda: {})
 
-    operator_name, assistant_name = module._get_operator_info()
+    operator_name, assistant_name, operator_language = module._get_operator_info()
     assert operator_name == "the operator"
     assert assistant_name == "Nova"
+    assert operator_language == "en"
 
 
 def test_email_monitor_processing_prompt_is_catalog_backed_and_generic(tmp_path, monkeypatch):
@@ -172,6 +173,7 @@ def test_email_monitor_processing_prompt_is_catalog_backed_and_generic(tmp_path,
         },
         operator_name="Laura",
         assistant_name="Nova",
+        operator_language="es",
         operator_email="owner@hotel-example.com",
         operator_aliases_label="owner@hotel-example.com, laura@hotel-example.com",
         trusted_domains_label="hotel-example.com, clients.example.com",
@@ -190,10 +192,34 @@ def test_email_monitor_processing_prompt_is_catalog_backed_and_generic(tmp_path,
 
     assert prompt.startswith("You are Nova")
     assert "This is your mailbox (agent@hotel-example.com)." in prompt
+    assert "ALWAYS use the operator's preferred language: es." in prompt
     assert "Keep replies short and factual." in prompt
     assert "EMAILS ASSIGNED TO THIS SESSION" in prompt
     assert "Francisco" not in prompt
     assert "franciscocp@gmail.com" not in prompt
+
+
+def test_email_monitor_localizes_operator_escalation_email_for_spanish(tmp_path, monkeypatch):
+    home = tmp_path / "nexo-home"
+    (home / "nexo-email").mkdir(parents=True)
+    monkeypatch.setenv("NEXO_HOME", str(home))
+    helper = types.ModuleType("nexo_helper")
+    helper.call_tool_text = lambda *args, **kwargs: ""
+    monkeypatch.setitem(sys.modules, "nexo_helper", helper)
+    module = _load_script_module("nexo_email_monitor_escalation_test", "nexo-email-monitor.py")
+
+    subject, body = module._localized_operator_escalation_email(
+        operator_name="Francisco",
+        assistant_name="Nero",
+        operator_language="es",
+        exhausted_count=1,
+        details="  - Subject: Report domain: canarirural.com | From: reports@example.com",
+    )
+
+    assert subject == "[NEXO] Emails que necesitan atención manual (1)"
+    assert body.startswith("Hola Francisco,")
+    assert "Los he marcado como `needs_interactive`." in body
+    assert "Abre Nero Desktop" in body
 
 
 def test_followup_runner_detects_dynamic_operator_name(tmp_path, monkeypatch):
