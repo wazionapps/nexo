@@ -194,7 +194,8 @@ def is_protected_runtime_core_path(file_path: str | os.PathLike[str] | None) -> 
     if not raw:
         return False
     try:
-        candidate = Path(raw).expanduser().resolve(strict=False)
+        expanded = os.path.expandvars(raw)
+        candidate = Path(expanded).expanduser().resolve(strict=False)
         candidate.relative_to(paths.core_dir().resolve(strict=False))
         return True
     except Exception:

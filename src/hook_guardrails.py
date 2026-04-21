@@ -5,6 +5,7 @@ import sqlite3
 
 import json
 import os
+import shlex
 import sys
 from pathlib import Path
 import paths
@@ -56,6 +57,21 @@ PUBLIC_REPO_FILES = {
     "package-lock.json",
     "package.json",
 }
+SHELL_DELETE_BASES = {"rm", "unlink", "rmdir"}
+SHELL_WRITE_BASES = {
+    "mv",
+    "cp",
+    "touch",
+    "install",
+    "mkdir",
+    "ln",
+    "chmod",
+    "chown",
+    "setfacl",
+    "tee",
+    "rsync",
+}
+SHELL_REDIRECT_TOKENS = {">", ">>", "1>", "1>>", "2>", "2>>"}
 
 
 def _operation_kind(tool_name: str) -> str:
@@ -158,6 +174,97 @@ def _extract_touched_files(tool_input) -> list[str]:
             seen.add(normalized)
             unique.append(item)
     return unique
+
+
+def _extract_bash_command(tool_input) -> str:
+    if not isinstance(tool_input, dict):
+        return ""
+    for key in ("command", "cmd"):
+        value = tool_input.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ""
+
+
+def _shell_tokens(command: str) -> list[str]:
+    if not str(command or "").strip():
+        return []
+    try:
+        return shlex.split(command)
+    except Exception:
+        return str(command).split()
+
+
+def _resolve_shell_candidate_path(token: str, cwd: str) -> str:
+    raw = os.path.expandvars(str(token or "").strip())
+    if not raw:
+        return ""
+    if raw.startswith("~"):
+        raw = str(Path(raw).expanduser())
+    path = Path(raw)
+    if not path.is_absolute():
+        if not str(cwd or "").strip():
+            return ""
+        path = Path(cwd).expanduser() / path
+    return str(path.resolve(strict=False))
+
+
+def _classify_bash_operation(command: str) -> str:
+    tokens = _shell_tokens(command)
+    if not tokens:
+        return "other"
+    if any(token in SHELL_REDIRECT_TOKENS for token in tokens):
+        return "write"
+    base = Path(tokens[0]).name.lower()
+    if base in SHELL_DELETE_BASES:
+        return "delete"
+    if base in SHELL_WRITE_BASES:
+        return "write"
+    if base == "sed" and "-i" in tokens:
+        return "write"
+    if base == "perl" and any(token == "-i" or token.startswith("-i") for token in tokens[1:]):
+        return "write"
+    return "other"
+
+
+def _extract_bash_touched_files(tool_input) -> list[str]:
+    command = _extract_bash_command(tool_input)
+    tokens = _shell_tokens(command)
+    if not tokens:
+        return []
+    cwd = ""
+    if isinstance(tool_input, dict):
+        cwd = str(tool_input.get("cwd") or "").strip()
+
+    candidates: list[str] = []
+    seen: set[str] = set()
+    suffixes = {
+        ".py", ".md", ".json", ".jsonl", ".sh", ".txt", ".toml", ".yaml", ".yml",
+        ".js", ".ts", ".tsx", ".jsx", ".php", ".sql", ".rs", ".go", ".c", ".cpp",
+        ".h", ".css", ".html",
+    }
+
+    def add(candidate: str) -> None:
+        resolved = _resolve_shell_candidate_path(candidate, cwd)
+        normalized = _normalize_file_path(resolved) if resolved else ""
+        if resolved and normalized and normalized not in seen:
+            seen.add(normalized)
+            candidates.append(resolved)
+
+    for index, token in enumerate(tokens):
+        if token in SHELL_REDIRECT_TOKENS:
+            if index + 1 < len(tokens):
+                add(tokens[index + 1])
+            continue
+        if token.startswith("-"):
+            continue
+        if (
+            token.startswith(("/", "~", ".", "$"))
+            or "/" in token
+            or Path(token).suffix.lower() in suffixes
+        ):
+            add(token)
+    return candidates
 
 
 def _resolve_nexo_sid(conn, external_session_id: str) -> str:
@@ -594,7 +701,15 @@ def _read_claude_session_id_from_coordination() -> str:
 
 def process_pre_tool_event(payload: dict) -> dict:
     tool_name = str(payload.get("tool_name", "")).strip()
+    tool_input = payload.get("tool_input")
     op = _operation_kind(tool_name)
+    shell_files: list[str] = []
+    if tool_name == "Bash":
+        shell_command = _extract_bash_command(tool_input)
+        shell_op = _classify_bash_operation(shell_command)
+        if shell_op in {"write", "delete"}:
+            op = shell_op
+            shell_files = _extract_bash_touched_files(tool_input)
     if op not in {"write", "delete"}:
         return {"ok": True, "skipped": True, "reason": "operation not blocked", "strictness": get_protocol_strictness()}
 
@@ -612,8 +727,14 @@ def process_pre_tool_event(payload: dict) -> dict:
             "strictness": get_protocol_strictness(),
         }
 
-    tool_input = payload.get("tool_input")
     files = _extract_touched_files(tool_input)
+    if shell_files:
+        existing_norms = {_normalize_file_path(item) for item in files}
+        for item in shell_files:
+            normalized = _normalize_file_path(item)
+            if normalized and normalized not in existing_norms:
+                files.append(item)
+                existing_norms.add(normalized)
     strictness = get_protocol_strictness()
     conn = get_db()
     claude_sid = str(payload.get("session_id", "") or "").strip()
