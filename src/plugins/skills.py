@@ -138,8 +138,16 @@ def handle_skill_result(id: str, success: bool = True, context: str = "", notes:
     return msg
 
 
-def handle_skill_list(level: str = "", tag: str = "", source_kind: str = "") -> str:
-    skills = list_skills(level=level, tag=tag, source_kind=source_kind)
+def handle_skill_list(
+    level: str = "",
+    tag: str = "",
+    source_kind: str = "",
+    status: str = "",
+    limit: int = 0,
+) -> str:
+    skills = list_skills(level=(level or status), tag=tag, source_kind=source_kind)
+    if int(limit or 0) > 0:
+        skills = skills[: max(1, int(limit))]
     if not skills:
         return "No skills found."
 

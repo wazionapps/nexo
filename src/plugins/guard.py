@@ -666,13 +666,49 @@ def handle_somatic_stats() -> str:
         return "Error: {}".format(e)
 
 
-def handle_guard_cross_check(findings: list, area: str = "") -> str:
+def handle_guard_cross_check(
+    findings: list | str | None = None,
+    area: str = "",
+    task: str = "",
+    summary: str = "",
+    observations: str = "",
+) -> str:
     """Cross-check audit findings against known learnings to filter false positives.
 
     Args:
         findings: List of audit finding strings to cross-check
         area: System area to narrow the learning search (webapp, shopify, etc.)
     """
+    resolved_findings: list[str] = []
+    if isinstance(findings, list):
+        resolved_findings.extend(str(item).strip() for item in findings if str(item).strip())
+    elif isinstance(findings, str) and findings.strip():
+        raw_findings = findings.strip()
+        if raw_findings.startswith("["):
+            try:
+                parsed = json.loads(raw_findings)
+                if isinstance(parsed, list):
+                    resolved_findings.extend(str(item).strip() for item in parsed if str(item).strip())
+                else:
+                    resolved_findings.append(raw_findings)
+            except Exception:
+                resolved_findings.append(raw_findings)
+        else:
+            resolved_findings.extend(line.strip() for line in raw_findings.splitlines() if line.strip())
+    for alias_text in (task, summary, observations):
+        if str(alias_text or "").strip():
+            resolved_findings.append(str(alias_text).strip())
+    findings = []
+    seen = set()
+    for item in resolved_findings:
+        if item in seen:
+            continue
+        seen.add(item)
+        findings.append(item)
+
+    if not findings:
+        return "CROSS-CHECK RESULTS: 0 findings — provide `findings` or a compatible alias like `task`."
+
     # Common English/Spanish stopwords to skip during keyword extraction
     STOPWORDS = {
         "the", "a", "an", "is", "in", "on", "at", "to", "of", "and", "or", "but",

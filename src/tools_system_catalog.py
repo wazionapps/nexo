@@ -15,5 +15,5 @@ def handle_system_catalog(section: str = "", query: str = "", limit: int = 20) -
     )
 
 
-def handle_tool_explain(name: str) -> str:
-    return format_tool_explanation(explain_tool(name))
+def handle_tool_explain(name: str = "", tool_name: str = "") -> str:
+    return format_tool_explanation(explain_tool((name or tool_name or "").strip()))

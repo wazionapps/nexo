@@ -136,7 +136,15 @@ def handle_rules_check(area: str = "", importance_min: int = 0) -> str:
     return "\n".join(lines)
 
 
-def handle_rules_list() -> str:
+def handle_rules_list(
+    category: str = "",
+    filter_category: str = "",
+    severity: str = "",
+    filter_severity: str = "",
+    area: str = "",
+    filter_area: str = "",
+    limit: int = 0,
+) -> str:
     """List all core rules with their status, grouped by category."""
     _seed_if_empty()
     conn = _get_db()
@@ -147,6 +155,27 @@ def handle_rules_list() -> str:
     rows = conn.execute(
         "SELECT id, category, rule, importance, type, is_active, added_in, removed_in FROM core_rules ORDER BY category, id"
     ).fetchall()
+    rows = [dict(row) for row in rows]
+
+    wanted_category = (category or filter_category or area or filter_area).strip().lower()
+    if wanted_category:
+        rows = [row for row in rows if str(row["category"]).strip().lower() == wanted_category]
+
+    wanted_severity = (severity or filter_severity).strip().lower()
+    severity_aliases = {
+        "block": "blocking",
+        "blocking": "blocking",
+        "advsr": "advisory",
+        "advisory": "advisory",
+        "warn": "advisory",
+        "warning": "advisory",
+    }
+    normalized_severity = severity_aliases.get(wanted_severity, "")
+    if normalized_severity:
+        rows = [row for row in rows if str(row["type"]).strip().lower() == normalized_severity]
+
+    if int(limit or 0) > 0:
+        rows = rows[: max(1, int(limit))]
 
     lines = [f"CORE RULES v{version} — {len([r for r in rows if r['is_active']])} active, {len([r for r in rows if not r['is_active']])} removed", ""]
 

@@ -179,6 +179,15 @@ NEGATION_PATTERNS = (
     re.compile(r"\bwithout\s+(?:touching|breaking|affecting)\b", re.IGNORECASE),
 )
 
+TASK_TYPE_ALIASES = {
+    "create": "edit",
+}
+
+CLOSE_OUTCOME_ALIASES = {
+    "complete": "done",
+    "completed": "done",
+}
+
 
 def _parse_list(value) -> list[str]:
     if isinstance(value, list):
@@ -725,7 +734,7 @@ def handle_confidence_check(
 
 def handle_task_open(
     sid: str,
-    goal: str,
+    goal: str = "",
     task_type: str = "answer",
     area: str = "",
     files: str = "",
@@ -738,20 +747,21 @@ def handle_task_open(
     verification_step: str = "",
     stakes: str = "",
     context_hint: str = "",
+    description: str = "",
 ) -> str:
     """Open a protocol task with heartbeat, guard, rules, and Cortex already captured.
 
     Use this as the default entry point for any non-trivial work. For edit/execute/delegate
     tasks it becomes the contract that later must be closed with `nexo_task_close`.
     """
-    clean_goal = (goal or "").strip()
+    clean_goal = (goal or description or "").strip()
     if not sid.strip():
         return json.dumps({"ok": False, "error": "sid is required"}, ensure_ascii=False, indent=2)
     if not clean_goal:
         return json.dumps({"ok": False, "error": "goal is required"}, ensure_ascii=False, indent=2)
 
     try:
-        clean_type = validate_task_type(task_type)
+        clean_type = validate_task_type(TASK_TYPE_ALIASES.get((task_type or "").strip().lower(), task_type))
     except ValueError as exc:
         return json.dumps(
             {
@@ -985,7 +995,7 @@ def handle_task_open(
 def handle_task_close(
     sid: str,
     task_id: str,
-    outcome: str,
+    outcome: str = "",
     evidence: str = "",
     files_changed: str = "",
     correction_happened: bool = False,
@@ -1005,6 +1015,10 @@ def handle_task_close(
     learning_content: str = "",
     learning_reasoning: str = "",
     outcome_notes: str = "",
+    result: str = "",
+    summary: str = "",
+    verification: str = "",
+    evidence_refs: str = "",
 ) -> str:
     """Close a protocol task and automatically record the required discipline artifacts."""
     task = get_protocol_task(task_id.strip())
@@ -1017,8 +1031,10 @@ def handle_task_close(
             indent=2,
         )
 
+    outcome_candidate = (outcome or result or "").strip()
+    normalized_outcome = CLOSE_OUTCOME_ALIASES.get(outcome_candidate.lower(), outcome_candidate)
     try:
-        clean_outcome = validate_close_outcome(outcome)
+        clean_outcome = validate_close_outcome(normalized_outcome)
     except ValueError as exc:
         return json.dumps(
             {
@@ -1030,7 +1046,13 @@ def handle_task_close(
             ensure_ascii=False,
             indent=2,
         )
-    clean_evidence = (evidence or "").strip()
+    clean_change_summary = (change_summary or summary or "").strip()
+    clean_change_verify = (change_verify or verification or "").strip()
+    clean_evidence = (evidence or clean_change_summary or "").strip()
+    extra_refs = _parse_list(evidence_refs)
+    if extra_refs:
+        refs_line = "Evidence refs: " + ", ".join(extra_refs)
+        clean_evidence = f"{clean_evidence}\n{refs_line}".strip() if clean_evidence else refs_line
     files_changed_list = _parse_list(files_changed)
     planned_files = _parse_list(task.get("files") or "[]")
     effective_files = files_changed_list or planned_files
@@ -1129,12 +1151,12 @@ def handle_task_close(
             change = log_change(
                 task["session_id"],
                 ", ".join(effective_files),
-                (change_summary or f"Protocol task {task_id}: {task.get('goal', '')}")[:500],
+                (clean_change_summary or f"Protocol task {task_id}: {task.get('goal', '')}")[:500],
                 (change_why or task.get("goal", ""))[:500],
                 (triggered_by or task_id)[:200],
                 task.get("area", "")[:200],
                 (change_risks or "")[:500],
-                (change_verify or clean_evidence)[:500],
+                (clean_change_verify or clean_evidence)[:500],
             )
             if "error" in change:
                 _record_debt(
@@ -1202,7 +1224,7 @@ def handle_task_close(
                 task_id,
                 effective_files,
                 clean_evidence=clean_evidence,
-                change_summary=change_summary,
+                change_summary=clean_change_summary,
                 change_why=change_why,
                 outcome_notes=outcome_notes,
             )
@@ -1308,7 +1330,7 @@ def handle_task_close(
         event_type=f"protocol_task_{clean_outcome}",
         title=(task.get("goal") or task_id)[:160],
         summary=(outcome_notes or clean_evidence or clean_outcome)[:600],
-        body=(change_summary or change_why or "")[:1600],
+        body=(clean_change_summary or change_why or "")[:1600],
         context_key=f"protocol_task:{task_id}",
         context_title=(task.get("goal") or task_id)[:160],
         context_summary=(task.get("context_hint") or task.get("goal") or "")[:600],
@@ -1330,7 +1352,7 @@ def handle_task_close(
     # ── Drive/Curiosity: detect signals from task evidence (best-effort) ──
     try:
         _drive_text = " ".join(filter(None, [
-            outcome_notes, clean_evidence, change_summary, change_why,
+            outcome_notes, clean_evidence, clean_change_summary, change_why,
         ]))
         if _drive_text and len(_drive_text.strip()) >= 15:
             from tools_drive import detect_drive_signal as _detect_drive
@@ -1434,11 +1456,12 @@ def handle_protocol_debt_list(
     debt_type: str = "",
     severity: str = "",
     limit: str = "50",
+    sid: str = "",
 ) -> str:
     rows = list_protocol_debts(
         status=status.strip() if isinstance(status, str) else "open",
         task_id=(task_id or "").strip(),
-        session_id=(session_id or "").strip(),
+        session_id=(session_id or sid or "").strip(),
         debt_type=(debt_type or "").strip(),
         severity=(severity or "").strip(),
         limit=max(1, min(500, int(limit or 50))),
@@ -1465,8 +1488,21 @@ def handle_protocol_debt_resolve(
     session_id: str = "",
     debt_types: str = "",
     resolution: str = "",
+    debt_id: str = "",
 ) -> str:
     parsed_ids = _parse_int_list(debt_ids)
+    single_debt_id = (debt_id or "").strip()
+    if single_debt_id:
+        try:
+            parsed_ids.append(int(single_debt_id))
+        except ValueError:
+            return json.dumps(
+                {"ok": False, "error": f"Invalid debt_id: {single_debt_id}"},
+                ensure_ascii=False,
+                indent=2,
+            )
+    if parsed_ids:
+        parsed_ids = sorted(set(parsed_ids))
     parsed_types = _parse_list(debt_types)
     if not parsed_ids and not (task_id or "").strip() and not (session_id or "").strip() and not parsed_types:
         return json.dumps(
