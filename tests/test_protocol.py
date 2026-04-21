@@ -1014,6 +1014,37 @@ def test_high_stakes_english_negation_also_suppresses():
     assert result["high_stakes"] is False
 
 
+def test_explicit_low_stakes_override_suppresses_auto_detection():
+    from plugins.protocol import evaluate_response_confidence
+
+    result = evaluate_response_confidence(
+        goal="Deploy the production release package",
+        task_type="analyze",
+        evidence_refs=["release.md"],
+        verification_step="review release checklist",
+        stakes="low",
+    )
+
+    assert result["high_stakes"] is False
+    assert "stakes override suppresses automatic high-stakes detection" in result["reasons"]
+
+
+def test_internal_audit_context_suppresses_release_keyword_false_positive():
+    from plugins.protocol import evaluate_response_confidence
+
+    result = evaluate_response_confidence(
+        goal="Audit the release wording detector used by protocol tests",
+        task_type="edit",
+        area="guardian",
+        context_hint="Read-only protocol audit for heuristic coverage",
+        evidence_refs=["tests/test_protocol.py"],
+        verification_step="run protocol tests",
+    )
+
+    assert result["high_stakes"] is False
+    assert "internal audit/testing context suppresses automatic high-stakes detection" in result["reasons"]
+
+
 def test_positive_signals_boost_confidence_score():
     from plugins.protocol import evaluate_response_confidence
 
@@ -1087,6 +1118,41 @@ def test_numeric_safeguard_converts_verify_to_defer_when_high_stakes_and_very_lo
     )
     assert result["mode"] == "defer"
     assert result["high_stakes"] is True
+
+
+def test_internal_guardian_audit_close_does_not_open_missing_cortex_debt():
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    sid = _register_session("nexo-1021-2021")
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Audit the release wording detector used by protocol tests",
+            task_type="edit",
+            area="guardian",
+            files="/Users/franciscoc/Documents/_PhpstormProjects/nexo/src/plugins/protocol.py",
+            plan='["inspect detector", "patch tests", "verify coverage"]',
+            evidence_refs='["tests/test_protocol.py"]',
+            verification_step="run protocol tests",
+            context_hint="Read-only protocol audit for heuristic coverage",
+        )
+    )
+
+    assert opened["decision_support"]["required"] is False
+    assert opened["response_contract"]["high_stakes"] is False
+
+    closed = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="done",
+            evidence="Ran the protocol test battery and reviewed the detector behavior without performing any release or production action.",
+            outcome_notes="Internal protocol audit only.",
+        )
+    )
+
+    debt_types = {item["debt_type"] for item in closed["open_debts"]}
+    assert "missing_cortex_evaluation" not in debt_types
 
 
 def test_score_never_exceeds_hundred_even_with_big_boosts():

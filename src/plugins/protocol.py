@@ -191,6 +191,53 @@ CLOSE_OUTCOME_ALIASES = {
     "completed": "done",
 }
 
+HIGH_STAKES_OVERRIDE_TRUE = {"high", "critical", "elevated"}
+HIGH_STAKES_OVERRIDE_FALSE = {
+    "low",
+    "normal",
+    "routine",
+    "none",
+    "off",
+    "false",
+    "read-only",
+    "readonly",
+    "dry-run",
+    "dryrun",
+}
+
+_INTERNAL_AUDIT_AREAS = {
+    "guardian",
+    "protocol",
+    "tests",
+    "nexo-ops",
+}
+_INTERNAL_AUDIT_MARKERS = (
+    "read-only",
+    "readonly",
+    "dry-run",
+    "dry run",
+    "protocol audit",
+    "guardian audit",
+    "guard audit",
+    "contract test",
+    "test harness",
+    "heuristic",
+    "detector",
+    "simulated",
+    "simulation",
+    "fixture",
+)
+_INTERNAL_AUDIT_VERBS = {
+    "audit",
+    "review",
+    "test",
+    "testing",
+    "verify",
+    "debug",
+    "probe",
+    "inspect",
+}
+
 _RELEASE_AREA_HINTS = {
     "release",
     "deploy",
@@ -321,6 +368,46 @@ def _detect_high_stakes(*parts: str) -> bool:
     )
 
 
+def _parse_high_stakes_override(stakes: str) -> bool | None:
+    clean = (stakes or "").strip().lower()
+    if not clean:
+        return None
+    if clean in HIGH_STAKES_OVERRIDE_TRUE:
+        return True
+    if clean in HIGH_STAKES_OVERRIDE_FALSE:
+        return False
+    return None
+
+
+def _has_internal_audit_context(
+    *,
+    goal: str,
+    area: str = "",
+    context_hint: str = "",
+    verification_step: str = "",
+    constraints=None,
+) -> bool:
+    combined = " ".join(
+        part.strip().lower()
+        for part in [
+            goal or "",
+            area or "",
+            context_hint or "",
+            verification_step or "",
+            " ".join(_parse_list(constraints)),
+        ]
+        if part and str(part).strip()
+    )
+    if not combined:
+        return False
+    if any(marker in combined for marker in _INTERNAL_AUDIT_MARKERS):
+        return True
+    area_lower = (area or "").strip().lower()
+    if area_lower not in _INTERNAL_AUDIT_AREAS:
+        return False
+    return any(token in combined for token in _INTERNAL_AUDIT_VERBS)
+
+
 def _decision_support_required(*, task_type: str, high_stakes: bool) -> bool:
     return task_type in ACTION_TASKS and high_stakes
 
@@ -364,15 +451,35 @@ def evaluate_response_confidence(
     unknowns = _parse_list(unknowns)
     constraints = _parse_list(constraints)
     explicit_stakes = (stakes or "").strip().lower()
-    high_stakes = explicit_stakes == "high" or _detect_high_stakes(
-        goal,
-        area,
-        context_hint,
-        " ".join(constraints),
-        explicit_stakes,
-    )
 
     reasons: list[str] = []
+    stakes_override = _parse_high_stakes_override(explicit_stakes)
+    if stakes_override is not None:
+        high_stakes = stakes_override
+        if stakes_override:
+            reasons.append("stakes override forces high-stakes handling")
+        else:
+            reasons.append("stakes override suppresses automatic high-stakes detection")
+    else:
+        detected_high_stakes = _detect_high_stakes(
+            goal,
+            area,
+            context_hint,
+            " ".join(constraints),
+            explicit_stakes,
+        )
+        if detected_high_stakes and _has_internal_audit_context(
+            goal=goal,
+            area=area,
+            context_hint=context_hint,
+            verification_step=verification_step,
+            constraints=constraints,
+        ):
+            high_stakes = False
+            reasons.append("internal audit/testing context suppresses automatic high-stakes detection")
+        else:
+            high_stakes = detected_high_stakes
+
     score = 85
     if unknowns:
         score -= 35
