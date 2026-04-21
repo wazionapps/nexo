@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 from db import get_latest_metrics, get_evolution_history, update_evolution_log_status, get_db
+from product_mode import DESKTOP_EVOLUTION_DISABLED_REASON, desktop_product_requested
 
 
 CANONICAL_DIMENSIONS = {
@@ -34,8 +35,17 @@ def _load_objective() -> dict:
     return raw if isinstance(raw, dict) else {}
 
 
+def _desktop_disabled_message() -> str:
+    if desktop_product_requested():
+        return f"Evolution is DISABLED: {DESKTOP_EVOLUTION_DISABLED_REASON}"
+    return ""
+
+
 def handle_evolution_status() -> str:
     """Show current NEXO dimension scores and recent trend."""
+    disabled = _desktop_disabled_message()
+    if disabled:
+        return disabled
     metrics = get_latest_metrics()
     objective = _load_objective()
     objective_dims = objective.get("dimensions", {}) if isinstance(objective.get("dimensions"), dict) else {}
@@ -83,6 +93,9 @@ def handle_evolution_history(limit: int = 10) -> str:
     Args:
         limit: Number of entries to return (default 10)
     """
+    disabled = _desktop_disabled_message()
+    if disabled:
+        return disabled
     history = get_evolution_history(limit)
     if not history:
         return "No evolution history."
@@ -111,6 +124,9 @@ def handle_evolution_propose() -> str:
     """Manually trigger an evolution analysis outside the weekly schedule.
     This sets a flag that the Cortex wrapper reads on the next cycle.
     """
+    disabled = _desktop_disabled_message()
+    if disabled:
+        return disabled
     import json
     from pathlib import Path
     nexo_home = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
@@ -138,6 +154,9 @@ def handle_evolution_approve(log_id: int, notes: str = '') -> str:
         log_id: Evolution log entry ID to approve
         notes: Optional notes from user
     """
+    disabled = _desktop_disabled_message()
+    if disabled:
+        return disabled
     update_evolution_log_status(log_id, "accepted",
                                 test_result=f"Approved by user. {notes}".strip())
     return f"Proposal #{log_id} APPROVED. Will be applied in next Evolution cycle."
@@ -150,6 +169,9 @@ def handle_evolution_reject(log_id: int, reason: str = '') -> str:
         log_id: Evolution log entry ID to reject
         reason: Why this proposal was rejected
     """
+    disabled = _desktop_disabled_message()
+    if disabled:
+        return disabled
     update_evolution_log_status(log_id, "rejected",
                                 test_result=f"Rejected: {reason}" if reason else "Rejected by user")
     return f"Proposal #{log_id} REJECTED. Reason: {reason or 'no reason given'}"
