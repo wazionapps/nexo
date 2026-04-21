@@ -365,6 +365,53 @@ def test_process_pre_tool_event_learning_mode_explains_guard_ack_requirement(gua
     assert "nexo_task_acknowledge_guard" in message
 
 
+def test_process_pre_tool_event_blocks_bash_write_until_guard_ack(guardrail_env, monkeypatch):
+    db, hook_guardrails = _reload_guardrail_stack()
+    db.init_db()
+    monkeypatch.setattr(hook_guardrails, "get_protocol_strictness", lambda: "strict")
+    sid = "nexo-2012-3012"
+    target = guardrail_env / "personal" / "scripts" / "sample.py"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("print('ok')\n")
+
+    db.register_session(
+        sid,
+        "bash write with guard debt",
+        external_session_id="claude-bash-guard-1",
+        session_client="claude_code",
+    )
+    task = db.create_protocol_task(
+        sid,
+        "Patch personal script",
+        task_type="edit",
+        files=[str(target)],
+        opened_with_guard=True,
+        guard_has_blocking=True,
+        guard_summary=f"BLOCKING RULES (resolve BEFORE writing):\n  #128 [FILE RULE:{target}]: Keep personal/core split\n",
+    )
+    db.create_protocol_debt(
+        sid,
+        "unacknowledged_guard_blocking",
+        severity="error",
+        task_id=task["task_id"],
+        evidence=f"Guard rule still unacknowledged for {target}",
+    )
+
+    result = hook_guardrails.process_pre_tool_event(
+        {
+            "session_id": "claude-bash-guard-1",
+            "tool_name": "Bash",
+            "tool_input": {"command": f"chmod 755 {target}"},
+        }
+    )
+
+    assert result["status"] == "blocked"
+    assert result["blocks"][0]["debt_type"] == "strict_protocol_write_without_guard_ack"
+    assert result["blocks"][0]["reason_code"] == "guard_unacknowledged"
+    message = hook_guardrails.format_pretool_block_message(result)
+    assert "nexo_task_acknowledge_guard" in message
+
+
 def test_process_pre_tool_event_blocks_automation_write_to_live_repo(guardrail_env, monkeypatch):
     db, hook_guardrails = _reload_guardrail_stack()
     db.init_db()
