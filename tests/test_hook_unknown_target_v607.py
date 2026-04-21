@@ -95,6 +95,24 @@ def test_startup_no_coordination_no_crash(hook_hotfix_runtime):
     assert row["claude_session_id"] == ""
 
 
+def test_startup_includes_session_briefing_excerpt_when_present(hook_hotfix_runtime):
+    from tools_sessions import handle_startup
+
+    briefing = hook_hotfix_runtime / "coordination" / "session-briefing.txt"
+    briefing.write_text(
+        "Top priority: reconcile pending release notes\n"
+        "Check the stale launchagent warnings\n"
+        "Avoid touching runtime core directly\n",
+        encoding="utf-8",
+    )
+
+    out = handle_startup(task="tests")
+
+    assert "SESSION BRIEFING:" in out
+    assert "Top priority: reconcile pending release notes" in out
+    assert "Full briefing:" in out
+
+
 # ──────────────────────────────────────────────────────────────────────
 # Secondary fix — _resolve_nexo_sid single-session fallback
 # ──────────────────────────────────────────────────────────────────────

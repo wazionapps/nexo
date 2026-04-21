@@ -302,6 +302,26 @@ def _autodetect_claude_session_id() -> str:
         return ""
 
 
+def _read_session_briefing_excerpt(max_lines: int = 6) -> tuple[str, str]:
+    """Return a short human-readable excerpt plus the briefing file path.
+
+    SessionStart writes coordination/session-briefing.txt, but startup used to
+    ignore it entirely. This helper keeps startup aware of the file without
+    dumping the whole briefing into every session banner.
+    """
+    briefing_path = paths.coordination_dir() / "session-briefing.txt"
+    try:
+        raw = briefing_path.read_text(encoding="utf-8")
+    except (FileNotFoundError, OSError):
+        return "", str(briefing_path)
+
+    lines = [line.strip() for line in raw.splitlines() if line.strip()]
+    if not lines:
+        return "", str(briefing_path)
+    excerpt = "\n".join(lines[:max_lines])
+    return excerpt, str(briefing_path)
+
+
 def handle_startup(
     task: str = "Startup",
     claude_session_id: str = "",
@@ -383,6 +403,14 @@ def handle_startup(
         for m in inbox:
             age = _format_age(m["created_epoch"])
             lines.append(f"  [{m['from_sid']}] ({age}): {m['text']}")
+
+    briefing_excerpt, briefing_path = _read_session_briefing_excerpt()
+    if briefing_excerpt:
+        lines.append("")
+        lines.append("SESSION BRIEFING:")
+        for raw_line in briefing_excerpt.splitlines():
+            lines.append(f"  {raw_line}")
+        lines.append(f"  Full briefing: {briefing_path}")
 
     # Check LaunchAgent health (macOS only)
     la_warnings = _check_launchagents()
