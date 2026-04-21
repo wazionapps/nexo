@@ -68,6 +68,17 @@ from tools_automation_sessions import (
     handle_session_log_create,
     handle_session_log_close,
 )
+from plugins.cortex import handle_cortex_check
+from plugins.guard import handle_guard_check
+from plugins.protocol import (
+    handle_task_acknowledge_guard,
+    handle_task_close,
+    handle_task_open,
+)
+from plugins.workflow import (
+    handle_workflow_open,
+    handle_workflow_update,
+)
 from plugin_loader import load_all_plugins, load_plugin, remove_plugin, list_plugins
 from tools_guardian import handle_guardian_rule_override
 
@@ -326,6 +337,220 @@ def nexo_stop(sid: str) -> str:
         sid: Session ID to close."""
     from tools_sessions import handle_stop
     return handle_stop(sid)
+
+
+@mcp.tool
+def nexo_cortex_check(
+    goal: str,
+    task_type: str = "answer",
+    plan: str = "[]",
+    known_facts: str = "[]",
+    unknowns: str = "[]",
+    constraints: str = "[]",
+    evidence_refs: str = "[]",
+    verification_step: str = "",
+) -> str:
+    """Cognitive pre-action check. Call before significant actions."""
+    return handle_cortex_check(
+        goal,
+        task_type,
+        plan,
+        known_facts,
+        unknowns,
+        constraints,
+        evidence_refs,
+        verification_step,
+    )
+
+
+@mcp.tool
+def nexo_guard_check(files: str = "", area: str = "") -> str:
+    """Check learnings relevant to files/area before reading or editing code."""
+    return handle_guard_check(files, area)
+
+
+@mcp.tool
+def nexo_task_open(
+    sid: str,
+    goal: str = "",
+    task_type: str = "answer",
+    area: str = "",
+    files: str = "",
+    project_hint: str = "",
+    plan: str = "[]",
+    known_facts: str = "[]",
+    unknowns: str = "[]",
+    constraints: str = "[]",
+    evidence_refs: str = "[]",
+    verification_step: str = "",
+    stakes: str = "",
+    context_hint: str = "",
+    description: str = "",
+) -> str:
+    """Open a protocol task for non-trivial work."""
+    return handle_task_open(
+        sid,
+        goal,
+        task_type,
+        area,
+        files,
+        project_hint,
+        plan,
+        known_facts,
+        unknowns,
+        constraints,
+        evidence_refs,
+        verification_step,
+        stakes,
+        context_hint,
+        description,
+    )
+
+
+@mcp.tool
+def nexo_task_acknowledge_guard(
+    sid: str,
+    task_id: str,
+    learning_ids: str = "",
+    note: str = "",
+) -> str:
+    """Acknowledge blocking guard rules on an open protocol task."""
+    return handle_task_acknowledge_guard(sid, task_id, learning_ids, note)
+
+
+@mcp.tool
+def nexo_task_close(
+    sid: str,
+    task_id: str,
+    outcome: str = "",
+    evidence: str = "",
+    files_changed: str = "",
+    correction_happened: bool = False,
+    change_summary: str = "",
+    change_why: str = "",
+    change_risks: str = "",
+    change_verify: str = "",
+    triggered_by: str = "",
+    followup_needed: bool = False,
+    followup_id: str = "",
+    followup_description: str = "",
+    followup_date: str = "",
+    followup_verification: str = "",
+    followup_reasoning: str = "",
+    learning_category: str = "",
+    learning_title: str = "",
+    learning_content: str = "",
+    learning_reasoning: str = "",
+    outcome_notes: str = "",
+    result: str = "",
+    summary: str = "",
+    verification: str = "",
+    evidence_refs: str = "",
+) -> str:
+    """Close a protocol task with evidence and optional artifacts."""
+    return handle_task_close(
+        sid,
+        task_id,
+        outcome,
+        evidence,
+        files_changed,
+        correction_happened,
+        change_summary,
+        change_why,
+        change_risks,
+        change_verify,
+        triggered_by,
+        followup_needed,
+        followup_id,
+        followup_description,
+        followup_date,
+        followup_verification,
+        followup_reasoning,
+        learning_category,
+        learning_title,
+        learning_content,
+        learning_reasoning,
+        outcome_notes,
+        result,
+        summary,
+        verification,
+        evidence_refs,
+    )
+
+
+@mcp.tool
+def nexo_workflow_open(
+    sid: str,
+    goal: str,
+    goal_id: str = "",
+    workflow_kind: str = "general",
+    protocol_task_id: str = "",
+    idempotency_key: str = "",
+    priority: str = "normal",
+    steps: str = "[]",
+    shared_state: str = "{}",
+    next_action: str = "",
+    owner: str = "",
+) -> str:
+    """Open a durable workflow run for long multi-step work."""
+    return handle_workflow_open(
+        sid,
+        goal,
+        goal_id,
+        workflow_kind,
+        protocol_task_id,
+        idempotency_key,
+        priority,
+        steps,
+        shared_state,
+        next_action,
+        owner,
+    )
+
+
+@mcp.tool
+def nexo_workflow_update(
+    run_id: str,
+    step_key: str = "",
+    step_title: str = "",
+    step_status: str = "",
+    run_status: str = "",
+    checkpoint_label: str = "",
+    summary: str = "",
+    shared_state: str = "",
+    state_patch: str = "",
+    evidence: str = "",
+    next_action: str = "",
+    retry_after: str = "",
+    max_retries: int = 0,
+    retry_policy: str = "",
+    requires_approval: bool = False,
+    compensation: str = "",
+    actor: str = "",
+    owner: str = "",
+) -> str:
+    """Update a workflow run with a replayable checkpoint."""
+    return handle_workflow_update(
+        run_id,
+        step_key,
+        step_title,
+        step_status,
+        run_status,
+        checkpoint_label,
+        summary,
+        shared_state,
+        state_patch,
+        evidence,
+        next_action,
+        retry_after,
+        max_retries,
+        retry_policy,
+        requires_approval,
+        compensation,
+        actor,
+        owner,
+    )
+
 
 @mcp.tool
 def nexo_status(keyword: str = "") -> str:
