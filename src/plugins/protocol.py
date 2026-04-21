@@ -1052,7 +1052,11 @@ def handle_task_open(
     debts_created: list[dict] = []
     if clean_type in ACTION_TASKS and (files_list or area.strip()):
         opened_with_guard = True
-        guard_summary = handle_guard_check(files=",".join(files_list), area=area.strip())
+        guard_summary = handle_guard_check(
+            files=",".join(files_list),
+            area=area.strip(),
+            project_hint=project_hint.strip(),
+        )
         guard_has_blocking = (
             "[BLOCKING]" in guard_summary
             or "WARNINGS — resolve before editing" in guard_summary

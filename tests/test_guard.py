@@ -166,6 +166,39 @@ def test_handle_guard_check_does_not_match_generic_parent_directory_tokens(guard
     assert "Never touch generic scripts blindly" not in output
 
 
+def test_handle_guard_check_project_hint_filters_unrelated_blocking_rules(guard_env):
+    db, guard = _reload_guard_stack()
+    db.init_db()
+
+    conn = db.get_db()
+    matching = db.create_learning(
+        "shopify",
+        "Never deploy recambios-bmw theme blindly",
+        "NEVER deploy recambios-bmw theme blindly; verify theme id and backup first.",
+        status="active",
+    )
+    unrelated = db.create_learning(
+        "shopify",
+        "Never deploy wazion storefront blindly",
+        "NEVER deploy wazion storefront blindly; verify live storefront status first.",
+        status="active",
+    )
+    conn.execute(
+        "UPDATE learnings SET priority = 'critical', weight = 1.0 WHERE id IN (?, ?)",
+        (matching["id"], unrelated["id"]),
+    )
+    conn.commit()
+
+    output = guard.handle_guard_check(
+        files="/repo/shopify/theme/snippets/reviews.liquid",
+        area="shopify",
+        project_hint="recambios-bmw",
+    )
+
+    assert "Never deploy recambios-bmw theme blindly" in output
+    assert "Never deploy wazion storefront blindly" not in output
+
+
 def test_handle_guard_file_check_skips_file_scoped_rules_for_other_files(guard_env):
     db, guard = _reload_guard_stack()
     db.init_db()

@@ -196,6 +196,33 @@ def test_task_open_with_blocking_guard_sets_pending_ack_state_without_opening_de
     assert debt_count == 0
 
 
+def test_task_open_passes_project_hint_to_guard_check(monkeypatch):
+    from plugins.protocol import handle_task_open
+
+    sid = _register_session("nexo-1005-2005")
+    observed = {}
+
+    def _fake_guard(**kwargs):
+        observed.update(kwargs)
+        return "No relevant learnings found for these files/area."
+
+    monkeypatch.setattr("plugins.protocol.handle_guard_check", _fake_guard)
+    payload = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Patch Shopify project safely",
+            task_type="edit",
+            area="shopify",
+            project_hint="recambios-bmw",
+            files="/repo/shopify/theme/snippets/reviews.liquid",
+        )
+    )
+
+    assert payload["ok"] is True
+    assert observed["project_hint"] == "recambios-bmw"
+    assert observed["area"] == "shopify"
+
+
 def test_task_open_requires_files_for_edit_in_strict_mode(monkeypatch):
     import plugins.protocol as protocol
 

@@ -146,6 +146,28 @@ def _is_runtime_core_path(filepath: str) -> bool:
         return False
 
 
+def _project_hint_tokens(project_hint: str) -> list[str]:
+    return [
+        token
+        for token in re.split(r"[^a-z0-9]+", str(project_hint or "").strip().lower())
+        if len(token) >= 4
+    ]
+
+
+def _learning_matches_project_hint(entry: dict, project_hint: str) -> bool:
+    tokens = _project_hint_tokens(project_hint)
+    if not tokens:
+        return False
+    haystack = " ".join(
+        str(entry.get(field, "")).strip().lower()
+        for field in ("title", "content", "applies_to", "category")
+        if str(entry.get(field, "")).strip()
+    )
+    if not haystack:
+        return False
+    return any(token in haystack for token in tokens)
+
+
 
 def _load_schema_cache() -> dict:
     """Load cached DB schemas from schema_cache.json."""
@@ -191,7 +213,12 @@ def _extract_table_names(content: str) -> set:
     return {t for t in tables if t.upper() not in sql_keywords}
 
 
-def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "true") -> str:
+def handle_guard_check(
+    files: str = "",
+    area: str = "",
+    project_hint: str = "",
+    include_schemas: str = "true",
+) -> str:
     """Check learnings relevant to files/area before editing. Call BEFORE any code change.
 
     Args:
@@ -202,6 +229,7 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
     conn = get_db()
     include_schemas_bool = include_schemas.lower() in ("true", "1", "yes")
     file_list = [f.strip() for f in files.split(",") if f.strip()] if files else []
+    project_hint_active = bool(_project_hint_tokens(project_hint))
 
     result = {
         "learnings": [],
@@ -242,6 +270,7 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
                     "rule": row["title"],
                     "priority": row.get("priority", "medium") or "medium",
                     "weight": row.get("weight", 0.5) or 0.5,
+                    "project_match": True,
                 })
                 result["conditioned_learnings"].append({
                     "id": row["id"],
@@ -278,7 +307,15 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
                 hit_ids.append(r["id"])
                 pri = r["priority"] or "medium"
                 w = r["weight"] or 0.5
-                result["learnings"].append({"id": r["id"], "category": r["category"], "rule": r["title"], "priority": pri, "weight": w})
+                entry = dict(r)
+                result["learnings"].append({
+                    "id": r["id"],
+                    "category": r["category"],
+                    "rule": r["title"],
+                    "priority": pri,
+                    "weight": w,
+                    "project_match": _learning_matches_project_hint(entry, project_hint),
+                })
 
     # 3. By area/category
     if area:
@@ -288,11 +325,22 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
         ).fetchall()
         for r in rows:
             if r["id"] not in seen_ids:
+                entry = dict(r)
+                project_match = _learning_matches_project_hint(entry, project_hint)
+                if project_hint_active and not project_match:
+                    continue
                 seen_ids.add(r["id"])
                 hit_ids.append(r["id"])
                 pri = r["priority"] or "medium"
                 w = r["weight"] or 0.5
-                result["learnings"].append({"id": r["id"], "category": r["category"], "rule": r["title"], "priority": pri, "weight": w})
+                result["learnings"].append({
+                    "id": r["id"],
+                    "category": r["category"],
+                    "rule": r["title"],
+                    "priority": pri,
+                    "weight": w,
+                    "project_match": project_match,
+                })
 
     # 4. Universal rules — only from the explicitly requested area plus any
     # truly global categories. Pulling `nexo-ops` into every guard check made
@@ -320,7 +368,17 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
         for r in rows:
             if r["id"] not in seen_ids:
                 seen_ids.add(r["id"])
-                result["universal_rules"].append({"id": r["id"], "rule": r["title"], "category": r["category"], "priority": r["priority"] or "medium"})
+                entry = dict(r)
+                project_match = _learning_matches_project_hint(entry, project_hint)
+                if project_hint_active and r["category"] == area and not project_match:
+                    continue
+                result["universal_rules"].append({
+                    "id": r["id"],
+                    "rule": r["title"],
+                    "category": r["category"],
+                    "priority": r["priority"] or "medium",
+                    "project_match": project_match,
+                })
 
     # 5. DB schemas if files contain SQL keywords
     if include_schemas_bool and file_list:
@@ -377,6 +435,8 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
         # Path (b): Only promote to blocking if high/critical priority AND title has prohibition keyword
         pri = learning.get("priority", "medium")
         if pri in ("critical", "high") and BLOCKING_KEYWORDS.search(learning["rule"]):
+            if project_hint_active and not learning.get("project_match"):
+                continue
             blocking_seen.add(lid)
             result["blocking_rules"].append({
                 "id": lid, "rule": learning["rule"], "repetitions": rep_count,
@@ -487,8 +547,13 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
     )
     conn.commit()
 
-    # Sort learnings by weight (highest first)
-    result["learnings"].sort(key=lambda x: x.get("weight", 0.5), reverse=True)
+    # Prefer project-matching learnings when a project hint is present, then weight.
+    result["learnings"].sort(
+        key=lambda x: (
+            not x.get("project_match", not project_hint_active),
+            -(x.get("weight", 0.5) or 0.5),
+        )
+    )
 
     # Format output
     lines = []
