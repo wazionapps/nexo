@@ -1,5 +1,30 @@
 # Changelog
 
+## [7.1.7] - 2026-04-21
+
+Patch release over v7.1.6. This line closes a real operator-facing language
+gap in Brain's email automation: `email-monitor` now carries the operator's
+preferred language explicitly through its prompt contract, and direct
+`needs_interactive` escalation emails stop falling back to English for Spanish
+operators.
+
+### Fixed
+
+- `src/scripts/nexo-email-monitor.py` now reads the calibrated operator
+  language alongside the operator/assistant names, injects that language into
+  the catalog-backed `email-monitor` prompt, and localizes direct operator
+  escalation subjects/bodies when the monitor exhausts automatic retries.
+- `templates/core-prompts/email-monitor.md` now states the language contract
+  explicitly: operator-facing emails must use the operator's preferred
+  language, while non-operator replies should follow the thread language.
+- Regression coverage now locks both surfaces so Spanish operators do not
+  silently receive English escalation mail again.
+
+### Verification
+
+- `1862 passed, 3 skipped, 1 xfailed, 5 xpassed` via `pytest -q`
+- `python3 scripts/verify_release_readiness.py --ci`
+
 ## [7.1.6] - 2026-04-21
 
 Patch release coordinated with NEXO Desktop v0.22.6. This line closes the
