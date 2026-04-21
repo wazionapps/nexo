@@ -114,6 +114,37 @@ def test_skill_list_accepts_status_alias_and_limit(isolated_db):
     assert "SK-ALIAS-TEST" in rendered
 
 
+def test_skill_match_syncs_runtime_before_matching(monkeypatch, isolated_db):
+    import plugins.skills as skills_plugin
+
+    seen = {"sync": 0, "match": 0}
+
+    monkeypatch.setattr(skills_plugin, "sync_skills", lambda: seen.__setitem__("sync", seen["sync"] + 1) or {"ok": True})
+    monkeypatch.setattr(
+        skills_plugin,
+        "match_skills",
+        lambda task, level="": seen.__setitem__("match", seen["match"] + 1) or [
+            {
+                "id": "SK-CREATE-NEXO-PRIMITIVE",
+                "name": "Create NEXO Primitive",
+                "level": "published",
+                "mode": "guide",
+                "source_kind": "core",
+                "trust_score": 80,
+                "use_count": 0,
+                "description": "Choose the correct artifact type.",
+                "_match": "trigger:crear una nueva skill",
+            }
+        ],
+    )
+
+    rendered = skills_plugin.handle_skill_match("crear una nueva skill reutilizable")
+
+    assert seen["sync"] == 1
+    assert seen["match"] == 1
+    assert "SK-CREATE-NEXO-PRIMITIVE" in rendered
+
+
 def test_guard_cross_check_accepts_task_alias(isolated_db):
     from plugins.guard import handle_guard_cross_check
 

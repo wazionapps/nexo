@@ -85,6 +85,7 @@ def handle_skill_create(
 
 
 def handle_skill_match(task: str, level: str = "") -> str:
+    sync_skills()
     matches = match_skills(task, level=level)
     if not matches:
         return f"No skills found for: '{task}'"
