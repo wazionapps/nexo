@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 import paths
 
+from core_prompts import render_core_prompt
 from db import create_protocol_debt, get_db
 from plugins.guard import _load_conditioned_learnings, _normalize_path_token
 from protocol_settings import get_protocol_strictness
@@ -607,7 +608,7 @@ def _collect_protocol_warnings(conn, *, sid: str, tool_name: str) -> list[dict]:
     if not sid:
         _append_protocol_warning(
             warnings,
-            "Trabajo no trivial detectado antes de `nexo_startup(...)`. Arranca NEXO, abre `nexo_task_open(...)`, y si esto va a durar varias fases abre también `nexo_workflow_open(...)` antes de seguir.",
+            render_core_prompt("hook-protocol-warning-startup-required"),
         )
         return warnings
 
@@ -615,17 +616,20 @@ def _collect_protocol_warnings(conn, *, sid: str, tool_name: str) -> list[dict]:
     has_guard = _session_has_guard_check(conn, sid)
     if not task:
         guard_note = (
-            " Ejecuta `nexo_guard_check(...)` antes de leer código condicionado o compartido."
+            render_core_prompt("hook-protocol-warning-task-open-guard-note")
             if short_name in {"Read", "Bash", "Grep", "Glob"} and not has_guard
             else ""
         )
         _append_protocol_warning(
             warnings,
-            "Trabajo no trivial detectado sin `nexo_task_open(...)`. Ábrelo ahora y, si esto va a cruzar varios pasos o mensajes, añade `nexo_workflow_open(...)`." + guard_note,
+            render_core_prompt(
+                "hook-protocol-warning-task-open-required",
+                guard_note=guard_note,
+            ),
         )
         _append_protocol_warning(
             warnings,
-            "Recordatorio protocolario: mantén `nexo_heartbeat(...)` al día y no cierres en optimista; si hay cambios reales, registra `nexo_change_log(...)` o cierra con `nexo_task_close(...)` más evidencia.",
+            render_core_prompt("hook-protocol-warning-heartbeat-close-evidence"),
         )
         return warnings
 
@@ -633,14 +637,20 @@ def _collect_protocol_warnings(conn, *, sid: str, tool_name: str) -> list[dict]:
     if str(task.get("task_type") or "").strip() in ACTION_TASK_TYPES and not (task.get("opened_with_guard") or has_guard):
         _append_protocol_warning(
             warnings,
-            f"La tarea {task_id} está activa sin guard visible. Ejecuta `nexo_guard_check(...)` antes de tocar código condicionado o compartido.",
+            render_core_prompt(
+                "hook-protocol-warning-guard-required",
+                task_id=task_id,
+            ),
         )
 
     workflow = _find_any_open_workflow(conn, sid)
     if _task_needs_workflow(task) and not workflow:
         _append_protocol_warning(
             warnings,
-            f"La tarea {task_id} ya tiene pinta de multi-step y sigue sin `nexo_workflow_open(...)`. Ábrelo para que checkpoints, resume y replay no dependan de memoria implícita.",
+            render_core_prompt(
+                "hook-protocol-warning-workflow-required",
+                task_id=task_id,
+            ),
         )
 
     if str(task.get("task_type") or "").strip() in ACTION_TASK_TYPES and short_name in {"Bash", "Edit", "MultiEdit", "Write", "Delete"}:
@@ -651,7 +661,11 @@ def _collect_protocol_warnings(conn, *, sid: str, tool_name: str) -> list[dict]:
         )
         _append_protocol_warning(
             warnings,
-            f"Recordatorio protocolario para {task_id}: mantén `nexo_heartbeat(...)` al día y ciérrala con `nexo_task_close(...)` más evidencia antes de decir que está resuelta.{change_note}",
+            render_core_prompt(
+                "hook-protocol-warning-task-close-evidence",
+                task_id=task_id,
+                change_note=change_note,
+            ),
         )
 
     return warnings

@@ -41,6 +41,13 @@ def test_prompt_catalog_dir_exists_and_contains_automation_prompts():
     assert (core_prompts.PROMPTS_DIR / "heartbeat-diary-overdue.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "heartbeat-guard-reminder.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "heartbeat-learning-reminder.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "hook-protocol-warning-startup-required.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "hook-protocol-warning-task-open-guard-note.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "hook-protocol-warning-task-open-required.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "hook-protocol-warning-heartbeat-close-evidence.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "hook-protocol-warning-guard-required.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "hook-protocol-warning-workflow-required.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "hook-protocol-warning-task-close-evidence.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "immune-triage.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "interactive-startup.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "json-object-only.md").is_file()
@@ -259,6 +266,20 @@ def test_render_core_prompt_supports_enforcer_and_startup_templates():
     )
     heartbeat_guard = core_prompts.render_core_prompt("heartbeat-guard-reminder")
     heartbeat_learning = core_prompts.render_core_prompt("heartbeat-learning-reminder")
+    hook_startup = core_prompts.render_core_prompt("hook-protocol-warning-startup-required")
+    hook_guard_note = core_prompts.render_core_prompt("hook-protocol-warning-task-open-guard-note")
+    hook_task_open = core_prompts.render_core_prompt(
+        "hook-protocol-warning-task-open-required",
+        guard_note=hook_guard_note,
+    )
+    hook_close = core_prompts.render_core_prompt("hook-protocol-warning-heartbeat-close-evidence")
+    hook_guard = core_prompts.render_core_prompt("hook-protocol-warning-guard-required", task_id="PT-42")
+    hook_workflow = core_prompts.render_core_prompt("hook-protocol-warning-workflow-required", task_id="PT-42")
+    hook_task_close = core_prompts.render_core_prompt(
+        "hook-protocol-warning-task-close-evidence",
+        task_id="PT-42",
+        change_note=" If you really edit, capture `nexo_change_log(...)` too.",
+    )
     watchdog = core_prompts.render_core_prompt(
         "watchdog-repair",
         fail_details="[core] demo failure",
@@ -310,6 +331,13 @@ def test_render_core_prompt_supports_enforcer_and_startup_templates():
     assert "nexo_session_diary_write" in heartbeat_diary
     assert "nexo_guard_check" in heartbeat_guard
     assert "nexo_learning_add" in heartbeat_learning
+    assert "before `nexo_startup(...)`" in hook_startup
+    assert "Run `nexo_guard_check(...)` before reading conditioned or shared code." in hook_guard_note
+    assert "without `nexo_task_open(...)`" in hook_task_open
+    assert "nexo_change_log(...)" in hook_close
+    assert "Task PT-42 is active without a visible guard." in hook_guard
+    assert "Task PT-42 already looks multi-step" in hook_workflow
+    assert "Protocol reminder for PT-42" in hook_task_close
     assert "[core] demo failure" in watchdog
     assert "/Users/franciscoc/.nexo/runtime/logs/watchdog-repair-result.log" in watchdog
 
