@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import ast
+import re
 import sys
 from pathlib import Path
 
@@ -12,8 +14,12 @@ if str(SRC) not in sys.path:
 import core_prompts
 
 
+_PROMPT_LIKE_NAME = re.compile(r".*(PROMPT|QUESTION|TEMPLATE|INJECTION).*")
+
+
 def test_prompt_catalog_dir_exists_and_contains_automation_prompts():
     assert core_prompts.PROMPTS_DIR.is_dir()
+    assert (core_prompts.PROMPTS_DIR / "automation-backend-probe.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "catchup-assessment.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "check-context.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "daily-synthesis.md").is_file()
@@ -93,6 +99,7 @@ def test_render_core_prompt_replaces_named_tokens():
 
 
 def test_render_core_prompt_supports_catchup_and_immune_templates():
+    probe = core_prompts.render_core_prompt("automation-backend-probe")
     catchup = core_prompts.render_core_prompt(
         "catchup-assessment",
         ran=3,
@@ -110,6 +117,7 @@ def test_render_core_prompt_supports_catchup_and_immune_templates():
     assert "The Mac was off/asleep and 3 scheduled tasks just ran as catch-up" in catchup
     assert "/tmp/catchup-assessment.md" in catchup
     assert "2026-04-20 09:30" in catchup
+    assert probe == "Reply exactly OK."
 
     assert "You are the NEXO Immune System triage analyst." in immune
     assert "/tmp/immune-triage.md" in immune
@@ -311,3 +319,86 @@ def test_render_core_prompt_supports_evolution_templates():
     assert "/tmp/public-repo" in public_contrib
     assert "Number: #42" in public_review
     assert "fix: runtime drift" in public_review
+
+
+def test_all_render_core_prompt_calls_point_to_existing_templates():
+    src_root = SRC
+    pattern = re.compile(r'render_core_prompt\("([^"]+)"')
+    seen: set[str] = set()
+    for path in sorted(src_root.rglob("*.py")):
+        text = path.read_text(encoding="utf-8")
+        for match in pattern.finditer(text):
+            seen.add(match.group(1))
+    missing = sorted(name for name in seen if not (core_prompts.PROMPTS_DIR / f"{name}.md").is_file())
+    assert not missing, f"Missing core prompt templates for: {missing}"
+
+
+def test_prompt_like_constants_do_not_embed_inline_prompt_text():
+    allowed_names = {"PROMPT_TEMPLATE_NAMES", "CORTEX_PROMPT"}
+
+    def _is_allowed_prompt_source(node: ast.AST) -> bool:
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+            if node.func.id == "render_core_prompt":
+                return True
+            if node.func.id == "_find_evolution_file":
+                return True
+        return False
+
+    def _is_inline_stringish(node: ast.AST) -> bool:
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            return True
+        if isinstance(node, ast.JoinedStr):
+            return True
+        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+            return _is_inline_stringish(node.left) or _is_inline_stringish(node.right)
+        return False
+
+    violations: list[str] = []
+    for path in sorted(SRC.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in tree.body:
+            if not isinstance(node, ast.Assign):
+                continue
+            if len(node.targets) != 1 or not isinstance(node.targets[0], ast.Name):
+                continue
+            name = node.targets[0].id
+            if name in allowed_names or not _PROMPT_LIKE_NAME.match(name):
+                continue
+            if _is_allowed_prompt_source(node.value):
+                continue
+            if _is_inline_stringish(node.value):
+                violations.append(f"{path.relative_to(SRC)}:{name}")
+    assert not violations, f"Inline prompt-like constants must use core prompt catalog: {violations}"
+
+
+def test_model_callsites_do_not_embed_inline_prompt_literals():
+    violations: list[str] = []
+    for path in sorted(SRC.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            func_name = None
+            if isinstance(node.func, ast.Name):
+                func_name = node.func.id
+            elif isinstance(node.func, ast.Attribute):
+                func_name = node.func.attr
+            if func_name not in {"run_automation_prompt", "call_model_raw"}:
+                continue
+            inline_fields: list[str] = []
+            if node.args:
+                first = node.args[0]
+                if isinstance(first, ast.Constant) and isinstance(first.value, str):
+                    inline_fields.append("arg0")
+                elif isinstance(first, ast.JoinedStr):
+                    inline_fields.append("arg0")
+            for kw in node.keywords:
+                if kw.arg not in {"prompt", "system", "append_system_prompt"}:
+                    continue
+                if isinstance(kw.value, ast.Constant) and isinstance(kw.value.value, str):
+                    inline_fields.append(kw.arg)
+                elif isinstance(kw.value, ast.JoinedStr):
+                    inline_fields.append(kw.arg)
+            if inline_fields:
+                violations.append(f"{path.relative_to(SRC)}:{func_name}:{','.join(inline_fields)}")
+    assert not violations, f"Inline model prompts must come from the core prompt catalog: {violations}"

@@ -1200,7 +1200,7 @@ def probe_automation_backend(
         }
     try:
         result = run_automation_prompt(
-            "Reply exactly OK.",
+            render_core_prompt("automation-backend-probe"),
             backend=selected_backend,
             cwd=cwd,
             timeout=timeout,
