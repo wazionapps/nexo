@@ -222,6 +222,42 @@ def test_auto_spreading_depth_stays_off_for_exact_lookups():
     assert _search._auto_spreading_depth("path /Users/test/app.py exact port 6174") == 0
 
 
+def test_query_intent_can_use_local_classifier_for_ambiguous_conceptual_queries(monkeypatch):
+    import importlib
+    _search = importlib.import_module("cognitive._search")
+
+    monkeypatch.setattr(_search, "_semantic_query_intent_scores", lambda _query: {})
+    monkeypatch.setattr(
+        _search,
+        "_local_classify_query_intent",
+        lambda _query: {
+            "available": True,
+            "label": "reasoning",
+            "confidence": 0.91,
+        },
+    )
+
+    assert _search._classify_query_intent("deploy drift after update with no obvious root cause") == "reasoning"
+
+
+def test_query_intent_keeps_lookup_when_classifier_is_unavailable_and_no_semantic_hit(monkeypatch):
+    import importlib
+    _search = importlib.import_module("cognitive._search")
+
+    monkeypatch.setattr(_search, "_semantic_query_intent_scores", lambda _query: {})
+    monkeypatch.setattr(
+        _search,
+        "_local_classify_query_intent",
+        lambda _query: {
+            "available": False,
+            "label": None,
+            "confidence": 0.0,
+        },
+    )
+
+    assert _search._classify_query_intent("last review status for maria sync") == "lookup"
+
+
 def test_result_confidence_labels():
     import importlib
     _search = importlib.import_module("cognitive._search")
