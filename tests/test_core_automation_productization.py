@@ -97,6 +97,26 @@ def test_send_reply_uses_configured_sent_folder_and_skips_without_imap(tmp_path,
     assert skipped is False
 
 
+def test_send_reply_semantic_event_classifier_handles_non_spanish_replies(tmp_path, monkeypatch):
+    home = tmp_path / "nexo-home"
+    (home / "nexo-email").mkdir(parents=True)
+    monkeypatch.setenv("NEXO_HOME", str(home))
+    module = _load_script_module("nexo_send_reply_semantic_event_test", "nexo-send-reply.py")
+
+    monkeypatch.setattr(module, "_classify_reply_event_semantically", lambda _text: "resolution")
+    assert module.classify_reply_event("I have attached the completed file and everything is now delivered.") == "resolution"
+
+
+def test_send_reply_regex_priority_still_wins_over_semantic_fallback(tmp_path, monkeypatch):
+    home = tmp_path / "nexo-home"
+    (home / "nexo-email").mkdir(parents=True)
+    monkeypatch.setenv("NEXO_HOME", str(home))
+    module = _load_script_module("nexo_send_reply_regex_priority_test", "nexo-send-reply.py")
+
+    monkeypatch.setattr(module, "_classify_reply_event_semantically", lambda _text: "commitment")
+    assert module.classify_reply_event("Hecho, ya está.") == "resolution"
+
+
 def test_email_monitor_trusted_domains_and_runtime_path_are_generic(tmp_path, monkeypatch):
     home = tmp_path / "nexo-home"
     (home / "nexo-email").mkdir(parents=True)
