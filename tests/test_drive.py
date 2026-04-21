@@ -399,6 +399,7 @@ class TestDetection:
     def test_area_inferred_from_local_classifier_when_semantics_are_ambiguous(self):
         orig_semantic = tools_drive._semantic_area_scores
         orig_local = tools_drive._local_classify_area
+        orig_llm = tools_drive._llm_classify_area
         orig_legacy = tools_drive._legacy_keyword_area
         try:
             tools_drive._semantic_area_scores = lambda _text: {}
@@ -406,6 +407,11 @@ class TestDetection:
                 "available": True,
                 "label": "email",
                 "confidence": 0.93,
+            }
+            tools_drive._llm_classify_area = lambda _text: {
+                "available": False,
+                "label": None,
+                "confidence": 0.0,
             }
             tools_drive._legacy_keyword_area = lambda _text: ""
             result = detect_drive_signal(
@@ -418,14 +424,46 @@ class TestDetection:
         finally:
             tools_drive._semantic_area_scores = orig_semantic
             tools_drive._local_classify_area = orig_local
+            tools_drive._llm_classify_area = orig_llm
+            tools_drive._legacy_keyword_area = orig_legacy
+
+    def test_area_inferred_from_llm_classifier_when_semantics_and_local_unavailable(self):
+        orig_semantic = tools_drive._semantic_area_scores
+        orig_local = tools_drive._local_classify_area
+        orig_llm = tools_drive._llm_classify_area
+        orig_legacy = tools_drive._legacy_keyword_area
+        try:
+            tools_drive._semantic_area_scores = lambda _text: {}
+            tools_drive._local_classify_area = lambda _text: {
+                "available": False,
+                "label": None,
+                "confidence": 0.0,
+            }
+            tools_drive._llm_classify_area = lambda _text: {
+                "available": True,
+                "label": "email",
+                "confidence": 0.88,
+            }
+            tools_drive._legacy_keyword_area = lambda _text: ""
+            assert tools_drive._infer_area("The sender mailbox keeps bouncing customer replies") == "email"
+        finally:
+            tools_drive._semantic_area_scores = orig_semantic
+            tools_drive._local_classify_area = orig_local
+            tools_drive._llm_classify_area = orig_llm
             tools_drive._legacy_keyword_area = orig_legacy
 
     def test_area_legacy_keywords_still_work_when_classifier_is_unavailable(self):
         orig_semantic = tools_drive._semantic_area_scores
         orig_local = tools_drive._local_classify_area
+        orig_llm = tools_drive._llm_classify_area
         try:
             tools_drive._semantic_area_scores = lambda _text: {}
             tools_drive._local_classify_area = lambda _text: {
+                "available": False,
+                "label": None,
+                "confidence": 0.0,
+            }
+            tools_drive._llm_classify_area = lambda _text: {
                 "available": False,
                 "label": None,
                 "confidence": 0.0,
@@ -434,6 +472,7 @@ class TestDetection:
         finally:
             tools_drive._semantic_area_scores = orig_semantic
             tools_drive._local_classify_area = orig_local
+            tools_drive._llm_classify_area = orig_llm
 
     def test_reinforces_existing_on_similar(self):
         detect_drive_signal(

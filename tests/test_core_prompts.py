@@ -27,6 +27,8 @@ def test_prompt_catalog_dir_exists_and_contains_automation_prompts():
     assert (core_prompts.PROMPTS_DIR / "deep-sleep-extract-json-conversion.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "deep-sleep-extract-json-output.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "codex-protocol-contract.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "drive-area-classifier-system.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "drive-area-classifier-user.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "drive-signal-classifier-system.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "drive-signal-classifier-user.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "email-monitor.md").is_file()
@@ -199,6 +201,11 @@ def test_render_core_prompt_supports_json_and_drive_classifier_templates():
         "deep-sleep-extract-json-output",
         session_id="session-123",
     )
+    area_system = core_prompts.render_core_prompt("drive-area-classifier-system")
+    area_user = core_prompts.render_core_prompt(
+        "drive-area-classifier-user",
+        text="The sender mailbox keeps bouncing customer replies.",
+    )
     drive_system = core_prompts.render_core_prompt("drive-signal-classifier-system")
     drive_user = core_prompts.render_core_prompt(
         "drive-signal-classifier-user",
@@ -211,6 +218,8 @@ def test_render_core_prompt_supports_json_and_drive_classifier_templates():
     assert "protocol_summary" in conversion
     assert "session-123" in deep_sleep_json
     assert "cannot_comply" in deep_sleep_json
+    assert "exactly nine labels: shopify, google-ads, meta-ads, wazion, nexo, canaririural, seo, email, none" in area_system
+    assert "The sender mailbox keeps bouncing customer replies." in area_user
     assert "one of exactly five labels: anomaly, pattern, gap, opportunity, none" in drive_system
     assert "ROAS dropped 35% after yesterday's deploy." in drive_user
 

@@ -35,6 +35,18 @@ _LLM_CONFIDENCE_THRESHOLD = float(os.environ.get("NEXO_DRIVE_LLM_CONFIDENCE", "0
 _LLM_CACHE_TTL_SECONDS = int(os.environ.get("NEXO_DRIVE_LLM_CACHE_TTL", "21600"))
 _LLM_ALLOWED_LABELS = {"anomaly", "pattern", "gap", "opportunity", "none"}
 _LLM_CLASSIFICATION_CACHE: dict[str, dict] = {}
+_AREA_LLM_ALLOWED_LABELS = {
+    "shopify",
+    "google-ads",
+    "meta-ads",
+    "wazion",
+    "nexo",
+    "canaririural",
+    "seo",
+    "email",
+    "none",
+}
+_LLM_AREA_CLASSIFICATION_CACHE: dict[str, dict] = {}
 _LOCAL_ALLOWED_LABELS = ("anomaly", "pattern", "gap", "opportunity", "none")
 _LOCAL_SIGNAL_CLASSIFIER = None
 _AREA_SCORE_THRESHOLD = 0.64
@@ -402,6 +414,72 @@ def _llm_classify_signal(text: str) -> dict:
     return classification
 
 
+def _llm_classify_area(text: str) -> dict:
+    text_norm = _normalize_text(text)
+    if len(text_norm) < _LLM_MIN_TEXT_CHARS:
+        return {"available": False, "label": None, "reason": "text_too_short"}
+
+    cache_key = _llm_cache_key(f"area::{text}")
+    now = time.time()
+    cached = _LLM_AREA_CLASSIFICATION_CACHE.get(cache_key)
+    if cached and cached.get("expires_at", 0) > now:
+        return {k: v for k, v in cached.items() if k != "expires_at"}
+
+    try:
+        from agent_runner import AutomationBackendUnavailableError, run_automation_prompt
+    except Exception as exc:
+        return {"available": False, "label": None, "reason": f"runner_unavailable:{exc}"}
+
+    json_system_prompt = render_core_prompt("drive-area-classifier-system")
+    prompt = render_core_prompt(
+        "drive-area-classifier-user",
+        text=text.strip()[:3000],
+    )
+
+    try:
+        result = run_automation_prompt(
+            prompt,
+            caller="tools/drive_area",
+            task_profile="fast",
+            timeout=_LLM_TIMEOUT_SECONDS,
+            output_format="text",
+            append_system_prompt=json_system_prompt,
+        )
+    except (AutomationBackendUnavailableError, subprocess.TimeoutExpired) as exc:
+        return {"available": False, "label": None, "reason": f"automation_unavailable:{exc}"}
+    except Exception as exc:
+        return {"available": False, "label": None, "reason": f"automation_error:{exc}"}
+
+    if result.returncode != 0:
+        return {"available": False, "label": None, "reason": f"automation_returncode:{result.returncode}"}
+
+    parsed = _extract_json_object(result.stdout)
+    if not parsed:
+        return {"available": False, "label": None, "reason": "invalid_json"}
+
+    label = str(parsed.get("label", "") or "").strip().lower()
+    if label not in _AREA_LLM_ALLOWED_LABELS:
+        return {"available": False, "label": None, "reason": "invalid_label"}
+
+    try:
+        confidence = float(parsed.get("confidence", 0.0) or 0.0)
+    except (TypeError, ValueError):
+        confidence = 0.0
+
+    classification = {
+        "available": True,
+        "label": None if label == "none" else label,
+        "confidence": confidence,
+        "reason": str(parsed.get("reason", "") or ""),
+        "source": "llm",
+    }
+    _LLM_AREA_CLASSIFICATION_CACHE[cache_key] = {
+        **classification,
+        "expires_at": now + _LLM_CACHE_TTL_SECONDS,
+    }
+    return classification
+
+
 def _regex_fallback_classify(text: str) -> str | None:
     for signal_type, patterns in _FALLBACK_PATTERNS.items():
         if any(pattern.search(text) for pattern in patterns):
@@ -543,6 +621,13 @@ def _infer_area(text: str) -> str:
         winner, winner_score = max(scores.items(), key=lambda item: item[1])
         if winner_score >= 0.36:
             return winner
+
+    llm_result = _llm_classify_area(text)
+    if llm_result.get("available"):
+        confidence = float(llm_result.get("confidence", 0.0) or 0.0)
+        label = llm_result.get("label")
+        if isinstance(label, str) and confidence >= _LLM_CONFIDENCE_THRESHOLD:
+            return label
 
     return _legacy_keyword_area(text)
 
