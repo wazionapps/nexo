@@ -37,6 +37,10 @@ _LLM_ALLOWED_LABELS = {"anomaly", "pattern", "gap", "opportunity", "none"}
 _LLM_CLASSIFICATION_CACHE: dict[str, dict] = {}
 _LOCAL_ALLOWED_LABELS = ("anomaly", "pattern", "gap", "opportunity", "none")
 _LOCAL_SIGNAL_CLASSIFIER = None
+_AREA_SCORE_THRESHOLD = 0.64
+_AREA_SCORE_MARGIN = 0.14
+_AREA_LOCAL_CONFIDENCE_THRESHOLD = float(os.environ.get("NEXO_DRIVE_AREA_LOCAL_CONFIDENCE", "0.66"))
+_LOCAL_AREA_CLASSIFIER = None
 
 _SIGNAL_CUES = {
     "anomaly": {
@@ -144,6 +148,55 @@ _FALLBACK_PATTERNS = {
         re.compile(r"\b(podríamos|could|se podría|we could|opportunity)\b.*\b(automatiz|improve|mejorar|optimiz)\b", re.I),
     ),
 }
+
+_AREA_CUES = {
+    "shopify": (
+        "shopify", "storefront", "checkout", "cart", "collection", "variant",
+        "inventory", "sku", "theme", "liquid", "order", "pedido", "producto",
+        "catalog", "catalogo",
+    ),
+    "google-ads": (
+        "google ads", "paid search", "search campaign", "campaign", "campana",
+        "campaña", "ad group", "cpc", "pmax", "roas", "gads", "keyword",
+        "search terms", "quality score",
+    ),
+    "meta-ads": (
+        "meta ads", "facebook ads", "instagram ads", "facebook", "instagram",
+        "pixel", "capi", "ad set", "creative", "reels campaign",
+    ),
+    "wazion": (
+        "wazion", "whatsapp", "baileys", "inbox agent", "wa automation",
+        "chat automation",
+    ),
+    "nexo": (
+        "nexo", "nexo brain", "desktop", "guardian", "mcp", "cognitive",
+        "protocol", "enforcer", "shared brain",
+    ),
+    "canaririural": (
+        "canarirural", "canari rural", "booking", "reserva", "hospedaje",
+        "alojamiento", "guest", "property", "villa", "hotel",
+    ),
+    "seo": (
+        "seo", "search console", "indexacion", "indexación", "serp",
+        "ranking", "organic traffic", "crawl", "schema markup",
+    ),
+    "email": (
+        "email", "correo", "inbox", "smtp", "imap", "mailbox", "reply",
+        "deliverability", "bounce", "sender", "newsletter",
+    ),
+}
+
+_AREA_LOCAL_LABELS = (
+    ("Shopify ecommerce storefront operations, catalog, checkout, themes, orders", "shopify"),
+    ("Google Ads paid search campaigns, CPC, ROAS, PMax, keywords", "google-ads"),
+    ("Meta Ads campaigns for Facebook and Instagram, pixel, CAPI, creatives", "meta-ads"),
+    ("WhatsApp automation and Wazion product operations", "wazion"),
+    ("NEXO Brain, Desktop, Guardian, protocol, or MCP runtime work", "nexo"),
+    ("Hospitality reservations, lodging, villas, or Canarirural operations", "canaririural"),
+    ("SEO, Search Console, indexing, ranking, or organic search", "seo"),
+    ("Email inbox, SMTP, IMAP, mailbox delivery, replies, or sender identity", "email"),
+    ("None of the listed business areas", "none"),
+)
 
 
 def _normalize_text(text: str) -> str:
@@ -401,8 +454,56 @@ def _classify_signal(text: str, *, allow_llm: bool = True) -> str | None:
     return _regex_fallback_classify(text)
 
 
-def _infer_area(text: str) -> str:
-    """Infer operational area from text keywords."""
+def _semantic_area_scores(text: str) -> dict[str, float]:
+    text_norm = _normalize_text(text)
+    tokens = _tokenize(text_norm)
+    if not tokens:
+        return {}
+    scores: dict[str, float] = {}
+    for area_name, cues in _AREA_CUES.items():
+        matches = [cue for cue in cues if _matches_cue(cue, text_norm, tokens)]
+        if not matches:
+            continue
+        score = 0.0
+        for cue in matches:
+            score += 0.26 if " " in cue else 0.18
+        scores[area_name] = min(0.98, score)
+    return scores
+
+
+def _local_classify_area(text: str) -> dict:
+    text_norm = _normalize_text(text)
+    if len(text_norm) < _LLM_MIN_TEXT_CHARS:
+        return {"available": False, "label": None, "reason": "text_too_short"}
+
+    global _LOCAL_AREA_CLASSIFIER
+    try:
+        if _LOCAL_AREA_CLASSIFIER is None:
+            from classifier_local import LocalZeroShotClassifier
+
+            _LOCAL_AREA_CLASSIFIER = LocalZeroShotClassifier(
+                confidence_floor=_AREA_LOCAL_CONFIDENCE_THRESHOLD,
+            )
+        if not _LOCAL_AREA_CLASSIFIER.is_available():
+            return {"available": False, "label": None, "reason": "classifier_unavailable"}
+        label_texts = [label for label, _canonical in _AREA_LOCAL_LABELS]
+        canonical_by_label = {label: canonical for label, canonical in _AREA_LOCAL_LABELS}
+        result = _LOCAL_AREA_CLASSIFIER.classify(text, label_texts)
+        if result is None:
+            return {"available": False, "label": None, "reason": "classifier_failed"}
+        canonical = canonical_by_label.get(result.label)
+        return {
+            "available": canonical is not None,
+            "label": None if canonical == "none" else canonical,
+            "confidence": float(result.confidence or 0.0),
+            "reason": "local_zero_shot",
+            "source": "local",
+        }
+    except Exception as exc:
+        return {"available": False, "label": None, "reason": f"classifier_error:{exc}"}
+
+
+def _legacy_keyword_area(text: str) -> str:
     text_lower = text.lower()
     area_keywords = {
         "shopify": ["shopify", "tienda", "pedido", "producto", "sku"],
@@ -419,6 +520,31 @@ def _infer_area(text: str) -> str:
             if kw in text_lower:
                 return area
     return ""
+
+
+def _infer_area(text: str) -> str:
+    """Infer operational area with semantic/local routing before legacy keywords."""
+    scores = _semantic_area_scores(text)
+    if scores:
+        ordered = sorted(scores.items(), key=lambda item: item[1], reverse=True)
+        winner, winner_score = ordered[0]
+        runner_up = ordered[1][1] if len(ordered) > 1 else 0.0
+        if winner_score >= _AREA_SCORE_THRESHOLD and (winner_score - runner_up) >= _AREA_SCORE_MARGIN:
+            return winner
+
+    local_result = _local_classify_area(text)
+    if local_result.get("available"):
+        confidence = float(local_result.get("confidence", 0.0) or 0.0)
+        label = local_result.get("label")
+        if isinstance(label, str) and confidence >= _AREA_LOCAL_CONFIDENCE_THRESHOLD:
+            return label
+
+    if scores:
+        winner, winner_score = max(scores.items(), key=lambda item: item[1])
+        if winner_score >= 0.36:
+            return winner
+
+    return _legacy_keyword_area(text)
 
 
 def detect_drive_signal(
