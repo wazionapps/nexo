@@ -118,6 +118,24 @@ def _load_conditioned_learnings(conn, file_list: list[str]) -> dict[str, list[di
     return conditioned
 
 
+_GENERIC_PARENT_DIR_TOKENS = {
+    "src",
+    "scripts",
+    "lib",
+    "app",
+    "apps",
+    "tests",
+    "docs",
+    "dist",
+    "build",
+}
+
+
+def _is_generic_parent_dir(name: str) -> bool:
+    token = str(name or "").strip().lower()
+    return token in _GENERIC_PARENT_DIR_TOKENS
+
+
 def _is_runtime_core_path(filepath: str) -> bool:
     try:
         candidate = Path(filepath).expanduser().resolve(strict=False)
@@ -247,11 +265,13 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
         p = Path(filepath)
         filename = p.name
         parent_dir = p.parent.name
+        query = "SELECT id, category, title, content, priority, weight FROM learnings WHERE INSTR(content, ?) > 0"
+        params: tuple[str, ...] = (filename,)
+        if parent_dir and not _is_generic_parent_dir(parent_dir):
+            query += " OR INSTR(content, ?) > 0"
+            params = (filename, parent_dir)
 
-        rows = conn.execute(
-            "SELECT id, category, title, content, priority, weight FROM learnings WHERE INSTR(content, ?) > 0 OR INSTR(content, ?) > 0",
-            (filename, parent_dir)
-        ).fetchall()
+        rows = conn.execute(query, params).fetchall()
         for r in rows:
             if r["id"] not in seen_ids:
                 seen_ids.add(r["id"])

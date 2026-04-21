@@ -148,6 +148,24 @@ def test_handle_guard_check_blocks_installed_runtime_core_paths(guard_env):
     assert "Installed runtime core files are protected" in output
 
 
+def test_handle_guard_check_does_not_match_generic_parent_directory_tokens(guard_env):
+    db, guard = _reload_guard_stack()
+    db.init_db()
+
+    conn = db.get_db()
+    db.create_learning(
+        "nexo-ops",
+        "Never touch generic scripts blindly",
+        "Never touch scripts blindly; always re-check launchd metadata first.",
+        status="active",
+    )
+    conn.commit()
+
+    output = guard.handle_guard_check(files="/repo/personal/scripts/new-automation.py", area="personal-scripts")
+
+    assert "Never touch generic scripts blindly" not in output
+
+
 def test_handle_guard_file_check_skips_file_scoped_rules_for_other_files(guard_env):
     db, guard = _reload_guard_stack()
     db.init_db()
