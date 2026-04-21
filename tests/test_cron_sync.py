@@ -318,6 +318,42 @@ def test_load_manifest_applies_core_automation_interval_override(tmp_path, monke
     assert watchdog["interval_seconds"] == 1800
 
 
+def test_load_manifest_applies_core_schedule_calendar_override(tmp_path, monkeypatch):
+    from crons import sync as cron_sync
+
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(
+        """
+{
+  "crons": [
+    {"id": "deep-sleep", "script": "scripts/nexo-deep-sleep.sh", "schedule": {"hour": 4, "minute": 30}, "core": true},
+    {"id": "watchdog", "script": "scripts/nexo-watchdog.sh", "interval_seconds": 1800, "core": true}
+  ]
+}
+""".strip()
+    )
+    nexo_home = tmp_path / "nexo-home"
+    config_dir = nexo_home / "personal" / "config"
+    config_dir.mkdir(parents=True)
+    config_dir.joinpath("schedule-overrides.json").write_text(
+        json.dumps({
+            "deep-sleep": {"start_hour": "05:15"}
+        })
+    )
+
+    monkeypatch.setattr(cron_sync, "MANIFEST", manifest)
+    monkeypatch.setenv("NEXO_HOME", str(nexo_home))
+    monkeypatch.setattr(cron_sync, "NEXO_HOME", nexo_home)
+    monkeypatch.setattr(cron_sync, "OPTIONALS_FILE", nexo_home / "config" / "optionals.json")
+
+    crons = cron_sync.load_manifest()
+    deep_sleep = next(item for item in crons if item["id"] == "deep-sleep")
+    watchdog = next(item for item in crons if item["id"] == "watchdog")
+    assert deep_sleep["schedule"] == {"hour": 5, "minute": 15}
+    assert deep_sleep["_schedule_source"] == "override"
+    assert watchdog["interval_seconds"] == 1800
+
+
 def test_load_manifest_filters_platforms_and_power_policy(tmp_path, monkeypatch):
     from crons import sync as cron_sync
 

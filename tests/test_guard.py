@@ -114,6 +114,143 @@ def test_handle_guard_check_does_not_promote_file_scoped_rules_to_universal_rule
     assert "Never edit guard.py directly" not in output
 
 
+def test_handle_guard_check_does_not_pull_unrelated_nexo_ops_universal_rules(guard_env):
+    db, guard = _reload_guard_stack()
+    db.init_db()
+
+    conn = db.get_db()
+    db.create_learning(
+        "nexo-ops",
+        "Cloudflare access must be verified before diagnosing Wrangler auth",
+        "SIEMPRE verify Cloudflare access before claiming Wrangler auth is the root cause.",
+        status="active",
+    )
+    conn.commit()
+
+    output = guard.handle_guard_check(files="/repo/src/doctor/providers/runtime.py", area="nexo")
+
+    assert "UNIVERSAL RULES" not in output
+    assert "Cloudflare access must be verified before diagnosing Wrangler auth" not in output
+
+
+def test_handle_guard_check_blocks_installed_runtime_core_paths(guard_env):
+    db, guard = _reload_guard_stack()
+    db.init_db()
+
+    runtime_core_file = guard_env / "core" / "plugins" / "protocol.py"
+    runtime_core_file.parent.mkdir(parents=True, exist_ok=True)
+    runtime_core_file.write_text("# installed runtime core\n", encoding="utf-8")
+
+    output = guard.handle_guard_check(files=str(runtime_core_file), area="nexo-ops")
+
+    assert "BLOCKING RULES" in output
+    assert f"FILE RULE:{runtime_core_file}" in output
+    assert "Installed runtime core files are protected" in output
+
+
+def test_handle_guard_check_does_not_match_generic_parent_directory_tokens(guard_env):
+    db, guard = _reload_guard_stack()
+    db.init_db()
+
+    conn = db.get_db()
+    db.create_learning(
+        "nexo-ops",
+        "Never touch generic scripts blindly",
+        "Never touch scripts blindly; always re-check launchd metadata first.",
+        status="active",
+    )
+    conn.commit()
+
+    output = guard.handle_guard_check(files="/repo/personal/scripts/new-automation.py", area="personal-scripts")
+
+    assert "Never touch generic scripts blindly" not in output
+
+
+def test_handle_guard_check_project_hint_filters_unrelated_blocking_rules(guard_env):
+    db, guard = _reload_guard_stack()
+    db.init_db()
+
+    conn = db.get_db()
+    matching = db.create_learning(
+        "shopify",
+        "Never deploy recambios-bmw theme blindly",
+        "NEVER deploy recambios-bmw theme blindly; verify theme id and backup first.",
+        status="active",
+    )
+    unrelated = db.create_learning(
+        "shopify",
+        "Never deploy wazion storefront blindly",
+        "NEVER deploy wazion storefront blindly; verify live storefront status first.",
+        status="active",
+    )
+    conn.execute(
+        "UPDATE learnings SET priority = 'critical', weight = 1.0 WHERE id IN (?, ?)",
+        (matching["id"], unrelated["id"]),
+    )
+    conn.commit()
+
+    output = guard.handle_guard_check(
+        files="/repo/shopify/theme/snippets/reviews.liquid",
+        area="shopify",
+        project_hint="recambios-bmw",
+    )
+
+    assert "Never deploy recambios-bmw theme blindly" in output
+    assert "Never deploy wazion storefront blindly" not in output
+
+
+def test_handle_guard_check_skips_cross_area_filename_matches_without_exact_path_or_project_hint(guard_env):
+    db, guard = _reload_guard_stack()
+    db.init_db()
+
+    conn = db.get_db()
+    db.create_learning(
+        "shopify",
+        "Do not edit settings_data.json blindly",
+        "Never edit settings_data.json blindly; verify the storefront backup first.",
+        status="active",
+    )
+    conn.commit()
+
+    output = guard.handle_guard_check(
+        files="/repo/personal/scripts/settings_data.json",
+        area="personal-scripts",
+    )
+
+    assert "Do not edit settings_data.json blindly" not in output
+
+
+def test_handle_guard_check_collapses_duplicate_blocking_rules_with_same_title(guard_env):
+    db, guard = _reload_guard_stack()
+    db.init_db()
+
+    conn = db.get_db()
+    first = db.create_learning(
+        "shopify",
+        "Separate product Brain from personal instance",
+        "NEVER mix product Brain changes with a personal live instance.",
+        status="active",
+    )
+    second = db.create_learning(
+        "shopify",
+        "Separate product Brain from personal instance",
+        "NEVER mix product Brain changes with a personal live instance.",
+        status="active",
+    )
+    conn.execute(
+        "UPDATE learnings SET priority = 'critical', weight = 1.0 WHERE id IN (?, ?)",
+        (first["id"], second["id"]),
+    )
+    conn.commit()
+
+    output = guard.handle_guard_check(
+        files="/repo/shopify/theme/snippets/reviews.liquid",
+        area="shopify",
+    )
+
+    assert output.count("Separate product Brain from personal instance") == 1
+
+
 def test_handle_guard_file_check_skips_file_scoped_rules_for_other_files(guard_env):
     db, guard = _reload_guard_stack()
     db.init_db()

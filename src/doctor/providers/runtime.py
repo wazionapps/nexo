@@ -25,6 +25,11 @@ from client_preferences import (
     normalize_client_preferences,
     resolve_client_runtime_profile,
 )
+from claude_cli import (
+    desktop_product_requested as _desktop_product_requested,
+    managed_claude_binary as _managed_claude_binary,
+    managed_claude_prefix as _managed_claude_prefix,
+)
 from cron_recovery import is_cron_enabled, resolve_declared_schedule, should_run_at_load
 from doctor.models import DoctorCheck, safe_check
 
@@ -1815,10 +1820,30 @@ def check_client_backend_preferences(fix: bool = False) -> DoctorCheck:
     severity = "info"
     status = "healthy"
 
+    if _desktop_product_requested(Path.home()):
+        managed_prefix = _managed_claude_prefix(Path.home())
+        managed_expected = managed_prefix / "bin" / "claude"
+        managed_path = _managed_claude_binary(Path.home())
+        if not managed_path:
+            status = "critical"
+            severity = "error"
+            evidence.append(
+                "desktop-managed Claude runtime missing or drifted "
+                f"(expected under `{managed_expected}`)"
+            )
+            repair_plan.append(
+                "Run `nexo update` or `nexo clients sync` from the Desktop-managed install "
+                "so the bundled Claude runtime is restored under "
+                "`~/.nexo/runtime/bootstrap/npm-global`"
+            )
+        else:
+            evidence.append(f"desktop-managed Claude runtime: {managed_path}")
+
     default_info = detected.get(default_terminal, {})
     if not default_info.get("installed"):
-        status = "degraded"
-        severity = "warn"
+        if status == "healthy":
+            status = "degraded"
+            severity = "warn"
         evidence.append(f"default terminal client `{default_terminal}` is selected but not installed")
         repair_plan.append(f"Install {default_terminal} or switch the default terminal client in schedule.json")
 
@@ -1827,19 +1852,22 @@ def check_client_backend_preferences(fix: bool = False) -> DoctorCheck:
             continue
         info = detected.get(client_key, {})
         if not info.get("installed"):
-            status = "degraded"
-            severity = "warn"
+            if status == "healthy":
+                status = "degraded"
+                severity = "warn"
             evidence.append(f"interactive client `{client_key}` is enabled but not installed")
 
     if automation_enabled:
         backend_info = detected.get(automation_backend, {})
         if automation_backend == "none":
-            status = "degraded"
-            severity = "warn"
+            if status == "healthy":
+                status = "degraded"
+                severity = "warn"
             evidence.append("automation is enabled but no automation backend is configured")
         elif not backend_info.get("installed"):
-            status = "degraded"
-            severity = "warn"
+            if status == "healthy":
+                status = "degraded"
+                severity = "warn"
             evidence.append(f"automation backend `{automation_backend}` is enabled but not installed")
             repair_plan.append(f"Install {automation_backend} or disable automation in schedule.json")
 
@@ -2462,6 +2490,21 @@ def check_protocol_compliance() -> DoctorCheck:
                                 (active_cutoff,),
                             ).fetchall()
                         }
+                    live_guard_task_ids: set[str] = set()
+                    if {
+                        "task_id", "session_id", "status", "guard_has_blocking"
+                    }.issubset(protocol_task_cols):
+                        has_guard_ack = "guard_acknowledged" in protocol_task_cols
+                        for row in tasks:
+                            if str(row["status"] or "") != "open":
+                                continue
+                            if str(row["session_id"] or "") not in active_session_ids:
+                                continue
+                            if not bool(row["guard_has_blocking"]):
+                                continue
+                            if has_guard_ack and bool(row["guard_acknowledged"]):
+                                continue
+                            live_guard_task_ids.add(str(row["task_id"] or ""))
                     live_guard_debt = 0
                     if {"task_id", "session_id"}.issubset(protocol_debt_cols):
                         task_status_expr = "'' AS task_status"
@@ -2486,15 +2529,17 @@ def check_protocol_compliance() -> DoctorCheck:
                             severity = str(row["severity"] or "warn")
                             debt_type = str(row["debt_type"] or "unknown")
                             session_id = str(row["session_id"] or "")
+                            task_id = str(row["task_id"] or "")
                             task_status = str(row["task_status"] or "")
                             if (
                                 debt_type == "unacknowledged_guard_blocking"
                                 and task_status == "open"
                                 and session_id in active_session_ids
                             ):
-                                live_guard_debt += 1
+                                live_guard_task_ids.add(task_id or f"debt:{session_id}:{row['created_at']}")
                                 continue
                             debt_counter[(severity, debt_type)] = debt_counter.get((severity, debt_type), 0) + 1
+                        live_guard_debt = len(live_guard_task_ids)
                         debt_rows = [
                             {"severity": severity, "debt_type": debt_type, "total": total}
                             for (severity, debt_type), total in sorted(

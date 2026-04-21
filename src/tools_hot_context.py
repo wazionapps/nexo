@@ -101,10 +101,19 @@ def handle_recent_context(query: str = "", context_key: str = "", hours: int = 2
     return format_pre_action_context_bundle(bundle)
 
 
-def handle_pre_action_context(query: str = "", context_key: str = "", session_id: str = "", hours: int = 24, limit: int = 8) -> str:
+def handle_pre_action_context(
+    query: str = "",
+    context_key: str = "",
+    session_id: str = "",
+    hours: int = 24,
+    limit: int = 8,
+    intent: str = "",
+    area: str = "",
+) -> str:
     """Build the recent 24h bundle that agents/scripts should consult before acting."""
+    query_bits = [part.strip() for part in [query, intent, area] if str(part or "").strip()]
     bundle = build_pre_action_context(
-        query=query,
+        query=" | ".join(query_bits),
         context_key=context_key,
         session_id=session_id,
         hours=hours,

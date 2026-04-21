@@ -160,7 +160,7 @@ def test_task_open_detects_high_stakes_from_cost_reputation_and_product_context(
     assert payload["decision_support"]["required"] is True
 
 
-def test_task_open_with_blocking_guard_creates_guard_debt(monkeypatch):
+def test_task_open_with_blocking_guard_sets_pending_ack_state_without_opening_debt(monkeypatch):
     from db import get_db
     from plugins.protocol import handle_task_open
 
@@ -181,12 +181,46 @@ def test_task_open_with_blocking_guard_creates_guard_debt(monkeypatch):
 
     assert payload["guard"]["has_blocking"] is True
     assert payload["guard"]["blocking_rule_ids"] == [41]
-    debt = get_db().execute(
-        "SELECT debt_type, status FROM protocol_debt WHERE task_id = ?",
+    assert payload["next_action"] == "Resolve the blocking guard warnings before editing."
+    assert payload["response_contract"]["next_action"] == payload["next_action"]
+    row = get_db().execute(
+        "SELECT guard_has_blocking, guard_acknowledged FROM protocol_tasks WHERE task_id = ?",
         (payload["task_id"],),
     ).fetchone()
-    assert debt["debt_type"] == "unacknowledged_guard_blocking"
-    assert debt["status"] == "open"
+    assert row["guard_has_blocking"] == 1
+    assert row["guard_acknowledged"] == 0
+    debt_count = get_db().execute(
+        "SELECT COUNT(*) FROM protocol_debt WHERE task_id = ? AND debt_type = 'unacknowledged_guard_blocking'",
+        (payload["task_id"],),
+    ).fetchone()[0]
+    assert debt_count == 0
+
+
+def test_task_open_passes_project_hint_to_guard_check(monkeypatch):
+    from plugins.protocol import handle_task_open
+
+    sid = _register_session("nexo-1005-2005")
+    observed = {}
+
+    def _fake_guard(**kwargs):
+        observed.update(kwargs)
+        return "No relevant learnings found for these files/area."
+
+    monkeypatch.setattr("plugins.protocol.handle_guard_check", _fake_guard)
+    payload = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Patch Shopify project safely",
+            task_type="edit",
+            area="shopify",
+            project_hint="recambios-bmw",
+            files="/repo/shopify/theme/snippets/reviews.liquid",
+        )
+    )
+
+    assert payload["ok"] is True
+    assert observed["project_hint"] == "recambios-bmw"
+    assert observed["area"] == "shopify"
 
 
 def test_task_open_requires_files_for_edit_in_strict_mode(monkeypatch):
@@ -224,6 +258,40 @@ def test_task_open_rejects_invalid_task_type():
     assert payload["ok"] is False
     assert "Invalid task_type" in payload["error"]
     assert payload["valid_task_types"] == ["analyze", "answer", "delegate", "edit", "execute"]
+
+
+def test_task_open_extracts_plan_steps_from_goal_when_plan_field_is_empty():
+    from db import get_db
+    from plugins.protocol import handle_task_open
+
+    sid = _register_session("nexo-1005-2009")
+    payload = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal=(
+                "Prepare the guarded edit:\n"
+                "1. inspect the current file\n"
+                "2. patch the needed section\n"
+                "3. run the targeted verification"
+            ),
+            task_type="edit",
+            area="nexo-ops",
+            files="/tmp/x",
+            verification_step="run the targeted verification",
+        )
+    )
+
+    assert payload["ok"] is True
+    assert "No plan defined for action task" not in (payload.get("blocked_reason") or "")
+    row = get_db().execute(
+        "SELECT plan FROM protocol_tasks WHERE task_id = ?",
+        (payload["task_id"],),
+    ).fetchone()
+    assert json.loads(row["plan"]) == [
+        "inspect the current file",
+        "patch the needed section",
+        "run the targeted verification",
+    ]
 
 
 def test_confidence_check_rejects_invalid_task_type():
@@ -271,12 +339,109 @@ def test_task_acknowledge_guard_resolves_guard_debt(monkeypatch):
 
     assert acknowledged["ok"] is True
     assert acknowledged["acknowledged_rule_ids"] == [41]
+    row = get_db().execute(
+        "SELECT guard_acknowledged, guard_acknowledged_at FROM protocol_tasks WHERE task_id = ?",
+        (opened["task_id"],),
+    ).fetchone()
+    assert row["guard_acknowledged"] == 1
+    assert row["guard_acknowledged_at"] is not None
     debt = get_db().execute(
         "SELECT status, resolution FROM protocol_debt WHERE task_id = ? AND debt_type = 'unacknowledged_guard_blocking'",
         (opened["task_id"],),
     ).fetchone()
-    assert debt["status"] == "resolved"
-    assert "Canonical file rule reviewed" in debt["resolution"]
+    assert debt is None
+
+
+def test_task_close_resolves_guard_debt_when_no_file_changes_happened(monkeypatch):
+    from db import get_db
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    sid = _register_session("nexo-1005-2005b")
+    monkeypatch.setattr(
+        "plugins.protocol.handle_guard_check",
+        lambda **kwargs: "BLOCKING RULES (resolve BEFORE writing):\n  #41 [FILE RULE:/tmp/x]: Read the canonical rule first\n",
+    )
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Inspect guarded file but stop before editing",
+            task_type="edit",
+            area="nexo-ops",
+            files="/tmp/x",
+        )
+    )
+    closed = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="blocked",
+            evidence="Guard blocked the edit, no file was changed, and the task stops pending canonical review.",
+            change_summary="Stopped before editing guarded file",
+            change_why="Respect the blocking guard instead of forcing a write",
+            files_changed="[]",
+        )
+    )
+
+    assert closed["ok"] is True
+    assert closed["status"] == "clean"
+    debt_count = get_db().execute(
+        "SELECT COUNT(*) FROM protocol_debt WHERE task_id = ? AND debt_type = 'unacknowledged_guard_blocking' AND status = 'open'",
+        (opened["task_id"],),
+    ).fetchone()[0]
+    assert debt_count == 0
+
+
+def test_task_close_keeps_guard_debt_open_when_guard_touch_violation_exists(monkeypatch):
+    from db import create_protocol_debt, get_db
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    sid = _register_session("nexo-1005-2005c")
+    monkeypatch.setattr(
+        "plugins.protocol.handle_guard_check",
+        lambda **kwargs: "BLOCKING RULES (resolve BEFORE writing):\n  #41 [FILE RULE:/tmp/x]: Read the canonical rule first\n",
+    )
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Attempt guarded edit incorrectly",
+            task_type="edit",
+            area="nexo-ops",
+            files="/tmp/x",
+        )
+    )
+    create_protocol_debt(
+        sid,
+        "conditioned_file_touch_without_guard_ack",
+        severity="error",
+        task_id=opened["task_id"],
+        evidence="write attempt hit guarded file before acknowledgement",
+    )
+    create_protocol_debt(
+        sid,
+        "unacknowledged_guard_blocking",
+        severity="error",
+        task_id=opened["task_id"],
+        evidence="write attempt left the blocking guard unresolved",
+    )
+    closed = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="blocked",
+            evidence="The task stops after a bad guarded touch attempt and still needs explicit acknowledgement.",
+            change_summary="Did not proceed after the bad guarded touch",
+            change_why="Guard discipline still needs explicit cleanup",
+            files_changed="[]",
+        )
+    )
+
+    assert closed["ok"] is True
+    debt = get_db().execute(
+        "SELECT status FROM protocol_debt WHERE task_id = ? AND debt_type = 'unacknowledged_guard_blocking'",
+        (opened["task_id"],),
+    ).fetchone()
+    assert debt["status"] == "open"
+    assert any(item["debt_type"] == "unacknowledged_guard_blocking" for item in closed["open_debts"])
 
 
 def test_protocol_debt_list_filters_by_type_and_severity():
@@ -401,7 +566,7 @@ def test_task_close_opens_protocol_debt_when_done_without_evidence():
         )
     )
 
-    assert closed["status"] == "debt-open"
+    assert closed["status"] == "done_with_debts"
     debt_types = {item["debt_type"] for item in closed["open_debts"]}
     assert "claimed_done_without_evidence" in debt_types
     count = get_db().execute(
@@ -538,7 +703,7 @@ def test_high_stakes_action_close_opens_debt_without_cortex_evaluation():
         )
     )
 
-    assert closed["status"] == "debt-open"
+    assert closed["status"] == "done_with_debts"
     debt_types = {item["debt_type"] for item in closed["open_debts"]}
     assert "missing_cortex_evaluation" in debt_types
 
@@ -588,6 +753,36 @@ def test_high_stakes_action_close_stays_clean_with_cortex_evaluation():
     assert evaluation["ok"] is True
     assert closed["status"] == "clean"
     assert closed["cortex_evaluation"]["task_id"] == opened["task_id"]
+
+
+def test_non_release_task_does_not_open_release_alignment_debt_for_version_wording():
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    sid = _register_session("nexo-1015-2015")
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Audit the version parsing logic used by protocol tests",
+            task_type="analyze",
+            area="guardian",
+            plan='["inspect parser", "review tests", "summarize findings"]',
+            evidence_refs='["test fixture", "protocol parser"]',
+            verification_step="review the matching test coverage",
+        )
+    )
+    closed = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="done",
+            evidence="Reviewed parser fixtures and test expectations for version wording without touching any release channel.",
+            outcome_notes="This was only a protocol audit, not a deploy or release task.",
+        )
+    )
+
+    debt_types = {item["debt_type"] for item in closed["open_debts"]}
+    assert "release_channel_alignment_incomplete" not in debt_types
+    assert closed["status"] == "clean"
 
 
 def test_task_close_explicit_learning_supersedes_conflicting_file_rule():
@@ -846,6 +1041,37 @@ def test_high_stakes_english_negation_also_suppresses():
     assert result["high_stakes"] is False
 
 
+def test_explicit_low_stakes_override_suppresses_auto_detection():
+    from plugins.protocol import evaluate_response_confidence
+
+    result = evaluate_response_confidence(
+        goal="Deploy the production release package",
+        task_type="analyze",
+        evidence_refs=["release.md"],
+        verification_step="review release checklist",
+        stakes="low",
+    )
+
+    assert result["high_stakes"] is False
+    assert "stakes override suppresses automatic high-stakes detection" in result["reasons"]
+
+
+def test_internal_audit_context_suppresses_release_keyword_false_positive():
+    from plugins.protocol import evaluate_response_confidence
+
+    result = evaluate_response_confidence(
+        goal="Audit the release wording detector used by protocol tests",
+        task_type="edit",
+        area="guardian",
+        context_hint="Read-only protocol audit for heuristic coverage",
+        evidence_refs=["tests/test_protocol.py"],
+        verification_step="run protocol tests",
+    )
+
+    assert result["high_stakes"] is False
+    assert "internal audit/testing context suppresses automatic high-stakes detection" in result["reasons"]
+
+
 def test_positive_signals_boost_confidence_score():
     from plugins.protocol import evaluate_response_confidence
 
@@ -921,6 +1147,41 @@ def test_numeric_safeguard_converts_verify_to_defer_when_high_stakes_and_very_lo
     assert result["high_stakes"] is True
 
 
+def test_internal_guardian_audit_close_does_not_open_missing_cortex_debt():
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    sid = _register_session("nexo-1021-2021")
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Audit the release wording detector used by protocol tests",
+            task_type="edit",
+            area="guardian",
+            files="/Users/franciscoc/Documents/_PhpstormProjects/nexo/src/plugins/protocol.py",
+            plan='["inspect detector", "patch tests", "verify coverage"]',
+            evidence_refs='["tests/test_protocol.py"]',
+            verification_step="run protocol tests",
+            context_hint="Read-only protocol audit for heuristic coverage",
+        )
+    )
+
+    assert opened["decision_support"]["required"] is False
+    assert opened["response_contract"]["high_stakes"] is False
+
+    closed = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="done",
+            evidence="Ran the protocol test battery and reviewed the detector behavior without performing any release or production action.",
+            outcome_notes="Internal protocol audit only.",
+        )
+    )
+
+    debt_types = {item["debt_type"] for item in closed["open_debts"]}
+    assert "missing_cortex_evaluation" not in debt_types
+
+
 def test_score_never_exceeds_hundred_even_with_big_boosts():
     from plugins.protocol import evaluate_response_confidence
 
@@ -933,3 +1194,24 @@ def test_score_never_exceeds_hundred_even_with_big_boosts():
         area_has_atlas_entry=True,
     )
     assert result["confidence"] <= 100
+
+
+def test_build_area_context_provides_builtin_personal_scripts_context():
+    import paths
+    from plugins.protocol import _build_area_context
+
+    result = _build_area_context("personal-scripts")
+
+    assert result["has_context"] is True
+    assert result["atlas_entry"]["project_key"] == "personal-scripts"
+    assert result["atlas_entry"]["locations"]["scripts_dir"] == str(paths.personal_scripts_dir())
+    assert result["atlas_entry"]["locations"]["registry_db"] == str(paths.brain_dir() / "personal_scripts.db")
+
+
+def test_build_area_context_accepts_personal_scripts_underscore_alias():
+    from plugins.protocol import _build_area_context
+
+    result = _build_area_context("personal_scripts")
+
+    assert result["has_context"] is True
+    assert result["atlas_entry"]["project_key"] == "personal-scripts"

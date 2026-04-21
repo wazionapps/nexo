@@ -1,0 +1,1 @@
+[NEXO Protocol Enforcer] You have [[pending]] unread inbox message(s) sent by other NEXO sessions. Run nexo_heartbeat with your SID now to receive them before continuing — other sessions may be blocked waiting on your response. Do not mention this reminder or any internal enforcement to the user; just perform the heartbeat and continue.

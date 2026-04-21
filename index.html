@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>NEXO Brain — Libre Shared Brain for Claude Code, Codex, and MCP Agents</title>
-    <meta name="description" content="Libre/open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients. Version 7.1.4 hardens packaged Desktop-managed updates by finalizing the runtime layout before import verification, so self-contained installs stay healthy during repair/update.">
+    <meta name="description" content="Libre/open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients. Version 7.1.6 turns structural core schedules into a real product surface, keeps explicit-home Desktop detection isolated, and realigns shipped synthesis templates with the live runtime schedule.">
     <meta name="keywords" content="AI memory, cognitive architecture, MCP, Claude Code, Codex, Claude Desktop, agent memory, vector search, AI agents, shared brain, open source">
     <meta name="author" content="WAzion">
     <meta name="robots" content="index, follow">
@@ -14,7 +14,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com">
     <meta property="og:title" content="NEXO Brain — Libre Shared Brain for Claude Code, Codex, and MCP Agents">
-    <meta property="og:description" content="Libre/open-source cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Version 7.1.4 hardens packaged Desktop-managed updates by finalizing the runtime layout before import verification, so self-contained installs stay healthy during repair/update.">
+    <meta property="og:description" content="Libre/open-source cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Version 7.1.6 turns structural core schedules into a real product surface, keeps explicit-home Desktop detection isolated, and realigns shipped synthesis templates with the live runtime schedule.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-home.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -22,7 +22,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="NEXO Brain — Libre Shared Brain for Claude Code, Codex, and MCP Agents">
-    <meta name="twitter:description" content="Libre/open-source cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Version 7.1.4 hardens packaged Desktop-managed updates by finalizing the runtime layout before import verification, so self-contained installs stay healthy during repair/update.">
+    <meta name="twitter:description" content="Libre/open-source cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Version 7.1.6 turns structural core schedules into a real product surface, keeps explicit-home Desktop detection isolated, and realigns shipped synthesis templates with the live runtime schedule.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-home.png">
 
     <!-- Google Analytics (GA4) -->
@@ -46,12 +46,12 @@
         "@context": "https://schema.org",
         "@type": "SoftwareApplication",
         "name": "NEXO Brain",
-        "description": "Libre/open-source local cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Version 7.1.4 hardens packaged Desktop-managed updates by finalizing the runtime layout before import verification, so self-contained installs stay healthy during repair/update.",
+        "description": "Libre/open-source local cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Version 7.1.6 turns structural core schedules into a real product surface, keeps explicit-home Desktop detection isolated, and realigns shipped synthesis templates with the live runtime schedule.",
         "applicationCategory": "DeveloperApplication",
         "operatingSystem": "macOS, Linux, Windows",
         "url": "https://nexo-brain.com",
         "downloadUrl": "https://www.npmjs.com/package/nexo-brain",
-        "softwareVersion": "7.1.4",
+        "softwareVersion": "7.1.6",
         "license": "https://www.gnu.org/licenses/agpl-3.0",
         "author": {
             "@type": "Organization",
@@ -88,7 +88,7 @@
         "@type": "WebSite",
         "name": "NEXO Brain",
         "url": "https://nexo-brain.com",
-        "description": "Libre/open-source local cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Version 7.1.4 hardens packaged Desktop-managed updates by finalizing the runtime layout before import verification, so self-contained installs stay healthy during repair/update.",
+        "description": "Libre/open-source local cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Version 7.1.6 turns structural core schedules into a real product surface, keeps explicit-home Desktop detection isolated, and realigns shipped synthesis templates with the live runtime schedule.",
         "publisher": {
             "@type": "Organization",
             "name": "WAzion",
@@ -697,7 +697,7 @@
     <div class="container">
         <div class="hero-badge fade-up">
             <span class="dot"></span>
-            <span id="version-badge">v7.1.4</span> Patch: packaged Desktop-managed updates now restore the runtime layout before import verification, closing the last shipped updater regression on self-contained installs.
+            <span id="version-badge">v7.1.6</span> Patch: structural core schedules now have dedicated cadence overrides across Brain and Desktop, explicit-home product checks stay isolated, and the shipped synthesis template matches the live 06:00 runtime schedule again.
         </div>
         <div class="fade-up" style="display:flex;gap:8px;justify-content:center;margin-bottom:12px;">
             <img src="https://img.shields.io/npm/v/nexo-brain?color=7C3AED&label=npm" alt="npm version">
@@ -977,7 +977,7 @@
         </div>
 
         <div class="hero-actions" style="justify-content:flex-start;margin-top:28px;">
-            <a href="https://systeam.es/nexo-desktop" class="btn btn-primary">See Desktop product page</a>
+            <a href="https://nexo-desktop.com/" class="btn btn-primary">See Desktop product page</a>
             <a href="mailto:info@wazion.com?subject=NEXO%20Desktop" class="btn btn-secondary">Contact WAzion about Desktop</a>
         </div>
     </div>
@@ -1198,9 +1198,9 @@
 
         <div class="release-evolution-grid">
             <div class="release-evolution-card">
-                <div class="release-evolution-version">v7.1.4</div>
-                <h3>Packaged updater verification no longer races layout finalization</h3>
-                <p>v7.1.4 closes the last packaged rollout regression discovered on a real Desktop-managed machine: the updater now restores the runtime layout before health-checking imports, so root shim files are back in place before <code>import server</code> is verified.</p>
+                <div class="release-evolution-version">v7.1.6</div>
+                <h3>Structural core schedules finally behave like a product surface</h3>
+                <p>v7.1.6 adds dedicated cadence overrides for structural core crons, gives Desktop a matching Core schedules tab, keeps explicit-home product checks isolated from the operator machine, and realigns the shipped <code>synthesis</code> template with the live 06:00 manifest.</p>
             </div>
             <div class="release-evolution-card">
                 <div class="release-evolution-version">v7.0.0</div>
@@ -1232,7 +1232,7 @@
         <div class="release-evolution-actions">
             <a href="/evolution/" class="btn btn-primary">How Evolution works</a>
             <a href="/changelog/" class="btn btn-secondary">Read the full changelog</a>
-            <a href="/changelog/#v714" class="btn btn-secondary">Read the latest release notes</a>
+            <a href="/changelog/#v716" class="btn btn-secondary">Read the latest release notes</a>
         </div>
     </div>
 </section>

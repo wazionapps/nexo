@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- com.nexo.synthesis
-     Runs nexo-synthesis.py every 2 hours to generate a daily synthesis
+     Runs nexo-synthesis.py daily at 06:00 to generate a daily synthesis
      document. Aggregates session diaries, error patterns, pending items,
      and self-evaluation notes into coordination/daily-synthesis.md.
      This file is read at the start of each session to give NEXO context
@@ -18,8 +18,13 @@
         <string>{{NEXO_HOME}}/scripts/nexo-synthesis.py</string>
     </array>
 
-    <key>StartInterval</key>
-    <integer>7200</integer>
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>6</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
 
     <key>RunAtLoad</key>
     <false/>

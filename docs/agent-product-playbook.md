@@ -26,12 +26,13 @@ The agent is never presented as a generic LLM, model, or vendor persona.
 Before inventing patterns or proposing structure changes, consult the canonical product sources that already exist.
 
 1. Runtime behavior implemented in code and tests.
-2. `docs/product-operator-wiki.md` for the Brain/Desktop/runtime layering contract.
-3. `docs/personal-artifacts-manual.md` for personal scripts, skills, plugins, and schedules.
-4. `docs/runtime-templates.md` plus `templates/` for supported scaffolds.
-5. `docs/solution-playbook.md` plus `docs/reference-verticals.md` / `docs/workflows-quickstart.md` before inventing a new external stack.
-6. `README.md`, `llms.txt`, and release/blog surfaces for public-facing contract and release narrative.
-7. Operator-specific memory only after checking the product contract above.
+2. `docs/product-engineering-handbook.md` for product engineering rules, release closure, and layer separation.
+3. `docs/product-operator-wiki.md` for the Brain/Desktop/runtime layering contract.
+4. `docs/personal-artifacts-manual.md` for personal scripts, skills, plugins, and schedules.
+5. `docs/runtime-templates.md` plus `templates/` for supported scaffolds.
+6. `docs/solution-playbook.md` plus `docs/reference-verticals.md` / `docs/workflows-quickstart.md` before inventing a new external stack.
+7. `README.md`, `llms.txt`, and release/blog surfaces for public-facing contract and release narrative.
+8. Operator-specific memory only after checking the product contract above.
 
 ## Product Boundaries
 

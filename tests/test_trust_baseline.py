@@ -83,6 +83,38 @@ class TestDetectSentiment:
         # ALL CAPS heuristic should push intensity above 0.5.
         assert isinstance(result["intensity"], float)
 
+    def test_local_classifier_can_promote_correction_when_keywords_are_ambiguous(self, isolated_db, monkeypatch):
+        from cognitive import _trust
+
+        monkeypatch.setattr(
+            _trust,
+            "_local_classify_sentiment_intent",
+            lambda _text: {
+                "available": True,
+                "label": "correction",
+                "confidence": 0.92,
+            },
+        )
+        result = _trust.detect_sentiment("eso no cuadraba con el dato real")
+        assert result["intent"] == "correction"
+        assert result["is_correction"] is True
+        assert result["sentiment"] == "negative"
+
+    def test_local_classifier_only_overrides_when_confident(self, isolated_db, monkeypatch):
+        from cognitive import _trust
+
+        monkeypatch.setattr(
+            _trust,
+            "_local_classify_sentiment_intent",
+            lambda _text: {
+                "available": True,
+                "label": "acknowledgement",
+                "confidence": 0.2,
+            },
+        )
+        result = _trust.detect_sentiment("haz el deploy ya")
+        assert result["intent"] == "instruction"
+
 
 # ── adjust_trust + get_trust_score ────────────────────────────────────────
 

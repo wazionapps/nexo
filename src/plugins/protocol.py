@@ -8,7 +8,9 @@ import os
 import re
 import secrets
 import time
+from pathlib import Path
 
+import paths
 from db import (
     VALID_TASK_TYPES,
     VALID_CLOSE_OUTCOMES,
@@ -23,6 +25,7 @@ from db import (
     get_db,
     get_followups,
     get_protocol_task,
+    set_protocol_task_guard_acknowledged,
     list_workflow_goals,
     list_workflow_runs,
     list_protocol_debts,
@@ -78,6 +81,11 @@ def _is_trivial_evidence(text: str) -> tuple[bool, str]:
 
 ACTION_TASKS = {"edit", "execute", "delegate"}
 RESPONSE_TASKS = {"answer", "analyze"}
+_GUARD_TOUCH_DEBT_TYPES = {
+    "strict_protocol_write_without_guard_ack",
+    "conditioned_file_touch_without_guard_ack",
+    "write_without_file_guard_check",
+}
 HIGH_STAKES_KEYWORDS = {
     "medical",
     "legal",
@@ -174,6 +182,102 @@ NEGATION_PATTERNS = (
     re.compile(r"\bwithout\s+(?:touching|breaking|affecting)\b", re.IGNORECASE),
 )
 
+TASK_TYPE_ALIASES = {
+    "create": "edit",
+}
+
+CLOSE_OUTCOME_ALIASES = {
+    "complete": "done",
+    "completed": "done",
+}
+
+HIGH_STAKES_OVERRIDE_TRUE = {"high", "critical", "elevated"}
+HIGH_STAKES_OVERRIDE_FALSE = {
+    "low",
+    "normal",
+    "routine",
+    "none",
+    "off",
+    "false",
+    "read-only",
+    "readonly",
+    "dry-run",
+    "dryrun",
+}
+
+_INTERNAL_AUDIT_AREAS = {
+    "guardian",
+    "protocol",
+    "tests",
+    "nexo-ops",
+}
+_INTERNAL_AUDIT_MARKERS = (
+    "read-only",
+    "readonly",
+    "dry-run",
+    "dry run",
+    "protocol audit",
+    "guardian audit",
+    "guard audit",
+    "contract test",
+    "test harness",
+    "heuristic",
+    "detector",
+    "simulated",
+    "simulation",
+    "fixture",
+)
+_INTERNAL_AUDIT_VERBS = {
+    "audit",
+    "review",
+    "test",
+    "testing",
+    "verify",
+    "debug",
+    "probe",
+    "inspect",
+}
+
+_RELEASE_AREA_HINTS = {
+    "release",
+    "deploy",
+    "deployment",
+    "publish",
+    "publishing",
+    "gh-pages",
+}
+_RELEASE_GOAL_HINTS = {
+    "release",
+    "deploy",
+    "launch",
+    "ship",
+    "publish",
+    "tag",
+    "rollout",
+    "despliegue",
+    "lanzamiento",
+    "publicar",
+    "etiqueta",
+}
+_RELEASE_CONTEXT_HINTS = {
+    "production",
+    "staging",
+    "changelog",
+    "version",
+    "update.json",
+    "npm",
+    "gh-pages",
+    "prod",
+    "producción",
+    "produccion",
+    "cambios",
+}
+
+_GOAL_PLAN_LINE_RE = re.compile(
+    r"^\s*(?:[-*]\s+|\d+[.)]\s+|(?:paso|step)\s*\d+\s*:\s+)",
+    re.IGNORECASE,
+)
+
 
 def _parse_list(value) -> list[str]:
     if isinstance(value, list):
@@ -192,6 +296,29 @@ def _parse_list(value) -> list[str]:
             return [str(item).strip() for item in parsed if str(item).strip()]
         return [item.strip() for item in stripped.split(",") if item.strip()]
     return [str(value).strip()]
+
+
+def _extract_plan_from_goal(goal: str) -> list[str]:
+    """Lift explicit numbered/bulleted steps embedded in `goal`.
+
+    This is intentionally structural, not semantic: it only activates when
+    the goal already contains clear plan lines (e.g. `1. inspect`, `- patch`,
+    `Paso 2: verify`). It prevents `task_open` from complaining about a
+    missing plan when the caller already wrote one inside the goal text.
+    """
+    if not goal:
+        return []
+    extracted: list[str] = []
+    for raw_line in str(goal).splitlines():
+        if not raw_line.strip():
+            continue
+        match = _GOAL_PLAN_LINE_RE.match(raw_line)
+        if not match:
+            continue
+        step = raw_line[match.end():].strip()
+        if step:
+            extracted.append(step)
+    return extracted if len(extracted) >= 2 else []
 
 
 def _parse_bool(value) -> bool:
@@ -241,8 +368,69 @@ def _detect_high_stakes(*parts: str) -> bool:
     )
 
 
+def _parse_high_stakes_override(stakes: str) -> bool | None:
+    clean = (stakes or "").strip().lower()
+    if not clean:
+        return None
+    if clean in HIGH_STAKES_OVERRIDE_TRUE:
+        return True
+    if clean in HIGH_STAKES_OVERRIDE_FALSE:
+        return False
+    return None
+
+
+def _has_internal_audit_context(
+    *,
+    goal: str,
+    area: str = "",
+    context_hint: str = "",
+    verification_step: str = "",
+    constraints=None,
+) -> bool:
+    combined = " ".join(
+        part.strip().lower()
+        for part in [
+            goal or "",
+            area or "",
+            context_hint or "",
+            verification_step or "",
+            " ".join(_parse_list(constraints)),
+        ]
+        if part and str(part).strip()
+    )
+    if not combined:
+        return False
+    if any(marker in combined for marker in _INTERNAL_AUDIT_MARKERS):
+        return True
+    area_lower = (area or "").strip().lower()
+    if area_lower not in _INTERNAL_AUDIT_AREAS:
+        return False
+    return any(token in combined for token in _INTERNAL_AUDIT_VERBS)
+
+
 def _decision_support_required(*, task_type: str, high_stakes: bool) -> bool:
     return task_type in ACTION_TASKS and high_stakes
+
+
+def _is_release_task(*, goal: str, area: str = "", project_hint: str = "", verification_step: str = "") -> bool:
+    area_lower = (area or "").strip().lower()
+    if area_lower in _RELEASE_AREA_HINTS:
+        return True
+    if any(area_lower.startswith(f"{hint}-") for hint in _RELEASE_AREA_HINTS):
+        return True
+
+    goal_lower = (goal or "").strip().lower()
+    if not goal_lower:
+        return False
+    if not any(token in goal_lower for token in _RELEASE_GOAL_HINTS):
+        return False
+
+    combined_context = " ".join(
+        part.strip().lower()
+        for part in [area, project_hint, verification_step, goal]
+        if part and str(part).strip()
+    )
+    return any(token in combined_context for token in _RELEASE_CONTEXT_HINTS)
 
 
 def evaluate_response_confidence(
@@ -263,15 +451,35 @@ def evaluate_response_confidence(
     unknowns = _parse_list(unknowns)
     constraints = _parse_list(constraints)
     explicit_stakes = (stakes or "").strip().lower()
-    high_stakes = explicit_stakes == "high" or _detect_high_stakes(
-        goal,
-        area,
-        context_hint,
-        " ".join(constraints),
-        explicit_stakes,
-    )
 
     reasons: list[str] = []
+    stakes_override = _parse_high_stakes_override(explicit_stakes)
+    if stakes_override is not None:
+        high_stakes = stakes_override
+        if stakes_override:
+            reasons.append("stakes override forces high-stakes handling")
+        else:
+            reasons.append("stakes override suppresses automatic high-stakes detection")
+    else:
+        detected_high_stakes = _detect_high_stakes(
+            goal,
+            area,
+            context_hint,
+            " ".join(constraints),
+            explicit_stakes,
+        )
+        if detected_high_stakes and _has_internal_audit_context(
+            goal=goal,
+            area=area,
+            context_hint=context_hint,
+            verification_step=verification_step,
+            constraints=constraints,
+        ):
+            high_stakes = False
+            reasons.append("internal audit/testing context suppresses automatic high-stakes detection")
+        else:
+            high_stakes = detected_high_stakes
+
     score = 85
     if unknowns:
         score -= 35
@@ -460,6 +668,35 @@ ATLAS_PATH = os.path.join(
 )
 
 
+def _builtin_area_context(area: str) -> dict | None:
+    """Return atlas-like context for core runtime areas not modelled as projects.
+
+    Some areas are real product surfaces but do not belong in project-atlas
+    because they are shared runtime capabilities rather than business projects.
+    Personal scripts is the main example: the agent still needs a canonical
+    source of truth for paths and artifacts instead of getting `atlas_entry: null`.
+    """
+    clean_area = (area or "").strip().lower()
+    normalized = clean_area.replace("_", "-")
+    if normalized not in {"personal-scripts", "personal-script"}:
+        return None
+
+    scripts_dir = paths.personal_scripts_dir()
+    return {
+        "project_key": "personal-scripts",
+        "description": (
+            "User-owned runtime scripts. Keep custom automations here instead of "
+            "editing core shipped scripts or LaunchAgents directly."
+        ),
+        "locations": {
+            "scripts_dir": str(scripts_dir),
+            "registry_db": str(paths.brain_dir() / "personal_scripts.db"),
+            "launchagents_dir": str(Path.home() / "Library" / "LaunchAgents"),
+        },
+        "servers": {},
+    }
+
+
 def _build_area_context(area: str) -> dict:
     """Build a pre-reading context block for a known area.
 
@@ -471,22 +708,23 @@ def _build_area_context(area: str) -> dict:
         return {"has_context": False}
 
     # 1. Project-atlas lookup
-    atlas_entry = None
+    atlas_entry = _builtin_area_context(clean_area)
     try:
-        with open(ATLAS_PATH, "r", encoding="utf-8") as f:
-            atlas = json.load(f)
-        for key, entry in atlas.items():
-            if key == "_meta":
-                continue
-            aliases = [a.lower() for a in entry.get("aliases", [])]
-            if clean_area == key.lower() or clean_area in aliases:
-                atlas_entry = {
-                    "project_key": key,
-                    "description": entry.get("description", ""),
-                    "locations": entry.get("locations", {}),
-                    "servers": {k: {sk: sv for sk, sv in v.items() if sk != "credential_key"} for k, v in entry.get("servers", {}).items()} if isinstance(entry.get("servers"), dict) else {},
-                }
-                break
+        if atlas_entry is None:
+            with open(ATLAS_PATH, "r", encoding="utf-8") as f:
+                atlas = json.load(f)
+            for key, entry in atlas.items():
+                if key == "_meta":
+                    continue
+                aliases = [a.lower() for a in entry.get("aliases", [])]
+                if clean_area == key.lower() or clean_area in aliases:
+                    atlas_entry = {
+                        "project_key": key,
+                        "description": entry.get("description", ""),
+                        "locations": entry.get("locations", {}),
+                        "servers": {k: {sk: sv for sk, sv in v.items() if sk != "credential_key"} for k, v in entry.get("servers", {}).items()} if isinstance(entry.get("servers"), dict) else {},
+                    }
+                    break
     except Exception:
         pass
 
@@ -720,7 +958,7 @@ def handle_confidence_check(
 
 def handle_task_open(
     sid: str,
-    goal: str,
+    goal: str = "",
     task_type: str = "answer",
     area: str = "",
     files: str = "",
@@ -733,20 +971,21 @@ def handle_task_open(
     verification_step: str = "",
     stakes: str = "",
     context_hint: str = "",
+    description: str = "",
 ) -> str:
     """Open a protocol task with heartbeat, guard, rules, and Cortex already captured.
 
     Use this as the default entry point for any non-trivial work. For edit/execute/delegate
     tasks it becomes the contract that later must be closed with `nexo_task_close`.
     """
-    clean_goal = (goal or "").strip()
+    clean_goal = (goal or description or "").strip()
     if not sid.strip():
         return json.dumps({"ok": False, "error": "sid is required"}, ensure_ascii=False, indent=2)
     if not clean_goal:
         return json.dumps({"ok": False, "error": "goal is required"}, ensure_ascii=False, indent=2)
 
     try:
-        clean_type = validate_task_type(task_type)
+        clean_type = validate_task_type(TASK_TYPE_ALIASES.get((task_type or "").strip().lower(), task_type))
     except ValueError as exc:
         return json.dumps(
             {
@@ -770,10 +1009,14 @@ def handle_task_open(
             ensure_ascii=False,
             indent=2,
         )
+    plan_items = _parse_list(plan)
+    if not plan_items:
+        plan_items = _extract_plan_from_goal(clean_goal)
+
     state = {
         "goal": clean_goal,
         "task_type": clean_type,
-        "plan": _parse_list(plan),
+        "plan": plan_items,
         "known_facts": _parse_list(known_facts),
         "unknowns": _parse_list(unknowns),
         "constraints": _parse_list(constraints),
@@ -809,7 +1052,11 @@ def handle_task_open(
     debts_created: list[dict] = []
     if clean_type in ACTION_TASKS and (files_list or area.strip()):
         opened_with_guard = True
-        guard_summary = handle_guard_check(files=",".join(files_list), area=area.strip())
+        guard_summary = handle_guard_check(
+            files=",".join(files_list),
+            area=area.strip(),
+            project_hint=project_hint.strip(),
+        )
         guard_has_blocking = (
             "[BLOCKING]" in guard_summary
             or "WARNINGS — resolve before editing" in guard_summary
@@ -890,16 +1137,7 @@ def handle_task_open(
         ttl_hours=24,
     )
     blocking_rule_ids = _extract_guard_blocking_ids(guard_summary) if guard_has_blocking else []
-    if guard_has_blocking:
-        _record_debt(
-            task["session_id"],
-            task["task_id"],
-            "unacknowledged_guard_blocking",
-            severity="error",
-            evidence=_guard_excerpt(guard_summary),
-            debts=debts_created,
-        )
-    elif clean_type in ACTION_TASKS and (anticipatory_warnings or attention["status"] in {"split", "overloaded"}):
+    if not guard_has_blocking and clean_type in ACTION_TASKS and (anticipatory_warnings or attention["status"] in {"split", "overloaded"}):
         preventive_followup = _create_preventive_followup(
             clean_goal,
             attention=attention,
@@ -926,6 +1164,10 @@ def handle_task_open(
         next_action = "Propose the plan or verification path before acting."
     else:
         next_action = "Proceed with the task and close it with nexo_task_close before claiming completion."
+
+    if guard_has_blocking and isinstance(response_contract, dict):
+        response_contract = dict(response_contract)
+        response_contract["next_action"] = next_action
 
     response = {
         "ok": True,
@@ -980,7 +1222,7 @@ def handle_task_open(
 def handle_task_close(
     sid: str,
     task_id: str,
-    outcome: str,
+    outcome: str = "",
     evidence: str = "",
     files_changed: str = "",
     correction_happened: bool = False,
@@ -1000,6 +1242,10 @@ def handle_task_close(
     learning_content: str = "",
     learning_reasoning: str = "",
     outcome_notes: str = "",
+    result: str = "",
+    summary: str = "",
+    verification: str = "",
+    evidence_refs: str = "",
 ) -> str:
     """Close a protocol task and automatically record the required discipline artifacts."""
     task = get_protocol_task(task_id.strip())
@@ -1012,8 +1258,10 @@ def handle_task_close(
             indent=2,
         )
 
+    outcome_candidate = (outcome or result or "").strip()
+    normalized_outcome = CLOSE_OUTCOME_ALIASES.get(outcome_candidate.lower(), outcome_candidate)
     try:
-        clean_outcome = validate_close_outcome(outcome)
+        clean_outcome = validate_close_outcome(normalized_outcome)
     except ValueError as exc:
         return json.dumps(
             {
@@ -1025,7 +1273,13 @@ def handle_task_close(
             ensure_ascii=False,
             indent=2,
         )
-    clean_evidence = (evidence or "").strip()
+    clean_change_summary = (change_summary or summary or "").strip()
+    clean_change_verify = (change_verify or verification or "").strip()
+    clean_evidence = (evidence or clean_change_summary or "").strip()
+    extra_refs = _parse_list(evidence_refs)
+    if extra_refs:
+        refs_line = "Evidence refs: " + ", ".join(extra_refs)
+        clean_evidence = f"{clean_evidence}\n{refs_line}".strip() if clean_evidence else refs_line
     files_changed_list = _parse_list(files_changed)
     planned_files = _parse_list(task.get("files") or "[]")
     effective_files = files_changed_list or planned_files
@@ -1100,9 +1354,12 @@ def handle_task_close(
             )
 
     # ── Release checklist: require channel alignment evidence for release tasks ──
-    RELEASE_KEYWORDS = {"release", "deploy", "version", "launch", "ship"}
-    task_goal_lower = (task.get("goal") or "").lower()
-    is_release = any(kw in task_goal_lower for kw in RELEASE_KEYWORDS)
+    is_release = _is_release_task(
+        goal=task.get("goal") or "",
+        area=task.get("area") or "",
+        project_hint=task.get("project_hint") or "",
+        verification_step=task.get("verification_step") or "",
+    )
     if is_release and clean_outcome == "done" and clean_evidence:
         missing_channels: list[str] = []
         evidence_lower = clean_evidence.lower()
@@ -1124,12 +1381,12 @@ def handle_task_close(
             change = log_change(
                 task["session_id"],
                 ", ".join(effective_files),
-                (change_summary or f"Protocol task {task_id}: {task.get('goal', '')}")[:500],
+                (clean_change_summary or f"Protocol task {task_id}: {task.get('goal', '')}")[:500],
                 (change_why or task.get("goal", ""))[:500],
                 (triggered_by or task_id)[:200],
                 task.get("area", "")[:200],
                 (change_risks or "")[:500],
-                (change_verify or clean_evidence)[:500],
+                (clean_change_verify or clean_evidence)[:500],
             )
             if "error" in change:
                 _record_debt(
@@ -1197,7 +1454,7 @@ def handle_task_close(
                 task_id,
                 effective_files,
                 clean_evidence=clean_evidence,
-                change_summary=change_summary,
+                change_summary=clean_change_summary,
                 change_why=change_why,
                 outcome_notes=outcome_notes,
             )
@@ -1275,6 +1532,19 @@ def handle_task_close(
                 debts=debts_created,
             )
 
+    if task.get("guard_has_blocking") and not files_changed_list:
+        open_task_debts = list_protocol_debts(status="open", task_id=task_id, limit=200)
+        has_guard_touch_violation = any(
+            (debt.get("debt_type") or "") in _GUARD_TOUCH_DEBT_TYPES
+            for debt in open_task_debts
+        )
+        if not has_guard_touch_violation:
+            resolve_protocol_debts(
+                task_id=task_id,
+                debt_types=["unacknowledged_guard_blocking"],
+                resolution="Task closed without touching guarded files.",
+            )
+
     task = close_protocol_task(
         task_id,
         outcome=clean_outcome,
@@ -1290,7 +1560,7 @@ def handle_task_close(
         event_type=f"protocol_task_{clean_outcome}",
         title=(task.get("goal") or task_id)[:160],
         summary=(outcome_notes or clean_evidence or clean_outcome)[:600],
-        body=(change_summary or change_why or "")[:1600],
+        body=(clean_change_summary or change_why or "")[:1600],
         context_key=f"protocol_task:{task_id}",
         context_title=(task.get("goal") or task_id)[:160],
         context_summary=(task.get("context_hint") or task.get("goal") or "")[:600],
@@ -1312,7 +1582,7 @@ def handle_task_close(
     # ── Drive/Curiosity: detect signals from task evidence (best-effort) ──
     try:
         _drive_text = " ".join(filter(None, [
-            outcome_notes, clean_evidence, change_summary, change_why,
+            outcome_notes, clean_evidence, clean_change_summary, change_why,
         ]))
         if _drive_text and len(_drive_text.strip()) >= 15:
             from tools_drive import detect_drive_signal as _detect_drive
@@ -1326,6 +1596,16 @@ def handle_task_close(
         pass  # Drive detection is best-effort
 
     open_debts = list_protocol_debts(status="open", task_id=task_id, limit=20)
+
+    status = "clean"
+    next_action = "Task closed cleanly."
+    if open_debts:
+        if clean_outcome == "done":
+            status = "done_with_debts"
+            next_action = "Task closed as done, but resolve the open protocol debt next."
+        else:
+            status = "debt-open"
+            next_action = "Resolve the open protocol debt next."
 
     response = {
         "ok": True,
@@ -1344,12 +1624,8 @@ def handle_task_close(
             }
             for debt in open_debts
         ],
-        "status": "clean" if not open_debts else "debt-open",
-        "next_action": (
-            "Do not claim completion yet. Resolve the open protocol debt first."
-            if open_debts else
-            "Task closed cleanly."
-        ),
+        "status": status,
+        "next_action": next_action,
     }
     return json.dumps(response, ensure_ascii=False, indent=2)
 
@@ -1376,6 +1652,18 @@ def handle_task_acknowledge_guard(
             ensure_ascii=False,
             indent=2,
         )
+    if task.get("guard_acknowledged"):
+        return json.dumps(
+            {
+                "ok": True,
+                "task_id": task_id,
+                "acknowledged_rule_ids": _extract_guard_blocking_ids(task.get("guard_summary") or ""),
+                "resolved_debts": 0,
+                "next_action": "Guard rules were already acknowledged for this task.",
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
 
     expected = _extract_guard_blocking_ids(task.get("guard_summary") or "")
     provided = sorted({int(item) for item in _parse_list(learning_ids) if str(item).strip().isdigit()})
@@ -1391,6 +1679,7 @@ def handle_task_acknowledge_guard(
             indent=2,
         )
 
+    set_protocol_task_guard_acknowledged(task_id, acknowledged=True)
     resolved = resolve_protocol_debts(
         task_id=task_id,
         debt_types=["unacknowledged_guard_blocking"],
@@ -1416,11 +1705,12 @@ def handle_protocol_debt_list(
     debt_type: str = "",
     severity: str = "",
     limit: str = "50",
+    sid: str = "",
 ) -> str:
     rows = list_protocol_debts(
         status=status.strip() if isinstance(status, str) else "open",
         task_id=(task_id or "").strip(),
-        session_id=(session_id or "").strip(),
+        session_id=(session_id or sid or "").strip(),
         debt_type=(debt_type or "").strip(),
         severity=(severity or "").strip(),
         limit=max(1, min(500, int(limit or 50))),
@@ -1447,8 +1737,21 @@ def handle_protocol_debt_resolve(
     session_id: str = "",
     debt_types: str = "",
     resolution: str = "",
+    debt_id: str = "",
 ) -> str:
     parsed_ids = _parse_int_list(debt_ids)
+    single_debt_id = (debt_id or "").strip()
+    if single_debt_id:
+        try:
+            parsed_ids.append(int(single_debt_id))
+        except ValueError:
+            return json.dumps(
+                {"ok": False, "error": f"Invalid debt_id: {single_debt_id}"},
+                ensure_ascii=False,
+                indent=2,
+            )
+    if parsed_ids:
+        parsed_ids = sorted(set(parsed_ids))
     parsed_types = _parse_list(debt_types)
     if not parsed_ids and not (task_id or "").strip() and not (session_id or "").strip() and not parsed_types:
         return json.dumps(

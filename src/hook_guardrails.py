@@ -5,10 +5,13 @@ import sqlite3
 
 import json
 import os
+import re
+import shlex
 import sys
 from pathlib import Path
 import paths
 
+from core_prompts import render_core_prompt
 from db import create_protocol_debt, get_db
 from plugins.guard import _load_conditioned_learnings, _normalize_path_token
 from protocol_settings import get_protocol_strictness
@@ -56,6 +59,63 @@ PUBLIC_REPO_FILES = {
     "package-lock.json",
     "package.json",
 }
+SHELL_DELETE_BASES = {"rm", "unlink", "rmdir"}
+SHELL_WRITE_BASES = {
+    "mv",
+    "cp",
+    "touch",
+    "install",
+    "mkdir",
+    "ln",
+    "chmod",
+    "chown",
+    "setfacl",
+    "tee",
+    "rsync",
+}
+SHELL_REDIRECT_TOKENS = {">", ">>", "1>", "1>>", "2>", "2>>"}
+INLINE_INTERPRETER_BASES = {
+    "python",
+    "python3",
+    "python3.11",
+    "python3.12",
+    "python3.13",
+    "node",
+    "php",
+    "ruby",
+    "perl",
+}
+INLINE_DELETE_RE = re.compile(
+    r"(?:"
+    r"\.unlink\s*\(|"
+    r"os\.remove\s*\(|"
+    r"shutil\.rmtree\s*\(|"
+    r"unlink(?:Sync)?\s*\(|"
+    r"rm(?:Sync)?\s*\(|"
+    r"rmdir(?:Sync)?\s*\(|"
+    r"remove(?:Sync)?\s*\(|"
+    r"file_delete\s*\("
+    r")",
+    re.IGNORECASE,
+)
+INLINE_WRITE_RE = re.compile(
+    r"(?:"
+    r"write_text\s*\(|"
+    r"write_bytes\s*\(|"
+    r"appendFile(?:Sync)?\s*\(|"
+    r"writeFile(?:Sync)?\s*\(|"
+    r"copyFile(?:Sync)?\s*\(|"
+    r"rename(?:Sync)?\s*\(|"
+    r"mkdir(?:Sync)?\s*\(|"
+    r"symlink(?:Sync)?\s*\(|"
+    r"chmod(?:Sync)?\s*\(|"
+    r"chown(?:Sync)?\s*\(|"
+    r"file_put_contents\s*\(|"
+    r"open\([^\n]*?,\s*['\"][wax+][^'\"]*['\"]"
+    r")",
+    re.IGNORECASE,
+)
+EMBEDDED_PATH_RE = re.compile(r"(~\/[^'\"\s,);]+|\/[^'\"\s,);]+)")
 
 
 def _operation_kind(tool_name: str) -> str:
@@ -158,6 +218,104 @@ def _extract_touched_files(tool_input) -> list[str]:
             seen.add(normalized)
             unique.append(item)
     return unique
+
+
+def _extract_bash_command(tool_input) -> str:
+    if not isinstance(tool_input, dict):
+        return ""
+    for key in ("command", "cmd"):
+        value = tool_input.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ""
+
+
+def _shell_tokens(command: str) -> list[str]:
+    if not str(command or "").strip():
+        return []
+    try:
+        return shlex.split(command)
+    except Exception:
+        return str(command).split()
+
+
+def _resolve_shell_candidate_path(token: str, cwd: str) -> str:
+    raw = os.path.expandvars(str(token or "").strip())
+    if not raw:
+        return ""
+    if raw.startswith("~"):
+        raw = str(Path(raw).expanduser())
+    path = Path(raw)
+    if not path.is_absolute():
+        if not str(cwd or "").strip():
+            return ""
+        path = Path(cwd).expanduser() / path
+    return str(path.resolve(strict=False))
+
+
+def _classify_bash_operation(command: str) -> str:
+    tokens = _shell_tokens(command)
+    if not tokens:
+        return "other"
+    if any(token in SHELL_REDIRECT_TOKENS for token in tokens):
+        return "write"
+    base = Path(tokens[0]).name.lower()
+    if base in SHELL_DELETE_BASES:
+        return "delete"
+    if base in SHELL_WRITE_BASES:
+        return "write"
+    if base == "sed" and "-i" in tokens:
+        return "write"
+    if base == "perl" and any(token == "-i" or token.startswith("-i") for token in tokens[1:]):
+        return "write"
+    if base in INLINE_INTERPRETER_BASES:
+        if INLINE_DELETE_RE.search(command):
+            return "delete"
+        if INLINE_WRITE_RE.search(command):
+            return "write"
+    return "other"
+
+
+def _extract_bash_touched_files(tool_input) -> list[str]:
+    command = _extract_bash_command(tool_input)
+    tokens = _shell_tokens(command)
+    if not tokens:
+        return []
+    cwd = ""
+    if isinstance(tool_input, dict):
+        cwd = str(tool_input.get("cwd") or "").strip()
+
+    candidates: list[str] = []
+    seen: set[str] = set()
+    suffixes = {
+        ".py", ".md", ".json", ".jsonl", ".sh", ".txt", ".toml", ".yaml", ".yml",
+        ".js", ".ts", ".tsx", ".jsx", ".php", ".sql", ".rs", ".go", ".c", ".cpp",
+        ".h", ".css", ".html",
+    }
+
+    def add(candidate: str) -> None:
+        resolved = _resolve_shell_candidate_path(candidate, cwd)
+        normalized = _normalize_file_path(resolved) if resolved else ""
+        if resolved and normalized and normalized not in seen:
+            seen.add(normalized)
+            candidates.append(resolved)
+
+    for index, token in enumerate(tokens):
+        if token in SHELL_REDIRECT_TOKENS:
+            if index + 1 < len(tokens):
+                add(tokens[index + 1])
+            continue
+        if token.startswith("-"):
+            continue
+        if (
+            token.startswith(("/", "~", ".", "$"))
+            or "/" in token
+            or Path(token).suffix.lower() in suffixes
+        ):
+            add(token)
+    for match in EMBEDDED_PATH_RE.findall(command):
+        add(match)
+    return candidates
 
 
 def _resolve_nexo_sid(conn, external_session_id: str) -> str:
@@ -266,7 +424,7 @@ def register_claude_session_alias(conn, sid: str, claude_session_id: str) -> boo
 def _find_open_task_for_file(conn, sid: str, filepath: str) -> dict | None:
     target = _normalize_file_path(filepath)
     rows = conn.execute(
-        """SELECT task_id, files, guard_has_blocking, task_type, plan, unknowns,
+        """SELECT task_id, files, guard_has_blocking, guard_acknowledged, task_type, plan, unknowns,
                   verification_step, opened_with_guard, must_change_log, must_verify
            FROM protocol_tasks
            WHERE session_id = ? AND status = 'open'
@@ -286,7 +444,7 @@ def _find_open_task_for_file(conn, sid: str, filepath: str) -> dict | None:
 
 def _find_any_open_task(conn, sid: str) -> dict | None:
     row = conn.execute(
-        """SELECT task_id, files, guard_has_blocking, task_type, plan, unknowns,
+        """SELECT task_id, files, guard_has_blocking, guard_acknowledged, task_type, plan, unknowns,
                   verification_step, opened_with_guard, must_change_log, must_verify
            FROM protocol_tasks
            WHERE session_id = ? AND status = 'open'
@@ -350,18 +508,34 @@ def _find_open_debt(conn, *, session_id: str, task_id: str, debt_type: str, file
     return dict(row) if row else None
 
 
-def _find_task_guard_blocking_debt(conn, task_id: str) -> dict | None:
-    row = conn.execute(
-        """SELECT *
-           FROM protocol_debt
-           WHERE status = 'open'
-             AND task_id = ?
-             AND debt_type = 'unacknowledged_guard_blocking'
-           ORDER BY id DESC
-           LIMIT 1""",
-        (task_id,),
-    ).fetchone()
-    return dict(row) if row else None
+def _task_requires_guard_ack(task: dict | None) -> bool:
+    if not task:
+        return False
+    if not bool(task.get("guard_has_blocking")):
+        return False
+    return not bool(task.get("guard_acknowledged"))
+
+
+def _ensure_unacknowledged_guard_blocking_debt(
+    conn,
+    *,
+    session_id: str,
+    task_id: str,
+    filepath: str,
+    tool_name: str,
+) -> dict:
+    return _ensure_protocol_debt(
+        conn,
+        session_id=session_id,
+        task_id=task_id,
+        debt_type="unacknowledged_guard_blocking",
+        severity="error",
+        evidence=(
+            f"{tool_name} attempted on {filepath} before acknowledging blocking guard rules "
+            f"for task {task_id}."
+        ),
+        file_token=filepath,
+    )
 
 
 def _ensure_protocol_debt(
@@ -434,7 +608,7 @@ def _collect_protocol_warnings(conn, *, sid: str, tool_name: str) -> list[dict]:
     if not sid:
         _append_protocol_warning(
             warnings,
-            "Trabajo no trivial detectado antes de `nexo_startup(...)`. Arranca NEXO, abre `nexo_task_open(...)`, y si esto va a durar varias fases abre también `nexo_workflow_open(...)` antes de seguir.",
+            render_core_prompt("hook-protocol-warning-startup-required"),
         )
         return warnings
 
@@ -442,17 +616,20 @@ def _collect_protocol_warnings(conn, *, sid: str, tool_name: str) -> list[dict]:
     has_guard = _session_has_guard_check(conn, sid)
     if not task:
         guard_note = (
-            " Ejecuta `nexo_guard_check(...)` antes de leer código condicionado o compartido."
+            render_core_prompt("hook-protocol-warning-task-open-guard-note")
             if short_name in {"Read", "Bash", "Grep", "Glob"} and not has_guard
             else ""
         )
         _append_protocol_warning(
             warnings,
-            "Trabajo no trivial detectado sin `nexo_task_open(...)`. Ábrelo ahora y, si esto va a cruzar varios pasos o mensajes, añade `nexo_workflow_open(...)`." + guard_note,
+            render_core_prompt(
+                "hook-protocol-warning-task-open-required",
+                guard_note=guard_note,
+            ),
         )
         _append_protocol_warning(
             warnings,
-            "Recordatorio protocolario: mantén `nexo_heartbeat(...)` al día y no cierres en optimista; si hay cambios reales, registra `nexo_change_log(...)` o cierra con `nexo_task_close(...)` más evidencia.",
+            render_core_prompt("hook-protocol-warning-heartbeat-close-evidence"),
         )
         return warnings
 
@@ -460,14 +637,20 @@ def _collect_protocol_warnings(conn, *, sid: str, tool_name: str) -> list[dict]:
     if str(task.get("task_type") or "").strip() in ACTION_TASK_TYPES and not (task.get("opened_with_guard") or has_guard):
         _append_protocol_warning(
             warnings,
-            f"La tarea {task_id} está activa sin guard visible. Ejecuta `nexo_guard_check(...)` antes de tocar código condicionado o compartido.",
+            render_core_prompt(
+                "hook-protocol-warning-guard-required",
+                task_id=task_id,
+            ),
         )
 
     workflow = _find_any_open_workflow(conn, sid)
     if _task_needs_workflow(task) and not workflow:
         _append_protocol_warning(
             warnings,
-            f"La tarea {task_id} ya tiene pinta de multi-step y sigue sin `nexo_workflow_open(...)`. Ábrelo para que checkpoints, resume y replay no dependan de memoria implícita.",
+            render_core_prompt(
+                "hook-protocol-warning-workflow-required",
+                task_id=task_id,
+            ),
         )
 
     if str(task.get("task_type") or "").strip() in ACTION_TASK_TYPES and short_name in {"Bash", "Edit", "MultiEdit", "Write", "Delete"}:
@@ -478,7 +661,11 @@ def _collect_protocol_warnings(conn, *, sid: str, tool_name: str) -> list[dict]:
         )
         _append_protocol_warning(
             warnings,
-            f"Recordatorio protocolario para {task_id}: mantén `nexo_heartbeat(...)` al día y ciérrala con `nexo_task_close(...)` más evidencia antes de decir que está resuelta.{change_note}",
+            render_core_prompt(
+                "hook-protocol-warning-task-close-evidence",
+                task_id=task_id,
+                change_note=change_note,
+            ),
         )
 
     return warnings
@@ -594,7 +781,15 @@ def _read_claude_session_id_from_coordination() -> str:
 
 def process_pre_tool_event(payload: dict) -> dict:
     tool_name = str(payload.get("tool_name", "")).strip()
+    tool_input = payload.get("tool_input")
     op = _operation_kind(tool_name)
+    shell_files: list[str] = []
+    if tool_name == "Bash":
+        shell_command = _extract_bash_command(tool_input)
+        shell_op = _classify_bash_operation(shell_command)
+        if shell_op in {"write", "delete"}:
+            op = shell_op
+            shell_files = _extract_bash_touched_files(tool_input)
     if op not in {"write", "delete"}:
         return {"ok": True, "skipped": True, "reason": "operation not blocked", "strictness": get_protocol_strictness()}
 
@@ -612,8 +807,14 @@ def process_pre_tool_event(payload: dict) -> dict:
             "strictness": get_protocol_strictness(),
         }
 
-    tool_input = payload.get("tool_input")
     files = _extract_touched_files(tool_input)
+    if shell_files:
+        existing_norms = {_normalize_file_path(item) for item in files}
+        for item in shell_files:
+            normalized = _normalize_file_path(item)
+            if normalized and normalized not in existing_norms:
+                files.append(item)
+                existing_norms.add(normalized)
     strictness = get_protocol_strictness()
     conn = get_db()
     claude_sid = str(payload.get("session_id", "") or "").strip()
@@ -742,8 +943,14 @@ def process_pre_tool_event(payload: dict) -> dict:
             )
             continue
 
-        guard_debt = _find_task_guard_blocking_debt(conn, task["task_id"])
-        if guard_debt:
+        if _task_requires_guard_ack(task):
+            _ensure_unacknowledged_guard_blocking_debt(
+                conn,
+                session_id=sid,
+                task_id=task["task_id"],
+                filepath=filepath,
+                tool_name=tool_name,
+            )
             debt = _ensure_protocol_debt(
                 conn,
                 session_id=sid,
@@ -873,11 +1080,17 @@ def process_tool_event(payload: dict) -> dict:
             )
             continue
 
-        guard_debt = _find_task_guard_blocking_debt(conn, task["task_id"])
-        if guard_debt:
+        if _task_requires_guard_ack(task):
+            _ensure_unacknowledged_guard_blocking_debt(
+                conn,
+                session_id=sid,
+                task_id=task["task_id"],
+                filepath=filepath,
+                tool_name=tool_name,
+            )
             evidence = (
                 f"{tool_name} touched conditioned file {filepath} linked to learning IDs {learning_ids} "
-                f"before acknowledging blocking guard debt for task {task['task_id']}."
+                f"before acknowledging blocking guard rules for task {task['task_id']}."
             )
             debt = _ensure_protocol_debt(
                 conn,

@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.1.5: patch — standalone catchup + isolated-home product checks</title>
+<meta name="description" content="NEXO Brain v7.1.5 patch over v7.1.4. Standalone catchup/runtime-root flows now lazy-load interactive helpers, explicit-home Desktop detection stops inheriting the operator machine state, and legacy doctor callers stay compatible.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-1-5/">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.1.5: patch — standalone catchup + isolated-home product checks","datePublished":"2026-04-21","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head><body><main><article style="max-width:760px;margin:80px auto;padding:0 24px;line-height:1.75;">
+<h1>NEXO 7.1.5 — standalone catchup + isolated-home product checks</h1>
+<p><em>Published 2026-04-21. Patch over v7.1.4.</em></p>
+<p>The <code>7.1.4</code> line closed the last packaged updater regression, but the runtime still had a quieter maintenance-path problem: some direct recovery and release flows were inheriting assumptions from the operator machine instead of the runtime context they were actually evaluating. This coordinated patch makes those paths honest again and keeps older doctor callers compatible while the product line stays strict where it should.</p>
+<h2>What changed</h2>
+<p><code>src/scripts/nexo-catchup.py</code> now imports the interactive automation helpers only when the post-catchup assessment path is actually needed, so direct runtime-root catchup execution no longer dies just because <code>claude_cli</code> is absent on a lean install. <code>src/product_mode.py</code> now treats an explicit external/test home as authoritative and ignores the operator machine's globally installed Desktop app when deciding whether Desktop product mode is present. <code>src/cli.py</code> also restores CLI compatibility for legacy <code>nexo scripts call nexo_doctor</code> callers by defaulting the missing <code>plane</code> to <code>installation_live</code>, while the underlying plugin contract remains explicit.</p>
+<h2>Why it matters</h2>
+<p>These are not headline UI changes, but they matter for reliability. Recovery scripts, isolated-home tests, release validators, and Desktop-managed maintenance flows must evaluate the runtime in front of them, not the operator's shell history or globally installed app footprint. This patch narrows that gap so packaged and standalone maintenance continue to behave predictably as the product line keeps shipping.</p>
+<h2>Verification</h2>
+<p>The coordinated Brain line was validated with the full Python suite green (<code>1854 passed, 3 skipped, 1 xfailed, 5 xpassed</code>) plus the public release-readiness validator after the release surfaces and integration artifacts were refreshed.</p>
+</article></main></body></html>

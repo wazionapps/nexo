@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import ast
+import re
 import sys
 from pathlib import Path
 
@@ -12,14 +14,22 @@ if str(SRC) not in sys.path:
 import core_prompts
 
 
+_PROMPT_LIKE_NAME = re.compile(r".*(PROMPT|QUESTION|TEMPLATE|INJECTION).*")
+
+
 def test_prompt_catalog_dir_exists_and_contains_automation_prompts():
     assert core_prompts.PROMPTS_DIR.is_dir()
+    assert (core_prompts.PROMPTS_DIR / "automation-backend-probe.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "autonomy-mandate-question.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "catchup-assessment.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "check-context.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "daily-synthesis.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "daily-self-audit.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "deep-sleep-extract-json-conversion.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "deep-sleep-extract-json-output.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "codex-protocol-contract.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "drive-area-classifier-system.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "drive-area-classifier-user.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "drive-signal-classifier-system.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "drive-signal-classifier-user.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "email-monitor.md").is_file()
@@ -31,12 +41,23 @@ def test_prompt_catalog_dir_exists_and_contains_automation_prompts():
     assert (core_prompts.PROMPTS_DIR / "followup-runner.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "followup-runner-operator-attention-context.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "followup-runner-operator-attention-question.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "heartbeat-diary-overdue.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "heartbeat-guard-reminder.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "heartbeat-learning-reminder.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "hook-protocol-warning-startup-required.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "hook-protocol-warning-task-open-guard-note.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "hook-protocol-warning-task-open-required.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "hook-protocol-warning-heartbeat-close-evidence.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "hook-protocol-warning-guard-required.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "hook-protocol-warning-workflow-required.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "hook-protocol-warning-task-close-evidence.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "immune-triage.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "interactive-startup.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "json-object-only.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "learning-validator.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "morning-agent.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "morning-agent-json-output.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "post-tool-inbox-reminder.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "postmortem-consolidator.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "r13-pre-edit-guard-injection.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "r14-correction-learning-injection.md").is_file()
@@ -71,10 +92,12 @@ def test_prompt_catalog_dir_exists_and_contains_automation_prompts():
     assert (core_prompts.PROMPTS_DIR / "r24-stale-memory-injection.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "r25-read-only-host-injection.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "sleep.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "server-mcp-instructions.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "t4-r15-project-context-gate.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "t4-r23e-force-push-gate.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "t4-r23f-db-no-where-gate.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "t4-r23h-shebang-mismatch-gate.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "watchdog-repair.md").is_file()
 
 
 def test_render_core_prompt_replaces_named_tokens():
@@ -93,6 +116,7 @@ def test_render_core_prompt_replaces_named_tokens():
 
 
 def test_render_core_prompt_supports_catchup_and_immune_templates():
+    probe = core_prompts.render_core_prompt("automation-backend-probe")
     catchup = core_prompts.render_core_prompt(
         "catchup-assessment",
         ran=3,
@@ -110,6 +134,7 @@ def test_render_core_prompt_supports_catchup_and_immune_templates():
     assert "The Mac was off/asleep and 3 scheduled tasks just ran as catch-up" in catchup
     assert "/tmp/catchup-assessment.md" in catchup
     assert "2026-04-20 09:30" in catchup
+    assert probe == "Reply exactly OK."
 
     assert "You are the NEXO Immune System triage analyst." in immune
     assert "/tmp/immune-triage.md" in immune
@@ -177,6 +202,12 @@ def test_render_core_prompt_supports_json_and_drive_classifier_templates():
         "deep-sleep-extract-json-output",
         session_id="session-123",
     )
+    area_system = core_prompts.render_core_prompt("drive-area-classifier-system")
+    area_user = core_prompts.render_core_prompt(
+        "drive-area-classifier-user",
+        text="The sender mailbox keeps bouncing customer replies.",
+    )
+    autonomy_question = core_prompts.render_core_prompt("autonomy-mandate-question")
     drive_system = core_prompts.render_core_prompt("drive-signal-classifier-system")
     drive_user = core_prompts.render_core_prompt(
         "drive-signal-classifier-user",
@@ -189,6 +220,9 @@ def test_render_core_prompt_supports_json_and_drive_classifier_templates():
     assert "protocol_summary" in conversion
     assert "session-123" in deep_sleep_json
     assert "cannot_comply" in deep_sleep_json
+    assert "stop deferring normal in-scope work" in autonomy_question
+    assert "exactly nine labels: shopify, google-ads, meta-ads, wazion, nexo, canaririural, seo, email, none" in area_system
+    assert "The sender mailbox keeps bouncing customer replies." in area_user
     assert "one of exactly five labels: anomaly, pattern, gap, opportunity, none" in drive_system
     assert "ROAS dropped 35% after yesterday's deploy." in drive_user
 
@@ -234,6 +268,36 @@ def test_render_core_prompt_supports_enforcer_and_startup_templates():
     r24 = core_prompts.render_core_prompt("r24-stale-memory-injection", threshold_days="7")
     r25 = core_prompts.render_core_prompt("r25-read-only-host-injection", host="maria", matched="rm")
     startup = core_prompts.render_core_prompt("interactive-startup")
+    codex_contract = core_prompts.render_core_prompt("codex-protocol-contract")
+    server_instructions = core_prompts.render_core_prompt("server-mcp-instructions", assistant_name="Nero")
+    inbox_reminder = core_prompts.render_core_prompt("post-tool-inbox-reminder", pending="3")
+    heartbeat_diary = core_prompts.render_core_prompt(
+        "heartbeat-diary-overdue",
+        heartbeat_count=14,
+        active_minutes=37,
+    )
+    heartbeat_guard = core_prompts.render_core_prompt("heartbeat-guard-reminder")
+    heartbeat_learning = core_prompts.render_core_prompt("heartbeat-learning-reminder")
+    hook_startup = core_prompts.render_core_prompt("hook-protocol-warning-startup-required")
+    hook_guard_note = core_prompts.render_core_prompt("hook-protocol-warning-task-open-guard-note")
+    hook_task_open = core_prompts.render_core_prompt(
+        "hook-protocol-warning-task-open-required",
+        guard_note=hook_guard_note,
+    )
+    hook_close = core_prompts.render_core_prompt("hook-protocol-warning-heartbeat-close-evidence")
+    hook_guard = core_prompts.render_core_prompt("hook-protocol-warning-guard-required", task_id="PT-42")
+    hook_workflow = core_prompts.render_core_prompt("hook-protocol-warning-workflow-required", task_id="PT-42")
+    hook_task_close = core_prompts.render_core_prompt(
+        "hook-protocol-warning-task-close-evidence",
+        task_id="PT-42",
+        change_note=" If you really edit, capture `nexo_change_log(...)` too.",
+    )
+    watchdog = core_prompts.render_core_prompt(
+        "watchdog-repair",
+        fail_details="[core] demo failure",
+        propagate_block="PROPAGATE",
+        nexo_home="/Users/franciscoc/.nexo",
+    )
 
     assert "Respond with EXACTLY ONE WORD: yes OR no." in strict
     assert "Emit 'yes' or 'no' and stop." in retry
@@ -270,6 +334,24 @@ def test_render_core_prompt_supports_enforcer_and_startup_templates():
     assert "older than 7 days" in r24
     assert "access_mode=read_only" in r25
     assert "run nexo_startup and nexo_heartbeat" in startup
+    assert "NEXO PROTOCOL (MANDATORY)" in codex_contract
+    assert "conditioned learnings or blocking guard rules" in codex_contract
+    assert "Nero — cognitive co-operator." in server_instructions
+    assert "R26b silent enforcement" in server_instructions
+    assert "3 unread inbox message(s)" in inbox_reminder
+    assert "14 heartbeats, 37min active" in heartbeat_diary
+    assert "nexo_session_diary_write" in heartbeat_diary
+    assert "nexo_guard_check" in heartbeat_guard
+    assert "nexo_learning_add" in heartbeat_learning
+    assert "before `nexo_startup(...)`" in hook_startup
+    assert "Run `nexo_guard_check(...)` before reading conditioned or shared code." in hook_guard_note
+    assert "without `nexo_task_open(...)`" in hook_task_open
+    assert "nexo_change_log(...)" in hook_close
+    assert "Task PT-42 is active without a visible guard." in hook_guard
+    assert "Task PT-42 already looks multi-step" in hook_workflow
+    assert "Protocol reminder for PT-42" in hook_task_close
+    assert "[core] demo failure" in watchdog
+    assert "/Users/franciscoc/.nexo/runtime/logs/watchdog-repair-result.log" in watchdog
 
 
 def test_render_core_prompt_supports_evolution_templates():
@@ -311,3 +393,86 @@ def test_render_core_prompt_supports_evolution_templates():
     assert "/tmp/public-repo" in public_contrib
     assert "Number: #42" in public_review
     assert "fix: runtime drift" in public_review
+
+
+def test_all_render_core_prompt_calls_point_to_existing_templates():
+    src_root = SRC
+    pattern = re.compile(r'render_core_prompt\("([^"]+)"')
+    seen: set[str] = set()
+    for path in sorted(src_root.rglob("*.py")):
+        text = path.read_text(encoding="utf-8")
+        for match in pattern.finditer(text):
+            seen.add(match.group(1))
+    missing = sorted(name for name in seen if not (core_prompts.PROMPTS_DIR / f"{name}.md").is_file())
+    assert not missing, f"Missing core prompt templates for: {missing}"
+
+
+def test_prompt_like_constants_do_not_embed_inline_prompt_text():
+    allowed_names = {"PROMPT_TEMPLATE_NAMES", "CORTEX_PROMPT"}
+
+    def _is_allowed_prompt_source(node: ast.AST) -> bool:
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+            if node.func.id == "render_core_prompt":
+                return True
+            if node.func.id == "_find_evolution_file":
+                return True
+        return False
+
+    def _is_inline_stringish(node: ast.AST) -> bool:
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            return True
+        if isinstance(node, ast.JoinedStr):
+            return True
+        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+            return _is_inline_stringish(node.left) or _is_inline_stringish(node.right)
+        return False
+
+    violations: list[str] = []
+    for path in sorted(SRC.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in tree.body:
+            if not isinstance(node, ast.Assign):
+                continue
+            if len(node.targets) != 1 or not isinstance(node.targets[0], ast.Name):
+                continue
+            name = node.targets[0].id
+            if name in allowed_names or not _PROMPT_LIKE_NAME.match(name):
+                continue
+            if _is_allowed_prompt_source(node.value):
+                continue
+            if _is_inline_stringish(node.value):
+                violations.append(f"{path.relative_to(SRC)}:{name}")
+    assert not violations, f"Inline prompt-like constants must use core prompt catalog: {violations}"
+
+
+def test_model_callsites_do_not_embed_inline_prompt_literals():
+    violations: list[str] = []
+    for path in sorted(SRC.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            func_name = None
+            if isinstance(node.func, ast.Name):
+                func_name = node.func.id
+            elif isinstance(node.func, ast.Attribute):
+                func_name = node.func.attr
+            if func_name not in {"run_automation_prompt", "call_model_raw"}:
+                continue
+            inline_fields: list[str] = []
+            if node.args:
+                first = node.args[0]
+                if isinstance(first, ast.Constant) and isinstance(first.value, str):
+                    inline_fields.append("arg0")
+                elif isinstance(first, ast.JoinedStr):
+                    inline_fields.append("arg0")
+            for kw in node.keywords:
+                if kw.arg not in {"prompt", "system", "append_system_prompt"}:
+                    continue
+                if isinstance(kw.value, ast.Constant) and isinstance(kw.value.value, str):
+                    inline_fields.append(kw.arg)
+                elif isinstance(kw.value, ast.JoinedStr):
+                    inline_fields.append(kw.arg)
+            if inline_fields:
+                violations.append(f"{path.relative_to(SRC)}:{func_name}:{','.join(inline_fields)}")
+    assert not violations, f"Inline model prompts must come from the core prompt catalog: {violations}"

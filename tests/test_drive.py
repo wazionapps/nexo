@@ -177,22 +177,22 @@ class TestStats:
 # ── Detection heuristic tests ────────────────────────────────────────
 
 class TestDetection:
-    def test_interactive_detection_defaults_to_local_classification(self, monkeypatch):
+    def test_local_classifier_confirms_mid_band_semantic_signal(self, monkeypatch):
         monkeypatch.setattr(
             tools_drive,
-            "_llm_classify_signal",
+            "_local_classify_signal",
             lambda text: {
                 "available": True,
                 "label": "opportunity",
                 "confidence": 0.91,
-                "reason": "model sees an automation opportunity",
-                "source": "llm",
+                "reason": "local model sees an automation opportunity",
+                "source": "local",
             },
         )
         monkeypatch.setattr(
             tools_drive,
             "_semantic_signal_scores",
-            lambda text: {"anomaly": 0.99, "pattern": 0.0, "gap": 0.0, "opportunity": 0.0},
+            lambda text: {"anomaly": 0.0, "pattern": 0.0, "gap": 0.0, "opportunity": 0.52},
         )
 
         result = detect_drive_signal(
@@ -203,9 +203,39 @@ class TestDetection:
         assert result is not None
         signal = get_drive_signal(result["id"])
         assert signal is not None
-        assert signal["signal_type"] == "anomaly"
+        assert signal["signal_type"] == "opportunity"
+
+    def test_local_classifier_none_blocks_fallback_when_confident(self, monkeypatch):
+        monkeypatch.setattr(
+            tools_drive,
+            "_local_classify_signal",
+            lambda text: {
+                "available": True,
+                "label": None,
+                "confidence": 0.93,
+                "reason": "local model sees routine status",
+                "source": "local",
+            },
+        )
+        monkeypatch.setattr(
+            tools_drive,
+            "_semantic_signal_scores",
+            lambda text: {"pattern": 0.52, "anomaly": 0.0, "gap": 0.0, "opportunity": 0.0},
+        )
+
+        result = detect_drive_signal(
+            "Otra vez revisé el dashboard y todo sigue bien",
+            source="heartbeat", source_id="test-sid-local-none",
+        )
+
+        assert result is None
 
     def test_llm_classification_is_primary_when_explicitly_enabled(self, monkeypatch):
+        monkeypatch.setattr(
+            tools_drive,
+            "_local_classify_signal",
+            lambda text: {"available": False, "label": None, "reason": "unavailable"},
+        )
         monkeypatch.setattr(
             tools_drive,
             "_llm_classify_signal",
@@ -220,7 +250,7 @@ class TestDetection:
         monkeypatch.setattr(
             tools_drive,
             "_semantic_signal_scores",
-            lambda text: {"anomaly": 0.99, "pattern": 0.0, "gap": 0.0, "opportunity": 0.0},
+            lambda text: {"anomaly": 0.52, "pattern": 0.0, "gap": 0.0, "opportunity": 0.0},
         )
 
         result = detect_drive_signal(
@@ -236,6 +266,11 @@ class TestDetection:
     def test_llm_none_blocks_fallback_when_confident(self, monkeypatch):
         monkeypatch.setattr(
             tools_drive,
+            "_local_classify_signal",
+            lambda text: {"available": False, "label": None, "reason": "unavailable"},
+        )
+        monkeypatch.setattr(
+            tools_drive,
             "_llm_classify_signal",
             lambda text: {
                 "available": True,
@@ -248,7 +283,7 @@ class TestDetection:
         monkeypatch.setattr(
             tools_drive,
             "_semantic_signal_scores",
-            lambda text: {"pattern": 0.98, "anomaly": 0.0, "gap": 0.0, "opportunity": 0.0},
+            lambda text: {"pattern": 0.52, "anomaly": 0.0, "gap": 0.0, "opportunity": 0.0},
         )
 
         result = detect_drive_signal(
@@ -259,6 +294,11 @@ class TestDetection:
         assert result is None
 
     def test_fallback_still_works_when_llm_is_unavailable(self, monkeypatch):
+        monkeypatch.setattr(
+            tools_drive,
+            "_local_classify_signal",
+            lambda text: {"available": False, "label": None, "reason": "unavailable"},
+        )
         monkeypatch.setattr(
             tools_drive,
             "_llm_classify_signal",
@@ -355,6 +395,84 @@ class TestDetection:
         assert result is not None
         signal = get_drive_signals(area="google-ads")
         assert len(signal) >= 1
+
+    def test_area_inferred_from_local_classifier_when_semantics_are_ambiguous(self):
+        orig_semantic = tools_drive._semantic_area_scores
+        orig_local = tools_drive._local_classify_area
+        orig_llm = tools_drive._llm_classify_area
+        orig_legacy = tools_drive._legacy_keyword_area
+        try:
+            tools_drive._semantic_area_scores = lambda _text: {}
+            tools_drive._local_classify_area = lambda _text: {
+                "available": True,
+                "label": "email",
+                "confidence": 0.93,
+            }
+            tools_drive._llm_classify_area = lambda _text: {
+                "available": False,
+                "label": None,
+                "confidence": 0.0,
+            }
+            tools_drive._legacy_keyword_area = lambda _text: ""
+            result = detect_drive_signal(
+                "Reply delivery dropped 45% unexpectedly and the sender mailbox keeps bouncing messages",
+                source="heartbeat", source_id="test-sid-email",
+            )
+            assert result is not None
+            signals = get_drive_signals(area="email")
+            assert len(signals) >= 1
+        finally:
+            tools_drive._semantic_area_scores = orig_semantic
+            tools_drive._local_classify_area = orig_local
+            tools_drive._llm_classify_area = orig_llm
+            tools_drive._legacy_keyword_area = orig_legacy
+
+    def test_area_inferred_from_llm_classifier_when_semantics_and_local_unavailable(self):
+        orig_semantic = tools_drive._semantic_area_scores
+        orig_local = tools_drive._local_classify_area
+        orig_llm = tools_drive._llm_classify_area
+        orig_legacy = tools_drive._legacy_keyword_area
+        try:
+            tools_drive._semantic_area_scores = lambda _text: {}
+            tools_drive._local_classify_area = lambda _text: {
+                "available": False,
+                "label": None,
+                "confidence": 0.0,
+            }
+            tools_drive._llm_classify_area = lambda _text: {
+                "available": True,
+                "label": "email",
+                "confidence": 0.88,
+            }
+            tools_drive._legacy_keyword_area = lambda _text: ""
+            assert tools_drive._infer_area("The sender mailbox keeps bouncing customer replies") == "email"
+        finally:
+            tools_drive._semantic_area_scores = orig_semantic
+            tools_drive._local_classify_area = orig_local
+            tools_drive._llm_classify_area = orig_llm
+            tools_drive._legacy_keyword_area = orig_legacy
+
+    def test_area_legacy_keywords_still_work_when_classifier_is_unavailable(self):
+        orig_semantic = tools_drive._semantic_area_scores
+        orig_local = tools_drive._local_classify_area
+        orig_llm = tools_drive._llm_classify_area
+        try:
+            tools_drive._semantic_area_scores = lambda _text: {}
+            tools_drive._local_classify_area = lambda _text: {
+                "available": False,
+                "label": None,
+                "confidence": 0.0,
+            }
+            tools_drive._llm_classify_area = lambda _text: {
+                "available": False,
+                "label": None,
+                "confidence": 0.0,
+            }
+            assert tools_drive._infer_area("El CPC de Google Ads subió otra vez") == "google-ads"
+        finally:
+            tools_drive._semantic_area_scores = orig_semantic
+            tools_drive._local_classify_area = orig_local
+            tools_drive._llm_classify_area = orig_llm
 
     def test_reinforces_existing_on_similar(self):
         detect_drive_signal(

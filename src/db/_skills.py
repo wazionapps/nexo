@@ -926,24 +926,6 @@ def match_skills(task: str, level: str = "", top_n: int = 3) -> list[dict]:
     level_filter = "AND level = ?" if level else "AND level IN ('draft', 'published', 'stable')"
     level_params = (level,) if level else ()
 
-    fts_results = fts_search(task, source_filter="skill", limit=10)
-    if fts_results:
-        ids = [result["source_id"] for result in fts_results]
-        placeholders = ",".join("?" * len(ids))
-        rows = conn.execute(
-            f"""SELECT * FROM skills WHERE id IN ({placeholders}) {level_filter}
-                ORDER BY CASE source_kind WHEN 'personal' THEN 0 WHEN 'core' THEN 1 ELSE 2 END,
-                         CASE level WHEN 'stable' THEN 0 WHEN 'published' THEN 1 ELSE 2 END,
-                         trust_score DESC""",
-            tuple(ids) + level_params,
-        ).fetchall()
-        for row in rows:
-            skill = dict(row)
-            skill["_match"] = "fts"
-            if skill["id"] not in seen:
-                seen.add(skill["id"])
-                results.append(skill)
-
     task_lower = task.lower()
     rows = conn.execute(
         f"SELECT * FROM skills WHERE trigger_patterns != '[]' {level_filter}",
@@ -976,13 +958,41 @@ def match_skills(task: str, level: str = "", top_n: int = 3) -> list[dict]:
             seen.add(skill["id"])
             results.append(skill)
 
+    fts_results = fts_search(task, source_filter="skill", limit=10)
+    if fts_results:
+        ids = [result["source_id"] for result in fts_results]
+        placeholders = ",".join("?" * len(ids))
+        rows = conn.execute(
+            f"""SELECT * FROM skills WHERE id IN ({placeholders}) {level_filter}
+                ORDER BY CASE source_kind WHEN 'personal' THEN 0 WHEN 'core' THEN 1 ELSE 2 END,
+                         CASE level WHEN 'stable' THEN 0 WHEN 'published' THEN 1 ELSE 2 END,
+                         trust_score DESC""",
+            tuple(ids) + level_params,
+        ).fetchall()
+        for row in rows:
+            skill = dict(row)
+            skill["_match"] = "fts"
+            if skill["id"] not in seen:
+                seen.add(skill["id"])
+                results.append(skill)
+
     for skill in results:
         review = get_skill_outcome_evidence(skill["id"])
         skill["_outcome_review"] = review
         skill["_outcome_rank"] = float(review.get("ranking_weight") or 0.0)
+        match_method = str(skill.get("_match") or "unknown")
+        if match_method.startswith("trigger:"):
+            skill["_match_rank"] = 0
+        elif match_method.startswith("tags:"):
+            skill["_match_rank"] = 1
+        elif match_method == "fts":
+            skill["_match_rank"] = 2
+        else:
+            skill["_match_rank"] = 3
 
     results.sort(
         key=lambda skill: (
+            int(skill.get("_match_rank", 3)),
             0 if skill.get("source_kind") == "personal" else 1 if skill.get("source_kind") == "core" else 2,
             0 if skill.get("level") == "stable" else 1 if skill.get("level") == "published" else 2,
             -float(skill.get("_outcome_rank", 0.0)),

@@ -1,7 +1,9 @@
 """NEXO Cognitive — Search, retrieval, ranking."""
 import math
+import os
 import re
 import sqlite3
+import time
 import numpy as np
 from datetime import datetime, timezone
 
@@ -16,6 +18,92 @@ from cognitive._core import (
     _get_model, _get_reranker, rerank_results, EMBEDDING_DIM,
     rehearsal_profile_update,
 )
+
+_QUERY_INTENT_SCORE_THRESHOLD = 0.72
+_QUERY_INTENT_SCORE_MARGIN = 0.14
+_QUERY_INTENT_LOCAL_CONFIDENCE_THRESHOLD = float(
+    os.environ.get("NEXO_QUERY_INTENT_LOCAL_CONFIDENCE", "0.67")
+)
+_QUERY_INTENT_CACHE_TTL_SECONDS = int(
+    os.environ.get("NEXO_QUERY_INTENT_LOCAL_CACHE_TTL", "21600")
+)
+_LOCAL_QUERY_INTENT_CLASSIFIER = None
+_QUERY_INTENT_CACHE: dict[str, dict] = {}
+_QUERY_INTENT_LABELS = (
+    ("A how-to guide, procedure, or step-by-step instruction request", "howto"),
+    ("A definition, explanation of what something is, or conceptual clarification", "definition"),
+    ("A reasoning question asking why something happens or what caused it", "reasoning"),
+    ("A question about dates, sequence, chronology, or timeline", "temporal"),
+    ("A technical code, syntax, API, or implementation lookup", "technical"),
+    ("A general lookup or recall request for facts, status, or previous context", "lookup"),
+)
+_QUERY_INTENT_CUES = {
+    "howto": ("how to", "how do", "steps", "como", "cómo", "guide", "walkthrough"),
+    "definition": ("what is", "what are", "define", "explain", "que es", "qué es", "meaning of"),
+    "reasoning": ("why", "por que", "por qué", "reason", "cause", "because", "motivo"),
+    "temporal": ("when", "timeline", "date", "fecha", "cuando", "cuándo", "chronology"),
+    "technical": ("::", "def ", "class ", "fn ", "function ", "api", "endpoint", "stack trace"),
+}
+
+
+def _query_intent_cache_key(query: str) -> str:
+    return " ".join((query or "").lower().split())[:600]
+
+
+def _semantic_query_intent_scores(query: str) -> dict[str, float]:
+    lowered = " " + " ".join((query or "").lower().split()) + " "
+    if len(lowered.strip()) < 8:
+        return {}
+    scores: dict[str, float] = {}
+    for intent, cues in _QUERY_INTENT_CUES.items():
+        hits = [cue for cue in cues if cue in lowered]
+        if not hits:
+            continue
+        score = 0.0
+        for cue in hits:
+            score += 0.28 if " " in cue else 0.18
+        scores[intent] = min(0.98, score)
+    return scores
+
+
+def _local_classify_query_intent(query: str) -> dict:
+    key = _query_intent_cache_key(query)
+    if len(key) < 12:
+        return {"available": False, "label": None, "reason": "text_too_short"}
+
+    cached = _QUERY_INTENT_CACHE.get(key)
+    if cached and cached.get("expires_at", 0) > time.time():
+        return {k: v for k, v in cached.items() if k != "expires_at"}
+
+    global _LOCAL_QUERY_INTENT_CLASSIFIER
+    try:
+        if _LOCAL_QUERY_INTENT_CLASSIFIER is None:
+            from classifier_local import LocalZeroShotClassifier
+
+            _LOCAL_QUERY_INTENT_CLASSIFIER = LocalZeroShotClassifier(
+                confidence_floor=_QUERY_INTENT_LOCAL_CONFIDENCE_THRESHOLD,
+            )
+        if not _LOCAL_QUERY_INTENT_CLASSIFIER.is_available():
+            return {"available": False, "label": None, "reason": "classifier_unavailable"}
+        label_texts = [label for label, _intent in _QUERY_INTENT_LABELS]
+        intent_by_label = {label: intent for label, intent in _QUERY_INTENT_LABELS}
+        result = _LOCAL_QUERY_INTENT_CLASSIFIER.classify(query, label_texts)
+        if result is None:
+            return {"available": False, "label": None, "reason": "classifier_failed"}
+        intent = intent_by_label.get(result.label)
+        payload = {
+            "available": intent is not None,
+            "label": intent,
+            "confidence": float(result.confidence or 0.0),
+            "reason": "local_zero_shot",
+        }
+        _QUERY_INTENT_CACHE[key] = {
+            **payload,
+            "expires_at": time.time() + _QUERY_INTENT_CACHE_TTL_SECONDS,
+        }
+        return payload
+    except Exception as exc:
+        return {"available": False, "label": None, "reason": f"classifier_error:{exc}"}
 
 def bm25_search(query_text: str, stores: str = "both", top_k: int = 20,
                 source_type_filter: str = "") -> list[dict]:
@@ -436,16 +524,27 @@ def _kg_boost_results(results: list[dict], max_boost: float = 0.08) -> list[dict
 # ============================================================================
 
 def _classify_query_intent(query: str) -> str:
-    """Classify query intent into one of 6 categories (Vestige-style)."""
-    lower = query.lower().strip()
-    if lower.startswith(("how to", "how do", "steps", "cómo")):
-        return "howto"
-    if lower.startswith(("what is", "what are", "define", "explain", "qué es")):
-        return "definition"
-    if lower.startswith(("why", "por qué")) or "reason" in lower or "porque" in lower:
-        return "reasoning"
-    if lower.startswith(("when", "cuándo")) or "date" in lower or "timeline" in lower or "fecha" in lower:
-        return "temporal"
+    """Classify query intent with semantic/local routing before lookup fallback."""
+    scores = _semantic_query_intent_scores(query)
+    if scores:
+        ordered = sorted(scores.items(), key=lambda item: item[1], reverse=True)
+        winner, winner_score = ordered[0]
+        runner_up = ordered[1][1] if len(ordered) > 1 else 0.0
+        if winner_score >= _QUERY_INTENT_SCORE_THRESHOLD and (winner_score - runner_up) >= _QUERY_INTENT_SCORE_MARGIN:
+            return winner
+
+    local_result = _local_classify_query_intent(query)
+    if local_result.get("available"):
+        confidence = float(local_result.get("confidence", 0.0) or 0.0)
+        label = local_result.get("label")
+        if isinstance(label, str) and confidence >= _QUERY_INTENT_LOCAL_CONFIDENCE_THRESHOLD:
+            return label
+
+    if scores:
+        winner, winner_score = max(scores.items(), key=lambda item: item[1])
+        if winner_score >= 0.35:
+            return winner
+
     if any(c in query for c in ("(", "{", "::", "def ", "class ", "fn ", "function ")):
         return "technical"
     return "lookup"

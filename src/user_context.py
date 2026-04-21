@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 
+from calibration_runtime import load_runtime_calibration
 from paths import brain_dir
 
 _ctx = None
@@ -26,7 +27,7 @@ class UserContext:
         # ({user_name, language}) shapes. Nested wins when both exist.
         if cal_path.exists():
             try:
-                cal = json.loads(cal_path.read_text())
+                cal = load_runtime_calibration(cal_path)
                 user_block = cal.get("user") if isinstance(cal.get("user"), dict) else {}
 
                 self.assistant_name = (

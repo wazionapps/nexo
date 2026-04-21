@@ -2229,6 +2229,7 @@ def _f06_legacy_shim_map() -> list[tuple[str, Path]]:
         ("data", NEXO_HOME / "runtime" / "data"),
         ("logs", NEXO_HOME / "runtime" / "logs"),
         ("operations", NEXO_HOME / "runtime" / "operations"),
+        ("state", NEXO_HOME / "runtime" / "state"),
         ("backups", NEXO_HOME / "runtime" / "backups"),
         ("memory", NEXO_HOME / "runtime" / "memory"),
         ("coordination", NEXO_HOME / "runtime" / "coordination"),
@@ -2236,6 +2237,14 @@ def _f06_legacy_shim_map() -> list[tuple[str, Path]]:
         ("nexo-email", NEXO_HOME / "runtime" / "nexo-email"),
         ("snapshots", NEXO_HOME / "runtime" / "snapshots"),
         ("crons", NEXO_HOME / "runtime" / "crons"),
+        ("workdir", paths.personal_lib_dir() / "workdir"),
+        ("working", paths.personal_lib_dir() / "working"),
+    ]
+
+
+def _f06_legacy_file_shim_map() -> list[tuple[str, Path]]:
+    return [
+        ("CLAUDE.md.generated", paths.personal_lib_dir() / "generated" / "CLAUDE.md.generated"),
     ]
 
 
@@ -2270,6 +2279,7 @@ def _f06_live_legacy_paths() -> list[Path]:
             "brain",
             "data",
             "operations",
+            "state",
             "logs",
             "backups",
             "memory",
@@ -2287,6 +2297,8 @@ def _f06_live_legacy_paths() -> list[Path]:
             "db",
             "dashboard",
             "skills-core",
+            "workdir",
+            "working",
         )
     ]
     present = [p for p in legacy_anchors if p.exists() and not p.is_symlink()]
@@ -2294,6 +2306,10 @@ def _f06_live_legacy_paths() -> list[Path]:
         return present
     live_files: list[Path] = []
     for legacy_name, _canonical in _f06_packaged_code_file_targets():
+        candidate = NEXO_HOME / legacy_name
+        if candidate.exists() and not candidate.is_symlink():
+            live_files.append(candidate)
+    for legacy_name, _canonical in _f06_legacy_file_shim_map():
         candidate = NEXO_HOME / legacy_name
         if candidate.exists() and not candidate.is_symlink():
             live_files.append(candidate)
@@ -2554,6 +2570,51 @@ def _ensure_f06_legacy_shims() -> None:
         except Exception as exc:
             _log(f"[F0.6 shim] file symlink create failed for {legacy_name}: {exc}")
 
+    for legacy_name, canonical in _f06_legacy_file_shim_map():
+        legacy = NEXO_HOME / legacy_name
+        canonical.parent.mkdir(parents=True, exist_ok=True)
+
+        if legacy.is_symlink():
+            try:
+                if legacy.resolve(strict=False) == canonical.resolve(strict=False):
+                    continue
+            except Exception:
+                pass
+            try:
+                legacy.unlink()
+            except Exception as exc:
+                _log(f"[F0.6 shim] could not replace misc file symlink {legacy_name}: {exc}")
+                continue
+
+        if legacy.is_file():
+            if canonical.exists():
+                if _same_file(legacy, canonical):
+                    try:
+                        legacy.unlink()
+                    except Exception:
+                        pass
+                else:
+                    backup_target = _conflict_dir() / "legacy-files"
+                    backup_target.mkdir(parents=True, exist_ok=True)
+                    shutil.move(str(legacy), str(backup_target / legacy.name))
+            else:
+                try:
+                    shutil.move(str(legacy), str(canonical))
+                except Exception as exc:
+                    _log(f"[F0.6 shim] move failed for misc flat file {legacy_name}: {exc}")
+                    continue
+        elif legacy.exists():
+            _log(f"[F0.6 shim] legacy misc flat path {legacy_name} is not a file; skipped")
+            continue
+
+        if not canonical.exists():
+            continue
+        try:
+            relative = os.path.relpath(str(canonical), str(legacy.parent))
+            legacy.symlink_to(relative)
+        except Exception as exc:
+            _log(f"[F0.6 shim] misc file symlink create failed for {legacy_name}: {exc}")
+
     marker = NEXO_HOME / ".structure-version"
     try:
         marker.write_text("F0.6\n", encoding="utf-8")
@@ -2611,6 +2672,52 @@ def _cleanup_f06_root_residue() -> None:
             shutil.rmtree(target, ignore_errors=True)
         except Exception as exc:
             _log(f"[F0.6] residue cleanup skipped for {target}: {exc}")
+
+
+def _heal_misplaced_personal_watchdog_runtime_files() -> list[str]:
+    """Move/remove watchdog runtime artifacts that ended up in personal/scripts.
+
+    These files are runtime state for the core watchdog and must live under
+    ``core/scripts``. Older migrations or manual copies could leave stale
+    duplicates under ``personal/scripts``; that pollutes the personal surface
+    and makes clean installs look dirtier than they are.
+    """
+    actions: list[str] = []
+    personal_scripts = paths.personal_scripts_dir()
+    core_scripts = paths.core_scripts_dir()
+    try:
+        core_scripts.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        return actions
+
+    for name in sorted(_CORE_SCRIPT_RUNTIME_FILES):
+        personal = personal_scripts / name
+        if not personal.exists():
+            continue
+        core = core_scripts / name
+        try:
+            if not core.exists():
+                shutil.move(str(personal), str(core))
+                actions.append(f"watchdog-runtime-file-moved:{name}")
+                continue
+            if name == ".watchdog-nexo-repair.lock":
+                personal.unlink(missing_ok=True)
+                actions.append(f"watchdog-runtime-file-pruned:{name}")
+                continue
+            try:
+                personal_mtime = personal.stat().st_mtime
+                core_mtime = core.stat().st_mtime
+            except OSError:
+                personal_mtime = core_mtime = 0
+            if personal_mtime > core_mtime:
+                shutil.move(str(personal), str(core))
+                actions.append(f"watchdog-runtime-file-promoted:{name}")
+            else:
+                personal.unlink(missing_ok=True)
+                actions.append(f"watchdog-runtime-file-pruned:{name}")
+        except Exception as exc:
+            actions.append(f"watchdog-runtime-file-warning:{name}:{exc.__class__.__name__}")
+    return actions
 
 
 def _maybe_migrate_to_f06_layout() -> None:
@@ -2674,8 +2781,9 @@ def _maybe_migrate_to_f06_layout() -> None:
         for sub in ("core/scripts", "core-dev/scripts", "personal/scripts",
                     "core/db", "core/cognitive", "core/doctor", "core/dashboard", "core/skills",
                     "personal/brain", "personal/skills", "personal/config",
+                    "personal/lib", "personal/lib/generated",
                     "core/plugins", "core/hooks", "core/rules",
-                    "runtime/data", "runtime/logs", "runtime/operations",
+                    "runtime/data", "runtime/logs", "runtime/operations", "runtime/state",
                     "runtime/backups", "runtime/memory",
                     "runtime/coordination", "runtime/exports",
                     "runtime/nexo-email",
@@ -2744,6 +2852,7 @@ def _maybe_migrate_to_f06_layout() -> None:
             ("data", NEXO_HOME / "runtime" / "data"),
             ("logs", NEXO_HOME / "runtime" / "logs"),
             ("operations", NEXO_HOME / "runtime" / "operations"),
+            ("state", NEXO_HOME / "runtime" / "state"),
             ("backups", NEXO_HOME / "runtime" / "backups"),
             ("memory", NEXO_HOME / "runtime" / "memory"),
             ("cognitive", paths.core_cognitive_dir(allow_legacy_fallback=False)),
@@ -2757,6 +2866,8 @@ def _maybe_migrate_to_f06_layout() -> None:
             ("plugins", NEXO_HOME / "core" / "plugins"),
             ("hooks", NEXO_HOME / "core" / "hooks"),
             ("rules", NEXO_HOME / "core" / "rules"),
+            ("workdir", paths.personal_lib_dir() / "workdir"),
+            ("working", paths.personal_lib_dir() / "working"),
         ]
         for legacy_name, new_dir in TREE_MAP:
             legacy = NEXO_HOME / legacy_name
@@ -4418,6 +4529,14 @@ def _run_runtime_post_sync(dest: Path = NEXO_HOME, progress_fn=None) -> tuple[bo
             actions.append(f"deep-sleep-heal:{action}")
     except Exception as exc:
         actions.append(f"deep-sleep-heal-warning:{exc.__class__.__name__}")
+
+    try:
+        _emit_progress(progress_fn, "Cleaning misplaced watchdog runtime files...")
+        misplaced_actions = _heal_misplaced_personal_watchdog_runtime_files()
+        for action in misplaced_actions:
+            actions.append(action)
+    except Exception as exc:
+        actions.append(f"watchdog-runtime-file-warning:{exc.__class__.__name__}")
 
     # Recover the user's legacy reasoning_effort preference into the new
     # default_resonance knob. v5.10.0 left this gap — users who had

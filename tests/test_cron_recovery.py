@@ -229,6 +229,38 @@ def test_load_enabled_crons_applies_core_automation_interval_override(tmp_path, 
     assert crons[0]["_schedule_source"] == "override"
 
 
+def test_load_enabled_crons_applies_core_schedule_override(tmp_path, monkeypatch):
+    import cron_recovery
+
+    nexo_home = tmp_path / "nexo"
+    manifest_dir = nexo_home / "runtime" / "crons"
+    manifest_dir.mkdir(parents=True)
+    (nexo_home / "personal" / "config").mkdir(parents=True)
+    (nexo_home / "runtime" / "crons" / "manifest.json").write_text(json.dumps({
+        "crons": [
+            {
+                "id": "deep-sleep",
+                "script": "scripts/nexo-deep-sleep.sh",
+                "schedule": {"hour": 4, "minute": 30},
+                "core": True,
+            }
+        ]
+    }))
+    (nexo_home / "personal" / "config" / "schedule-overrides.json").write_text(json.dumps({
+        "deep-sleep": {"start_hour": "05:45"}
+    }))
+
+    monkeypatch.setenv("NEXO_HOME", str(nexo_home))
+    monkeypatch.setattr(cron_recovery, "NEXO_HOME", nexo_home)
+    monkeypatch.setattr(cron_recovery, "OPTIONALS_FILE", nexo_home / "config" / "optionals.json")
+
+    crons = cron_recovery.load_enabled_crons()
+    assert len(crons) == 1
+    assert crons[0]["id"] == "deep-sleep"
+    assert crons[0]["schedule"] == {"hour": 5, "minute": 45}
+    assert crons[0]["_schedule_source"] == "override"
+
+
 def test_load_enabled_crons_filters_platforms_and_power_policy(tmp_path, monkeypatch):
     import cron_recovery
 

@@ -38,9 +38,26 @@ def test_marker_detection_ingests_and_activates(mandate_module):
     assert loaded is not None and loaded.active
 
 
+def test_marker_detection_ingests_semantic_mandate(mandate_module):
+    am = mandate_module
+    st = am.maybe_ingest_from_text(
+        "Stop postponing this and just execute the in-scope work now.",
+        session_id="sid-semantic",
+        classifier=lambda **_: True,
+    )
+    assert st is not None
+    assert st.marker == "semantic-autonomy-mandate"
+    loaded = am.load_state()
+    assert loaded is not None and loaded.marker == "semantic-autonomy-mandate"
+
+
 def test_marker_detection_ignores_unrelated_text(mandate_module):
     am = mandate_module
-    assert am.maybe_ingest_from_text("pasa al siguiente item", "sid") is None
+    assert am.maybe_ingest_from_text(
+        "pasa al siguiente item",
+        "sid",
+        classifier=lambda **_: False,
+    ) is None
     assert am.load_state() is None
 
 

@@ -6,8 +6,10 @@ and provides stats on error prevention effectiveness.
 import json
 import os
 import re
+import unicodedata
 from datetime import datetime, timedelta
 from pathlib import Path
+import paths
 from db import get_db, find_similar_learnings, extract_keywords, search_learnings, search_changes
 
 
@@ -117,6 +119,146 @@ def _load_conditioned_learnings(conn, file_list: list[str]) -> dict[str, list[di
     return conditioned
 
 
+_GENERIC_PARENT_DIR_TOKENS = {
+    "src",
+    "scripts",
+    "lib",
+    "app",
+    "apps",
+    "tests",
+    "docs",
+    "dist",
+    "build",
+}
+
+
+def _is_generic_parent_dir(name: str) -> bool:
+    token = str(name or "").strip().lower()
+    return token in _GENERIC_PARENT_DIR_TOKENS
+
+
+def _is_runtime_core_path(filepath: str) -> bool:
+    try:
+        candidate = Path(filepath).expanduser().resolve(strict=False)
+        core_root = paths.core_dir().resolve(strict=False)
+        candidate.relative_to(core_root)
+        return True
+    except Exception:
+        return False
+
+
+def _project_hint_tokens(project_hint: str) -> list[str]:
+    return [
+        token
+        for token in re.split(r"[^a-z0-9]+", str(project_hint or "").strip().lower())
+        if len(token) >= 4
+    ]
+
+
+def _learning_matches_project_hint(entry: dict, project_hint: str) -> bool:
+    tokens = _project_hint_tokens(project_hint)
+    if not tokens:
+        return False
+    haystack = " ".join(
+        str(entry.get(field, "")).strip().lower()
+        for field in ("title", "content", "applies_to", "category")
+        if str(entry.get(field, "")).strip()
+    )
+    if not haystack:
+        return False
+    return any(token in haystack for token in tokens)
+
+
+def _category_matches_area(category: str, area: str) -> bool:
+    clean_category = str(category or "").strip().lower()
+    clean_area = str(area or "").strip().lower()
+    if not clean_area:
+        return True
+    return clean_category in {clean_area, "universal", "global"}
+
+
+_PRIORITY_RANK = {
+    "critical": 3,
+    "high": 2,
+    "medium": 1,
+    "low": 0,
+}
+
+_BLOCKING_REASON_RANK = {
+    "runtime_core_protected": 4,
+    "file_conditioned": 3,
+    "prohibition_keyword": 2,
+    "repeated_error": 1,
+}
+
+
+def _canonical_rule_key(text: str) -> str:
+    normalized = unicodedata.normalize("NFKD", str(text or "").strip().lower())
+    ascii_only = "".join(ch for ch in normalized if not unicodedata.combining(ch))
+    compact = re.sub(r"[^a-z0-9]+", " ", ascii_only).strip()
+    return compact
+
+
+def _prefer_learning_entry(current: dict, candidate: dict) -> dict:
+    current_rank = (
+        bool(current.get("project_match")),
+        _PRIORITY_RANK.get(str(current.get("priority", "medium")).lower(), 1),
+        float(current.get("weight", 0.5) or 0.5),
+    )
+    candidate_rank = (
+        bool(candidate.get("project_match")),
+        _PRIORITY_RANK.get(str(candidate.get("priority", "medium")).lower(), 1),
+        float(candidate.get("weight", 0.5) or 0.5),
+    )
+    return candidate if candidate_rank > current_rank else current
+
+
+def _prefer_blocking_entry(current: dict, candidate: dict) -> dict:
+    current_rank = (
+        _BLOCKING_REASON_RANK.get(str(current.get("reason", "repeated_error")), 0),
+        int(current.get("repetitions", 0) or 0),
+    )
+    candidate_rank = (
+        _BLOCKING_REASON_RANK.get(str(candidate.get("reason", "repeated_error")), 0),
+        int(candidate.get("repetitions", 0) or 0),
+    )
+    return candidate if candidate_rank > current_rank else current
+
+
+def _dedupe_learning_entries(entries: list[dict]) -> list[dict]:
+    deduped: dict[str, dict] = {}
+    ordered_keys: list[str] = []
+    for entry in entries:
+        key = _canonical_rule_key(entry.get("rule", ""))
+        if not key:
+            ordered_keys.append(f"raw-{len(ordered_keys)}")
+            deduped[ordered_keys[-1]] = entry
+            continue
+        if key in deduped:
+            deduped[key] = _prefer_learning_entry(deduped[key], entry)
+            continue
+        ordered_keys.append(key)
+        deduped[key] = entry
+    return [deduped[key] for key in ordered_keys]
+
+
+def _dedupe_blocking_entries(entries: list[dict]) -> list[dict]:
+    deduped: dict[str, dict] = {}
+    ordered_keys: list[str] = []
+    for entry in entries:
+        key = _canonical_rule_key(entry.get("rule", ""))
+        if not key:
+            ordered_keys.append(f"raw-{len(ordered_keys)}")
+            deduped[ordered_keys[-1]] = entry
+            continue
+        if key in deduped:
+            deduped[key] = _prefer_blocking_entry(deduped[key], entry)
+            continue
+        ordered_keys.append(key)
+        deduped[key] = entry
+    return [deduped[key] for key in ordered_keys]
+
+
 
 def _load_schema_cache() -> dict:
     """Load cached DB schemas from schema_cache.json."""
@@ -162,7 +304,12 @@ def _extract_table_names(content: str) -> set:
     return {t for t in tables if t.upper() not in sql_keywords}
 
 
-def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "true") -> str:
+def handle_guard_check(
+    files: str = "",
+    area: str = "",
+    project_hint: str = "",
+    include_schemas: str = "true",
+) -> str:
     """Check learnings relevant to files/area before editing. Call BEFORE any code change.
 
     Args:
@@ -173,6 +320,7 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
     conn = get_db()
     include_schemas_bool = include_schemas.lower() in ("true", "1", "yes")
     file_list = [f.strip() for f in files.split(",") if f.strip()] if files else []
+    project_hint_active = bool(_project_hint_tokens(project_hint))
 
     result = {
         "learnings": [],
@@ -187,6 +335,19 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
     conditioned_blocking_seen = set()
     conditioned_by_file = _load_conditioned_learnings(conn, file_list) if file_list else {}
 
+    runtime_core_hits = [filepath for filepath in file_list if _is_runtime_core_path(filepath)]
+    for filepath in runtime_core_hits:
+        result["blocking_rules"].append({
+            "id": "runtime-core",
+            "rule": (
+                "Installed runtime core files are protected. Edit the source repo, validate there, "
+                "then ship the change through release/update instead of mutating ~/.nexo/core directly."
+            ),
+            "repetitions": 0,
+            "reason": "runtime_core_protected",
+            "file": filepath,
+        })
+
     # 1. File-conditioned learnings — explicit applies_to guardrails for target files
     hit_ids = []
     for filepath in file_list:
@@ -200,6 +361,7 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
                     "rule": row["title"],
                     "priority": row.get("priority", "medium") or "medium",
                     "weight": row.get("weight", 0.5) or 0.5,
+                    "project_match": True,
                 })
                 result["conditioned_learnings"].append({
                     "id": row["id"],
@@ -223,18 +385,34 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
         p = Path(filepath)
         filename = p.name
         parent_dir = p.parent.name
+        query = "SELECT id, category, title, content, priority, weight FROM learnings WHERE INSTR(content, ?) > 0"
+        params: tuple[str, ...] = (filename,)
+        if parent_dir and not _is_generic_parent_dir(parent_dir):
+            query += " OR INSTR(content, ?) > 0"
+            params = (filename, parent_dir)
 
-        rows = conn.execute(
-            "SELECT id, category, title, content, priority, weight FROM learnings WHERE INSTR(content, ?) > 0 OR INSTR(content, ?) > 0",
-            (filename, parent_dir)
-        ).fetchall()
+        rows = conn.execute(query, params).fetchall()
         for r in rows:
             if r["id"] not in seen_ids:
+                entry = dict(r)
+                project_match = _learning_matches_project_hint(entry, project_hint)
+                if area and not _category_matches_area(r["category"], area):
+                    content_lower = str(r["content"] or "").strip().lower()
+                    exact_path_match = str(filepath or "").strip().lower() in content_lower
+                    if not exact_path_match and not project_match:
+                        continue
                 seen_ids.add(r["id"])
                 hit_ids.append(r["id"])
                 pri = r["priority"] or "medium"
                 w = r["weight"] or 0.5
-                result["learnings"].append({"id": r["id"], "category": r["category"], "rule": r["title"], "priority": pri, "weight": w})
+                result["learnings"].append({
+                    "id": r["id"],
+                    "category": r["category"],
+                    "rule": r["title"],
+                    "priority": pri,
+                    "weight": w,
+                    "project_match": project_match,
+                })
 
     # 3. By area/category
     if area:
@@ -244,28 +422,60 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
         ).fetchall()
         for r in rows:
             if r["id"] not in seen_ids:
+                entry = dict(r)
+                project_match = _learning_matches_project_hint(entry, project_hint)
+                if project_hint_active and not project_match:
+                    continue
                 seen_ids.add(r["id"])
                 hit_ids.append(r["id"])
                 pri = r["priority"] or "medium"
                 w = r["weight"] or 0.5
-                result["learnings"].append({"id": r["id"], "category": r["category"], "rule": r["title"], "priority": pri, "weight": w})
+                result["learnings"].append({
+                    "id": r["id"],
+                    "category": r["category"],
+                    "rule": r["title"],
+                    "priority": pri,
+                    "weight": w,
+                    "project_match": project_match,
+                })
 
-    # 4. Universal rules — only from matching area or nexo-ops (not ALL learnings)
-    universal_categories = {"nexo-ops"}
+    # 4. Universal rules — only from the explicitly requested area plus any
+    # truly global categories. Pulling `nexo-ops` into every guard check made
+    # unrelated prohibitions (for example a Cloudflare-specific learning)
+    # appear in blocked task summaries far outside their domain.
+    universal_categories = []
     if area:
-        universal_categories.add(area)
-    placeholders = ",".join("?" for _ in universal_categories)
-    rows = conn.execute(
-        f"SELECT id, category, title, content, priority FROM learnings WHERE "
-        f"category IN ({placeholders}) AND COALESCE(applies_to, '') = '' AND ("
-        f"content LIKE '%SIEMPRE%' OR content LIKE '%NUNCA%' OR content LIKE '%ANTES%' "
-        f"OR content LIKE '%always%' OR content LIKE '%never%')",
-        tuple(universal_categories)
-    ).fetchall()
-    for r in rows:
-        if r["id"] not in seen_ids:
-            seen_ids.add(r["id"])
-            result["universal_rules"].append({"id": r["id"], "rule": r["title"], "category": r["category"], "priority": r["priority"] or "medium"})
+        universal_categories.append(area)
+    universal_categories.extend(["universal", "global"])
+    # Keep order stable while deduplicating.
+    seen_categories = set()
+    universal_categories = [
+        category for category in universal_categories
+        if category and not (category in seen_categories or seen_categories.add(category))
+    ]
+    if universal_categories:
+        placeholders = ",".join("?" for _ in universal_categories)
+        rows = conn.execute(
+            f"SELECT id, category, title, content, priority FROM learnings WHERE "
+            f"category IN ({placeholders}) AND COALESCE(applies_to, '') = '' AND ("
+            f"content LIKE '%SIEMPRE%' OR content LIKE '%NUNCA%' OR content LIKE '%ANTES%' "
+            f"OR content LIKE '%always%' OR content LIKE '%never%')",
+            tuple(universal_categories)
+        ).fetchall()
+        for r in rows:
+            if r["id"] not in seen_ids:
+                seen_ids.add(r["id"])
+                entry = dict(r)
+                project_match = _learning_matches_project_hint(entry, project_hint)
+                if project_hint_active and r["category"] == area and not project_match:
+                    continue
+                result["universal_rules"].append({
+                    "id": r["id"],
+                    "rule": r["title"],
+                    "category": r["category"],
+                    "priority": r["priority"] or "medium",
+                    "project_match": project_match,
+                })
 
     # 5. DB schemas if files contain SQL keywords
     if include_schemas_bool and file_list:
@@ -322,6 +532,8 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
         # Path (b): Only promote to blocking if high/critical priority AND title has prohibition keyword
         pri = learning.get("priority", "medium")
         if pri in ("critical", "high") and BLOCKING_KEYWORDS.search(learning["rule"]):
+            if project_hint_active and not learning.get("project_match"):
+                continue
             blocking_seen.add(lid)
             result["blocking_rules"].append({
                 "id": lid, "rule": learning["rule"], "repetitions": rep_count,
@@ -432,8 +644,16 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
     )
     conn.commit()
 
-    # Sort learnings by weight (highest first)
-    result["learnings"].sort(key=lambda x: x.get("weight", 0.5), reverse=True)
+    # Prefer project-matching learnings when a project hint is present, then weight.
+    result["learnings"].sort(
+        key=lambda x: (
+            not x.get("project_match", not project_hint_active),
+            -(x.get("weight", 0.5) or 0.5),
+        )
+    )
+    result["learnings"] = _dedupe_learning_entries(result["learnings"])
+    result["universal_rules"] = _dedupe_learning_entries(result["universal_rules"])
+    result["blocking_rules"] = _dedupe_blocking_entries(result["blocking_rules"])
 
     # Format output
     lines = []
@@ -441,7 +661,7 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
         lines.append("BLOCKING RULES (resolve BEFORE writing):")
         for r in result["blocking_rules"]:
             reason = r.get("reason", "repeated_error")
-            if reason == "file_conditioned":
+            if reason in {"file_conditioned", "runtime_core_protected"}:
                 lines.append(f"  #{r['id']} [FILE RULE:{r.get('file', '')}]: {r['rule']}")
             elif reason == "prohibition_keyword":
                 lines.append(f"  #{r['id']} [PROHIBIT]: {r['rule']}")
@@ -655,13 +875,49 @@ def handle_somatic_stats() -> str:
         return "Error: {}".format(e)
 
 
-def handle_guard_cross_check(findings: list, area: str = "") -> str:
+def handle_guard_cross_check(
+    findings: list | str | None = None,
+    area: str = "",
+    task: str = "",
+    summary: str = "",
+    observations: str = "",
+) -> str:
     """Cross-check audit findings against known learnings to filter false positives.
 
     Args:
         findings: List of audit finding strings to cross-check
         area: System area to narrow the learning search (webapp, shopify, etc.)
     """
+    resolved_findings: list[str] = []
+    if isinstance(findings, list):
+        resolved_findings.extend(str(item).strip() for item in findings if str(item).strip())
+    elif isinstance(findings, str) and findings.strip():
+        raw_findings = findings.strip()
+        if raw_findings.startswith("["):
+            try:
+                parsed = json.loads(raw_findings)
+                if isinstance(parsed, list):
+                    resolved_findings.extend(str(item).strip() for item in parsed if str(item).strip())
+                else:
+                    resolved_findings.append(raw_findings)
+            except Exception:
+                resolved_findings.append(raw_findings)
+        else:
+            resolved_findings.extend(line.strip() for line in raw_findings.splitlines() if line.strip())
+    for alias_text in (task, summary, observations):
+        if str(alias_text or "").strip():
+            resolved_findings.append(str(alias_text).strip())
+    findings = []
+    seen = set()
+    for item in resolved_findings:
+        if item in seen:
+            continue
+        seen.add(item)
+        findings.append(item)
+
+    if not findings:
+        return "CROSS-CHECK RESULTS: 0 findings — provide `findings` or a compatible alias like `task`."
+
     # Common English/Spanish stopwords to skip during keyword extraction
     STOPWORDS = {
         "the", "a", "an", "is", "in", "on", "at", "to", "of", "and", "or", "but",

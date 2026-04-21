@@ -9,6 +9,7 @@ import secrets
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
+from core_prompts import render_core_prompt
 from db import (
     register_session, update_session, complete_session,
     get_active_sessions, clean_stale_sessions, search_sessions,
@@ -18,6 +19,11 @@ from db import (
     get_db, build_pre_action_context, format_pre_action_context_bundle,
     capture_context_event,
 )
+
+try:
+    from r14_correction_learning import detect_correction as _detect_correction_semantic
+except Exception:  # pragma: no cover - optional runtime dependency
+    _detect_correction_semantic = None
 
 # ── Session Keepalive ────────────────────────────────────────────────
 # Background thread per session that auto-pings last_update_epoch every
@@ -302,6 +308,26 @@ def _autodetect_claude_session_id() -> str:
         return ""
 
 
+def _read_session_briefing_excerpt(max_lines: int = 6) -> tuple[str, str]:
+    """Return a short human-readable excerpt plus the briefing file path.
+
+    SessionStart writes coordination/session-briefing.txt, but startup used to
+    ignore it entirely. This helper keeps startup aware of the file without
+    dumping the whole briefing into every session banner.
+    """
+    briefing_path = paths.coordination_dir() / "session-briefing.txt"
+    try:
+        raw = briefing_path.read_text(encoding="utf-8")
+    except (FileNotFoundError, OSError):
+        return "", str(briefing_path)
+
+    lines = [line.strip() for line in raw.splitlines() if line.strip()]
+    if not lines:
+        return "", str(briefing_path)
+    excerpt = "\n".join(lines[:max_lines])
+    return excerpt, str(briefing_path)
+
+
 def handle_startup(
     task: str = "Startup",
     claude_session_id: str = "",
@@ -383,6 +409,14 @@ def handle_startup(
         for m in inbox:
             age = _format_age(m["created_epoch"])
             lines.append(f"  [{m['from_sid']}] ({age}): {m['text']}")
+
+    briefing_excerpt, briefing_path = _read_session_briefing_excerpt()
+    if briefing_excerpt:
+        lines.append("")
+        lines.append("SESSION BRIEFING:")
+        for raw_line in briefing_excerpt.splitlines():
+            lines.append(f"  {raw_line}")
+        lines.append(f"  Full briefing: {briefing_path}")
 
     # Check LaunchAgent health (macOS only)
     la_warnings = _check_launchagents()
@@ -682,7 +716,13 @@ def _handle_heartbeat_inner(sid: str, task: str, context_hint: str = '') -> str:
         # DIARY_OVERDUE: >10 heartbeats OR >30 minutes, without a diary
         if not has_diary and (_hb_count > 10 or age_seconds >= 1800):
             parts.append("")
-            parts.append(f"⚠ DIARY_OVERDUE: {_hb_count} heartbeats, {int(age_seconds/60)}min active, no diary. Write nexo_session_diary_write NOW.")
+            parts.append(
+                render_core_prompt(
+                    "heartbeat-diary-overdue",
+                    heartbeat_count=_hb_count,
+                    active_minutes=int(age_seconds / 60),
+                )
+            )
 
     # Guard check reminder: if context_hint mentions code editing and no guard_check this session
     if context_hint and _hint_suggests_code_edit(context_hint):
@@ -692,7 +732,7 @@ def _handle_heartbeat_inner(sid: str, task: str, context_hint: str = '') -> str:
             ).fetchone()[0]
             if guard_used == 0:
                 parts.append("")
-                parts.append("⚠ GUARD REMINDER: You appear to be editing code but haven't called `nexo_guard_check` this session. Do it NOW before any edits.")
+                parts.append(render_core_prompt("heartbeat-guard-reminder"))
         except Exception:
             pass  # guard_log table may not exist in older installs
 
@@ -700,10 +740,7 @@ def _handle_heartbeat_inner(sid: str, task: str, context_hint: str = '') -> str:
         try:
             if not _recent_learning_capture_exists(conn, sid, window_seconds=300):
                 parts.append("")
-                parts.append(
-                    "⚠ LEARNING REMINDER: This looks like a user correction and no recent learning was captured. "
-                    "If it revealed a reusable pattern, write `nexo_learning_add` NOW."
-                )
+                parts.append(render_core_prompt("heartbeat-learning-reminder"))
         except Exception:
             pass  # Best-effort reminder only
 
@@ -1036,9 +1073,24 @@ def _hint_suggests_code_edit(hint: str) -> bool:
     return any(signal in hint_lower for signal in edit_signals)
 
 
-def _hint_suggests_correction(hint: str) -> bool:
-    """Detect explicit user correction signals in a heartbeat context hint."""
-    hint_lower = hint.lower()
+def _hint_suggests_correction(hint: str, *, correction_detector=None) -> bool:
+    """Detect user-correction intent in a heartbeat context hint.
+
+    Prefer the same semantic detector used by R14 so heartbeat reminders do
+    not depend primarily on literal ES/EN phrase lists. Keep the old keyword
+    fallback as a conservative safety net when the classifier is unavailable.
+    """
+    text = (hint or "").strip()
+    if not text:
+        return False
+    detector = correction_detector if correction_detector is not None else _detect_correction_semantic
+    if detector is not None:
+        try:
+            if bool(detector(text)):
+                return True
+        except Exception:
+            pass
+    hint_lower = text.lower()
     correction_signals = [
         "that's wrong",
         "that is wrong",

@@ -26,7 +26,6 @@ _runtime_root = Path(os.environ.get("NEXO_CODE", str(_DEFAULT_RUNTIME_ROOT)))
 if str(_runtime_root) not in sys.path:
     sys.path.insert(0, str(_runtime_root))
 
-from agent_runner import AutomationBackendUnavailableError, probe_automation_backend, run_automation_prompt
 from constants import AUTOMATION_SUBPROCESS_TIMEOUT
 from core_prompts import render_core_prompt
 from cron_recovery import catchup_candidates
@@ -34,30 +33,6 @@ import paths
 
 HOME = Path.home()
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(HOME / ".nexo")))
-
-
-def _resolve_claude_cli() -> Path:
-    """Find claude CLI: saved path > PATH > common locations."""
-    saved = paths.config_dir() / "claude-cli-path"
-    if saved.exists():
-        p = Path(saved.read_text().strip())
-        if p.exists():
-            return p
-    import shutil
-    found = shutil.which("claude")
-    if found:
-        return Path(found)
-    for candidate in [
-        HOME / ".local" / "bin" / "claude",
-        HOME / ".npm-global" / "bin" / "claude",
-        Path("/usr/local/bin/claude"),
-    ]:
-        if candidate.exists():
-            return candidate
-    return HOME / ".local" / "bin" / "claude"  # last resort
-
-
-CLAUDE_CLI = _resolve_claude_cli()
 LOG_DIR = paths.logs_dir()
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 LOG_FILE = LOG_DIR / "catchup.log"
@@ -247,6 +222,12 @@ def main():
 
 def _cli_post_catchup_assessment(ran: int, skipped: int, state: dict):
     """When 3+ tasks were missed, use CLI to assess if there are concerns."""
+    try:
+        from agent_runner import AutomationBackendUnavailableError, probe_automation_backend, run_automation_prompt
+    except Exception as e:
+        log(f"CLI assessment skipped: runtime dependencies unavailable ({e})")
+        return
+
     probe = probe_automation_backend(timeout=30)
     if not probe.get("ok"):
         print(

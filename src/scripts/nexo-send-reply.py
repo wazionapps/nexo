@@ -25,6 +25,7 @@ import html
 import imaplib
 import json
 import mimetypes
+import os
 import re
 import smtplib
 import sqlite3
@@ -90,6 +91,15 @@ RESOLUTION_PATTERNS = (
     r"\badjunto el\b",
     r"\bhecho\b",
     r"\bya est[aá]\b",
+)
+
+_REPLY_EVENT_CONFIDENCE = float(os.environ.get("NEXO_REPLY_EVENT_CONFIDENCE", "0.72"))
+_LOCAL_REPLY_EVENT_CLASSIFIER = None
+_REPLY_EVENT_LABELS = (
+    ("The reply acknowledges receipt or says the work starts now", "ack"),
+    ("The reply makes a future commitment or promises an update later", "commitment"),
+    ("The reply says the work is finished, delivered, attached, or solved", "resolution"),
+    ("The reply is a normal response without a clear lifecycle milestone", "replied"),
 )
 
 
@@ -159,7 +169,37 @@ def classify_reply_event(body_text):
         return "ack"
     if any(re.search(pattern, normalized) for pattern in COMMITMENT_PATTERNS):
         return "commitment"
+    semantic = _classify_reply_event_semantically(body_text)
+    if semantic:
+        return semantic
     return "replied"
+
+
+def _classify_reply_event_semantically(body_text):
+    text = normalize_reply_text(body_text)
+    if len(text) < 20:
+        return None
+
+    global _LOCAL_REPLY_EVENT_CLASSIFIER
+    try:
+        if _LOCAL_REPLY_EVENT_CLASSIFIER is None:
+            from classifier_local import LocalZeroShotClassifier
+
+            _LOCAL_REPLY_EVENT_CLASSIFIER = LocalZeroShotClassifier(
+                confidence_floor=_REPLY_EVENT_CONFIDENCE,
+            )
+        if not _LOCAL_REPLY_EVENT_CLASSIFIER.is_available():
+            return None
+        label_texts = [label for label, _canonical in _REPLY_EVENT_LABELS]
+        canonical_by_label = {label: canonical for label, canonical in _REPLY_EVENT_LABELS}
+        result = _LOCAL_REPLY_EVENT_CLASSIFIER.classify(text, label_texts)
+        if result is None:
+            return None
+        if float(result.confidence or 0.0) < _REPLY_EVENT_CONFIDENCE:
+            return None
+        return canonical_by_label.get(result.label)
+    except Exception:
+        return None
 
 
 def _existing_email(conn, message_id):

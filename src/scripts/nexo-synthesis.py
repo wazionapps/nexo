@@ -44,27 +44,6 @@ NEXO_DB = paths.db_path()
 OUTPUT_FILE = COORD_DIR / "daily-synthesis.md"
 LAST_RUN_FILE = COORD_DIR / "synthesis-last-run"
 LOCK_FILE = COORD_DIR / "synthesis.lock"
-def _resolve_claude_cli() -> Path:
-    """Find claude CLI: saved path > PATH > common locations."""
-    import shutil as _shutil
-    saved = paths.config_dir() / "claude-cli-path"
-    if saved.exists():
-        p = Path(saved.read_text().strip())
-        if p.exists():
-            return p
-    found = _shutil.which("claude")
-    if found:
-        return Path(found)
-    for candidate in [
-        HOME / ".local" / "bin" / "claude",
-        HOME / ".npm-global" / "bin" / "claude",
-        Path("/usr/local/bin/claude"),
-    ]:
-        if candidate.exists():
-            return candidate
-    return HOME / ".local" / "bin" / "claude"
-
-CLAUDE_CLI = _resolve_claude_cli()
 
 TODAY = date.today()
 TODAY_STR = TODAY.isoformat()

@@ -12,6 +12,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from calibration_runtime import load_runtime_calibration
+
 try:
     import tomllib
 except ModuleNotFoundError:  # Python < 3.11
@@ -117,7 +119,7 @@ def _resolve_operator_name(nexo_home: Path, explicit: str = "") -> str:
     env_name = os.environ.get("NEXO_NAME", "").strip()
     if env_name:
         return env_name
-    calibration = _read_json_file(nexo_home / "personal" / "brain" / "calibration.json")
+    calibration = load_runtime_calibration(nexo_home / "personal" / "brain" / "calibration.json")
     user_payload = calibration.get("user")
     if isinstance(user_payload, dict):
         candidate = str(user_payload.get("assistant_name", "")).strip()
@@ -190,6 +192,28 @@ def _managed_claude_prefix(user_home: Path | None = None) -> Path:
     return home / ".nexo" / "runtime" / "bootstrap" / "npm-global"
 
 
+def _desktop_product_requested(user_home: Path | None = None) -> bool:
+    if str(os.environ.get("NEXO_DESKTOP_MANAGED", "")).strip() == "1":
+        return True
+    home = (user_home or _user_home()).expanduser()
+    mode_paths = [
+        home / ".nexo" / "personal" / "config" / "product-mode.json",
+        home / ".nexo" / "config" / "product-mode.json",
+    ]
+    for path in mode_paths:
+        try:
+            payload = json.loads(path.read_text())
+        except Exception:
+            continue
+        if not isinstance(payload, dict):
+            continue
+        if payload.get("desktop_managed") is True:
+            return True
+        if str(payload.get("product_mode") or "").strip().lower() == "desktop_closed_product":
+            return True
+    return False
+
+
 def _bundled_npm_runtime() -> tuple[str, str]:
     node_bin = str(os.environ.get("NEXO_DESKTOP_NODE", "")).strip()
     npm_cli = str(os.environ.get("NEXO_DESKTOP_NPM_CLI", "")).strip()
@@ -224,6 +248,7 @@ def _installed_client_path(client_key: str, *, user_home: Path | None = None) ->
 
 def ensure_claude_code_installed(*, user_home: str | os.PathLike[str] | None = None) -> dict:
     home_path = Path(user_home).expanduser() if user_home else _user_home()
+    desktop_managed = _desktop_product_requested(home_path)
     existing = _installed_client_path("claude_code", user_home=home_path)
     if existing:
         _persist_managed_claude_path(existing, user_home=home_path)
@@ -232,7 +257,7 @@ def ensure_claude_code_installed(*, user_home: str | os.PathLike[str] | None = N
             "client": "claude_code",
             "installed": True,
             "changed": False,
-            "action": "already_installed",
+            "action": "already_installed_managed" if desktop_managed else "already_installed",
             "path": existing,
             "attempts": [],
         }
@@ -280,6 +305,27 @@ def ensure_claude_code_installed(*, user_home: str | os.PathLike[str] | None = N
                 "path": installed_after_bundle,
                 "attempts": attempts,
             }
+
+    if desktop_managed:
+        error = (
+            "Desktop-managed install requires the NEXO Desktop bundled Claude runtime; "
+            "global `npx`/`npm -g` fallbacks are disabled."
+        )
+        if desktop_node and bundled_npm_cli:
+            error = (
+                "Desktop-managed Claude install did not produce the managed "
+                "`~/.nexo/runtime/bootstrap/npm-global/bin/claude` binary."
+            )
+        return {
+            "ok": False,
+            "client": "claude_code",
+            "installed": False,
+            "changed": False,
+            "action": "managed_install_failed",
+            "path": "",
+            "attempts": attempts,
+            "error": error,
+        }
 
     try:
         probe = subprocess.run(

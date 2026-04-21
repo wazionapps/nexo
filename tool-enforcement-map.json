@@ -2246,6 +2246,45 @@
       },
       "triggers_after": []
     },
+    "nexo_core_schedules_list": {
+      "description": "List structural core schedules whose cadence can be tuned",
+      "category": "personal",
+      "source": "plugin:personal_scripts",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_core_schedule_status": {
+      "description": "Read the status of one structural core schedule",
+      "category": "personal",
+      "source": "plugin:personal_scripts",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_core_schedule_set": {
+      "description": "Set or clear a structural core schedule cadence override",
+      "category": "personal",
+      "source": "plugin:personal_scripts",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
     "nexo_plugin_list": {
       "description": "List loaded plugins and tools",
       "category": "plugin",
@@ -3133,7 +3172,7 @@
         "rules": [
           {
             "type": "on_session_start",
-            "threshold": 2
+            "threshold": 1
           }
         ],
         "inject_prompt": "You must start by calling nexo_startup to register this session. Execute it now with a brief task description. Do not produce visible text.",
@@ -3621,7 +3660,7 @@
     "none": "Sin enforcement — tool bajo demanda del modelo/usuario"
   },
   "rule_types": {
-    "on_session_start": "Al inicio de sesión (primeros N tool calls)",
+    "on_session_start": "Al inicio de sesión (primeros N mensajes del usuario)",
     "on_session_end": "Al cerrar sesión/chat/app",
     "periodic_by_messages": "Cada N mensajes del usuario sin que se haya llamado",
     "periodic_by_time": "Cada N minutos de sesión activa sin que se haya llamado",

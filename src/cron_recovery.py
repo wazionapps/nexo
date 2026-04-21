@@ -152,6 +152,10 @@ def load_enabled_crons() -> list[dict]:
     except Exception:
         apply_core_automation_overrides = None
     try:
+        from core_schedule_controls import apply_core_schedule_overrides
+    except Exception:
+        apply_core_schedule_overrides = None
+    try:
         from product_mode import filter_blocked_crons
     except Exception:
         filter_blocked_crons = None
@@ -193,9 +197,14 @@ def load_enabled_crons() -> list[dict]:
                 pass
         if callable(apply_core_automation_overrides):
             try:
-                return apply_core_automation_overrides(enabled)
+                enabled = apply_core_automation_overrides(enabled)
             except Exception:
-                return enabled
+                pass
+        if callable(apply_core_schedule_overrides):
+            try:
+                enabled = apply_core_schedule_overrides(enabled)
+            except Exception:
+                pass
         return enabled
     return []
 

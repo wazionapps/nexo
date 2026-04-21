@@ -208,6 +208,29 @@ def _zero_shot_classify(line: str) -> tuple[str, float] | None:
     return result.label, float(result.confidence)
 
 
+def _should_consult_classifier(
+    line: str,
+    facts: list[tuple[str, str]],
+) -> bool:
+    """Return True when semantic arbitration is worth the cost.
+
+    We keep the deterministic regex fast-path for already-strong hits
+    like explicit decisions/corrections, and only pay the local-model
+    cost when:
+
+      * regex found nothing, or
+      * regex only found a generic ``explicit`` reminder and the line may
+        still encode a semantic correction/decision the wording list does
+        not know yet.
+    """
+    if len(line) < _ZS_MIN_LEN_FOR_LLM:
+        return False
+    if not facts:
+        return True
+    labels = {fact_type for fact_type, _content in facts}
+    return labels == {"explicit"}
+
+
 def _classify_line(line: str) -> list[tuple[str, str]]:
     line = line.strip()
     if len(line) < _MIN_LINE_LENGTH:
@@ -231,16 +254,18 @@ def _classify_line(line: str) -> list[tuple[str, str]]:
             facts.append(("explicit", line))
             break
 
-    # 2. If regex produced no facts, ask the local zero-shot classifier
-    # for a semantic opinion. This catches multilingual correction
-    # shapes the regex does not know ("la ruta estaba mal en realidad",
-    # "that last paragraph is backwards"). The floor + min-length
-    # guard keep noise / short chatter off the learning pipeline.
-    if not facts:
+    # 2. Hybrid semantic arbitration. Regex remains the source of truth
+    # for strong deterministic hits, but the local classifier is allowed
+    # to recover multilingual drift when regex found nothing or only a
+    # generic reminder shape ("important:", "remember") that may hide a
+    # real correction/decision.
+    if _should_consult_classifier(line, facts):
         zs = _zero_shot_classify(line)
         if zs is not None:
             label, _ = zs
-            if label in {"decision", "correction", "explicit"}:
+            if label in {"decision", "correction", "explicit"} and label not in {
+                fact_type for fact_type, _content in facts
+            }:
                 facts.append((label, line))
 
     return facts

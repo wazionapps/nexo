@@ -6,6 +6,11 @@ The loader prefers the `email_accounts` table. When the table is empty
 to the legacy JSON for backwards compatibility — no crons stall while
 the operator migrates.
 
+On post-F0.6 installs the legacy-looking path may be just a compatibility
+shim into `~/.nexo/runtime/nexo-email/config.json`. Treat those two paths as
+the same artifact during migration/debugging, not as two independent sources
+of truth.
+
 Usage from any script:
 
     from email_config import load_email_config

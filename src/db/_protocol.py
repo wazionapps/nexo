@@ -81,6 +81,8 @@ def create_protocol_task(
     opened_with_guard: bool = False,
     opened_with_rules: bool = False,
     guard_has_blocking: bool = False,
+    guard_acknowledged: bool = False,
+    guard_acknowledged_at: str = "",
     guard_summary: str = "",
     must_verify: bool = False,
     must_change_log: bool = False,
@@ -99,10 +101,11 @@ def create_protocol_task(
                task_id, session_id, goal, task_type, area, project_hint, context_hint,
                files, plan, known_facts, unknowns, constraints, evidence_refs, verification_step,
                cortex_mode, cortex_check_id, cortex_blocked_reason, cortex_warnings, cortex_rules,
-               opened_with_guard, opened_with_rules, guard_has_blocking, guard_summary,
+               opened_with_guard, opened_with_rules, guard_has_blocking, guard_acknowledged,
+               guard_acknowledged_at, guard_summary,
                must_verify, must_change_log, must_learning_if_corrected, must_write_diary_on_close,
                response_mode, response_confidence, response_reasons, response_high_stakes
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             task_id,
             session_id.strip(),
@@ -126,6 +129,8 @@ def create_protocol_task(
             _as_bool(opened_with_guard),
             _as_bool(opened_with_rules),
             _as_bool(guard_has_blocking),
+            _as_bool(guard_acknowledged),
+            guard_acknowledged_at.strip()[:64] or None,
             guard_summary[:4000],
             _as_bool(must_verify),
             _as_bool(must_change_log),
@@ -139,6 +144,32 @@ def create_protocol_task(
     )
     conn.commit()
     return get_protocol_task(task_id)
+
+
+def set_protocol_task_guard_acknowledged(
+    task_id: str,
+    *,
+    acknowledged: bool = True,
+) -> dict:
+    conn = get_db()
+    if acknowledged:
+        conn.execute(
+            """UPDATE protocol_tasks
+               SET guard_acknowledged = 1,
+                   guard_acknowledged_at = COALESCE(guard_acknowledged_at, datetime('now'))
+               WHERE task_id = ?""",
+            (task_id,),
+        )
+    else:
+        conn.execute(
+            """UPDATE protocol_tasks
+               SET guard_acknowledged = 0,
+                   guard_acknowledged_at = NULL
+               WHERE task_id = ?""",
+            (task_id,),
+        )
+    conn.commit()
+    return get_protocol_task(task_id) or {}
 
 
 def get_protocol_task(task_id: str) -> dict | None:

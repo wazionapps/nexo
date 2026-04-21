@@ -1,9 +1,12 @@
 """Plan Consolidado 0.21 consumer — auto_capture uses classifier_local.
 
 Verifies:
-  * When regex hits, classifier is NOT consulted (fast-path remains).
+  * When regex already carries a strong short hit, classifier is NOT
+    consulted (fast-path remains).
   * When regex misses and classifier votes with confidence >= floor
     for a real bucket, the line is classified.
+  * When regex only captures a generic explicit reminder, classifier may
+    supplement it with a semantic correction/decision.
   * When classifier reports low confidence or None, regex result stands
     (no spurious capture).
   * When transformers / classifier_local fails to load, the hook keeps
@@ -28,7 +31,7 @@ def _reset_classifier_cache():
     auto_capture._zs_classifier = None
 
 
-def test_regex_hit_does_not_consult_classifier(monkeypatch):
+def test_short_regex_hit_does_not_consult_classifier(monkeypatch):
     _reset_classifier_cache()
     calls: list[str] = []
 
@@ -38,7 +41,7 @@ def test_regex_hit_does_not_consult_classifier(monkeypatch):
 
     monkeypatch.setattr(auto_capture, "_get_zs_classifier", spy_get_classifier)
     facts = auto_capture._classify_line(
-        "decided to switch the deploy pipeline to Cloudflare next week"
+        "decided to use Cloudflare"
     )
     assert facts and facts[0][0] == "decision"
     assert calls == [], "classifier should not run when regex already matched"
@@ -72,6 +75,22 @@ def test_classifier_high_confidence_correction_is_captured(monkeypatch):
     )
     assert facts
     assert facts[0][0] == "correction"
+
+
+def test_classifier_can_add_semantic_correction_on_top_of_explicit(monkeypatch):
+    _reset_classifier_cache()
+
+    class FakeClf:
+        def classify(self, text, labels):
+            return SimpleNamespace(label="correction", confidence=0.88, scores={}, latency_ms=120)
+
+    monkeypatch.setattr(auto_capture, "_get_zs_classifier", lambda: FakeClf())
+    line = "recuerda que el parámetro del deploy quedó invertido respecto al esperado y conviene revisarlo"
+    facts = auto_capture._classify_line(
+        line
+    )
+    assert ("explicit", line) in facts
+    assert ("correction", line) in facts
 
 
 def test_classifier_low_confidence_is_discarded(monkeypatch):

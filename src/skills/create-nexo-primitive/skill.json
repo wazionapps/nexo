@@ -1,0 +1,62 @@
+{
+  "id": "SK-CREATE-NEXO-PRIMITIVE",
+  "name": "Create NEXO Primitive",
+  "description": "Choose and scaffold the correct NEXO artifact type: personal script, skill, personal plugin, schedule-only change, or core repo change.",
+  "level": "published",
+  "mode": "guide",
+  "source_kind": "core",
+  "execution_level": "none",
+  "approval_required": false,
+  "approved_at": "",
+  "approved_by": "",
+  "tags": [
+    "nexo",
+    "artifact",
+    "script",
+    "skill",
+    "plugin",
+    "schedule",
+    "template",
+    "core"
+  ],
+  "trigger_patterns": [
+    "create a new skill",
+    "create a new personal script",
+    "create a new plugin",
+    "crear una nueva skill",
+    "crear una skill nueva",
+    "crear un script personal",
+    "crear un plugin personal",
+    "which artifact should i create",
+    "nexo artifact decision",
+    "scaffold nexo skill",
+    "scaffold nexo script",
+    "scaffold nexo plugin"
+  ],
+  "steps": [
+    "Read docs/agent-product-playbook.md, docs/personal-artifacts-manual.md, and docs/runtime-templates.md before deciding anything.",
+    "Decide first whether the need is a core repo change, personal plugin, personal skill, personal script, or schedule-only change.",
+    "Use the shipped template from templates/ instead of inventing a new scaffold.",
+    "Keep product code in the repo and personal artifacts under NEXO_HOME; do not blur the boundary.",
+    "Validate the resulting artifact with the canonical runtime command (skills sync/apply, scripts doctor/reconcile, plugin load/list) before claiming it is ready."
+  ],
+  "gotchas": [
+    "Do not create a plugin when a script plus schedule is enough.",
+    "Do not create a scheduled artifact by editing LaunchAgents directly.",
+    "Do not create personal artifacts whose names shadow core product identities.",
+    "Do not scaffold from memory when docs/runtime-templates already define the contract."
+  ],
+  "params_schema": {
+    "goal": {
+      "type": "string",
+      "required": true
+    },
+    "target_scope": {
+      "type": "string",
+      "required": false,
+      "default": ""
+    }
+  },
+  "command_template": {},
+  "stable_after_uses": 3
+}

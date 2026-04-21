@@ -158,6 +158,10 @@ def load_manifest() -> list[dict]:
     except Exception:
         apply_core_automation_overrides = None
     try:
+        from core_schedule_controls import apply_core_schedule_overrides
+    except Exception:
+        apply_core_schedule_overrides = None
+    try:
         from product_mode import filter_blocked_crons
     except Exception:
         filter_blocked_crons = None
@@ -199,9 +203,14 @@ def load_manifest() -> list[dict]:
             log(f"WARNING: could not filter product-blocked crons: {e}")
     if callable(apply_core_automation_overrides):
         try:
-            return apply_core_automation_overrides(filtered)
+            filtered = apply_core_automation_overrides(filtered)
         except Exception as e:
             log(f"WARNING: could not apply core automation overrides: {e}")
+    if callable(apply_core_schedule_overrides):
+        try:
+            filtered = apply_core_schedule_overrides(filtered)
+        except Exception as e:
+            log(f"WARNING: could not apply core schedule overrides: {e}")
     return filtered
 
 

@@ -11,6 +11,8 @@ from db._core import get_db, now_epoch
 from db._classification import normalise_internal, normalise_owner
 from db._fts import fts_upsert
 from db._hot_context import capture_context_event
+from db._learnings import extract_keywords
+from db._semantic_similarity import hybrid_similarity_score
 
 ACTIVE_EXCLUDED_STATUSES = {"DELETED", "archived", "blocked", "waiting"}
 READ_TOKEN_TTL_SECONDS = 30 * 60
@@ -568,29 +570,37 @@ def get_reminder_history(id: str, limit: int = 20) -> list[dict]:
 
 
 def find_similar_followups(description: str, threshold: float = 0.3) -> list[dict]:
-    """Find open followups similar to a description using keyword overlap."""
+    """Find open followups similar to a description with semantic fallback."""
     conn = get_db()
     rows = conn.execute(
         f"SELECT * FROM followups WHERE {_active_status_where()}"
     ).fetchall()
 
-    def tokenize(text: str) -> set[str]:
-        return {w.lower() for w in text.split() if len(w) > 3}
-
-    query_tokens = tokenize(description)
-    if not query_tokens:
+    candidate_text = str(description or "").strip()
+    query_tokens = set(extract_keywords(candidate_text))
+    if not query_tokens and not candidate_text:
         return []
 
     matches = []
     for row in rows:
-        existing_tokens = tokenize(f"{row['id']} {row['description']} {row['verification'] or ''}")
-        if not existing_tokens:
+        existing_text = " ".join(
+            part for part in (
+                str(row["id"] or ""),
+                str(row["description"] or ""),
+                str(row["verification"] or ""),
+            )
+            if part
+        ).strip()
+        if not existing_text:
             continue
-        intersection = query_tokens & existing_tokens
-        if not intersection:
-            continue
-        smaller = min(len(query_tokens), len(existing_tokens))
-        score = len(intersection) / smaller if smaller else 0
+        score = hybrid_similarity_score(
+            candidate_text,
+            existing_text,
+            keyword_extractor=extract_keywords,
+            strong_semantic_threshold=0.82,
+            moderate_semantic_threshold=0.74,
+            moderate_keyword_floor=0.08,
+        )
         if score >= threshold:
             matches.append({**dict(row), "_similarity": round(score, 2)})
 

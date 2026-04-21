@@ -29,11 +29,30 @@ from db import (
 _SEMANTIC_THRESHOLD = 0.75
 _SEMANTIC_MARGIN = 0.15
 _LLM_MIN_TEXT_CHARS = int(os.environ.get("NEXO_DRIVE_LLM_MIN_CHARS", "24"))
+_LOCAL_CONFIDENCE_THRESHOLD = float(os.environ.get("NEXO_DRIVE_LOCAL_CONFIDENCE", "0.72"))
 _LLM_TIMEOUT_SECONDS = int(os.environ.get("NEXO_DRIVE_LLM_TIMEOUT", "20"))
 _LLM_CONFIDENCE_THRESHOLD = float(os.environ.get("NEXO_DRIVE_LLM_CONFIDENCE", "0.62"))
 _LLM_CACHE_TTL_SECONDS = int(os.environ.get("NEXO_DRIVE_LLM_CACHE_TTL", "21600"))
 _LLM_ALLOWED_LABELS = {"anomaly", "pattern", "gap", "opportunity", "none"}
 _LLM_CLASSIFICATION_CACHE: dict[str, dict] = {}
+_AREA_LLM_ALLOWED_LABELS = {
+    "shopify",
+    "google-ads",
+    "meta-ads",
+    "wazion",
+    "nexo",
+    "canaririural",
+    "seo",
+    "email",
+    "none",
+}
+_LLM_AREA_CLASSIFICATION_CACHE: dict[str, dict] = {}
+_LOCAL_ALLOWED_LABELS = ("anomaly", "pattern", "gap", "opportunity", "none")
+_LOCAL_SIGNAL_CLASSIFIER = None
+_AREA_SCORE_THRESHOLD = 0.64
+_AREA_SCORE_MARGIN = 0.14
+_AREA_LOCAL_CONFIDENCE_THRESHOLD = float(os.environ.get("NEXO_DRIVE_AREA_LOCAL_CONFIDENCE", "0.66"))
+_LOCAL_AREA_CLASSIFIER = None
 
 _SIGNAL_CUES = {
     "anomaly": {
@@ -141,6 +160,55 @@ _FALLBACK_PATTERNS = {
         re.compile(r"\b(podríamos|could|se podría|we could|opportunity)\b.*\b(automatiz|improve|mejorar|optimiz)\b", re.I),
     ),
 }
+
+_AREA_CUES = {
+    "shopify": (
+        "shopify", "storefront", "checkout", "cart", "collection", "variant",
+        "inventory", "sku", "theme", "liquid", "order", "pedido", "producto",
+        "catalog", "catalogo",
+    ),
+    "google-ads": (
+        "google ads", "paid search", "search campaign", "campaign", "campana",
+        "campaña", "ad group", "cpc", "pmax", "roas", "gads", "keyword",
+        "search terms", "quality score",
+    ),
+    "meta-ads": (
+        "meta ads", "facebook ads", "instagram ads", "facebook", "instagram",
+        "pixel", "capi", "ad set", "creative", "reels campaign",
+    ),
+    "wazion": (
+        "wazion", "whatsapp", "baileys", "inbox agent", "wa automation",
+        "chat automation",
+    ),
+    "nexo": (
+        "nexo", "nexo brain", "desktop", "guardian", "mcp", "cognitive",
+        "protocol", "enforcer", "shared brain",
+    ),
+    "canaririural": (
+        "canarirural", "canari rural", "booking", "reserva", "hospedaje",
+        "alojamiento", "guest", "property", "villa", "hotel",
+    ),
+    "seo": (
+        "seo", "search console", "indexacion", "indexación", "serp",
+        "ranking", "organic traffic", "crawl", "schema markup",
+    ),
+    "email": (
+        "email", "correo", "inbox", "smtp", "imap", "mailbox", "reply",
+        "deliverability", "bounce", "sender", "newsletter",
+    ),
+}
+
+_AREA_LOCAL_LABELS = (
+    ("Shopify ecommerce storefront operations, catalog, checkout, themes, orders", "shopify"),
+    ("Google Ads paid search campaigns, CPC, ROAS, PMax, keywords", "google-ads"),
+    ("Meta Ads campaigns for Facebook and Instagram, pixel, CAPI, creatives", "meta-ads"),
+    ("WhatsApp automation and Wazion product operations", "wazion"),
+    ("NEXO Brain, Desktop, Guardian, protocol, or MCP runtime work", "nexo"),
+    ("Hospitality reservations, lodging, villas, or Canarirural operations", "canaririural"),
+    ("SEO, Search Console, indexing, ranking, or organic search", "seo"),
+    ("Email inbox, SMTP, IMAP, mailbox delivery, replies, or sender identity", "email"),
+    ("None of the listed business areas", "none"),
+)
 
 
 def _normalize_text(text: str) -> str:
@@ -250,6 +318,36 @@ def _llm_cache_key(text: str) -> str:
     return _normalize_text(text)[:1200]
 
 
+def _local_classify_signal(text: str) -> dict:
+    text_norm = _normalize_text(text)
+    if len(text_norm) < _LLM_MIN_TEXT_CHARS:
+        return {"available": False, "label": None, "reason": "text_too_short"}
+
+    global _LOCAL_SIGNAL_CLASSIFIER
+    try:
+        if _LOCAL_SIGNAL_CLASSIFIER is None:
+            from classifier_local import LocalZeroShotClassifier
+
+            _LOCAL_SIGNAL_CLASSIFIER = LocalZeroShotClassifier(
+                confidence_floor=_LOCAL_CONFIDENCE_THRESHOLD,
+            )
+        if not _LOCAL_SIGNAL_CLASSIFIER.is_available():
+            return {"available": False, "label": None, "reason": "classifier_unavailable"}
+        result = _LOCAL_SIGNAL_CLASSIFIER.classify(text, _LOCAL_ALLOWED_LABELS)
+        if result is None:
+            return {"available": False, "label": None, "reason": "classifier_failed"}
+        label = result.label if result.label in _LOCAL_ALLOWED_LABELS else None
+        return {
+            "available": label is not None,
+            "label": None if label == "none" else label,
+            "confidence": float(result.confidence or 0.0),
+            "reason": "local_zero_shot",
+            "source": "local",
+        }
+    except Exception as exc:
+        return {"available": False, "label": None, "reason": f"classifier_error:{exc}"}
+
+
 def _llm_classify_signal(text: str) -> dict:
     text_norm = _normalize_text(text)
     if len(text_norm) < _LLM_MIN_TEXT_CHARS:
@@ -316,6 +414,72 @@ def _llm_classify_signal(text: str) -> dict:
     return classification
 
 
+def _llm_classify_area(text: str) -> dict:
+    text_norm = _normalize_text(text)
+    if len(text_norm) < _LLM_MIN_TEXT_CHARS:
+        return {"available": False, "label": None, "reason": "text_too_short"}
+
+    cache_key = _llm_cache_key(f"area::{text}")
+    now = time.time()
+    cached = _LLM_AREA_CLASSIFICATION_CACHE.get(cache_key)
+    if cached and cached.get("expires_at", 0) > now:
+        return {k: v for k, v in cached.items() if k != "expires_at"}
+
+    try:
+        from agent_runner import AutomationBackendUnavailableError, run_automation_prompt
+    except Exception as exc:
+        return {"available": False, "label": None, "reason": f"runner_unavailable:{exc}"}
+
+    json_system_prompt = render_core_prompt("drive-area-classifier-system")
+    prompt = render_core_prompt(
+        "drive-area-classifier-user",
+        text=text.strip()[:3000],
+    )
+
+    try:
+        result = run_automation_prompt(
+            prompt,
+            caller="tools/drive_area",
+            task_profile="fast",
+            timeout=_LLM_TIMEOUT_SECONDS,
+            output_format="text",
+            append_system_prompt=json_system_prompt,
+        )
+    except (AutomationBackendUnavailableError, subprocess.TimeoutExpired) as exc:
+        return {"available": False, "label": None, "reason": f"automation_unavailable:{exc}"}
+    except Exception as exc:
+        return {"available": False, "label": None, "reason": f"automation_error:{exc}"}
+
+    if result.returncode != 0:
+        return {"available": False, "label": None, "reason": f"automation_returncode:{result.returncode}"}
+
+    parsed = _extract_json_object(result.stdout)
+    if not parsed:
+        return {"available": False, "label": None, "reason": "invalid_json"}
+
+    label = str(parsed.get("label", "") or "").strip().lower()
+    if label not in _AREA_LLM_ALLOWED_LABELS:
+        return {"available": False, "label": None, "reason": "invalid_label"}
+
+    try:
+        confidence = float(parsed.get("confidence", 0.0) or 0.0)
+    except (TypeError, ValueError):
+        confidence = 0.0
+
+    classification = {
+        "available": True,
+        "label": None if label == "none" else label,
+        "confidence": confidence,
+        "reason": str(parsed.get("reason", "") or ""),
+        "source": "llm",
+    }
+    _LLM_AREA_CLASSIFICATION_CACHE[cache_key] = {
+        **classification,
+        "expires_at": now + _LLM_CACHE_TTL_SECONDS,
+    }
+    return classification
+
+
 def _regex_fallback_classify(text: str) -> str | None:
     for signal_type, patterns in _FALLBACK_PATTERNS.items():
         if any(pattern.search(text) for pattern in patterns):
@@ -325,7 +489,38 @@ def _regex_fallback_classify(text: str) -> str | None:
 
 def _classify_signal(text: str, *, allow_llm: bool = True) -> str | None:
     """Classify text into a signal type, or None if nothing interesting."""
-    if allow_llm:
+    scores = _semantic_signal_scores(text)
+    if scores:
+        ordered = sorted(scores.items(), key=lambda item: item[1], reverse=True)
+        winner, winner_score = ordered[0]
+        runner_up = ordered[1][1] if len(ordered) > 1 else 0.0
+        if winner_score >= _SEMANTIC_THRESHOLD and (winner_score - runner_up) >= _SEMANTIC_MARGIN:
+            return winner
+        if winner_score >= 0.45:
+            local_result = _local_classify_signal(text)
+            if local_result.get("available"):
+                confidence = float(local_result.get("confidence", 0.0) or 0.0)
+                label = local_result.get("label")
+                if label is None and confidence >= _LOCAL_CONFIDENCE_THRESHOLD:
+                    return None
+                if (
+                    isinstance(label, str)
+                    and confidence >= _LOCAL_CONFIDENCE_THRESHOLD
+                    and label == winner
+                ):
+                    return label
+            if allow_llm:
+                llm_result = _llm_classify_signal(text)
+                if llm_result.get("available"):
+                    confidence = float(llm_result.get("confidence", 0.0) or 0.0)
+                    label = llm_result.get("label")
+                    if label is None and confidence >= _LLM_CONFIDENCE_THRESHOLD:
+                        return None
+                    if isinstance(label, str) and confidence >= _LLM_CONFIDENCE_THRESHOLD:
+                        return label
+        if winner_score >= 0.35:
+            return None
+    elif allow_llm:
         llm_result = _llm_classify_signal(text)
         if llm_result.get("available"):
             confidence = float(llm_result.get("confidence", 0.0) or 0.0)
@@ -334,21 +529,59 @@ def _classify_signal(text: str, *, allow_llm: bool = True) -> str | None:
                 return None
             if isinstance(label, str) and confidence >= _LLM_CONFIDENCE_THRESHOLD:
                 return label
-
-    scores = _semantic_signal_scores(text)
-    if scores:
-        ordered = sorted(scores.items(), key=lambda item: item[1], reverse=True)
-        winner, winner_score = ordered[0]
-        runner_up = ordered[1][1] if len(ordered) > 1 else 0.0
-        if winner_score >= _SEMANTIC_THRESHOLD and (winner_score - runner_up) >= _SEMANTIC_MARGIN:
-            return winner
-        if winner_score >= 0.35:
-            return None
     return _regex_fallback_classify(text)
 
 
-def _infer_area(text: str) -> str:
-    """Infer operational area from text keywords."""
+def _semantic_area_scores(text: str) -> dict[str, float]:
+    text_norm = _normalize_text(text)
+    tokens = _tokenize(text_norm)
+    if not tokens:
+        return {}
+    scores: dict[str, float] = {}
+    for area_name, cues in _AREA_CUES.items():
+        matches = [cue for cue in cues if _matches_cue(cue, text_norm, tokens)]
+        if not matches:
+            continue
+        score = 0.0
+        for cue in matches:
+            score += 0.26 if " " in cue else 0.18
+        scores[area_name] = min(0.98, score)
+    return scores
+
+
+def _local_classify_area(text: str) -> dict:
+    text_norm = _normalize_text(text)
+    if len(text_norm) < _LLM_MIN_TEXT_CHARS:
+        return {"available": False, "label": None, "reason": "text_too_short"}
+
+    global _LOCAL_AREA_CLASSIFIER
+    try:
+        if _LOCAL_AREA_CLASSIFIER is None:
+            from classifier_local import LocalZeroShotClassifier
+
+            _LOCAL_AREA_CLASSIFIER = LocalZeroShotClassifier(
+                confidence_floor=_AREA_LOCAL_CONFIDENCE_THRESHOLD,
+            )
+        if not _LOCAL_AREA_CLASSIFIER.is_available():
+            return {"available": False, "label": None, "reason": "classifier_unavailable"}
+        label_texts = [label for label, _canonical in _AREA_LOCAL_LABELS]
+        canonical_by_label = {label: canonical for label, canonical in _AREA_LOCAL_LABELS}
+        result = _LOCAL_AREA_CLASSIFIER.classify(text, label_texts)
+        if result is None:
+            return {"available": False, "label": None, "reason": "classifier_failed"}
+        canonical = canonical_by_label.get(result.label)
+        return {
+            "available": canonical is not None,
+            "label": None if canonical == "none" else canonical,
+            "confidence": float(result.confidence or 0.0),
+            "reason": "local_zero_shot",
+            "source": "local",
+        }
+    except Exception as exc:
+        return {"available": False, "label": None, "reason": f"classifier_error:{exc}"}
+
+
+def _legacy_keyword_area(text: str) -> str:
     text_lower = text.lower()
     area_keywords = {
         "shopify": ["shopify", "tienda", "pedido", "producto", "sku"],
@@ -365,6 +598,38 @@ def _infer_area(text: str) -> str:
             if kw in text_lower:
                 return area
     return ""
+
+
+def _infer_area(text: str) -> str:
+    """Infer operational area with semantic/local routing before legacy keywords."""
+    scores = _semantic_area_scores(text)
+    if scores:
+        ordered = sorted(scores.items(), key=lambda item: item[1], reverse=True)
+        winner, winner_score = ordered[0]
+        runner_up = ordered[1][1] if len(ordered) > 1 else 0.0
+        if winner_score >= _AREA_SCORE_THRESHOLD and (winner_score - runner_up) >= _AREA_SCORE_MARGIN:
+            return winner
+
+    local_result = _local_classify_area(text)
+    if local_result.get("available"):
+        confidence = float(local_result.get("confidence", 0.0) or 0.0)
+        label = local_result.get("label")
+        if isinstance(label, str) and confidence >= _AREA_LOCAL_CONFIDENCE_THRESHOLD:
+            return label
+
+    if scores:
+        winner, winner_score = max(scores.items(), key=lambda item: item[1])
+        if winner_score >= 0.36:
+            return winner
+
+    llm_result = _llm_classify_area(text)
+    if llm_result.get("available"):
+        confidence = float(llm_result.get("confidence", 0.0) or 0.0)
+        label = llm_result.get("label")
+        if isinstance(label, str) and confidence >= _LLM_CONFIDENCE_THRESHOLD:
+            return label
+
+    return _legacy_keyword_area(text)
 
 
 def detect_drive_signal(

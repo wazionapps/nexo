@@ -69,6 +69,30 @@ def _recent_change_phrase(count: int) -> str:
     return f"{base} reciente" if count == 1 else f"{base} recientes"
 
 
+def _stringify_diary_payload_value(value) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, (list, dict, tuple)):
+        try:
+            return json.dumps(value, ensure_ascii=False)
+        except Exception:
+            return str(value)
+    return str(value)
+
+
+def _coalesce_diary_field(explicit, payload: dict, *keys: str) -> str:
+    explicit_text = _stringify_diary_payload_value(explicit).strip()
+    if explicit_text:
+        return explicit_text
+    for key in keys:
+        candidate = _stringify_diary_payload_value(payload.get(key)).strip()
+        if candidate:
+            return candidate
+    return ""
+
+
 def handle_decision_log(domain: str, decision: str, alternatives: str = '',
                         based_on: str = '', confidence: str = 'medium',
                         context_ref: str = '', session_id: str = '',
@@ -222,14 +246,15 @@ def handle_memory_review_queue(days: int = 0) -> str:
     return "\n".join(lines)
 
 
-def handle_session_diary_write(decisions: str, summary: str,
+def handle_session_diary_write(decisions: str = '', summary: str = '',
                                 discarded: str = '', pending: str = '',
                                 context_next: str = '', mental_state: str = '',
                                 user_signals: str = '',
                                 domain: str = '',
                                 session_id: str = '',
                                 self_critique: str = '',
-                                source: str = 'claude') -> str:
+                                source: str = 'claude',
+                                payload_json: str = '') -> str:
     """Write session diary entry at end of session. OBLIGATORIO antes de cerrar.
 
     Args:
@@ -244,7 +269,32 @@ def handle_session_diary_write(decisions: str, summary: str,
         session_id: Current session ID
         self_critique: REQUIRED. Honest post-mortem.
         source: Session type. 'claude' for human-interactive sessions (default), 'cron' for automated cron jobs. Affects visibility at startup.
+        payload_json: Optional JSON object alternative for long diary calls. Useful when the client/runtime is fragile with many long XML/MCP arguments.
     """
+    payload = {}
+    if str(payload_json or "").strip():
+        try:
+            payload = json.loads(payload_json)
+        except Exception as exc:
+            return f"ERROR: payload_json must be valid JSON object ({exc})"
+        if not isinstance(payload, dict):
+            return "ERROR: payload_json must be a JSON object."
+
+    decisions = _coalesce_diary_field(decisions, payload, "decisions", "decision_log")
+    summary = _coalesce_diary_field(summary, payload, "summary")
+    discarded = _coalesce_diary_field(discarded, payload, "discarded", "rejected", "discarded_options")
+    pending = _coalesce_diary_field(pending, payload, "pending", "open_items", "pending_items")
+    context_next = _coalesce_diary_field(context_next, payload, "context_next", "next_context", "context")
+    mental_state = _coalesce_diary_field(mental_state, payload, "mental_state", "state")
+    user_signals = _coalesce_diary_field(user_signals, payload, "user_signals", "signals")
+    domain = _coalesce_diary_field(domain, payload, "domain")
+    session_id = _coalesce_diary_field(session_id, payload, "session_id", "sid")
+    self_critique = _coalesce_diary_field(self_critique, payload, "self_critique", "critique")
+    source = _coalesce_diary_field(source, payload, "source") or "claude"
+
+    if not summary.strip():
+        return "ERROR: summary is required. Provide it directly or inside payload_json."
+
     sid = session_id or 'unknown'
     # Clean up draft — manual diary supersedes it
     from db import delete_diary_draft

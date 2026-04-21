@@ -20,6 +20,7 @@ NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(Path(__file__).resolve().parent
 if str(NEXO_CODE) not in sys.path:
     sys.path.insert(0, str(NEXO_CODE))
 
+import paths
 from agent_runner import AutomationBackendUnavailableError, run_automation_prompt
 from core_prompts import render_core_prompt
 try:
@@ -32,8 +33,8 @@ except Exception:
 
 class ContextChecker:
     def __init__(self):
-        self.state_dir = NEXO_HOME / "state"
-        self.state_dir.mkdir(exist_ok=True)
+        self.state_dir = paths.runtime_state_dir()
+        self.state_dir.mkdir(parents=True, exist_ok=True)
 
     def check_email_sent(self, to_addr, subject, since_hours=72):
         """Check if email was already sent to address with subject."""

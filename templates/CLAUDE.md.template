@@ -113,7 +113,7 @@ Install tools, create scripts, run commands — whatever it takes. NEVER push ma
 ## Project Atlas
 `{{NEXO_HOME}}/brain/project-atlas.json` — search BEFORE touching any project. Never assume server, port, or code location.
 
-Credentials: (1) `nexo_credential_get`, (2) `{{NEXO_HOME}}/*.txt/*.json`.
+Credentials: (1) `nexo_credential_get`, (2) legacy read-only fallback `{{NEXO_HOME}}/*.txt/*.json` only when an old install already has them. Never create new flat credential files; persist new secrets with `nexo_credential_create`.
 <!-- nexo:end:atlas -->
 
 <!-- nexo:start:hooks -->

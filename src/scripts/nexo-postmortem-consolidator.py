@@ -54,27 +54,6 @@ MEMORY_DIR = paths.memory_dir()
 MEMORY_INDEX = MEMORY_DIR / "MEMORY.md"
 HISTORY_FILE = paths.coordination_dir() / "postmortem-history.json"
 CONSOLIDATION_LOG = paths.logs_dir() / "postmortem-consolidation.log"
-def _resolve_claude_cli() -> Path:
-    """Find claude CLI: saved path > PATH > common locations."""
-    import shutil as _shutil
-    saved = paths.config_dir() / "claude-cli-path"
-    if saved.exists():
-        p = Path(saved.read_text().strip())
-        if p.exists():
-            return p
-    found = _shutil.which("claude")
-    if found:
-        return Path(found)
-    for candidate in [
-        HOME / ".local" / "bin" / "claude",
-        HOME / ".npm-global" / "bin" / "claude",
-        Path("/usr/local/bin/claude"),
-    ]:
-        if candidate.exists():
-            return candidate
-    return HOME / ".local" / "bin" / "claude"
-
-CLAUDE_CLI = _resolve_claude_cli()
 SESSION_BUFFER = paths.brain_dir() / "session_buffer.jsonl"
 
 TODAY = date.today()

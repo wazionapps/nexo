@@ -118,7 +118,10 @@ def _validate_state(state: dict) -> dict:
     # Rule 1: unknowns exist → force ASK mode
     if unknowns:
         mode = "ask"
-        blocked_reason = f"Cannot act with {len(unknowns)} unknown(s). Resolve first."
+        blocked_reason = (
+            f"{len(unknowns)} unknown(s) still unresolved. "
+            "Investigation and reading are allowed, but do not mutate anything until they are resolved."
+        )
         warnings.append(f"UNKNOWNS: {', '.join(unknowns[:3])}")
 
     # Rule 2: edit/execute without plan → force PROPOSE

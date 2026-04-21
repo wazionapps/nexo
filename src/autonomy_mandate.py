@@ -33,9 +33,12 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+from core_prompts import render_core_prompt
+
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 STATE_PATH = NEXO_HOME / "runtime" / "data" / "autonomy_mandate.json"
+CLASSIFIER_QUESTION = render_core_prompt("autonomy-mandate-question")
 
 # Marker list per NF-DS-45569A27. Case-insensitive substring match.
 MARKERS = (
@@ -48,6 +51,7 @@ MARKERS = (
     "llevo 3 veces",
     "lo quiero ya",
 )
+_SEMANTIC_MARKER = "semantic-autonomy-mandate"
 
 # Default mandate TTL. Longer than a normal working session but short enough
 # that a stale state does not block followups weeks later.
@@ -93,13 +97,23 @@ class MandateState:
         }
 
 
-def _detect_marker(text: str) -> Optional[str]:
+def _detect_marker(text: str, *, classifier=None) -> Optional[str]:
     if not text:
         return None
     lowered = text.lower()
     for marker in MARKERS:
         if marker in lowered:
             return marker
+    if classifier is None:
+        try:
+            from enforcement_classifier import classify as classifier  # type: ignore
+        except Exception:
+            return None
+    try:
+        if bool(classifier(question=CLASSIFIER_QUESTION, context=text.strip()[:1200])):
+            return _SEMANTIC_MARKER
+    except Exception:
+        return None
     return None
 
 
@@ -163,6 +177,7 @@ def maybe_ingest_from_text(
     session_id: str,
     source: str = "auto",
     ttl_seconds: int = DEFAULT_TTL_SECONDS,
+    classifier=None,
 ) -> Optional[MandateState]:
     """Scan free-form text for a mandate marker and persist if found.
 
@@ -170,7 +185,7 @@ def maybe_ingest_from_text(
     mandate can be set transparently, without a separate explicit tool.
     Returns the new state when a marker was detected, otherwise None.
     """
-    marker = _detect_marker(text or "")
+    marker = _detect_marker(text or "", classifier=classifier)
     if not marker:
         return None
     return set_mandate(

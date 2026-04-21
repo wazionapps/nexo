@@ -109,6 +109,38 @@ def test_maybe_migrate_f06_keeps_watchdog_runtime_files_under_core_scripts(monke
     assert not (home / "personal" / "scripts" / ".watchdog-fails").exists()
 
 
+def test_heal_misplaced_personal_watchdog_runtime_files_prunes_or_promotes(monkeypatch, tmp_path):
+    home = tmp_path
+    (home / "core" / "scripts").mkdir(parents=True)
+    (home / "personal" / "scripts").mkdir(parents=True)
+    (home / "core" / "scripts" / ".watchdog-hashes").write_text("core\n")
+    (home / "core" / "scripts" / ".watchdog-fails").write_text("1\n")
+    (home / "core" / "scripts" / ".watchdog-nexo-repair.lock").write_text("")
+    (home / "personal" / "scripts" / ".watchdog-hashes").write_text("personal-newer\n")
+    fail_personal = home / "personal" / "scripts" / ".watchdog-fails"
+    fail_personal.write_text("1\n")
+    (home / "personal" / "scripts" / ".watchdog-nexo-repair.lock").write_text("")
+
+    # Make the personal hash registry the newest copy so the helper promotes it.
+    import os
+    newer = (home / "personal" / "scripts" / ".watchdog-hashes")
+    os.utime(newer, (newer.stat().st_atime + 10, newer.stat().st_mtime + 10))
+    # Keep the core fail counter newer so the personal duplicate is pruned.
+    fail_core = home / "core" / "scripts" / ".watchdog-fails"
+    os.utime(fail_core, (fail_core.stat().st_atime + 20, fail_core.stat().st_mtime + 20))
+
+    au = _reload_auto_update(monkeypatch, home)
+    actions = au._heal_misplaced_personal_watchdog_runtime_files()
+
+    assert "watchdog-runtime-file-promoted:.watchdog-hashes" in actions
+    assert "watchdog-runtime-file-pruned:.watchdog-fails" in actions
+    assert "watchdog-runtime-file-pruned:.watchdog-nexo-repair.lock" in actions
+    assert (home / "core" / "scripts" / ".watchdog-hashes").read_text() == "personal-newer\n"
+    assert not (home / "personal" / "scripts" / ".watchdog-hashes").exists()
+    assert not (home / "personal" / "scripts" / ".watchdog-fails").exists()
+    assert not (home / "personal" / "scripts" / ".watchdog-nexo-repair.lock").exists()
+
+
 def test_maybe_migrate_f06_does_not_create_legacy_shims_for_already_canonical_install(monkeypatch, tmp_path):
     home = tmp_path
     (home / ".structure-version").write_text("F0.6\n")
@@ -138,3 +170,36 @@ def test_maybe_migrate_f06_removes_root_pycache_residue(monkeypatch, tmp_path):
     au._maybe_migrate_to_f06_layout()
 
     assert not cache_dir.exists()
+
+
+def test_maybe_migrate_f06_moves_runtime_state_and_operator_scratch_roots(monkeypatch, tmp_path):
+    home = tmp_path
+    (home / ".structure-version").write_text("F0.6\n")
+    (home / "state").mkdir(parents=True)
+    (home / "state" / "vrbo-calendar-monitor.json").write_text('{"ok":true}\n')
+    (home / "workdir" / "project-a").mkdir(parents=True)
+    (home / "workdir" / "project-a" / "draft.txt").write_text("draft\n")
+    (home / "working" / "patches").mkdir(parents=True)
+    (home / "working" / "patches" / "fix.patch.md").write_text("patch\n")
+    (home / "CLAUDE.md.generated").write_text("# generated\n")
+
+    au = _reload_auto_update(monkeypatch, home)
+    au._maybe_migrate_to_f06_layout()
+
+    assert (home / "runtime" / "state" / "vrbo-calendar-monitor.json").is_file()
+    assert (home / "state").is_symlink()
+    assert (home / "state").resolve() == (home / "runtime" / "state").resolve()
+
+    assert (home / "personal" / "lib" / "workdir" / "project-a" / "draft.txt").is_file()
+    assert (home / "workdir").is_symlink()
+    assert (home / "workdir").resolve() == (home / "personal" / "lib" / "workdir").resolve()
+
+    assert (home / "personal" / "lib" / "working" / "patches" / "fix.patch.md").is_file()
+    assert (home / "working").is_symlink()
+    assert (home / "working").resolve() == (home / "personal" / "lib" / "working").resolve()
+
+    assert (home / "personal" / "lib" / "generated" / "CLAUDE.md.generated").is_file()
+    assert (home / "CLAUDE.md.generated").is_symlink()
+    assert (home / "CLAUDE.md.generated").resolve() == (
+        home / "personal" / "lib" / "generated" / "CLAUDE.md.generated"
+    ).resolve()

@@ -1,5 +1,75 @@
 # Changelog
 
+## [7.1.6] - 2026-04-21
+
+Patch release coordinated with NEXO Desktop v0.22.6. This line closes the
+remaining product gap around structural core cron cadence: Brain now exposes a
+dedicated core-schedules contract, Desktop consumes it through a dedicated
+surface, and the shipped `synthesis` launchagent template/docs are realigned
+with the live manifest again.
+
+### Fixed
+
+- Added `src/core_schedule_controls.py`, a dedicated override layer for
+  structural core crons backed by
+  `~/.nexo/personal/config/schedule-overrides.json`. Toggleable product
+  automations stay on their existing Automations surface; fixed/CLI-only
+  core services such as `catchup`, `dashboard`, and `evolution` keep their
+  product policy.
+- `src/cli.py` now exposes `nexo core-schedules list|status|schedule`, and the
+  MCP/plugin bridge exports the matching `nexo_core_schedules_*` tool family,
+  so Desktop and other clients can tune safe cadence without editing manifest
+  files by hand.
+- `src/crons/sync.py` and `src/cron_recovery.py` now apply structural core
+  schedule overrides after the existing automation overrides, so live runtime
+  sync and recovery paths evaluate the same composed cadence.
+- Desktop-coordinated product mode detection stays honest in explicit-home
+  flows even on non-macOS CI hosts, closing the remaining global-marker test
+  drift around `/Applications/NEXO Desktop.app`.
+- `templates/launchagents/com.nexo.synthesis.plist` and
+  `templates/launchagents/README.md` now match the live `synthesis` manifest
+  again (`06:00` daily instead of the stale every-2-hours docs/template), and a
+  regression test keeps that alignment from drifting again.
+- Public release surfaces and integration artifacts are refreshed again so the
+  open-source Brain and the coordinated Desktop client describe the same
+  `7.1.6` / `0.22.6` shipped line.
+
+### Verification
+
+- `1860 passed, 3 skipped, 1 xfailed, 5 xpassed` via `pytest -q`
+- `python3 scripts/verify_release_readiness.py --ci`
+
+## [7.1.5] - 2026-04-21
+
+Patch release coordinated with NEXO Desktop v0.22.5. This line hardens
+standalone/runtime-root maintenance paths and explicit-home product checks:
+direct catchup runs no longer die just because Claude CLI helpers are absent,
+isolated-home evaluations stop inheriting the operator's globally installed
+Desktop app, and legacy `nexo_doctor` callers stay compatible without an
+explicit `plane`.
+
+### Fixed
+
+- `src/scripts/nexo-catchup.py` now lazy-loads the `agent_runner` /
+  `claude_cli` stack only for the post-catchup assessment path, so runtime-root
+  executions and recovery flows keep working on lean installs that do not need
+  the interactive automation helpers.
+- `src/product_mode.py` now ignores global Desktop install markers when the
+  check is running against an explicit external/test home, preventing false
+  "Desktop installed" detections from the operator machine from contaminating
+  isolated runs.
+- `src/cli.py` now defaults `plane="installation_live"` for legacy
+  `nexo scripts call nexo_doctor` callers that omit the field, keeping the
+  direct plugin contract strict while preserving CLI compatibility.
+- Public release surfaces and integration artifacts are refreshed again so the
+  open-source Brain and the coordinated Desktop client describe the same
+  `7.1.5` / `0.22.5` shipped line.
+
+### Verification
+
+- `1854 passed, 3 skipped, 1 xfailed, 5 xpassed` via `pytest -q`
+- `python3 scripts/verify_release_readiness.py --ci`
+
 ## [7.1.4] - 2026-04-20
 
 Patch release coordinated with NEXO Desktop v0.22.4. This line closes the

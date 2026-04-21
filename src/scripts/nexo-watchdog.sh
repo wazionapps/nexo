@@ -1159,42 +1159,40 @@ Do NOT propagate fixes for [personal] services — those stay local only."
         fi
       fi
 
-      # Write prompt to temp file (avoids heredoc quoting issues in subshell)
-      REPAIR_PROMPT_FILE=$(mktemp /tmp/nexo-repair-XXXXXXXX)
-      cat > "$REPAIR_PROMPT_FILE" <<NEXOPROMPT
-WATCHDOG LEVEL 2 REPAIR — Automated diagnostic session.
-
-The watchdog detected services that failed mechanical repair (launchctl/systemctl re-registration).
-Your job: diagnose the root cause and fix it. Do NOT ask the user anything — resolve autonomously.
-
-Each failure is tagged [core] or [personal]:
-- [core] = part of NEXO public package — fix may need propagation to public repo
-- [personal] = user-specific service — fix stays local only
-
-FAILURES:
-${FAIL_DETAILS}
-
-STEPS:
-1. Read the service config (plist on macOS, systemd unit on Linux) to understand the service
-2. Check stderr/stdout logs for the actual error
-3. Fix the root cause (missing file, bad config, dependency issue, etc.)
-4. Reload the service and verify it is running (launchctl on macOS, systemctl on Linux)
-5. Log what you did to $NEXO_HOME/runtime/logs/watchdog-repair-result.log
-${PROPAGATE_BLOCK}
-
-CONSTRAINTS:
-- Do NOT modify CLAUDE.md, AGENTS.md, or any protected file
-- Do NOT start interactive conversations
-- Keep it under 5 minutes
-- Log what you did to $NEXO_HOME/runtime/logs/watchdog-repair-result.log
-NEXOPROMPT
-
       # Launch NEXO in background with the configured automation backend.
       # Keep the hardened Claude fallback for older runtimes or partial installs.
       AGENT_RUNNER="$NEXO_HOME/core/scripts/nexo-agent-run.py"
       NEXO_PYTHON="$NEXO_HOME/.venv/bin/python3"
       if [ ! -x "$NEXO_PYTHON" ]; then
         NEXO_PYTHON=$(command -v python3 2>/dev/null || echo "python3")
+      fi
+
+      # Write prompt to temp file from the shared core prompt catalog so this
+      # contract is versioned alongside the rest of NEXO prompts.
+      REPAIR_PROMPT_FILE=$(mktemp /tmp/nexo-repair-XXXXXXXX)
+      if ! PYTHONPATH="$NEXO_CODE${PYTHONPATH:+:$PYTHONPATH}" FAIL_DETAILS="$FAIL_DETAILS" PROPAGATE_BLOCK="$PROPAGATE_BLOCK" NEXO_HOME="$NEXO_HOME" "$NEXO_PYTHON" - <<'PY' > "$REPAIR_PROMPT_FILE"; then
+import os
+import sys
+from pathlib import Path
+
+code_root = Path(os.environ.get("NEXO_CODE", "")).expanduser()
+if code_root and str(code_root) not in sys.path:
+    sys.path.insert(0, str(code_root))
+
+from core_prompts import render_core_prompt
+
+print(
+    render_core_prompt(
+        "watchdog-repair",
+        fail_details=os.environ.get("FAIL_DETAILS", ""),
+        propagate_block=os.environ.get("PROPAGATE_BLOCK", ""),
+        nexo_home=os.environ.get("NEXO_HOME", ""),
+    )
+)
+PY
+        log "NEXO repair ABORTED: failed to render watchdog-repair core prompt"
+        rm -f "$REPAIR_PROMPT_FILE"
+        continue
       fi
 
       if [ -f "$AGENT_RUNNER" ]; then
