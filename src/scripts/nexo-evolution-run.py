@@ -166,6 +166,7 @@ from evolution_cycle import (
     dry_run_restore_test, max_auto_changes, create_snapshot,
     build_public_contribution_prompt, build_public_pr_review_prompt,
 )
+from product_mode import DESKTOP_EVOLUTION_DISABLED_REASON, desktop_product_requested
 from public_contribution import (
     CONTRIB_ARTIFACTS_DIR,
     CONTRIB_REPO_DIR,
@@ -1355,6 +1356,10 @@ def _apply_accepted_proposals(
 def run():
     log("=" * 60)
     log("NEXO Evolution cycle starting (standalone, v2 — real execution)")
+
+    if desktop_product_requested():
+        log(f"Evolution DISABLED: {DESKTOP_EVOLUTION_DISABLED_REASON}")
+        return
 
     # Check objective
     objective = load_objective()

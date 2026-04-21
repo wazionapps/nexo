@@ -588,3 +588,92 @@ def test_process_pre_tool_event_blocks_bash_mutation_into_runtime_core(guardrail
     assert result["blocks"][0]["debt_type"] == "runtime_core_write_blocked"
     message = hook_guardrails.format_pretool_block_message(result)
     assert "~/.nexo/core" in message
+
+
+def test_process_pre_tool_event_blocks_python_inline_write_into_runtime_core(guardrail_env, monkeypatch):
+    core_target = guardrail_env / "core" / "scripts" / "nexo-followup-runner.py"
+    core_target.parent.mkdir(parents=True, exist_ok=True)
+    core_target.write_text("#!/usr/bin/env python3\n")
+
+    monkeypatch.setenv("NEXO_HOME", str(guardrail_env))
+    db, hook_guardrails = _reload_guardrail_stack()
+    db.init_db()
+    monkeypatch.setattr(hook_guardrails, "get_protocol_strictness", lambda: "strict")
+    db.register_session(
+        "nexo-2012-3012",
+        "runtime core python inline write",
+        external_session_id="claude-core-bash-python",
+        session_client="claude_code",
+    )
+
+    command = f"python3 -c \"open('{core_target}', 'w').write('x')\""
+    result = hook_guardrails.process_pre_tool_event(
+        {
+            "session_id": "claude-core-bash-python",
+            "tool_name": "Bash",
+            "tool_input": {"command": command},
+        }
+    )
+
+    assert result["status"] == "blocked"
+    assert result["blocks"][0]["debt_type"] == "runtime_core_write_blocked"
+    message = hook_guardrails.format_pretool_block_message(result)
+    assert "~/.nexo/core" in message
+
+
+def test_process_pre_tool_event_blocks_node_inline_write_into_runtime_core(guardrail_env, monkeypatch):
+    core_target = guardrail_env / "core" / "scripts" / "nexo-morning-agent.py"
+    core_target.parent.mkdir(parents=True, exist_ok=True)
+    core_target.write_text("#!/usr/bin/env node\n")
+
+    monkeypatch.setenv("NEXO_HOME", str(guardrail_env))
+    db, hook_guardrails = _reload_guardrail_stack()
+    db.init_db()
+    monkeypatch.setattr(hook_guardrails, "get_protocol_strictness", lambda: "strict")
+    db.register_session(
+        "nexo-2013-3013",
+        "runtime core node inline write",
+        external_session_id="claude-core-bash-node",
+        session_client="claude_code",
+    )
+
+    command = f"node -e \"require('fs').writeFileSync('{core_target}', 'x')\""
+    result = hook_guardrails.process_pre_tool_event(
+        {
+            "session_id": "claude-core-bash-node",
+            "tool_name": "Bash",
+            "tool_input": {"command": command},
+        }
+    )
+
+    assert result["status"] == "blocked"
+    assert result["blocks"][0]["debt_type"] == "runtime_core_write_blocked"
+
+
+def test_process_pre_tool_event_allows_python_inline_read_from_runtime_core(guardrail_env, monkeypatch):
+    core_target = guardrail_env / "core" / "scripts" / "nexo-email-monitor.py"
+    core_target.parent.mkdir(parents=True, exist_ok=True)
+    core_target.write_text("print('ok')\n")
+
+    monkeypatch.setenv("NEXO_HOME", str(guardrail_env))
+    db, hook_guardrails = _reload_guardrail_stack()
+    db.init_db()
+    monkeypatch.setattr(hook_guardrails, "get_protocol_strictness", lambda: "strict")
+    db.register_session(
+        "nexo-2014-3014",
+        "runtime core python inline read",
+        external_session_id="claude-core-bash-read",
+        session_client="claude_code",
+    )
+
+    command = f"python3 -c \"print(open('{core_target}').read())\""
+    result = hook_guardrails.process_pre_tool_event(
+        {
+            "session_id": "claude-core-bash-read",
+            "tool_name": "Bash",
+            "tool_input": {"command": command},
+        }
+    )
+
+    assert result["ok"] is True
+    assert result["skipped"] is True

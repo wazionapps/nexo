@@ -38,6 +38,10 @@ These are product-controlled prompt bodies, not personal scaffolds:
 | R-CATALOG probe | `templates/core-prompts/r-catalog.md` |
 | R34 identity coherence | `templates/core-prompts/r34-identity-coherence-*.md` |
 | Interactive startup | `templates/core-prompts/interactive-startup.md` |
+| Codex protocol contract | `templates/core-prompts/codex-protocol-contract.md` |
+| MCP server instructions | `templates/core-prompts/server-mcp-instructions.md` |
+| Post-tool inbox reminder | `templates/core-prompts/post-tool-inbox-reminder.md` |
+| Watchdog L2 repair | `templates/core-prompts/watchdog-repair.md` |
 
 ## Rules
 

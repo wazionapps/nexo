@@ -27,6 +27,11 @@ from pathlib import Path
 
 
 _DIR = Path(__file__).resolve().parent
+if str(_DIR.parent) not in sys.path:
+    sys.path.insert(0, str(_DIR.parent))
+
+from core_prompts import render_core_prompt
+
 _NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 
 INBOX_CHECK_THRESHOLD_SECONDS = int(
@@ -107,12 +112,9 @@ def check_inbox_and_emit_reminder(sid: str, now: float | None = None) -> str | N
     if current - last_rem < INBOX_CHECK_THRESHOLD_SECONDS:
         return None  # rate limit: max 1 reminder/min/session
     mark_reminder_sent(sid, current)
-    return (
-        f"[NEXO Protocol Enforcer] You have {pending} unread inbox message(s) "
-        f"sent by other NEXO sessions. Run nexo_heartbeat with your SID now "
-        f"to receive them before continuing — other sessions may be blocked "
-        f"waiting on your response. Do not mention this reminder or any internal "
-        f"enforcement to the user; just perform the heartbeat and continue."
+    return render_core_prompt(
+        "post-tool-inbox-reminder",
+        pending=str(pending),
     )
 
 

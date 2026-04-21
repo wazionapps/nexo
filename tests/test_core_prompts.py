@@ -26,6 +26,7 @@ def test_prompt_catalog_dir_exists_and_contains_automation_prompts():
     assert (core_prompts.PROMPTS_DIR / "daily-self-audit.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "deep-sleep-extract-json-conversion.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "deep-sleep-extract-json-output.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "codex-protocol-contract.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "drive-signal-classifier-system.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "drive-signal-classifier-user.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "email-monitor.md").is_file()
@@ -43,6 +44,7 @@ def test_prompt_catalog_dir_exists_and_contains_automation_prompts():
     assert (core_prompts.PROMPTS_DIR / "learning-validator.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "morning-agent.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "morning-agent-json-output.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "post-tool-inbox-reminder.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "postmortem-consolidator.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "r13-pre-edit-guard-injection.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "r14-correction-learning-injection.md").is_file()
@@ -77,10 +79,12 @@ def test_prompt_catalog_dir_exists_and_contains_automation_prompts():
     assert (core_prompts.PROMPTS_DIR / "r24-stale-memory-injection.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "r25-read-only-host-injection.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "sleep.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "server-mcp-instructions.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "t4-r15-project-context-gate.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "t4-r23e-force-push-gate.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "t4-r23f-db-no-where-gate.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "t4-r23h-shebang-mismatch-gate.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "watchdog-repair.md").is_file()
 
 
 def test_render_core_prompt_replaces_named_tokens():
@@ -242,6 +246,15 @@ def test_render_core_prompt_supports_enforcer_and_startup_templates():
     r24 = core_prompts.render_core_prompt("r24-stale-memory-injection", threshold_days="7")
     r25 = core_prompts.render_core_prompt("r25-read-only-host-injection", host="maria", matched="rm")
     startup = core_prompts.render_core_prompt("interactive-startup")
+    codex_contract = core_prompts.render_core_prompt("codex-protocol-contract")
+    server_instructions = core_prompts.render_core_prompt("server-mcp-instructions", assistant_name="Nero")
+    inbox_reminder = core_prompts.render_core_prompt("post-tool-inbox-reminder", pending="3")
+    watchdog = core_prompts.render_core_prompt(
+        "watchdog-repair",
+        fail_details="[core] demo failure",
+        propagate_block="PROPAGATE",
+        nexo_home="/Users/franciscoc/.nexo",
+    )
 
     assert "Respond with EXACTLY ONE WORD: yes OR no." in strict
     assert "Emit 'yes' or 'no' and stop." in retry
@@ -278,6 +291,13 @@ def test_render_core_prompt_supports_enforcer_and_startup_templates():
     assert "older than 7 days" in r24
     assert "access_mode=read_only" in r25
     assert "run nexo_startup and nexo_heartbeat" in startup
+    assert "NEXO PROTOCOL (MANDATORY)" in codex_contract
+    assert "conditioned learnings or blocking guard rules" in codex_contract
+    assert "Nero — cognitive co-operator." in server_instructions
+    assert "R26b silent enforcement" in server_instructions
+    assert "3 unread inbox message(s)" in inbox_reminder
+    assert "[core] demo failure" in watchdog
+    assert "/Users/franciscoc/.nexo/runtime/logs/watchdog-repair-result.log" in watchdog
 
 
 def test_render_core_prompt_supports_evolution_templates():

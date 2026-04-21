@@ -5,6 +5,7 @@ import sqlite3
 
 import json
 import os
+import re
 import shlex
 import sys
 from pathlib import Path
@@ -72,6 +73,48 @@ SHELL_WRITE_BASES = {
     "rsync",
 }
 SHELL_REDIRECT_TOKENS = {">", ">>", "1>", "1>>", "2>", "2>>"}
+INLINE_INTERPRETER_BASES = {
+    "python",
+    "python3",
+    "python3.11",
+    "python3.12",
+    "python3.13",
+    "node",
+    "php",
+    "ruby",
+    "perl",
+}
+INLINE_DELETE_RE = re.compile(
+    r"(?:"
+    r"\.unlink\s*\(|"
+    r"os\.remove\s*\(|"
+    r"shutil\.rmtree\s*\(|"
+    r"unlink(?:Sync)?\s*\(|"
+    r"rm(?:Sync)?\s*\(|"
+    r"rmdir(?:Sync)?\s*\(|"
+    r"remove(?:Sync)?\s*\(|"
+    r"file_delete\s*\("
+    r")",
+    re.IGNORECASE,
+)
+INLINE_WRITE_RE = re.compile(
+    r"(?:"
+    r"write_text\s*\(|"
+    r"write_bytes\s*\(|"
+    r"appendFile(?:Sync)?\s*\(|"
+    r"writeFile(?:Sync)?\s*\(|"
+    r"copyFile(?:Sync)?\s*\(|"
+    r"rename(?:Sync)?\s*\(|"
+    r"mkdir(?:Sync)?\s*\(|"
+    r"symlink(?:Sync)?\s*\(|"
+    r"chmod(?:Sync)?\s*\(|"
+    r"chown(?:Sync)?\s*\(|"
+    r"file_put_contents\s*\(|"
+    r"open\([^\n]*?,\s*['\"][wax+][^'\"]*['\"]"
+    r")",
+    re.IGNORECASE,
+)
+EMBEDDED_PATH_RE = re.compile(r"(~\/[^'\"\s,);]+|\/[^'\"\s,);]+)")
 
 
 def _operation_kind(tool_name: str) -> str:
@@ -224,6 +267,11 @@ def _classify_bash_operation(command: str) -> str:
         return "write"
     if base == "perl" and any(token == "-i" or token.startswith("-i") for token in tokens[1:]):
         return "write"
+    if base in INLINE_INTERPRETER_BASES:
+        if INLINE_DELETE_RE.search(command):
+            return "delete"
+        if INLINE_WRITE_RE.search(command):
+            return "write"
     return "other"
 
 
@@ -264,6 +312,8 @@ def _extract_bash_touched_files(tool_input) -> list[str]:
             or Path(token).suffix.lower() in suffixes
         ):
             add(token)
+    for match in EMBEDDED_PATH_RE.findall(command):
+        add(match)
     return candidates
 
 
