@@ -6,7 +6,7 @@ import json
 def test_task_open_accepts_description_alias_and_create_task_type(monkeypatch, isolated_db):
     import plugins.protocol as protocol
 
-    monkeypatch.setattr(protocol, "handle_guard_check", lambda files="", area="": "OK")
+    monkeypatch.setattr(protocol, "handle_guard_check", lambda files="", area="", project_hint="": "OK")
 
     raw = protocol.handle_task_open(
         sid="nexo-1776762228-40323",

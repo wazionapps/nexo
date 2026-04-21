@@ -508,6 +508,38 @@ class TestSkillsRuntime:
         assert matches[0]["_outcome_rank"] > 0
         assert matches[1]["_outcome_review"]["recommended_action"] == "retire"
 
+    def test_match_skills_prefers_trigger_match_over_generic_fts_rank(self, skills_env):
+        db, _, _, _ = _reload_skill_stack()
+        db.init_db()
+
+        db.create_skill(
+            skill_id="SK-CREATE-NEXO-PRIMITIVE",
+            name="Create NEXO Primitive",
+            description="Choose the correct artifact type before coding.",
+            level="published",
+            content="# Create NEXO Primitive\n",
+            trigger_patterns=["crear una nueva skill", "crear un script personal", "crear un plugin personal"],
+            tags=["nexo", "creation"],
+            source_kind="core",
+            trust_score=60,
+        )
+        db.create_skill(
+            skill_id="SK-DEPLOY-GENERIC",
+            name="Deploy Generic",
+            description="Generic deploy workflow.",
+            level="stable",
+            content="# Deploy Generic\ncrear una nueva skill reusable deploy checklist\n",
+            trigger_patterns=["deploy workflow"],
+            tags=["deploy", "release"],
+            source_kind="personal",
+            trust_score=95,
+        )
+
+        matches = db.match_skills("crear una nueva skill reutilizable", top_n=2)
+
+        assert [item["id"] for item in matches] == ["SK-CREATE-NEXO-PRIMITIVE", "SK-DEPLOY-GENERIC"]
+        assert matches[0]["_match"].startswith("trigger:")
+
     def test_outcome_promoted_skill_improves_featured_discovery(self, skills_env):
         db, skills_runtime, _, _ = _reload_skill_stack()
         db.init_db()
