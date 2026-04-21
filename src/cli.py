@@ -700,6 +700,83 @@ def _automations_set_schedule(args):
     return 0
 
 
+def _core_schedules_list(args):
+    from core_schedule_controls import list_core_schedules
+
+    rows = list_core_schedules()
+    if args.json:
+        print(json.dumps({"ok": True, "core_schedules": rows}, indent=2, ensure_ascii=False))
+        return 0
+    if not rows:
+        print("No core schedules available.")
+        return 0
+    for row in rows:
+        schedule = str(row.get("effective_schedule_label") or "—")
+        note = str(row.get("note") or "").strip()
+        extra = f" · {note}" if note else ""
+        print(f"{row.get('name')} · {schedule}{extra}")
+    return 0
+
+
+def _core_schedules_status(args):
+    from core_schedule_controls import get_core_schedule_status
+
+    result = get_core_schedule_status(args.name)
+    if args.json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return 0 if result.get("ok") else 1
+    if not result.get("ok"):
+        print(result.get("error", "Failed to read core schedule"), file=sys.stderr)
+        return 1
+    print(f"{result.get('name')} -> {result.get('effective_schedule_label') or '—'}")
+    default_label = (result.get("default_schedule_label") or "").strip()
+    if default_label:
+        print(f"  default: {default_label}")
+    note = (result.get("note") or "").strip()
+    if note:
+        print(f"  note: {note}")
+    return 0
+
+
+def _core_schedules_set(args):
+    from core_schedule_controls import set_core_schedule
+
+    interval_seconds = None
+    daily_at = None
+    if getattr(args, "every_minutes", None) is not None:
+        interval_seconds = int(args.every_minutes) * 60
+    elif getattr(args, "every_seconds", None) is not None:
+        interval_seconds = int(args.every_seconds)
+    elif getattr(args, "daily_at", None):
+        daily_at = str(args.daily_at).strip()
+
+    result = set_core_schedule(
+        args.name,
+        interval_seconds=interval_seconds,
+        daily_at=daily_at,
+        clear=bool(getattr(args, "reset", False)),
+    )
+    if args.json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return 0 if result.get("ok") else 1
+    if not result.get("ok"):
+        print(result.get("error", "Failed to update core schedule"), file=sys.stderr)
+        return 1
+    label = str(result.get("effective_schedule_label") or "").strip()
+    source = str(result.get("schedule_source") or "manifest").strip()
+    if label:
+        print(f"Core schedule updated for {result['name']}: {label} ({source})")
+    else:
+        print(f"Core schedule updated for {result['name']}.")
+    warning = str(result.get("warning") or "").strip()
+    if warning:
+        print(f"  Warning: {warning}")
+    sync_result = result.get("runtime_sync") if isinstance(result.get("runtime_sync"), dict) else {}
+    if sync_result.get("ok") is False:
+        print(f"  Warning: saved, but runtime sync failed: {sync_result.get('error', 'unknown error')}")
+    return 0
+
+
 def _scripts_remove(args):
     from script_registry import remove_personal_script
 
@@ -2547,6 +2624,28 @@ def main():
     automations_schedule_group.add_argument("--reset", action="store_true", help="Restore the shipped default cadence")
     automations_schedule_p.add_argument("--json", action="store_true", help="JSON output")
 
+    core_schedules_parser = sub.add_parser("core-schedules", help="Manage structural core cron cadences")
+    core_schedules_sub = core_schedules_parser.add_subparsers(dest="core_schedules_command")
+
+    core_schedules_list_p = core_schedules_sub.add_parser("list", help="List structural core schedules")
+    core_schedules_list_p.add_argument("--json", action="store_true", help="JSON output")
+
+    core_schedules_status_p = core_schedules_sub.add_parser("status", help="Read one structural core schedule")
+    core_schedules_status_p.add_argument("name", help="Core cron name")
+    core_schedules_status_p.add_argument("--json", action="store_true", help="JSON output")
+
+    core_schedules_schedule_p = core_schedules_sub.add_parser(
+        "schedule",
+        help="Change the cadence of a structural core cron",
+    )
+    core_schedules_schedule_p.add_argument("name", help="Core cron name")
+    core_schedules_schedule_group = core_schedules_schedule_p.add_mutually_exclusive_group(required=True)
+    core_schedules_schedule_group.add_argument("--every-minutes", type=int, help="Run the cron every N minutes")
+    core_schedules_schedule_group.add_argument("--every-seconds", type=int, help="Run the cron every N seconds")
+    core_schedules_schedule_group.add_argument("--daily-at", type=str, help="Run the cron at HH:MM and preserve any weekday")
+    core_schedules_schedule_group.add_argument("--reset", action="store_true", help="Restore the shipped default cadence")
+    core_schedules_schedule_p.add_argument("--json", action="store_true", help="JSON output")
+
     # -- update --
     update_parser = sub.add_parser("update", help="Update installed runtime")
     update_parser.add_argument("--json", action="store_true", help="JSON output")
@@ -2851,6 +2950,15 @@ def main():
         elif args.automations_command == "schedule":
             return _automations_set_schedule(args)
         automations_parser.print_help()
+        return 0
+    elif args.command == "core-schedules":
+        if args.core_schedules_command == "list":
+            return _core_schedules_list(args)
+        elif args.core_schedules_command == "status":
+            return _core_schedules_status(args)
+        elif args.core_schedules_command == "schedule":
+            return _core_schedules_set(args)
+        core_schedules_parser.print_help()
         return 0
     elif args.command == "chat":
         return _chat(args)

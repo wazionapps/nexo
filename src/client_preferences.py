@@ -101,7 +101,7 @@ def _desktop_product_requested(home: Path | None = None) -> bool:
         base / ".local" / "share" / "NEXO Desktop",
         base / ".config" / "NEXO Desktop",
     ]
-    if sys.platform == "darwin" and not explicit_home:
+    if not explicit_home:
         desktop_markers.insert(0, Path("/Applications/NEXO Desktop.app"))
     for marker in desktop_markers:
         try:

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -54,7 +53,7 @@ def _desktop_install_markers(home: Path | None = None, *, include_global_markers
         base / ".local" / "share" / "NEXO Desktop",
         base / ".config" / "NEXO Desktop",
     ]
-    if include_global_markers and sys.platform == "darwin":
+    if include_global_markers:
         markers.insert(0, Path("/Applications/NEXO Desktop.app"))
     if os.name == "nt":
         local = Path(os.environ.get("LOCALAPPDATA", str(base / "AppData" / "Local")))

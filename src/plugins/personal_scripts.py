@@ -207,6 +207,41 @@ def handle_automation_schedule(
     )
 
 
+def handle_core_schedules_list() -> str:
+    from core_schedule_controls import list_core_schedules
+
+    init_db()
+    return json.dumps({"ok": True, "core_schedules": list_core_schedules()}, ensure_ascii=False)
+
+
+def handle_core_schedule_status(name: str) -> str:
+    from core_schedule_controls import get_core_schedule_status
+
+    init_db()
+    return json.dumps(get_core_schedule_status(name), ensure_ascii=False)
+
+
+def handle_core_schedule_set(
+    name: str,
+    every_seconds: int = 0,
+    daily_at: str = "",
+    clear: bool = False,
+) -> str:
+    from core_schedule_controls import set_core_schedule
+
+    init_db()
+    interval_seconds = int(every_seconds or 0) or None
+    return json.dumps(
+        set_core_schedule(
+            name,
+            interval_seconds=interval_seconds,
+            daily_at=str(daily_at or "").strip() or None,
+            clear=bool(clear),
+        ),
+        ensure_ascii=False,
+    )
+
+
 TOOLS = [
     (handle_personal_scripts_sync, "nexo_personal_scripts_sync",
      "Sync personal scripts and personal cron schedules from filesystem and LaunchAgents into the registry."),
@@ -238,4 +273,10 @@ TOOLS = [
      "Set or clear operator-side extra instructions for one automation without editing the core prompt."),
     (handle_automation_schedule, "nexo_automation_schedule",
      "Set or clear the cadence override for one operator-facing automation."),
+    (handle_core_schedules_list, "nexo_core_schedules_list",
+     "List structural core crons whose cadence can be tuned without disabling them."),
+    (handle_core_schedule_status, "nexo_core_schedule_status",
+     "Read the composed runtime status for one structural core schedule."),
+    (handle_core_schedule_set, "nexo_core_schedule_set",
+     "Set or clear the cadence override for one structural core cron."),
 ]

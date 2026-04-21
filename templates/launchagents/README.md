@@ -95,7 +95,7 @@ These agents power NEXO's learning and memory systems. Strongly recommended.
 |------|----------|-------------|
 | `com.nexo.deep-sleep.plist` | Daily 04:30 | Reads full session transcripts from the previous day and extracts learnings that were not captured during live sessions. NEXO's "REM sleep." |
 | `com.nexo.cognitive-decay.plist` | Daily 03:00 | Applies Ebbinghaus forgetting curve to the vector memory database. Reduces confidence scores for memories that have not been reinforced recently, keeping retrieval fresh and accurate. |
-| `com.nexo.synthesis.plist` | Every 2 hours | Aggregates recent session diaries, error patterns, and pending items into `coordination/daily-synthesis.md`. This file is read at every session startup. |
+| `com.nexo.synthesis.plist` | Daily 06:00 | Aggregates recent session diaries, error patterns, and pending items into `coordination/daily-synthesis.md`. This file is read at every session startup. |
 | `com.nexo.postmortem.plist` | Daily 23:30 | Produces an end-of-day consolidated summary of decisions, changes, and errors. Feeds into the next morning's synthesis. |
 | `com.nexo.self-audit.plist` | Daily 07:00 | Audits the learning system health. Flags repeated errors, calculates the learning repetition rate, and alerts if it exceeds 30%. |
 | `com.nexo.immune.plist` | Every 30 min | Scans the knowledge base for internal contradictions and stale data. Prevents memory drift over time. |

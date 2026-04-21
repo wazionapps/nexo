@@ -10,7 +10,6 @@ surfaces can share the same resolution policy.
 import json
 import os
 import shutil
-import sys
 from pathlib import Path
 
 
@@ -27,7 +26,9 @@ def _desktop_install_markers(home: Path, *, include_global_markers: bool) -> lis
         home / ".local" / "share" / "NEXO Desktop",
         home / ".config" / "NEXO Desktop",
     ]
-    if include_global_markers and sys.platform == "darwin":
+    # Treat the global app bundle path as a stable install marker even when
+    # tests run on non-macOS CI hosts. Explicit homes still suppress it.
+    if include_global_markers:
         markers.insert(0, Path("/Applications/NEXO Desktop.app"))
     if os.name == "nt":
         local = Path(os.environ.get("LOCALAPPDATA", str(home / "AppData" / "Local")))

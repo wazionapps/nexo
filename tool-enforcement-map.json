@@ -2246,6 +2246,45 @@
       },
       "triggers_after": []
     },
+    "nexo_core_schedules_list": {
+      "description": "List structural core schedules whose cadence can be tuned",
+      "category": "personal",
+      "source": "plugin:personal_scripts",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_core_schedule_status": {
+      "description": "Read the status of one structural core schedule",
+      "category": "personal",
+      "source": "plugin:personal_scripts",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_core_schedule_set": {
+      "description": "Set or clear a structural core schedule cadence override",
+      "category": "personal",
+      "source": "plugin:personal_scripts",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
     "nexo_plugin_list": {
       "description": "List loaded plugins and tools",
       "category": "plugin",
