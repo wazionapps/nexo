@@ -188,6 +188,41 @@ CLOSE_OUTCOME_ALIASES = {
     "completed": "done",
 }
 
+_RELEASE_AREA_HINTS = {
+    "release",
+    "deploy",
+    "deployment",
+    "publish",
+    "publishing",
+    "gh-pages",
+}
+_RELEASE_GOAL_HINTS = {
+    "release",
+    "deploy",
+    "launch",
+    "ship",
+    "publish",
+    "tag",
+    "rollout",
+    "despliegue",
+    "lanzamiento",
+    "publicar",
+    "etiqueta",
+}
+_RELEASE_CONTEXT_HINTS = {
+    "production",
+    "staging",
+    "changelog",
+    "version",
+    "update.json",
+    "npm",
+    "gh-pages",
+    "prod",
+    "producción",
+    "produccion",
+    "cambios",
+}
+
 _GOAL_PLAN_LINE_RE = re.compile(
     r"^\s*(?:[-*]\s+|\d+[.)]\s+|(?:paso|step)\s*\d+\s*:\s+)",
     re.IGNORECASE,
@@ -285,6 +320,27 @@ def _detect_high_stakes(*parts: str) -> bool:
 
 def _decision_support_required(*, task_type: str, high_stakes: bool) -> bool:
     return task_type in ACTION_TASKS and high_stakes
+
+
+def _is_release_task(*, goal: str, area: str = "", project_hint: str = "", verification_step: str = "") -> bool:
+    area_lower = (area or "").strip().lower()
+    if area_lower in _RELEASE_AREA_HINTS:
+        return True
+    if any(area_lower.startswith(f"{hint}-") for hint in _RELEASE_AREA_HINTS):
+        return True
+
+    goal_lower = (goal or "").strip().lower()
+    if not goal_lower:
+        return False
+    if not any(token in goal_lower for token in _RELEASE_GOAL_HINTS):
+        return False
+
+    combined_context = " ".join(
+        part.strip().lower()
+        for part in [area, project_hint, verification_step, goal]
+        if part and str(part).strip()
+    )
+    return any(token in combined_context for token in _RELEASE_CONTEXT_HINTS)
 
 
 def evaluate_response_confidence(
@@ -1163,9 +1219,12 @@ def handle_task_close(
             )
 
     # ── Release checklist: require channel alignment evidence for release tasks ──
-    RELEASE_KEYWORDS = {"release", "deploy", "version", "launch", "ship"}
-    task_goal_lower = (task.get("goal") or "").lower()
-    is_release = any(kw in task_goal_lower for kw in RELEASE_KEYWORDS)
+    is_release = _is_release_task(
+        goal=task.get("goal") or "",
+        area=task.get("area") or "",
+        project_hint=task.get("project_hint") or "",
+        verification_step=task.get("verification_step") or "",
+    )
     if is_release and clean_outcome == "done" and clean_evidence:
         missing_channels: list[str] = []
         evidence_lower = clean_evidence.lower()

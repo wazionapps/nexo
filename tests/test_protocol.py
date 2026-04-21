@@ -712,6 +712,36 @@ def test_high_stakes_action_close_stays_clean_with_cortex_evaluation():
     assert closed["cortex_evaluation"]["task_id"] == opened["task_id"]
 
 
+def test_non_release_task_does_not_open_release_alignment_debt_for_version_wording():
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    sid = _register_session("nexo-1015-2015")
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Audit the version parsing logic used by protocol tests",
+            task_type="analyze",
+            area="guardian",
+            plan='["inspect parser", "review tests", "summarize findings"]',
+            evidence_refs='["test fixture", "protocol parser"]',
+            verification_step="review the matching test coverage",
+        )
+    )
+    closed = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="done",
+            evidence="Reviewed parser fixtures and test expectations for version wording without touching any release channel.",
+            outcome_notes="This was only a protocol audit, not a deploy or release task.",
+        )
+    )
+
+    debt_types = {item["debt_type"] for item in closed["open_debts"]}
+    assert "release_channel_alignment_incomplete" not in debt_types
+    assert closed["status"] == "clean"
+
+
 def test_task_close_explicit_learning_supersedes_conflicting_file_rule():
     from db import create_learning, get_db
     from plugins.protocol import handle_task_open, handle_task_close
