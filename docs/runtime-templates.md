@@ -45,3 +45,82 @@ These are product-controlled prompt bodies, not personal scaffolds:
 - Keep personal artifacts under `NEXO_HOME`, not inside repo `src/`, unless the behavior should ship to all users.
 - If a template no longer reflects the runtime contract, update the template and the consuming docs/tests together.
 - Do not create parallel template trees under `personal/` that shadow the product contract without a specific reason.
+
+## Worked Starting Points
+
+Use these as the canonical first move instead of cloning an old operator file.
+
+### New personal automation script
+
+Use:
+
+- `templates/script-template.py`
+- `templates/nexo_helper.py`
+
+Then:
+
+1. fill header metadata
+2. implement the real job
+3. run `nexo scripts doctor NAME`
+4. run `nexo scripts reconcile`
+
+### New script with only shell glue
+
+Use:
+
+- `templates/script-template.sh`
+
+Then:
+
+1. keep it thin
+2. push real business logic into stable helpers when possible
+3. declare schedule metadata only if the shell script itself is the canonical runner
+
+### New personal plugin/tool
+
+Use:
+
+- `templates/plugin-template.py`
+
+Then:
+
+1. give tools explicit names
+2. keep runtime side effects narrow
+3. verify with `nexo_plugin_load(...)` + `nexo_plugin_list()`
+
+### New reusable skill
+
+Use:
+
+- `templates/skill-template.md`
+- `templates/skill-script-template.py` only if execution is really needed
+
+Then:
+
+1. define the procedure clearly in `guide.md`
+2. only add executable code if text instructions are not enough
+3. sync and dry-run before relying on the skill
+
+### New reviewable email draft
+
+Use:
+
+- `templates/email-template.md`
+
+Then:
+
+1. keep the message human-facing
+2. keep product/internal reasoning out of the final text
+3. use it for operator-visible drafts and automation copy that should stay reviewable
+
+### New managed bootstrap prompt/config
+
+Use:
+
+- `templates/CLAUDE.md.template`
+- `templates/CODEX.AGENTS.md.template`
+
+Rule:
+
+- treat these as managed bootstrap surfaces, not as free-form scratchpads
+- if the credential rule or source-of-truth order changes, update the template, not just one generated copy

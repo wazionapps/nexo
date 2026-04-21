@@ -14,11 +14,12 @@ This skill exists so NEXO stops improvising the wrong primitive or pulling half-
 
 Before deciding anything, read:
 
-1. `docs/agent-product-playbook.md`
-2. `docs/personal-artifacts-manual.md`
-3. `docs/runtime-templates.md`
+1. `docs/product-engineering-handbook.md`
+2. `docs/agent-product-playbook.md`
+3. `docs/personal-artifacts-manual.md`
+4. `docs/runtime-templates.md`
 
-If those three do not cover the case clearly, update the docs before building more surface.
+If those docs do not cover the case clearly, update the docs before building more surface.
 
 ## Decision flow
 
@@ -42,6 +43,8 @@ Always start from `templates/`:
 - `templates/nexo_helper.py`
 
 Do not create a parallel scaffold tree under `personal/` unless the product docs explicitly require it.
+
+Worked starting points and example usage now live in `docs/runtime-templates.md`. Use that document instead of copying old operator files by memory.
 
 ## Validation by artifact type
 

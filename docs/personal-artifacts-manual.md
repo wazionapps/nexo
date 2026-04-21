@@ -18,6 +18,8 @@ If a proposal touches personal runtime behavior and this manual does not clearly
 
 If the agent needs a reusable procedure for making this decision, the canonical matching skill is `SK-CREATE-NEXO-PRIMITIVE`.
 
+For product-engineering context around releases, managed installs, source/runtime separation, and operator-safe migrations, pair this manual with `docs/product-engineering-handbook.md`.
+
 ## First Principles
 
 - Personal artifacts live under `NEXO_HOME`, not in repo `src/`, unless the behavior should ship to every user.

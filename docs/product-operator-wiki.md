@@ -4,6 +4,8 @@ This is the compact internal wiki for agents operating on NEXO as a product.
 
 Use it before modifying Brain, Desktop, automations, onboarding, release surfaces, or personal artifact flows. The goal is to keep one stable explanation of what each layer is and where extensions belong.
 
+For release closure, product-engineering process, and the "how do I ship or scaffold this safely?" workflow, pair this wiki with `docs/product-engineering-handbook.md`.
+
 ## 1. What NEXO Brain is
 
 NEXO Brain is the open-source runtime and source of truth.
@@ -52,6 +54,7 @@ Use the right surface for the right job:
 
 Canonical docs for these decisions:
 
+- `docs/product-engineering-handbook.md`
 - `docs/personal-artifacts-manual.md`
 - `docs/runtime-templates.md`
 - `docs/writing-scripts.md`
@@ -104,9 +107,10 @@ Canonical release surfaces:
 Use this order every time:
 
 1. Check code/tests for the real runtime contract.
-2. Check this wiki.
-3. Check `docs/agent-product-playbook.md`.
-4. Check `docs/personal-artifacts-manual.md` and `docs/runtime-templates.md`.
-5. Check the relevant release/public surfaces if the change is user-visible.
+2. Check `docs/product-engineering-handbook.md`.
+3. Check this wiki.
+4. Check `docs/agent-product-playbook.md`.
+5. Check `docs/personal-artifacts-manual.md` and `docs/runtime-templates.md`.
+6. Check the relevant release/public surfaces if the change is user-visible.
 
 If the answer is still unclear after that, add/update docs before adding more product surface.
