@@ -6,6 +6,7 @@ and provides stats on error prevention effectiveness.
 import json
 import os
 import re
+import unicodedata
 from datetime import datetime, timedelta
 from pathlib import Path
 import paths
@@ -166,6 +167,88 @@ def _learning_matches_project_hint(entry: dict, project_hint: str) -> bool:
     if not haystack:
         return False
     return any(token in haystack for token in tokens)
+
+
+_PRIORITY_RANK = {
+    "critical": 3,
+    "high": 2,
+    "medium": 1,
+    "low": 0,
+}
+
+_BLOCKING_REASON_RANK = {
+    "runtime_core_protected": 4,
+    "file_conditioned": 3,
+    "prohibition_keyword": 2,
+    "repeated_error": 1,
+}
+
+
+def _canonical_rule_key(text: str) -> str:
+    normalized = unicodedata.normalize("NFKD", str(text or "").strip().lower())
+    ascii_only = "".join(ch for ch in normalized if not unicodedata.combining(ch))
+    compact = re.sub(r"[^a-z0-9]+", " ", ascii_only).strip()
+    return compact
+
+
+def _prefer_learning_entry(current: dict, candidate: dict) -> dict:
+    current_rank = (
+        bool(current.get("project_match")),
+        _PRIORITY_RANK.get(str(current.get("priority", "medium")).lower(), 1),
+        float(current.get("weight", 0.5) or 0.5),
+    )
+    candidate_rank = (
+        bool(candidate.get("project_match")),
+        _PRIORITY_RANK.get(str(candidate.get("priority", "medium")).lower(), 1),
+        float(candidate.get("weight", 0.5) or 0.5),
+    )
+    return candidate if candidate_rank > current_rank else current
+
+
+def _prefer_blocking_entry(current: dict, candidate: dict) -> dict:
+    current_rank = (
+        _BLOCKING_REASON_RANK.get(str(current.get("reason", "repeated_error")), 0),
+        int(current.get("repetitions", 0) or 0),
+    )
+    candidate_rank = (
+        _BLOCKING_REASON_RANK.get(str(candidate.get("reason", "repeated_error")), 0),
+        int(candidate.get("repetitions", 0) or 0),
+    )
+    return candidate if candidate_rank > current_rank else current
+
+
+def _dedupe_learning_entries(entries: list[dict]) -> list[dict]:
+    deduped: dict[str, dict] = {}
+    ordered_keys: list[str] = []
+    for entry in entries:
+        key = _canonical_rule_key(entry.get("rule", ""))
+        if not key:
+            ordered_keys.append(f"raw-{len(ordered_keys)}")
+            deduped[ordered_keys[-1]] = entry
+            continue
+        if key in deduped:
+            deduped[key] = _prefer_learning_entry(deduped[key], entry)
+            continue
+        ordered_keys.append(key)
+        deduped[key] = entry
+    return [deduped[key] for key in ordered_keys]
+
+
+def _dedupe_blocking_entries(entries: list[dict]) -> list[dict]:
+    deduped: dict[str, dict] = {}
+    ordered_keys: list[str] = []
+    for entry in entries:
+        key = _canonical_rule_key(entry.get("rule", ""))
+        if not key:
+            ordered_keys.append(f"raw-{len(ordered_keys)}")
+            deduped[ordered_keys[-1]] = entry
+            continue
+        if key in deduped:
+            deduped[key] = _prefer_blocking_entry(deduped[key], entry)
+            continue
+        ordered_keys.append(key)
+        deduped[key] = entry
+    return [deduped[key] for key in ordered_keys]
 
 
 
@@ -554,6 +637,9 @@ def handle_guard_check(
             -(x.get("weight", 0.5) or 0.5),
         )
     )
+    result["learnings"] = _dedupe_learning_entries(result["learnings"])
+    result["universal_rules"] = _dedupe_learning_entries(result["universal_rules"])
+    result["blocking_rules"] = _dedupe_blocking_entries(result["blocking_rules"])
 
     # Format output
     lines = []

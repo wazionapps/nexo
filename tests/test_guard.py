@@ -199,6 +199,37 @@ def test_handle_guard_check_project_hint_filters_unrelated_blocking_rules(guard_
     assert "Never deploy wazion storefront blindly" not in output
 
 
+def test_handle_guard_check_collapses_duplicate_blocking_rules_with_same_title(guard_env):
+    db, guard = _reload_guard_stack()
+    db.init_db()
+
+    conn = db.get_db()
+    first = db.create_learning(
+        "shopify",
+        "Separate product Brain from personal instance",
+        "NEVER mix product Brain changes with a personal live instance.",
+        status="active",
+    )
+    second = db.create_learning(
+        "shopify",
+        "Separate product Brain from personal instance",
+        "NEVER mix product Brain changes with a personal live instance.",
+        status="active",
+    )
+    conn.execute(
+        "UPDATE learnings SET priority = 'critical', weight = 1.0 WHERE id IN (?, ?)",
+        (first["id"], second["id"]),
+    )
+    conn.commit()
+
+    output = guard.handle_guard_check(
+        files="/repo/shopify/theme/snippets/reviews.liquid",
+        area="shopify",
+    )
+
+    assert output.count("Separate product Brain from personal instance") == 1
+
+
 def test_handle_guard_file_check_skips_file_scoped_rules_for_other_files(guard_env):
     db, guard = _reload_guard_stack()
     db.init_db()
