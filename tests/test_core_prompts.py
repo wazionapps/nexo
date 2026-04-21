@@ -20,6 +20,7 @@ _PROMPT_LIKE_NAME = re.compile(r".*(PROMPT|QUESTION|TEMPLATE|INJECTION).*")
 def test_prompt_catalog_dir_exists_and_contains_automation_prompts():
     assert core_prompts.PROMPTS_DIR.is_dir()
     assert (core_prompts.PROMPTS_DIR / "automation-backend-probe.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "autonomy-mandate-question.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "catchup-assessment.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "check-context.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "daily-synthesis.md").is_file()
@@ -206,6 +207,7 @@ def test_render_core_prompt_supports_json_and_drive_classifier_templates():
         "drive-area-classifier-user",
         text="The sender mailbox keeps bouncing customer replies.",
     )
+    autonomy_question = core_prompts.render_core_prompt("autonomy-mandate-question")
     drive_system = core_prompts.render_core_prompt("drive-signal-classifier-system")
     drive_user = core_prompts.render_core_prompt(
         "drive-signal-classifier-user",
@@ -218,6 +220,7 @@ def test_render_core_prompt_supports_json_and_drive_classifier_templates():
     assert "protocol_summary" in conversion
     assert "session-123" in deep_sleep_json
     assert "cannot_comply" in deep_sleep_json
+    assert "stop deferring normal in-scope work" in autonomy_question
     assert "exactly nine labels: shopify, google-ads, meta-ads, wazion, nexo, canaririural, seo, email, none" in area_system
     assert "The sender mailbox keeps bouncing customer replies." in area_user
     assert "one of exactly five labels: anomaly, pattern, gap, opportunity, none" in drive_system
