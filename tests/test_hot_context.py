@@ -130,6 +130,32 @@ def test_heartbeat_warns_when_user_correction_has_no_recent_learning(isolated_db
     assert "nexo_learning_add" in output
 
 
+def test_correction_hint_prefers_semantic_detector_before_legacy_phrases(isolated_db, monkeypatch):
+    import tools_sessions
+
+    importlib.reload(tools_sessions)
+    monkeypatch.setattr(
+        tools_sessions,
+        "_detect_correction_semantic",
+        lambda text: text == "La URL correcta era la otra, no esa.",
+    )
+
+    assert tools_sessions._hint_suggests_correction("La URL correcta era la otra, no esa.") is True
+
+
+def test_correction_hint_falls_back_to_legacy_signals_when_detector_fails(isolated_db, monkeypatch):
+    import tools_sessions
+
+    importlib.reload(tools_sessions)
+
+    def _boom(_text):
+        raise RuntimeError("classifier unavailable")
+
+    monkeypatch.setattr(tools_sessions, "_detect_correction_semantic", _boom)
+
+    assert tools_sessions._hint_suggests_correction("Eso está mal, corrige esto.") is True
+
+
 def test_heartbeat_drive_detection_disables_llm_by_default(isolated_db, monkeypatch):
     import tools_drive
     import tools_sessions

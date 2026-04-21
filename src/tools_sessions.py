@@ -19,6 +19,11 @@ from db import (
     capture_context_event,
 )
 
+try:
+    from r14_correction_learning import detect_correction as _detect_correction_semantic
+except Exception:  # pragma: no cover - optional runtime dependency
+    _detect_correction_semantic = None
+
 # ── Session Keepalive ────────────────────────────────────────────────
 # Background thread per session that auto-pings last_update_epoch every
 # KEEPALIVE_INTERVAL seconds.  This prevents clean_stale_sessions from
@@ -1064,9 +1069,24 @@ def _hint_suggests_code_edit(hint: str) -> bool:
     return any(signal in hint_lower for signal in edit_signals)
 
 
-def _hint_suggests_correction(hint: str) -> bool:
-    """Detect explicit user correction signals in a heartbeat context hint."""
-    hint_lower = hint.lower()
+def _hint_suggests_correction(hint: str, *, correction_detector=None) -> bool:
+    """Detect user-correction intent in a heartbeat context hint.
+
+    Prefer the same semantic detector used by R14 so heartbeat reminders do
+    not depend primarily on literal ES/EN phrase lists. Keep the old keyword
+    fallback as a conservative safety net when the classifier is unavailable.
+    """
+    text = (hint or "").strip()
+    if not text:
+        return False
+    detector = correction_detector if correction_detector is not None else _detect_correction_semantic
+    if detector is not None:
+        try:
+            if bool(detector(text)):
+                return True
+        except Exception:
+            pass
+    hint_lower = text.lower()
     correction_signals = [
         "that's wrong",
         "that is wrong",
