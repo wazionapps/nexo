@@ -151,7 +151,10 @@ def test_refresh_installed_manifest_packaged_mode_uses_npm_src_for_core_artifact
     monkeypatch.setenv("NEXO_HOME", str(runtime_home))
     monkeypatch.setattr(update, "NEXO_HOME", runtime_home)
     monkeypatch.setattr(update, "SRC_DIR", runtime_home)
+    # B10 mini-refactor: callsites moved from the _PACKAGED_INSTALL constant
+    # to the _is_packaged_install() helper, so monkey-patch the helper too.
     monkeypatch.setattr(update, "_PACKAGED_INSTALL", True)
+    monkeypatch.setattr(update, "_is_packaged_install", lambda: True)
     monkeypatch.setattr(update, "_find_npm_pkg_src", lambda: npm_src)
 
     update._refresh_installed_manifest()
