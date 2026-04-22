@@ -166,6 +166,67 @@ class TestLearnWeightsShadowAndGraduation:
         assert state.get("learned_weights")
         assert len(state["learned_weights"]) == 6
 
+    def test_empirical_promotion_activates_after_200_samples_and_2_days(
+        self, adaptive_env, monkeypatch
+    ):
+        """v7.2.0 G5: promote to active when data is solid, not only on the calendar."""
+        db, adaptive_mode = _reload_adaptive_stack(monkeypatch, adaptive_env)
+        db.init_db()
+
+        # 210 samples over the last few days — well above the 200 empirical bar.
+        _seed_adaptive_log_with_feedback(db, rows=210)
+
+        # Learning started 3 days ago. Still short of the 14-day calendar rule
+        # but the empirical rule should kick in because 210 ≥ 200 AND 3 ≥ 2.
+        state = adaptive_mode._load_state()
+        state["learned_weights_first_date"] = (
+            datetime.utcnow() - timedelta(days=3)
+        ).strftime("%Y-%m-%dT%H:%M:%S")
+        adaptive_mode._save_state(state)
+
+        result = adaptive_mode.learn_weights(min_samples=30)
+        assert result["status"] == "active"
+        assert result["mode"] == "active"
+        state = adaptive_mode._load_state()
+        assert state.get("learned_weights")
+
+    def test_empirical_promotion_suppressed_with_opt_out_env(
+        self, adaptive_env, monkeypatch
+    ):
+        """Operator opt-out falls back to the 14-day calendar rule."""
+        db, adaptive_mode = _reload_adaptive_stack(monkeypatch, adaptive_env)
+        db.init_db()
+
+        _seed_adaptive_log_with_feedback(db, rows=210)
+        state = adaptive_mode._load_state()
+        state["learned_weights_first_date"] = (
+            datetime.utcnow() - timedelta(days=3)
+        ).strftime("%Y-%m-%dT%H:%M:%S")
+        adaptive_mode._save_state(state)
+
+        monkeypatch.setenv("NEXO_ADAPTIVE_EMPIRICAL_PROMOTION", "off")
+        result = adaptive_mode.learn_weights(min_samples=30)
+        assert result["status"] == "shadow"
+        state = adaptive_mode._load_state()
+        assert state.get("learned_weights") is None or "learned_weights" not in state
+
+    def test_empirical_promotion_needs_at_least_two_days(
+        self, adaptive_env, monkeypatch
+    ):
+        """Plenty of samples but only 1 calendar day → stay in shadow."""
+        db, adaptive_mode = _reload_adaptive_stack(monkeypatch, adaptive_env)
+        db.init_db()
+
+        _seed_adaptive_log_with_feedback(db, rows=210)
+        state = adaptive_mode._load_state()
+        state["learned_weights_first_date"] = (
+            datetime.utcnow() - timedelta(days=1)
+        ).strftime("%Y-%m-%dT%H:%M:%S")
+        adaptive_mode._save_state(state)
+
+        result = adaptive_mode.learn_weights(min_samples=30)
+        assert result["status"] == "shadow"
+
 
 # ── Rollback safety ────────────────────────────────────────────────────────
 

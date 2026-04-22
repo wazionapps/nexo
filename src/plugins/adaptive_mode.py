@@ -540,7 +540,22 @@ def learn_weights(min_samples: int = 30, lookback_days: int = 30) -> dict:
         drift = {name: round(learned[name] - WEIGHTS[name], 4) for name in signal_names}
         max_drift = max(abs(d) for d in drift.values())
 
-        # Shadow mode: first 2 weeks, only LOG without activating
+        # Shadow → active promotion (v7.2.0, master Block K G5):
+        #
+        # Historical rule was "shadow for the first 14 days after the first
+        # learned-weights compute, regardless of sample volume". That was
+        # safe but biased: on an active install the learner already has
+        # hundreds of samples by day 2, yet the promotion waited two full
+        # weeks. The inhibition rate stays above the 30-60% target the
+        # whole time, and any real drift is painfully slow to react to.
+        #
+        # New rule: promote to active when EITHER
+        #   (a) the classic 14-day window has elapsed, OR
+        #   (b) the learner has ≥200 samples AND ≥2 calendar days of data.
+        #
+        # Operator opt-out: set NEXO_ADAPTIVE_EMPIRICAL_PROMOTION=off to
+        # fall back to the 14-day-only rule. Env override is checked on
+        # every call so a flipped install can be reverted without restart.
         first_learned_date = state.get("learned_weights_first_date")
         if not first_learned_date:
             first_learned_date = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
@@ -548,7 +563,16 @@ def learn_weights(min_samples: int = 30, lookback_days: int = 30) -> dict:
 
         first_dt = datetime.strptime(first_learned_date, "%Y-%m-%dT%H:%M:%S")
         days_since_first = (datetime.utcnow() - first_dt).days
-        is_shadow = days_since_first < 14
+        empirical_opt_out = (
+            os.environ.get("NEXO_ADAPTIVE_EMPIRICAL_PROMOTION", "").strip().lower() == "off"
+        )
+        calendar_ready = days_since_first >= 14
+        empirical_ready = (
+            (not empirical_opt_out)
+            and len(rows) >= 200
+            and days_since_first >= 2
+        )
+        is_shadow = not (calendar_ready or empirical_ready)
 
         state["shadow_weights"] = learned
         state["shadow_weights_date"] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
