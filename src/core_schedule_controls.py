@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import platform
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -207,6 +208,51 @@ def _save_core_schedule_overrides(overrides: dict[str, dict[str, Any]]) -> Path:
     tmp_path.write_text(json.dumps(overrides, indent=2, ensure_ascii=False) + "\n")
     tmp_path.replace(path)
     return path
+
+
+def _audit_log_path() -> Path:
+    home = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+    # Prefer the F0.6 runtime/logs location with a legacy fallback so audit
+    # entries remain contiguous across installs that have not yet migrated.
+    new = home / "runtime" / "logs" / "core-schedule-overrides.log"
+    legacy = home / "logs" / "core-schedule-overrides.log"
+    if new.parent.is_dir() or not legacy.parent.is_dir():
+        return new
+    return legacy
+
+
+def _append_override_audit(
+    *,
+    name: str,
+    action: str,
+    previous: dict[str, Any],
+    current: dict[str, Any],
+    warning: str,
+    actor: str,
+) -> None:
+    """Append a single-line JSON audit record for a schedule override change.
+
+    Writes to ``~/.nexo/runtime/logs/core-schedule-overrides.log`` (or the
+    legacy location on pre-F0.6 installs). Best-effort only: a failed log
+    write never blocks the override itself.
+    """
+    try:
+        log_path = _audit_log_path()
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        record = {
+            "ts": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
+            "name": name,
+            "action": action,
+            "previous": previous,
+            "current": current,
+            "warning": warning or "",
+            "actor": actor or "cli",
+        }
+        with log_path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+    except Exception:
+        # Audit logging is best-effort — never fail the operator action.
+        pass
 
 
 def _apply_calendar_override(base_cron: dict[str, Any], start_hour: str) -> dict[str, Any]:
@@ -417,6 +463,7 @@ def set_core_schedule(
     interval_seconds: int | None = None,
     daily_at: str | None = None,
     clear: bool = False,
+    actor: str = "cli",
 ) -> dict[str, Any]:
     clean_name = _normalize_name(name)
     if clean_name in _TOGGLEABLE_AUTOMATIONS:
@@ -437,6 +484,7 @@ def set_core_schedule(
         }
 
     overrides = load_core_schedule_overrides()
+    previous_snapshot = dict(overrides.get(clean_name) or {})
     changed = False
     warning = ""
     if clear:
@@ -482,6 +530,24 @@ def set_core_schedule(
         }
 
     config_path = _save_core_schedule_overrides(overrides)
+
+    if changed:
+        current_snapshot = dict(overrides.get(clean_name) or {})
+        if clear:
+            audit_action = "clear"
+        elif not previous_snapshot:
+            audit_action = "set"
+        else:
+            audit_action = "update"
+        _append_override_audit(
+            name=clean_name,
+            action=audit_action,
+            previous=previous_snapshot,
+            current=current_snapshot,
+            warning=warning,
+            actor=actor,
+        )
+
     sync_result = _sync_core_crons_runtime()
     refreshed = get_core_schedule_status(clean_name)
     refreshed.update({
