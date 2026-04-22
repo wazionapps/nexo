@@ -229,7 +229,11 @@ def test_loader_prefers_table_over_legacy_json(isolated_home):
     assert cfg["_source"] == "email_accounts"
     assert cfg["operator_email"] == "owner@company.com"
     assert cfg["operator_aliases"] == ["owner@company.com"]
-    assert cfg["francisco_emails"] == ["owner@company.com"]
+    # ``francisco_emails`` no longer round-trips through email_config.py:
+    # it leaked an operator identity and callers must now read
+    # ``operator_aliases`` instead. The legacy key is still tolerated at
+    # ingest time (see other tests) to preserve upgrades from old JSON.
+    assert "francisco_emails" not in cfg
     assert cfg["default_operator_account"]["email"] == "owner@company.com"
     assert len(cfg["operator_accounts"]) == 1
 
