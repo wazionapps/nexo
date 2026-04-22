@@ -87,6 +87,70 @@ def _load_user_name(calibration_path: Path) -> str:
         return ""
 
 
+_CLASSIFIER_LABELS = (
+    "user_decision_required",
+    "waiting_for_external_response",
+    "agent_automation_cron",
+    "other_shared",
+)
+_CLASSIFIER_CONFIDENCE_FLOOR = 0.55
+
+
+def _load_local_classifier():
+    """Lazy import the zero-shot classifier. Returns None if unavailable."""
+    try:
+        # classifier_local lives next to the ``scripts`` dir at runtime; add
+        # the parent so both in-repo (``src/``) and installed
+        # (``~/.nexo/core/``) layouts find it.
+        here = Path(__file__).resolve().parent
+        for candidate in (here.parent, here.parent.parent):
+            sys_path = str(candidate)
+            if sys_path not in sys.path:
+                sys.path.insert(0, sys_path)
+        from classifier_local import (  # type: ignore
+            LocalZeroShotClassifier,
+            is_local_classifier_available_with_install_state,
+        )
+    except Exception:
+        return None
+    try:
+        if not is_local_classifier_available_with_install_state():
+            return None
+        return LocalZeroShotClassifier()
+    except Exception:
+        return None
+
+
+def _classify_with_local_llm(description: str, classifier) -> str | None:
+    """Ask the local zero-shot classifier to pick a semantic owner label.
+
+    Returns the mapped owner string ('user', 'waiting', 'agent', 'shared')
+    or None when the classifier is unavailable, low-confidence, or the text
+    is too short to be worth invoking the model. The 40-character floor
+    mirrors classifier_local's own noise-discard threshold and keeps the
+    migration-time batch cheap.
+    """
+    if classifier is None:
+        return None
+    text = (description or "").strip()
+    if len(text) < 40:
+        return None
+    try:
+        result = classifier.classify(text, _CLASSIFIER_LABELS)
+    except Exception:
+        return None
+    if result is None:
+        return None
+    if result.confidence < _CLASSIFIER_CONFIDENCE_FLOOR:
+        return None
+    return {
+        "user_decision_required": "user",
+        "waiting_for_external_response": "waiting",
+        "agent_automation_cron": "agent",
+        "other_shared": "shared",
+    }.get(result.label)
+
+
 def classify(
     *,
     item_id: str,
@@ -94,8 +158,17 @@ def classify(
     category: str,
     recurrence: str,
     user_name: str,
+    classifier=None,
 ) -> str:
-    """Return one of 'user', 'waiting', 'agent', 'shared'."""
+    """Return one of 'user', 'waiting', 'agent', 'shared'.
+
+    The structural signals (id prefix, category, recurrence) stay rule-based
+    because they are unambiguous and cheap. The textual signals (waiting /
+    agent / user intent from the description) prefer the local zero-shot
+    classifier when available; the Spanish/English keyword regexes stay as
+    a graceful fallback so installs without the classifier model still
+    migrate correctly.
+    """
     tid = (item_id or "").strip().lower()
     if tid.startswith("nf-protocol-"):
         return "user"
@@ -110,6 +183,9 @@ def classify(
     desc = description or ""
     desc_low = desc.lower()
 
+    # Operator-name proximity remains a structural signal — if the row
+    # explicitly calls out <OperatorName> deciding/reviewing/etc., we trust
+    # that without burning an LLM call.
     if user_name:
         name_low = user_name.lower()
         user_verbs = "|".join(re.escape(v) for v in _USER_VERBS_ES + _USER_VERBS_EN)
@@ -119,6 +195,10 @@ def classify(
         )
         if name_verb_rx.search(desc_low):
             return "user"
+
+    llm_label = _classify_with_local_llm(desc, classifier)
+    if llm_label is not None:
+        return llm_label
 
     for rx in _compile(_WAITING_PHRASES):
         if rx.search(desc_low):
@@ -189,6 +269,10 @@ def run(
     if not db_path.exists():
         raise SystemExit(f"nexo.db not found at {db_path}")
     user_name = _load_user_name(calibration_path)
+    # Load the zero-shot classifier once up front so the migration loop does
+    # not pay repeated import/init overhead. Returns None on installs without
+    # transformers/model — the regex fallback still produces correct owners.
+    classifier = _load_local_classifier()
 
     conn = sqlite3.connect(str(db_path))
     try:
@@ -207,6 +291,7 @@ def run(
                     category=row["category"],
                     recurrence=row["recurrence"],
                     user_name=user_name,
+                    classifier=classifier,
                 )
                 plans.append({"table": table, "id": row["id"], "owner": owner})
 
