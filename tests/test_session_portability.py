@@ -20,7 +20,11 @@ def portability_runtime(isolated_db, monkeypatch):
     importlib.reload(db_episodic)
     importlib.reload(db)
     importlib.reload(tools_sessions)
-    monkeypatch.setattr(tools_sessions, "SESSION_PORTABILITY_DIR", Path(isolated_db["nexo_db"]).parent / "portability")
+    portability_dir = Path(isolated_db["nexo_db"]).parent / "portability"
+    # Override the lazy path helper so internal callers resolve to the
+    # isolated sandbox. The former ``SESSION_PORTABILITY_DIR`` constant is
+    # still exposed via PEP 562 __getattr__ for external callers.
+    monkeypatch.setattr(tools_sessions, "_session_portability_dir", lambda: portability_dir)
     yield
 
 

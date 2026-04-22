@@ -46,10 +46,41 @@ from db_guard import (
     validate_backup_matches_source,
 )
 
-NEXO_HOME = export_resolved_nexo_home()
-DATA_DIR = paths.data_dir()
-BACKUP_BASE = paths.backups_dir()
-PRIMARY_DB = DATA_DIR / "nexo.db"
+# Path resolution moved to lazy helpers (AUDITOR-V700-PASS2 §11, B10 item 3)
+# to keep monkeypatched NEXO_HOME / paths.* fixtures honoured. PEP 562
+# ``__getattr__`` below preserves the legacy constant names for any caller
+# that imports them as module attributes.
+
+
+def _nexo_home() -> Path:
+    return export_resolved_nexo_home()
+
+
+def _data_dir() -> Path:
+    return paths.data_dir()
+
+
+def _backup_base() -> Path:
+    return paths.backups_dir()
+
+
+def _primary_db() -> Path:
+    return _data_dir() / "nexo.db"
+
+
+_LAZY_PATHS = {
+    "NEXO_HOME": _nexo_home,
+    "DATA_DIR": _data_dir,
+    "BACKUP_BASE": _backup_base,
+    "PRIMARY_DB": _primary_db,
+}
+
+
+def __getattr__(name: str):
+    resolver = _LAZY_PATHS.get(name)
+    if resolver is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    return resolver()
 
 
 # ── Backup discovery ────────────────────────────────────────────────────
@@ -64,24 +95,25 @@ def list_available_backups() -> list[dict]:
     critical_rows, is_usable. Sorted newest-first.
     """
     entries: list[dict] = []
-    if not BACKUP_BASE.is_dir():
+    backup_base = _backup_base()
+    if not backup_base.is_dir():
         return entries
 
     # Hourly backups from nexo-backup.sh
-    for entry in BACKUP_BASE.glob(HOURLY_BACKUP_GLOB):
+    for entry in backup_base.glob(HOURLY_BACKUP_GLOB):
         if not entry.is_file():
             continue
         entries.append(_describe_backup(entry, kind="hourly"))
 
     # Weekly backups
-    weekly_dir = BACKUP_BASE / "weekly"
+    weekly_dir = backup_base / "weekly"
     if weekly_dir.is_dir():
         for entry in weekly_dir.glob("weekly-*.db"):
             if entry.is_file():
                 entries.append(_describe_backup(entry, kind="weekly"))
 
     # pre-update / pre-autoupdate / pre-recover / pre-heal snapshot dirs
-    for subdir in BACKUP_BASE.iterdir():
+    for subdir in backup_base.iterdir():
         if not subdir.is_dir():
             continue
         name = subdir.name
@@ -162,7 +194,7 @@ def recover(
         dry_run: Report what would happen without touching disk.
         target: Override the target DB path (defaults to ~/.nexo/data/nexo.db).
     """
-    target_path = Path(target).expanduser() if target else PRIMARY_DB
+    target_path = Path(target).expanduser() if target else _primary_db()
     target_path.parent.mkdir(parents=True, exist_ok=True)
 
     result: dict = {
@@ -236,7 +268,7 @@ def recover(
             time.sleep(0.5)
 
     # Step 4: snapshot current state to pre-recover/
-    pre_recover_dir = BACKUP_BASE / f"pre-recover-{time.strftime('%Y-%m-%d-%H%M%S')}"
+    pre_recover_dir = _backup_base() / f"pre-recover-{time.strftime('%Y-%m-%d-%H%M%S')}"
     if target_path.is_file():
         pre_recover_dir.mkdir(parents=True, exist_ok=True)
         # Copy the main DB plus any sidecar files (-wal, -shm) with shutil so

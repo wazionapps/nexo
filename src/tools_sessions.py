@@ -32,8 +32,38 @@ except Exception:  # pragma: no cover - optional runtime dependency
 # Threads are daemon=True so they die when the MCP server process exits.
 
 KEEPALIVE_INTERVAL = 600  # 10 min — well inside the 15-min TTL
-NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
-SESSION_PORTABILITY_DIR = paths.operations_dir() / "session-portability"
+
+
+# Path resolution moved to lazy functions (AUDITOR-V700-PASS2 §11, B10 item
+# 3). The prior module-level NEXO_HOME / SESSION_PORTABILITY_DIR constants
+# were evaluated at import time, so tests that monkeypatched NEXO_HOME or
+# paths.operations_dir() after import saw stale values. The ``__getattr__``
+# hook below keeps ``tools_sessions.SESSION_PORTABILITY_DIR`` / ``.NEXO_HOME``
+# working for attribute-style access (re-evaluated on every read). The
+# existing ``monkeypatch.setattr(tools_sessions, "SESSION_PORTABILITY_DIR",
+# ...)`` pattern in tests keeps working because setattr inserts into the
+# module __dict__ and shadows __getattr__.
+
+
+def _nexo_home() -> Path:
+    return Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+
+
+def _session_portability_dir() -> Path:
+    return paths.operations_dir() / "session-portability"
+
+
+_LAZY_PATHS = {
+    "NEXO_HOME": _nexo_home,
+    "SESSION_PORTABILITY_DIR": _session_portability_dir,
+}
+
+
+def __getattr__(name: str):
+    resolver = _LAZY_PATHS.get(name)
+    if resolver is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    return resolver()
 
 _keepalive_threads: dict[str, threading.Event] = {}  # sid → stop_event
 
@@ -264,7 +294,7 @@ def handle_session_export_bundle(sid: str = "", path: str = "") -> str:
         return json.dumps(bundle, ensure_ascii=False)
 
     session_id = bundle["session"]["sid"]
-    export_path = Path(path).expanduser() if path else (SESSION_PORTABILITY_DIR / f"{session_id}.json")
+    export_path = Path(path).expanduser() if path else (_session_portability_dir() / f"{session_id}.json")
     export_path.parent.mkdir(parents=True, exist_ok=True)
     export_path.write_text(json.dumps(bundle, indent=2, ensure_ascii=False) + "\n")
     return json.dumps(
