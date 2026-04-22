@@ -972,6 +972,7 @@ def handle_task_open(
     stakes: str = "",
     context_hint: str = "",
     description: str = "",
+    ack_rules: str = "",
 ) -> str:
     """Open a protocol task with heartbeat, guard, rules, and Cortex already captured.
 
@@ -1216,6 +1217,46 @@ def handle_task_open(
         "preventive_followup": preventive_followup,
         "next_action": next_action,
     }
+
+    # G7 (Francisco 2026-04-22): allow inline acknowledgement of blocking
+    # guard rules so the operator does not have to chain a separate
+    # `nexo_task_acknowledge_guard` call. ``ack_rules`` accepts any of:
+    #   "#95,#156"   "95,156"   "95 156"   "[95, 156]"
+    # and delegates to ``handle_task_acknowledge_guard`` which already
+    # validates that every blocking rule is covered.
+    if ack_rules and isinstance(ack_rules, str) and ack_rules.strip():
+        raw = ack_rules.replace("#", "").strip()
+        _resolved_task_id = str(response.get("task_id") or "").strip()
+        _has_blocking = bool(
+            (response.get("guard") or {}).get("has_blocking")
+        )
+        if _has_blocking and _resolved_task_id:
+            ack_result_raw = handle_task_acknowledge_guard(
+                sid=sid,
+                task_id=_resolved_task_id,
+                learning_ids=raw,
+            )
+            try:
+                ack_payload = json.loads(ack_result_raw)
+            except Exception:
+                ack_payload = {"ok": False, "error": "ack_guard_parse_failed"}
+            response["ack_guard"] = ack_payload
+            if ack_payload.get("ok"):
+                # Refresh the blocking flag + next_action so the caller
+                # sees the post-ack state instead of the stale pre-ack one.
+                response["guard"] = response.get("guard") or {}
+                response["guard"]["acknowledged_inline"] = True
+                response["next_action"] = (
+                    "Blocking guard rules acknowledged inline via task_open."
+                )
+        else:
+            response["ack_guard"] = {
+                "ok": False,
+                "skipped": True,
+                "reason": (
+                    "No blocking guard rules on this task — ack_rules had nothing to acknowledge."
+                ),
+            }
     return json.dumps(response, ensure_ascii=False, indent=2)
 
 
