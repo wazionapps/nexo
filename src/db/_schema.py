@@ -1237,6 +1237,60 @@ def _m49_protocol_guard_ack_backfill(conn):
     _migrate_add_column(conn, "protocol_tasks", "guard_acknowledged_at", "TEXT DEFAULT NULL")
 
 
+def _m50_dedupe_nexo_product_learning_pair(conn):
+    """Block D.2 / G7-adjacent: dedupe the two learnings that encode the
+    "NEXO Brain producto público vs instancia personal de Francisco"
+    invariant as a physically separate pair.
+
+    Francisco's runtime has this concept stored twice (historical IDs 212
+    and 224). Guard dedup already collapses them at display time, but
+    the underlying rows stayed split, so list/search/update flows still
+    saw two rows. Physically supersede the older one by pointing its
+    ``supersedes_id`` at the newer duplicate and flipping its status to
+    ``superseded``. Anything newer than both is left untouched.
+
+    Idempotent. Fresh installs that never created either row silently
+    do nothing; installs where an operator has already set the relation
+    manually do nothing. The migration matches on a text-normalised form
+    of the title so synonymous wording on both rows is enough — we don't
+    need identical strings, and we don't need the IDs to literally be
+    212 and 224.
+    """
+    try:
+        rows = conn.execute(
+            "SELECT id, title, content, status, supersedes_id FROM learnings "
+            "WHERE status = 'active'"
+        ).fetchall()
+    except Exception:
+        return
+
+    def _norm(text: str) -> str:
+        # Collapse whitespace and strip punctuation/case so "NEXO Brain
+        # producto público vs instancia personal" matches its twin no
+        # matter how the operator rephrased it.
+        import re as _re
+        stripped = _re.sub(r"[\W_]+", " ", str(text or "")).strip().lower()
+        return _re.sub(r"\s+", " ", stripped)
+
+    marker = "nexo brain producto"
+    candidates = [r for r in rows if marker in _norm(r[1] or "")]
+    # Need at least two rows for this migration to do anything.
+    if len(candidates) < 2:
+        return
+    # Sort by id ascending; the highest id is the canonical survivor.
+    candidates.sort(key=lambda r: int(r[0] or 0))
+    survivor = candidates[-1]
+    for older in candidates[:-1]:
+        older_id = int(older[0] or 0)
+        if int(older[4] or 0) == int(survivor[0] or 0):
+            continue  # already linked
+        conn.execute(
+            "UPDATE learnings SET supersedes_id = ?, status = 'superseded', "
+            "updated_at = strftime('%s','now') WHERE id = ? AND status = 'active'",
+            (int(survivor[0] or 0), older_id),
+        )
+
+
 def _m44_entities_extended_schema(conn):
     """Plan Consolidado 0.3 — extend entities with aliases/metadata/source/confidence/access_mode.
 
@@ -1307,6 +1361,7 @@ MIGRATIONS = [
     (47, "email_operator_accounts", _m47_email_operator_accounts),
     (48, "email_agent_contract_backfill", _m48_email_agent_contract_backfill),
     (49, "protocol_guard_ack_backfill", _m49_protocol_guard_ack_backfill),
+    (50, "dedupe_nexo_product_learning_pair", _m50_dedupe_nexo_product_learning_pair),
 ]
 
 
