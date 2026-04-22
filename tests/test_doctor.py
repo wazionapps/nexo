@@ -173,6 +173,36 @@ class TestBootChecks:
         assert check.status == "healthy"
         assert set(check.evidence) == {"schedule.json", "optionals.json", "crons/manifest.json"}
 
+    def test_core_dev_absent_on_packaged_install_is_healthy(self, nexo_home):
+        # Packaged layout: core/ exists, no src/, and core-dev/ is absent.
+        (nexo_home / "core").mkdir(parents=True, exist_ok=True)
+        from doctor.providers.boot import check_core_dev_packaged_install
+        check = check_core_dev_packaged_install()
+        assert check.status == "healthy"
+        assert check.id == "boot.core_dev_absent_on_packaged"
+
+    def test_core_dev_present_on_packaged_install_is_warn(self, nexo_home):
+        (nexo_home / "core").mkdir(parents=True, exist_ok=True)
+        core_dev = nexo_home / "core-dev"
+        (core_dev / "scripts").mkdir(parents=True, exist_ok=True)
+        (core_dev / "scripts" / "experimental.py").write_text("# dev leftover\n")
+        from doctor.providers.boot import check_core_dev_packaged_install
+        check = check_core_dev_packaged_install()
+        assert check.status == "degraded"
+        assert check.severity == "warn"
+        assert any(str(core_dev) in ev for ev in check.evidence)
+        assert any(f"rm -rf {core_dev}" in plan for plan in check.repair_plan)
+
+    def test_core_dev_present_on_dev_install_is_healthy(self, nexo_home):
+        # Dev layout: core/ exists AND src/ exists → core-dev/ is legitimate.
+        (nexo_home / "core").mkdir(parents=True, exist_ok=True)
+        (nexo_home / "src").mkdir(parents=True, exist_ok=True)
+        (nexo_home / "core-dev" / "scripts").mkdir(parents=True, exist_ok=True)
+        from doctor.providers.boot import check_core_dev_packaged_install
+        check = check_core_dev_packaged_install()
+        assert check.status == "healthy"
+        assert "dev install" in check.summary
+
 
 class TestRuntimeChecks:
     def test_fresh_immune(self, nexo_home):
