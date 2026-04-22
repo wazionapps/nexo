@@ -193,6 +193,18 @@
       "run_on_wake": true
     },
     {
+      "id": "guardian-metrics",
+      "script": "scripts/guardian_metrics_aggregate.py",
+      "schedule": {"hour": 2, "minute": 15},
+      "description": "Plan Consolidado 0.25 — daily aggregation of Guardian KPIs (capture rate, core rule violations, declared-done without evidence, false-positive correction, minutes between guard_check failures) from guardian-telemetry.ndjson to guardian-metrics.ndjson. Feeds Fase C gate + Guardian Proposals panel.",
+      "core": true,
+      "recovery_policy": "catchup",
+      "idempotent": true,
+      "max_catchup_age": 172800,
+      "run_on_boot": false,
+      "run_on_wake": false
+    },
+    {
       "id": "auto-close-sessions",
       "script": "auto_close_sessions.py",
       "interval_seconds": 300,

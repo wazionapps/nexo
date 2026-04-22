@@ -104,6 +104,80 @@
       }
     },
     {
+      "type": "destructive_command",
+      "name": "curl_pipe_shell",
+      "aliases": [
+        "curl | bash",
+        "curl | sh",
+        "wget | bash",
+        "wget | sh"
+      ],
+      "metadata": {
+        "shell": "posix",
+        "severity": "critical",
+        "pattern": "(curl|wget)[^|]*\\|\\s*(sudo\\s+)?(bash|sh|zsh)\\b",
+        "note": "Piping network content straight to shell executes unreviewed code"
+      }
+    },
+    {
+      "type": "destructive_command",
+      "name": "dd_to_device",
+      "aliases": [
+        "dd of=/dev/"
+      ],
+      "metadata": {
+        "shell": "posix",
+        "severity": "critical",
+        "pattern": "\\bdd\\s+.*?\\bof=/dev/\\S+",
+        "note": "dd writing to a block device wipes whatever is there"
+      }
+    },
+    {
+      "type": "destructive_command",
+      "name": "chmod_recursive_wide_open",
+      "aliases": [
+        "chmod -R 777",
+        "chmod -R 666",
+        "chmod -R a+rw"
+      ],
+      "metadata": {
+        "shell": "posix",
+        "severity": "high",
+        "pattern": "\\bchmod\\s+-R\\s+(777|666|a\\+rw)\\b",
+        "note": "Recursive world-writable is almost never intended"
+      }
+    },
+    {
+      "type": "destructive_command",
+      "name": "ssh_remote_overwrite",
+      "aliases": [
+        "ssh host \"cat > file\"",
+        "ssh host \"tee file\"",
+        "ssh host \"sed -i ...\"",
+        "ssh host \"echo ... > file\""
+      ],
+      "metadata": {
+        "shell": "ssh",
+        "severity": "high",
+        "pattern": "\\bssh\\b[^'\"`]*?(?:['\"`])(?:[^'\"`]*?)(?:cat\\s*>>?\\s|tee\\s|sed\\s+-i\\b|echo\\s.*\\s>>?\\s|rm\\s+-\\S*[rRfF])",
+        "note": "Remote-write patterns routed through ssh bypass the local destructive gate"
+      }
+    },
+    {
+      "type": "destructive_command",
+      "name": "scp_rsync_upload",
+      "aliases": [
+        "scp local host:path",
+        "rsync local host:path"
+      ],
+      "metadata": {
+        "shell": "ssh",
+        "severity": "medium",
+        "pattern": "\\b(scp|rsync)\\b[^|&;]*?\\s\\S+\\s+[^:\\s]+:[^\\s]+",
+        "note": "Upload direction mutates remote filesystem"
+      }
+    },
+    {
       "type": "legacy_path",
       "name": "claude_hooks_to_nexo",
       "aliases": [],
