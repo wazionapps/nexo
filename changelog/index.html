@@ -93,7 +93,7 @@
                     <span class="page-chip">Adaptive empirical</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v740" class="btn btn-primary">Start with v7.4.0</a>
+                    <a href="#v741" class="btn btn-primary">Start with v7.4.1</a>
                     <a href="#v7110" class="btn btn-secondary">See v7.1.10</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -192,6 +192,16 @@
 <section class="section-compact" style="background:rgba(124,58,237,0.08);">
     <div class="container desktop-disclaimer" style="max-width:860px;font-size:13px;line-height:1.55;">
         <p><strong>Sobre NEXO Desktop.</strong> NEXO Desktop es un cliente acompa&ntilde;ante closed-source distribuido aparte en <a href="https://nexo-desktop.com/">nexo-desktop.com</a>. Cuando una entrada de changelog menciona "NEXO Desktop" se refiere a una versi&oacute;n coordinada de ese cliente que consume el contrato CLI/MCP del Brain. El c&oacute;digo de Desktop no vive en este repo; el Brain (AGPL-3.0) es 100% usable por s&iacute; solo desde terminal, Codex, Claude Code, o cualquier cliente MCP.</p>
+    </div>
+</section>
+
+<section id="v741" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.4.1 <span style="opacity:.5;font-weight:400;">&mdash; April 22, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">guardian-claude-desktop lifecycle closure &mdash; ledger/authority split made explicit, partner Desktop v0.24.1 covers the last 3 routes</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            v7.4.1 corrects the over-promise in the v7.4.0 release notes and locks in the exact role of <code>nexo_lifecycle_event</code>: a <strong>ledger + reconciliation authority</strong>, NOT the canonical executor of <code>diary+stop</code>. Diary+stop injection still happens in Desktop's <code>closeConversationGraceful</code> (the only place that writes to the live Claude process's stdin). Moving that responsibility to Brain requires a Brain&harr;Claude-session bridge that does not exist yet and is scheduled for v7.5 (followup <code>NF-V75-CANONICAL-DIARY-AUTHORITY</code>). The paired Desktop v0.24.1 wires the remaining <code>switch</code> / <code>window-close</code> / <code>app-exit</code> transitions through the same durable service, adds an NDJSON telemetry trail keyed by <code>event_id</code> (kinds: <em>enqueued, sent, acked, retry, reconciled, failed</em>), and an exponential backoff schedule in the reconciler (2s, 8s, 30s, 2m, 10m, 30m, 1h, 2h, 4h, 8h). Brain needed no code change for any of that &mdash; the ledger already accepted every action from day one. No schema migration in this patch; the <code>lifecycle_events</code> table shipped by migration m51 in v7.4.0 already covers all six actions. <code>VALID_ACTIONS</code> stays frozen at <code>close / delete / archive / switch / app-exit / window-close</code>, enforced by a contract test. Total MCP tool count unchanged (262).
+        </p>
     </div>
 </section>
 
