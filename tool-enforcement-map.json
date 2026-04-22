@@ -3214,7 +3214,7 @@
             "threshold": 1
           }
         ],
-        "inject_prompt": "You must start by calling nexo_startup to register this session. Execute it now with a brief task description. Do not produce visible text.",
+        "inject_prompt": "You must start by calling nexo_startup to register this session. If mcp__nexo__* tools appear as deferred in the tool list (names visible but JSONSchemas not loaded), first call ToolSearch with query \"select:mcp__nexo__nexo_startup,mcp__nexo__nexo_heartbeat,mcp__nexo__nexo_session_diary_read,mcp__nexo__nexo_reminders,mcp__nexo__nexo_smart_startup\" to load the schemas — deferred is not absent. Then execute nexo_startup with a brief task description. Do not produce visible text.",
         "triggers_after": [
           "nexo_smart_startup",
           "nexo_session_diary_read",
