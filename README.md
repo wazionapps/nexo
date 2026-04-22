@@ -18,7 +18,22 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `6.0.6` is the current packaged-runtime line: the installer no longer leaks `export PATH="$NEXO_HOME/bin:$PATH"` into the developer's real shell profile (`~/.bash_profile`, `~/.bashrc`, `~/.zshrc`) when `NEXO_HOME` points somewhere other than the canonical `$HOME/.nexo` — the classic case being any pytest run with `NEXO_HOME=/tmp/pytest-xxx`. Both the Python path (`src/auto_update.py::_ensure_runtime_cli_in_shell`) and the two JavaScript twins in `bin/nexo-brain.js` (install Step 8 and the migration path that restores the operator alias) now consult `_should_skip_shell_profile_backfill()` / `shouldSkipShellProfileBackfill()` and skip the write whenever `NEXO_HOME` is non-canonical, with `NEXO_SKIP_SHELL_PROFILE=1` as an explicit escape hatch. Fresh installs at `$HOME/.nexo` are unaffected. Release also carries v6.0.5's strict-hook `unknown target` fix and the pytest CI gate that caught this regression in the first place.
+Version `7.1.8` is the current packaged-runtime line. It batches the Block K Guardian/Enforcer roadmap (auto-drain of stale `protocol_debt` rows, destructive-command pre-tool gate, `guard_check`-required gate, inline guard ack on `nexo_task_open`, Guardian Health in the morning briefing) with Block D hardcode cleanup (classifier-backed `backfill_task_owner`, migration v50 supersedes the duplicate NEXO-product learning pair, new semantic-hardcodes audit) and Block E product guards (LaunchAgent plist protection, agent-name fallbacks no longer leak the product identity, `francisco_emails` removed from the email-config dict export, `runner-health-check.py` + `nexo_personal_automation.py` promoted from personal to core). All new gates ship in shadow mode with env-flag rollout to `hard`. No coordinated Desktop release is required for this patch; Desktop consumers continue against the same CLI / MCP contract.
+
+Previously in `7.0.1`: hotfix over v7.0.0 (db._core.DB_PATH was only caller still hardcoded to legacy ~/.nexo/data/nexo.db; every shared-DB command silently returned empty results post-migration). Previously in `7.0.0`: **BREAKING — Plan Consolidado fase F0.6**: physical separation of the runtime tree into `~/.nexo/{core,personal,runtime}/`. The flat layout (`~/.nexo/scripts/`, `brain/`, `data/`, `operations/`, ...) is gone. Operators on v6.x are auto-migrated on first `nexo update`; fresh installs land directly in the new tree. New `paths.py` helpers are transition-aware.
+
+Previously in `6.5.0`: Plan Consolidado fase F0.2: operators can now `nexo scripts enable|disable|status <name>` any personal automation. The cron wrapper honours the flag at every tick (`exit 0` with `summary='[disabled]'` while the LaunchAgent stays loaded). The companion NEXO Desktop client (a closed-source product, distributed separately) wires the same toggle into its Automatizaciones panel. See [CHANGELOG](CHANGELOG.md) for the full diff.
+
+> **About NEXO Desktop.** NEXO Desktop is a separate closed-source companion app distributed at [nexo-desktop.com](https://nexo-desktop.com/) — its source does not live in this repo. When release notes mention Desktop they describe a coordinated client release that consumes the Brain's CLI / MCP contract; the Brain itself is fully usable on its own (terminal, Codex, Claude Code, or any MCP client). If you want the product edition rather than the open-source Brain alone, contact `info@wazion.com` and ask about NEXO Desktop.
+
+
+Previously in `6.4.0`: Plan Consolidado fase F1 — multi-tenant email accounts (`email_accounts` table, `nexo email setup` interactive wizard, `nexo email add --password-stdin --json` for machine consumers, idempotent migrator from legacy `~/.nexo/nexo-email/config.json`). On post-F0.6 installs that legacy-looking path is only a compatibility alias/shim into `~/.nexo/runtime/nexo-email/config.json`; it should never be treated as a second source of truth.
+
+Previously in `6.3.1`: privacy hotfix over v6.3.0. The nightly auditor caught that `src/presets/entities_universal.json` in v6.3.0 shipped operator-specific `vhost_mapping` entries (private IPs, hostnames, tenant names). v6.3.1 pulls those out into `src/presets/entities_local.sample.json` (template) + `.gitignore`'d `~/.nexo/brain/presets/entities_local.json` (operator copy), and the installer drops the sample at `nexo init`. No behaviour change on the Guardian side.
+
+Previously in `6.3.0` — Plan Consolidado wave 2, coordinated with NEXO Desktop v0.18.0. Closes the remaining Guardian roadmap items that do not require an invasive structure migration: extended `cognitive_sentiment` shape (is_correction/valence/intent), extended `entities` schema, 21 labelled rule fixtures with R13 spike gates, Fase F telemetry loops + Deep Sleep phase, pinned local zero-shot classifier skeleton (mDeBERTa), hook respects `NEXO_MIGRATING=1`, `origin` column on `personal_scripts`, and the T4 LLM gate wrapping R15/R23e/R23f/R23h (byte-parity Py ↔ JS). Two pre-release auditors flagged a CRITICAL in the first JS wire (method-name + async mismatch) and a HIGH (classifier bool conflated "no" with "unparseable"); both corrected with regression tests before merge.
+
+Previously in `6.1.1`: small fix to `nexo --help` so the `Latest: vX` line reliably appears when NEXO Desktop invokes the CLI via subprocess — unblocks the Desktop Brain auto-update banner that previously couldn't parse the version delta. No behaviour change for interactive terminal users; the 6-hour registry cache still rate-limits network calls. Bundles all v6.1.0 Protocol Enforcer Fase 2 + multi-claude-sid hotfix content.
 
 Previously in `6.0.2`: adds the reserved caller prefix `personal/*` so scripts living in `~/.nexo/scripts/` can invoke the automation backend with their own caller id without editing `src/resonance_map.py`. New kwarg `tier` (`"maximo"` / `"alto"` / `"medio"` / `"bajo"`) on `run_automation_prompt`, `run_automation_interactive`, `nexo_helper.run_automation_text`, `nexo_helper.run_automation_json`, and `nexo-agent-run.py --tier`. Precedence for `personal/*` callers: explicit `tier=` → explicit `reasoning_effort=` → `calibration.preferences.default_resonance` → `DEFAULT_RESONANCE` (`alto`). Registered callers keep their behaviour unchanged. New guide: [`docs/personal-scripts-guide.md`](docs/personal-scripts-guide.md).
 
@@ -55,6 +70,7 @@ Previously in `5.5.3`: CLAUDE.md CORE teaches the model to trust the Protocol En
 Start here:
 - [5-minute quickstart](docs/quickstart-5-minutes.md)
 - [Workflow quickstart](docs/workflows-quickstart.md)
+- [Runtime templates](docs/runtime-templates.md)
 - [Recent memory fallbacks + live system catalog](docs/recent-memory-fallbacks-and-system-catalog.md)
 - [Supported client guides](docs/integrations/cursor.md)
 - [Docker setup](docs/docker-setup.md)
@@ -781,7 +797,7 @@ npx nexo-brain
 The installer handles everything and syncs the same `nexo` MCP brain into Claude Code, Claude Desktop, and Codex when those clients are present:
 
 ```
-  How should I call myself? (default: NEXO) > Atlas
+  How should I call myself? (default: Nova) > Atlas
 
   Can I explore your workspace to learn about your projects? (y/n) > y
 
