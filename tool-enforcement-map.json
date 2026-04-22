@@ -1869,6 +1869,19 @@
       },
       "triggers_after": []
     },
+    "nexo_lifecycle_complete_canonical": {
+      "description": "Close the v7.5 canonical-authority 2-call contract: confirm that Desktop finished executing the canonical_actions Brain handed out.",
+      "category": "lifecycle",
+      "source": "plugin:lifecycle_events",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
     "nexo_media_memory_add": {
       "description": "Store non-text artifact metadata",
       "category": "media",

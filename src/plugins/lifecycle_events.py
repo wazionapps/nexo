@@ -99,15 +99,68 @@ def handle_nexo_lifecycle_status(event_id: str) -> str:
     return json.dumps(row, ensure_ascii=False)
 
 
+def handle_nexo_lifecycle_complete_canonical(
+    event_id: str,
+    canonical_plan_id: str,
+    results: str = "",
+) -> str:
+    """Close the v7.5 canonical-authority 2-call contract.
+
+    Desktop calls this tool after executing every action Brain returned
+    in the ``canonical_actions`` array from ``nexo_lifecycle_event``.
+    Brain then records ``canonical_done_at`` and flips the row status
+    to ``canonical_done`` (or ``retryable_error`` if any action
+    failed).
+
+    Args:
+        event_id: UUID of the original lifecycle event.
+        canonical_plan_id: The plan id Brain returned. Mismatch → rejected.
+        results: JSON-encoded array of per-action outcomes:
+            ``[{"action_id": "a1", "status": "ok"|"failed", ...}, ...]``
+
+    Returns:
+        JSON ack with the effective row status.
+    """
+    parsed_results: list = []
+    if results:
+        try:
+            parsed = json.loads(results)
+            if isinstance(parsed, list):
+                parsed_results = parsed
+            else:
+                parsed_results = [{"status": "failed", "reason": "results-not-array", "raw": str(results)[:200]}]
+        except Exception as exc:
+            parsed_results = [{"status": "failed", "reason": f"malformed-results:{exc}"}]
+
+    try:
+        ack = lifecycle_events.record_complete_canonical(
+            event_id=str(event_id or ""),
+            canonical_plan_id=str(canonical_plan_id or ""),
+            results=parsed_results,
+        )
+    except Exception as exc:
+        return json.dumps({
+            "status": "retryable_error",
+            "reason": f"{type(exc).__name__}: {exc}",
+            "handler_threw": True,
+        }, ensure_ascii=False)
+    return json.dumps(ack, ensure_ascii=False)
+
+
 TOOLS = [
     (
         handle_nexo_lifecycle_event,
         "nexo_lifecycle_event",
-        "Record a durable lifecycle event (close/delete/archive/switch/app-exit/window-close) and return a canonical ack.",
+        "Record a durable lifecycle event (close/delete/archive/switch/app-exit/window-close). In v7.5 Brain returns a canonical_actions plan for diary-triggering actions with a live session_id.",
     ),
     (
         handle_nexo_lifecycle_status,
         "nexo_lifecycle_status",
         "Read the current delivery_status of a lifecycle event. Used by Desktop boot reconciliation.",
+    ),
+    (
+        handle_nexo_lifecycle_complete_canonical,
+        "nexo_lifecycle_complete_canonical",
+        "Confirm that Desktop finished executing the canonical_actions Brain handed out in a prior nexo_lifecycle_event call. Brain marks canonical_done_at only on this confirmation.",
     ),
 ]

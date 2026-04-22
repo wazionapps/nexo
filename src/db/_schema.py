@@ -1351,6 +1351,48 @@ def _m51_lifecycle_events(conn):
     _migrate_add_index(conn, "idx_lifecycle_events_action", "lifecycle_events", "action")
 
 
+def _m52_lifecycle_canonical_plan(conn):
+    """v7.5.0 — Brain promoted to canonical authority for session-end.
+
+    When the Desktop pipeline posts a close / delete / archive / app-exit
+    lifecycle event with a live session_id, Brain now decides the exact
+    prompt + sequence to run against the live Claude process and hands
+    that plan back to Desktop in the same MCP call. Desktop executes
+    the plan inline and confirms via a second call
+    (``nexo_lifecycle_complete_canonical``).
+
+    New columns on ``lifecycle_events``:
+
+    - ``canonical_plan_id`` — deterministic id hash(event_id+plan_version).
+      Used for idempotent retries: Desktop can ask "did you already
+      finish this plan_id" and Brain can dedupe without re-running any
+      diary write.
+    - ``canonical_plan_version`` — schema version of the plan payload
+      (INTEGER, default 1). Lets us evolve the action shape without
+      breaking older Desktop builds.
+    - ``canonical_actions_json`` — the actions array Brain returned,
+      verbatim. Persisted so boot reconciliation can re-send the exact
+      same plan on a crash between dispatch and confirm.
+    - ``canonical_dispatched_at`` — first time Brain returned the plan.
+      Used as the "since" cursor for the session_diary dedup query.
+    - ``canonical_done_at`` — set only when Desktop calls
+      ``nexo_lifecycle_complete_canonical``. Absence + presence of
+      ``canonical_dispatched_at`` == "dispatched but not confirmed".
+    - ``canonical_done_results`` — JSON array of per-action results
+      reported by Desktop, used for telemetry and retry classification.
+
+    Idempotent. Fresh installs already created the table in m51; this
+    migration only ADDs the new columns.
+    """
+    _migrate_add_column(conn, "lifecycle_events", "canonical_plan_id", "TEXT DEFAULT NULL")
+    _migrate_add_column(conn, "lifecycle_events", "canonical_plan_version", "INTEGER DEFAULT NULL")
+    _migrate_add_column(conn, "lifecycle_events", "canonical_actions_json", "TEXT DEFAULT NULL")
+    _migrate_add_column(conn, "lifecycle_events", "canonical_dispatched_at", "TEXT DEFAULT NULL")
+    _migrate_add_column(conn, "lifecycle_events", "canonical_done_at", "TEXT DEFAULT NULL")
+    _migrate_add_column(conn, "lifecycle_events", "canonical_done_results", "TEXT DEFAULT NULL")
+    _migrate_add_index(conn, "idx_lifecycle_events_plan_id", "lifecycle_events", "canonical_plan_id")
+
+
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
     (2, "followups_reasoning", _m2_followups_reasoning),
@@ -1403,6 +1445,7 @@ MIGRATIONS = [
     (49, "protocol_guard_ack_backfill", _m49_protocol_guard_ack_backfill),
     (50, "dedupe_nexo_product_learning_pair", _m50_dedupe_nexo_product_learning_pair),
     (51, "lifecycle_events", _m51_lifecycle_events),
+    (52, "lifecycle_canonical_plan", _m52_lifecycle_canonical_plan),
 ]
 
 

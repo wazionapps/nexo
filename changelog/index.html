@@ -93,13 +93,21 @@
                     <span class="page-chip">Adaptive empirical</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v741" class="btn btn-primary">Start with v7.4.1</a>
-                    <a href="#v7110" class="btn btn-secondary">See v7.1.10</a>
+                    <a href="#v750" class="btn btn-primary">Start with v7.5.0</a>
+                    <a href="#v741" class="btn btn-secondary">See v7.4.1</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
             </div>
             <div class="page-visual">
                 <div class="page-stack">
+                    <div class="page-stack-card">
+                        <strong>v7.5.0</strong>
+                        <span>Minor release. <code>nexo_lifecycle_event</code> promoted to canonical authority of session-end: Brain owns prompt + sequence + timing, Desktop v0.25.0 executes the plan inline. New 2-call contract (event + complete_canonical), deterministic <code>canonical_plan_id</code>, session_diary dedupe, seven <code>delivery_status</code> values. Migration m52. MCP tools 262 &rarr; 263.</span>
+                    </div>
+                    <div class="page-stack-card">
+                        <strong>v7.4.1</strong>
+                        <span>Patch release. Honest correction of v7.4.0 role: <code>nexo_lifecycle_event</code> is a ledger + reconciliation authority, NOT the canonical executor of diary+stop. Partner Desktop v0.24.1 wires switch/window-close/app-exit through the same durable service with NDJSON telemetry + exponential backoff reconciler.</span>
+                    </div>
                     <div class="page-stack-card">
                         <strong>v7.2.0</strong>
                         <span>Minor release consolidating three parallel workstreams into a Guardian-active-by-default train. G1 enforcer + G3 SSH wrapper + persist hard defaults during <code>nexo update</code>. F0.6 hardening: <code>nexo rollback f06</code>, layout contract, doctor checks, Nora migration workflow. Adaptive weights empirical promotion. B10 path constants lazy. Schedule audit log. Pre-release discipline pack.</span>
@@ -192,6 +200,16 @@
 <section class="section-compact" style="background:rgba(124,58,237,0.08);">
     <div class="container desktop-disclaimer" style="max-width:860px;font-size:13px;line-height:1.55;">
         <p><strong>Sobre NEXO Desktop.</strong> NEXO Desktop es un cliente acompa&ntilde;ante closed-source distribuido aparte en <a href="https://nexo-desktop.com/">nexo-desktop.com</a>. Cuando una entrada de changelog menciona "NEXO Desktop" se refiere a una versi&oacute;n coordinada de ese cliente que consume el contrato CLI/MCP del Brain. El c&oacute;digo de Desktop no vive en este repo; el Brain (AGPL-3.0) es 100% usable por s&iacute; solo desde terminal, Codex, Claude Code, o cualquier cliente MCP.</p>
+    </div>
+</section>
+
+<section id="v750" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.5.0 <span style="opacity:.5;font-weight:400;">&mdash; April 22, 2026 &mdash; <strong>MINOR</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">Canonical authority of session-end &mdash; Brain decides, Desktop executes, no polling</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            v7.5.0 promotes <code>nexo_lifecycle_event</code> from ledger + reconciliation authority to <strong>canonical authority of session-end</strong>. Brain now owns the prompt, the sequence, and the timing of diary+stop; NEXO Desktop v0.25.0 (closed-source companion at <a href="https://nexo-desktop.com" style="color:#C4B5FD;">nexo-desktop.com</a>) is the conduit that executes Brain's plan against the live Claude process stdin. The new 2-call contract &mdash; <code>nexo_lifecycle_event</code> returns a versioned <code>canonical_plan</code> (resume_session &rarr; inject_prompt &rarr; stop_session, with stable ids and per-action <code>timeout_ms</code>) and the new <code>nexo_lifecycle_complete_canonical</code> confirms execution with a per-action results array &mdash; replaces polling with explicit acknowledgement. <code>canonical_plan_id</code> is deterministic: <code>sha256(event_id + "|v" + plan_version)[:24]</code>, so retries reuse the same id and clients deduplicate by <code>(event_id, canonical_plan_id)</code>. Schema migration <strong>m52</strong> extends <code>lifecycle_events</code> with six <code>canonical_*</code> columns plus an index; pre-v7.5 rows simply carry <code>NULL</code>. <code>session_diary</code> is the dedupe key on re-delivery: if Desktop crashes between executing the inject and sending the complete call, the next <code>nexo_lifecycle_event</code> call for the same <code>event_id</code> inspects <code>session_diary</code> for a row written after <code>canonical_dispatched_at</code>; if one exists, Brain short-circuits to <code>already_processed</code> and refuses to re-dispatch. Seven explicit <code>delivery_status</code> values (<code>accepted</code> / <code>processed</code> / <code>canonical_pending</code> / <code>canonical_done</code> / <code>already_processed</code> / <code>retryable_error</code> / <code>rejected</code>) give the pipeline a diffable state machine. <code>switch</code> and <code>window-close</code> stay observational (no plan ever issued, even with a live <code>session_id</code>). <code>nexo lifecycle record</code> exit code 0 now covers <code>canonical_pending</code>; older wrappers that treated it as an error are incompatible with v7.5. Tests: 24/24 lifecycle canonical green (plan_id determinism, complete-canonical branches, redelivery after canonical_done, session_diary dedup, retry-after-failed-inject, JSON round-trip). Full pytest suite 2050 passing, 10 pre-existing failures unrelated to v7.5. Total MCP tools 262 &rarr; 263.
+        </p>
     </div>
 </section>
 
