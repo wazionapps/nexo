@@ -322,6 +322,91 @@ def check_dashboard_desktop_contract() -> DoctorCheck:
     )
 
 
+def check_f06_migration_consistency() -> DoctorCheck:
+    """Detect half-migrated F0.6 installs.
+
+    Contract (``docs/f06-layout-contract.md`` §6 rule 5):
+      - F0.6 marker + legacy runtime dirs populated → half-migration.
+      - No marker but canonical ``core/`` already populated → half-migration.
+      - Marker F0.6 with no legacy residue → healthy.
+      - No marker, no canonical ``core/``, pure legacy layout → healthy
+        (pre-F0.6 install waiting for ``nexo update``).
+
+    Half-migration is the scenario where ``paths.coordination_dir()`` (and
+    siblings) silently fall back to the legacy path on an install that
+    *should* be on F0.6. Doctor surfaces it so ``nexo update`` can be
+    asked to finish the job instead of the operator discovering later that
+    half their state lives in the wrong place.
+    """
+    import paths
+    marker = NEXO_HOME / ".structure-version"
+    marker_text = ""
+    if marker.is_file():
+        try:
+            marker_text = marker.read_text().strip().upper().split()[0]
+        except (OSError, IndexError):
+            marker_text = ""
+    is_f06_marked = marker_text.startswith("F0.6")
+
+    core_dir = paths.core_dir()
+    core_populated = core_dir.is_dir() and any(core_dir.iterdir()) if core_dir.exists() else False
+
+    # Legacy runtime dirs that MUST be gone (or be symlinks into canonical F0.6)
+    # once the migration has finished physically.
+    legacy_runtime_names = ("coordination", "data", "logs", "operations")
+    legacy_stragglers: list[str] = []
+    for name in legacy_runtime_names:
+        legacy_path = NEXO_HOME / name
+        if not legacy_path.exists():
+            continue
+        if legacy_path.is_symlink():
+            # A symlink pointing at the canonical runtime/<name> is the
+            # compat shim contract; that is acceptable.
+            continue
+        try:
+            has_content = any(legacy_path.iterdir())
+        except OSError:
+            has_content = False
+        if has_content:
+            legacy_stragglers.append(name)
+
+    if is_f06_marked and legacy_stragglers:
+        return DoctorCheck(
+            id="boot.f06_migration_consistency",
+            tier="boot",
+            status="critical",
+            severity="error",
+            summary="Half-migrated F0.6 install: marker present but legacy runtime dirs still populated",
+            evidence=[f"Marker: {marker_text}"] + [f"Legacy with content: {NEXO_HOME / n}" for n in legacy_stragglers],
+            repair_plan=[
+                "nexo update   # finish the F0.6 migration",
+                "# if update refuses, inspect manifest and consider: nexo rollback f06",
+            ],
+        )
+    if (not is_f06_marked) and core_populated:
+        return DoctorCheck(
+            id="boot.f06_migration_consistency",
+            tier="boot",
+            status="critical",
+            severity="error",
+            summary="Half-migrated F0.6 install: core/ populated but marker absent",
+            evidence=[f"Marker: {marker_text or '(absent)'}", f"core/ path: {core_dir}"],
+            repair_plan=[
+                "nexo update   # re-run migration to write the marker",
+            ],
+        )
+    return DoctorCheck(
+        id="boot.f06_migration_consistency",
+        tier="boot",
+        status="healthy",
+        severity="info",
+        summary=(
+            f"F0.6 marker consistent with layout (marker={marker_text or 'absent'}, "
+            f"legacy_stragglers={len(legacy_stragglers)})"
+        ),
+    )
+
+
 def run_boot_checks(fix: bool = False) -> list[DoctorCheck]:
     """Run all boot-tier checks."""
     checks = [
@@ -333,6 +418,7 @@ def run_boot_checks(fix: bool = False) -> list[DoctorCheck]:
         safe_check(check_config_parse),
         safe_check(check_core_dev_packaged_install),
         safe_check(check_dashboard_desktop_contract),
+        safe_check(check_f06_migration_consistency),
     ]
 
     if fix:
