@@ -245,6 +245,8 @@ def main() -> int:
             readiness_cmd.append("--require-contract-complete")
     elif require_contract_complete:
         print("[release-final-audit] require_contract_complete ignored because contract=none")
+    if include_smoke or final_closeout:
+        readiness_cmd.append("--require-smoke")
     if final_closeout:
         readiness_cmd.append("--final-closeout")
         if protocol_task_id.strip():

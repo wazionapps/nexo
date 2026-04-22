@@ -701,12 +701,18 @@ def _collect_protocol_warnings(conn, *, sid: str, tool_name: str) -> list[dict]:
             if task.get("must_change_log")
             else ""
         )
+        closeout_note = (
+            " If this edit wave came from a user correction or you are leaving a blocker unresolved, "
+            "include `correction_happened=true` with a reusable learning, or `followup_needed=true`, "
+            "when you call `nexo_task_close(...)`."
+        )
         _append_protocol_warning(
             warnings,
             render_core_prompt(
                 "hook-protocol-warning-task-close-evidence",
                 task_id=task_id,
                 change_note=change_note,
+                closeout_note=closeout_note,
             ),
         )
 

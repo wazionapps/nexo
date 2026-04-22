@@ -10,7 +10,9 @@ Use this before claiming a release/publication is closed when you need a live ch
 
 ## Gotchas
 - A missing auto-resolved contract is a real blocker for the final release audit.
-- Smoke is version-line scoped. If no runner exists, the skill reports the skip explicitly instead of pretending it ran.
+- Smoke is version-line scoped. The audit now requires a passing smoke artifact for the current version during final closeout, and the contract can tighten it further with `smoke.required_groups` and `smoke.max_age_hours`.
+- Contracts may declare `critical_surfaces` to open installed/user-facing files or directories and verify markers before publication is considered closed.
+- Contracts may declare `publication.status`, `publication.checklist_complete`, and `publication.blockers`; any open `high`/`critical` blocker now keeps publication blocked.
 - The script is read-only except for the optional official `nexo update` step during `final_closeout`; it still does not bump versions, tag, publish, or edit website worktrees.
 - `final_closeout` is intentionally stricter than the repo-only readiness pass: it fails if the release task was not closed with evidence or if its `change_log` row is missing.
 - If the touched area includes bootstrap, startup, or public claims, finish with the manual watchpoints in `docs/client-parity-checklist.md`.
