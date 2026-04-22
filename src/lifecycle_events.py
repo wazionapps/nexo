@@ -1,36 +1,52 @@
-"""NEXO Brain — canonical lifecycle event handler (v7.4.0).
+"""NEXO Brain — canonical lifecycle event handler (v7.5).
 
-Companion to nexo-desktop's ConversationLifecycleService. Desktop
-persists every conversation/app transition (close / delete / archive /
-switch / window-close / app-exit) to an append-only NDJSON queue BEFORE
-any UI mutation becomes visible, then calls this handler via the
-``nexo_lifecycle_event`` MCP tool. The handler is strictly idempotent:
-re-delivery of the same ``event_id`` returns ``already_processed``
-without replaying any canonical side effect.
+v7.4.x shipped this tool as a pure ledger + reconciliation surface:
+Desktop persisted every conversation lifecycle transition locally,
+called ``nexo_lifecycle_event`` for book-keeping, and ran its own
+hardcoded ``diary + stop`` prompts against the live Claude process
+during ``closeConversationGraceful``.
 
-Canonical side effects are intentionally minimal in this first slice:
+v7.5 promotes this handler to the **canonical authority** for
+session-end. For every ``close`` / ``delete`` / ``archive`` /
+``app-exit`` event with a live ``session_id``, Brain now generates a
+deterministic **canonical plan** (``canonical_plan_id``, versioned
+action list) and hands it back in the same MCP call. Desktop executes
+the plan inline (Desktop is still the only process that can reach the
+Claude proc's stdin) and then calls
+``nexo_lifecycle_complete_canonical`` with per-action results. Brain
+records ``canonical_done_at`` only on that second call — no polling.
 
-- ``close`` / ``delete`` / ``archive`` / ``app-exit`` / ``window-close``
-  → mark processed. Diary / stop inside the conversation are driven by
-  Desktop's graceful-close flow (``conv-close`` IPC → nexo CLI) and
-  remain the authority for that per-conversation payload. This table
-  is the durable ledger so the next boot can reconcile.
-- ``switch`` → mark processed. No canonical side effect beyond the
-  audit trail; the ledger still matters for telemetry and guard
-  invariants ("operator switched away from a conversation that still
-  had uncommitted claims").
+Idempotency is real, not cosmetic:
 
-Return shape matches the plan (lines 94-100):
+1. ``canonical_plan_id`` is deterministic: ``sha256(event_id + version)``.
+   A retry of the same event returns the same plan id, which Desktop
+   can use to skip actions it already completed locally.
+2. Before regenerating a plan for a previously dispatched event, Brain
+   checks whether the session already wrote a ``session_diary`` row
+   after the original ``canonical_dispatched_at``. If it did → the
+   answer is ``already_processed``; no re-dispatch, no duplicate diary.
 
-- ``processed``          first delivery, side effects (if any) done
-- ``already_processed``  duplicate delivery, no re-run
-- ``accepted``           persisted, side effect deferred (not used yet)
-- ``rejected``           malformed input, no persistence
-- ``retryable_error``    transient failure, Desktop should retry
+Status values:
 
-Any row keeps ``delivery_status`` as the latest terminal or retryable
-status so ``nexo_lifecycle_status`` / future reconciliation queries
-can read it directly.
+- ``processed``           first delivery, no canonical plan applicable
+                          (e.g. switch / window-close / missing
+                          session_id).
+- ``canonical_pending``   plan generated and returned. Desktop is
+                          expected to execute + confirm.
+- ``canonical_dispatched`` alias for ``canonical_pending`` on a row
+                          that already has ``canonical_dispatched_at``
+                          set (re-delivery case).
+- ``canonical_done``      Desktop confirmed via complete_canonical.
+- ``already_processed``   idempotent duplicate, no re-run.
+- ``accepted``            persisted, no canonical side effect required.
+- ``rejected``            malformed input.
+- ``retryable_error``     a canonical action failed (inject timeout,
+                          stdin closed, etc). Reconciler can retry
+                          with the same plan_id.
+
+Actions that carry a canonical plan: ``close``, ``delete``, ``archive``,
+``app-exit``. ``switch`` and ``window-close`` still return
+``accepted`` (no live-session work to do).
 """
 from __future__ import annotations
 
@@ -38,6 +54,7 @@ import json
 from typing import Any, Dict, Optional
 
 from db import get_db
+import lifecycle_prompts
 
 
 VALID_ACTIONS = {
@@ -49,8 +66,14 @@ VALID_ACTIONS = {
     "window-close",
 }
 
-TERMINAL_STATUSES = {"processed", "already_processed", "rejected"}
-_DIARY_TRIGGERING = {"close", "delete", "archive", "app-exit"}
+# Terminal for the user of the ledger (no further action expected).
+TERMINAL_STATUSES = {
+    "processed",
+    "canonical_done",
+    "already_processed",
+    "rejected",
+}
+_DIARY_TRIGGERING = lifecycle_prompts.DIARY_TRIGGERING_ACTIONS
 
 
 def _normalise_payload(obj: Any) -> str:
@@ -58,6 +81,26 @@ def _normalise_payload(obj: Any) -> str:
         return json.dumps(obj or {}, ensure_ascii=False, sort_keys=True)
     except Exception:
         return "{}"
+
+
+def _session_diary_since(conn, session_id: str, dispatched_at: Optional[str]) -> bool:
+    """True if session_diary has a row for ``session_id`` created after
+    ``dispatched_at``. Used by the canonical-authority idempotency
+    guard: if the live session already produced a diary since the
+    plan was handed out, we must NOT re-dispatch it.
+    """
+    if not session_id or not dispatched_at:
+        return False
+    try:
+        row = conn.execute(
+            "SELECT 1 FROM session_diary "
+            "WHERE session_id = ? AND created_at > ? LIMIT 1",
+            (str(session_id), str(dispatched_at)),
+        ).fetchone()
+    except Exception:
+        # Missing table on a minimal test harness — treat as "no diary".
+        return False
+    return row is not None
 
 
 def record_lifecycle_event(
@@ -70,9 +113,15 @@ def record_lifecycle_event(
     source: str = "desktop",
     schema_version: int = 1,
 ) -> Dict[str, Any]:
-    """Idempotent upsert + process.
+    """Idempotent upsert + canonical plan generation (v7.5).
 
-    Returns ``{status, event_id, diary_triggered, duplicate}``.
+    Returns ``{status, event_id, ...}`` where ``status`` is one of:
+    ``rejected`` | ``already_processed`` | ``processed`` |
+    ``canonical_pending`` | ``accepted``. When the answer is
+    ``canonical_pending``, the response also carries
+    ``canonical_plan_id``, ``canonical_plan_version`` and
+    ``canonical_actions[]`` — Desktop must execute those actions and
+    confirm via ``record_complete_canonical``.
     """
     if not event_id or not str(event_id).strip():
         return {"status": "rejected", "reason": "missing-event-id"}
@@ -83,12 +132,32 @@ def record_lifecycle_event(
 
     conn = get_db()
     existing = conn.execute(
-        "SELECT delivery_status FROM lifecycle_events WHERE event_id = ?",
+        "SELECT delivery_status, canonical_plan_id, canonical_plan_version, "
+        "canonical_actions_json, canonical_dispatched_at, canonical_done_at "
+        "FROM lifecycle_events WHERE event_id = ?",
         (str(event_id),),
     ).fetchone()
 
+    plan = lifecycle_prompts.build_canonical_plan(
+        event_id=str(event_id),
+        action=str(action),
+        conversation_id=str(conversation_id),
+        session_id=str(session_id) if session_id else None,
+        payload_snapshot=payload_snapshot or {},
+    )
+
     if existing is not None:
         status = str(existing[0] or "")
+        prior_plan_id = existing[1]
+        prior_actions_json = existing[3]
+        prior_dispatched_at = existing[5]  # column 5 is canonical_done_at — reuse?
+        # column indices (0-5): delivery_status, canonical_plan_id,
+        # canonical_plan_version, canonical_actions_json,
+        # canonical_dispatched_at, canonical_done_at.
+        prior_dispatched_at = existing[4]
+        prior_done_at = existing[5]
+
+        # Case A: terminal status already recorded — hard idempotency.
         if status in TERMINAL_STATUSES:
             return {
                 "status": "already_processed",
@@ -96,8 +165,73 @@ def record_lifecycle_event(
                 "duplicate": True,
                 "prior_status": status,
             }
-        # Non-terminal row (accepted / retryable_error) — flip to processed
-        # now and record the transition.
+
+        # Case B: canonical was dispatched but never confirmed. Check
+        # whether the live session wrote a diary after dispatch; if so
+        # the intent has already been satisfied by the model and we
+        # must NOT ask Desktop to re-run the plan.
+        if prior_plan_id and prior_dispatched_at and not prior_done_at:
+            if session_id and _session_diary_since(conn, str(session_id), str(prior_dispatched_at)):
+                conn.execute(
+                    "UPDATE lifecycle_events "
+                    "SET delivery_status = 'already_processed', "
+                    "    canonical_done_at = datetime('now'), "
+                    "    last_error = NULL "
+                    "WHERE event_id = ?",
+                    (str(event_id),),
+                )
+                conn.commit()
+                return {
+                    "status": "already_processed",
+                    "event_id": event_id,
+                    "duplicate": True,
+                    "prior_status": status,
+                    "reason": "session_diary-already-written",
+                }
+            # Re-hand the exact same plan so Desktop can resume / finish
+            # any actions it didn't complete before the crash.
+            try:
+                actions = json.loads(prior_actions_json) if prior_actions_json else []
+            except Exception:
+                actions = []
+            return {
+                "status": "canonical_pending",
+                "event_id": event_id,
+                "canonical_plan_id": prior_plan_id,
+                "canonical_plan_version": int(existing[2] or lifecycle_prompts.PLAN_VERSION),
+                "canonical_actions": actions,
+                "resumed_from_dispatch": True,
+            }
+
+        # Case C: non-terminal, no canonical plan yet — flip to processed
+        # (legacy ledger semantics) OR upgrade to canonical_pending if a
+        # plan applies.
+        if plan is not None:
+            conn.execute(
+                "UPDATE lifecycle_events "
+                "SET delivery_status = 'canonical_pending', "
+                "    canonical_plan_id = ?, "
+                "    canonical_plan_version = ?, "
+                "    canonical_actions_json = ?, "
+                "    canonical_dispatched_at = datetime('now'), "
+                "    last_error = NULL "
+                "WHERE event_id = ?",
+                (
+                    plan["canonical_plan_id"],
+                    int(plan["canonical_plan_version"]),
+                    json.dumps(plan["canonical_actions"], ensure_ascii=False),
+                    str(event_id),
+                ),
+            )
+            conn.commit()
+            return {
+                "status": "canonical_pending",
+                "event_id": event_id,
+                "canonical_plan_id": plan["canonical_plan_id"],
+                "canonical_plan_version": plan["canonical_plan_version"],
+                "canonical_actions": plan["canonical_actions"],
+                "reopened": True,
+            }
         conn.execute(
             "UPDATE lifecycle_events SET delivery_status = 'processed', "
             "processed_at = datetime('now'), last_error = NULL "
@@ -113,6 +247,45 @@ def record_lifecycle_event(
             "reopened": True,
         }
 
+    # Brand new event.
+    if plan is not None:
+        conn.execute(
+            """
+            INSERT INTO lifecycle_events (
+                event_id, schema_version, source, action, conversation_id,
+                session_id, reason, payload_snapshot, delivery_status,
+                retry_count, canonical_plan_id, canonical_plan_version,
+                canonical_actions_json, canonical_dispatched_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'canonical_pending', 0,
+                      ?, ?, ?, datetime('now'))
+            """,
+            (
+                str(event_id),
+                int(schema_version or 1),
+                str(source or "desktop"),
+                str(action),
+                str(conversation_id),
+                str(session_id) if session_id else None,
+                str(reason or "user_action"),
+                _normalise_payload(payload_snapshot),
+                plan["canonical_plan_id"],
+                int(plan["canonical_plan_version"]),
+                json.dumps(plan["canonical_actions"], ensure_ascii=False),
+            ),
+        )
+        conn.commit()
+        return {
+            "status": "canonical_pending",
+            "event_id": event_id,
+            "canonical_plan_id": plan["canonical_plan_id"],
+            "canonical_plan_version": plan["canonical_plan_version"],
+            "canonical_actions": plan["canonical_actions"],
+            "duplicate": False,
+        }
+
+    # No plan: ledger-only record (switch/window-close or missing
+    # session_id on a diary-triggering action). Mark processed
+    # immediately so callers get the v7.4.x contract back.
     conn.execute(
         """
         INSERT INTO lifecycle_events (
@@ -133,12 +306,90 @@ def record_lifecycle_event(
         ),
     )
     conn.commit()
-
     return {
         "status": "processed",
         "event_id": event_id,
         "diary_triggered": action in _DIARY_TRIGGERING,
         "duplicate": False,
+    }
+
+
+def record_complete_canonical(
+    event_id: str,
+    canonical_plan_id: str,
+    results: Optional[list] = None,
+) -> Dict[str, Any]:
+    """Close the 2-call contract: Desktop confirms it executed the plan.
+
+    Inputs:
+    - ``event_id``: the original event id.
+    - ``canonical_plan_id``: must match the one Brain handed out. A
+      mismatch means Desktop is confirming a stale plan — we ignore
+      it and answer ``rejected``.
+    - ``results``: list of ``{action_id, status, ...}``. If any
+      ``status != 'ok'`` we flip the row to ``retryable_error`` and
+      keep ``canonical_dispatched_at`` intact so reconciliation can
+      re-ask.
+
+    Returns the effective row status after the call.
+    """
+    if not event_id:
+        return {"status": "rejected", "reason": "missing-event-id"}
+    if not canonical_plan_id:
+        return {"status": "rejected", "reason": "missing-canonical-plan-id"}
+
+    conn = get_db()
+    row = conn.execute(
+        "SELECT delivery_status, canonical_plan_id, canonical_done_at "
+        "FROM lifecycle_events WHERE event_id = ?",
+        (str(event_id),),
+    ).fetchone()
+    if row is None:
+        return {"status": "rejected", "reason": "unknown-event-id"}
+    current_status = str(row[0] or "")
+    expected_plan = row[1]
+    already_done_at = row[2]
+
+    if expected_plan and canonical_plan_id != expected_plan:
+        return {
+            "status": "rejected",
+            "reason": "canonical_plan_id-mismatch",
+            "expected": expected_plan,
+            "received": canonical_plan_id,
+        }
+    if already_done_at and current_status == "canonical_done":
+        return {
+            "status": "already_processed",
+            "event_id": event_id,
+            "duplicate": True,
+        }
+
+    results_list = list(results or [])
+    any_failure = any(
+        str((r or {}).get("status", "")).lower() not in {"ok", "success", "already_processed"}
+        for r in results_list
+    )
+    effective = "retryable_error" if any_failure else "canonical_done"
+    conn.execute(
+        "UPDATE lifecycle_events "
+        "SET delivery_status = ?, "
+        "    canonical_done_at = datetime('now'), "
+        "    canonical_done_results = ?, "
+        "    last_error = ? "
+        "WHERE event_id = ?",
+        (
+            effective,
+            json.dumps(results_list, ensure_ascii=False),
+            "one-or-more-actions-failed" if any_failure else None,
+            str(event_id),
+        ),
+    )
+    conn.commit()
+    return {
+        "status": effective,
+        "event_id": event_id,
+        "canonical_plan_id": canonical_plan_id,
+        "failed_actions": any_failure,
     }
 
 
@@ -148,7 +399,9 @@ def get_lifecycle_event(event_id: str) -> Optional[Dict[str, Any]]:
     row = get_db().execute(
         "SELECT event_id, schema_version, source, action, conversation_id, "
         "session_id, reason, payload_snapshot, delivery_status, retry_count, "
-        "created_at, processed_at, last_error "
+        "created_at, processed_at, last_error, "
+        "canonical_plan_id, canonical_plan_version, canonical_actions_json, "
+        "canonical_dispatched_at, canonical_done_at, canonical_done_results "
         "FROM lifecycle_events WHERE event_id = ?",
         (str(event_id),),
     ).fetchone()
@@ -158,6 +411,14 @@ def get_lifecycle_event(event_id: str) -> Optional[Dict[str, Any]]:
         payload = json.loads(row[7] or "{}")
     except Exception:
         payload = {}
+    try:
+        actions = json.loads(row[15]) if row[15] else None
+    except Exception:
+        actions = None
+    try:
+        results = json.loads(row[18]) if row[18] else None
+    except Exception:
+        results = None
     return {
         "event_id": row[0],
         "schema_version": row[1],
@@ -172,6 +433,12 @@ def get_lifecycle_event(event_id: str) -> Optional[Dict[str, Any]]:
         "created_at": row[10],
         "processed_at": row[11],
         "last_error": row[12],
+        "canonical_plan_id": row[13],
+        "canonical_plan_version": row[14],
+        "canonical_actions": actions,
+        "canonical_dispatched_at": row[16],
+        "canonical_done_at": row[17],
+        "canonical_done_results": results,
     }
 
 

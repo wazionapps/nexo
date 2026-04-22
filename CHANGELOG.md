@@ -1,5 +1,93 @@
 # Changelog
 
+## [7.5.0] - 2026-04-22
+
+Minor release. Promotes `nexo_lifecycle_event` from ledger + reconciliation
+authority to **canonical authority of session-end**. Brain now decides the
+prompt, the sequence, and the timing of diary+stop; Desktop is the conduit
+that executes Brain's plan against the live Claude process stdin.
+
+### Added
+
+- **Canonical authority 2-call contract** in `nexo_lifecycle_event` +
+  new `nexo_lifecycle_complete_canonical` MCP tool. Brain returns a
+  versioned `canonical_plan` (resume_session → inject_prompt →
+  stop_session, with per-action `timeout_ms` and stable `id`s). Desktop
+  executes the plan inline, then calls `complete-canonical` with a
+  per-action results array. Brain flips the row to `canonical_done` on
+  explicit confirmation — **no polling, no periodic ticks**.
+- **`src/lifecycle_prompts.py`** (new). Central place that owns the
+  diary prompt + plan shape. Prompt now lives in Brain, not in Desktop.
+  `canonical_plan_id` is deterministic: `sha256(event_id + "|v" +
+  plan_version)[:24]`, so a retry reuses the same id and clients can
+  deduplicate by `(event_id, canonical_plan_id)`.
+- **Schema migration m52** on `lifecycle_events`: adds
+  `canonical_plan_id`, `canonical_plan_version`, `canonical_actions_json`,
+  `canonical_dispatched_at`, `canonical_done_at`,
+  `canonical_done_results` + `idx_lifecycle_events_plan_id`. No
+  backfill required; pre-v7.5 rows simply carry NULL in the new columns.
+- **`session_diary` dedupe on re-delivery.** If Desktop crashes between
+  executing the inject and sending `complete_canonical`, the next
+  `nexo_lifecycle_event` call for the same `event_id` inspects
+  `session_diary` for any row written after `canonical_dispatched_at`.
+  If a diary exists, Brain short-circuits to `already_processed` and
+  refuses to re-dispatch. If no diary exists, Brain re-hands the SAME
+  plan (same `canonical_plan_id`) so execution is resumed, not restarted.
+- **7 explicit `delivery_status` values**: `accepted`, `processed`,
+  `canonical_pending`, `canonical_done`, `already_processed`,
+  `retryable_error`, `rejected`. The state machine is diff-able and
+  every transition has a visible event (`canonical_dispatched_at` /
+  `canonical_done_at`).
+- **`nexo lifecycle complete-canonical` CLI** mirroring the MCP tool,
+  and a fourth entry in `tool-enforcement-map.json`
+  (tool count: 262 → 263).
+
+### Changed
+
+- **`nexo lifecycle record` exit code 0** now covers
+  `canonical_pending` in addition to `processed` / `already_processed` /
+  `accepted`. Older wrappers that treated `canonical_pending` as an
+  error are incompatible with v7.5.
+- `TERMINAL_STATUSES` includes `canonical_done` so re-delivery after a
+  successful close + confirm returns `already_processed` instead of
+  re-handing the plan.
+
+### Preserved (no behaviour change)
+
+- `switch` and `window-close` actions remain **observational**: Brain
+  never emits `canonical_actions` for them, even when a `session_id`
+  is present. There is no side effect beyond the ledger row.
+- Actions without a `session_id` (e.g. abandoned conversations) stay
+  on the v7.4 `processed` path — no plan can be executed without a
+  live proc, so no plan is issued.
+- The v7.4 legacy injection in Desktop's `closeConversationGraceful`
+  is preserved as **fallback** for Brains < v7.5 and for the rare
+  window when Brain times out or cannot return a plan. Desktop detects
+  the fallback via `canonical === false` on the service return.
+
+### Tests
+
+- Full Brain `pytest` green (2050 passing). Ten pre-existing failures
+  in `test_cli_scripts`, `test_client_sync`, `test_doctor`,
+  `test_evolution` are unchanged from main and unrelated to v7.5
+  (TTY / client-selection edge cases).
+- `tests/test_lifecycle_events.py`: **24 lifecycle tests green**,
+  including the new canonical contract (plan_id determinism,
+  complete-canonical done/failed/rejected branches, redelivery after
+  canonical_done, session_diary dedup, switch / window-close never
+  issue plans, and canonical_actions JSON round-trip via status).
+
+### Companion release
+
+- **NEXO Desktop v0.25.0** ships at the same time and is the conduit
+  that completes this contract. It parses the full JSON ack, executes
+  the plan inline against the Claude proc stdin, and calls
+  `nexo_lifecycle_complete_canonical` on completion. Desktop's
+  hardcoded `FALLBACK_SESSION_END_PROMPTS` is retained only as fallback
+  for pre-v7.5 Brains and timeout recovery. Desktop is closed-source
+  and not in this repo — see [nexo-desktop.com](https://nexo-desktop.com)
+  for the release notes.
+
 ## [7.4.1] - 2026-04-22
 
 Patch release. Honest correction of v7.4.0's role in the

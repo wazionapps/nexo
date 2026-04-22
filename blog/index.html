@@ -144,23 +144,23 @@
                 <div class="section-label">Latest release</div>
                 <div class="blog-featured-meta">
                     <span class="compare-chip">April 22, 2026</span>
-                    <span class="compare-chip">Patch release</span>
-                    <span class="compare-chip">Honest correction + closure</span>
+                    <span class="compare-chip">Minor release</span>
+                    <span class="compare-chip">Canonical authority of session-end</span>
                 </div>
-                <h2>NEXO 7.4.1: guardian-claude-desktop lifecycle closure — ledger/authority split made explicit, partner Desktop v0.24.1 covers the last 3 routes</h2>
-                <p>v7.4.1 corrects the over-promise in the v7.4.0 release notes and locks in the exact role of <code>nexo_lifecycle_event</code>: a ledger + reconciliation authority, NOT the canonical executor of <code>diary+stop</code>. Diary+stop injection still happens in Desktop's <code>closeConversationGraceful</code> (the only place that writes to the live Claude process's stdin); moving that responsibility to Brain requires a Brain↔Claude-session bridge that does not exist yet and is scheduled for v7.5 (followup <code>NF-V75-CANONICAL-DIARY-AUTHORITY</code>). The paired Desktop v0.24.1 wires the remaining <code>switch</code> / <code>window-close</code> / <code>app-exit</code> transitions through the same durable service, adds an NDJSON telemetry trail keyed by <code>event_id</code> and an exponential backoff in the reconciler. Brain needed no code change for that — the ledger already accepted every action from day one. No schema migration; <code>VALID_ACTIONS</code> stays frozen at six entries.</p>
+                <h2>NEXO 7.5.0: canonical authority of session-end — Brain decides, Desktop executes, no polling</h2>
+                <p>v7.5.0 promotes <code>nexo_lifecycle_event</code> from ledger + reconciliation authority to <strong>canonical authority of session-end</strong>. Brain now owns the prompt, the sequence, and the timing of diary+stop; NEXO Desktop v0.25.0 (closed-source companion) is the conduit that executes Brain's plan against the live Claude process stdin. The new 2-call contract (<code>nexo_lifecycle_event</code> returns a versioned <code>canonical_plan</code>; <code>nexo_lifecycle_complete_canonical</code> confirms execution with per-action results) replaces polling with explicit acknowledgement. <code>canonical_plan_id</code> is deterministic so retries reuse the same id. Migration m52 adds six <code>canonical_*</code> columns to <code>lifecycle_events</code>. <code>session_diary</code> dedupes re-delivery so crashes between inject and confirm cannot produce a duplicate diary. Seven explicit delivery_status values (accepted / processed / canonical_pending / canonical_done / already_processed / retryable_error / rejected). 24/24 lifecycle tests green. MCP tools 262 → 263.</p>
                 <div class="hero-actions" style="justify-content:flex-start;margin-bottom:18px;">
-                    <a href="/blog/nexo-7-4-1/" class="btn btn-primary">Open article</a>
-                    <a href="/changelog/#v741" class="btn btn-secondary">Open changelog</a>
+                    <a href="/blog/nexo-7-5-0/" class="btn btn-primary">Open article</a>
+                    <a href="/changelog/#v750" class="btn btn-secondary">Open changelog</a>
                 </div>
                 <div class="blog-mini-stack">
                     <div class="blog-mini-card">
                         <strong>Companion view</strong>
-                        <span><a href="/changelog/#v741">See the full v7.4.1 changelog</a></span>
+                        <span><a href="/changelog/#v750">See the full v7.5.0 changelog</a></span>
                     </div>
                     <div class="blog-mini-card">
                         <strong>Previous release</strong>
-                        <span><a href="/blog/nexo-7-4-0/">NEXO 7.4.0: guardian-claude-desktop lifecycle pipeline — nexo_lifecycle_event + lifecycle_events table + m51</a>.</span>
+                        <span><a href="/blog/nexo-7-4-1/">NEXO 7.4.1: guardian-claude-desktop lifecycle closure — ledger/authority split made explicit</a>.</span>
                     </div>
                 </div>
             </div>
@@ -172,6 +172,15 @@
 <section class="section-flush-top">
     <div class="container">
         <div class="blog-grid">
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 22, 2026</div>
+                <h2><a href="/blog/nexo-7-5-0/">NEXO 7.5.0: canonical authority of session-end — Brain decides, Desktop executes, no polling</a></h2>
+                <p>Minor release. <code>nexo_lifecycle_event</code> is now the canonical authority of session-end: Brain owns prompt + sequence + timing; Desktop v0.25.0 executes Brain's plan against the live Claude process. New 2-call contract with <code>nexo_lifecycle_complete_canonical</code>, deterministic <code>canonical_plan_id</code>, <code>session_diary</code> dedupe on re-delivery, seven delivery_status values. Migration m52. 24/24 lifecycle tests green. MCP tools 262 → 263.</p>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/blog/nexo-7-5-0/" class="btn btn-secondary">Read more</a>
+                </div>
+            </div>
 
             <div class="blog-card">
                 <div class="blog-card-date">April 22, 2026</div>

@@ -3092,6 +3092,18 @@ def main():
     lstat_p = lifecycle_sub.add_parser("status", help="Read the current delivery_status of an event")
     lstat_p.add_argument("--event-id", required=True)
 
+    lcomp_p = lifecycle_sub.add_parser(
+        "complete-canonical",
+        help="v7.5: confirm Desktop finished executing the canonical_actions a prior record returned",
+    )
+    lcomp_p.add_argument("--event-id", required=True)
+    lcomp_p.add_argument("--plan-id", required=True, help="canonical_plan_id returned by the original record call")
+    lcomp_p.add_argument(
+        "--results",
+        default="",
+        help="JSON array of per-action outcomes, e.g. '[{\"action_id\":\"a1\",\"status\":\"ok\"}]'",
+    )
+
     # Fase E.5 — quarantine ops surfaced via Desktop Guardian Proposals panel.
     quarantine_parser = sub.add_parser("quarantine", help="Quarantine proposals (Fase E.5 Desktop UI)")
     quarantine_sub = quarantine_parser.add_subparsers(dest="quarantine_command")
@@ -3327,10 +3339,12 @@ def main():
                 status = str(parsed.get("status", ""))
             except Exception:
                 status = ""
-            # Exit code 0 for terminal ok states, 2 for retryable_error so
-            # Desktop can distinguish "persisted + processed" from "try
-            # again on boot reconciliation". Rejected is exit 3 (bad input).
-            if status in ("processed", "already_processed", "accepted"):
+            # Exit code 0 for terminal ok states AND for canonical_pending
+            # (v7.5: plan handed to Desktop, awaiting complete_canonical).
+            # 2 for retryable_error so Desktop can distinguish "persisted +
+            # processed" from "try again on boot reconciliation".
+            # Rejected is exit 3 (bad input).
+            if status in ("processed", "already_processed", "accepted", "canonical_pending"):
                 return 0
             if status == "retryable_error":
                 return 2
@@ -3339,6 +3353,23 @@ def main():
             out = _lifecycle_plugin.handle_nexo_lifecycle_status(args.event_id)
             print(out)
             return 0
+        if args.lifecycle_command == "complete-canonical":
+            out = _lifecycle_plugin.handle_nexo_lifecycle_complete_canonical(
+                event_id=args.event_id,
+                canonical_plan_id=args.plan_id,
+                results=args.results or "",
+            )
+            print(out)
+            try:
+                parsed = _json.loads(out)
+                status = str(parsed.get("status", ""))
+            except Exception:
+                status = ""
+            if status in ("canonical_done", "already_processed"):
+                return 0
+            if status == "retryable_error":
+                return 2
+            return 3
         lifecycle_parser.print_help()
         return 1
     elif args.command in ("schema", "identity", "onboard", "scan-profile"):
