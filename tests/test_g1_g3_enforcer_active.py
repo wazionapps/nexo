@@ -391,3 +391,129 @@ def test_persist_skips_ephemeral_runtime(persist_env, monkeypatch):
     persisted, msg = au._persist_guardian_hard_defaults(home)
     assert persisted is False
     assert msg is not None and "ephemeral" in msg
+
+
+# ---------------------------------------------------------------------------
+# Auto-update empirical adaptive-weights promotion during `nexo update`
+# ---------------------------------------------------------------------------
+
+
+def _write_adaptive_state(home: Path, payload: dict) -> Path:
+    state_path = home / "personal" / "brain" / "adaptive_state.json"
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
+    return state_path
+
+
+def _iso_utc(days_ago: int = 0) -> str:
+    import datetime as _dt
+    moment = _dt.datetime.utcnow() - _dt.timedelta(days=days_ago)
+    return moment.strftime("%Y-%m-%dT%H:%M:%S")
+
+
+_SAMPLE_SHADOW = {
+    "vibe": 0.2402,
+    "corrections": 0.262,
+    "brevity": 0.1345,
+    "topic": 0.0962,
+    "tool_errors": 0.1345,
+    "git_diff": 0.1326,
+}
+
+
+def test_adaptive_promote_happy_path_activates_weights(persist_env, monkeypatch):
+    home, au = persist_env
+    monkeypatch.delenv("NEXO_ADAPTIVE_EMPIRICAL_PROMOTION", raising=False)
+    monkeypatch.setattr(au, "_is_ephemeral_runtime_install", lambda _dest: False)
+
+    _write_adaptive_state(home, {
+        "shadow_weights": _SAMPLE_SHADOW,
+        "shadow_weights_samples": 245,
+        "learned_weights_first_date": _iso_utc(days_ago=3),
+    })
+
+    promoted, msg = au._maybe_promote_adaptive_weights_empirically(home)
+    assert promoted is True
+    assert msg is None
+
+    state_path = home / "personal" / "brain" / "adaptive_state.json"
+    data = json.loads(state_path.read_text())
+    assert data["learned_weights"] == _SAMPLE_SHADOW
+    assert data["learned_weights_samples"] == 245
+    assert data["learned_weights_promoted_by"] == "nexo_update_empirical_v7_2_0"
+    assert data["learned_weights_promoted_at"]
+
+
+def test_adaptive_promote_noop_when_already_active(persist_env, monkeypatch):
+    home, au = persist_env
+    monkeypatch.delenv("NEXO_ADAPTIVE_EMPIRICAL_PROMOTION", raising=False)
+    monkeypatch.setattr(au, "_is_ephemeral_runtime_install", lambda _dest: False)
+
+    _write_adaptive_state(home, {
+        "shadow_weights": _SAMPLE_SHADOW,
+        "shadow_weights_samples": 245,
+        "learned_weights": _SAMPLE_SHADOW,
+        "learned_weights_first_date": _iso_utc(days_ago=30),
+    })
+
+    promoted, msg = au._maybe_promote_adaptive_weights_empirically(home)
+    assert promoted is False
+    assert msg is None
+
+
+def test_adaptive_promote_skips_when_samples_below_threshold(persist_env, monkeypatch):
+    home, au = persist_env
+    monkeypatch.delenv("NEXO_ADAPTIVE_EMPIRICAL_PROMOTION", raising=False)
+    monkeypatch.setattr(au, "_is_ephemeral_runtime_install", lambda _dest: False)
+
+    _write_adaptive_state(home, {
+        "shadow_weights": _SAMPLE_SHADOW,
+        "shadow_weights_samples": 50,  # below the 200 bar
+        "learned_weights_first_date": _iso_utc(days_ago=5),
+    })
+
+    promoted, msg = au._maybe_promote_adaptive_weights_empirically(home)
+    assert promoted is False
+    assert msg is None  # quiet no-op, not a "skipped:" message
+
+
+def test_adaptive_promote_skips_when_days_below_threshold(persist_env, monkeypatch):
+    home, au = persist_env
+    monkeypatch.delenv("NEXO_ADAPTIVE_EMPIRICAL_PROMOTION", raising=False)
+    monkeypatch.setattr(au, "_is_ephemeral_runtime_install", lambda _dest: False)
+
+    _write_adaptive_state(home, {
+        "shadow_weights": _SAMPLE_SHADOW,
+        "shadow_weights_samples": 500,
+        "learned_weights_first_date": _iso_utc(days_ago=1),
+    })
+
+    promoted, msg = au._maybe_promote_adaptive_weights_empirically(home)
+    assert promoted is False
+    assert msg is None
+
+
+def test_adaptive_promote_respects_operator_opt_out(persist_env, monkeypatch):
+    home, au = persist_env
+    monkeypatch.setenv("NEXO_ADAPTIVE_EMPIRICAL_PROMOTION", "off")
+    monkeypatch.setattr(au, "_is_ephemeral_runtime_install", lambda _dest: False)
+
+    _write_adaptive_state(home, {
+        "shadow_weights": _SAMPLE_SHADOW,
+        "shadow_weights_samples": 245,
+        "learned_weights_first_date": _iso_utc(days_ago=3),
+    })
+
+    promoted, msg = au._maybe_promote_adaptive_weights_empirically(home)
+    assert promoted is False
+    assert msg is not None and "operator-opt-out" in msg
+
+
+def test_adaptive_promote_handles_missing_state_file_quietly(persist_env, monkeypatch):
+    home, au = persist_env
+    monkeypatch.delenv("NEXO_ADAPTIVE_EMPIRICAL_PROMOTION", raising=False)
+    monkeypatch.setattr(au, "_is_ephemeral_runtime_install", lambda _dest: False)
+    # No adaptive_state.json at all — fresh install.
+    promoted, msg = au._maybe_promote_adaptive_weights_empirically(home)
+    assert promoted is False
+    assert msg is None
