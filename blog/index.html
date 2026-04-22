@@ -134,7 +134,7 @@
                     <span class="page-chip">Shared brain product notes</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="/blog/nexo-7-2-0/" class="btn btn-primary">Read latest release</a>
+                    <a href="/blog/nexo-7-3-0/" class="btn btn-primary">Read latest release</a>
                     <a href="/changelog/" class="btn btn-secondary">Latest release notes</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -144,23 +144,23 @@
                 <div class="section-label">Latest release</div>
                 <div class="blog-featured-meta">
                     <span class="compare-chip">April 22, 2026</span>
-                    <span class="compare-chip">Minor release</span>
-                    <span class="compare-chip">Guardian active by default</span>
+                    <span class="compare-chip">Hotfix minor release</span>
+                    <span class="compare-chip">Guardian wire + map distribution</span>
                 </div>
-                <h2>NEXO 7.2.0: Guardian active by default — G1 enforcer + G3 SSH wrapper + persist hard + adaptive empirical promotion + F0.6 hardening</h2>
-                <p>v7.2.0 is a minor release that consolidates three parallel workstreams into a single Guardian-active-by-default train. Block K closes G1 (PostToolUse enforcer that nudges when <code>task_open</code> returned <code>defer/ask/verify</code> without a paired <code>next_action</code>), G3 SSH remote-write detector, a new <code>guardian_runtime_config.py</code> resolver that unifies gate modes, and <code>_persist_guardian_hard_defaults</code> during <code>nexo update</code> so every non-ephemeral install gets Guardian hard automatically. F0.6 hardening ships the <code>nexo rollback f06</code> CLI, <code>prune_runtime_backups.py</code> promoted to core, the authoritative layout contract, three new doctor boot checks, and the idempotent Nora-migration workflow. Adaptive weights auto-promote shadow→learned when mature data is there, without waiting 14 calendar days. Small fixes: R34 bool, <code>classify_scripts_dir</code> dedup, B10 module-level path constants lazy-evaluated, schedule-override audit log, pre-release discipline pack.</p>
+                <h2>NEXO 7.3.0: Guardian wire hotfix — PreToolUse properly registered, post-sync runs the fresh tree, tool-enforcement-map now shipped via npm</h2>
+                <p>v7.3.0 corrects three critical bugs that surfaced right after v7.2.0 went live. B11: the new <code>src/hooks/pre_tool_use.py</code> entrypoint is now registered in both hook manifests so Claude Code's PreToolUse event actually reaches Guardian — <code>guardian-runtime-overrides.json</code> in hard mode was silently inert before this for G3-destructive, G3-SSH, and G4-guard_check gates. A parallel SSH prescreen in <code>hook_guardrails.process_pre_tool_event</code> forces <code>op=write</code> on remote-write patterns the local shell classifier never saw. B10: <code>_run_post_install_hooks_fresh(dest, env)</code> invokes each whitelisted post-install hook in a clean subprocess against the newly copied tree, so the first <code>nexo update</code> that introduces a new hook actually runs it. B12: <code>tool-enforcement-map.json</code> is now part of the npm <code>files</code> whitelist, closing the three-way gap (Brain npm + Desktop bundle + runtime sync) that prevented Desktop from ever discovering the map on fresh installs. Also ships PE1 0.4 (5 new destructive_command presets, coverage floor 7→12) and PE1 0.25 (the <code>guardian-metrics</code> daily cron at 02:15 feeding Fase C and the Guardian Proposals panel).</p>
                 <div class="hero-actions" style="justify-content:flex-start;margin-bottom:18px;">
-                    <a href="/blog/nexo-7-2-0/" class="btn btn-primary">Open article</a>
-                    <a href="/changelog/#v720" class="btn btn-secondary">Open changelog</a>
+                    <a href="/blog/nexo-7-3-0/" class="btn btn-primary">Open article</a>
+                    <a href="/changelog/#v730" class="btn btn-secondary">Open changelog</a>
                 </div>
                 <div class="blog-mini-stack">
                     <div class="blog-mini-card">
                         <strong>Companion view</strong>
-                        <span><a href="/changelog/#v720">See the full v7.2.0 changelog</a></span>
+                        <span><a href="/changelog/#v730">See the full v7.3.0 changelog</a></span>
                     </div>
                     <div class="blog-mini-card">
                         <strong>Previous release</strong>
-                        <span><a href="/blog/nexo-7-1-10/">NEXO 7.1.10: follow-up — autonomy-mandate vocabulary + compact hooks + checkpoint_policy + smoke-artifact release verifier</a>.</span>
+                        <span><a href="/blog/nexo-7-2-0/">NEXO 7.2.0: Guardian active by default — G1 enforcer + G3 SSH wrapper + persist hard + adaptive empirical promotion + F0.6 hardening</a>.</span>
                     </div>
                 </div>
             </div>
@@ -172,6 +172,15 @@
 <section class="section-flush-top">
     <div class="container">
         <div class="blog-grid">
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 22, 2026</div>
+                <h2><a href="/blog/nexo-7-3-0/">NEXO 7.3.0: Guardian wire hotfix — PreToolUse properly registered, post-sync runs the fresh tree, tool-enforcement-map now shipped via npm</a></h2>
+                <p>Hotfix minor release. B11 wires the new <code>pre_tool_use.py</code> entrypoint so Claude Code's PreToolUse event actually reaches Guardian (<code>guardian-runtime-overrides.json</code> hard mode was silently inert before this). B10 runs post-install hooks from the freshly copied tree via subprocess so the first <code>nexo update</code> that introduces them actually executes. B12 ships <code>tool-enforcement-map.json</code> via the npm bundle so Desktop can discover it on fresh installs. Also PE1 0.4 (5 new destructive presets, floor 7→12) and PE1 0.25 (guardian-metrics daily cron).</p>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/blog/nexo-7-3-0/" class="btn btn-secondary">Read more</a>
+                </div>
+            </div>
 
             <div class="blog-card">
                 <div class="blog-card-date">April 22, 2026</div>
