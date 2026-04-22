@@ -128,3 +128,61 @@ Rule:
 
 - treat these as managed bootstrap surfaces, not as free-form scratchpads
 - if the credential rule or source-of-truth order changes, update the template, not just one generated copy
+
+## Navigating templates from `~/.nexo/personal/`
+
+Templates live under `~/.nexo/core/templates/`. They are shipped with every
+release, read-only from the operator's perspective (same rule as the rest
+of `core/`: never edit in place). The personal filesystem (`~/.nexo/personal/`)
+is where new artifacts go. Use this flow when the operator wants to start a
+new personal script or skill from a supported starting point.
+
+### Copying a template into a personal script
+
+```
+cp ~/.nexo/core/templates/script-template.py \
+   ~/.nexo/personal/scripts/<logical-name>.py
+```
+
+Then edit the new file. The `# nexo: name=...` header is the one the
+registry reads; match the filename (`<logical-name>.py`) so
+`nexo scripts reconcile` keeps the metadata coherent.
+
+`nexo scripts create <logical-name>` also materializes this template
+automatically and calls `sync_personal_scripts` for you — prefer the CLI
+when the operator is scaffolding interactively.
+
+### Copying a skill template into a personal skill
+
+```
+mkdir -p ~/.nexo/personal/skills/sk-<slug>
+cp ~/.nexo/core/templates/skill-template.md \
+   ~/.nexo/personal/skills/sk-<slug>/guide.md
+cp ~/.nexo/core/templates/skill-script-template.py \
+   ~/.nexo/personal/skills/sk-<slug>/script.py   # only if execution is needed
+```
+
+Then create `skill.json` with `{id, name, description, level, mode, content,
+trigger_patterns}`. Skills that are guide-only do not need `skill.json` to
+declare `executable_entry` / `command_template` — skip those fields.
+
+### Why NOT copy templates as `*.template` into personal/
+
+A prior version of this runbook suggested mirroring the entire `templates/`
+tree into `~/.nexo/personal/scripts/` with a `.template` suffix for
+navigability. That approach creates a parallel source of truth: the
+mirror falls out of sync on every release, operators edit the wrong copy,
+and `sync_personal_scripts` has to ignore them by extension. The current
+contract is simpler:
+
+- Browse templates at `~/.nexo/core/templates/` (read-only; treat like any
+  `core/` content).
+- Create your personal artifact in `~/.nexo/personal/scripts/` or
+  `~/.nexo/personal/skills/` by copying ONE template into the new
+  artifact's real filename.
+- Do not leave `.template` copies sitting next to real scripts — that
+  noise confuses both the registry scan and the operator.
+
+If a new starting point should be shipped to everyone, add it to
+`templates/` in the repo and list it in this document, same as any other
+contract change.
