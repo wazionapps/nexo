@@ -3007,10 +3007,11 @@ def _check_npm_version() -> str | None:
             return None
         if latest != current and not current.endswith(latest):
             try:
-                from user_context import get_context
-                _name = get_context().assistant_name
+                from user_context import get_context, DEFAULT_ASSISTANT_NAME
+                _name = get_context().assistant_name or DEFAULT_ASSISTANT_NAME
             except Exception:
-                _name = "NEXO"
+                from user_context import DEFAULT_ASSISTANT_NAME
+                _name = DEFAULT_ASSISTANT_NAME
             return f"{_name} update available: {current} -> {latest}. Run: npm update -g {pkg_name}"
     except Exception:
         pass
@@ -3385,12 +3386,17 @@ def _find_user_claude_md() -> Path | None:
 
 def _resolve_placeholders(template_text: str) -> str:
     """Fill {{NAME}} and {{NEXO_HOME}} from the user's existing CLAUDE.md or config."""
-    # Read operator name from calibration/version
+    # Read operator name from calibration/version. The fallback must never be a
+    # reserved product identity ("NEXO", "NEXO Brain", "NEXO Desktop"); those
+    # are rejected by desktop_bridge.RESERVED_ASSISTANT_NAME_VALUES and leaking
+    # them into the managed CLAUDE.md would conflate the agent (Nova/Nero/etc.)
+    # with the product itself.
     try:
-        from user_context import get_context
-        name = get_context().assistant_name
+        from user_context import get_context, DEFAULT_ASSISTANT_NAME
+        name = get_context().assistant_name or DEFAULT_ASSISTANT_NAME
     except Exception:
-        name = "NEXO"
+        from user_context import DEFAULT_ASSISTANT_NAME
+        name = DEFAULT_ASSISTANT_NAME
 
     return (
         template_text
