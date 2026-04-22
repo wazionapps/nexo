@@ -1,17 +1,22 @@
 from __future__ import annotations
 
 import ast
+import importlib
+import os
 import re
 import sys
 from pathlib import Path
 
 
-SRC = Path(__file__).resolve().parents[1] / "src"
+ROOT = Path(__file__).resolve().parents[1]
+os.environ["NEXO_CODE"] = str(ROOT)
+SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 
 import core_prompts
+importlib.reload(core_prompts)
 
 
 _PROMPT_LIKE_NAME = re.compile(r".*(PROMPT|QUESTION|TEMPLATE|INJECTION).*")
@@ -308,6 +313,7 @@ def test_render_core_prompt_supports_enforcer_and_startup_templates():
         "hook-protocol-warning-task-close-evidence",
         task_id="PT-42",
         change_note=" If you really edit, capture `nexo_change_log(...)` too.",
+        closeout_note=" If this edit wave came from a user correction or you are leaving a blocker unresolved, include `correction_happened=true` with a reusable learning, or `followup_needed=true`, when you call `nexo_task_close(...)`.",
     )
     watchdog = core_prompts.render_core_prompt(
         "watchdog-repair",
@@ -321,6 +327,7 @@ def test_render_core_prompt_supports_enforcer_and_startup_templates():
     assert "nexo_guard_check(files='/repo/src/foo.py')" in r13
     assert "teaching the assistant a rule it should have known" in r14_question
     assert "nexo_learning_add" in r14_injection
+    assert "followup_needed=true" in r14_injection
     assert "nexo-desktop" in r15
     assert "nexo_followup_create" in catalog
     assert "shared brain" in r34_probe
@@ -367,6 +374,7 @@ def test_render_core_prompt_supports_enforcer_and_startup_templates():
     assert "Task PT-42 is active without a visible guard." in hook_guard
     assert "Task PT-42 already looks multi-step" in hook_workflow
     assert "Protocol reminder for PT-42" in hook_task_close
+    assert "followup_needed=true" in hook_task_close
     assert "[core] demo failure" in watchdog
     assert "/Users/franciscoc/.nexo/runtime/logs/watchdog-repair-result.log" in watchdog
 

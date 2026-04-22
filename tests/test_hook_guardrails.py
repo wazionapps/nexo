@@ -23,6 +23,7 @@ def _reload_guardrail_stack():
     import db._learnings as db_learnings
     import db._protocol as db_protocol
     import db._sessions as db_sessions
+    import core_prompts
     import db
     import hook_guardrails
 
@@ -32,6 +33,7 @@ def _reload_guardrail_stack():
     importlib.reload(db_learnings)
     importlib.reload(db_protocol)
     importlib.reload(db_sessions)
+    importlib.reload(core_prompts)
     importlib.reload(db)
     importlib.reload(hook_guardrails)
     return db, hook_guardrails
@@ -222,6 +224,7 @@ def test_process_tool_event_warns_when_multi_step_action_task_lacks_workflow(gua
     assert any("nexo_workflow_open" in message for message in messages)
     assert any("nexo_task_close" in message for message in messages)
     assert any("nexo_change_log" in message for message in messages)
+    assert any("followup_needed=true" in message for message in messages)
 
 
 def test_process_pre_tool_event_blocks_write_without_open_task_in_strict_mode(guardrail_env, monkeypatch):

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import sqlite3
 import sys
 from pathlib import Path
@@ -126,6 +127,27 @@ def _seed_public_surfaces(root: Path, version: str, *, include_well_known: bool 
         )
 
 
+def _seed_smoke_artifact(root: Path, version: str, *, groups: list[dict] | None = None, ok: bool = True):
+    smoke_dir = root / "smoke"
+    smoke_dir.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "version": version,
+        "generated_at": "2026-04-22T05:30:00+00:00",
+        "ok": ok,
+        "groups": groups or [
+            {
+                "id": "core",
+                "ok": True,
+                "returncode": 0,
+                "command": ["python3", "-m", "pytest", "-q", "tests/test_protocol.py"],
+                "targets": ["tests/test_protocol.py"],
+                "duration_seconds": 1.2,
+            }
+        ],
+    }
+    (smoke_dir / f"v{version}.json").write_text(json.dumps(payload), encoding="utf-8")
+
+
 def test_check_contract_accepts_valid_contract(tmp_path):
     module = _load_module()
     website_root = tmp_path / "site"
@@ -156,6 +178,7 @@ def test_check_contract_accepts_valid_contract(tmp_path):
         contract,
         contract_path=tmp_path / "contract.json",
         website_root=website_root,
+        nexo_home=tmp_path / "nexo-home",
         require_complete=True,
         repo_root=tmp_path,
     )
@@ -187,6 +210,7 @@ def test_check_contract_rejects_wrong_distribution(tmp_path):
             contract,
             contract_path=tmp_path / "contract.json",
             website_root=tmp_path / "site",
+            nexo_home=tmp_path / "nexo-home",
             require_complete=False,
             repo_root=tmp_path,
         )
@@ -223,6 +247,106 @@ def test_check_contract_requires_completion_when_requested(tmp_path):
             contract,
             contract_path=tmp_path / "contract.json",
             website_root=website_root,
+            nexo_home=tmp_path / "nexo-home",
+            require_complete=True,
+            repo_root=tmp_path,
+        )
+
+
+def test_check_contract_validates_critical_surfaces_and_publication_state(tmp_path):
+    module = _load_module()
+    website_root = tmp_path / "site"
+    website_root.mkdir()
+    nexo_home = tmp_path / "nexo-home"
+    (nexo_home / "managed").mkdir(parents=True)
+    (nexo_home / "managed" / "surface.txt").write_text("release-ready marker\n", encoding="utf-8")
+    (tmp_path / "repo-artifact.txt").write_text("ok", encoding="utf-8")
+    (website_root / "index.html").write_text("ok", encoding="utf-8")
+
+    contract = {
+        "release_line": "v4.5",
+        "target_version": "4.5.0",
+        "distribution": {
+            "git_updates_on": "merge_to_main",
+            "packaged_release_on": "tag_publish",
+        },
+        "required_repo_files": ["repo-artifact.txt"],
+        "required_website_files": ["index.html"],
+        "critical_surfaces": [
+            {
+                "id": "managed_surface",
+                "path": "{nexo_home}/managed/surface.txt",
+                "kind": "file",
+                "markers": ["release-ready marker"],
+            }
+        ],
+        "publication": {
+            "status": "ready",
+            "checklist_complete": True,
+            "blockers": [
+                {"title": "resolved blocker", "severity": "high", "status": "resolved"}
+            ],
+        },
+        "gates": [
+            {
+                "id": "manual",
+                "title": "Manual",
+                "status": "complete",
+                "evidence_required": ["doc exists"],
+            }
+        ],
+    }
+
+    module._check_contract(
+        contract,
+        contract_path=tmp_path / "contract.json",
+        website_root=website_root,
+        nexo_home=nexo_home,
+        require_complete=True,
+        repo_root=tmp_path,
+    )
+
+
+def test_check_contract_rejects_open_high_publication_blocker(tmp_path):
+    module = _load_module()
+    website_root = tmp_path / "site"
+    website_root.mkdir()
+    nexo_home = tmp_path / "nexo-home"
+    (tmp_path / "repo-artifact.txt").write_text("ok", encoding="utf-8")
+    (website_root / "index.html").write_text("ok", encoding="utf-8")
+
+    contract = {
+        "release_line": "v4.5",
+        "target_version": "4.5.0",
+        "distribution": {
+            "git_updates_on": "merge_to_main",
+            "packaged_release_on": "tag_publish",
+        },
+        "required_repo_files": ["repo-artifact.txt"],
+        "required_website_files": ["index.html"],
+        "publication": {
+            "status": "blocked",
+            "checklist_complete": True,
+            "blockers": [
+                {"title": "desktop smoke broken", "severity": "high", "status": "open"}
+            ],
+        },
+        "gates": [
+            {
+                "id": "manual",
+                "title": "Manual",
+                "status": "complete",
+                "evidence_required": ["doc exists"],
+            }
+        ],
+    }
+
+    with pytest.raises(SystemExit, match="publication blocked by open high-severity blockers"):
+        module._check_contract(
+            contract,
+            contract_path=tmp_path / "contract.json",
+            website_root=website_root,
+            nexo_home=nexo_home,
             require_complete=True,
             repo_root=tmp_path,
         )
@@ -303,6 +427,32 @@ def test_check_protocol_closeout_rejects_missing_change_log(tmp_path):
         module._check_protocol_closeout(nexo_home, "PT-201")
 
 
+def test_check_smoke_artifact_accepts_passing_artifact(tmp_path):
+    module = _load_module()
+    _seed_smoke_artifact(tmp_path, "5.3.29")
+
+    module._check_smoke_artifact("5.3.29", smoke_root=tmp_path / "smoke")
+
+
+def test_check_smoke_artifact_rejects_missing_required_group(tmp_path):
+    module = _load_module()
+    _seed_smoke_artifact(tmp_path, "5.3.29")
+
+    with pytest.raises(SystemExit, match="required smoke groups missing"):
+        module._check_smoke_artifact(
+            "5.3.29",
+            contract={"smoke": {"required_groups": ["desktop_install"]}},
+            smoke_root=tmp_path / "smoke",
+        )
+
+
+def test_check_smoke_artifact_rejects_missing_artifact(tmp_path):
+    module = _load_module()
+
+    with pytest.raises(SystemExit, match="smoke artifact missing"):
+        module._check_smoke_artifact("5.3.29", smoke_root=tmp_path / "smoke")
+
+
 def test_main_final_closeout_requires_protocol_task_id(tmp_path, monkeypatch):
     module = _load_module()
     nexo_home = tmp_path / "nexo-home"
@@ -317,3 +467,25 @@ def test_main_final_closeout_requires_protocol_task_id(tmp_path, monkeypatch):
 
     with pytest.raises(SystemExit, match="requires --protocol-task-id"):
         module.main()
+
+
+def test_main_require_smoke_checks_smoke_artifact(tmp_path, monkeypatch):
+    module = _load_module()
+    nexo_home = tmp_path / "nexo-home"
+    nexo_home.mkdir()
+
+    smoke_calls = []
+    monkeypatch.setattr(module, "_package_manifest", lambda: {"name": "nexo-brain", "version": "5.3.11", "repository": {"url": "git+https://github.com/wazionapps/nexo.git"}})
+    monkeypatch.setattr(module, "_check_changelog", lambda version: None)
+    monkeypatch.setattr(module, "_check_repo_public_surfaces", lambda version, repo_root=module.ROOT: None)
+    monkeypatch.setattr(module, "_check_duplicate_artifacts", lambda repo_root=module.ROOT: None)
+    monkeypatch.setattr(module, "_check_website", lambda version, website_root: None)
+    monkeypatch.setattr(module, "_run", lambda *args, **kwargs: None)
+    monkeypatch.setattr(module, "_resolve_nexo_home", lambda explicit_home="": nexo_home)
+    monkeypatch.setattr(module, "_run_runtime_doctor", lambda home: None)
+    monkeypatch.setattr(module, "_check_smoke_artifact", lambda version, contract=None, smoke_root=module.DEFAULT_SMOKE_ROOT: smoke_calls.append((version, contract)))
+    monkeypatch.setattr(sys, "argv", ["verify_release_readiness.py", "--require-smoke"])
+
+    module.main()
+
+    assert smoke_calls == [("5.3.11", None)]

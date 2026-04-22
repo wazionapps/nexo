@@ -19,6 +19,7 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -33,6 +34,7 @@ PACKAGE_JSON = ROOT / "package.json"
 CHANGELOG = ROOT / "CHANGELOG.md"
 DEFAULT_WEBSITE_ROOT = ROOT.parent / "nexo-gh-pages"
 DEFAULT_CONTRACTS_ROOT = ROOT / "release-contracts"
+DEFAULT_SMOKE_ROOT = DEFAULT_CONTRACTS_ROOT / "smoke"
 DEFAULT_NEXO_HOME_CANDIDATES = (
     Path.home() / ".nexo",
     Path.home() / "claude",
@@ -258,6 +260,97 @@ def _check_repo_public_surfaces(version: str, repo_root: Path = ROOT) -> None:
     )
 
 
+def _parse_iso_timestamp(label: str, raw: str) -> datetime:
+    text = str(raw or "").strip()
+    if not text:
+        raise SystemExit(f"[release-readiness] {label} missing timestamp")
+    try:
+        if text.endswith("Z"):
+            text = text[:-1] + "+00:00"
+        parsed = datetime.fromisoformat(text)
+    except ValueError as exc:
+        raise SystemExit(f"[release-readiness] invalid {label} timestamp {raw!r}") from exc
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _load_smoke_artifact(version: str, *, smoke_root: Path = DEFAULT_SMOKE_ROOT) -> tuple[Path, dict]:
+    path = smoke_root / f"v{version}.json"
+    if not path.is_file():
+        raise SystemExit(f"[release-readiness] smoke artifact missing: {path}")
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"[release-readiness] invalid smoke artifact JSON {path}: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise SystemExit(f"[release-readiness] smoke artifact must be a JSON object: {path}")
+    return path, payload
+
+
+def _check_smoke_artifact(
+    version: str,
+    *,
+    contract: dict | None = None,
+    smoke_root: Path = DEFAULT_SMOKE_ROOT,
+) -> None:
+    path, payload = _load_smoke_artifact(version, smoke_root=smoke_root)
+    artifact_version = str(payload.get("version", "") or "").strip()
+    if artifact_version != version:
+        raise SystemExit(
+            f"[release-readiness] smoke artifact version {artifact_version!r} != package.json {version}"
+        )
+    if not bool(payload.get("ok")):
+        raise SystemExit(f"[release-readiness] smoke artifact reports failure: {path}")
+
+    groups = payload.get("groups")
+    if not isinstance(groups, list) or not groups:
+        raise SystemExit(f"[release-readiness] smoke artifact has no groups: {path}")
+
+    failed_groups: list[str] = []
+    functional_groups = 0
+    group_map: dict[str, dict] = {}
+    for index, group in enumerate(groups, start=1):
+        if not isinstance(group, dict):
+            raise SystemExit(f"[release-readiness] smoke group #{index} is not an object")
+        group_id = str(group.get("id", "") or "").strip() or f"group-{index}"
+        group_map[group_id] = group
+        command = group.get("command")
+        if isinstance(command, list) and command:
+            functional_groups += 1
+        if not bool(group.get("ok")) or int(group.get("returncode") or 0) != 0:
+            failed_groups.append(group_id)
+    if functional_groups <= 0:
+        raise SystemExit(f"[release-readiness] smoke artifact does not contain a functional command trace: {path}")
+    if failed_groups:
+        raise SystemExit("[release-readiness] smoke artifact has failing groups:\n- " + "\n- ".join(failed_groups))
+
+    smoke_contract = contract.get("smoke") if isinstance(contract, dict) else None
+    if smoke_contract is not None and not isinstance(smoke_contract, dict):
+        raise SystemExit("[release-readiness] contract smoke section must be an object")
+    required_groups = smoke_contract.get("required_groups") if isinstance(smoke_contract, dict) else None
+    if required_groups is not None:
+        if not isinstance(required_groups, list) or not all(isinstance(item, str) and item.strip() for item in required_groups):
+            raise SystemExit("[release-readiness] contract smoke.required_groups must be a list of non-empty strings")
+        missing_groups = [item for item in required_groups if item not in group_map]
+        if missing_groups:
+            raise SystemExit("[release-readiness] required smoke groups missing:\n- " + "\n- ".join(missing_groups))
+    max_age_hours = smoke_contract.get("max_age_hours") if isinstance(smoke_contract, dict) else None
+    if max_age_hours is not None:
+        try:
+            max_age_hours = float(max_age_hours)
+        except (TypeError, ValueError) as exc:
+            raise SystemExit("[release-readiness] contract smoke.max_age_hours must be numeric") from exc
+        generated_at = _parse_iso_timestamp("smoke.generated_at", str(payload.get("generated_at", "") or ""))
+        age_hours = (datetime.now(timezone.utc) - generated_at).total_seconds() / 3600.0
+        if age_hours > max_age_hours:
+            raise SystemExit(
+                f"[release-readiness] smoke artifact is stale ({age_hours:.1f}h > {max_age_hours:.1f}h): {path}"
+            )
+
+    print(f"[release-readiness] smoke artifact OK ({path}, groups={len(groups)})")
+
+
 def _check_github_release(version: str, repository_slug: str) -> None:
     payload = _fetch_json(
         f"https://api.github.com/repos/{repository_slug}/releases/tags/v{version}",
@@ -312,11 +405,142 @@ def _normalize_contract_paths(values: list[str], *, root: Path) -> list[Path]:
     return paths
 
 
+def _resolve_surface_path(
+    raw: str,
+    *,
+    repo_root: Path,
+    website_root: Path,
+    nexo_home: Path,
+) -> Path:
+    try:
+        rendered = raw.format(
+            repo_root=str(repo_root),
+            website_root=str(website_root),
+            nexo_home=str(nexo_home),
+            home=str(Path.home()),
+        )
+    except KeyError as exc:
+        raise SystemExit(f"[release-readiness] unknown placeholder in critical surface path {raw!r}: {exc}") from exc
+    expanded = os.path.expandvars(rendered)
+    candidate = Path(expanded).expanduser()
+    if not candidate.is_absolute():
+        candidate = (repo_root / candidate).resolve()
+    else:
+        candidate = candidate.resolve()
+    return candidate
+
+
+def _check_critical_surfaces(
+    contract: dict,
+    *,
+    repo_root: Path,
+    website_root: Path,
+    nexo_home: Path,
+) -> None:
+    surfaces = contract.get("critical_surfaces")
+    if surfaces is None:
+        return
+    if not isinstance(surfaces, list):
+        raise SystemExit("[release-readiness] contract critical_surfaces must be a list")
+
+    checked = 0
+    failures: list[str] = []
+    for index, surface in enumerate(surfaces, start=1):
+        if not isinstance(surface, dict):
+            raise SystemExit("[release-readiness] contract critical_surfaces entries must be objects")
+        label = str(surface.get("label", "") or surface.get("id", "") or f"surface-{index}").strip()
+        raw_path = str(surface.get("path", "") or "").strip()
+        if not raw_path:
+            raise SystemExit(f"[release-readiness] critical surface {label!r} missing path")
+        kind = str(surface.get("kind", "file") or "file").strip().lower()
+        if kind not in {"file", "dir"}:
+            raise SystemExit(f"[release-readiness] critical surface {label!r} has invalid kind {kind!r}")
+        must_exist = surface.get("must_exist", True)
+        if not isinstance(must_exist, bool):
+            raise SystemExit(f"[release-readiness] critical surface {label!r} must_exist must be boolean")
+        markers = surface.get("markers") or []
+        if not isinstance(markers, list) or not all(isinstance(item, str) and item.strip() for item in markers):
+            raise SystemExit(f"[release-readiness] critical surface {label!r} markers must be a list of non-empty strings")
+
+        target = _resolve_surface_path(raw_path, repo_root=repo_root, website_root=website_root, nexo_home=nexo_home)
+        checked += 1
+        if not target.exists():
+            if must_exist:
+                failures.append(f"{label}: missing {target}")
+            continue
+        if kind == "file":
+            if not target.is_file():
+                failures.append(f"{label}: expected file at {target}")
+                continue
+            if markers:
+                text = target.read_text(encoding="utf-8")
+                for marker in markers:
+                    if marker not in text:
+                        failures.append(f"{label}: {target} missing marker {marker!r}")
+                        break
+        else:
+            if not target.is_dir():
+                failures.append(f"{label}: expected directory at {target}")
+                continue
+            for marker in markers:
+                if not (target / marker).exists():
+                    failures.append(f"{label}: {target} missing required entry {marker}")
+                    break
+
+    if failures:
+        raise SystemExit("[release-readiness] critical installed surfaces failed:\n- " + "\n- ".join(failures))
+    print(f"[release-readiness] critical installed surfaces OK ({checked})")
+
+
+def _check_publication_state(contract: dict, *, require_complete: bool) -> None:
+    publication = contract.get("publication")
+    if publication is None:
+        return
+    if not isinstance(publication, dict):
+        raise SystemExit("[release-readiness] contract publication must be an object")
+
+    status = str(publication.get("status", "") or "").strip().lower()
+    allowed_statuses = {"ready", "blocked", "draft", "in_progress"}
+    if status and status not in allowed_statuses:
+        raise SystemExit(f"[release-readiness] invalid publication status {status!r}")
+
+    checklist_complete = publication.get("checklist_complete", None)
+    if checklist_complete is not None and not isinstance(checklist_complete, bool):
+        raise SystemExit("[release-readiness] publication checklist_complete must be boolean")
+
+    blockers = publication.get("blockers") or []
+    if not isinstance(blockers, list):
+        raise SystemExit("[release-readiness] publication blockers must be a list")
+    open_blockers: list[str] = []
+    for index, blocker in enumerate(blockers, start=1):
+        if not isinstance(blocker, dict):
+            raise SystemExit("[release-readiness] publication blockers must be objects")
+        title = str(blocker.get("title", "") or blocker.get("id", "") or f"blocker-{index}").strip()
+        severity = str(blocker.get("severity", "") or "medium").strip().lower()
+        blocker_status = str(blocker.get("status", "") or "open").strip().lower()
+        if severity not in {"low", "medium", "high", "critical"}:
+            raise SystemExit(f"[release-readiness] publication blocker {title!r} has invalid severity {severity!r}")
+        if severity in {"high", "critical"} and blocker_status not in {"resolved", "closed", "done"}:
+            open_blockers.append(f"{title} ({severity}, {blocker_status})")
+    if open_blockers:
+        raise SystemExit("[release-readiness] publication blocked by open high-severity blockers:\n- " + "\n- ".join(open_blockers))
+    if require_complete and checklist_complete is False:
+        raise SystemExit("[release-readiness] publication checklist is incomplete")
+    if require_complete and status and status != "ready":
+        raise SystemExit(f"[release-readiness] publication status is not ready: {status}")
+
+    print(
+        "[release-readiness] publication state OK "
+        f"(status={status or 'unspecified'}, checklist_complete={checklist_complete if checklist_complete is not None else 'unspecified'})"
+    )
+
+
 def _check_contract(
     contract: dict,
     *,
     contract_path: Path,
     website_root: Path,
+    nexo_home: Path,
     require_complete: bool,
     repo_root: Path = ROOT,
 ) -> None:
@@ -377,6 +601,14 @@ def _check_contract(
 
     if require_complete and incomplete:
         raise SystemExit("[release-readiness] contract has incomplete gates:\n- " + "\n- ".join(incomplete))
+
+    _check_critical_surfaces(
+        contract,
+        repo_root=repo_root,
+        website_root=website_root,
+        nexo_home=nexo_home,
+    )
+    _check_publication_state(contract, require_complete=require_complete)
 
     print(
         f"[release-readiness] contract OK "
@@ -492,6 +724,11 @@ def main() -> int:
         help="Optional path to a machine-readable release contract JSON file.",
     )
     parser.add_argument(
+        "--require-smoke",
+        action="store_true",
+        help="Fail unless a passing smoke artifact exists for the current version.",
+    )
+    parser.add_argument(
         "--require-contract-complete",
         action="store_true",
         help="Fail if any gate in the provided contract is not marked complete.",
@@ -518,17 +755,24 @@ def main() -> int:
     package_name = _package_name(manifest)
     nexo_home = _resolve_nexo_home(args.nexo_home)
     website_root = Path(args.website_root).expanduser()
+    contract_payload = None
+    contract_path = Path(args.contract).expanduser() if args.contract else None
+    if contract_path is not None:
+        contract_payload = _load_contract(contract_path)
     _check_changelog(version)
     _check_repo_public_surfaces(version)
     _check_duplicate_artifacts()
     _run([sys.executable, "scripts/sync_release_artifacts.py", "--check"])
     _run([sys.executable, "scripts/verify_client_parity.py"])
     _check_website(version, website_root)
-    if args.contract:
+    if args.require_smoke or args.final_closeout:
+        _check_smoke_artifact(version, contract=contract_payload)
+    if contract_payload is not None:
         _check_contract(
-            _load_contract(Path(args.contract).expanduser()),
-            contract_path=Path(args.contract).expanduser(),
+            contract_payload,
+            contract_path=contract_path,
             website_root=website_root,
+            nexo_home=nexo_home,
             require_complete=args.require_contract_complete,
         )
     if args.final_closeout:

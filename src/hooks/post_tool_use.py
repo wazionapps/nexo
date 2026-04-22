@@ -140,6 +140,21 @@ def _run(cmd: list[str], timeout: int) -> int:
         return 1
 
 
+def _run_step(cmd: list[str], timeout: int) -> tuple[int, str]:
+    try:
+        result = subprocess.run(cmd, timeout=timeout, capture_output=True, text=True)
+        return result.returncode, (result.stdout or "").strip()
+    except Exception:
+        return 1, ""
+
+
+def _combine_system_messages(*messages: str | None) -> str | None:
+    parts = [str(item).strip() for item in messages if str(item or "").strip()]
+    if not parts:
+        return None
+    return "\n\n".join(parts)
+
+
 def _read_stdin_json() -> dict:
     """Read the Claude Code hook payload from stdin. Never raises."""
     if sys.stdin.isatty():
@@ -202,11 +217,15 @@ def main() -> int:
         (["bash", str(_DIR / "heartbeat-posttool.sh")],3),
     ]
     exits = []
+    protocol_message = ""
     for cmd, timeout in steps:
         script = Path(cmd[-1])
         if not script.is_file():
             continue
-        exits.append(_run(cmd, timeout))
+        exit_code, stdout = _run_step(cmd, timeout)
+        exits.append(exit_code)
+        if script.name == "protocol-guardrail.sh" and stdout:
+            protocol_message = stdout
 
     exits.append(_run_auto_capture(payload))
 
@@ -217,8 +236,9 @@ def main() -> int:
     try:
         sid = _resolve_sid_from_payload(payload)
         reminder = check_inbox_and_emit_reminder(sid)
-        if reminder:
-            print(json.dumps({"systemMessage": reminder}))
+        combined = _combine_system_messages(protocol_message, reminder)
+        if combined:
+            print(json.dumps({"systemMessage": combined}))
     except Exception:
         pass
 
