@@ -1,14 +1,67 @@
 # Changelog
 
+## [7.4.1] - 2026-04-22
+
+Patch release. Honest correction of v7.4.0's role in the
+`guardian-claude-desktop-plan.md` pipeline and explicit statement of
+the remaining work, plus a small companion set for Desktop v0.24.1.
+
+### Clarified / honest re-statement
+
+- **`nexo_lifecycle_event` is a ledger + reconciliation authority in
+  v7.4.x. It is NOT the canonical executor of `diary+stop`.** The
+  v7.4.0 blog post and changelog entry used language that implied the
+  handler would run diary+stop itself — it does not. The actual diary
+  and session-stop injection still happens in Desktop's
+  `closeConversationGraceful` which writes prompts into the live
+  Claude process's stdin. Brain cannot do that today because no
+  Brain↔Claude-session bridge exists. Moving that responsibility to
+  Brain is real work and is scheduled for **v7.5** (new followup
+  `NF-V75-CANONICAL-DIARY-AUTHORITY`).
+- **Coverage of v7.4.0 was partial.** The paired Desktop v0.24.0
+  release wired `close`, `delete`, `archive` through the durable
+  service. `switch`, `window-close` and `app-exit` stayed on the
+  legacy flow. Desktop v0.24.1 (ships the same day as this release)
+  closes those gaps; Brain behaviour is identical for them — Brain
+  just sees the extra `event_id`s arrive via `nexo_lifecycle_event`
+  and records them.
+
+### Added
+
+- **Idempotency contract is explicit.** The v7.4.0 test suite already
+  enforced "duplicate `event_id` → `already_processed`"; this release
+  adds a CHANGELOG-level statement so the contract is discoverable
+  outside the test file.
+- **`VALID_ACTIONS` frozen set stays at six entries**: `close`,
+  `delete`, `archive`, `switch`, `app-exit`, `window-close`.
+  Enumerating a new action requires a deliberate migration — there is
+  no "close-ish" fallback that absorbs typos.
+
+### Notes
+
+- No schema migration in this release (no m52). The `lifecycle_events`
+  table shipped in v7.4.0 (m51) covers the six actions as-is.
+- Desktop v0.24.1 is the partner release. It adds the three missing
+  routes (`switch` / `window-close` / `app-exit`), NDJSON telemetry
+  trail, and exponential backoff in the reconciler. The Brain side
+  needed no code change for any of that — the ledger already accepted
+  every action from day one.
+
 ## [7.4.0] - 2026-04-22
 
-Minor release. Ships the Brain-side half of the
-`guardian-claude-desktop-plan.md` pipeline that NEXO Desktop v0.24.0
-now depends on. Every conversation lifecycle transition on Desktop
-(close / delete / archive / switch / window-close / app-exit) is
-persisted to a durable queue BEFORE any UI mutation and then relayed
-to Brain through a new MCP tool for canonical processing with strict
-idempotency.
+> **Honest correction (logged after the v7.4.1 review):** the text
+> below originally said "every conversation lifecycle transition" and
+> implied canonical processing. The actual v7.4.0 shape is: a
+> lifecycle **ledger + reconciliation authority** consumed by Desktop
+> v0.24.0 for `close`/`delete`/`archive` only. `switch`,
+> `window-close` and `app-exit` landed in Desktop v0.24.1; canonical
+> `diary+stop` execution inside this handler is deferred to v7.5.
+
+Minor release. Ships a new MCP tool `nexo_lifecycle_event` +
+`lifecycle_events` table (migration m51) + `nexo lifecycle` CLI so
+NEXO Desktop v0.24.0 can persist conversation `close`/`delete`/
+`archive` transitions durably on the Brain side and let boot
+reconciliation replay them with strict idempotency by `event_id`.
 
 ### Added
 

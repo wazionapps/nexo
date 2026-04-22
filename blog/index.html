@@ -134,7 +134,7 @@
                     <span class="page-chip">Shared brain product notes</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="/blog/nexo-7-4-0/" class="btn btn-primary">Read latest release</a>
+                    <a href="/blog/nexo-7-4-1/" class="btn btn-primary">Read latest release</a>
                     <a href="/changelog/" class="btn btn-secondary">Latest release notes</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -144,23 +144,23 @@
                 <div class="section-label">Latest release</div>
                 <div class="blog-featured-meta">
                     <span class="compare-chip">April 22, 2026</span>
-                    <span class="compare-chip">Hotfix minor release</span>
-                    <span class="compare-chip">Guardian wire + map distribution</span>
+                    <span class="compare-chip">Patch release</span>
+                    <span class="compare-chip">Honest correction + closure</span>
                 </div>
-                <h2>NEXO 7.4.0: guardian-claude-desktop lifecycle pipeline — nexo_lifecycle_event + idempotency + Desktop durable queue</h2>
-                <p>v7.4.0 ships the Brain-side half of the guardian-claude-desktop-plan.md pipeline that NEXO Desktop v0.24.0 now depends on. Every conversation lifecycle transition on Desktop (close / delete / archive / switch / window-close / app-exit) is persisted to a durable queue BEFORE any UI mutation becomes visible and then relayed to Brain through a new MCP tool <code>nexo_lifecycle_event</code> for canonical processing. Re-delivery of the same event_id returns already_processed without re-running any side effect — strict idempotency. Companion <code>nexo_lifecycle_status(event_id)</code> powers Desktop's boot-time reconciliation. Backed by a new <code>lifecycle_events</code> table (migration m51) keyed by event_id, a <code>nexo lifecycle record</code> / <code>nexo lifecycle status</code> CLI that lets Desktop bridge without any new IPC surface, and 12 new contract tests. No breaking changes. Total MCP tools bumped 260 → 262. Install coordinates automatically via <code>nexo update</code>.</p>
+                <h2>NEXO 7.4.1: guardian-claude-desktop lifecycle closure — ledger/authority split made explicit, partner Desktop v0.24.1 covers the last 3 routes</h2>
+                <p>v7.4.1 corrects the over-promise in the v7.4.0 release notes and locks in the exact role of <code>nexo_lifecycle_event</code>: a ledger + reconciliation authority, NOT the canonical executor of <code>diary+stop</code>. Diary+stop injection still happens in Desktop's <code>closeConversationGraceful</code> (the only place that writes to the live Claude process's stdin); moving that responsibility to Brain requires a Brain↔Claude-session bridge that does not exist yet and is scheduled for v7.5 (followup <code>NF-V75-CANONICAL-DIARY-AUTHORITY</code>). The paired Desktop v0.24.1 wires the remaining <code>switch</code> / <code>window-close</code> / <code>app-exit</code> transitions through the same durable service, adds an NDJSON telemetry trail keyed by <code>event_id</code> and an exponential backoff in the reconciler. Brain needed no code change for that — the ledger already accepted every action from day one. No schema migration; <code>VALID_ACTIONS</code> stays frozen at six entries.</p>
                 <div class="hero-actions" style="justify-content:flex-start;margin-bottom:18px;">
-                    <a href="/blog/nexo-7-4-0/" class="btn btn-primary">Open article</a>
-                    <a href="/changelog/#v740" class="btn btn-secondary">Open changelog</a>
+                    <a href="/blog/nexo-7-4-1/" class="btn btn-primary">Open article</a>
+                    <a href="/changelog/#v741" class="btn btn-secondary">Open changelog</a>
                 </div>
                 <div class="blog-mini-stack">
                     <div class="blog-mini-card">
                         <strong>Companion view</strong>
-                        <span><a href="/changelog/#v740">See the full v7.4.0 changelog</a></span>
+                        <span><a href="/changelog/#v741">See the full v7.4.1 changelog</a></span>
                     </div>
                     <div class="blog-mini-card">
                         <strong>Previous release</strong>
-                        <span><a href="/blog/nexo-7-3-0/">NEXO 7.3.0: Guardian wire hotfix — PreToolUse properly registered, post-sync runs the fresh tree, tool-enforcement-map now shipped via npm</a>.</span>
+                        <span><a href="/blog/nexo-7-4-0/">NEXO 7.4.0: guardian-claude-desktop lifecycle pipeline — nexo_lifecycle_event + lifecycle_events table + m51</a>.</span>
                     </div>
                 </div>
             </div>
@@ -175,8 +175,17 @@
 
             <div class="blog-card">
                 <div class="blog-card-date">April 22, 2026</div>
+                <h2><a href="/blog/nexo-7-4-1/">NEXO 7.4.1: guardian-claude-desktop lifecycle closure — ledger/authority split made explicit, partner Desktop v0.24.1 covers the last 3 routes</a></h2>
+                <p>Patch release. Honest correction of v7.4.0's role: <code>nexo_lifecycle_event</code> is a ledger + reconciliation authority, NOT the canonical executor of <code>diary+stop</code>. Canonical diary+stop execution inside the handler is explicitly deferred to v7.5 (needs a Brain↔Claude-session bridge that does not exist yet). Paired Desktop v0.24.1 wires the remaining switch/window-close/app-exit routes through the durable service, adds NDJSON telemetry and exponential backoff. No schema migration; VALID_ACTIONS stays frozen.</p>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/blog/nexo-7-4-1/" class="btn btn-secondary">Read more</a>
+                </div>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 22, 2026</div>
                 <h2><a href="/blog/nexo-7-4-0/">NEXO 7.4.0: guardian-claude-desktop lifecycle pipeline — nexo_lifecycle_event + idempotency + Desktop durable queue</a></h2>
-                <p>Minor release. Ships the Brain-side of the guardian-claude-desktop-plan.md pipeline: new <code>nexo_lifecycle_event</code> and <code>nexo_lifecycle_status</code> MCP tools, a <code>lifecycle_events</code> table (migration m51) keyed by event_id, and a <code>nexo lifecycle</code> CLI subcommand so Desktop v0.24.0 can persist every close/delete/archive/switch transition durably before touching the UI and replay on the next boot if Brain was unreachable. 12 new contract tests. No breaking changes.</p>
+                <p>Minor release. Ships the Brain-side first slice of the guardian-claude-desktop-plan.md pipeline: new <code>nexo_lifecycle_event</code> and <code>nexo_lifecycle_status</code> MCP tools, a <code>lifecycle_events</code> table (migration m51) keyed by event_id, and a <code>nexo lifecycle</code> CLI subcommand so Desktop v0.24.0 can persist close/delete/archive transitions durably and replay on the next boot. 12 new contract tests. No breaking changes.</p>
                 <div class="hero-actions" style="justify-content:flex-start;">
                     <a href="/blog/nexo-7-4-0/" class="btn btn-secondary">Read more</a>
                 </div>
