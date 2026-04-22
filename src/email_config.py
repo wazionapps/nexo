@@ -122,9 +122,15 @@ def _account_to_legacy_shape(
         "password": runtime_account["password"],
         "operator_email": default_operator_email,
         "operator_aliases": list(extra_operator_emails or []),
-        # Transitional compatibility for older scripts that still read the
-        # pre-F2 alias key directly.
-        "francisco_emails": list(extra_operator_emails or []),
+        # Historical note: earlier versions exported the same list under the
+        # ``francisco_emails`` key for scripts that still referenced the
+        # operator's email by a personal name. The key leaked the operator
+        # identity into anything consuming the email config dict, so it has
+        # been removed. Callers must read ``operator_aliases`` instead. The
+        # legacy ``francisco_emails`` key inside ~/.nexo/nexo-email/config.json
+        # is still tolerated at ingest time (see _operator_aliases in
+        # automation_controls.py and nexo-email-monitor.py) so upgrades from
+        # old runtimes do not break; it just no longer round-trips here.
         "trusted_domains": runtime_account["trusted_domains"],
         "sender_policy": runtime_account["sender_policy"],
         "sent_folder": runtime_account["sent_folder"],

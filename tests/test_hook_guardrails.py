@@ -677,3 +677,139 @@ def test_process_pre_tool_event_allows_python_inline_read_from_runtime_core(guar
 
     assert result["ok"] is True
     assert result["skipped"] is True
+
+
+# --- LaunchAgent plist protection -----------------------------------------
+# Agentic edits to ~/Library/LaunchAgents/com.nexo.*.plist must be blocked
+# so that the plist regeneration flow remains the canonical surface
+# (``nexo scripts ensure-schedules`` / auto_update regenerator). Core flows
+# that *should* regenerate plists set NEXO_CORE_WRITES_ALLOWED=1 via
+# ``product_mode.core_writes_allowed()`` and bypass this gate.
+
+
+_FAKE_LAUNCHAGENT = "/Users/testop/Library/LaunchAgents/com.nexo.runner-health-check.plist"
+
+
+def test_is_protected_launchagent_path_matches_nexo_plists():
+    db, hook_guardrails = _reload_guardrail_stack()
+    assert hook_guardrails._is_protected_launchagent_path(_FAKE_LAUNCHAGENT) is True
+    assert hook_guardrails._is_protected_launchagent_path(
+        "~/Library/LaunchAgents/com.nexo.morning-agent.plist"
+    ) is True
+
+
+def test_is_protected_launchagent_path_ignores_foreign_plists():
+    db, hook_guardrails = _reload_guardrail_stack()
+    assert hook_guardrails._is_protected_launchagent_path(
+        "/Users/testop/Library/LaunchAgents/com.apple.itunes.plist"
+    ) is False
+    assert hook_guardrails._is_protected_launchagent_path(
+        "/Users/testop/Documents/com.nexo.fake.plist"
+    ) is False
+    assert hook_guardrails._is_protected_launchagent_path("") is False
+
+
+def test_process_pre_tool_event_blocks_edit_on_launchagent_plist(guardrail_env, monkeypatch):
+    monkeypatch.setenv("NEXO_HOME", str(guardrail_env))
+    db, hook_guardrails = _reload_guardrail_stack()
+    db.init_db()
+    monkeypatch.setattr(hook_guardrails, "get_protocol_strictness", lambda: "strict")
+    monkeypatch.setattr(hook_guardrails, "core_writes_allowed", lambda: False)
+    db.register_session(
+        "nexo-2030-3030",
+        "launchagent edit block",
+        external_session_id="claude-launchagent-1",
+        session_client="claude_code",
+    )
+
+    result = hook_guardrails.process_pre_tool_event(
+        {
+            "session_id": "claude-launchagent-1",
+            "tool_name": "Edit",
+            "tool_input": {"file_path": _FAKE_LAUNCHAGENT},
+        }
+    )
+
+    assert result["status"] == "blocked"
+    assert result["blocks"][0]["debt_type"] == "launchagent_plist_write_blocked"
+    assert result["blocks"][0]["file"] == _FAKE_LAUNCHAGENT
+
+
+def test_process_pre_tool_event_blocks_bash_write_to_launchagent_plist(guardrail_env, monkeypatch):
+    monkeypatch.setenv("NEXO_HOME", str(guardrail_env))
+    db, hook_guardrails = _reload_guardrail_stack()
+    db.init_db()
+    monkeypatch.setattr(hook_guardrails, "get_protocol_strictness", lambda: "strict")
+    monkeypatch.setattr(hook_guardrails, "core_writes_allowed", lambda: False)
+    db.register_session(
+        "nexo-2031-3031",
+        "launchagent bash block",
+        external_session_id="claude-launchagent-2",
+        session_client="claude_code",
+    )
+
+    command = f"echo 'stuff' > {_FAKE_LAUNCHAGENT}"
+    result = hook_guardrails.process_pre_tool_event(
+        {
+            "session_id": "claude-launchagent-2",
+            "tool_name": "Bash",
+            "tool_input": {"command": command},
+        }
+    )
+
+    assert result["status"] == "blocked"
+    assert result["blocks"][0]["debt_type"] == "launchagent_plist_write_blocked"
+
+
+def test_process_pre_tool_event_allows_launchagent_write_under_core_writes_allowed(guardrail_env, monkeypatch):
+    monkeypatch.setenv("NEXO_HOME", str(guardrail_env))
+    db, hook_guardrails = _reload_guardrail_stack()
+    db.init_db()
+    monkeypatch.setattr(hook_guardrails, "get_protocol_strictness", lambda: "lenient")
+    monkeypatch.setattr(hook_guardrails, "core_writes_allowed", lambda: True)
+    db.register_session(
+        "nexo-2032-3032",
+        "launchagent core bypass",
+        external_session_id="claude-launchagent-3",
+        session_client="claude_code",
+    )
+
+    result = hook_guardrails.process_pre_tool_event(
+        {
+            "session_id": "claude-launchagent-3",
+            "tool_name": "Edit",
+            "tool_input": {"file_path": _FAKE_LAUNCHAGENT},
+        }
+    )
+
+    # Lenient mode + core_writes_allowed => hook_guardrails returns skipped,
+    # not a launchagent block.
+    assert result.get("status") != "blocked"
+
+
+def test_process_pre_tool_event_does_not_block_foreign_plists(guardrail_env, monkeypatch):
+    monkeypatch.setenv("NEXO_HOME", str(guardrail_env))
+    db, hook_guardrails = _reload_guardrail_stack()
+    db.init_db()
+    monkeypatch.setattr(hook_guardrails, "get_protocol_strictness", lambda: "lenient")
+    monkeypatch.setattr(hook_guardrails, "core_writes_allowed", lambda: False)
+    db.register_session(
+        "nexo-2033-3033",
+        "foreign plist untouched",
+        external_session_id="claude-foreign-plist",
+        session_client="claude_code",
+    )
+
+    result = hook_guardrails.process_pre_tool_event(
+        {
+            "session_id": "claude-foreign-plist",
+            "tool_name": "Edit",
+            "tool_input": {"file_path": "/Users/testop/Library/LaunchAgents/com.apple.itunes.plist"},
+        }
+    )
+
+    # Foreign plist must not be reported as launchagent_plist_write_blocked.
+    blocks = result.get("blocks", []) or []
+    assert all(
+        b.get("debt_type") != "launchagent_plist_write_blocked" for b in blocks
+    )
