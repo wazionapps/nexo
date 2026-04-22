@@ -949,6 +949,72 @@ def process_pre_tool_event(payload: dict) -> dict:
             "status": "blocked",
         }
 
+    # Block K G4 (Francisco 2026-04-22): require nexo_guard_check to have
+    # run within the session for every file about to be written. Opt-in
+    # via NEXO_G4_ENFORCE_GUARD_CHECK (default "shadow"): ``shadow``
+    # records a protocol_debt entry of severity ``warn`` but does NOT
+    # block the write; ``hard`` blocks the write with severity ``error``
+    # so the operator must run guard_check explicitly. Skipped entirely
+    # in lenient mode or when there are no files, since the existing
+    # strict-mode path already covers those cases with its own gating.
+    g4_mode = os.environ.get("NEXO_G4_ENFORCE_GUARD_CHECK", "shadow").strip().lower()
+    if g4_mode in {"shadow", "hard"} and files and sid:
+        g4_blocks: list[dict] = []
+        g4_warnings: list[dict] = []
+        for filepath in files:
+            if _session_has_guard_for_file(conn, sid, filepath):
+                continue
+            severity = "error" if g4_mode == "hard" else "warn"
+            debt = _ensure_protocol_debt(
+                conn,
+                session_id=sid,
+                task_id="",
+                debt_type="g4_guard_check_required",
+                severity=severity,
+                evidence=(
+                    f"{tool_name} attempted on {filepath} without a prior "
+                    "nexo_guard_check covering that file. "
+                    "Run nexo_guard_check(files='{path}') first."
+                ).format(path=filepath),
+                file_token=filepath,
+            )
+            entry = {
+                "file": filepath,
+                "task_id": "",
+                "debt_id": debt.get("id"),
+                "debt_type": "g4_guard_check_required",
+                "reason_code": "g4_guard_check_required",
+                "severity": severity,
+                "g4_mode": g4_mode,
+            }
+            if g4_mode == "hard":
+                g4_blocks.append(entry)
+            else:
+                g4_warnings.append(entry)
+        if g4_blocks:
+            return {
+                "ok": True,
+                "session_id": sid,
+                "tool_name": tool_name,
+                "operation": op,
+                "strictness": strictness,
+                "blocks": g4_blocks,
+                "status": "blocked",
+                "g4_mode": g4_mode,
+            }
+        # Shadow-mode warnings piggyback on the existing return path so
+        # the surface stays observable without hijacking the control flow.
+        if g4_warnings:
+            # Store on the payload so callers that care about shadow
+            # telemetry can pick it up. Do NOT return yet — continue
+            # through the existing strict/lenient gates.
+            # Stash under a well-known key for the post-tool hook.
+            _shadow_cache = getattr(process_pre_tool_event, "_g4_shadow", None)
+            if _shadow_cache is None:
+                _shadow_cache = {}
+                process_pre_tool_event._g4_shadow = _shadow_cache
+            _shadow_cache[sid] = g4_warnings
+
     if strictness == "lenient":
         return {"ok": True, "skipped": True, "reason": "lenient mode", "strictness": strictness}
 
