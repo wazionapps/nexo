@@ -143,24 +143,24 @@
             <div class="blog-featured-card">
                 <div class="section-label">Latest release</div>
                 <div class="blog-featured-meta">
-                    <span class="compare-chip">April 22, 2026</span>
+                    <span class="compare-chip">April 23, 2026</span>
                     <span class="compare-chip">Patch</span>
-                    <span class="compare-chip">Emergency-diary exact SID</span>
+                    <span class="compare-chip">hook_runs sid observability</span>
                 </div>
-                <h2>NEXO 7.8.1: v7.8 emergency-diary SID targeting — Layer 2 + Layer 3 use exact TARGET_SID, fail-closed, behavioural tests</h2>
-                <p>Patch over v7.8.0. pre-compact.sh Layer 2 emergency auto-diary and Layer 3 record_auto_flush were still using "latest active session"; v7.8.1 routes both to the exact TARGET_SID resolved from CLAUDE_SESSION_ID at the top of the hook. Fail-closed when no SID resolves. last_diary_ts scoped by session_id. Two new behavioural tests drive the real shell against a fixture DB with two sessions. Adding those tests surfaced a latent bash-escape bug: a double-quoted phrase inside a Python comment silently closed the python3 -c argument — fixed. 2092 pytest passing. No Desktop bump.</p>
+                <h2>NEXO 7.8.2: hook_runs sid observability — compact hooks now store the resolved NEXO sid, not the raw Claude token</h2>
+                <p>Patch over v7.8.1. pre_compact.py and post_compact.py were storing the raw CLAUDE_SESSION_ID token in hook_runs.session_id (7/8 recent compact rows were empty, and even when populated they did not match the NEXO sid format). v7.8.2 adds compact_session_resolver.resolve_nexo_sid which walks sessions → aliases → per-conv sidecar → legacy global sidecar, and both wrappers now record the real NEXO sid plus claude_session_id + sid_source in metadata. Nine new tests. No Desktop bump.</p>
                 <div class="hero-actions" style="justify-content:flex-start;margin-bottom:18px;">
-                    <a href="/blog/nexo-7-8-1/" class="btn btn-primary">Open article</a>
-                    <a href="/changelog/#v781" class="btn btn-secondary">Open changelog</a>
+                    <a href="/blog/nexo-7-8-2/" class="btn btn-primary">Open article</a>
+                    <a href="/changelog/#v782" class="btn btn-secondary">Open changelog</a>
                 </div>
                 <div class="blog-mini-stack">
                     <div class="blog-mini-card">
                         <strong>Companion view</strong>
-                        <span><a href="/changelog/#v781">See the full v7.8.1 changelog</a></span>
+                        <span><a href="/changelog/#v782">See the full v7.8.2 changelog</a></span>
                     </div>
                     <div class="blog-mini-card">
                         <strong>Previous release</strong>
-                        <span><a href="/blog/nexo-7-8-0/">NEXO 7.8.0: compaction continuity closed end-to-end</a>.</span>
+                        <span><a href="/blog/nexo-7-8-1/">NEXO 7.8.1: v7.8 emergency-diary SID targeting</a>.</span>
                     </div>
                 </div>
             </div>
@@ -191,6 +191,15 @@
 <section class="section-flush-top">
     <div class="container">
         <div class="blog-grid">
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 23, 2026</div>
+                <h2><a href="/blog/nexo-7-8-2/">NEXO 7.8.2: hook_runs sid observability — compact hooks now store the resolved NEXO sid, not the raw Claude token</a></h2>
+                <p>Patch over v7.8.1. New compact_session_resolver walks sessions → aliases → per-conv sidecar → legacy global sidecar to resolve the NEXO sid. pre_compact.py + post_compact.py store the real sid in hook_runs.session_id (ending the 7/8 empty-row rate) and stash claude_session_id + sid_source in metadata. 9 new tests. No Desktop bump.</p>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/blog/nexo-7-8-2/" class="btn btn-secondary">Read more</a>
+                </div>
+            </div>
 
             <div class="blog-card">
                 <div class="blog-card-date">April 22, 2026</div>
