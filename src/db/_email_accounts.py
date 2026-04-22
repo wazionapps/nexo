@@ -78,6 +78,22 @@ def add_email_account(
         raise ValueError("label and email are required")
     if role not in VALID_ROLES:
         raise ValueError(f"role must be one of {VALID_ROLES}, got {role!r}")
+    # AUDITOR-3RDPASS §Risk 3: the SELECT (``get_email_account``) and the
+    # follow-up INSERT ... ON CONFLICT DO UPDATE below used to run as two
+    # independent statements on the shared connection. A concurrent writer
+    # (Desktop + cron overlap) could slip a metadata mutation between them
+    # and get silently overwritten by whatever ``existing.get("metadata")``
+    # we captured here. Wrap the read-modify-write in ``BEGIN IMMEDIATE``
+    # so the row is pinned against concurrent writers for the duration of
+    # the upsert. WAL mode still lets readers through, so no lock storm.
+    conn = _get_db()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        _owns_txn = True
+    except Exception:
+        # Already inside a transaction (e.g. caller wrapped the whole flow);
+        # trust the caller's boundary instead of nesting an IMMEDIATE.
+        _owns_txn = False
     existing = get_email_account(label) or {}
     clean_account_type = str(account_type or existing.get("account_type") or "agent").strip().lower()
     if clean_account_type not in VALID_ACCOUNT_TYPES:
@@ -166,7 +182,10 @@ def add_email_account(
             now,
         ),
     )
-    conn.commit()
+    # Only commit/close the transaction we opened ourselves. Callers that
+    # already wrapped the flow in their own transaction must keep control.
+    if _owns_txn:
+        conn.commit()
     return get_email_account(label) or {}
 
 

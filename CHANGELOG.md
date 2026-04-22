@@ -1,5 +1,94 @@
 # Changelog
 
+## [7.1.8] - 2026-04-22
+
+Batch release of the overnight 2026-04-21 → 04-22 session: Block K
+Guardian/Enforcer roadmap items, Block D hardcode cleanup, Block E
+product guards, and several pre-existing audit residuals.
+
+### Added
+
+- `src/server.py` exports `nexo_cortex_check`, `nexo_guard_check`,
+  `nexo_task_open`, `nexo_task_acknowledge_guard`, `nexo_task_close`,
+  `nexo_workflow_open`, `nexo_workflow_update` as first-class
+  `@mcp.tool` handlers. `nexo_task_open` accepts a new `ack_rules`
+  kwarg that inline-delegates to `handle_task_acknowledge_guard`
+  (Block K G7).
+- `src/db/_schema.py` migration v49 backfills
+  `protocol_tasks.guard_acknowledged` columns for installs that
+  marked v22 applied before those columns existed.
+- `src/db/_schema.py` migration v50 physically supersedes the
+  `NEXO Brain producto vs instancia personal` duplicate learning
+  pair (Block D.2).
+- `src/hook_guardrails.py` new pre-tool gates:
+  - `launchagent_plist_write_blocked` rejects agentic edits to
+    `~/Library/LaunchAgents/com.nexo.*.plist` unless
+    `product_mode.core_writes_allowed()` is set (Block E.6).
+  - `g4_guard_check_required` enforces that `Edit/Write/Bash-write`
+    runs after `nexo_guard_check` for the same file. Shadow by
+    default; `NEXO_G4_ENFORCE_GUARD_CHECK=hard` promotes to a hard
+    block (Block K G4).
+  - `g3_destructive_command_requires_cortex` flags destructive Bash
+    shapes (`rm -rf`, `git push --force`, `DROP TABLE`, `curl|bash`,
+    `dd of=/dev/…`, `chmod -R 777`) and requires
+    `nexo_cortex_decide` before retrying. Shadow by default;
+    `NEXO_G3_ENFORCE_DESTRUCTIVE=hard` promotes to a hard block
+    (Block K G3).
+- `src/scripts/deep-sleep/phase_protocol_debt_drain.py` nightly phase
+  classifies open `protocol_debt` rows as stale / still_valid /
+  requires_user and auto-drains the stale ones with a transparent
+  audit JSON (Block K G2).
+- `src/hooks/session-start.sh` emits a `## Guardian Health` section
+  in `session-briefing.txt` with open-debt totals + per-type
+  breakdown + guard-check activity + failing hooks, with an ACTION
+  NEEDED banner when thresholds are crossed (Block K G8).
+- `src/scripts/runner-health-check.py` promoted from personal to core
+  (NF-DS-2442056C); `src/scripts/nexo_personal_automation.py`
+  promoted as canonical personal-script automation helper
+  (NF-DS-857651BA).
+- `scripts/audit_semantic_hardcodes.py` lists keyword/regex
+  candidates for the local zero-shot classifier (Block D.1).
+- `src/scripts/backfill_task_owner.py` routes its textual
+  classification through the local zero-shot classifier with the
+  regex ladder kept only as fallback (Block D.1).
+
+### Fixed
+
+- `src/auto_update.py` `_name = "NEXO"` fallbacks now route through
+  `DEFAULT_ASSISTANT_NAME`, so the product identity never leaks
+  into user-visible update prompts or the managed CLAUDE.md
+  (Block E.1/E.2).
+- `src/email_config.py` stops exporting `francisco_emails` from
+  `load_email_config()`; callers must now read `operator_aliases`.
+  Legacy ingest from `~/.nexo/nexo-email/config.json` stays intact.
+- `src/db/_email_accounts.add_email_account` wraps its
+  SELECT + upsert inside `BEGIN IMMEDIATE` so concurrent writers
+  cannot race the metadata preserve branch
+  (AUDITOR-3RDPASS §Risk 3).
+- `src/cli.py::_ordered_available_terminal_clients` surfaces every
+  installed terminal client instead of filtering by the `enabled`
+  preference first, so `nexo chat` never skips the picker when
+  Claude Code and Codex are both installed (bug 2026-04-22).
+- `src/classifier_local.py` docstring shows the real
+  `ClassificationResult` dataclass API (AUDITOR-NOCTURNO §L1).
+- `scripts/check_no_personal_data.sh` adds a regex-shape detection
+  layer with an allowlist so the privacy guard catches leak shapes
+  from any operator identity (AUDITOR-3RDPASS §Risk 1).
+
+### Verification
+
+- Suite: `pytest tests/test_protocol.py tests/test_hook_guardrails.py
+  tests/test_email_accounts.py tests/test_phase_protocol_debt_drain.py
+  tests/test_m50_dedupe_learning_pair.py
+  tests/test_cli_chat_client_picker.py
+  tests/test_backfill_task_owner_classifier_hook.py
+  tests/test_server_protocol_exports.py
+  tests/test_cron_wrapper_disabled_gate.py
+  tests/test_assistant_name_reserved_fallbacks.py -q` → green.
+- `scripts/verify_client_parity.py` → 179 passed + docs OK +
+  parity OK.
+
+
 ## [7.1.7] - 2026-04-21
 
 Patch release over v7.1.6. This line closes a real operator-facing language
