@@ -44,12 +44,22 @@ if [ -f "$NEXO_DB" ] && [ -n "${CLAUDE_SESSION_ID:-}" ]; then
 fi
 
 if [ -f "$NEXO_DB" ] && [ -n "$TARGET_SID" ] && [[ "$TARGET_SID" =~ ^nexo-[0-9]+-[0-9]+$ ]]; then
-    # Persist the resolved SID so PostCompact reads the EXACT session that
-    # just compacted, not some "latest" from whichever conv was touched
-    # most recently. File lives under NEXO_HOME, not /tmp, so two
-    # concurrent compactions on two conversations do not clobber each
-    # other across reboots or TMPDIR cleanups.
-    COMPACT_STATE="$DATA_DIR/compacting-sid.txt"
+    # v7.8.1 (Francisco correction): the sidecar is per-conversation now.
+    # A single global `compacting-sid.txt` let two near-concurrent
+    # compactions on two different conversations clobber each other's
+    # state. We key the sidecar by the Claude session token that fired
+    # this hook (unique per conversation in Desktop). If the env token
+    # is unset we keep writing the legacy global file so single-conv
+    # callers are unaffected.
+    mkdir -p "$DATA_DIR/compacting" 2>/dev/null || true
+    if [ -n "${CLAUDE_SESSION_ID:-}" ]; then
+        # Sanitise to a filesystem-safe token without paying a subshell
+        # per hook invocation.
+        SAFE_CLAUDE_ID="${CLAUDE_SESSION_ID//[^a-zA-Z0-9._-]/_}"
+        COMPACT_STATE="$DATA_DIR/compacting/$SAFE_CLAUDE_ID.txt"
+    else
+        COMPACT_STATE="$DATA_DIR/compacting-sid.txt"
+    fi
     printf '%s\n' "$TARGET_SID" > "$COMPACT_STATE"
 
     # Pull diary draft data into checkpoint for the EXACT session.

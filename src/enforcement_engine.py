@@ -2315,16 +2315,30 @@ class HeadlessEnforcer:
         self._consume_pending_hook_events()
 
     def _consume_pending_hook_events(self):
-        """v7.8 — drain ~/.nexo/runtime/data/pending_enforcer_events.ndjson.
+        """v7.8 / v7.8.1 — drain queued hook events for THIS session only.
 
-        pre-compact.sh and post-compact.sh run in separate processes so
+        pre-compact.sh and post-compact.sh run in separate processes, so
         they cannot call `raise_event()` directly. They append one NDJSON
-        row per event to this file; the engine consumes the queue on
-        every periodic tick and fires the matching `on_event` rule.
-        The queue file is truncated after a successful read so a single
-        event never fires twice.
+        row per event to `~/.nexo/runtime/data/pending_enforcer_events.ndjson`.
 
-        Fail-closed: any parse / IO error is swallowed so a broken queue
+        v7.8.1 (Francisco correction): the queue is GLOBAL across all
+        concurrent sessions, so the engine MUST filter by `self._session_id`
+        before consuming. The original v7.8 drain read every row, fired
+        `raise_event` for all of them, then truncated the whole file —
+        that let a session A enforcer eat events addressed to session B.
+        The fix:
+
+          * Read all rows.
+          * Split into (mine, others) by comparing row["session_id"] to
+            the engine's own `_session_id`.
+          * Fire `raise_event` for MY rows only.
+          * Rewrite the file with only the OTHERS (plus any rows whose
+            session_id we cannot parse — leave them for the next run).
+
+        This preserves the "no double-fire" invariant and also closes
+        the cross-session consumption bug.
+
+        Fail-closed: any parse/IO error is swallowed so a broken queue
         cannot crash enforcement.
         """
         try:
@@ -2336,25 +2350,48 @@ class HeadlessEnforcer:
             import json
             try:
                 with open(queue_path, "r", encoding="utf-8") as fh:
-                    lines = [ln.strip() for ln in fh.readlines() if ln.strip()]
+                    raw_lines = [ln.rstrip("\n") for ln in fh.readlines()]
             except Exception:
                 return
-            if not lines:
+            if not raw_lines:
                 return
-            # Truncate immediately so the same row never re-fires. Any
-            # event that fails to parse below is silently dropped — the
-            # hooks that wrote the row are the source of truth, the
-            # engine is a consumer.
-            try:
-                open(queue_path, "w", encoding="utf-8").close()
-            except Exception:
-                pass
-            for raw in lines:
-                try:
-                    row = json.loads(raw)
-                except Exception:
+            own_sid = str(self._session_id or "").strip()
+            mine: list[dict] = []
+            keep_raw: list[str] = []
+            for line in raw_lines:
+                s = line.strip()
+                if not s:
                     continue
-                event = row.get("event")
+                try:
+                    row = json.loads(s)
+                except Exception:
+                    # Preserve malformed lines so an unrelated parser
+                    # error does not silently drop another session's event.
+                    keep_raw.append(s)
+                    continue
+                row_sid = str((row or {}).get("session_id") or "").strip()
+                if own_sid and row_sid and row_sid == own_sid:
+                    mine.append(row)
+                elif not own_sid:
+                    # Engine has no session id yet (startup edge). Do
+                    # not consume anything — another session might own
+                    # these rows.
+                    keep_raw.append(s)
+                else:
+                    keep_raw.append(s)
+            # Rewrite the file with the rows this session did NOT claim.
+            try:
+                with open(queue_path, "w", encoding="utf-8") as fh:
+                    for kept in keep_raw:
+                        fh.write(kept + "\n")
+            except Exception:
+                # If the rewrite fails we still have the events cached in
+                # `mine`; we just live with a duplicate-risk for the next
+                # read (still bounded — raise_event is itself idempotent
+                # via its dedup tag).
+                pass
+            for row in mine:
+                event = (row or {}).get("event")
                 if not isinstance(event, str) or not event:
                     continue
                 try:

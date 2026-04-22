@@ -30,7 +30,17 @@ fi
 # we FAIL-CLOSED: print a diagnostic Core Memory Block acknowledging
 # the drop and exit without injecting stale context.
 TARGET_SID=""
-COMPACT_STATE="$DATA_DIR/compacting-sid.txt"
+# v7.8.1 — per-conversation sidecar. If CLAUDE_SESSION_ID is present
+# we read the token-specific file; otherwise (single-conv legacy path)
+# fall back to the global file. Either way, we rm ONLY the file we
+# actually consumed, never another session's.
+SAFE_CLAUDE_ID=""
+if [ -n "${CLAUDE_SESSION_ID:-}" ]; then
+    SAFE_CLAUDE_ID="${CLAUDE_SESSION_ID//[^a-zA-Z0-9._-]/_}"
+    COMPACT_STATE="$DATA_DIR/compacting/$SAFE_CLAUDE_ID.txt"
+else
+    COMPACT_STATE="$DATA_DIR/compacting-sid.txt"
+fi
 if [ -f "$COMPACT_STATE" ]; then
     RAW_SID=$(cat "$COMPACT_STATE" 2>/dev/null || echo "")
     rm -f "$COMPACT_STATE"

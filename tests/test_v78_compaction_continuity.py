@@ -186,16 +186,24 @@ def test_engine_consumes_pending_events_on_periodic_tick():
     )
 
 
-def test_engine_consumer_truncates_queue_after_read():
-    """Rail 4 part 3: a row must not fire twice. The consumer must
-    truncate the queue file after reading."""
+def test_engine_consumer_rewrites_queue_without_mine():
+    """Rail 4 part 3 (v7.8.1 update): consumed rows must not fire
+    twice, but other sessions' rows must survive. The v7.8.0 code
+    truncated the whole file; v7.8.1 rewrites the file with the rows
+    this session did NOT claim (`keep_raw`) so cross-session events
+    persist for the engine that owns them."""
     src = ENGINE.read_text(encoding="utf-8")
     idx = src.find("def _consume_pending_hook_events(self)")
     assert idx != -1
-    window = src[idx:idx + 3000]
-    assert 'open(queue_path, "w"' in window or 'open(queue_path,"w"' in window, (
-        "consumer must truncate the queue file after reading so events "
-        "never fire twice."
+    window = src[idx:idx + 5000]
+    # The consumer MUST open the queue for write and MUST write
+    # `keep_raw` back — not truncate unconditionally.
+    assert 'open(queue_path, "w"' in window, (
+        "consumer must reopen the queue for write to drop its own rows."
+    )
+    assert "keep_raw" in window, (
+        "consumer must preserve other sessions' rows in `keep_raw` when "
+        "rewriting the queue (v7.8.1 cross-session fix)."
     )
 
 
@@ -232,3 +240,160 @@ def test_compaction_count_is_incremented_only_on_real_restore():
         "compaction_count++ must live inside the real-restore branch of "
         "post-compact.sh (not the no-checkpoint fallback)."
     )
+
+
+# ── v7.8.1 — per-session queue + per-session sidecar (behavioural) ────
+
+
+def _build_engine_for_session(sid: str):
+    """Instantiate a real HeadlessEnforcer pinned to a specific SID so
+    the behavioural tests below can reproduce the multi-conversation
+    race Francisco flagged."""
+    import sys
+    sys.path.insert(0, str(REPO_ROOT / "src"))
+    from enforcement_engine import HeadlessEnforcer as _EE  # noqa: E402
+    eng = _EE()
+    eng._session_id = sid
+    return eng
+
+
+def _write_queue(queue_path, rows):
+    with open(queue_path, "w", encoding="utf-8") as fh:
+        for row in rows:
+            fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+
+def _read_queue(queue_path):
+    if not queue_path.is_file():
+        return []
+    out = []
+    for line in queue_path.read_text(encoding="utf-8").splitlines():
+        s = line.strip()
+        if not s:
+            continue
+        try:
+            out.append(json.loads(s))
+        except Exception:
+            out.append({"__raw__": s})
+    return out
+
+
+def test_rail_multi_conv_queue_filters_by_session_id(tmp_path, monkeypatch):
+    """v7.8.1 — Francisco's crash test: engine A (session_id=nexo-MINE-1)
+    must NOT consume an event written for session B (nexo-OTHER-1).
+    Before the fix the consumer truncated the whole queue and fired
+    raise_event for every row it saw, so session A ate session B's
+    event and B never recovered it.
+    """
+    nexo_home = tmp_path / ".nexo"
+    data_dir = nexo_home / "runtime" / "data"
+    data_dir.mkdir(parents=True)
+    queue_path = data_dir / "pending_enforcer_events.ndjson"
+    monkeypatch.setenv("NEXO_HOME", str(nexo_home))
+
+    # Two events live concurrently in the global queue: one for MINE,
+    # one for OTHER. Engine A is pinned to MINE.
+    _write_queue(queue_path, [
+        {"event": "pre_compaction",  "session_id": "nexo-MINE-1",  "claude_session_id": "cs-mine"},
+        {"event": "post_compaction", "session_id": "nexo-OTHER-1", "claude_session_id": "cs-other"},
+    ])
+
+    eng = _build_engine_for_session("nexo-MINE-1")
+    # Clear any queued injections so the test can read only what the
+    # consumer produced.
+    eng.injection_queue.clear()
+    eng._consume_pending_hook_events()
+
+    # Queue must still contain OTHER's event (it was not this session's).
+    remaining = _read_queue(queue_path)
+    sids = [r.get("session_id") for r in remaining]
+    assert "nexo-OTHER-1" in sids, (
+        "Global queue consumer MUST leave other sessions' events behind. "
+        f"Got remaining={remaining}"
+    )
+    assert "nexo-MINE-1" not in sids, (
+        "The engine's own event must be drained after consumption."
+    )
+
+
+def test_rail_multi_conv_queue_does_not_truncate_other_sessions_rows(tmp_path, monkeypatch):
+    """Extra tight invariant: if engine A finds only its own event in
+    the queue, it must consume that one and leave an empty file — but
+    if there are extra rows for other sessions, they survive byte-for-
+    byte across the consumer call (the file truncation trick the
+    pre-v7.8.1 code did would violate this)."""
+    nexo_home = tmp_path / ".nexo"
+    data_dir = nexo_home / "runtime" / "data"
+    data_dir.mkdir(parents=True)
+    queue_path = data_dir / "pending_enforcer_events.ndjson"
+    monkeypatch.setenv("NEXO_HOME", str(nexo_home))
+
+    _write_queue(queue_path, [
+        {"event": "pre_compaction",  "session_id": "nexo-A", "extra": 1},
+        {"event": "pre_compaction",  "session_id": "nexo-B", "extra": 2},
+        {"event": "pre_compaction",  "session_id": "nexo-C", "extra": 3},
+    ])
+
+    eng = _build_engine_for_session("nexo-B")
+    eng.injection_queue.clear()
+    eng._consume_pending_hook_events()
+
+    remaining = _read_queue(queue_path)
+    sids = sorted([r.get("session_id") for r in remaining])
+    assert sids == ["nexo-A", "nexo-C"], (
+        f"Only nexo-B's row must be drained; A and C must survive. Got {sids}"
+    )
+
+
+def test_rail_per_session_sidecar_path_is_used_when_claude_session_id_present():
+    """v7.8.1 — pre-compact.sh and post-compact.sh must key the sidecar
+    by CLAUDE_SESSION_ID instead of using the single global file. Two
+    near-concurrent compactions on two different conversations would
+    otherwise clobber each other.
+    """
+    pre = PRE_COMPACT_SH.read_text(encoding="utf-8")
+    post = POST_COMPACT_SH.read_text(encoding="utf-8")
+    # Both hooks must construct the per-conv sidecar under
+    # $DATA_DIR/compacting/<token>.txt when the env token is present.
+    assert 'compacting/$SAFE_CLAUDE_ID.txt' in pre, (
+        "pre-compact.sh must write a per-conversation sidecar "
+        "(compacting/<token>.txt) when CLAUDE_SESSION_ID is set."
+    )
+    assert 'compacting/$SAFE_CLAUDE_ID.txt' in post, (
+        "post-compact.sh must read the per-conversation sidecar "
+        "(compacting/<token>.txt) when CLAUDE_SESSION_ID is set."
+    )
+    # The CLAUDE_SESSION_ID fallback path (legacy global file) must
+    # still exist so single-conv callers without env continue to work.
+    assert 'compacting-sid.txt' in pre and 'compacting-sid.txt' in post, (
+        "Both hooks must keep the legacy fallback file for callers "
+        "without CLAUDE_SESSION_ID set."
+    )
+
+
+def test_rail_malformed_queue_lines_are_preserved_not_dropped(tmp_path, monkeypatch):
+    """Bad JSON on one line must not drop another session's good row.
+    v7.8.1 preserves unparseable lines so a logging glitch cannot eat
+    events addressed to a different enforcer."""
+    nexo_home = tmp_path / ".nexo"
+    data_dir = nexo_home / "runtime" / "data"
+    data_dir.mkdir(parents=True)
+    queue_path = data_dir / "pending_enforcer_events.ndjson"
+    monkeypatch.setenv("NEXO_HOME", str(nexo_home))
+
+    queue_path.write_text(
+        "not-json-at-all\n"
+        + json.dumps({"event": "post_compaction", "session_id": "nexo-ME"}) + "\n"
+        + "{\"partial\":\n",
+        encoding="utf-8",
+    )
+
+    eng = _build_engine_for_session("nexo-ME")
+    eng.injection_queue.clear()
+    eng._consume_pending_hook_events()
+
+    # My row is gone (consumed), but the two malformed lines must stay.
+    raw = queue_path.read_text(encoding="utf-8")
+    assert "not-json-at-all" in raw, "malformed line must survive consumer"
+    assert "{\"partial\":" in raw, "partial-json line must survive consumer"
+    assert "nexo-ME" not in raw, "consumed row must be drained"
