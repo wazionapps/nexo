@@ -386,8 +386,14 @@ def nexo_task_open(
     stakes: str = "",
     context_hint: str = "",
     description: str = "",
+    ack_rules: str = "",
 ) -> str:
-    """Open a protocol task for non-trivial work."""
+    """Open a protocol task for non-trivial work.
+
+    ``ack_rules`` accepts "#95,#156" / "95,156" / "[95, 156]" and, when
+    the guard surfaces blocking rules, acknowledges them inline instead
+    of requiring a separate ``nexo_task_acknowledge_guard`` call.
+    """
     return handle_task_open(
         sid,
         goal,
@@ -404,6 +410,7 @@ def nexo_task_open(
         stakes,
         context_hint,
         description,
+        ack_rules,
     )
 
 
