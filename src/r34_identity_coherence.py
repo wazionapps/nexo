@@ -26,9 +26,27 @@ and this module decides whether to inject.
 from __future__ import annotations
 
 import re
-from typing import Callable, Iterable, Optional
+from typing import Any, Callable, Iterable, Optional
 
 from core_prompts import render_core_prompt
+
+
+def _verdict_to_bool(verdict: Any) -> bool:
+    """Normalize a classifier verdict to an inject/no-inject decision.
+
+    The shared ``enforcement_classifier.classify`` exposes a ``tristate``
+    mode that returns ``"yes"``/``"no"``/``"unknown"`` strings. A naive
+    ``bool(verdict)`` wrap treats ``"unknown"`` (and any non-empty string
+    the model may produce) as truthy, which is fail-OPEN for R34. Only
+    a real ``True`` or an explicit ``"yes"`` should trigger an injection;
+    every other shape — ``False``, ``None``, ``"no"``, ``"unknown"``,
+    arbitrary strings — is conservative no-inject.
+    """
+    if isinstance(verdict, bool):
+        return verdict
+    if isinstance(verdict, str):
+        return verdict.strip().lower() == "yes"
+    return False
 
 
 # Shared-brain tools that count as "you checked before speaking".
@@ -79,7 +97,7 @@ def should_inject_r34(
     message: str,
     *,
     recent_tool_names: Iterable[str] | None,
-    classifier: Callable[[str, str], bool] | None = None,
+    classifier: Callable[[str, str], Any] | None = None,
 ) -> tuple[bool, str, str]:
     """Return ``(inject, prompt, matched_text)``.
 
@@ -88,9 +106,11 @@ def should_inject_r34(
         recent_tool_names: tool names seen in this turn; any match in
             SHARED_BRAIN_TOOLS suppresses the rule.
         classifier: optional LLM classifier. Signature
-            ``classifier(question, context) -> bool``. If provided, the
-            rule fires only when classifier says "yes". If None, the
-            regex match alone fires (test path).
+            ``classifier(question, context) -> bool | str``. Return ``True``
+            or the string ``"yes"`` to trigger injection; any other value
+            (``False``, ``None``, ``"no"``, ``"unknown"``, arbitrary
+            strings) is treated as no-inject. If ``None`` is passed for
+            the argument, the regex match alone fires (test path).
     """
     if not isinstance(message, str) or not message:
         return False, "", ""
@@ -103,15 +123,17 @@ def should_inject_r34(
     if classifier is None:
         return True, INJECTION_PROMPT, matched
     # LLM disambiguation — reuses T4 infra. The engine passes a lambda
-    # that calls enforcement_classifier.classify under the hood.
+    # that calls enforcement_classifier.classify under the hood. Parse
+    # the verdict via _verdict_to_bool so tristate "unknown" does not
+    # coerce to True.
     try:
-        verdict = bool(classifier(CLASSIFIER_QUESTION, message))
+        raw_verdict = classifier(CLASSIFIER_QUESTION, message)
     except Exception:
         # Fail-closed: if the classifier errors, do not inject (avoids
         # noisy false positives on regex-only matches when the LLM is
         # unavailable).
         return False, "", matched
-    if not verdict:
+    if not _verdict_to_bool(raw_verdict):
         return False, "", matched
     return True, INJECTION_PROMPT, matched
 
@@ -121,5 +143,6 @@ __all__ = [
     "CLASSIFIER_QUESTION",
     "INJECTION_PROMPT",
     "SHARED_BRAIN_TOOLS",
+    "_verdict_to_bool",
     "should_inject_r34",
 ]

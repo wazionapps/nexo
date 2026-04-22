@@ -12,6 +12,7 @@ from r34_identity_coherence import (  # noqa: E402
     DENIAL_PATTERNS,
     INJECTION_PROMPT,
     SHARED_BRAIN_TOOLS,
+    _verdict_to_bool,
     should_inject_r34,
 )
 
@@ -79,6 +80,40 @@ def test_classifier_exception_fails_closed():
         "yo no he hecho eso", recent_tool_names=[], classifier=boom
     )
     assert inject is False
+
+
+@pytest.mark.parametrize("verdict", ["unknown", "no", "maybe", "", "si", None, 0, []])
+def test_classifier_tristate_non_yes_suppresses(verdict):
+    """The classifier may return tristate strings; only True/"yes" injects."""
+    inject, _, _ = should_inject_r34(
+        "yo no he hecho eso",
+        recent_tool_names=[],
+        classifier=lambda q, msg: verdict,
+    )
+    assert inject is False, f"verdict={verdict!r} should not inject"
+
+
+@pytest.mark.parametrize("verdict", [True, "yes", "YES", "Yes", "yes\n"])
+def test_classifier_tristate_yes_allows(verdict):
+    inject, _, _ = should_inject_r34(
+        "yo no he hecho eso",
+        recent_tool_names=[],
+        classifier=lambda q, msg: verdict,
+    )
+    assert inject is True, f"verdict={verdict!r} should inject"
+
+
+def test_verdict_to_bool_direct():
+    assert _verdict_to_bool(True) is True
+    assert _verdict_to_bool(False) is False
+    assert _verdict_to_bool(None) is False
+    assert _verdict_to_bool("yes") is True
+    assert _verdict_to_bool("YES") is True
+    assert _verdict_to_bool("no") is False
+    assert _verdict_to_bool("unknown") is False
+    assert _verdict_to_bool("") is False
+    assert _verdict_to_bool(1) is False  # non-bool truthy is NOT yes
+    assert _verdict_to_bool(object()) is False
 
 
 def test_empty_or_non_string_input_safe():

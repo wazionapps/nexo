@@ -15,7 +15,10 @@
 
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# Default ROOT is the repo itself (path of this script's parent). Tests
+# and local sandboxes override via CHECK_ROOT so the scanner points at
+# a synthetic tree without touching the real src/.
+ROOT="${CHECK_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 cd "$ROOT"
 
 # Operator-specific markers — extend with care. Each one must be a

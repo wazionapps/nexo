@@ -707,7 +707,14 @@ def classify_scripts_dir() -> dict:
     core_names = load_core_script_names()
     core_identities = load_core_script_identities()
     entries: list[dict] = []
-    seen_keys: set[tuple[str, str]] = set()
+    # Dedup by resolved real path so the same physical file surfaced
+    # from two candidate dirs (e.g. core/scripts/foo.sh + the F0.6
+    # legacy fallback ~/.nexo/scripts/foo.sh pointing at the same inode
+    # via symlink) appears once. Two distinct files that happen to share
+    # a filename resolve to different paths and both survive — preserves
+    # the D2 audit fix without the cosmetic duplicate the AUDITOR-V700-
+    # PASS2 §5 transitional window flagged.
+    seen_real_paths: set[str] = set()
     for sdir in candidate_dirs:
         if not sdir.is_dir():
             continue
@@ -725,12 +732,13 @@ def classify_scripts_dir() -> dict:
         for f in sorted(sdir.iterdir()):
             if not f.is_file():
                 continue
-            # Dedup by (name, dir-classification) so a personal script with
-            # the same filename as a core script doesn't disappear (D2 audit fix).
-            dedup_key = (f.name, dir_classification or "legacy")
-            if dedup_key in seen_keys:
+            try:
+                real_path = str(f.resolve(strict=False))
+            except OSError:
+                real_path = str(f)
+            if real_path in seen_real_paths:
                 continue
-            seen_keys.add(dedup_key)
+            seen_real_paths.add(real_path)
             meta = parse_inline_metadata(f)
             if _is_ignored(f):
                 entries.append(_script_entry(f, meta, is_core=False, classification="ignored", reason="internal or hidden artifact"))
