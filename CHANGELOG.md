@@ -1,5 +1,63 @@
 # Changelog
 
+## [7.2.0] - 2026-04-22
+
+Minor release consolidating three parallel workstreams (B1-B6 + B7-B11 + G1-G3) into a single Guardian-active-by-default train.
+
+### Added
+
+- **`nexo rollback f06` CLI** — two-stage safe swap for reverting the F0.6 migration using `~/.nexo-pre-f06-snapshot`. 4 integration tests.
+- **`src/scripts/prune_runtime_backups.py`** promoted from personal to core; retention policy separates TECHNICAL rollback snapshots from BUSINESS/HOURLY_DB operational artifacts.
+- **`docs/f06-layout-contract.md`** — authoritative contract for the post-F0.6 runtime layout.
+- **3 new doctor boot-tier checks**: `check_core_dev_packaged_install`, `check_dashboard_desktop_contract`, `check_f06_migration_consistency`.
+- **`scripts/nexo-migrate-nora.sh` + `scripts/f0-safe-apply-remote.sh` + `scripts/README-migrate-nora.md`** — 8-phase idempotent workflow migrating a remote NEXO install from F0.0 to F0.6 via SSH.
+- **Schedule override audit log** at `runtime/logs/core-schedule-overrides.log`.
+- **G1 enforcer active** (`src/hooks/g1_enforcer.py`) — PostToolUse nudge when the latest `task_open` returned `mode ∈ {defer, ask, verify}` and the operator has not executed the paired `next_action`.
+- **G3 SSH remote-write detector** — catches `ssh host "cat > ..."`, `scp upload`, `rsync upload`, `sftp -b`, 10+ other patterns the local destructive gate never saw.
+- **`src/guardian_runtime_config.py`** — single resolver for Guardian gate modes (env > `guardian-runtime-overrides.json` > default).
+- **`_persist_guardian_hard_defaults`** — `nexo update` writes `guardian-runtime-overrides.json` with hard defaults for G1/G3/G3-SSH/G4 automatically. Operator opt-out via `NEXO_GUARDIAN_PERSIST_HARD=off`.
+- **Adaptive weights empirical promotion** — `adaptive_mode.py` flips from "14-day calendar" to "14 days OR (≥200 samples AND ≥2 days)". `nexo update` auto-promotes shadow→learned when data is mature.
+- **`scripts/pre-release-verify.sh` + `docs/release-discipline.md`** — pre-release sanity pack + written discipline.
+- **Pre-commit hook for `tool-enforcement-map.json`** — blocks commits when tool map drifts from `src/plugins/`.
+- **B10 module-level path constants lazy-evaluated** in `public_contribution.py`, `tools_sessions.py`, `plugins/recover.py`, `plugins/update.py`.
+
+### Changed
+
+- **B1 Nexo→Nero rename** in personal scripts `shopify-backup-monitor.py` + `send-8am-core-crons-report.sh`.
+- **B2 watchdog manifest fallback** — 3 resolution slots so half-migrated installs don't lose core monitors.
+- **B2 `_sync_watchdog_hash_registry`** folds legacy entries into canonical F0.6 file + removes legacy artifact.
+- **B10 R34 bool classifier** fix — `bool("unknown")==True` force-inject corrected.
+- **B10 `classify_scripts_dir`** — dedup by realpath.
+- **B8 rules DB** — dedup #212/#224, added `applies_to_domain` to #156.
+- **CHANGELOG rollback recipe** v7.0.0 fixed — mandates backup-rename before restore.
+
+### Pending
+
+- **`francisco_emails` shim retirada** blocked until Nora migration. Followup `NF-B1B6-RETIRAR-FRANCISCO-EMAILS-POST-MARIA` target `2026-05-10`.
+- **B9 four hooks runtime** deferred to `NF-B9-HOOKS-POST-RELEASE-2026-04-22`.
+- **B10 cosmetic callsites** 77 remaining in `plugins/update.py` — followup `NF-B10-UPDATE-PY-LAZY-CALLSITES-COSMETIC` target `2026-05-15`.
+- **G5 Cortex calibration re-review** — `R-CORTEX-CALIBRATION-REVIEW-14D` target `2026-05-06`.
+- **G6 mid-session pressure, G10 somatic markers** — scoped for v7.3.
+
+### Migration
+
+Run `nexo update`. Everything else automatic:
+- `guardian-runtime-overrides.json` written with hard defaults.
+- Adaptive weights auto-promoted if ≥200 samples + ≥2 days.
+- F0.6 hardening doctor checks activate.
+- Rollback: `nexo rollback f06`.
+- Opt-outs: `NEXO_GUARDIAN_PERSIST_HARD=off`, `NEXO_ADAPTIVE_EMPIRICAL_PROMOTION=off`, per-gate `NEXO_G*=shadow|off`.
+
+### Verification
+
+- `pytest tests/` green.
+- `scripts/verify_release_readiness.py --ci` green.
+- PRs #261 (B1-B6), #258+#259+#260 (B7-B11), #262 (G1-G3) all passed CI.
+
+### Notes
+
+Desktop v0.22.6 compatible; NOT bumped (MCP external contract unchanged). gh-pages / website / X / blog intentionally NOT touched — v7.2.0 is an internal release to restore Guardian-active experience without commercial narrative overhead.
+
 ## [7.1.10] - 2026-04-22
 
 Follow-up release over v7.1.8. Ships two rescue batches of WIP that
