@@ -368,6 +368,7 @@ def test_catchup_script_releases_lock_on_early_crash(tmp_path):
 
     # Restore the real module for the second run
     shutil.copy2(repo_src / "cron_recovery.py", runtime_root / "cron_recovery.py")
+    shutil.copy2(repo_src / "scripts" / "nexo-catchup.py", runtime_root / "scripts" / "nexo-catchup.py")
     (runtime_root / "crons" / "manifest.json").write_text('{"crons":[]}')
 
     # Second run — must NOT say "already running" (lock must have been released)
