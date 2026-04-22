@@ -48,9 +48,14 @@ def _plugin_hook_handlers() -> set[tuple[str, str]]:
     return pairs
 
 
-def test_manifest_has_eight_hooks():
+def test_manifest_has_nine_hooks():
+    # v7.8.0: PostCompact joined the canonical set (SessionStart,
+    # UserPromptSubmit, PreToolUse, PostToolUse, PreCompact,
+    # PostCompact, Stop, Notification, SubagentStop). Dropping below 9
+    # means a hook got de-registered — keep the floor explicit so a
+    # silent removal never ships.
     pairs = _manifest_pairs()
-    assert len(pairs) == 8, f"manifest should list 8 hooks, got {len(pairs)}: {pairs}"
+    assert len(pairs) == 9, f"manifest should list 9 hooks, got {len(pairs)}: {pairs}"
 
 
 def test_plugin_mode_matches_manifest():

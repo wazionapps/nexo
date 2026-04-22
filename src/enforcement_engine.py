@@ -2311,6 +2311,59 @@ class HeadlessEnforcer:
         # v7.6 conditional + deferred on_event reminders.
         self._check_conditional()
         self._check_on_event_pending()
+        # v7.8 — drain hook-emitted events (pre_compaction, post_compaction).
+        self._consume_pending_hook_events()
+
+    def _consume_pending_hook_events(self):
+        """v7.8 — drain ~/.nexo/runtime/data/pending_enforcer_events.ndjson.
+
+        pre-compact.sh and post-compact.sh run in separate processes so
+        they cannot call `raise_event()` directly. They append one NDJSON
+        row per event to this file; the engine consumes the queue on
+        every periodic tick and fires the matching `on_event` rule.
+        The queue file is truncated after a successful read so a single
+        event never fires twice.
+
+        Fail-closed: any parse / IO error is swallowed so a broken queue
+        cannot crash enforcement.
+        """
+        try:
+            import os
+            nexo_home = os.environ.get("NEXO_HOME", os.path.expanduser("~/.nexo"))
+            queue_path = os.path.join(nexo_home, "runtime", "data", "pending_enforcer_events.ndjson")
+            if not os.path.isfile(queue_path):
+                return
+            import json
+            try:
+                with open(queue_path, "r", encoding="utf-8") as fh:
+                    lines = [ln.strip() for ln in fh.readlines() if ln.strip()]
+            except Exception:
+                return
+            if not lines:
+                return
+            # Truncate immediately so the same row never re-fires. Any
+            # event that fails to parse below is silently dropped — the
+            # hooks that wrote the row are the source of truth, the
+            # engine is a consumer.
+            try:
+                open(queue_path, "w", encoding="utf-8").close()
+            except Exception:
+                pass
+            for raw in lines:
+                try:
+                    row = json.loads(raw)
+                except Exception:
+                    continue
+                event = row.get("event")
+                if not isinstance(event, str) or not event:
+                    continue
+                try:
+                    self.raise_event(event, row)
+                except Exception:
+                    pass
+        except Exception:
+            # Never crash on consumer errors.
+            pass
 
     def _check_on_event_pending(self):
         """Re-evaluate on_event rules with grace > 0 after message ticks.
