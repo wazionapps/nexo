@@ -1,5 +1,70 @@
 # Changelog
 
+## [7.7.0] - 2026-04-22
+
+Minor release. Pass 2 of the constructor-guardian-90 checklist: the six
+gaps that remained partial after v7.6.0 are now closed or raised to
+their target enforcement level.
+
+### Added
+
+- **Autonomous detector for `multi_step_task_detected`** (Gap 1). v7.6
+  dispatched the event via `raise_event()` but nothing raised it
+  automatically. v7.7 wires a heuristic into `on_tool_call`: three
+  recent `Edit` / `Write` / `Task` calls without a prior
+  `nexo_skill_match` fire the event once per task cycle. Both a
+  subsequent `nexo_skill_match` and a `nexo_task_close` clear the
+  latch so the next task gets its own detection window.
+- **`R_PRIMITIVE_CHOICE` runtime rule** (Gap 4). New module
+  `src/r_primitive_choice.py` gates plain `Edit` / `Write` into a
+  brand-new artefact file (skills/, plugins/, personal scripts,
+  templates) without a recent primitive-choice probe. Disjoint from
+  R_CATALOG: R_CATALOG fires on every artefact-path write without
+  inventory consultation; R_PRIMITIVE_CHOICE fires only when the file
+  is actually new. Template at `templates/core-prompts/r-primitive-
+  choice.md`. Default mode: **soft** (observe before hardening).
+- **Tests `tests/test_v77_enforcement_gaps.py`** (Gap 6). Twelve tests
+  across six rails: multi-step detector wiring, R16 vocabulary,
+  R_CATALOG extended scope, R_PRIMITIVE_CHOICE behaviour, R11 default,
+  guardian_default shape.
+
+### Changed
+
+- **R16 classifier prompt** (Gap 2). `templates/core-prompts/
+  r16-declared-done-question.md` now matches sent / delivered /
+  published / deployed / released / fixed / resolved / merged /
+  pushed (plus Spanish: listo / hecho / terminado / enviado /
+  arreglado / desplegado / publicado / lanzado / resuelto / mergeado).
+  The on_event trigger `done_claimed_with_open_task` now fires on
+  the full close-claim vocabulary the checklist called out.
+- **R_CATALOG extended scope** (Gap 3). `src/r_catalog.py`:
+  - Trigger set grew beyond `nexo_*_create/_open/_add` to include
+    `Edit` / `Write` into artefact-bearing paths (skills/, plugins/,
+    scripts/, personal artefacts, `templates/core-prompts/`).
+  - Discovery tools set grew from 6 to 8:
+    `nexo_personal_scripts_list` and `nexo_plugin_list` now count as
+    inventory consultation.
+- **`guardian_default.json` v1.5.0** (Gap 5 + Gap 4):
+  - `R11_plugin_load_pre_inventory`: soft → **hard**.
+  - `R_PRIMITIVE_CHOICE`: new entry at soft.
+- **Desktop mirror** (Gap 5, Gap 4): `nexo-desktop/enforcement-
+  engine.js` default map updated in lock-step. Parity test
+  `packaged defaults cover catalog + identity coherence parity`
+  extended to assert the new modes.
+
+### Tests
+
+- Pytest: 2070 passing (+14 vs v7.6.0). Ten unrelated pre-existing
+  failures remain (chat TTY / client sync / doctor / evolution —
+  environment-specific).
+- Desktop: 673/673 passing.
+
+### Companion release
+
+- **NEXO Desktop v0.27.0** ships at the same time, matching the
+  guardian default bumps. No rule-type dispatch changes beyond what
+  v0.26.0 already shipped.
+
 ## [7.6.0] - 2026-04-22
 
 Minor release. Closes the drift between `tool-enforcement-map.json`

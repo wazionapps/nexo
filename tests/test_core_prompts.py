@@ -332,7 +332,13 @@ def test_render_core_prompt_supports_enforcer_and_startup_templates():
     assert "nexo_followup_create" in catalog
     assert "shared brain" in r34_probe
     assert "past-tense denial" in r34_question
-    assert "task is finished, completed, shipped, or already done" in r16_question
+    # v7.7 Gap 2: expanded vocabulary so the on_event
+    # done_claimed_with_open_task trigger covers sent / deployed /
+    # published / released / fixed / resolved (plus Spanish). The
+    # token list here must stay in sync with the classifier prompt.
+    assert "finished, completed, shipped" in r16_question
+    assert "sent, delivered, published, deployed" in r16_question
+    assert "released, fixed, resolved" in r16_question
     assert "nexo_task_close" in r16_injection
     assert "explicitly promise a FUTURE action" in r17_question
     assert "promise without execution opens operational debt" in r17_injection

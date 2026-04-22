@@ -15,7 +15,11 @@ from r_catalog import (  # noqa: E402
 )
 
 
-def test_discovery_tools_set_is_the_canonical_six():
+def test_discovery_tools_set_is_the_canonical_eight():
+    # v7.7 Gap 3: the canonical six (original inventory/discovery tools)
+    # plus the two surfaces that count as "I checked what already
+    # exists before materialising a new artefact" via plain
+    # Edit/Write: nexo_personal_scripts_list and nexo_plugin_list.
     assert DISCOVERY_TOOLS == frozenset({
         "nexo_system_catalog",
         "nexo_tool_explain",
@@ -23,6 +27,8 @@ def test_discovery_tools_set_is_the_canonical_six():
         "nexo_skill_list",
         "nexo_learning_search",
         "nexo_guard_check",
+        "nexo_personal_scripts_list",
+        "nexo_plugin_list",
     })
 
 

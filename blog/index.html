@@ -145,22 +145,22 @@
                 <div class="blog-featured-meta">
                     <span class="compare-chip">April 22, 2026</span>
                     <span class="compare-chip">Minor release</span>
-                    <span class="compare-chip">Enforcement parity + per-instance</span>
+                    <span class="compare-chip">Obedience gaps closed</span>
                 </div>
-                <h2>NEXO 7.6.0: enforcement parity — Brain catches up on before_tool / on_event / conditional, after_tool goes per-instance, defaults hardened</h2>
-                <p>v7.6.0 closes the drift between <code>tool-enforcement-map.json</code> v2.2 and the two enforcement engines. Before this release, the Brain engine silently ignored <code>before_tool</code>, <code>on_event</code>, and <code>conditional</code> rules that the map declared — only Desktop honoured them. v7.6 dispatches all eight declared types in both engines and exposes new public API (<code>on_tool_call_before</code>, <code>raise_event</code>, <code>reset_task_cycle</code>). <code>after_tool</code> satisfaction now compares a monotonic per-instance counter instead of a session-wide set, so the checklist's "satisfied-by-once" defect is gone. Map v2.2 tightens <code>nexo_learning_add</code> grace 3→0 and <code>nexo_task_open</code> conditional threshold 10→4 with level must + explicit inject_prompt. <code>guardian_default.json</code> v1.4.0 hardens R15/R17/R22/R_CATALOG from soft to hard, and moves R34_identity_coherence from shadow to soft. New contract test pins six invariants including Brain↔Desktop dispatch parity. 2056 passing pytest. Companion: NEXO Desktop v0.26.0.</p>
+                <h2>NEXO 7.7.0: constructor-guardian-90 pass 2 — the six gaps left partial in v7.6 are now closed</h2>
+                <p>v7.6.0 shipped contract parity (all eight rule types dispatched by both engines) and four default-mode bumps, but listed six gaps as honestly still-partial. v7.7.0 closes them. Gap 1: autonomous detector for <code>multi_step_task_detected</code> (heuristic in <code>on_tool_call</code>). Gap 2: R16 classifier prompt recognises the full done-claim vocabulary (sent / delivered / published / deployed / released / fixed / resolved / merged / pushed plus Spanish). Gap 3: R_CATALOG extends to plain Edit/Write into artefact-bearing paths. Gap 4: new <code>R_PRIMITIVE_CHOICE</code> runtime rule gates new-artefact writes without a primitive-choice probe. Gap 5: guardian_default v1.5.0 raises <code>R11_plugin_load_pre_inventory</code> soft → hard. Gap 6: 12 new contract tests across all six rails. 2070 pytest passing. Companion: NEXO Desktop v0.27.0.</p>
                 <div class="hero-actions" style="justify-content:flex-start;margin-bottom:18px;">
-                    <a href="/blog/nexo-7-6-0/" class="btn btn-primary">Open article</a>
-                    <a href="/changelog/#v760" class="btn btn-secondary">Open changelog</a>
+                    <a href="/blog/nexo-7-7-0/" class="btn btn-primary">Open article</a>
+                    <a href="/changelog/#v770" class="btn btn-secondary">Open changelog</a>
                 </div>
                 <div class="blog-mini-stack">
                     <div class="blog-mini-card">
                         <strong>Companion view</strong>
-                        <span><a href="/changelog/#v760">See the full v7.6.0 changelog</a></span>
+                        <span><a href="/changelog/#v770">See the full v7.7.0 changelog</a></span>
                     </div>
                     <div class="blog-mini-card">
                         <strong>Previous release</strong>
-                        <span><a href="/blog/nexo-7-5-0/">NEXO 7.5.0: canonical authority of session-end — Brain decides, Desktop executes, no polling</a>.</span>
+                        <span><a href="/blog/nexo-7-6-0/">NEXO 7.6.0: enforcement parity — Brain catches up on before_tool / on_event / conditional, after_tool goes per-instance</a>.</span>
                     </div>
                 </div>
             </div>
@@ -172,6 +172,15 @@
 <section class="section-flush-top">
     <div class="container">
         <div class="blog-grid">
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 22, 2026</div>
+                <h2><a href="/blog/nexo-7-7-0/">NEXO 7.7.0: constructor-guardian-90 pass 2 — the six gaps left partial in v7.6 are now closed</a></h2>
+                <p>Minor release. Pass 2 of the obedience checklist: autonomous <code>multi_step_task_detected</code> detector, R16 vocabulary expansion, R_CATALOG extended to plain Edit/Write, new <code>R_PRIMITIVE_CHOICE</code> rule gating SK-CREATE-NEXO-PRIMITIVE, R11_plugin_load soft→hard, 12 new contract tests across 6 rails. 2070 pytest passing. Companion: NEXO Desktop v0.27.0.</p>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/blog/nexo-7-7-0/" class="btn btn-secondary">Read more</a>
+                </div>
+            </div>
 
             <div class="blog-card">
                 <div class="blog-card-date">April 22, 2026</div>
