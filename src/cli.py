@@ -1168,6 +1168,199 @@ def _recover(args):
     return _recover_cli_main(argv)
 
 
+def _rollback_f06(args):
+    """Revert the F0.6 layout migration using ``~/.nexo-pre-f06-snapshot``.
+
+    Safe two-stage swap: the current ``~/.nexo`` tree is renamed to a dated
+    backup (``~/.nexo-rollback-backup-YYYYMMDDHHMMSS``) BEFORE the snapshot is
+    restored in its place, so the operation never destroys state if it is
+    interrupted mid-way. LaunchAgents are booted out before the swap and
+    reloaded after (skip via ``--keep-agents-running``).
+    """
+    import json as _json
+    import shutil as _shutil
+    import subprocess as _subprocess
+    from datetime import datetime as _datetime
+    from pathlib import Path as _Path
+
+    nexo_home = _Path(os.environ.get("NEXO_HOME", str(_Path.home() / ".nexo")))
+    snapshot = _Path(str(nexo_home) + "-pre-f06-snapshot")
+    now_stamp = _datetime.now().strftime("%Y%m%d%H%M%S")
+    dry_run = bool(getattr(args, "dry_run", False))
+    emit_json = bool(getattr(args, "json", False))
+    assume_yes = bool(getattr(args, "yes", False))
+    keep_agents = bool(getattr(args, "keep_agents_running", False))
+
+    report: dict[str, object] = {
+        "nexo_home": str(nexo_home),
+        "snapshot": str(snapshot),
+        "snapshot_exists": snapshot.exists(),
+        "snapshot_is_dir": snapshot.is_dir() if snapshot.exists() else False,
+        "dry_run": dry_run,
+        "steps": [],
+        "status": "planned",
+    }
+
+    if not snapshot.exists() or not snapshot.is_dir():
+        report["status"] = "error_no_snapshot"
+        report["error"] = f"Pre-F0.6 snapshot not found at {snapshot}"
+        if emit_json:
+            print(_json.dumps(report, indent=2))
+        else:
+            print(f"ERROR: no pre-F0.6 snapshot at {snapshot}", file=sys.stderr)
+            print("       Rollback is only available immediately after a migration.", file=sys.stderr)
+        return 1
+
+    if nexo_home.exists():
+        backup_target = _Path(str(nexo_home) + f"-rollback-backup-{now_stamp}")
+        # Avoid collision if the operator retries in the same second.
+        collision_suffix = 0
+        while backup_target.exists():
+            collision_suffix += 1
+            backup_target = _Path(str(nexo_home) + f"-rollback-backup-{now_stamp}-{collision_suffix}")
+    else:
+        backup_target = None
+
+    agents_to_restart: list[_Path] = []
+    if not keep_agents:
+        agents_dir = _Path.home() / "Library" / "LaunchAgents"
+        if agents_dir.is_dir():
+            agents_to_restart = sorted(agents_dir.glob("com.nexo.*.plist"))
+
+    plan_steps: list[dict] = []
+    if agents_to_restart:
+        plan_steps.append({
+            "step": "bootout_launchagents",
+            "count": len(agents_to_restart),
+            "samples": [p.name for p in agents_to_restart[:5]],
+        })
+    if backup_target is not None:
+        plan_steps.append({
+            "step": "move_current_nexo_home_to_backup",
+            "from": str(nexo_home),
+            "to": str(backup_target),
+        })
+    plan_steps.append({
+        "step": "move_snapshot_to_nexo_home",
+        "from": str(snapshot),
+        "to": str(nexo_home),
+    })
+    if agents_to_restart:
+        plan_steps.append({
+            "step": "reload_launchagents",
+            "count": len(agents_to_restart),
+        })
+    report["steps"] = plan_steps
+
+    if dry_run:
+        report["status"] = "dry_run"
+        if emit_json:
+            print(_json.dumps(report, indent=2))
+        else:
+            print(f"nexo rollback f06 (DRY-RUN)")
+            print(f"  NEXO_HOME: {nexo_home}")
+            print(f"  snapshot:  {snapshot}")
+            if backup_target is not None:
+                print(f"  backup → {backup_target}")
+            if agents_to_restart:
+                print(f"  LaunchAgents to restart: {len(agents_to_restart)}")
+            print("  (no filesystem or launchctl changes were made)")
+        return 0
+
+    if not assume_yes:
+        if not (sys.stdin.isatty() and sys.stdout.isatty()):
+            print("ERROR: interactive confirmation required. Pass --yes to proceed non-interactively.", file=sys.stderr)
+            return 1
+        print("This will replace the current NEXO_HOME with the pre-F0.6 snapshot.")
+        print(f"  Current ~/.nexo → {backup_target if backup_target else '(nothing to back up, current missing)'}")
+        print(f"  Restored from snapshot → {nexo_home}")
+        if agents_to_restart:
+            print(f"  LaunchAgents affected: {len(agents_to_restart)}")
+        answer = input("Type 'ROLLBACK' to proceed: ").strip()
+        if answer != "ROLLBACK":
+            print("Aborted — exact token not typed.")
+            return 1
+
+    def _run_launchctl(cmd: list[str]) -> tuple[int, str]:
+        try:
+            proc = _subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            return proc.returncode, (proc.stderr or "").strip()
+        except _subprocess.TimeoutExpired as exc:
+            return 124, f"timeout: {exc}"
+        except FileNotFoundError:
+            return 127, "launchctl not found"
+        except Exception as exc:  # noqa: BLE001  — launchctl errors are varied
+            return 1, str(exc)
+
+    executed: list[dict] = []
+
+    if agents_to_restart and not keep_agents:
+        for plist in agents_to_restart:
+            rc, err = _run_launchctl(["launchctl", "unload", str(plist)])
+            executed.append({"op": "unload", "plist": str(plist), "rc": rc, "err": err})
+
+    if backup_target is not None:
+        try:
+            nexo_home.rename(backup_target)
+            executed.append({"op": "rename_home", "to": str(backup_target), "rc": 0})
+        except OSError as exc:
+            executed.append({"op": "rename_home", "to": str(backup_target), "rc": 1, "err": str(exc)})
+            report["status"] = "error_rename_home"
+            report["executed"] = executed
+            if emit_json:
+                print(_json.dumps(report, indent=2))
+            else:
+                print(f"ERROR: failed to move {nexo_home} → {backup_target}: {exc}", file=sys.stderr)
+                print("       No changes to snapshot. Current NEXO_HOME is intact.", file=sys.stderr)
+            return 1
+
+    try:
+        snapshot.rename(nexo_home)
+        executed.append({"op": "rename_snapshot", "to": str(nexo_home), "rc": 0})
+    except OSError as exc:
+        executed.append({"op": "rename_snapshot", "to": str(nexo_home), "rc": 1, "err": str(exc)})
+        # Best-effort rollback of the backup rename so the user isn't left without NEXO_HOME.
+        if backup_target is not None and backup_target.exists() and not nexo_home.exists():
+            try:
+                backup_target.rename(nexo_home)
+                executed.append({"op": "rollback_rename_home", "rc": 0})
+            except OSError as rexc:
+                executed.append({"op": "rollback_rename_home", "rc": 1, "err": str(rexc)})
+        report["status"] = "error_rename_snapshot"
+        report["executed"] = executed
+        if emit_json:
+            print(_json.dumps(report, indent=2))
+        else:
+            print(f"ERROR: failed to move snapshot → NEXO_HOME: {exc}", file=sys.stderr)
+        return 1
+
+    if agents_to_restart and not keep_agents:
+        for plist in agents_to_restart:
+            if not plist.exists():
+                # The snapshot may not have the same plist set; skip silently.
+                executed.append({"op": "load_skip_missing", "plist": str(plist), "rc": 0})
+                continue
+            rc, err = _run_launchctl(["launchctl", "load", str(plist)])
+            executed.append({"op": "load", "plist": str(plist), "rc": rc, "err": err})
+
+    report["status"] = "done"
+    report["executed"] = executed
+    if backup_target is not None:
+        report["backup_target"] = str(backup_target)
+
+    if emit_json:
+        print(_json.dumps(report, indent=2))
+    else:
+        print("nexo rollback f06: done")
+        print(f"  restored:  {nexo_home}")
+        if backup_target is not None:
+            print(f"  prior home saved at: {backup_target}")
+            print(f"    review and rm -rf {backup_target}  when you are sure.")
+        if agents_to_restart:
+            print(f"  LaunchAgents reloaded: {len(agents_to_restart)}")
+    return 0
+
+
 def _update(args):
     """Update the installed runtime.
 
@@ -2699,6 +2892,37 @@ def main():
                                 help="Skip the interactive confirmation prompt")
     recover_parser.add_argument("--json", action="store_true", help="JSON output")
 
+    # -- rollback --
+    rollback_parser = sub.add_parser(
+        "rollback",
+        help="Reverse a structural migration using a pre-change snapshot",
+    )
+    rollback_sub = rollback_parser.add_subparsers(dest="rollback_command")
+    rollback_f06_p = rollback_sub.add_parser(
+        "f06",
+        help="Revert the F0.6 layout migration using ~/.nexo-pre-f06-snapshot",
+    )
+    rollback_f06_p.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would happen, do not mutate filesystem or LaunchAgents.",
+    )
+    rollback_f06_p.add_argument(
+        "--yes",
+        action="store_true",
+        help="Skip the interactive confirmation prompt.",
+    )
+    rollback_f06_p.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit machine-readable JSON instead of text output.",
+    )
+    rollback_f06_p.add_argument(
+        "--keep-agents-running",
+        action="store_true",
+        help="Do not bootout / reload LaunchAgents. Advanced use; leaves stale services.",
+    )
+
     # -- clients --
     clients_parser = sub.add_parser("clients", help="Shared client config management")
     clients_sub = clients_parser.add_subparsers(dest="clients_command")
@@ -2998,6 +3222,11 @@ def main():
         return _update(args)
     elif args.command == "recover":
         return _recover(args)
+    elif args.command == "rollback":
+        if args.rollback_command == "f06":
+            return _rollback_f06(args)
+        rollback_parser.print_help()
+        return 0
     elif args.command == "clients":
         if args.clients_command == "sync":
             return _clients_sync(args)

@@ -1,0 +1,376 @@
+#!/usr/bin/env python3
+# nexo: name=prune-runtime-backups
+# nexo: description=Rotate technical rollback snapshots under runtime/backups by family. Never touches business (shopify-backups) or hourly_db (nexo-backup.sh) artifacts.
+# nexo: category=maintenance
+# nexo: runtime=python
+# nexo: timeout=300
+# nexo: idempotent=true
+
+"""
+prune_runtime_backups.py — NEXO backup retention by class.
+
+Separates *technical* rollback snapshots (throwaway, produced by the installer,
+updater and backfills) from *operational* snapshots (shopify-backups, hourly
+DB dumps, weekly archives) so the former can be rotated without risk to the
+latter.
+
+Target: $NEXO_HOME/runtime/backups/ (default ~/.nexo/runtime/backups)
+
+Class taxonomy (prefix-based) and retention policy:
+
+  TECHNICAL (rollback snapshots, produced by installer/updater/backfills):
+    Prefixes:
+      pre-update-*, pre-autoupdate-*, pre-backfill-owner-*,
+      pre-runtime-sync-*, pre-sleep-wrapper-*, pre-obs-clean-*,
+      pre-import-user-data-*, pre-backfill-*,
+      code-tree-*, runtime-tree-*,
+      app-install-*, app-reinstall-*, desktop-local-install-*,
+      packaged-code-f06-conflicts-*, legacy-shim-conflicts-*,
+      legacy-personal-brain-db-stubs-*, legacy-root-db-stubs-*,
+      codex-live-sync-*, layout-loop-cleanup-*,
+      aux-launchagents-restore-*, live-sync-*, manual-*,
+      personal-script-legacy-prefix-*, plist-f06fix-*,
+      retired-personal-scripts-*, retired-personal-skills-*,
+      runtime-core-sync-*, pre-freshinstall-*
+    Retention (per prefix family): keep last N_RECENT + 1 per month for
+    MONTHLY_WINDOW_DAYS. Older than that and outside the 10 most recent
+    are eligible for deletion.
+
+  HOURLY_DB (sqlite dumps, managed by nexo-backup.sh):
+    Prefix: nexo-YYYY-MM-DD-HHMM.db in runtime/backups/ root
+    These are already rotated by nexo-backup.sh (48h retention). We skip
+    them here to avoid double-rotation logic.
+
+  WEEKLY_DB (weekly/ directory):
+    Already rotated by nexo-backup.sh (90d retention). Skip.
+
+  BUSINESS (shopify-backups/ and similar protected directories):
+    Prefix/name: shopify-backups (directory). Never touched.
+
+Usage:
+  prune_runtime_backups.py                 # dry-run summary
+  prune_runtime_backups.py --apply         # actually delete
+  prune_runtime_backups.py --json          # machine-readable report
+  prune_runtime_backups.py --recent 10     # override N_RECENT
+  prune_runtime_backups.py --window-days 90
+  prune_runtime_backups.py --only pre-backfill-owner  # restrict family
+
+Exit codes:
+  0  success (or nothing to prune)
+  1  bad arguments or fatal I/O error
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import shutil
+import sys
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Iterable
+
+# Technical prefixes. Order defines precedence when a name matches several.
+TECHNICAL_PREFIXES = (
+    "pre-update-",
+    "pre-autoupdate-",
+    "pre-backfill-owner-",
+    "pre-backfill-",
+    "pre-runtime-sync-",
+    "pre-sleep-wrapper-",
+    "pre-obs-clean-",
+    "pre-import-user-data-",
+    "pre-freshinstall-",
+    "code-tree-",
+    "runtime-tree-",
+    "app-install-",
+    "app-reinstall-",
+    "desktop-local-install-",
+    "packaged-code-f06-conflicts-",
+    "legacy-shim-conflicts-",
+    "legacy-personal-brain-db-stubs-",
+    "legacy-root-db-stubs-",
+    "codex-live-sync-",
+    "layout-loop-cleanup-",
+    "aux-launchagents-restore-",
+    "live-sync-",
+    "manual-",
+    "personal-script-legacy-prefix-",
+    "plist-f06fix-",
+    "retired-personal-scripts-",
+    "retired-personal-skills-",
+    "runtime-core-sync-",
+)
+
+# Entries that must never be considered for pruning.
+PROTECTED_NAMES = {"shopify-backups", "weekly"}
+# Hourly DB dumps at the root of runtime/backups — managed by nexo-backup.sh.
+HOURLY_DB_RE = re.compile(r"^nexo-\d{4}-\d{2}-\d{2}-\d{4}\.db$")
+# Big ad-hoc DB files at the root — rare, include for reporting but never auto-prune.
+ROOT_DB_RE = re.compile(r"^(pre-obs-clean|pre-sleep-wrapper-apply|pre-.*)-\d{4}-\d{2}-\d{2}-\d{4}\.db$")
+
+# Timestamp patterns embedded in directory names.
+TS_PATTERNS = (
+    # e.g. 2026-04-20-0427 or 2026-04-20-042733
+    re.compile(r"(\d{4})-(\d{2})-(\d{2})-(\d{2})(\d{2})(\d{2})?$"),
+    # e.g. 20260420-083106
+    re.compile(r"(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})?$"),
+)
+
+
+def default_nexo_home() -> Path:
+    return Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+
+
+def parse_timestamp(name: str) -> datetime | None:
+    for pat in TS_PATTERNS:
+        m = pat.search(name)
+        if not m:
+            continue
+        parts = [int(x) for x in m.groups() if x is not None]
+        # year, month, day, hour, minute, [second]
+        try:
+            if len(parts) == 5:
+                y, mo, d, h, mi = parts
+                s = 0
+            else:
+                y, mo, d, h, mi, s = parts
+            return datetime(y, mo, d, h, mi, s, tzinfo=timezone.utc)
+        except ValueError:
+            return None
+    return None
+
+
+def classify(name: str) -> tuple[str, str] | None:
+    """Return (class, family) or None if the entry should be ignored."""
+    if name in PROTECTED_NAMES:
+        return ("BUSINESS", name)
+    if HOURLY_DB_RE.match(name):
+        return ("HOURLY_DB", "nexo-db")
+    if ROOT_DB_RE.match(name):
+        return ("ROOT_DB", "root-db")
+    for pref in TECHNICAL_PREFIXES:
+        if name.startswith(pref):
+            return ("TECHNICAL", pref.rstrip("-"))
+    # Unknown: report but never touch.
+    return ("UNKNOWN", "unknown")
+
+
+def dir_size_bytes(path: Path) -> int:
+    total = 0
+    try:
+        for root, _dirs, files in os.walk(path, onerror=lambda _e: None):
+            for fn in files:
+                fp = Path(root) / fn
+                try:
+                    total += fp.stat().st_size
+                except OSError:
+                    pass
+    except OSError:
+        pass
+    return total
+
+
+def human_size(n: int) -> str:
+    for unit in ("B", "K", "M", "G", "T"):
+        if n < 1024:
+            return f"{n:.1f}{unit}"
+        n /= 1024
+    return f"{n:.1f}P"
+
+
+def gather_entries(backups_root: Path) -> list[dict]:
+    items: list[dict] = []
+    for entry in backups_root.iterdir():
+        name = entry.name
+        cls = classify(name)
+        if cls is None:
+            continue
+        klass, family = cls
+        ts = parse_timestamp(name)
+        if ts is None:
+            try:
+                ts = datetime.fromtimestamp(entry.stat().st_mtime, tz=timezone.utc)
+            except OSError:
+                ts = None
+        size = dir_size_bytes(entry) if entry.is_dir() else entry.stat().st_size
+        items.append({
+            "name": name,
+            "path": str(entry),
+            "class": klass,
+            "family": family,
+            "ts": ts,
+            "size": size,
+            "is_dir": entry.is_dir(),
+        })
+    return items
+
+
+def plan_prunes(
+    items: list[dict],
+    *,
+    n_recent: int,
+    window_days: int,
+    only: str | None,
+) -> tuple[list[dict], list[dict]]:
+    """Return (to_delete, to_keep) among TECHNICAL items only."""
+    now = datetime.now(tz=timezone.utc)
+    to_delete: list[dict] = []
+    to_keep: list[dict] = []
+    by_family: dict[str, list[dict]] = {}
+    for it in items:
+        if it["class"] != "TECHNICAL":
+            continue
+        if only and it["family"] != only:
+            continue
+        by_family.setdefault(it["family"], []).append(it)
+
+    for family, group in by_family.items():
+        group.sort(key=lambda x: (x["ts"] or datetime.min.replace(tzinfo=timezone.utc)), reverse=True)
+        # Keep the N_RECENT most recent unconditionally.
+        keep_recent = group[:n_recent]
+        older = group[n_recent:]
+        recent_ts = {id(x) for x in keep_recent}
+        # From older, keep one per (year, month) if within window_days. The
+        # rest are pruned.
+        seen_months: set[tuple[int, int]] = set()
+        for it in older:
+            ts = it["ts"]
+            age_days = (now - ts).days if ts else 10_000
+            if age_days <= window_days and ts is not None:
+                ym = (ts.year, ts.month)
+                if ym not in seen_months:
+                    seen_months.add(ym)
+                    to_keep.append(it)
+                    continue
+            to_delete.append(it)
+        to_keep.extend(keep_recent)
+    return to_delete, to_keep
+
+
+def run(args: argparse.Namespace) -> int:
+    backups_root = Path(args.root or (default_nexo_home() / "runtime" / "backups"))
+    if not backups_root.is_dir():
+        print(f"ERROR: backups root not found: {backups_root}", file=sys.stderr)
+        return 1
+    items = gather_entries(backups_root)
+    tech_items = [i for i in items if i["class"] == "TECHNICAL"]
+    biz_items = [i for i in items if i["class"] == "BUSINESS"]
+    hourly_items = [i for i in items if i["class"] == "HOURLY_DB"]
+    root_db_items = [i for i in items if i["class"] == "ROOT_DB"]
+    unknown_items = [i for i in items if i["class"] == "UNKNOWN"]
+
+    to_delete, to_keep = plan_prunes(
+        items,
+        n_recent=args.recent,
+        window_days=args.window_days,
+        only=args.only,
+    )
+
+    total_all = sum(i["size"] for i in items)
+    total_del = sum(i["size"] for i in to_delete)
+
+    report = {
+        "root": str(backups_root),
+        "now_utc": datetime.now(tz=timezone.utc).isoformat(),
+        "policy": {
+            "n_recent": args.recent,
+            "window_days": args.window_days,
+            "only": args.only,
+        },
+        "totals": {
+            "all_bytes": total_all,
+            "all_human": human_size(total_all),
+            "delete_bytes": total_del,
+            "delete_human": human_size(total_del),
+            "delete_count": len(to_delete),
+        },
+        "counts_by_class": {
+            "technical": len(tech_items),
+            "business": len(biz_items),
+            "hourly_db": len(hourly_items),
+            "root_db": len(root_db_items),
+            "unknown": len(unknown_items),
+        },
+        "delete": [
+            {"name": i["name"], "family": i["family"], "size": i["size"],
+             "ts": i["ts"].isoformat() if i["ts"] else None}
+            for i in sorted(to_delete, key=lambda x: x["size"], reverse=True)
+        ],
+        "keep_sample": [
+            {"name": i["name"], "family": i["family"], "size": i["size"],
+             "ts": i["ts"].isoformat() if i["ts"] else None}
+            for i in sorted(to_keep, key=lambda x: (x["family"], x["ts"] or datetime.min.replace(tzinfo=timezone.utc)), reverse=True)[:30]
+        ],
+        "unknown": [i["name"] for i in unknown_items],
+    }
+
+    if args.json:
+        print(json.dumps(report, indent=2))
+    else:
+        print(f"NEXO backup prune — root: {backups_root}")
+        print(f"  total on disk:   {human_size(total_all)}  ({len(items)} entries)")
+        print(f"    technical:     {len(tech_items)}")
+        print(f"    business:      {len(biz_items)} (protected)")
+        print(f"    hourly_db:     {len(hourly_items)} (managed by nexo-backup.sh)")
+        print(f"    root_db:       {len(root_db_items)} (never auto-pruned)")
+        print(f"    unknown:       {len(unknown_items)}")
+        print(f"  policy: keep {args.recent} most-recent + 1 per month within {args.window_days}d")
+        if args.only:
+            print(f"  restricted to family: {args.only}")
+        print()
+        print(f"  would free: {human_size(total_del)}  ({len(to_delete)} entries)")
+        if to_delete:
+            print("\nTOP 20 candidates:")
+            for it in sorted(to_delete, key=lambda x: x["size"], reverse=True)[:20]:
+                ts = it["ts"].strftime("%Y-%m-%d %H:%M") if it["ts"] else "?"
+                print(f"  - {human_size(it['size']):>8}  {ts}  {it['name']}")
+        if unknown_items:
+            print("\nUNKNOWN entries (never pruned — review manually):")
+            for it in unknown_items[:20]:
+                print(f"  ? {it['name']}")
+
+    if not args.apply:
+        if not args.json:
+            print("\n(dry-run: pass --apply to delete)")
+        return 0
+
+    deleted = 0
+    failed = 0
+    freed = 0
+    for it in to_delete:
+        p = Path(it["path"])
+        try:
+            if p.is_dir():
+                shutil.rmtree(p)
+            else:
+                p.unlink()
+            deleted += 1
+            freed += it["size"]
+        except OSError as e:
+            failed += 1
+            print(f"WARN: failed to delete {p}: {e}", file=sys.stderr)
+    print(f"\nDELETED {deleted} entries, freed {human_size(freed)}, failures: {failed}")
+    return 0 if failed == 0 else 1
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description="NEXO runtime backups prune (technical rollback tiers).")
+    ap.add_argument("--root", help="override runtime/backups path")
+    ap.add_argument("--apply", action="store_true", help="actually delete (default is dry-run)")
+    ap.add_argument("--json", action="store_true", help="machine-readable report")
+    ap.add_argument("--recent", type=int, default=10, help="N most recent per family to always keep (default: 10)")
+    ap.add_argument("--window-days", type=int, default=90, help="month-spaced retention window (default: 90)")
+    ap.add_argument("--only", help="restrict to one technical family (e.g. 'pre-backfill-owner')")
+    args = ap.parse_args()
+    try:
+        return run(args)
+    except KeyboardInterrupt:
+        print("interrupted", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
