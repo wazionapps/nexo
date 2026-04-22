@@ -3076,6 +3076,22 @@ def main():
     dashboard_parser.add_argument("action", choices=["on", "off", "status"], help="Start, stop, or check dashboard")
 
     # -- desktop bridge (read-only, for NEXO Desktop and any external UI) --
+    # v7.4.0 — lifecycle event bridge (guardian-claude-desktop-plan).
+    lifecycle_parser = sub.add_parser("lifecycle", help="Conversation lifecycle event handler (v7.4 Desktop bridge)")
+    lifecycle_sub = lifecycle_parser.add_subparsers(dest="lifecycle_command")
+
+    lrec_p = lifecycle_sub.add_parser("record", help="Record a lifecycle event")
+    lrec_p.add_argument("--event-id", required=True, help="UUID minted by the client (idempotency key)")
+    lrec_p.add_argument("--action", required=True, help="close|delete|archive|switch|app-exit|window-close")
+    lrec_p.add_argument("--conversation-id", required=True)
+    lrec_p.add_argument("--session-id", default="")
+    lrec_p.add_argument("--reason", default="user_action")
+    lrec_p.add_argument("--payload", default="", help="JSON-encoded payload_snapshot")
+    lrec_p.add_argument("--source", default="desktop")
+
+    lstat_p = lifecycle_sub.add_parser("status", help="Read the current delivery_status of an event")
+    lstat_p.add_argument("--event-id", required=True)
+
     # Fase E.5 — quarantine ops surfaced via Desktop Guardian Proposals panel.
     quarantine_parser = sub.add_parser("quarantine", help="Quarantine proposals (Fase E.5 Desktop UI)")
     quarantine_sub = quarantine_parser.add_subparsers(dest="quarantine_command")
@@ -3287,6 +3303,43 @@ def main():
             return cmd_quarantine_reject(args)
         # No subcommand — show help.
         quarantine_parser.print_help()
+        return 1
+    elif args.command == "lifecycle":
+        # v7.4.0 — bridge for NEXO Desktop's ConversationLifecycleService.
+        # Both subcommands emit a single JSON line to stdout so the
+        # caller (main.js runNexoCommand) can parse the ack directly.
+        import json as _json
+        import plugins.lifecycle_events as _lifecycle_plugin
+        if args.lifecycle_command == "record":
+            out = _lifecycle_plugin.handle_nexo_lifecycle_event(
+                event_id=args.event_id,
+                action=args.action,
+                conversation_id=args.conversation_id,
+                session_id=args.session_id or "",
+                reason=args.reason or "user_action",
+                payload_snapshot=args.payload or "",
+                source=args.source or "desktop",
+                schema_version=1,
+            )
+            print(out)
+            try:
+                parsed = _json.loads(out)
+                status = str(parsed.get("status", ""))
+            except Exception:
+                status = ""
+            # Exit code 0 for terminal ok states, 2 for retryable_error so
+            # Desktop can distinguish "persisted + processed" from "try
+            # again on boot reconciliation". Rejected is exit 3 (bad input).
+            if status in ("processed", "already_processed", "accepted"):
+                return 0
+            if status == "retryable_error":
+                return 2
+            return 3
+        if args.lifecycle_command == "status":
+            out = _lifecycle_plugin.handle_nexo_lifecycle_status(args.event_id)
+            print(out)
+            return 0
+        lifecycle_parser.print_help()
         return 1
     elif args.command in ("schema", "identity", "onboard", "scan-profile"):
         from desktop_bridge import cmd_schema, cmd_identity, cmd_onboard, cmd_scan_profile

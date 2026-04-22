@@ -1843,6 +1843,32 @@
       },
       "triggers_after": []
     },
+    "nexo_lifecycle_event": {
+      "description": "Record a durable conversation lifecycle event (close/delete/archive/switch/app-exit/window-close) with idempotency by event_id.",
+      "category": "lifecycle",
+      "source": "plugin:lifecycle_events",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_lifecycle_status": {
+      "description": "Read the current delivery_status of a lifecycle event (used by Desktop boot reconciliation).",
+      "category": "lifecycle",
+      "source": "plugin:lifecycle_events",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
     "nexo_media_memory_add": {
       "description": "Store non-text artifact metadata",
       "category": "media",

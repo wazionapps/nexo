@@ -1311,6 +1311,46 @@ def _m44_entities_extended_schema(conn):
     _migrate_add_column(conn, "entities", "access_mode", "TEXT DEFAULT 'unknown'")
 
 
+def _m51_lifecycle_events(conn):
+    """v7.4.0 — durable lifecycle event store for the Desktop pipeline.
+
+    Matches the Desktop-side NDJSON queue contract:
+    event_id (PRIMARY KEY, uuid from Desktop), source (desktop|cron|...),
+    action (close|delete|archive|switch|app-exit|window-close),
+    conversation_id, session_id (claude session), reason,
+    payload_snapshot (JSON), delivery_status
+    (pending|accepted|processed|already_processed|rejected|retryable_error),
+    retry_count, created_at, processed_at, last_error.
+
+    Idempotency key is event_id. Re-delivery of the same event_id returns
+    status=already_processed without re-running any canonical side effect
+    (diary, stop, archive bookkeeping). This is the backbone of
+    guardian-claude-desktop-plan.md → "5. Idempotencia real".
+    """
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS lifecycle_events (
+            event_id TEXT PRIMARY KEY,
+            schema_version INTEGER NOT NULL DEFAULT 1,
+            source TEXT NOT NULL DEFAULT 'desktop',
+            action TEXT NOT NULL,
+            conversation_id TEXT NOT NULL,
+            session_id TEXT DEFAULT NULL,
+            reason TEXT DEFAULT 'user_action',
+            payload_snapshot TEXT DEFAULT '{}',
+            delivery_status TEXT NOT NULL DEFAULT 'accepted',
+            retry_count INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT DEFAULT (datetime('now')),
+            processed_at TEXT DEFAULT NULL,
+            last_error TEXT DEFAULT NULL
+        )
+        """
+    )
+    _migrate_add_index(conn, "idx_lifecycle_events_status", "lifecycle_events", "delivery_status")
+    _migrate_add_index(conn, "idx_lifecycle_events_conv", "lifecycle_events", "conversation_id")
+    _migrate_add_index(conn, "idx_lifecycle_events_action", "lifecycle_events", "action")
+
+
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
     (2, "followups_reasoning", _m2_followups_reasoning),
@@ -1362,6 +1402,7 @@ MIGRATIONS = [
     (48, "email_agent_contract_backfill", _m48_email_agent_contract_backfill),
     (49, "protocol_guard_ack_backfill", _m49_protocol_guard_ack_backfill),
     (50, "dedupe_nexo_product_learning_pair", _m50_dedupe_nexo_product_learning_pair),
+    (51, "lifecycle_events", _m51_lifecycle_events),
 ]
 
 
