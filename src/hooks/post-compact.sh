@@ -91,6 +91,36 @@ if [ -f "$NEXO_DB" ]; then
             LAST_HINT=$(echo "$DRAFT" | cut -d'|' -f2)
         fi
 
+        EXECUTION_LATCH=""
+        AUTONOMY_STATE_FILE="$DATA_DIR/autonomy_mandate.json"
+        if [ -f "$AUTONOMY_STATE_FILE" ]; then
+            EXECUTION_LATCH=$(
+                TARGET_SID="$SID" AUTONOMY_STATE_FILE="$AUTONOMY_STATE_FILE" python3 -c "
+import json, os, time
+try:
+    raw = json.loads(open(os.environ['AUTONOMY_STATE_FILE']).read())
+except Exception:
+    raise SystemExit(0)
+session_id = str(raw.get('session_id', '') or '').strip()
+target_sid = str(os.environ.get('TARGET_SID', '') or '').strip()
+if not raw.get('active'):
+    raise SystemExit(0)
+try:
+    expires_at = float(raw.get('expires_at', 0))
+except Exception:
+    expires_at = 0.0
+if expires_at <= time.time():
+    raise SystemExit(0)
+if session_id and target_sid and session_id != target_sid:
+    raise SystemExit(0)
+if not bool(raw.get('execute_until_blocker', True)):
+    raise SystemExit(0)
+print('**Execution mode:** execute-until-blocker still active after compaction.')
+print('**Guardrail:** skip option menus, reprioritization, summaries, and audits unless a real blocker or approval gate appears.')
+" 2>/dev/null || true
+            )
+        fi
+
         # Build Core Memory Block
         BLOCK="## SESSION CONTINUITY [auto-injected post-compaction #$((COMPACT_COUNT + 1))]"
         BLOCK="$BLOCK\n**Session:** $SID"
@@ -126,6 +156,10 @@ if [ -f "$NEXO_DB" ]; then
 
         if [ -n "$TASKS_SEEN" ] && [ "$TASKS_SEEN" != "[]" ]; then
             BLOCK="$BLOCK\n**Session tasks so far:** $TASKS_SEEN"
+        fi
+
+        if [ -n "$EXECUTION_LATCH" ]; then
+            BLOCK="$BLOCK\n$EXECUTION_LATCH"
         fi
 
         BLOCK="$BLOCK\n**Tool logs:** ${OPERATIONS_DIR}/tool-logs/${TODAY}.jsonl ($LOG_LINES entries)"

@@ -556,6 +556,27 @@ def handle_heartbeat(sid: str, task: str, context_hint: str = '') -> str:
 def _handle_heartbeat_inner(sid: str, task: str, context_hint: str = '') -> str:
     """Inner body of handle_heartbeat — wrapped by tool_span above."""
     from db import get_db, update_last_heartbeat_ts
+
+    mandate_state = None
+    if context_hint:
+        try:
+            from autonomy_mandate import maybe_ingest_from_text
+
+            mandate_state = maybe_ingest_from_text(
+                context_hint,
+                session_id=sid,
+                source="heartbeat",
+            )
+        except Exception:
+            mandate_state = None
+    if mandate_state is None:
+        try:
+            from autonomy_mandate import load_state
+
+            mandate_state = load_state()
+        except Exception:
+            mandate_state = None
+
     update_session(sid, task)
     # v6.0.1 — stamp last_heartbeat_ts so the PostToolUse hook can
     # decide whether to surface a pending-inbox reminder on autopilot
@@ -601,6 +622,16 @@ def _handle_heartbeat_inner(sid: str, task: str, context_hint: str = '') -> str:
                 parts.append(format_pre_action_context_bundle(bundle, compact=True))
         except Exception:
             pass
+
+    try:
+        from autonomy_mandate import format_execution_latch_notice
+
+        latch_notice = format_execution_latch_notice(sid, state=mandate_state)
+        if latch_notice:
+            parts.append("")
+            parts.append(latch_notice)
+    except Exception:
+        pass
 
     # Incremental diary draft — accumulate every heartbeat, full UPSERT every 5
     _hb_count = 0  # Hoisted for Layer 3 DIARY_OVERDUE signal
