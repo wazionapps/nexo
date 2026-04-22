@@ -22,15 +22,30 @@ from pathlib import Path
 _DIR = Path(__file__).resolve().parent
 
 
-def _record(duration_ms: int, exit_code: int, session_id: str) -> None:
+def _record(duration_ms: int, exit_code: int, claude_session_id: str) -> None:
+    """Log a hook_runs row with the resolved NEXO sid.
+
+    v7.8.2 — see the matching docstring in pre_compact.py. Post-compact
+    runs after the shell script has already consumed the per-conv
+    sidecar, but the DB rails (sessions/aliases) stay valid, so the
+    resolver still returns a sid in the common case. `sid_source` goes
+    into metadata for empty-row triage.
+    """
     try:
         sys.path.insert(0, str(_DIR.parent))
+        sys.path.insert(0, str(_DIR))
         import hook_observability  # type: ignore
+        from compact_session_resolver import resolve_nexo_sid  # type: ignore
+        nexo_sid, sid_source = resolve_nexo_sid(claude_session_id)
         hook_observability.record_hook_run(
             "post_compact",
             duration_ms=duration_ms,
             exit_code=exit_code,
-            session_id=session_id,
+            session_id=nexo_sid,
+            metadata={
+                "claude_session_id": claude_session_id,
+                "sid_source": sid_source,
+            },
         )
     except Exception:
         pass
