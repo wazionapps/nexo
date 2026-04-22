@@ -410,6 +410,15 @@ def legacy_db_path() -> Path:
     return legacy_data_dir() / "nexo.db"
 
 
+def legacy_watchdog_hashes_path() -> Path:
+    # Pre-F0.6 watchdog hash registry landed at ``~/.nexo/scripts/.watchdog-hashes``.
+    # Post-F0.6 the canonical location is ``core_scripts_dir() / ".watchdog-hashes"``.
+    # A migration-aware consumer should check this legacy path and fold entries
+    # into the canonical file before deleting, exactly like the rest of the
+    # pre-F0.6 compat shims above.
+    return legacy_scripts_dir() / ".watchdog-hashes"
+
+
 # ---------------------------------------------------------------------------
 # Smart resolver: prefer new location if it exists, fall back to legacy.
 # Used during the v7.0.0 / v7.1.0 transition window.
@@ -472,5 +481,6 @@ __all__ = [
     "legacy_logs_dir",
     "legacy_operations_dir",
     "legacy_db_path",
+    "legacy_watchdog_hashes_path",
     "resolve_db_path",
 ]

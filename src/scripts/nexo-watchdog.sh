@@ -55,9 +55,15 @@ log() { echo "[$TS] $1" >> "$LOG"; }
 # The NEXO_CODE env var must point to the repo src/ directory.
 # Add personal (non-manifest) monitors to PERSONAL_MONITORS below.
 NEXO_CODE="${NEXO_CODE:-$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)}"
-# Look for manifest in NEXO_HOME first (packaged install), then NEXO_CODE (dev/repo)
+# Manifest resolution priority:
+#   1. $NEXO_HOME/runtime/crons/manifest.json  — F0.6 canonical location
+#   2. $NEXO_HOME/crons/manifest.json          — pre-F0.6 legacy (kept so
+#      half-migrated installs don't silently lose all core monitors)
+#   3. $NEXO_CODE/crons/manifest.json          — dev/repo checkout
 if [ -f "$NEXO_HOME/runtime/crons/manifest.json" ]; then
   MANIFEST_FILE="$NEXO_HOME/runtime/crons/manifest.json"
+elif [ -f "$NEXO_HOME/crons/manifest.json" ]; then
+  MANIFEST_FILE="$NEXO_HOME/crons/manifest.json"
 else
   MANIFEST_FILE="$NEXO_CODE/crons/manifest.json"
 fi

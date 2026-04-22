@@ -43,6 +43,12 @@ VALID_STATUSES = {
 }
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+# Public-contribution staging lives under ``NEXO_HOME / contrib`` (the mirror
+# clone of the public repo plus per-proposal worktrees). It is intentionally
+# outside ``paths.operations_dir()`` because it holds an actual git clone, not
+# operational artifacts. Artifacts (logs, proposal payloads) live at
+# ``CONTRIB_ARTIFACTS_DIR`` below. If this ever relocates, migrate the existing
+# clone + open worktrees — do NOT delete and reclone blindly.
 CONTRIB_ROOT = NEXO_HOME / "contrib" / "public-core"
 CONTRIB_REPO_DIR = CONTRIB_ROOT / "repo"
 CONTRIB_WORKTREES_DIR = CONTRIB_ROOT / "worktrees"

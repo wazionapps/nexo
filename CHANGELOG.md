@@ -559,8 +559,18 @@ directly in the new tree.
 - 40 LaunchAgent plists (`~/Library/LaunchAgents/com.nexo.*.plist`)
   rewritten so their `ProgramArguments` script paths and
   `StandardOutPath`/`StandardErrorPath` log paths use the new layout.
-- One snapshot (`~/.nexo-pre-f06-snapshot/`) is kept by the migrator;
-  operators can `mv ~/.nexo-pre-f06-snapshot ~/.nexo` to roll back.
+- One snapshot (`~/.nexo-pre-f06-snapshot/`) is kept by the migrator.
+  Preferred rollback path: `nexo rollback f06` (available from v7.1.11+)
+  — takes a two-stage swap with a dated backup of the current tree,
+  boots LaunchAgents out, and reloads them after the restore.
+  Manual rollback (legacy / emergency) REQUIRES moving the current
+  tree out of the way first so the snapshot is not clobbered:
+  ``stamp="$(date +%Y%m%d%H%M%S)"``
+  ``mv ~/.nexo ~/.nexo-rollback-backup-"$stamp"``
+  ``mv ~/.nexo-pre-f06-snapshot ~/.nexo``
+  Do NOT use the older ``mv ~/.nexo-pre-f06-snapshot ~/.nexo`` recipe
+  without the backup-rename first: it silently destroys anything the
+  operator changed post-migration.
 
 ### Tests
 

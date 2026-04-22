@@ -389,25 +389,65 @@ def _write_last_check(data: dict):
 
 
 def _sync_watchdog_hash_registry():
-    """Keep the immutable-hash registry aligned with the installed watchdog script."""
+    """Keep the immutable-hash registry aligned with the installed watchdog script.
+
+    Folds any pre-F0.6 legacy registry at ``paths.legacy_watchdog_hashes_path()``
+    into the canonical F0.6 file and then drops the legacy artifact so a later
+    ``ls ~/.nexo/scripts/.watchdog-hashes`` is empty (unless ``~/.nexo/scripts``
+    is itself a symlink to the canonical dir, in which case both paths already
+    point at the same inode).
+    """
     try:
         watchdog_file = paths.core_scripts_dir() / "nexo-watchdog.sh"
         if not watchdog_file.exists():
             return
         registry_file = paths.core_scripts_dir() / ".watchdog-hashes"
+        legacy_registry_file = paths.legacy_watchdog_hashes_path()
         entries: dict[str, str] = {}
-        if registry_file.exists():
-            for line in registry_file.read_text().splitlines():
-                if "|" not in line:
-                    continue
-                filepath, expected = line.split("|", 1)
-                if filepath:
-                    entries[filepath] = expected
+
+        def _load(path: Path) -> None:
+            if not path.exists():
+                return
+            try:
+                for line in path.read_text().splitlines():
+                    if "|" not in line:
+                        continue
+                    filepath, expected = line.split("|", 1)
+                    if filepath:
+                        entries[filepath] = expected
+            except Exception as load_error:
+                _log(f"watchdog hash registry load error at {path}: {load_error}")
+
+        _load(registry_file)
+
+        legacy_is_canonical_alias = False
+        if legacy_registry_file.exists():
+            try:
+                legacy_is_canonical_alias = (
+                    registry_file.exists()
+                    and legacy_registry_file.resolve() == registry_file.resolve()
+                )
+            except Exception:
+                legacy_is_canonical_alias = False
+            if not legacy_is_canonical_alias:
+                _load(legacy_registry_file)
+
         actual_hash = hashlib.sha256(watchdog_file.read_bytes()).hexdigest()
         entries[str(watchdog_file)] = actual_hash
         registry_file.write_text(
             "\n".join(f"{filepath}|{digest}" for filepath, digest in sorted(entries.items())) + "\n"
         )
+
+        if (
+            legacy_registry_file.exists()
+            and not legacy_is_canonical_alias
+            and legacy_registry_file != registry_file
+        ):
+            try:
+                legacy_registry_file.unlink()
+                _log(f"watchdog hash registry migrated from legacy path: {legacy_registry_file}")
+            except Exception as unlink_error:
+                _log(f"watchdog hash registry legacy cleanup skipped: {unlink_error}")
     except Exception as e:
         _log(f"watchdog hash registry sync error: {e}")
 

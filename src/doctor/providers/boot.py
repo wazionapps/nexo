@@ -220,6 +220,193 @@ def check_config_parse() -> DoctorCheck:
     )
 
 
+def check_core_dev_packaged_install() -> DoctorCheck:
+    """Warn when ``~/.nexo/core-dev/`` exists on a packaged (non-dev) install.
+
+    Contract (see ``docs/f06-layout-contract.md`` §3): ``core-dev/`` is a
+    developer opt-in and MUST be absent on production installs. Its presence
+    on a packaged install is almost always a leftover from a dev environment
+    that was later repackaged, and silently keeps parallel code paths
+    discoverable through ``_classify_script_dir``. Doctor surfaces it so the
+    operator can confirm and remove.
+    """
+    import paths
+    core_dev = paths.core_dev_dir()
+    if not core_dev.exists():
+        return DoctorCheck(
+            id="boot.core_dev_absent_on_packaged",
+            tier="boot",
+            status="healthy",
+            severity="info",
+            summary="core-dev/ absent (expected on packaged installs)",
+        )
+    is_packaged = paths.core_dir().is_dir() and not (NEXO_HOME / "src").is_dir()
+    if not is_packaged:
+        return DoctorCheck(
+            id="boot.core_dev_absent_on_packaged",
+            tier="boot",
+            status="healthy",
+            severity="info",
+            summary="core-dev/ present on a dev install (contract allows this)",
+        )
+    try:
+        payload = [p.name for p in core_dev.iterdir()][:5]
+    except OSError:
+        payload = []
+    return DoctorCheck(
+        id="boot.core_dev_absent_on_packaged",
+        tier="boot",
+        status="degraded",
+        severity="warn",
+        summary="core-dev/ present on a packaged install — contract forbids this",
+        evidence=[f"Location: {core_dev}"] + [f"Entry: {n}" for n in payload],
+        repair_plan=[
+            f"Confirm with operator, then: rm -rf {core_dev}",
+        ],
+    )
+
+
+def check_dashboard_desktop_contract() -> DoctorCheck:
+    """Flag Dashboard LaunchAgent contradicting Desktop product surface.
+
+    Contract (see ``docs/f06-layout-contract.md`` §4):
+      - Terminal-only install → ``com.nexo.dashboard`` loaded.
+      - Desktop-managed install → ``com.nexo.dashboard`` unloaded.
+    Both signals disagreeing with the chosen product mode is a warn.
+    """
+    if sys.platform != "darwin":
+        return DoctorCheck(
+            id="boot.dashboard_desktop_contract",
+            tier="boot",
+            status="healthy",
+            severity="info",
+            summary="Non-darwin host — dashboard LaunchAgent contract does not apply",
+        )
+    agent_path = Path.home() / "Library" / "LaunchAgents" / "com.nexo.dashboard.plist"
+    agent_installed = agent_path.exists()
+    try:
+        from product_mode import enforce_desktop_product_contract  # type: ignore
+        desktop_contract = bool(enforce_desktop_product_contract())
+    except Exception:
+        desktop_contract = False
+
+    if desktop_contract and agent_installed:
+        return DoctorCheck(
+            id="boot.dashboard_desktop_contract",
+            tier="boot",
+            status="degraded",
+            severity="warn",
+            summary="Desktop product surface active but standalone dashboard LaunchAgent is installed",
+            evidence=[f"Plist: {agent_path}"],
+            repair_plan=[
+                f"launchctl unload {agent_path}",
+                f"rm {agent_path}",
+            ],
+        )
+    if not desktop_contract and not agent_installed:
+        return DoctorCheck(
+            id="boot.dashboard_desktop_contract",
+            tier="boot",
+            status="degraded",
+            severity="warn",
+            summary="Terminal-only install without a dashboard LaunchAgent",
+            evidence=["Expected plist missing: com.nexo.dashboard.plist"],
+            repair_plan=["nexo update  # re-materialize com.nexo.dashboard"],
+        )
+    return DoctorCheck(
+        id="boot.dashboard_desktop_contract",
+        tier="boot",
+        status="healthy",
+        severity="info",
+        summary="Dashboard LaunchAgent state matches the product surface contract",
+    )
+
+
+def check_f06_migration_consistency() -> DoctorCheck:
+    """Detect half-migrated F0.6 installs.
+
+    Contract (``docs/f06-layout-contract.md`` §6 rule 5):
+      - F0.6 marker + legacy runtime dirs populated → half-migration.
+      - No marker but canonical ``core/`` already populated → half-migration.
+      - Marker F0.6 with no legacy residue → healthy.
+      - No marker, no canonical ``core/``, pure legacy layout → healthy
+        (pre-F0.6 install waiting for ``nexo update``).
+
+    Half-migration is the scenario where ``paths.coordination_dir()`` (and
+    siblings) silently fall back to the legacy path on an install that
+    *should* be on F0.6. Doctor surfaces it so ``nexo update`` can be
+    asked to finish the job instead of the operator discovering later that
+    half their state lives in the wrong place.
+    """
+    import paths
+    marker = NEXO_HOME / ".structure-version"
+    marker_text = ""
+    if marker.is_file():
+        try:
+            marker_text = marker.read_text().strip().upper().split()[0]
+        except (OSError, IndexError):
+            marker_text = ""
+    is_f06_marked = marker_text.startswith("F0.6")
+
+    core_dir = paths.core_dir()
+    core_populated = core_dir.is_dir() and any(core_dir.iterdir()) if core_dir.exists() else False
+
+    # Legacy runtime dirs that MUST be gone (or be symlinks into canonical F0.6)
+    # once the migration has finished physically.
+    legacy_runtime_names = ("coordination", "data", "logs", "operations")
+    legacy_stragglers: list[str] = []
+    for name in legacy_runtime_names:
+        legacy_path = NEXO_HOME / name
+        if not legacy_path.exists():
+            continue
+        if legacy_path.is_symlink():
+            # A symlink pointing at the canonical runtime/<name> is the
+            # compat shim contract; that is acceptable.
+            continue
+        try:
+            has_content = any(legacy_path.iterdir())
+        except OSError:
+            has_content = False
+        if has_content:
+            legacy_stragglers.append(name)
+
+    if is_f06_marked and legacy_stragglers:
+        return DoctorCheck(
+            id="boot.f06_migration_consistency",
+            tier="boot",
+            status="critical",
+            severity="error",
+            summary="Half-migrated F0.6 install: marker present but legacy runtime dirs still populated",
+            evidence=[f"Marker: {marker_text}"] + [f"Legacy with content: {NEXO_HOME / n}" for n in legacy_stragglers],
+            repair_plan=[
+                "nexo update   # finish the F0.6 migration",
+                "# if update refuses, inspect manifest and consider: nexo rollback f06",
+            ],
+        )
+    if (not is_f06_marked) and core_populated:
+        return DoctorCheck(
+            id="boot.f06_migration_consistency",
+            tier="boot",
+            status="critical",
+            severity="error",
+            summary="Half-migrated F0.6 install: core/ populated but marker absent",
+            evidence=[f"Marker: {marker_text or '(absent)'}", f"core/ path: {core_dir}"],
+            repair_plan=[
+                "nexo update   # re-run migration to write the marker",
+            ],
+        )
+    return DoctorCheck(
+        id="boot.f06_migration_consistency",
+        tier="boot",
+        status="healthy",
+        severity="info",
+        summary=(
+            f"F0.6 marker consistent with layout (marker={marker_text or 'absent'}, "
+            f"legacy_stragglers={len(legacy_stragglers)})"
+        ),
+    )
+
+
 def run_boot_checks(fix: bool = False) -> list[DoctorCheck]:
     """Run all boot-tier checks."""
     checks = [
@@ -229,6 +416,9 @@ def run_boot_checks(fix: bool = False) -> list[DoctorCheck]:
         safe_check(check_wrapper_scripts),
         safe_check(check_python_runtime),
         safe_check(check_config_parse),
+        safe_check(check_core_dev_packaged_install),
+        safe_check(check_dashboard_desktop_contract),
+        safe_check(check_f06_migration_consistency),
     ]
 
     if fix:
