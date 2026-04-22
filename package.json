@@ -89,6 +89,7 @@
     ".claude-plugin/",
     ".mcp.json",
     "hooks/hooks.json",
+    "tool-enforcement-map.json",
     "README.md",
     "LICENSE"
   ]
