@@ -1,10 +1,16 @@
-"""v6.0.0 — Plugin mode and npm mode must register the same seven hooks.
+"""v6.0.0 — Plugin mode and npm mode must register the same hook set.
 
 Compares the set of (event, handler-basename) pairs declared by:
   - The canonical manifest ``src/hooks/manifest.json``.
   - The plugin-mode registration file ``hooks/hooks.json``.
 These two sources used to drift (learning #23, #169). The test locks the
 contract so a future edit that only touches one side immediately fails.
+
+v7.3.0: manifest grew to eight entries with the PreToolUse hook that
+wires Block K Guardian gates (G3 destructive + G3 SSH + G4 guard_check)
+into Claude Code's tool pipeline. Without it, ``hook_guardrails.
+process_pre_tool_event`` was code that never ran in production — the
+post-v7.2.0 bug the operator hit on 2026-04-22.
 """
 from __future__ import annotations
 
@@ -42,9 +48,9 @@ def _plugin_hook_handlers() -> set[tuple[str, str]]:
     return pairs
 
 
-def test_manifest_has_seven_hooks():
+def test_manifest_has_eight_hooks():
     pairs = _manifest_pairs()
-    assert len(pairs) == 7, f"manifest should list 7 hooks, got {len(pairs)}: {pairs}"
+    assert len(pairs) == 8, f"manifest should list 8 hooks, got {len(pairs)}: {pairs}"
 
 
 def test_plugin_mode_matches_manifest():
@@ -63,3 +69,14 @@ def test_manifest_includes_new_v6_hooks():
     events = {event for (event, _) in _manifest_pairs()}
     assert "Notification" in events
     assert "SubagentStop" in events
+
+
+def test_manifest_includes_v7_3_pre_tool_use_hook():
+    """v7.3.0 wired PreToolUse into the manifest to close the Block K Guardian
+    gap. Without this hook, ``hook_guardrails.process_pre_tool_event`` is
+    unreachable from Claude Code and Guardian hard is silently no-op.
+    """
+    pairs = _manifest_pairs()
+    assert ("PreToolUse", "pre_tool_use.py") in pairs, (
+        f"manifest must register the NEXO core PreToolUse hook: {pairs}"
+    )

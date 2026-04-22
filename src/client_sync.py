@@ -87,6 +87,9 @@ HOOK_TIMEOUTS_BY_EVENT = {
     "PreCompact": 15,
     "PostCompact": 15,
     "UserPromptSubmit": 5,
+    # PreToolUse is synchronous on every tool call — keep low. 8s gives room
+    # for DB lookups under load without stalling routine Edit/Write/Bash.
+    "PreToolUse": 8,
     "PostToolUse": 20,
     "Notification": 3,
     "SubagentStop": 10,
