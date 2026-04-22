@@ -19,6 +19,10 @@ from core_prompts import render_core_prompt
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(NEXO_HOME)))
 NEXO_DB = paths.db_path()
+# Evolution sandbox lives under the runtime root (equivalent to
+# ``paths.runtime_dir() / "sandbox"``). Kept as ``NEXO_HOME / sandbox /
+# workspace`` for backwards compatibility with existing installs that already
+# have a populated sandbox at this path. Do NOT relocate without a migration.
 SANDBOX_DIR = NEXO_HOME / "sandbox" / "workspace"
 SNAPSHOTS_DIR = paths.snapshots_dir()
 RESTORE_LOG = paths.logs_dir() / "snapshot-restores.log"

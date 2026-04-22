@@ -322,6 +322,60 @@ class TestSkillsRuntime:
 
         assert "collides with core skill" in result["error"]
 
+    def test_personal_skill_and_script_rejection_on_core_name_colision(self, skills_env):
+        # NEXO-MASTER-CHECKLIST Brain B1: personal scripts/skills must never collide
+        # with reserved core identities. This exercises the full surface (skills via
+        # create_skill/materialize_personal_skill_definition, scripts via create_script)
+        # in one test so `pytest -k colision` returns a positive integrated signal.
+        import script_registry as personal_scripts
+
+        db, _, _, db_skills = _reload_skill_stack()
+        db.init_db()
+
+        skill_create = db.create_skill(
+            skill_id="SK-PERSONAL-RUNTIME-DOCTOR",
+            name="Run Runtime Doctor",
+            description="Personal attempt at a reserved core name.",
+            level="draft",
+            content="# Collision\n",
+            source_kind="personal",
+        )
+        assert "collides with core skill" in skill_create.get("error", "")
+
+        skill_materialize = db.materialize_personal_skill_definition(
+            {
+                "id": "SK-RUN-RUNTIME-DOCTOR",
+                "name": "Personal Runtime Doctor",
+                "description": "Personal definition with reserved core identity.",
+                "level": "published",
+                "mode": "guide",
+                "content": "# Collision\n",
+            }
+        )
+        assert "collides with core skill" in skill_materialize["error"]
+
+        scripts_dir = Path(db_skills.PERSONAL_SKILLS_DIR).parent / "personal" / "scripts"
+        scripts_dir.mkdir(parents=True, exist_ok=True)
+        core_scripts_dir = scripts_dir.parent.parent / "core" / "scripts"
+        core_scripts_dir.mkdir(parents=True, exist_ok=True)
+        (core_scripts_dir / "nexo-email-monitor.py").write_text(
+            "#!/usr/bin/env python3\n"
+            "# nexo: name=email-monitor\n"
+            "# nexo: runtime=python\n"
+            "print('core')\n"
+        )
+        import paths as _paths_module
+        original_scripts_dir = personal_scripts.get_scripts_dir
+        personal_scripts.get_scripts_dir = lambda: scripts_dir  # type: ignore[assignment]
+        original_core_scripts_dir = _paths_module.core_scripts_dir
+        _paths_module.core_scripts_dir = lambda: core_scripts_dir  # type: ignore[assignment]
+        try:
+            with pytest.raises(ValueError, match="collides with a reserved core script identity"):
+                personal_scripts.create_script("email-monitor", description="should fail", runtime="python")
+        finally:
+            personal_scripts.get_scripts_dir = original_scripts_dir  # type: ignore[assignment]
+            _paths_module.core_scripts_dir = original_core_scripts_dir  # type: ignore[assignment]
+
     def test_scriptable_candidates_promote_to_executable_drafts(self, skills_env):
         db, skills_runtime, _, _ = _reload_skill_stack()
         db.init_db()
