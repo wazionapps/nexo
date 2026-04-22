@@ -93,7 +93,7 @@
                     <span class="page-chip">Adaptive empirical</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v730" class="btn btn-primary">Start with v7.3.0</a>
+                    <a href="#v740" class="btn btn-primary">Start with v7.4.0</a>
                     <a href="#v7110" class="btn btn-secondary">See v7.1.10</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -192,6 +192,16 @@
 <section class="section-compact" style="background:rgba(124,58,237,0.08);">
     <div class="container desktop-disclaimer" style="max-width:860px;font-size:13px;line-height:1.55;">
         <p><strong>Sobre NEXO Desktop.</strong> NEXO Desktop es un cliente acompa&ntilde;ante closed-source distribuido aparte en <a href="https://nexo-desktop.com/">nexo-desktop.com</a>. Cuando una entrada de changelog menciona "NEXO Desktop" se refiere a una versi&oacute;n coordinada de ese cliente que consume el contrato CLI/MCP del Brain. El c&oacute;digo de Desktop no vive en este repo; el Brain (AGPL-3.0) es 100% usable por s&iacute; solo desde terminal, Codex, Claude Code, o cualquier cliente MCP.</p>
+    </div>
+</section>
+
+<section id="v740" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.4.0 <span style="opacity:.5;font-weight:400;">&mdash; April 22, 2026 &mdash; <strong>MINOR</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">guardian-claude-desktop lifecycle pipeline — <code>nexo_lifecycle_event</code> + idempotency + Desktop durable queue</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            v7.4.0 ships the Brain-side of the <code>guardian-claude-desktop-plan.md</code> pipeline that NEXO Desktop v0.24.0 now depends on. Every conversation lifecycle transition on Desktop (<em>close / delete / archive / switch / window-close / app-exit</em>) is persisted to a durable queue BEFORE any UI mutation becomes visible and then relayed to Brain through <code>nexo_lifecycle_event</code> for canonical processing. Re-delivery of the same <code>event_id</code> returns <code>already_processed</code> without re-running any side effect &mdash; strict idempotency per "5. Idempotencia real" in the plan. Companion <code>nexo_lifecycle_status(event_id)</code> exposes the stored row for Desktop's boot-time reconciliation. Backed by the new <code>lifecycle_events</code> table (migration m51) keyed by <code>event_id</code> with columns action, conversation_id, session_id, reason, payload_snapshot, delivery_status, retry_count, created_at, processed_at, last_error. A <code>nexo lifecycle record</code> / <code>nexo lifecycle status</code> CLI subcommand lets Desktop bridge through <code>runNexoCommand</code> without any new IPC surface; exit codes 0/2/3 map onto terminal / retryable / rejected acks. 12 new contract tests pin idempotency, diary-triggering action flags, malformed input rejection paths, payload roundtrip, and the frozen <code>VALID_ACTIONS</code> set. Total MCP tools 260 → 262 (<code>verify_tool_map.py</code> passes). No breaking changes; install coordinates automatically via <code>nexo update</code>.
+        </p>
     </div>
 </section>
 
