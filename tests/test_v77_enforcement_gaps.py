@@ -225,3 +225,122 @@ def test_rail_6_r_catalog_fragments_include_core_artefact_roots():
         assert any(f == fragment or f.endswith(fragment) or fragment in f for f in CATALOG_FRAGMENTS), (
             f"R_CATALOG fragment list missing {fragment}; Gap 3 coverage broken."
         )
+
+
+# ── v7.7 pass-2 hotfix rails (gaps Francisco flagged after initial pass) ─
+
+def _build_engine_for_behavioral_test():
+    """Instantiate a real EnforcementEngine against the shipped map so
+    the behavioural tests below exercise the same dispatch + indexes
+    the production runtime uses. No DB mutation here — the tests only
+    inspect internal state and the injection queue."""
+    import sys
+    sys.path.insert(0, str(REPO_ROOT / "src"))
+    from enforcement_engine import HeadlessEnforcer as _EE  # noqa: E402
+    return _EE()
+
+
+def test_rail_7_task_open_rearms_after_task_close_for_real():
+    """v7.7 Gap 7.1: reset_task_cycle must actually remove task_open
+    from tools_called, not just reset the counter. Otherwise the
+    conditional gate sees `tool in self.tools_called` and skips forever.
+    """
+    eng = _build_engine_for_behavioral_test()
+    eng.on_tool_call("nexo_task_open")
+    assert "nexo_task_open" in eng.tools_called
+    eng.on_tool_call("nexo_task_close")
+    # After close, task_open must have been removed from the satisfied
+    # set so the next cycle's conditional check can nudge again.
+    assert "nexo_task_open" not in eng.tools_called, (
+        "reset_task_cycle must discard task_open from tools_called so "
+        "the conditional gate re-arms for the next task cycle (v7.7 hotfix)."
+    )
+    assert eng._conditional_counters.get("nexo_task_open", None) == 0, (
+        "counter must also be reset to 0 after reset_task_cycle."
+    )
+    # And per-instance pin must also be cleared so after_tool
+    # dependencies on task_open don't stay satisfied-by-once either.
+    assert "nexo_task_open" not in eng._tool_last_instance, (
+        "reset_task_cycle must clear the per-instance pin so after_tool "
+        "gates on task_open rearm for the next cycle."
+    )
+
+
+def test_rail_8_r14_detector_raises_user_correction_without_learning():
+    """v7.7 Gap 7.2: when R14 classifier returns True, the engine must
+    raise the on_event `user_correction_without_learning` so the map's
+    trigger actually fires in the live stream (not only via tests)."""
+    src = (REPO_ROOT / "src" / "enforcement_engine.py").read_text(encoding="utf-8")
+    # The R14 detector body must raise the canonical event name right
+    # after opening its window. Grep-level invariant is enough: the
+    # string must appear inside on_user_message body within reasonable
+    # proximity of `_r14_window_remaining = _R14_WINDOW`.
+    idx = src.find("_r14_window_remaining = _R14_WINDOW")
+    assert idx != -1, "R14 window opener not found; detector changed shape"
+    window = src[idx:idx + 1200]
+    assert 'raise_event("user_correction_without_learning"' in window, (
+        "R14 detector must raise on_event user_correction_without_learning "
+        "so the map's on_event rule (grace_messages=0) actually fires."
+    )
+
+
+def test_rail_8_r16_detector_raises_done_claimed_with_open_task():
+    """v7.7 Gap 7.2: when R16 fires on declared-done with an open task,
+    the engine must also raise the on_event event so the map's
+    `done_claimed_with_open_task` trigger lands in the live stream.
+    """
+    src = (REPO_ROOT / "src" / "enforcement_engine.py").read_text(encoding="utf-8")
+    idx = src.find('rule_id="R16_declared_done"')
+    assert idx != -1, "R16 enqueue site not found; detector changed shape"
+    window = src[idx:idx + 600]
+    assert 'raise_event("done_claimed_with_open_task"' in window, (
+        "R16 detector must raise on_event done_claimed_with_open_task so "
+        "the map's on_event rule fires from the live stream (Gap 7.2)."
+    )
+
+
+def test_rail_9_live_stream_invokes_on_tool_call_before():
+    """v7.7 Gap 7.3: run_with_enforcement must call on_tool_call_before
+    BEFORE on_tool_call on every tool_use event, so before_tool rules
+    (the map's nexo_guard_check watching Edit/Write) fire in Brain the
+    same way Desktop fires onBeforeToolCall.
+    """
+    src = (REPO_ROOT / "src" / "enforcement_engine.py").read_text(encoding="utf-8")
+    # Both dispatch branches (tool_use inside `assistant` event AND the
+    # content_block_start fast path) must call on_tool_call_before.
+    before_calls = src.count("enforcer.on_tool_call_before(")
+    after_calls = src.count("enforcer.on_tool_call(")
+    assert before_calls >= 2, (
+        f"Expected at least 2 on_tool_call_before() call sites inside "
+        f"run_with_enforcement (both tool_use dispatch branches); "
+        f"found {before_calls}. Gap 7.3 regressed."
+    )
+    # Sanity: on_tool_call still fires too (it handles the after_tool side).
+    assert after_calls >= before_calls, (
+        "on_tool_call must still run after on_tool_call_before."
+    )
+
+
+def test_rail_10_conditional_rearm_is_behavioural_not_just_counter():
+    """v7.7 Gap 7.1 behavioural guard: after open→close→new work, the
+    conditional rule must be able to fire again. Without the
+    tools_called discard in reset_task_cycle, the gate would stay
+    silent forever because of the early `if tool in tools_called`
+    continue inside _check_conditional.
+    """
+    eng = _build_engine_for_behavioral_test()
+    # Cycle 1: task_open → task_close.
+    eng.on_tool_call("nexo_task_open")
+    eng.on_tool_call("nexo_task_close")
+    # Simulate another 4 tool calls (matches the new threshold of 4).
+    for _ in range(4):
+        eng.on_tool_call("Edit")
+    # Re-evaluate conditional. The rule should surface because the
+    # previous task_open no longer counts as satisfying the next cycle.
+    eng.injection_queue.clear()
+    eng._check_conditional()
+    tags = [q.get("tag", "") for q in eng.injection_queue]
+    assert any(t.startswith("conditional:nexo_task_open") for t in tags), (
+        f"conditional rule must re-fire in the next task cycle after "
+        f"task_close; saw queue tags={tags}. Gap 7.1 regressed."
+    )
