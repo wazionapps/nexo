@@ -22,22 +22,73 @@ if [ -f "$LOG_FILE" ]; then
     LOG_LINES=$(wc -l < "$LOG_FILE" | tr -d ' ')
 fi
 
-# Read checkpoint for the session that just compacted
-# PreCompact writes the SID to /tmp/nexo-compacting-sid
+# v7.8 — Read checkpoint for the EXACT session that compacted. Source
+# of truth is the NEXO_HOME-scoped sidecar PreCompact writes; /tmp is
+# gone (multiple conversations racing on /tmp was the root cause of
+# "otra conversación restauró por accidente"). If the exact SID is not
+# available or maps to a different Claude session than this invocation,
+# we FAIL-CLOSED: print a diagnostic Core Memory Block acknowledging
+# the drop and exit without injecting stale context.
 TARGET_SID=""
-if [ -f /tmp/nexo-compacting-sid ]; then
-    RAW_SID=$(cat /tmp/nexo-compacting-sid 2>/dev/null || echo "")
-    rm -f /tmp/nexo-compacting-sid
-    # Validate SID format: must be nexo-DIGITS-DIGITS
+# v7.8.1 — per-conversation sidecar. If CLAUDE_SESSION_ID is present
+# we read the token-specific file; otherwise (single-conv legacy path)
+# fall back to the global file. Either way, we rm ONLY the file we
+# actually consumed, never another session's.
+SAFE_CLAUDE_ID=""
+if [ -n "${CLAUDE_SESSION_ID:-}" ]; then
+    SAFE_CLAUDE_ID="${CLAUDE_SESSION_ID//[^a-zA-Z0-9._-]/_}"
+    COMPACT_STATE="$DATA_DIR/compacting/$SAFE_CLAUDE_ID.txt"
+else
+    COMPACT_STATE="$DATA_DIR/compacting-sid.txt"
+fi
+if [ -f "$COMPACT_STATE" ]; then
+    RAW_SID=$(cat "$COMPACT_STATE" 2>/dev/null || echo "")
+    rm -f "$COMPACT_STATE"
     if [[ "$RAW_SID" =~ ^nexo-[0-9]+-[0-9]+$ ]]; then
         TARGET_SID="$RAW_SID"
+    fi
+fi
+
+# Cross-check: the SID we recover MUST belong to the Claude session
+# that fired this hook. If the env ships CLAUDE_SESSION_ID, resolve it
+# to a NEXO SID and require a match with the pre-compact sidecar.
+if [ -f "$NEXO_DB" ] && [ -n "${CLAUDE_SESSION_ID:-}" ]; then
+    ENV_SID=$(sqlite3 "$NEXO_DB" "
+        SELECT sid FROM sessions WHERE claude_session_id = '$CLAUDE_SESSION_ID' LIMIT 1
+    " 2>/dev/null || echo "")
+    if [ -z "$ENV_SID" ]; then
+        ENV_SID=$(sqlite3 "$NEXO_DB" "
+            SELECT sid FROM session_claude_aliases WHERE claude_session_id = '$CLAUDE_SESSION_ID' ORDER BY last_seen DESC LIMIT 1
+        " 2>/dev/null || echo "")
+    fi
+    if [ -n "$TARGET_SID" ] && [ -n "$ENV_SID" ] && [ "$TARGET_SID" != "$ENV_SID" ]; then
+        # Safer to restore nothing than to restore the wrong conv.
+        echo "<!-- NEXO post-compact: SID mismatch (sidecar=$TARGET_SID env=$ENV_SID); skipping rehydration to avoid cross-conv leak. -->"
+        # Still emit a post_compaction event so the engine sees the hook ran.
+        PENDING_EVENTS="$DATA_DIR/pending_enforcer_events.ndjson"
+        python3 -c "
+import json, os, time
+row = {'event': 'post_compaction', 'session_id': os.environ.get('ENV_SID',''),
+       'status': 'mismatch', 'sidecar_sid': os.environ.get('TARGET_SID',''),
+       'claude_session_id': os.environ.get('CLAUDE_SESSION_ID',''),
+       'timestamp': time.time()}
+try:
+    with open(os.environ['PENDING_EVENTS'], 'a', encoding='utf-8') as fh:
+        fh.write(json.dumps(row, ensure_ascii=False) + '\n')
+except Exception: pass
+" ENV_SID="$ENV_SID" TARGET_SID="$TARGET_SID" CLAUDE_SESSION_ID="${CLAUDE_SESSION_ID:-}" PENDING_EVENTS="$PENDING_EVENTS" >/dev/null 2>&1 || true
+        exit 0
+    fi
+    # If the sidecar was missing, trust the env-resolved SID.
+    if [ -z "$TARGET_SID" ] && [ -n "$ENV_SID" ]; then
+        TARGET_SID="$ENV_SID"
     fi
 fi
 
 CHECKPOINT=""
 if [ -f "$NEXO_DB" ]; then
     if [ -n "$TARGET_SID" ]; then
-        # Read checkpoint for the specific session that compacted
+        # Read checkpoint for the specific session that compacted.
         CHECKPOINT=$(sqlite3 "$NEXO_DB" "
             SELECT sid, task, task_status, active_files, current_goal,
                    decisions_summary, errors_found, reasoning_thread,
@@ -46,16 +97,10 @@ if [ -f "$NEXO_DB" ]; then
             WHERE sid = '$TARGET_SID'
         " 2>/dev/null || echo "")
     fi
-    # Fallback: if no target SID or no checkpoint found, use latest
-    if [ -z "$CHECKPOINT" ]; then
-        CHECKPOINT=$(sqlite3 "$NEXO_DB" "
-            SELECT sid, task, task_status, active_files, current_goal,
-                   decisions_summary, errors_found, reasoning_thread,
-                   next_step, compaction_count
-            FROM session_checkpoints
-            ORDER BY updated_at DESC LIMIT 1
-        " 2>/dev/null || echo "")
-    fi
+    # v7.8: NO MORE latest-checkpoint fallback. Francisco flagged this
+    # explicitly — restoring the wrong conversation is worse than
+    # restoring nothing. We leave CHECKPOINT empty so the "Core memory
+    # block" prints a small diagnostic and exits cleanly.
 
     if [ -n "$CHECKPOINT" ]; then
         # Parse pipe-separated fields
@@ -178,10 +223,13 @@ print('**Guardrail:** skip option menus, reprioritization, summaries, and audits
 }
 HOOKEOF
     else
-        # No checkpoint — fallback to basic message
-        cat << 'HOOKEOF'
+        # v7.8 fail-closed: no checkpoint for the exact SID. We do NOT
+        # inject another conversation's context (that was the pre-v7.8
+        # bug). Minimal diagnostic so the operator can call
+        # nexo_heartbeat with the right SID if they want to continue.
+        cat << HOOKEOF
 {
-  "systemMessage": "Post-compaction: no prior checkpoint found. Call nexo_heartbeat to reconnect session state."
+  "systemMessage": "Post-compaction (SID=${TARGET_SID:-unknown}): no checkpoint for this exact session. Call nexo_heartbeat(sid='${TARGET_SID:-<run nexo_startup>}') to rehydrate — NEXO did NOT restore a different conversation's checkpoint to avoid cross-conv leaks."
 }
 HOOKEOF
     fi
@@ -192,3 +240,25 @@ else
 }
 HOOKEOF
 fi
+
+# v7.8 — emit post_compaction event for the engine consumer.
+PENDING_EVENTS="$DATA_DIR/pending_enforcer_events.ndjson"
+python3 -c "
+import json, os, sys, time
+target = os.environ.get('TARGET_SID', '')
+pending = os.environ.get('PENDING_EVENTS', '')
+if not pending:
+    sys.exit(0)
+row = {
+    'event': 'post_compaction',
+    'session_id': target,
+    'claude_session_id': os.environ.get('CLAUDE_SESSION_ID', ''),
+    'status': 'restored' if target else 'no_target',
+    'timestamp': time.time(),
+}
+try:
+    with open(pending, 'a', encoding='utf-8') as fh:
+        fh.write(json.dumps(row, ensure_ascii=False) + '\n')
+except Exception:
+    pass
+" TARGET_SID="$TARGET_SID" CLAUDE_SESSION_ID="${CLAUDE_SESSION_ID:-}" PENDING_EVENTS="$PENDING_EVENTS" >/dev/null 2>&1 || true

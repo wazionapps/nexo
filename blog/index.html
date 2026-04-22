@@ -145,22 +145,22 @@
                 <div class="blog-featured-meta">
                     <span class="compare-chip">April 22, 2026</span>
                     <span class="compare-chip">Minor release</span>
-                    <span class="compare-chip">Obedience gaps closed</span>
+                    <span class="compare-chip">Compaction continuity closed</span>
                 </div>
-                <h2>NEXO 7.7.0: constructor-guardian-90 pass 2 — the six gaps left partial in v7.6 are now closed</h2>
-                <p>v7.6.0 shipped contract parity (all eight rule types dispatched by both engines) and four default-mode bumps, but listed six gaps as honestly still-partial. v7.7.0 closes them. Gap 1: autonomous detector for <code>multi_step_task_detected</code> (heuristic in <code>on_tool_call</code>). Gap 2: R16 classifier prompt recognises the full done-claim vocabulary (sent / delivered / published / deployed / released / fixed / resolved / merged / pushed plus Spanish). Gap 3: R_CATALOG extends to plain Edit/Write into artefact-bearing paths. Gap 4: new <code>R_PRIMITIVE_CHOICE</code> runtime rule gates new-artefact writes without a primitive-choice probe. Gap 5: guardian_default v1.5.0 raises <code>R11_plugin_load_pre_inventory</code> soft → hard. Gap 6: 12 new contract tests across all six rails. 2070 pytest passing. Companion: NEXO Desktop v0.27.0.</p>
+                <h2>NEXO 7.8.0: compaction continuity closed end-to-end — PostCompact is a real hook, SID targeting is exact, fail-closed on cross-conv</h2>
+                <p>v7.7 closed 6 obedience gaps. v7.8 closes the PostCompact continuity work Francisco flagged right after: <code>src/hooks/post_compact.py</code> is a real registered hook (canonical set 8 → 9), <code>pre-compact.sh</code> resolves the exact NEXO SID via <code>CLAUDE_SESSION_ID</code> instead of the wrong "latest active" fallback, the sidecar moves from <code>/tmp</code> to <code>$NEXO_HOME</code> (no multi-conv race), <code>post-compact.sh</code> is fail-closed with a "SID mismatch" diagnostic instead of restoring the wrong conversation, the engine drains hook-emitted NDJSON events on every periodic tick so the map's <code>pre_compaction</code> / <code>post_compaction</code> <code>on_event</code> rules finally fire from the live stream, and <code>compaction_count</code> is pinned to increment only on real restores. 11 new invariants. Pytest 2086 passing. No Desktop bump.</p>
                 <div class="hero-actions" style="justify-content:flex-start;margin-bottom:18px;">
-                    <a href="/blog/nexo-7-7-0/" class="btn btn-primary">Open article</a>
-                    <a href="/changelog/#v770" class="btn btn-secondary">Open changelog</a>
+                    <a href="/blog/nexo-7-8-0/" class="btn btn-primary">Open article</a>
+                    <a href="/changelog/#v780" class="btn btn-secondary">Open changelog</a>
                 </div>
                 <div class="blog-mini-stack">
                     <div class="blog-mini-card">
                         <strong>Companion view</strong>
-                        <span><a href="/changelog/#v770">See the full v7.7.0 changelog</a></span>
+                        <span><a href="/changelog/#v780">See the full v7.8.0 changelog</a></span>
                     </div>
                     <div class="blog-mini-card">
                         <strong>Previous release</strong>
-                        <span><a href="/blog/nexo-7-6-0/">NEXO 7.6.0: enforcement parity — Brain catches up on before_tool / on_event / conditional, after_tool goes per-instance</a>.</span>
+                        <span><a href="/blog/nexo-7-7-0/">NEXO 7.7.0: constructor-guardian-90 pass 2 — the six gaps left partial in v7.6 are now closed</a>.</span>
                     </div>
                 </div>
             </div>
@@ -172,6 +172,15 @@
 <section class="section-flush-top">
     <div class="container">
         <div class="blog-grid">
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 22, 2026</div>
+                <h2><a href="/blog/nexo-7-8-0/">NEXO 7.8.0: compaction continuity closed end-to-end — PostCompact is a real hook, SID targeting is exact, fail-closed on cross-conv</a></h2>
+                <p>Minor release. PostCompact is now a real registered hook (canonical 8→9). pre-compact.sh uses exact CLAUDE_SESSION_ID (LATEST_SID fallback gone). Sidecar /tmp → $NEXO_HOME so multi-conv cannot race. post-compact.sh fail-closed on SID mismatch — no cross-conv leak. Engine drains hook-emitted NDJSON events each tick. 11 new invariants. No Desktop bump.</p>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/blog/nexo-7-8-0/" class="btn btn-secondary">Read more</a>
+                </div>
+            </div>
 
             <div class="blog-card">
                 <div class="blog-card-date">April 22, 2026</div>

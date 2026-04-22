@@ -1,5 +1,83 @@
 # Changelog
 
+## [7.8.0] - 2026-04-22
+
+Minor release. Compaction continuity closed end-to-end per the
+post-v7.7 review: PostCompact becomes a real registered hook, session
+targeting uses the exact Claude Code token (not "latest active"), and
+cross-conversation leaks are fail-closed by design.
+
+### Added
+
+- **`src/hooks/post_compact.py`** — canonical wrapper for the
+  PostCompact hook, mirrors `pre_compact.py`. Proxies `post-compact.sh`
+  stdout verbatim (so Claude Code receives the systemMessage JSON) and
+  records the run in `hook_runs` with the real session id for
+  auditability.
+- **`PostCompact` entry in `src/hooks/manifest.json` + `hooks/hooks.json`** —
+  the hook is now part of the canonical 9-hook set (was 8). Both the
+  managed sync path and the plugin install path register it. Timeout
+  15 s, `critical: true`.
+- **Engine `_consume_pending_hook_events()`** — hooks run in separate
+  processes so they cannot call `raise_event()` directly. Pre- and
+  post-compact write one NDJSON row per event to
+  `~/.nexo/runtime/data/pending_enforcer_events.ndjson`; the engine
+  drains the queue on every periodic tick and fires the matching
+  `on_event` rule. The queue file is truncated after read so a row
+  never fires twice.
+- **Tests `tests/test_v78_compaction_continuity.py`** — 11 invariants
+  across 10 rails: manifest registration, wrapper stdout proxy, exact
+  SID resolution, /tmp sidecar removal, fail-closed on missing SID,
+  cross-conv mismatch diagnostic, both hooks emit events, engine
+  consumer + queue truncation, compaction_count on real restore only,
+  hook_runs audit trail.
+
+### Changed — session targeting
+
+- **`pre-compact.sh`** stops using `LATEST_SID`. It now resolves the
+  NEXO SID from `CLAUDE_SESSION_ID` via `sessions.claude_session_id`
+  (primary) or `session_claude_aliases` (fallback). Multi-conversation
+  Desktop with several active conversations no longer compacts one
+  conv's checkpoint under another conv's bucket.
+- **Sidecar file moves from `/tmp/nexo-compacting-sid` to
+  `$NEXO_HOME/runtime/data/compacting-sid.txt`**. Two concurrent
+  compactions on two conversations no longer race on `/tmp` (the file
+  is NEXO-scoped, not per-OS-temp).
+- **`post-compact.sh` removes the "latest checkpoint" fallback**.
+  Restoring a different conversation's state was worse than restoring
+  nothing — the explicit checklist item. When the exact SID is missing
+  or mismatches the env-resolved one, the hook emits a small diagnostic
+  systemMessage ("SID mismatch", "no checkpoint for this exact
+  session") and exits cleanly. No cross-conv leak.
+- **`post-compact.sh` cross-checks the sidecar SID against
+  `CLAUDE_SESSION_ID`**. If they disagree, the hook refuses to
+  restore and emits a `post_compaction` event with
+  `status: mismatch` for auditing.
+- **`compaction_count` is only incremented inside the real-restore
+  branch** (`if [ -n "$CHECKPOINT" ]`). This was the pre-v7.8 behaviour
+  and is now pinned by a test so a future refactor cannot accidentally
+  tick it on failed restores or no-op fallbacks.
+
+### Preserved
+
+- The full `pre-compact.sh` Layer-2 auto-diary parachute (emergency
+  diary when the model never wrote one) is unchanged.
+- PostCompact systemMessage format is unchanged when a real checkpoint
+  restores — same Core Memory Block structure operators already know.
+
+### Tests
+
+- Pytest: 2086 passing (+16 vs v7.7.0). Ten unrelated pre-existing
+  failures remain (chat TTY / client sync / doctor / evolution —
+  environment-specific).
+- `test_v6_hooks_manifest_parity.py::test_manifest_has_nine_hooks`
+  replaces the old 8-hook floor.
+
+### No Desktop bump
+
+Desktop v0.27.0 continues to ship unchanged. v7.8 is entirely
+server/hooks-side — Desktop's surface contract is unaffected.
+
 ## [7.7.0] - 2026-04-22
 
 Minor release. Pass 2 of the constructor-guardian-90 checklist: the six

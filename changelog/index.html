@@ -93,13 +93,17 @@
                     <span class="page-chip">Adaptive empirical</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v770" class="btn btn-primary">Start with v7.7.0</a>
-                    <a href="#v760" class="btn btn-secondary">See v7.6.0</a>
+                    <a href="#v780" class="btn btn-primary">Start with v7.8.0</a>
+                    <a href="#v770" class="btn btn-secondary">See v7.7.0</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
             </div>
             <div class="page-visual">
                 <div class="page-stack">
+                    <div class="page-stack-card">
+                        <strong>v7.8.0</strong>
+                        <span>Minor release — compaction continuity. PostCompact is a real hook (canonical 8 &rarr; 9). pre-compact.sh uses exact SID via CLAUDE_SESSION_ID (LATEST_SID fallback gone). Sidecar /tmp &rarr; $NEXO_HOME (no multi-conv race). post-compact.sh fail-closed on SID mismatch, no cross-conv leak. Engine drains hook NDJSON events per tick. 11 new invariants. No Desktop bump.</span>
+                    </div>
                     <div class="page-stack-card">
                         <strong>v7.7.0</strong>
                         <span>Minor release — constructor-guardian-90 pass 2. Closes the 6 gaps left partial in v7.6: autonomous multi_step_task_detected detector, R16 vocabulary expansion (sent/fixed/deployed/released/…), R_CATALOG extended to plain Edit/Write of artefacts, new R_PRIMITIVE_CHOICE rule, R11_plugin_load soft&rarr;hard, 12 new contract tests across 6 rails. 2070 pytest passing. Companion: NEXO Desktop v0.27.0.</span>
@@ -208,6 +212,16 @@
 <section class="section-compact" style="background:rgba(124,58,237,0.08);">
     <div class="container desktop-disclaimer" style="max-width:860px;font-size:13px;line-height:1.55;">
         <p><strong>Sobre NEXO Desktop.</strong> NEXO Desktop es un cliente acompa&ntilde;ante closed-source distribuido aparte en <a href="https://nexo-desktop.com/">nexo-desktop.com</a>. Cuando una entrada de changelog menciona "NEXO Desktop" se refiere a una versi&oacute;n coordinada de ese cliente que consume el contrato CLI/MCP del Brain. El c&oacute;digo de Desktop no vive en este repo; el Brain (AGPL-3.0) es 100% usable por s&iacute; solo desde terminal, Codex, Claude Code, o cualquier cliente MCP.</p>
+    </div>
+</section>
+
+<section id="v780" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.8.0 <span style="opacity:.5;font-weight:400;">&mdash; April 22, 2026 &mdash; <strong>MINOR</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">Compaction continuity closed end-to-end &mdash; PostCompact is a real hook, SID targeting is exact, fail-closed on cross-conv</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            v7.7 shipped pass 2 of constructor-guardian-90. v7.8 closes the PostCompact work Francisco flagged right after: <code>src/hooks/post_compact.py</code> is now a <strong>real registered hook</strong> (the canonical set grows from 8 to 9, both in <code>src/hooks/manifest.json</code> and <code>hooks/hooks.json</code>; <code>test_manifest_has_nine_hooks</code> pins the floor). <code>pre-compact.sh</code> resolves the NEXO SID from <code>CLAUDE_SESSION_ID</code> via <code>sessions.claude_session_id</code> + <code>session_claude_aliases</code> — the pre-v7.8 <code>LATEST_SID</code> fallback was actively wrong in multi-conversation Desktop (it compacted whichever conv was touched last, not the one Claude Code actually compacted). The sidecar moves from <code>/tmp/nexo-compacting-sid</code> to <code>$NEXO_HOME/runtime/data/compacting-sid.txt</code> so two concurrent compactions on two conversations cannot race on <code>/tmp</code>. <code>post-compact.sh</code> <strong>removes the "latest checkpoint" fallback</strong>: fail-closed with a small "SID mismatch" / "no checkpoint for this exact session" <code>systemMessage</code> instead of restoring the wrong conversation. It also cross-checks the sidecar SID against the env-resolved one and refuses the restore on mismatch. Pre- and post-compact now append one NDJSON row per event to <code>pending_enforcer_events.ndjson</code>; the engine's new <code>_consume_pending_hook_events()</code> drains the queue on every periodic tick and fires the matching <code>on_event</code> rule — the map's <code>pre_compaction</code> / <code>post_compaction</code> triggers finally fire from the live stream, not only via tests. The queue file is truncated after read so a row never fires twice. <code>compaction_count</code> is pinned to increment only inside the real-restore branch (a test now catches if a refactor moves it into the fallback path). New contract test <code>tests/test_v78_compaction_continuity.py</code> (11 invariants across all ten rails). Pytest 2086 passing (+16 vs v7.7). No Desktop bump — v7.8 is entirely server/hooks-side.
+        </p>
     </div>
 </section>
 

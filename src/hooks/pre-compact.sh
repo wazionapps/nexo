@@ -24,34 +24,62 @@ if [ -f "$LOG_FILE" ]; then
     LOG_LINES=$(wc -l < "$LOG_FILE" | tr -d ' ')
 fi
 
-# Enrich checkpoint: copy diary draft context into checkpoint if exists
-if [ -f "$NEXO_DB" ]; then
-    # Get latest active session's diary draft
-    LATEST_SID=$(sqlite3 "$NEXO_DB" "
-        SELECT sid FROM sessions ORDER BY last_update_epoch DESC LIMIT 1
+# v7.8 — Exact session targeting. Claude Code passes the external
+# session token through CLAUDE_SESSION_ID to every hook. We resolve
+# THAT token to the NEXO SID via session_claude_aliases (or direct
+# match on sessions.claude_session_id). LATEST_SID fallback is gone —
+# multi-conversation Desktop made it actively wrong, because the
+# "latest active" session frequently belongs to a different conv than
+# the one Claude Code is compacting in this hook invocation.
+TARGET_SID=""
+if [ -f "$NEXO_DB" ] && [ -n "${CLAUDE_SESSION_ID:-}" ]; then
+    TARGET_SID=$(sqlite3 "$NEXO_DB" "
+        SELECT sid FROM sessions WHERE claude_session_id = '$CLAUDE_SESSION_ID' LIMIT 1
     " 2>/dev/null || echo "")
+    if [ -z "$TARGET_SID" ]; then
+        TARGET_SID=$(sqlite3 "$NEXO_DB" "
+            SELECT sid FROM session_claude_aliases WHERE claude_session_id = '$CLAUDE_SESSION_ID' ORDER BY last_seen DESC LIMIT 1
+        " 2>/dev/null || echo "")
+    fi
+fi
 
-    if [ -n "$LATEST_SID" ] && [[ "$LATEST_SID" =~ ^nexo-[0-9]+-[0-9]+$ ]]; then
-        # Write SID to temp file so PostCompact knows which session compacted
-        echo "$LATEST_SID" > /tmp/nexo-compacting-sid
-        # Pull diary draft data into checkpoint
-        sqlite3 "$NEXO_DB" "
-            INSERT INTO session_checkpoints (sid, task, current_goal, updated_at)
-            SELECT s.sid, s.task, COALESCE(d.last_context_hint, s.task), datetime('now')
-            FROM sessions s
-            LEFT JOIN session_diary_draft d ON d.sid = s.sid
-            WHERE s.sid = '$LATEST_SID'
-            ON CONFLICT(sid) DO UPDATE SET
-                task = excluded.task,
-                current_goal = CASE
-                    WHEN excluded.current_goal != '' THEN excluded.current_goal
-                    ELSE session_checkpoints.current_goal
-                END,
-                updated_at = datetime('now')
-        " 2>/dev/null || true
+if [ -f "$NEXO_DB" ] && [ -n "$TARGET_SID" ] && [[ "$TARGET_SID" =~ ^nexo-[0-9]+-[0-9]+$ ]]; then
+    # v7.8.1 (Francisco correction): the sidecar is per-conversation now.
+    # A single global `compacting-sid.txt` let two near-concurrent
+    # compactions on two different conversations clobber each other's
+    # state. We key the sidecar by the Claude session token that fired
+    # this hook (unique per conversation in Desktop). If the env token
+    # is unset we keep writing the legacy global file so single-conv
+    # callers are unaffected.
+    mkdir -p "$DATA_DIR/compacting" 2>/dev/null || true
+    if [ -n "${CLAUDE_SESSION_ID:-}" ]; then
+        # Sanitise to a filesystem-safe token without paying a subshell
+        # per hook invocation.
+        SAFE_CLAUDE_ID="${CLAUDE_SESSION_ID//[^a-zA-Z0-9._-]/_}"
+        COMPACT_STATE="$DATA_DIR/compacting/$SAFE_CLAUDE_ID.txt"
+    else
+        COMPACT_STATE="$DATA_DIR/compacting-sid.txt"
+    fi
+    printf '%s\n' "$TARGET_SID" > "$COMPACT_STATE"
 
-        # Flush the richer durable checkpoint state if milestone data exists.
-        NEXO_PRECOMPACT_SID="$LATEST_SID" HOOK_DIR="$HOOK_DIR" python3 -c "
+    # Pull diary draft data into checkpoint for the EXACT session.
+    sqlite3 "$NEXO_DB" "
+        INSERT INTO session_checkpoints (sid, task, current_goal, updated_at)
+        SELECT s.sid, s.task, COALESCE(d.last_context_hint, s.task), datetime('now')
+        FROM sessions s
+        LEFT JOIN session_diary_draft d ON d.sid = s.sid
+        WHERE s.sid = '$TARGET_SID'
+        ON CONFLICT(sid) DO UPDATE SET
+            task = excluded.task,
+            current_goal = CASE
+                WHEN excluded.current_goal != '' THEN excluded.current_goal
+                ELSE session_checkpoints.current_goal
+            END,
+            updated_at = datetime('now')
+    " 2>/dev/null || true
+
+    # Flush the richer durable checkpoint state if milestone data exists.
+    NEXO_PRECOMPACT_SID="$TARGET_SID" HOOK_DIR="$HOOK_DIR" python3 -c "
 import os, sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.environ['HOOK_DIR'], '..')))
 try:
@@ -63,7 +91,29 @@ try:
 except Exception:
     pass
 " 2>/dev/null || true
-    fi
+
+    # v7.8 — enqueue a `pre_compaction` event for the live engine to
+    # consume on the next tool call, so the map's on_event rule fires
+    # from the real stream instead of only via tests.
+    PENDING_EVENTS="$DATA_DIR/pending_enforcer_events.ndjson"
+    python3 -c "
+import json, os, sys, time
+target = os.environ.get('NEXO_PRECOMPACT_SID', '')
+pending = os.environ.get('PENDING_EVENTS', '')
+if not (target and pending):
+    sys.exit(0)
+row = {
+    'event': 'pre_compaction',
+    'session_id': target,
+    'claude_session_id': os.environ.get('CLAUDE_SESSION_ID', ''),
+    'timestamp': time.time(),
+}
+try:
+    with open(pending, 'a', encoding='utf-8') as fh:
+        fh.write(json.dumps(row, ensure_ascii=False) + '\n')
+except Exception:
+    pass
+" NEXO_PRECOMPACT_SID="$TARGET_SID" PENDING_EVENTS="$PENDING_EVENTS" CLAUDE_SESSION_ID="${CLAUDE_SESSION_ID:-}" >/dev/null 2>&1 || true
 fi
 
 # ── Layer 2: Emergency auto-diary before compaction ──────────────────
