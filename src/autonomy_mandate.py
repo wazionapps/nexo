@@ -45,8 +45,15 @@ MARKERS = (
     "autonomía total",
     "autonomia total",
     "sin esperas",
+    "hazlo todo",
     "todo ya",
+    "no pares",
+    "estás al mando",
+    "estas al mando",
+    "te dejo al mando",
     "no esperes",
+    "sigue sin parar",
+    "haz el plan completo",
     "no te escondas",
     "llevo 3 veces",
     "lo quiero ya",
@@ -81,6 +88,9 @@ class MandateState:
     expires_at: float
     marker: str
     source: str
+    execute_until_blocker: bool = True
+    suppress_mid_task_menus: bool = True
+    revalidate_after_compaction: bool = True
 
     def remaining_seconds(self, now: Optional[float] = None) -> float:
         now = time.time() if now is None else now
@@ -94,6 +104,9 @@ class MandateState:
             "expires_at": self.expires_at,
             "marker": self.marker,
             "source": self.source,
+            "execute_until_blocker": self.execute_until_blocker,
+            "suppress_mid_task_menus": self.suppress_mid_task_menus,
+            "revalidate_after_compaction": self.revalidate_after_compaction,
         }
 
 
@@ -137,6 +150,9 @@ def load_state() -> Optional[MandateState]:
             expires_at=float(raw.get("expires_at", 0.0)),
             marker=str(raw.get("marker", "")),
             source=str(raw.get("source", "")),
+            execute_until_blocker=bool(raw.get("execute_until_blocker", True)),
+            suppress_mid_task_menus=bool(raw.get("suppress_mid_task_menus", True)),
+            revalidate_after_compaction=bool(raw.get("revalidate_after_compaction", True)),
         )
     except (TypeError, ValueError):
         return None
@@ -150,6 +166,9 @@ def set_mandate(
     marker: str,
     source: str = "manual",
     ttl_seconds: int = DEFAULT_TTL_SECONDS,
+    execute_until_blocker: bool = True,
+    suppress_mid_task_menus: bool = True,
+    revalidate_after_compaction: bool = True,
 ) -> MandateState:
     _ensure_dir()
     now = time.time()
@@ -160,6 +179,9 @@ def set_mandate(
         expires_at=now + max(60, int(ttl_seconds)),
         marker=marker,
         source=source,
+        execute_until_blocker=bool(execute_until_blocker),
+        suppress_mid_task_menus=bool(suppress_mid_task_menus),
+        revalidate_after_compaction=bool(revalidate_after_compaction),
     )
     STATE_PATH.write_text(json.dumps(st.to_dict(), ensure_ascii=False, indent=2))
     return st
@@ -194,6 +216,46 @@ def maybe_ingest_from_text(
         source=source,
         ttl_seconds=ttl_seconds,
     )
+
+
+def _state_applies_to_session(state: MandateState, session_id: str = "") -> bool:
+    clean_sid = str(session_id or "").strip()
+    if not clean_sid:
+        return True
+    return not state.session_id or state.session_id == clean_sid
+
+
+def is_execute_until_blocker_active(
+    session_id: str = "",
+    state: Optional[MandateState] = None,
+) -> bool:
+    st = state if state is not None else load_state()
+    if st is None or not _state_applies_to_session(st, session_id):
+        return False
+    return bool(st.active and st.execute_until_blocker)
+
+
+def format_execution_latch_notice(
+    session_id: str = "",
+    state: Optional[MandateState] = None,
+) -> str:
+    st = state if state is not None else load_state()
+    if st is None or not _state_applies_to_session(st, session_id):
+        return ""
+    if not st.active or not st.execute_until_blocker:
+        return ""
+
+    lines = [
+        (
+            "EXECUTION MODE: execute-until-blocker active "
+            f"(marker='{st.marker}', source={st.source})."
+        ),
+        "Do not stop for option menus, reprioritization, summaries, or audits.",
+        "Pause only for a real blocker, an explicit approval gate, or a requested report.",
+    ]
+    if st.revalidate_after_compaction:
+        lines.append("Re-validate this latch after compaction and continue from the stored next step.")
+    return "\n".join(lines)
 
 
 def _description_has_exception(description: str, exception: str) -> bool:

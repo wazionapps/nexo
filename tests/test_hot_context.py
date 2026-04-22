@@ -60,6 +60,30 @@ def test_heartbeat_surfaces_recent_context_from_last_hours(isolated_db):
     assert "recambiosbmw" in second.lower()
 
 
+def test_heartbeat_latches_execute_until_blocker_on_explicit_go(
+    isolated_db,
+    tmp_path,
+    monkeypatch,
+):
+    import autonomy_mandate
+    import tools_sessions
+
+    monkeypatch.setenv("NEXO_HOME", str(tmp_path))
+    importlib.reload(autonomy_mandate)
+    importlib.reload(tools_sessions)
+
+    sid = _register_session("nexo-1003-3003")
+    output = tools_sessions.handle_heartbeat(
+        sid,
+        "seguir ejecucion",
+        "Hazlo todo, no pares, estás al mando hasta terminar o encontrar un blocker real.",
+    )
+
+    assert "EXECUTION MODE: execute-until-blocker active" in output
+    assert "option menus" in output
+    assert autonomy_mandate.is_execute_until_blocker_active(sid) is True
+
+
 def test_task_open_includes_recent_context_excerpt(isolated_db):
     import db
     from plugins.protocol import handle_task_open

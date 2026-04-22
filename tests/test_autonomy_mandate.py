@@ -36,6 +36,23 @@ def test_marker_detection_ingests_and_activates(mandate_module):
     assert st.session_id == "sid-1"
     loaded = am.load_state()
     assert loaded is not None and loaded.active
+    assert loaded.execute_until_blocker is True
+    assert loaded.suppress_mid_task_menus is True
+
+
+def test_new_explicit_markers_enable_execute_until_blocker(mandate_module):
+    am = mandate_module
+    st = am.maybe_ingest_from_text(
+        "Hazlo todo, no pares, estás al mando hasta que haya blocker real.",
+        session_id="sid-latch",
+    )
+    assert st is not None
+    assert st.marker in {"hazlo todo", "no pares", "estás al mando"}
+    assert am.is_execute_until_blocker_active("sid-latch") is True
+    notice = am.format_execution_latch_notice("sid-latch")
+    assert "execute-until-blocker" in notice
+    assert "option menus" in notice
+    assert "compaction" in notice
 
 
 def test_marker_detection_ingests_semantic_mandate(mandate_module):
@@ -59,6 +76,13 @@ def test_marker_detection_ignores_unrelated_text(mandate_module):
         classifier=lambda **_: False,
     ) is None
     assert am.load_state() is None
+
+
+def test_execution_latch_notice_is_session_scoped(mandate_module):
+    am = mandate_module
+    am.set_mandate(session_id="sid-owner", marker="hazlo todo")
+    assert am.format_execution_latch_notice("sid-owner")
+    assert am.format_execution_latch_notice("sid-other") == ""
 
 
 def test_expired_mandate_does_not_block(mandate_module):

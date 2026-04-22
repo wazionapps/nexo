@@ -71,6 +71,43 @@ def _parse_json_object(value: str) -> dict | None:
     return parsed if isinstance(parsed, dict) else None
 
 
+def _checkpoint_active_files(*payloads: dict | None) -> list[str]:
+    seen: list[str] = []
+    for payload in payloads:
+        if not isinstance(payload, dict):
+            continue
+        for key in ("active_files", "files", "tracked_files"):
+            raw = payload.get(key)
+            if raw is None:
+                continue
+            if isinstance(raw, str):
+                items = [item.strip() for item in raw.split(",") if item.strip()]
+            elif isinstance(raw, (list, tuple, set)):
+                items = [str(item).strip() for item in raw if str(item).strip()]
+            else:
+                items = [str(raw).strip()] if str(raw).strip() else []
+            for item in items:
+                if item and item not in seen:
+                    seen.append(item)
+    return seen
+
+
+def _workflow_blocker_text(
+    *,
+    step_status: str,
+    run_status: str,
+    summary: str,
+    next_action: str,
+    requires_approval: bool,
+) -> str:
+    status_tokens = {str(step_status or "").strip().lower(), str(run_status or "").strip().lower()}
+    if "blocked" in status_tokens:
+        return summary or next_action or "Workflow blocked."
+    if requires_approval or "waiting_approval" in status_tokens:
+        return summary or next_action or "Workflow waiting for approval."
+    return ""
+
+
 def handle_workflow_open(
     sid: str,
     goal: str,
@@ -387,6 +424,34 @@ def handle_workflow_update(
             "attempt_count": resume["next_step"].get("attempt_count", 0),
             "max_retries": resume["next_step"].get("max_retries", 0),
         }
+    try:
+        from checkpoint_policy import record_milestone
+
+        durable_checkpoint = record_milestone(
+            run.get("session_id", ""),
+            reason=f"workflow:{(step_key or run.get('current_step_key') or 'update')}",
+            task=run.get("goal", ""),
+            task_status=("blocked" if run["status"] in {"blocked", "waiting_approval"} else "active"),
+            active_files=_checkpoint_active_files(
+                _parse_json_object(shared_state) if str(shared_state).strip() else None,
+                _parse_json_object(state_patch) if str(state_patch).strip() else None,
+                run.get("shared_state") if isinstance(run.get("shared_state"), dict) else None,
+            ),
+            current_goal=run.get("goal", ""),
+            decisions_summary=(summary or checkpoint_label or step_title or step_key or run.get("last_checkpoint_label", "")),
+            blockers=_workflow_blocker_text(
+                step_status=step_status,
+                run_status=run["status"],
+                summary=summary,
+                next_action=next_action or run.get("next_action", ""),
+                requires_approval=requires_approval,
+            ),
+            reasoning_thread=(evidence or compensation or "").strip(),
+            next_step=(next_action or run.get("next_action", "")),
+        )
+        response["durable_checkpoint"] = durable_checkpoint
+    except Exception:
+        pass
     return json.dumps(response, ensure_ascii=False, indent=2)
 
 

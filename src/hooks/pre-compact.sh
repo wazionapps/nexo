@@ -49,6 +49,20 @@ if [ -f "$NEXO_DB" ]; then
                 END,
                 updated_at = datetime('now')
         " 2>/dev/null || true
+
+        # Flush the richer durable checkpoint state if milestone data exists.
+        NEXO_PRECOMPACT_SID="$LATEST_SID" HOOK_DIR="$HOOK_DIR" python3 -c "
+import os, sys
+sys.path.insert(0, os.path.abspath(os.path.join(os.environ['HOOK_DIR'], '..')))
+try:
+    import checkpoint_policy
+    checkpoint_policy.force_runtime_checkpoint(
+        os.environ['NEXO_PRECOMPACT_SID'],
+        reason='pre-compact-hook',
+    )
+except Exception:
+    pass
+" 2>/dev/null || true
     fi
 fi
 
