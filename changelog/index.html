@@ -93,13 +93,17 @@
                     <span class="page-chip">Adaptive empirical</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v760" class="btn btn-primary">Start with v7.6.0</a>
-                    <a href="#v750" class="btn btn-secondary">See v7.5.0</a>
+                    <a href="#v770" class="btn btn-primary">Start with v7.7.0</a>
+                    <a href="#v760" class="btn btn-secondary">See v7.6.0</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
             </div>
             <div class="page-visual">
                 <div class="page-stack">
+                    <div class="page-stack-card">
+                        <strong>v7.7.0</strong>
+                        <span>Minor release — constructor-guardian-90 pass 2. Closes the 6 gaps left partial in v7.6: autonomous multi_step_task_detected detector, R16 vocabulary expansion (sent/fixed/deployed/released/…), R_CATALOG extended to plain Edit/Write of artefacts, new R_PRIMITIVE_CHOICE rule, R11_plugin_load soft&rarr;hard, 12 new contract tests across 6 rails. 2070 pytest passing. Companion: NEXO Desktop v0.27.0.</span>
+                    </div>
                     <div class="page-stack-card">
                         <strong>v7.6.0</strong>
                         <span>Minor release. Enforcement parity: Brain engine dispatches <code>before_tool</code>, <code>on_event</code>, <code>conditional</code> (previously only Desktop did). <code>after_tool</code> is per-instance instead of once-per-session. Map v2.2 tightens learning_add grace 3&rarr;0 and task_open threshold 10&rarr;4 must. guardian_default v1.4.0 hardens R15/R17/R22/R_CATALOG and raises R34 from shadow to soft. 6 new contract parity tests. Companion: NEXO Desktop v0.26.0.</span>
@@ -204,6 +208,16 @@
 <section class="section-compact" style="background:rgba(124,58,237,0.08);">
     <div class="container desktop-disclaimer" style="max-width:860px;font-size:13px;line-height:1.55;">
         <p><strong>Sobre NEXO Desktop.</strong> NEXO Desktop es un cliente acompa&ntilde;ante closed-source distribuido aparte en <a href="https://nexo-desktop.com/">nexo-desktop.com</a>. Cuando una entrada de changelog menciona "NEXO Desktop" se refiere a una versi&oacute;n coordinada de ese cliente que consume el contrato CLI/MCP del Brain. El c&oacute;digo de Desktop no vive en este repo; el Brain (AGPL-3.0) es 100% usable por s&iacute; solo desde terminal, Codex, Claude Code, o cualquier cliente MCP.</p>
+    </div>
+</section>
+
+<section id="v770" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.7.0 <span style="opacity:.5;font-weight:400;">&mdash; April 22, 2026 &mdash; <strong>MINOR</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">Constructor-guardian-90 pass 2 &mdash; the six gaps left partial in v7.6 are now closed</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            v7.6.0 shipped contract parity (all eight rule types dispatched by both engines) and four default-mode bumps, but listed six gaps as honestly still-partial. v7.7.0 closes them. <strong>Gap 1</strong>: autonomous detector for <code>multi_step_task_detected</code> — three recent <code>Edit</code>/<code>Write</code>/<code>Task</code> calls without a prior <code>nexo_skill_match</code> now raise the event automatically through <code>raise_event()</code> (v7.6 exposed the API but nothing invoked it). The latch clears on both <code>nexo_skill_match</code> and <code>nexo_task_close</code>. <strong>Gap 2</strong>: the R16 classifier prompt (<code>templates/core-prompts/r16-declared-done-question.md</code>) now matches <em>sent / delivered / published / deployed / released / fixed / resolved / merged / pushed</em> plus Spanish equivalents, so the on_event trigger <code>done_claimed_with_open_task</code> fires on the full close-claim vocabulary the checklist called out. <strong>Gap 3</strong>: R_CATALOG extends its trigger set beyond <code>nexo_*_create/_open/_add</code> to plain <code>Edit</code>/<code>Write</code> into artefact-bearing paths (<code>skills/</code>, <code>plugins/</code>, <code>personal/scripts/</code>, <code>templates/core-prompts/</code>, …). Discovery set grows from 6 to 8 (adds <code>nexo_personal_scripts_list</code> + <code>nexo_plugin_list</code>). <strong>Gap 4</strong>: new runtime rule <code>R_PRIMITIVE_CHOICE</code> (module <code>src/r_primitive_choice.py</code>) gates Edit/Write of a brand-new artefact file without a recent primitive-choice probe — SK-CREATE-NEXO-PRIMITIVE becomes enforcement-backed instead of advisory. Disjoint from R_CATALOG: R_CATALOG fires on every artefact-path write without inventory consultation; R_PRIMITIVE_CHOICE fires only when the file is actually new. <strong>Gap 5</strong>: <code>guardian_default.json</code> v1.5.0 raises <code>R11_plugin_load_pre_inventory</code> soft &rarr; hard and adds the new rule at soft so its FP rate can be observed. <strong>Gap 6</strong>: new <code>tests/test_v77_enforcement_gaps.py</code> pins 12 invariants across all six rails. Pytest 2070 passing (+14 vs v7.6). Companion release: NEXO Desktop v0.27.0 mirrors the guardian default bumps (no new dispatch changes beyond v0.26).
+        </p>
     </div>
 </section>
 

@@ -81,6 +81,11 @@ except ImportError:  # pragma: no cover
     _r_catalog_should = None  # type: ignore
 
 try:
+    from r_primitive_choice import should_inject_r_primitive as _r_primitive_should
+except ImportError:  # pragma: no cover
+    _r_primitive_should = None  # type: ignore
+
+try:
     from r34_identity_coherence import should_inject_r34 as _r34_should
 except ImportError:  # pragma: no cover
     _r34_should = None  # type: ignore
@@ -422,6 +427,9 @@ class HeadlessEnforcer:
         # on_event grace windows — per (event_name) counter of messages
         # since event fired without the required tool being called.
         self._on_event_pending: dict[str, dict] = {}
+        # v7.7 Gap 1: latch so multi_step_task_detected fires at most once
+        # per task cycle. Cleared on skill_match OR task_close.
+        self._multi_step_event_fired: bool = False
 
         if self.map:
             self._build_indexes()
@@ -1753,8 +1761,15 @@ class HeadlessEnforcer:
         self._enqueue(prompt, decision["tag"], rule_id="R22_personal_script")
         _logger.info("[R22 %s] enqueued path=%s missing=%s", mode.upper(), decision["path"], decision["missing"])
 
-    def _check_r_catalog(self, tool_name: str):
-        """R-CATALOG (Plan Consolidado 0.X.2) — pre-create discovery probe."""
+    def _check_r_catalog(self, tool_name: str, files: list[str] | None = None):
+        """R-CATALOG — pre-create discovery probe.
+
+        v7.7 Gap 3: the trigger set is now {nexo_*_create/_open/_add}
+        UNION {Edit / Write into artefact-bearing paths}. The caller
+        passes the extracted file list so plain Edit/Write materialising
+        a skill / plugin / script without going through a dedicated MCP
+        tool still triggers the probe.
+        """
         if _r_catalog_should is None:
             return
         mode = self._guardian_rule_mode("R_CATALOG_before_artifact_create")
@@ -1768,7 +1783,7 @@ class HeadlessEnforcer:
             r.tool for r in self.recent_tool_records[:-1]
             if (now - getattr(r, "ts", now)) <= window
         ]
-        should, prompt = _r_catalog_should(tool_name, recent_tool_names=names)
+        should, prompt = _r_catalog_should(tool_name, recent_tool_names=names, files=files or [])
         if not should:
             return
         if mode == "shadow":
@@ -1776,6 +1791,45 @@ class HeadlessEnforcer:
             return
         self._enqueue(prompt, f"R_CATALOG:{tool_name}", rule_id="R_CATALOG_before_artifact_create")
         _logger.info("[R_CATALOG %s] enqueued tool=%s", mode.upper(), tool_name)
+
+    def _check_r_primitive_choice(self, tool_name: str, files: list[str] | None):
+        """R_PRIMITIVE_CHOICE (v7.7 Gap 4) — SK-CREATE-NEXO-PRIMITIVE gate.
+
+        Flags Edit/Write of a NEW artefact file without a recent primitive-
+        choice probe. Does not duplicate R_CATALOG: R_CATALOG fires on
+        every artefact-path write without inventory consultation, while
+        this rule fires only when the file is genuinely new (no prior
+        Read / Grep / Edit on the same path).
+        """
+        if _r_primitive_should is None:
+            return
+        mode = self._guardian_rule_mode("R_PRIMITIVE_CHOICE")
+        if mode == "off":
+            return
+        window = 120.0
+        now = time.time()
+        names = [
+            r.tool for r in self.recent_tool_records[:-1]
+            if (now - getattr(r, "ts", now)) <= window
+        ]
+        records = [r for r in self.recent_tool_records[:-1]]
+        should, prompt = _r_primitive_should(
+            tool_name,
+            files=files or [],
+            recent_tool_names=names,
+            recent_tool_records=records,
+        )
+        if not should:
+            return
+        if mode == "shadow":
+            _logger.info("[R_PRIMITIVE_CHOICE SHADOW] would inject for %s", tool_name)
+            return
+        self._enqueue(
+            prompt,
+            f"R_PRIMITIVE_CHOICE:{tool_name}",
+            rule_id="R_PRIMITIVE_CHOICE",
+        )
+        _logger.info("[R_PRIMITIVE_CHOICE %s] enqueued tool=%s", mode.upper(), tool_name)
 
     def _check_r18(self, tool_name: str, tool_input):
         """R18 — suggest followup_complete on closure-class actions."""
@@ -1934,6 +1988,29 @@ class HeadlessEnforcer:
         # open tool so the next task cycle re-opens the obligation.
         if name == "nexo_task_close":
             self.reset_task_cycle("nexo_task_open")
+
+        # v7.7 Gap 1 — autonomous detector for multi_step_task_detected.
+        # The event was dispatched by the map but nothing ever raised it.
+        # Heuristic: three or more edit/execute/delegate calls within the
+        # recent window (Edit/Write/Task/Bash-with-write-command) without
+        # a nexo_skill_match in between signals multi-step work that
+        # should consult skills first. We raise the event at most once per
+        # task cycle — skill_match clears it; task_close rearms it.
+        if not self._multi_step_event_fired:
+            edit_like = {"Edit", "Write", "Task"}
+            recent_edit_calls = sum(
+                1 for r in self.recent_tool_records[-10:] if r.tool in edit_like
+            )
+            if recent_edit_calls >= 3 and "nexo_skill_match" not in self.tools_called:
+                try:
+                    self.raise_event("multi_step_task_detected", {"recent_edits": recent_edit_calls})
+                except Exception:
+                    pass  # telemetry-style; never crash enforcement
+                self._multi_step_event_fired = True
+        if name == "nexo_skill_match" or name == "nexo_task_close":
+            # Both signals clear the multi-step flag so the next task
+            # cycle gets its own detection window.
+            self._multi_step_event_fired = False
         # Track the recent tool_use with the file paths it targets so Fase 2
         # Capa 2 rules (R13, future R19/R20) can inspect the write path.
         files = self._extract_files(tool_input)
@@ -2004,7 +2081,13 @@ class HeadlessEnforcer:
 
         # R-CATALOG (Plan 0.X.2) — nudge if we are about to create/open/add
         # without having consulted the live inventory in the last 60 s.
-        self._check_r_catalog(name)
+        self._check_r_catalog(name, files)
+
+        # v7.7 Gap 4 — R_PRIMITIVE_CHOICE. Runs AFTER R_CATALOG because
+        # R_CATALOG's prompt covers the generic inventory case; this one
+        # adds the specific primitive-decision reminder when a brand-new
+        # artefact file is being materialised via Edit/Write.
+        self._check_r_primitive_choice(name, files)
 
         # R18 — retroactive followup-complete suggestion on closure actions.
         self._check_r18(name, tool_input)
