@@ -1,5 +1,53 @@
 # Changelog
 
+## [7.8.1] - 2026-04-22
+
+Patch release. Closes the last compaction-continuity gap Francisco
+flagged after v7.8.0: the Layer-2 emergency auto-diary and Layer-3
+`compaction_memory.record_auto_flush` inside `pre-compact.sh` were
+still querying `SELECT sid FROM sessions ORDER BY last_update_epoch
+DESC LIMIT 1` — "latest active session". In multi-conversation
+Desktop this routinely wrote the emergency diary against the WRONG
+conversation even though the main restore path (checkpoint sidecar
++ post-compact fail-closed) was already exact-SID in v7.8.0.
+
+### Changed
+
+- `src/hooks/pre-compact.sh` Layer 2 + Layer 3 now use the
+  `TARGET_SID` already resolved from `CLAUDE_SESSION_ID` above. If
+  that SID is missing or not present in `sessions`, the emergency
+  diary is skipped — fail-closed instead of falling back to latest.
+  `last_diary_ts` is also scoped by `session_id` now, so another
+  conversation's recent diary does not truncate this conv's mechanical
+  summary window.
+- Behavioural tests added in `tests/test_v78_compaction_continuity.py`:
+  - `test_rail_pre_compact_emergency_diary_uses_target_sid_not_latest`
+    sets up two sessions where the "latest active" is NOT the target,
+    runs the real shell script, and asserts the diary row carries the
+    TARGET SID.
+  - `test_rail_pre_compact_emergency_diary_fail_closed_without_target_sid`
+    asserts that without a resolvable `CLAUDE_SESSION_ID`, the
+    emergency diary writes nothing (fail-closed) instead of picking
+    the latest session.
+
+### Fixed (regression caught by adding the tests above)
+
+- Double-quotes inside a Python comment embedded in a `python3 -c
+  "..."` shell heredoc silently closed the argument early — the
+  Layer-2 block therefore silently no-opped in production on the
+  first hook run. The comment was reworded to avoid any bash-meta
+  characters inside the double-quoted Python payload.
+
+### Tests
+
+- Pytest: 2092 passing (+2 new behavioural). The ten unrelated pre-
+  existing failures remain (darwin-only TTY / client-sync / doctor /
+  evolution).
+
+### No Desktop bump
+
+- v7.8.1 is entirely Brain-side. Desktop v0.27.0 continues to ship.
+
 ## [7.8.0] - 2026-04-22
 
 Minor release. Compaction continuity closed end-to-end per the

@@ -93,13 +93,17 @@
                     <span class="page-chip">Adaptive empirical</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v780" class="btn btn-primary">Start with v7.8.0</a>
-                    <a href="#v770" class="btn btn-secondary">See v7.7.0</a>
+                    <a href="#v781" class="btn btn-primary">Start with v7.8.1</a>
+                    <a href="#v780" class="btn btn-secondary">See v7.8.0</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
             </div>
             <div class="page-visual">
                 <div class="page-stack">
+                    <div class="page-stack-card">
+                        <strong>v7.8.1</strong>
+                        <span>Patch — pre-compact.sh Layer 2 emergency diary + Layer 3 record_auto_flush now use exact TARGET_SID (from CLAUDE_SESSION_ID), not "latest active". Fail-closed when no SID resolves. last_diary_ts scoped by session_id. Fixed latent bash-escape bug in python3 -c heredoc. 2 new behavioural tests drive real shell. No Desktop bump.</span>
+                    </div>
                     <div class="page-stack-card">
                         <strong>v7.8.0</strong>
                         <span>Minor release — compaction continuity. PostCompact is a real hook (canonical 8 &rarr; 9). pre-compact.sh uses exact SID via CLAUDE_SESSION_ID (LATEST_SID fallback gone). Sidecar /tmp &rarr; $NEXO_HOME (no multi-conv race). post-compact.sh fail-closed on SID mismatch, no cross-conv leak. Engine drains hook NDJSON events per tick. 11 new invariants. No Desktop bump.</span>
@@ -212,6 +216,16 @@
 <section class="section-compact" style="background:rgba(124,58,237,0.08);">
     <div class="container desktop-disclaimer" style="max-width:860px;font-size:13px;line-height:1.55;">
         <p><strong>Sobre NEXO Desktop.</strong> NEXO Desktop es un cliente acompa&ntilde;ante closed-source distribuido aparte en <a href="https://nexo-desktop.com/">nexo-desktop.com</a>. Cuando una entrada de changelog menciona "NEXO Desktop" se refiere a una versi&oacute;n coordinada de ese cliente que consume el contrato CLI/MCP del Brain. El c&oacute;digo de Desktop no vive en este repo; el Brain (AGPL-3.0) es 100% usable por s&iacute; solo desde terminal, Codex, Claude Code, o cualquier cliente MCP.</p>
+    </div>
+</section>
+
+<section id="v781" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.8.1 <span style="opacity:.5;font-weight:400;">&mdash; April 22, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">v7.8 emergency-diary SID targeting &mdash; Layer 2 + Layer 3 now use exact TARGET_SID, fail-closed, behavioural tests added</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            v7.8.0 closed the main compaction restore path (checkpoint sidecar, post-compact fail-closed on SID mismatch, per-session queue). Francisco flagged one last hole: <code>pre-compact.sh</code>'s <strong>Layer 2</strong> emergency auto-diary and <strong>Layer 3</strong> <code>compaction_memory.record_auto_flush</code> were still querying <code>SELECT sid FROM sessions ORDER BY last_update_epoch DESC LIMIT 1</code> — "latest active session". In multi-conversation Desktop that routinely wrote the emergency diary against the WRONG conversation even though the main restore was already exact-SID. v7.8.1 changes both layers to use the <code>TARGET_SID</code> already resolved from <code>CLAUDE_SESSION_ID</code>, scopes <code>last_diary_ts</code> by <code>session_id</code>, and fails-closed when no SID resolves (skipping the emergency diary is better than writing against the wrong conversation). Two new behavioural tests drive the real shell script against a fixture DB with two sessions where the "latest" is NOT the target — pre-v7.8.1 regressions would write against the wrong SID, the new behaviour writes against TARGET_SID. Adding the tests surfaced a latent bash-escape bug: a double-quoted phrase inside a Python comment embedded in a <code>python3 -c "..."</code> heredoc silently closed the argument early, so the entire Layer-2 block had been no-oping in production on the first hook run. The comment was reworded to remove any bash-meta characters. Pytest 2092 passing (+2 new behavioural). No Desktop bump.
+        </p>
     </div>
 </section>
 

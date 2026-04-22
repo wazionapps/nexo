@@ -280,7 +280,7 @@ def _read_queue(queue_path):
 
 def test_rail_multi_conv_queue_filters_by_session_id(tmp_path, monkeypatch):
     """v7.8.1 — Francisco's crash test: engine A (session_id=nexo-MINE-1)
-    must NOT consume an event written for session B (nexo-OTHER-1).
+    must NOT consume an event written for session B (nexo-2000-1).
     Before the fix the consumer truncated the whole queue and fired
     raise_event for every row it saw, so session A ate session B's
     event and B never recovered it.
@@ -295,7 +295,7 @@ def test_rail_multi_conv_queue_filters_by_session_id(tmp_path, monkeypatch):
     # one for OTHER. Engine A is pinned to MINE.
     _write_queue(queue_path, [
         {"event": "pre_compaction",  "session_id": "nexo-MINE-1",  "claude_session_id": "cs-mine"},
-        {"event": "post_compaction", "session_id": "nexo-OTHER-1", "claude_session_id": "cs-other"},
+        {"event": "post_compaction", "session_id": "nexo-2000-1", "claude_session_id": "cs-other"},
     ])
 
     eng = _build_engine_for_session("nexo-MINE-1")
@@ -307,7 +307,7 @@ def test_rail_multi_conv_queue_filters_by_session_id(tmp_path, monkeypatch):
     # Queue must still contain OTHER's event (it was not this session's).
     remaining = _read_queue(queue_path)
     sids = [r.get("session_id") for r in remaining]
-    assert "nexo-OTHER-1" in sids, (
+    assert "nexo-2000-1" in sids, (
         "Global queue consumer MUST leave other sessions' events behind. "
         f"Got remaining={remaining}"
     )
@@ -368,6 +368,208 @@ def test_rail_per_session_sidecar_path_is_used_when_claude_session_id_present():
     assert 'compacting-sid.txt' in pre and 'compacting-sid.txt' in post, (
         "Both hooks must keep the legacy fallback file for callers "
         "without CLAUDE_SESSION_ID set."
+    )
+
+
+def test_rail_pre_compact_emergency_diary_uses_target_sid_not_latest(tmp_path, monkeypatch):
+    """v7.8.1 — Layer 2 emergency diary must scope by TARGET_SID. The
+    pre-v7.8.1 path queried `SELECT sid FROM sessions ORDER BY
+    last_update_epoch DESC LIMIT 1` and wrote the diary onto whichever
+    conversation happened to be most recently touched. In multi-
+    conversation Desktop that was routinely the WRONG conversation.
+
+    This test drives the real shell script with:
+      * Two sessions in the DB: nexo-1000-1 (old last_update_epoch)
+        and nexo-2000-1 (newest last_update_epoch → pre-v7.8.1 would
+        have picked this one).
+      * CLAUDE_SESSION_ID pointing at the Claude token mapped to TARGET.
+      * A tool-log entry so the diary path actually fires.
+
+    Assertion: the session_diary row written by the hook must carry
+    session_id=nexo-1000-1, never nexo-2000-1.
+    """
+    import os
+    import sqlite3
+    import subprocess
+
+    nexo_home = tmp_path / ".nexo"
+    data_dir = nexo_home / "runtime" / "data"
+    ops_dir = nexo_home / "runtime" / "operations" / "tool-logs"
+    data_dir.mkdir(parents=True)
+    ops_dir.mkdir(parents=True)
+
+    # Minimal schema — only the tables the hook touches.
+    db_path = data_dir / "nexo.db"
+    conn = sqlite3.connect(str(db_path))
+    conn.executescript(
+        """
+        CREATE TABLE sessions (
+            sid TEXT PRIMARY KEY,
+            task TEXT,
+            last_update_epoch REAL,
+            claude_session_id TEXT
+        );
+        CREATE TABLE session_claude_aliases (
+            sid TEXT,
+            claude_session_id TEXT,
+            last_seen REAL
+        );
+        CREATE TABLE session_diary (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT,
+            created_at TEXT DEFAULT (datetime('now')),
+            decisions TEXT,
+            discarded TEXT,
+            pending TEXT,
+            context_next TEXT,
+            mental_state TEXT,
+            domain TEXT,
+            user_signals TEXT,
+            summary TEXT,
+            source TEXT
+        );
+        CREATE TABLE session_checkpoints (
+            sid TEXT PRIMARY KEY,
+            task TEXT,
+            current_goal TEXT,
+            updated_at TEXT
+        );
+        CREATE TABLE session_diary_draft (
+            sid TEXT PRIMARY KEY,
+            summary_draft TEXT,
+            tasks_seen TEXT,
+            change_ids TEXT,
+            decision_ids TEXT,
+            last_context_hint TEXT,
+            heartbeat_count INTEGER,
+            created_at TEXT,
+            updated_at TEXT
+        );
+        """
+    )
+    # TARGET was touched earlier; OTHER was touched more recently. A
+    # pre-v7.8.1 hook would have picked OTHER via the ORDER BY clause.
+    conn.execute(
+        "INSERT INTO sessions (sid, task, last_update_epoch, claude_session_id) VALUES (?, ?, ?, ?)",
+        ("nexo-1000-1", "task target", 1000.0, "claude-target-token"),
+    )
+    conn.execute(
+        "INSERT INTO sessions (sid, task, last_update_epoch, claude_session_id) VALUES (?, ?, ?, ?)",
+        ("nexo-2000-1", "task other", 9999.0, "claude-other-token"),
+    )
+    conn.commit()
+    conn.close()
+
+    # Tool log must have at least one entry or the Layer-2 block exits
+    # early ("if not entries: sys.exit(0)").
+    today = subprocess.check_output(["date", "+%Y-%m-%d"]).decode().strip()
+    log_path = ops_dir / f"{today}.jsonl"
+    log_path.write_text(
+        json.dumps({
+            "timestamp": "2099-01-01T00:00:00Z",  # far-future so it passes last_diary filter
+            "tool_name": "Edit",
+            "tool_input": {"file_path": "/tmp/example.py"},
+        }) + "\n",
+        encoding="utf-8",
+    )
+
+    env = os.environ.copy()
+    env["NEXO_HOME"] = str(nexo_home)
+    env["CLAUDE_SESSION_ID"] = "claude-target-token"  # must resolve to nexo-1000-1
+    # Execute the real script against the fixture DB.
+    r = subprocess.run(
+        ["bash", str(PRE_COMPACT_SH)],
+        env=env, capture_output=True, text=True, timeout=15,
+    )
+    assert r.returncode == 0, f"pre-compact.sh exited {r.returncode}: {r.stderr}"
+
+    # Inspect the diary table. Exactly one row, and it MUST belong to
+    # nexo-1000-1 — not the "latest active" nexo-2000-1.
+    conn = sqlite3.connect(str(db_path))
+    rows = conn.execute(
+        "SELECT session_id, source FROM session_diary ORDER BY id DESC"
+    ).fetchall()
+    conn.close()
+    assert rows, (
+        "Emergency diary was not written. Expected at least one row for "
+        "nexo-1000-1 with source=pre-compact-hook."
+    )
+    assert rows[0][0] == "nexo-1000-1", (
+        f"Emergency diary written against WRONG session_id. Expected "
+        f"nexo-1000-1, got {rows[0][0]}. Pre-v7.8.1 regression."
+    )
+    assert rows[0][1] == "pre-compact-hook", (
+        f"Emergency diary source must be 'pre-compact-hook'; got {rows[0][1]}"
+    )
+
+
+def test_rail_pre_compact_emergency_diary_fail_closed_without_target_sid(tmp_path, monkeypatch):
+    """v7.8.1 — if no TARGET_SID can be resolved (no CLAUDE_SESSION_ID
+    env), the Layer-2 block must write NOTHING rather than fall back to
+    the latest session. Fail-closed is the checklist invariant."""
+    import os
+    import sqlite3
+    import subprocess
+
+    nexo_home = tmp_path / ".nexo"
+    data_dir = nexo_home / "runtime" / "data"
+    ops_dir = nexo_home / "runtime" / "operations" / "tool-logs"
+    data_dir.mkdir(parents=True)
+    ops_dir.mkdir(parents=True)
+
+    db_path = data_dir / "nexo.db"
+    conn = sqlite3.connect(str(db_path))
+    conn.executescript(
+        """
+        CREATE TABLE sessions (
+            sid TEXT PRIMARY KEY, task TEXT, last_update_epoch REAL,
+            claude_session_id TEXT
+        );
+        CREATE TABLE session_claude_aliases (
+            sid TEXT, claude_session_id TEXT, last_seen REAL
+        );
+        CREATE TABLE session_diary (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT, created_at TEXT DEFAULT (datetime('now')),
+            decisions TEXT, discarded TEXT, pending TEXT,
+            context_next TEXT, mental_state TEXT, domain TEXT,
+            user_signals TEXT, summary TEXT, source TEXT
+        );
+        CREATE TABLE session_checkpoints (
+            sid TEXT PRIMARY KEY, task TEXT, current_goal TEXT, updated_at TEXT
+        );
+        CREATE TABLE session_diary_draft (
+            sid TEXT PRIMARY KEY, summary_draft TEXT, tasks_seen TEXT,
+            change_ids TEXT, decision_ids TEXT, last_context_hint TEXT,
+            heartbeat_count INTEGER, created_at TEXT, updated_at TEXT
+        );
+        """
+    )
+    conn.execute(
+        "INSERT INTO sessions (sid, task, last_update_epoch, claude_session_id) VALUES (?, ?, ?, ?)",
+        ("nexo-2000-1", "task other", 9999.0, "claude-other-token"),
+    )
+    conn.commit()
+    conn.close()
+
+    env = os.environ.copy()
+    env["NEXO_HOME"] = str(nexo_home)
+    env.pop("CLAUDE_SESSION_ID", None)
+
+    r = subprocess.run(
+        ["bash", str(PRE_COMPACT_SH)],
+        env=env, capture_output=True, text=True, timeout=15,
+    )
+    assert r.returncode == 0, f"pre-compact.sh exited {r.returncode}: {r.stderr}"
+
+    conn = sqlite3.connect(str(db_path))
+    rows = conn.execute(
+        "SELECT session_id FROM session_diary WHERE source='pre-compact-hook'"
+    ).fetchall()
+    conn.close()
+    assert not rows, (
+        f"Emergency diary must be fail-closed when no TARGET_SID can be "
+        f"resolved. Got rows={rows} — pre-v7.8.1 regression."
     )
 
 

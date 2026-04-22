@@ -144,11 +144,30 @@
                 <div class="section-label">Latest release</div>
                 <div class="blog-featured-meta">
                     <span class="compare-chip">April 22, 2026</span>
-                    <span class="compare-chip">Minor release</span>
-                    <span class="compare-chip">Compaction continuity closed</span>
+                    <span class="compare-chip">Patch</span>
+                    <span class="compare-chip">Emergency-diary exact SID</span>
                 </div>
-                <h2>NEXO 7.8.0: compaction continuity closed end-to-end — PostCompact is a real hook, SID targeting is exact, fail-closed on cross-conv</h2>
-                <p>v7.7 closed 6 obedience gaps. v7.8 closes the PostCompact continuity work Francisco flagged right after: <code>src/hooks/post_compact.py</code> is a real registered hook (canonical set 8 → 9), <code>pre-compact.sh</code> resolves the exact NEXO SID via <code>CLAUDE_SESSION_ID</code> instead of the wrong "latest active" fallback, the sidecar moves from <code>/tmp</code> to <code>$NEXO_HOME</code> (no multi-conv race), <code>post-compact.sh</code> is fail-closed with a "SID mismatch" diagnostic instead of restoring the wrong conversation, the engine drains hook-emitted NDJSON events on every periodic tick so the map's <code>pre_compaction</code> / <code>post_compaction</code> <code>on_event</code> rules finally fire from the live stream, and <code>compaction_count</code> is pinned to increment only on real restores. 11 new invariants. Pytest 2086 passing. No Desktop bump.</p>
+                <h2>NEXO 7.8.1: v7.8 emergency-diary SID targeting — Layer 2 + Layer 3 use exact TARGET_SID, fail-closed, behavioural tests</h2>
+                <p>Patch over v7.8.0. pre-compact.sh Layer 2 emergency auto-diary and Layer 3 record_auto_flush were still using "latest active session"; v7.8.1 routes both to the exact TARGET_SID resolved from CLAUDE_SESSION_ID at the top of the hook. Fail-closed when no SID resolves. last_diary_ts scoped by session_id. Two new behavioural tests drive the real shell against a fixture DB with two sessions. Adding those tests surfaced a latent bash-escape bug: a double-quoted phrase inside a Python comment silently closed the python3 -c argument — fixed. 2092 pytest passing. No Desktop bump.</p>
+                <div class="hero-actions" style="justify-content:flex-start;margin-bottom:18px;">
+                    <a href="/blog/nexo-7-8-1/" class="btn btn-primary">Open article</a>
+                    <a href="/changelog/#v781" class="btn btn-secondary">Open changelog</a>
+                </div>
+                <div class="blog-mini-stack">
+                    <div class="blog-mini-card">
+                        <strong>Companion view</strong>
+                        <span><a href="/changelog/#v781">See the full v7.8.1 changelog</a></span>
+                    </div>
+                    <div class="blog-mini-card">
+                        <strong>Previous release</strong>
+                        <span><a href="/blog/nexo-7-8-0/">NEXO 7.8.0: compaction continuity closed end-to-end</a>.</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="blog-featured-card" style="display:none;">
+                <h2>NEXO 7.8.0: compaction continuity closed end-to-end</h2>
+                <p>v7.7 closed 6 obedience gaps. v7.8 closes the PostCompact continuity work.</p>
                 <div class="hero-actions" style="justify-content:flex-start;margin-bottom:18px;">
                     <a href="/blog/nexo-7-8-0/" class="btn btn-primary">Open article</a>
                     <a href="/changelog/#v780" class="btn btn-secondary">Open changelog</a>
@@ -172,6 +191,15 @@
 <section class="section-flush-top">
     <div class="container">
         <div class="blog-grid">
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 22, 2026</div>
+                <h2><a href="/blog/nexo-7-8-1/">NEXO 7.8.1: v7.8 emergency-diary SID targeting — Layer 2 + Layer 3 use exact TARGET_SID, fail-closed, behavioural tests</a></h2>
+                <p>Patch over v7.8.0. pre-compact.sh Layer 2 emergency auto-diary + Layer 3 record_auto_flush now use exact TARGET_SID resolved from CLAUDE_SESSION_ID (not "latest active"). Fail-closed when no SID resolves. last_diary_ts scoped by session_id. Two new behavioural tests drive the real shell. Fixed latent bash-escape bug where a double-quoted phrase inside a Python comment silently closed the python3 -c argument.</p>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/blog/nexo-7-8-1/" class="btn btn-secondary">Read more</a>
+                </div>
+            </div>
 
             <div class="blog-card">
                 <div class="blog-card-date">April 22, 2026</div>
