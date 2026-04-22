@@ -233,10 +233,19 @@ def main() -> int:
     # (including any writes the previous steps may have done). Emits a
     # single-line JSON systemMessage so Claude Code surfaces it to the
     # agent without breaking the tool pipeline.
+    # v7.2.0 — G1 enforcer (response_contract.mode physical gate) plugs in
+    # alongside the inbox reminder. Shadow mode only records a debt row;
+    # hard mode appends a nudge to the systemMessage.
     try:
         sid = _resolve_sid_from_payload(payload)
         reminder = check_inbox_and_emit_reminder(sid)
-        combined = _combine_system_messages(protocol_message, reminder)
+        g1_message: str | None = None
+        try:
+            from g1_enforcer import check_response_contract_gate  # type: ignore
+            g1_message = check_response_contract_gate(sid)
+        except Exception:
+            g1_message = None
+        combined = _combine_system_messages(protocol_message, reminder, g1_message)
         if combined:
             print(json.dumps({"systemMessage": combined}))
     except Exception:

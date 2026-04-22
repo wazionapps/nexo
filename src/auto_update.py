@@ -4648,6 +4648,16 @@ def _run_runtime_post_sync(dest: Path = NEXO_HOME, progress_fn=None) -> tuple[bo
     except Exception as exc:
         actions.append(f"classifier-install-warning:{exc.__class__.__name__}")
 
+    try:
+        _emit_progress(progress_fn, "Persisting Guardian enforcement defaults...")
+        persisted, persist_message = _persist_guardian_hard_defaults(dest)
+        if persisted:
+            actions.append("guardian-hard-persisted")
+        if persist_message:
+            actions.append(persist_message)
+    except Exception as exc:
+        actions.append(f"guardian-hard-persist-warning:{exc.__class__.__name__}")
+
     _emit_progress(progress_fn, "Verifying runtime imports...")
     verify = subprocess.run(
         [sys.executable, "-c", "import server"],
@@ -4693,6 +4703,76 @@ def _emit_progress(progress_fn, message: str) -> None:
             progress_fn(message)
         except Exception:
             pass
+
+
+_GUARDIAN_PERSIST_HARD_DEFAULTS = {
+    "G1_ENFORCER_ACTIVE": "hard",
+    "G3_ENFORCE_DESTRUCTIVE": "hard",
+    "G3_SSH_ENFORCE_REMOTE_WRITE": "hard",
+    "G4_ENFORCE_GUARD_CHECK": "hard",
+}
+
+
+def _persist_guardian_hard_defaults(dest: Path) -> tuple[bool, str | None]:
+    """Write ``~/.nexo/config/guardian-runtime-overrides.json`` with the
+    v7.2.0 "Guardian-on by default" matrix so operators get the active
+    enforcer experience without setting env vars every shell.
+
+    Returns (persisted, message). ``persisted`` is True when the file was
+    written or updated during this call; False when we left it alone
+    (operator opt-out, or file already matches the defaults).
+
+    Contract:
+        - Operator opt-out with ``NEXO_GUARDIAN_PERSIST_HARD=off`` in env
+          at update time: leave the file untouched.
+        - Ephemeral runtimes: skip.
+        - Never overwrite a key the operator already customized to a
+          non-default value (``shadow`` / ``off`` / anything else). Only
+          fills missing keys or upgrades explicit defaults.
+    """
+    if _is_ephemeral_runtime_install(dest):
+        return False, "guardian-hard-persist-skipped:ephemeral"
+    if os.environ.get("NEXO_GUARDIAN_PERSIST_HARD", "").strip().lower() == "off":
+        return False, "guardian-hard-persist-skipped:operator-opt-out"
+
+    config_path = dest / "personal" / "config" / "guardian-runtime-overrides.json"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+
+    current: dict[str, str] = {}
+    if config_path.is_file():
+        try:
+            raw = json.loads(config_path.read_text())
+            if isinstance(raw, dict):
+                current = {str(k): str(v) for k, v in raw.items()}
+        except Exception:
+            # Malformed file — treat as empty. We write the fresh defaults
+            # and keep the malformed copy for the operator to inspect.
+            try:
+                config_path.rename(
+                    config_path.with_suffix(
+                        config_path.suffix + f".broken-{int(time.time())}"
+                    )
+                )
+            except Exception:
+                pass
+            current = {}
+
+    original = dict(current)
+    for key, default in _GUARDIAN_PERSIST_HARD_DEFAULTS.items():
+        if key not in current:
+            current[key] = default
+
+    if current == original and config_path.is_file():
+        return False, None
+
+    try:
+        tmp_path = config_path.with_suffix(config_path.suffix + ".tmp")
+        tmp_path.write_text(json.dumps(current, indent=2, ensure_ascii=False) + "\n")
+        tmp_path.replace(config_path)
+    except Exception as exc:  # pragma: no cover - filesystem failures
+        return False, f"guardian-hard-persist-error:{exc.__class__.__name__}"
+
+    return True, None
 
 
 def _parse_runtime_init_payload(stdout: str) -> dict:
