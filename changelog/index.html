@@ -87,19 +87,27 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v7.1.7 live</span>
-                    <span class="page-chip">Email monitor</span>
-                    <span class="page-chip">Operator language</span>
-                    <span class="page-chip">Escalation i18n</span>
+                    <span class="page-chip">v7.1.10 live</span>
+                    <span class="page-chip">Autonomy mandate</span>
+                    <span class="page-chip">Compact hooks</span>
+                    <span class="page-chip">Release verifier</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v718" class="btn btn-primary">Start with v7.1.8</a>
-                    <a href="#v716" class="btn btn-secondary">See v7.1.6</a>
+                    <a href="#v7110" class="btn btn-primary">Start with v7.1.10</a>
+                    <a href="#v718" class="btn btn-secondary">See v7.1.8</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
             </div>
             <div class="page-visual">
                 <div class="page-stack">
+                    <div class="page-stack-card">
+                        <strong>v7.1.10</strong>
+                        <span>Follow-up over v7.1.8. Two rescue batches: autonomy-mandate vocabulary expansion + session flags + post/pre-compact hooks + new <code>checkpoint_policy</code> module; and <code>verify_release_readiness.py</code> smoke-artifact contract pass + core prompt polish.</span>
+                    </div>
+                    <div class="page-stack-card">
+                        <strong>v7.1.8</strong>
+                        <span>Batch release: Guardian/Enforcer roadmap G2/G3/G4/G7/G8 (auto-drain stale debts, destructive-command gate, <code>guard_check</code>-required gate, inline guard ack, Guardian Health briefing), Block D hardcode cleanup, Block E product guards.</span>
+                    </div>
                     <div class="page-stack-card">
                         <strong>v7.1.7</strong>
                         <span>Patch release: <code>email-monitor</code> now carries the calibrated operator language through its prompt contract and localizes direct <code>needs_interactive</code> escalation emails, so Spanish operators stop receiving fallback English monitor mail.</span>
@@ -180,6 +188,16 @@
 <section class="section-compact" style="background:rgba(124,58,237,0.08);">
     <div class="container desktop-disclaimer" style="max-width:860px;font-size:13px;line-height:1.55;">
         <p><strong>Sobre NEXO Desktop.</strong> NEXO Desktop es un cliente acompa&ntilde;ante closed-source distribuido aparte en <a href="https://nexo-desktop.com/">nexo-desktop.com</a>. Cuando una entrada de changelog menciona "NEXO Desktop" se refiere a una versi&oacute;n coordinada de ese cliente que consume el contrato CLI/MCP del Brain. El c&oacute;digo de Desktop no vive en este repo; el Brain (AGPL-3.0) es 100% usable por s&iacute; solo desde terminal, Codex, Claude Code, o cualquier cliente MCP.</p>
+    </div>
+</section>
+
+<section id="v7110" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.1.10 <span style="opacity:.5;font-weight:400;">&mdash; April 22, 2026 &mdash; <strong>FOLLOW-UP</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">Autonomy-mandate vocabulary + compact hooks + <code>checkpoint_policy</code> + smoke-artifact release verifier</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            Follow-up over <code>v7.1.8</code>. Ships two rescue batches of WIP that were stashed aside during the v7.1.8 release window. First rescue: <code>src/autonomy_mandate.py</code> expands the mandate-detection vocabulary (<em>hazlo todo</em> / <em>no pares</em> / <em>estás al mando</em> / <em>te dejo al mando</em> / <em>sigue sin parar</em> / <em>haz el plan completo</em>), adds three honest flags on <code>MandateState</code> (<code>execute_until_blocker</code>, <code>suppress_mid_task_menus</code>, <code>revalidate_after_compaction</code>) with session filtering, wires post/pre-compact hooks that read those flags, surfaces them through protocol/workflow handlers and session payload, and introduces the new <code>src/checkpoint_policy.py</code> module with tests. Second rescue: <code>scripts/verify_release_readiness.py</code> gains a smoke-artifact contract pass that validates <code>release-contracts/smoke/v&lt;version&gt;.json</code> before any tag push, the release-final audit skill references the new contract, <code>src/hook_guardrails.py</code> + <code>src/hooks/post_tool_use.py</code> refine the post-tool protocol reminder path with a new contract test, and a couple of core prompts (task-close evidence, r14 correction learning) get wording polish.
+        </p>
     </div>
 </section>
 
