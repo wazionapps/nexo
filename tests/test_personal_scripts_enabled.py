@@ -401,3 +401,61 @@ def test_list_scripts_include_core_surfaces_last_cron_run_for_core_entry(isolate
     assert target["last_exit_code"] == 0
     assert target["last_run_at"]
     assert target["last_summary"] == "Processed 2 inbox threads"
+
+
+def test_set_personal_script_enabled_refuses_non_toggleable_packaged_core(
+    isolated_home, monkeypatch
+):
+    """AUDITOR-V650-PASS1 §7 (master checklist D2.1) — `set_personal_script_enabled`
+    must refuse non-toggleable packaged core scripts. Without this refusal,
+    a call like ``set_personal_script_enabled("backup-now", False)`` could
+    silently disable a core automation that was never meant to be toggled
+    from this entry point. The operator is steered to ``nexo scripts
+    unschedule`` instead (script_registry.py:1990 docstring).
+
+    Pins the refusal path: (a) script marked core, (b) NOT toggleable via
+    the automation contract, (c) located OUTSIDE the personal scripts
+    dir. Return must be ``{ok: False, error contains "Refusing" and
+    "unschedule"}``.
+    """
+    import script_registry as sr
+    import automation_controls as ac
+
+    stub = {
+        "name": "packaged-core-thing",
+        "path": "/opt/nexo-packaged/core/scripts/packaged_core_thing.py",
+        "core": True,
+        "origin": "core",
+        "runtime": "python",
+        "enabled": True,
+    }
+    monkeypatch.setattr(sr, "sync_personal_scripts", lambda: None)
+    monkeypatch.setattr(sr, "resolve_script", lambda _name: stub)
+    import db._personal_scripts as _ps
+    monkeypatch.setattr(_ps, "get_personal_script", lambda *a, **kw: None)
+    monkeypatch.setattr(
+        ac,
+        "get_script_runtime_contract",
+        lambda name: {
+            "name": name,
+            "toggleable_core": False,
+            "supports_extra_instructions": False,
+            "available": True,
+            "blocked_reason": "",
+            "blocked_reason_code": "",
+            "eligible_labels": [],
+        },
+    )
+
+    result = sr.set_personal_script_enabled("packaged-core-thing", False)
+    assert result["ok"] is False, (
+        f"Refusal path regressed — expected ok=False for non-toggleable "
+        f"packaged core; got {result}"
+    )
+    assert "Refusing" in result.get("error", ""), (
+        f"Refusal error message must start with 'Refusing'; "
+        f"got error={result.get('error')!r}"
+    )
+    assert "unschedule" in result.get("error", ""), (
+        "Refusal error must point the operator at `nexo scripts unschedule`."
+    )

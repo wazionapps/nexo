@@ -93,13 +93,17 @@
                     <span class="page-chip">Adaptive empirical</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v781" class="btn btn-primary">Start with v7.8.1</a>
-                    <a href="#v780" class="btn btn-secondary">See v7.8.0</a>
+                    <a href="#v782" class="btn btn-primary">Start with v7.8.2</a>
+                    <a href="#v781" class="btn btn-secondary">See v7.8.1</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
             </div>
             <div class="page-visual">
                 <div class="page-stack">
+                    <div class="page-stack-card">
+                        <strong>v7.8.2</strong>
+                        <span>Patch — hook_runs sid observability for compact hooks. compact_session_resolver walks sessions → aliases → per-conv sidecar → legacy global sidecar. pre_compact.py and post_compact.py now store the resolved NEXO sid in hook_runs.session_id (ending the 7/8 empty-row rate) plus claude_session_id + sid_source in metadata. 9 new tests. No Desktop bump.</span>
+                    </div>
                     <div class="page-stack-card">
                         <strong>v7.8.1</strong>
                         <span>Patch — pre-compact.sh Layer 2 emergency diary + Layer 3 record_auto_flush now use exact TARGET_SID (from CLAUDE_SESSION_ID), not "latest active". Fail-closed when no SID resolves. last_diary_ts scoped by session_id. Fixed latent bash-escape bug in python3 -c heredoc. 2 new behavioural tests drive real shell. No Desktop bump.</span>
@@ -216,6 +220,16 @@
 <section class="section-compact" style="background:rgba(124,58,237,0.08);">
     <div class="container desktop-disclaimer" style="max-width:860px;font-size:13px;line-height:1.55;">
         <p><strong>Sobre NEXO Desktop.</strong> NEXO Desktop es un cliente acompa&ntilde;ante closed-source distribuido aparte en <a href="https://nexo-desktop.com/">nexo-desktop.com</a>. Cuando una entrada de changelog menciona "NEXO Desktop" se refiere a una versi&oacute;n coordinada de ese cliente que consume el contrato CLI/MCP del Brain. El c&oacute;digo de Desktop no vive en este repo; el Brain (AGPL-3.0) es 100% usable por s&iacute; solo desde terminal, Codex, Claude Code, o cualquier cliente MCP.</p>
+    </div>
+</section>
+
+<section id="v782" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.8.2 <span style="opacity:.5;font-weight:400;">&mdash; April 23, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">hook_runs sid observability &mdash; compact hooks now store the resolved NEXO sid, not the raw Claude token</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            v7.8.0 and v7.8.1 closed the compaction restore path and the Layer-2/3 emergency-diary SID targeting. Francisco audited the resulting telemetry and flagged one remaining hole: <code>hook_runs.session_id</code> was empty for 7 out of 8 recent compaction rows, and when populated it stored the raw <code>CLAUDE_SESSION_ID</code> token instead of the NEXO sid — per-session joins over <code>hook_runs</code> were therefore useless for compact events. v7.8.2 adds <code>src/hooks/compact_session_resolver.py</code> with <code>resolve_nexo_sid(claude_session_id)</code>, which walks the same rails the shell already uses: <code>sessions.claude_session_id</code> match, then <code>session_claude_aliases.claude_session_id</code> (most recent <code>last_seen</code> wins), then the per-conversation sidecar under <code>runtime/data/compacting/&lt;safe-claude-id&gt;.txt</code>, then the legacy global sidecar for single-conversation setups. Returns <code>(nexo_sid, source)</code> so callers can stash <code>source</code> in <code>hook_runs.metadata</code> for empty-row triage. <code>src/hooks/pre_compact.py</code> and <code>src/hooks/post_compact.py</code> now call the resolver and store the real NEXO sid in <code>hook_runs.session_id</code>; both wrappers also stash <code>{claude_session_id, sid_source}</code> in <code>hook_runs.metadata</code> so "why is this row still empty?" has a one-query answer. Nine new tests in <code>tests/test_hook_runs_compact_sid_resolution.py</code> pin the five resolver rails (sessions / alias / sidecar / legacy / none), malformed-sidecar rejection, the pre- and post-compact wrapper end-to-end paths, and the empty-state wrapper rail so a clean audit trail is written even when nothing resolves. Pytest remains green. No Desktop bump.
+        </p>
     </div>
 </section>
 

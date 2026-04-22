@@ -1,5 +1,56 @@
 # Changelog
 
+## [7.8.2] - 2026-04-23
+
+Patch release. Fixes a narrow observability gap Francisco flagged:
+`hook_runs.session_id` was empty for 7 out of 8 recent compaction rows,
+and even when populated it stored the raw `CLAUDE_SESSION_ID` token
+instead of the NEXO sid. Per-session queries over `hook_runs` for
+compact events therefore could not be joined back to the NEXO session
+that actually compacted.
+
+### Added
+
+- `src/hooks/compact_session_resolver.py` with `resolve_nexo_sid`,
+  which walks the same rails the shell hooks use (in order):
+  1. `sessions.claude_session_id`.
+  2. `session_claude_aliases.claude_session_id` (most recent
+     `last_seen` wins when several aliases exist).
+  3. Per-conversation sidecar written by `pre-compact.sh` under
+     `runtime/data/compacting/<safe-claude-id>.txt`.
+  4. Legacy global sidecar `runtime/data/compacting-sid.txt` (only
+     used when the env token is missing — single-conversation path).
+  Returns `(nexo_sid, source)` so callers can stash `source` in
+  `hook_runs.metadata` for empty-row triage.
+
+### Changed
+
+- `src/hooks/pre_compact.py` and `src/hooks/post_compact.py` now call
+  the resolver above and write the real NEXO sid to
+  `hook_runs.session_id`. Both wrappers also stash
+  `{claude_session_id, sid_source}` in `hook_runs.metadata` so "why
+  is this row still empty?" has a one-query answer.
+
+### Tests
+
+- `tests/test_hook_runs_compact_sid_resolution.py` (9 tests):
+  - 5 resolver rails: sessions match, alias match (newest wins),
+    per-conv sidecar fallback, legacy global sidecar, and the "none"
+    outcome when nothing matches.
+  - Malformed sidecar rejection (non-NEXO-shaped content must not
+    poison `hook_runs.session_id`).
+  - Pre-compact and post-compact wrapper end-to-end via stubbed
+    `hook_observability`: assert `session_id` + `metadata` captured.
+  - Empty-state wrapper path: when nothing resolves, the row is
+    written with `session_id=''` and `sid_source='none'` so the audit
+    trail stays clean instead of being silently skipped.
+
+### Operator note
+
+No runtime config changes needed. The resolver reads from the same
+rails the shell already writes, so post-update the next compaction
+will emit a properly attributed row without any extra step.
+
 ## [7.8.1] - 2026-04-22
 
 Patch release. Closes the last compaction-continuity gap Francisco
