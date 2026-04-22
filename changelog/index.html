@@ -93,7 +93,7 @@
                     <span class="page-chip">Adaptive empirical</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v720" class="btn btn-primary">Start with v7.2.0</a>
+                    <a href="#v730" class="btn btn-primary">Start with v7.3.0</a>
                     <a href="#v7110" class="btn btn-secondary">See v7.1.10</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -192,6 +192,16 @@
 <section class="section-compact" style="background:rgba(124,58,237,0.08);">
     <div class="container desktop-disclaimer" style="max-width:860px;font-size:13px;line-height:1.55;">
         <p><strong>Sobre NEXO Desktop.</strong> NEXO Desktop es un cliente acompa&ntilde;ante closed-source distribuido aparte en <a href="https://nexo-desktop.com/">nexo-desktop.com</a>. Cuando una entrada de changelog menciona "NEXO Desktop" se refiere a una versi&oacute;n coordinada de ese cliente que consume el contrato CLI/MCP del Brain. El c&oacute;digo de Desktop no vive en este repo; el Brain (AGPL-3.0) es 100% usable por s&iacute; solo desde terminal, Codex, Claude Code, o cualquier cliente MCP.</p>
+    </div>
+</section>
+
+<section id="v730" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.3.0 <span style="opacity:.5;font-weight:400;">&mdash; April 22, 2026 &mdash; <strong>HOTFIX MINOR</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">Guardian wire hotfix — PreToolUse properly registered, post-sync runs the fresh tree, tool-enforcement-map now shipped via npm</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            Hotfix minor release correcting three critical bugs that surfaced right after <code>v7.2.0</code>. <strong>B11 Guardian wire:</strong> new <code>src/hooks/pre_tool_use.py</code> entrypoint is now registered in <code>src/hooks/manifest.json</code> and <code>hooks/hooks.json</code> so the Claude Code <code>PreToolUse</code> event actually reaches Guardian &mdash; before this, <code>guardian-runtime-overrides.json</code> in hard mode was silently inert for G3-destructive, G3-SSH, and G4-guard_check gates. A parallel SSH prescreen in <code>hook_guardrails.process_pre_tool_event</code> forces <code>op=write</code> on remote-write patterns the local shell classifier could not see. <strong>B10 post-sync:</strong> <code>_run_post_install_hooks_fresh(dest, env)</code> invokes each whitelisted hook (<code>_persist_guardian_hard_defaults</code>, <code>_maybe_promote_adaptive_weights_empirically</code>) in a clean subprocess against the newly copied tree, so the first <code>nexo update</code> that introduces a new post-install hook actually runs it &mdash; previously the hook dispatch used the pre-upgrade module held in memory and silently no-op'd. <strong>B12 map distribution:</strong> <code>tool-enforcement-map.json</code> is now part of the npm <code>files</code> whitelist so fresh <code>npm install -g nexo-brain</code> ships it, closing the three-way gap (Brain npm + Desktop bundle + runtime sync) that prevented Desktop from ever discovering the map on new installs. <strong>PE1 rapid items:</strong> 5 additional <code>destructive_command</code> presets in <code>src/presets/entities_universal.json</code> (<code>curl_pipe_shell</code>, <code>dd_to_device</code>, <code>chmod_recursive_wide_open</code>, <code>ssh_remote_overwrite</code>, <code>scp_rsync_upload</code>; coverage floor raised from 7 to 12) and the <code>guardian-metrics</code> daily cron at 02:15 that feeds Fase C gate and the Guardian Proposals panel. Desktop v0.23.0 ships the renderer-side half of B12 plus B13/B14 (the "Parar &rarr; Enviar cola" recovery loop).
+        </p>
     </div>
 </section>
 

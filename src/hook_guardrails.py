@@ -1000,6 +1000,27 @@ def process_pre_tool_event(payload: dict) -> dict:
             _shell_cmd = _extract_bash_command(tool_input)
             if _classify_destructive_intent(_shell_cmd):
                 op = "delete"  # force the main gate to keep evaluating
+    # Block K G3 SSH prescreen: SSH remote-write patterns never map to
+    # ``write``/``delete`` via ``_classify_bash_operation`` (they look like
+    # ``other`` at shell level because the mutation happens on the remote
+    # end). Without this prescreen the ``if op not in {'write', 'delete'}``
+    # early-return below lets them sail past the main G3-SSH gate — the
+    # exact failure mode uncovered on v7.2.0: ``ssh host "cat > file"``
+    # in hard mode never emitted the deny response.
+    if tool_name == "Bash" and op not in {"write", "delete"}:
+        try:
+            from guardian_runtime_config import resolve_guardian_flag as _resolve_ssh
+            _g3_ssh_mode_prescreen = _resolve_ssh(
+                "G3_SSH_ENFORCE_REMOTE_WRITE", default="shadow"
+            )
+        except Exception:
+            _g3_ssh_mode_prescreen = os.environ.get(
+                "NEXO_G3_SSH_ENFORCE_REMOTE_WRITE", "shadow"
+            ).strip().lower()
+        if _g3_ssh_mode_prescreen in {"shadow", "hard"}:
+            _shell_cmd_ssh = _extract_bash_command(tool_input)
+            if _classify_ssh_remote_write(_shell_cmd_ssh):
+                op = "write"  # force the main gate to keep evaluating
     if op not in {"write", "delete"}:
         return {"ok": True, "skipped": True, "reason": "operation not blocked", "strictness": get_protocol_strictness()}
 

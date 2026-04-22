@@ -4648,25 +4648,27 @@ def _run_runtime_post_sync(dest: Path = NEXO_HOME, progress_fn=None) -> tuple[bo
     except Exception as exc:
         actions.append(f"classifier-install-warning:{exc.__class__.__name__}")
 
+    # v7.3.0 fix for the post-v7.2.0 bug: ``_run_runtime_post_sync`` was
+    # invoking post-install hooks directly against the ``auto_update``
+    # module already loaded in this process (the OLD code). Any function
+    # added to auto_update in the CURRENT release therefore never ran on
+    # the first ``nexo update`` that introduced it — only on the next
+    # one. Exhibit A: v7.2.0 shipped ``_persist_guardian_hard_defaults``
+    # and ``_maybe_promote_adaptive_weights_empirically`` but
+    # ``guardian-runtime-overrides.json`` was not written on the operator's
+    # first upgrade until the functions were invoked manually.
+    #
+    # The fix runs those post-install hooks inside a clean Python
+    # subprocess that imports from the freshly-copied tree at
+    # ``dest/core`` (packaged) or ``dest`` (dev/legacy layout). The
+    # subprocess emits a single JSON line so the parent process can
+    # record each hook's outcome in ``actions``.
     try:
-        _emit_progress(progress_fn, "Persisting Guardian enforcement defaults...")
-        persisted, persist_message = _persist_guardian_hard_defaults(dest)
-        if persisted:
-            actions.append("guardian-hard-persisted")
-        if persist_message:
-            actions.append(persist_message)
+        _emit_progress(progress_fn, "Running post-install hooks from fresh code...")
+        fresh_actions = _run_post_install_hooks_fresh(dest, env=env)
+        actions.extend(fresh_actions)
     except Exception as exc:
-        actions.append(f"guardian-hard-persist-warning:{exc.__class__.__name__}")
-
-    try:
-        _emit_progress(progress_fn, "Promoting adaptive weights if enough data...")
-        promoted, promote_message = _maybe_promote_adaptive_weights_empirically(dest)
-        if promoted:
-            actions.append("adaptive-weights-promoted")
-        if promote_message:
-            actions.append(promote_message)
-    except Exception as exc:
-        actions.append(f"adaptive-weights-promote-warning:{exc.__class__.__name__}")
+        actions.append(f"post-install-hooks-fresh-warning:{exc.__class__.__name__}")
 
     _emit_progress(progress_fn, "Verifying runtime imports...")
     verify = subprocess.run(
@@ -4884,6 +4886,115 @@ def _maybe_promote_adaptive_weights_empirically(dest: Path) -> tuple[bool, str |
         return False, f"adaptive-promote-error:{exc.__class__.__name__}"
 
     return True, None
+
+
+# Whitelist of post-install hooks to invoke from the fresh tree. Each entry
+# is the function name inside ``auto_update.py`` of the freshly-copied
+# code. The subprocess resolves them on the NEW module and calls
+# ``fn(dest)`` returning ``(bool, str | None)``. New hooks added in
+# future releases only need an entry here — no extra wiring.
+_POST_INSTALL_FRESH_HOOKS = (
+    ("guardian-hard-persisted", "_persist_guardian_hard_defaults"),
+    ("adaptive-weights-promoted", "_maybe_promote_adaptive_weights_empirically"),
+)
+
+
+def _run_post_install_hooks_fresh(dest: Path, *, env: dict | None = None) -> list[str]:
+    """Execute post-install hooks from the freshly-copied code, not the old
+    module already loaded in this process.
+
+    Without this, any function added to ``auto_update.py`` in the current
+    release never runs on the first ``nexo update`` — only on the next
+    one. See the post-v7.2.0 bug: ``_persist_guardian_hard_defaults`` and
+    ``_maybe_promote_adaptive_weights_empirically`` both shipped in
+    v7.2.0 but neither fired until the operator ran the functions
+    manually.
+
+    Resolution order for the fresh code root:
+        1. ``<dest>/core`` (packaged/F0.6 layout).
+        2. ``<dest>`` (legacy/dev layout).
+
+    Subprocess contract: emits a single JSON line on stdout with per-hook
+    ``{"action": ..., "ok": bool, "changed": bool, "message": str|null}``.
+    Returns a list of action strings mirroring the shape the old in-process
+    path used, so callers that read ``actions`` keep working unchanged.
+    """
+    code_root = dest / "core"
+    if not code_root.is_dir():
+        code_root = dest
+    hook_specs = list(_POST_INSTALL_FRESH_HOOKS)
+    hook_specs_json = json.dumps(hook_specs)
+    dest_str = str(dest)
+    script = (
+        "import json, sys\n"
+        "from pathlib import Path\n"
+        f"sys.path.insert(0, {repr(str(code_root))})\n"
+        "hooks = json.loads(" + repr(hook_specs_json) + ")\n"
+        f"dest = Path({repr(dest_str)})\n"
+        "results = []\n"
+        "try:\n"
+        "    import auto_update as fresh\n"
+        "except Exception as exc:\n"
+        "    print(json.dumps({'error': 'import_auto_update_failed', 'detail': repr(exc)}))\n"
+        "    sys.exit(0)\n"
+        "for tag, fn_name in hooks:\n"
+        "    fn = getattr(fresh, fn_name, None)\n"
+        "    if fn is None:\n"
+        "        results.append({'action': tag, 'ok': False, 'changed': False, 'message': 'fn_missing:' + fn_name})\n"
+        "        continue\n"
+        "    try:\n"
+        "        changed, message = fn(dest)\n"
+        "        results.append({'action': tag, 'ok': True, 'changed': bool(changed), 'message': message})\n"
+        "    except Exception as exc:\n"
+        "        results.append({'action': tag, 'ok': False, 'changed': False, 'message': 'error:' + exc.__class__.__name__})\n"
+        "print(json.dumps({'hooks': results}))\n"
+    )
+    try:
+        proc = subprocess.run(
+            [sys.executable, "-c", script],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            env=env or os.environ.copy(),
+        )
+    except subprocess.TimeoutExpired:
+        return ["post-install-hooks-fresh-warning:timeout"]
+    except Exception as exc:
+        return [f"post-install-hooks-fresh-warning:{exc.__class__.__name__}"]
+
+    if proc.returncode != 0:
+        return [f"post-install-hooks-fresh-warning:exit-{proc.returncode}"]
+
+    stdout = (proc.stdout or "").strip()
+    payload = None
+    for line in reversed(stdout.splitlines()):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            payload = json.loads(line)
+            break
+        except Exception:
+            continue
+    if not isinstance(payload, dict):
+        return ["post-install-hooks-fresh-warning:no-json-line"]
+    if "error" in payload:
+        return [f"post-install-hooks-fresh-warning:{payload['error']}"]
+
+    actions: list[str] = []
+    hooks_out = payload.get("hooks")
+    if not isinstance(hooks_out, list):
+        return ["post-install-hooks-fresh-warning:bad-shape"]
+    for entry in hooks_out:
+        if not isinstance(entry, dict):
+            continue
+        tag = str(entry.get("action") or "")
+        if entry.get("ok") and entry.get("changed"):
+            actions.append(tag)
+        message = entry.get("message")
+        if message:
+            actions.append(str(message))
+    return actions
 
 
 def _parse_runtime_init_payload(stdout: str) -> dict:

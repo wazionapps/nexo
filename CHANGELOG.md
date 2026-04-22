@@ -1,5 +1,27 @@
 # Changelog
 
+## [7.3.0] - 2026-04-22
+
+Hotfix minor release. Three critical bugs surfaced right after v7.2.0 went live and are all corrected here: the PreToolUse hook wire that made `guardian-runtime-overrides.json` a no-op, the post-sync hook ordering bug that ran new post-install hooks against the pre-upgrade module in memory, and the distribution gap that kept Desktop from ever discovering `tool-enforcement-map.json` on fresh installs. Also ships the remaining PE1 rapid items promised for this milestone.
+
+### Added
+
+- **`src/hooks/pre_tool_use.py`** — new entrypoint that the Claude Code `PreToolUse` event actually calls. Parses the payload, delegates to `hook_guardrails.process_pre_tool_event`, and emits `permissionDecision: deny` JSON when a rule is in hard mode. Before this commit the Guardian code existed but was never wired, so every gate in `guardian-runtime-overrides.json` was silently inert. 8 integration tests in `tests/test_pre_tool_use_hook.py`.
+- **Registered in both hook manifests** — `src/hooks/manifest.json` (NEXO Brain native) and `hooks/hooks.json` (Claude Code plugin mode) now list `PreToolUse` with `timeout: 8`. `client_sync.HOOK_TIMEOUTS_BY_EVENT` updated in parallel.
+- **SSH prescreen in `hook_guardrails.process_pre_tool_event`** — `_classify_bash_operation` returns `"other"` for `ssh host "cat > ..."` because remote mutation is invisible at the local shell classifier level. The prescreen runs `_classify_ssh_remote_write` before the early return so G3-SSH hard mode can actually block those commands.
+- **`tool-enforcement-map.json` is now shipped via npm** — added to the `files` whitelist in `package.json`. Desktop's `npm -g nexo-brain/tool-enforcement-map.json` candidate resolves on fresh installs for the first time since the map existed.
+- **PE1 0.4** — 5 new `destructive_command` preset entries in `src/presets/entities_universal.json`: `curl_pipe_shell`, `dd_to_device`, `chmod_recursive_wide_open`, `ssh_remote_overwrite`, `scp_rsync_upload`. Coverage floor raised from 7 to 12 entries. 8 new contract tests in `tests/test_entities_universal_preset.py`.
+- **PE1 0.25** — `guardian-metrics` cron wired in `src/crons/manifest.json`. Runs `scripts/guardian_metrics_aggregate.py` daily at 02:15 to feed Fase C gate and the Guardian Proposals panel.
+
+### Fixed
+
+- **B10 post-sync runs new hooks from the freshly-copied tree.** `_run_runtime_post_sync` used to call `_persist_guardian_hard_defaults` and `_maybe_promote_adaptive_weights_empirically` from the already-loaded `auto_update` module — which is the *pre-upgrade* code. On the first `nexo update` that introduced them, the functions literally did not exist yet in memory, so they silently no-op'd. Now `_run_post_install_hooks_fresh(dest, env)` invokes each whitelisted hook in a clean subprocess against `dest/core` (packaged) or `dest` (dev). 5 tests in `tests/test_post_install_hooks_fresh.py` cover the happy path, missing function graceful skip, no-core fallback, broken import error surfacing, and per-hook exception isolation.
+
+### Notes
+
+- PE1 0.5 (guardian defaults), 0.17 (rule_override tool), and 0.19 (validator rejecting mode=off on core rules) were already shipped in v7.2.0 and are listed here only because the v7.3.0 release gate verified them as stable.
+- Desktop v0.23.0 ships the renderer-side half of B12 (enforcement map bundle + preflight sync + visible warning) alongside B13/B14 (the "Parar → Enviar cola" recovery loop).
+
 ## [7.2.0] - 2026-04-22
 
 Minor release consolidating three parallel workstreams (B1-B6 + B7-B11 + G1-G3) into a single Guardian-active-by-default train.

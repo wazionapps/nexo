@@ -40,6 +40,18 @@
         ]
       }
     ],
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "NEXO_HOME=\"${CLAUDE_PLUGIN_DATA}\" NEXO_CODE=\"${CLAUDE_PLUGIN_ROOT}/src\" python3 \"${CLAUDE_PLUGIN_ROOT}/src/hooks/pre_tool_use.py\"",
+            "timeout": 8
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "*",
