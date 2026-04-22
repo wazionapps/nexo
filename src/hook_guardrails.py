@@ -291,6 +291,10 @@ def _extract_bash_touched_files(tool_input) -> list[str]:
         ".py", ".md", ".json", ".jsonl", ".sh", ".txt", ".toml", ".yaml", ".yml",
         ".js", ".ts", ".tsx", ".jsx", ".php", ".sql", ".rs", ".go", ".c", ".cpp",
         ".h", ".css", ".html",
+        # ``.plist`` is needed so that ``_collect_launchagent_write_blocks``
+        # can see managed LaunchAgent plists inside Bash commands such as
+        # ``chmod 755 ~/Library/LaunchAgents/com.nexo.runner-health-check.plist``.
+        ".plist",
     }
 
     def add(candidate: str) -> None:
@@ -746,6 +750,79 @@ def _collect_runtime_core_write_blocks(
     return blocks
 
 
+# ``_normalize_path_token`` lower-cases the path, so the regex and substring
+# checks here must also be lower-case. We intentionally omit the leading
+# ``/`` so that both ``/Users/.../Library/...`` and ``~/Library/...`` shapes
+# match — ``_normalize_file_path`` does not expand the user home.
+_LAUNCHAGENT_PLIST_RE = re.compile(
+    r"library/launchagents/com\.nexo\.[^/]+\.plist$"
+)
+
+
+def _is_protected_launchagent_path(filepath: str) -> bool:
+    """True when ``filepath`` resolves to a NEXO-managed LaunchAgent plist.
+
+    Matches any absolute or tilde-prefixed path that ends with
+    ``Library/LaunchAgents/com.nexo.<name>.plist``. Other plists in the same
+    directory (e.g. third-party agents) are left untouched.
+    """
+    if not filepath:
+        return False
+    normalized = _normalize_file_path(filepath)
+    if "library/launchagents/com.nexo." not in normalized:
+        return False
+    return _LAUNCHAGENT_PLIST_RE.search(normalized) is not None
+
+
+def _collect_launchagent_write_blocks(
+    conn,
+    *,
+    sid: str,
+    tool_name: str,
+    files: list[str],
+) -> list[dict]:
+    """Block agent-driven writes to NEXO-managed LaunchAgent plists.
+
+    Core flows (``auto_update.py`` re-generating plists, ``nexo_migrate``,
+    product controllers) set ``NEXO_CORE_WRITES_ALLOWED=1`` via
+    ``product_mode.core_writes_allowed()``, which bypasses this gate. Agentic
+    edits (an operator prompting Claude Code to "fix this LaunchAgent"
+    manually) go through the check and are rejected with a pointer to the
+    canonical surfaces: ``nexo scripts ensure-schedules``,
+    ``nexo core-schedules``, or the source repo release flow.
+    """
+    if core_writes_allowed():
+        return []
+    blocks: list[dict] = []
+    for filepath in files:
+        if not _is_protected_launchagent_path(filepath):
+            continue
+        debt = _ensure_protocol_debt(
+            conn,
+            session_id=sid,
+            task_id="",
+            debt_type="launchagent_plist_write_blocked",
+            severity="error",
+            evidence=(
+                f"{tool_name} attempted on managed LaunchAgent plist {filepath}. "
+                "NEXO-managed plists must be regenerated through "
+                "`nexo scripts ensure-schedules`, `nexo core-schedules`, or the "
+                "source repo release flow, not edited in place."
+            ),
+            file_token=filepath,
+        )
+        blocks.append(
+            {
+                "file": filepath,
+                "task_id": "",
+                "debt_id": debt.get("id"),
+                "debt_type": "launchagent_plist_write_blocked",
+                "reason_code": "launchagent_plist_protected",
+            }
+        )
+    return blocks
+
+
 def _read_claude_session_id_from_coordination() -> str:
     """Fallback claude_session_id when Claude Code's PreToolUse payload omits it.
 
@@ -852,6 +929,23 @@ def process_pre_tool_event(payload: dict) -> dict:
             "operation": op,
             "strictness": strictness,
             "blocks": core_blocks,
+            "status": "blocked",
+        }
+
+    launchagent_blocks = _collect_launchagent_write_blocks(
+        conn,
+        sid=sid,
+        tool_name=tool_name,
+        files=files,
+    )
+    if launchagent_blocks:
+        return {
+            "ok": True,
+            "session_id": sid,
+            "tool_name": tool_name,
+            "operation": op,
+            "strictness": strictness,
+            "blocks": launchagent_blocks,
             "status": "blocked",
         }
 
