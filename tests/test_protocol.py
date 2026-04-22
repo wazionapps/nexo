@@ -196,6 +196,99 @@ def test_task_open_with_blocking_guard_sets_pending_ack_state_without_opening_de
     assert debt_count == 0
 
 
+def test_task_open_ack_rules_inline_acknowledges_blocking_guard(monkeypatch):
+    """Block K G7: ``nexo_task_open(..., ack_rules="#41")`` must acknowledge
+    the blocking rules inline so the operator does not have to chain a
+    second ``nexo_task_acknowledge_guard`` call."""
+    from db import get_db
+    from plugins.protocol import handle_task_open
+
+    sid = _register_session("nexo-1004-3004")
+    monkeypatch.setattr(
+        "plugins.protocol.handle_guard_check",
+        lambda **kwargs: "BLOCKING RULES (resolve BEFORE writing):\n  #41 [FILE RULE:/tmp/x]: Read the canonical rule first\n",
+    )
+    payload = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Edit guarded file, ack inline",
+            task_type="edit",
+            area="nexo-ops",
+            files="/tmp/x",
+            ack_rules="#41",
+        )
+    )
+
+    # Inline ack payload present + ok.
+    assert payload["ack_guard"]["ok"] is True
+    assert payload["guard"]["acknowledged_inline"] is True
+    # next_action updates to reflect post-ack state.
+    assert payload["next_action"] == (
+        "Blocking guard rules acknowledged inline via task_open."
+    )
+    # DB row reflects the acknowledged flag.
+    row = get_db().execute(
+        "SELECT guard_has_blocking, guard_acknowledged FROM protocol_tasks WHERE task_id = ?",
+        (payload["task_id"],),
+    ).fetchone()
+    assert row["guard_has_blocking"] == 1
+    assert row["guard_acknowledged"] == 1
+
+
+def test_task_open_ack_rules_without_blocking_is_a_noop(monkeypatch):
+    """When there are no blocking rules, ``ack_rules`` must report a
+    graceful no-op instead of failing the open."""
+    from plugins.protocol import handle_task_open
+
+    sid = _register_session("nexo-1004-3005")
+    monkeypatch.setattr(
+        "plugins.protocol.handle_guard_check",
+        lambda **kwargs: "",  # no blocking rules
+    )
+    payload = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="answer without guard",
+            task_type="answer",
+            area="nexo-ops",
+            ack_rules="#99",
+        )
+    )
+    # Task opens fine, ack_guard reports the skip.
+    assert payload["ok"] is True
+    assert payload["ack_guard"]["ok"] is False
+    assert payload["ack_guard"]["skipped"] is True
+
+
+def test_task_open_ack_rules_mismatched_ids_surface_error(monkeypatch):
+    """If the operator passes an ack list that does not cover every
+    blocking rule, the inline ack must fail with the validator's
+    ``expected_ids`` / ``provided_ids`` payload so the operator can
+    correct the call without a second round-trip."""
+    from plugins.protocol import handle_task_open
+
+    sid = _register_session("nexo-1004-3006")
+    monkeypatch.setattr(
+        "plugins.protocol.handle_guard_check",
+        lambda **kwargs: "BLOCKING RULES (resolve BEFORE writing):\n"
+        "  #41 [FILE RULE:/tmp/x]: alpha\n"
+        "  #156 [FILE RULE:/tmp/x]: beta\n",
+    )
+    payload = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Edit guarded file, partial ack",
+            task_type="edit",
+            area="nexo-ops",
+            files="/tmp/x",
+            ack_rules="#41",  # missing #156
+        )
+    )
+    assert payload["ack_guard"]["ok"] is False
+    assert set(payload["ack_guard"]["expected_ids"]) == {41, 156}
+    assert payload["ack_guard"]["provided_ids"] == [41]
+
+
 def test_task_open_passes_project_hint_to_guard_check(monkeypatch):
     from plugins.protocol import handle_task_open
 
