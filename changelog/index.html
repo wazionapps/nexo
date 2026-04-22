@@ -87,19 +87,23 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v7.1.10 live</span>
-                    <span class="page-chip">Autonomy mandate</span>
-                    <span class="page-chip">Compact hooks</span>
-                    <span class="page-chip">Release verifier</span>
+                    <span class="page-chip">v7.2.0 live</span>
+                    <span class="page-chip">Guardian active</span>
+                    <span class="page-chip">F0.6 hardening</span>
+                    <span class="page-chip">Adaptive empirical</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v7110" class="btn btn-primary">Start with v7.1.10</a>
-                    <a href="#v718" class="btn btn-secondary">See v7.1.8</a>
+                    <a href="#v720" class="btn btn-primary">Start with v7.2.0</a>
+                    <a href="#v7110" class="btn btn-secondary">See v7.1.10</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
             </div>
             <div class="page-visual">
                 <div class="page-stack">
+                    <div class="page-stack-card">
+                        <strong>v7.2.0</strong>
+                        <span>Minor release consolidating three parallel workstreams into a Guardian-active-by-default train. G1 enforcer + G3 SSH wrapper + persist hard defaults during <code>nexo update</code>. F0.6 hardening: <code>nexo rollback f06</code>, layout contract, doctor checks, Nora migration workflow. Adaptive weights empirical promotion. B10 path constants lazy. Schedule audit log. Pre-release discipline pack.</span>
+                    </div>
                     <div class="page-stack-card">
                         <strong>v7.1.10</strong>
                         <span>Follow-up over v7.1.8. Two rescue batches: autonomy-mandate vocabulary expansion + session flags + post/pre-compact hooks + new <code>checkpoint_policy</code> module; and <code>verify_release_readiness.py</code> smoke-artifact contract pass + core prompt polish.</span>
@@ -188,6 +192,16 @@
 <section class="section-compact" style="background:rgba(124,58,237,0.08);">
     <div class="container desktop-disclaimer" style="max-width:860px;font-size:13px;line-height:1.55;">
         <p><strong>Sobre NEXO Desktop.</strong> NEXO Desktop es un cliente acompa&ntilde;ante closed-source distribuido aparte en <a href="https://nexo-desktop.com/">nexo-desktop.com</a>. Cuando una entrada de changelog menciona "NEXO Desktop" se refiere a una versi&oacute;n coordinada de ese cliente que consume el contrato CLI/MCP del Brain. El c&oacute;digo de Desktop no vive en este repo; el Brain (AGPL-3.0) es 100% usable por s&iacute; solo desde terminal, Codex, Claude Code, o cualquier cliente MCP.</p>
+    </div>
+</section>
+
+<section id="v720" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.2.0 <span style="opacity:.5;font-weight:400;">&mdash; April 22, 2026 &mdash; <strong>MINOR</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">Guardian active by default — G1 enforcer + G3 SSH wrapper + persist hard + F0.6 hardening + adaptive empirical promotion</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            Minor release consolidating three parallel workstreams into a single Guardian-active-by-default train. Block K closure: G1 enforcer (PostToolUse nudge when <code>nexo_task_open</code> returned <code>mode &isin; {defer, ask, verify}</code> without the paired <code>next_action</code>), G3 SSH remote-write detector (catches <code>ssh host "cat &gt; ..."</code>, <code>scp upload</code>, <code>rsync upload</code>, <code>sftp -b batch</code> and 10+ other patterns the local destructive gate never saw), new <code>src/guardian_runtime_config.py</code> resolver unifying gate modes (env &gt; <code>~/.nexo/personal/config/guardian-runtime-overrides.json</code> &gt; default), and <code>_persist_guardian_hard_defaults</code> during <code>nexo update</code> so every non-ephemeral install gets Guardian in <code>hard</code> without env vars. F0.6 hardening: <code>nexo rollback f06</code> CLI with two-stage safe swap, <code>src/scripts/prune_runtime_backups.py</code> promoted from personal to core, authoritative <code>docs/f06-layout-contract.md</code>, three new doctor boot-tier checks (<code>check_core_dev_packaged_install</code>, <code>check_dashboard_desktop_contract</code>, <code>check_f06_migration_consistency</code>), <code>scripts/nexo-migrate-nora.sh</code> + <code>scripts/f0-safe-apply-remote.sh</code> idempotent migration workflow, v6.x&rarr;F0.6 rollback hardening tests. Adaptive weights: flips from "14-day calendar" to "14 days OR (&ge;200 samples AND &ge;2 days)" + <code>_maybe_promote_adaptive_weights_empirically</code> auto-promotes shadow&rarr;learned during <code>nexo update</code> so mature installs feel Cortex calibration immediately. Small fixes: R34 <code>bool("unknown")==True</code> corrected, <code>classify_scripts_dir</code> dedup by realpath, B10 module-level path constants lazy-evaluated in <code>public_contribution.py</code> / <code>tools_sessions.py</code> / <code>plugins/recover.py</code> / <code>plugins/update.py</code>, schedule-override audit log at <code>runtime/logs/core-schedule-overrides.log</code>, <code>scripts/pre-release-verify.sh</code> + <code>docs/release-discipline.md</code>, pre-commit hook for <code>tool-enforcement-map.json</code> drift. Desktop v0.22.6 compatible; MCP external contract unchanged.
+        </p>
     </div>
 </section>
 

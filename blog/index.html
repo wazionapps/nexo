@@ -134,7 +134,7 @@
                     <span class="page-chip">Shared brain product notes</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="/blog/nexo-7-1-10/" class="btn btn-primary">Read latest release</a>
+                    <a href="/blog/nexo-7-2-0/" class="btn btn-primary">Read latest release</a>
                     <a href="/changelog/" class="btn btn-secondary">Latest release notes</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -144,23 +144,23 @@
                 <div class="section-label">Latest release</div>
                 <div class="blog-featured-meta">
                     <span class="compare-chip">April 22, 2026</span>
-                    <span class="compare-chip">Follow-up release</span>
-                    <span class="compare-chip">Autonomy mandate + release verifier</span>
+                    <span class="compare-chip">Minor release</span>
+                    <span class="compare-chip">Guardian active by default</span>
                 </div>
-                <h2>NEXO 7.1.10: follow-up — autonomy-mandate vocabulary + compact hooks + checkpoint_policy + smoke-artifact release verifier</h2>
-                <p>v7.1.10 is a follow-up over v7.1.8 that ships two rescue batches of WIP that were stashed aside during the v7.1.8 release window. First rescue: <code>src/autonomy_mandate.py</code> expands the mandate-detection vocabulary, adds three honest flags (<code>execute_until_blocker</code>, <code>suppress_mid_task_menus</code>, <code>revalidate_after_compaction</code>) with session filtering, wires post/pre-compact hooks, and introduces the new <code>src/checkpoint_policy.py</code> module. Second rescue: <code>scripts/verify_release_readiness.py</code> gains a smoke-artifact contract pass, the release-final audit skill references the new contract, and core prompts get wording polish.</p>
+                <h2>NEXO 7.2.0: Guardian active by default — G1 enforcer + G3 SSH wrapper + persist hard + adaptive empirical promotion + F0.6 hardening</h2>
+                <p>v7.2.0 is a minor release that consolidates three parallel workstreams into a single Guardian-active-by-default train. Block K closes G1 (PostToolUse enforcer that nudges when <code>task_open</code> returned <code>defer/ask/verify</code> without a paired <code>next_action</code>), G3 SSH remote-write detector, a new <code>guardian_runtime_config.py</code> resolver that unifies gate modes, and <code>_persist_guardian_hard_defaults</code> during <code>nexo update</code> so every non-ephemeral install gets Guardian hard automatically. F0.6 hardening ships the <code>nexo rollback f06</code> CLI, <code>prune_runtime_backups.py</code> promoted to core, the authoritative layout contract, three new doctor boot checks, and the idempotent Nora-migration workflow. Adaptive weights auto-promote shadow→learned when mature data is there, without waiting 14 calendar days. Small fixes: R34 bool, <code>classify_scripts_dir</code> dedup, B10 module-level path constants lazy-evaluated, schedule-override audit log, pre-release discipline pack.</p>
                 <div class="hero-actions" style="justify-content:flex-start;margin-bottom:18px;">
-                    <a href="/blog/nexo-7-1-10/" class="btn btn-primary">Open article</a>
-                    <a href="/changelog/#v7110" class="btn btn-secondary">Open changelog</a>
+                    <a href="/blog/nexo-7-2-0/" class="btn btn-primary">Open article</a>
+                    <a href="/changelog/#v720" class="btn btn-secondary">Open changelog</a>
                 </div>
                 <div class="blog-mini-stack">
                     <div class="blog-mini-card">
                         <strong>Companion view</strong>
-                        <span><a href="/changelog/#v7110">See the full v7.1.10 changelog</a></span>
+                        <span><a href="/changelog/#v720">See the full v7.2.0 changelog</a></span>
                     </div>
                     <div class="blog-mini-card">
                         <strong>Previous release</strong>
-                        <span><a href="/blog/nexo-7-1-8/">NEXO 7.1.8: batch — Guardian/Enforcer roadmap G2/G3/G4/G7/G8 + hardcode cleanup + product guards</a>.</span>
+                        <span><a href="/blog/nexo-7-1-10/">NEXO 7.1.10: follow-up — autonomy-mandate vocabulary + compact hooks + checkpoint_policy + smoke-artifact release verifier</a>.</span>
                     </div>
                 </div>
             </div>
@@ -172,6 +172,15 @@
 <section class="section-flush-top">
     <div class="container">
         <div class="blog-grid">
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 22, 2026</div>
+                <h2><a href="/blog/nexo-7-2-0/">NEXO 7.2.0: Guardian active by default — G1 enforcer + G3 SSH wrapper + persist hard + adaptive empirical promotion + F0.6 hardening</a></h2>
+                <p>Minor release consolidating three parallel workstreams. Block K closure: G1 enforcer, G3 SSH wrapper, persist hard defaults during <code>nexo update</code>. F0.6 hardening: <code>nexo rollback f06</code>, layout contract, doctor checks, Nora migration. Adaptive weights empirical promotion. B10 path constants lazy. Schedule audit log. Pre-release discipline pack.</p>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/blog/nexo-7-2-0/" class="btn btn-secondary">Read more</a>
+                </div>
+            </div>
 
             <div class="blog-card">
                 <div class="blog-card-date">April 22, 2026</div>
