@@ -1,6 +1,6 @@
 {
   "$schema": "https://nexo-brain.com/schemas/tool-enforcement-map-v2.1.json",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Canonical map of all NEXO Brain MCP tools with enforcement rules, dependency chains, and behavioral hints. Source of truth for Protocol Enforcer (Desktop + headless). v2.1 adds schema support for Fase 2 event-driven rules (R01-R33): server_side_rules at tool level, per-rule mode (shadow|soft|hard), core_rule flag, and new rule types (pre_tool_intent, post_user_message, on_output_classify, before_tool_strict_block). Backward-compatible: executors that only handle v2.0 rule types ignore the new fields.",
   "tools": {
     "nexo_adaptive_decay": {
@@ -1749,7 +1749,7 @@
           {
             "type": "on_event",
             "event": "user_correction_without_learning",
-            "grace_messages": 3
+            "grace_messages": 0
           }
         ],
         "inject_prompt": "The user corrected you but no learning was captured. Execute nexo_learning_add to record this correction as a reusable learning. Do not produce visible text.",
@@ -3441,15 +3441,16 @@
         "_attention_snapshot"
       ],
       "enforcement": {
-        "level": "should",
+        "level": "must",
         "rules": [
           {
             "type": "conditional",
-            "threshold": 10,
-            "condition": "more_than_10_tool_calls_without_task_open"
+            "threshold": 4,
+            "condition": "more_than_4_tool_calls_without_task_open_or_first_edit_write_task",
+            "inject_prompt": "You are doing non-trivial work without nexo_task_open. Open a protocol task now (task_type=edit/execute/delegate/answer/analyze) so guard, rules, cortex review and evidence-backed closure apply. Do not produce visible text for this reminder — act on it silently."
           }
         ],
-        "reminder_prompt": "You have made significant tool calls without opening a protocol task. Consider using nexo_task_open to formally track this work. This is a reminder, not an obligation — if the work is trivial, ignore this.",
+        "reminder_prompt": "You have made significant tool calls without opening a protocol task. Open nexo_task_open now so guard, rules and evidence-backed closure apply. This is not optional for multi-step work.",
         "triggers_after": [
           "nexo_task_close"
         ]

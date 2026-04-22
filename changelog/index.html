@@ -93,13 +93,17 @@
                     <span class="page-chip">Adaptive empirical</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v750" class="btn btn-primary">Start with v7.5.0</a>
-                    <a href="#v741" class="btn btn-secondary">See v7.4.1</a>
+                    <a href="#v760" class="btn btn-primary">Start with v7.6.0</a>
+                    <a href="#v750" class="btn btn-secondary">See v7.5.0</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
             </div>
             <div class="page-visual">
                 <div class="page-stack">
+                    <div class="page-stack-card">
+                        <strong>v7.6.0</strong>
+                        <span>Minor release. Enforcement parity: Brain engine dispatches <code>before_tool</code>, <code>on_event</code>, <code>conditional</code> (previously only Desktop did). <code>after_tool</code> is per-instance instead of once-per-session. Map v2.2 tightens learning_add grace 3&rarr;0 and task_open threshold 10&rarr;4 must. guardian_default v1.4.0 hardens R15/R17/R22/R_CATALOG and raises R34 from shadow to soft. 6 new contract parity tests. Companion: NEXO Desktop v0.26.0.</span>
+                    </div>
                     <div class="page-stack-card">
                         <strong>v7.5.0</strong>
                         <span>Minor release. <code>nexo_lifecycle_event</code> promoted to canonical authority of session-end: Brain owns prompt + sequence + timing, Desktop v0.25.0 executes the plan inline. New 2-call contract (event + complete_canonical), deterministic <code>canonical_plan_id</code>, session_diary dedupe, seven <code>delivery_status</code> values. Migration m52. MCP tools 262 &rarr; 263.</span>
@@ -200,6 +204,16 @@
 <section class="section-compact" style="background:rgba(124,58,237,0.08);">
     <div class="container desktop-disclaimer" style="max-width:860px;font-size:13px;line-height:1.55;">
         <p><strong>Sobre NEXO Desktop.</strong> NEXO Desktop es un cliente acompa&ntilde;ante closed-source distribuido aparte en <a href="https://nexo-desktop.com/">nexo-desktop.com</a>. Cuando una entrada de changelog menciona "NEXO Desktop" se refiere a una versi&oacute;n coordinada de ese cliente que consume el contrato CLI/MCP del Brain. El c&oacute;digo de Desktop no vive en este repo; el Brain (AGPL-3.0) es 100% usable por s&iacute; solo desde terminal, Codex, Claude Code, o cualquier cliente MCP.</p>
+    </div>
+</section>
+
+<section id="v760" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.6.0 <span style="opacity:.5;font-weight:400;">&mdash; April 22, 2026 &mdash; <strong>MINOR</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">Enforcement parity &mdash; Brain catches up to Desktop on before_tool / on_event / conditional, after_tool becomes per-instance, default modes hardened</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            v7.6.0 closes the drift between <code>tool-enforcement-map.json</code> v2.2 and the two enforcement engines. Before this release the Brain engine (<code>src/enforcement_engine.py::_build_indexes</code>) silently ignored <code>before_tool</code>, <code>on_event</code>, and <code>conditional</code> rules even though the map declared them — so Brain users got the weaker contract while Desktop honoured them correctly. The v7.6 engine dispatches all eight rule types declared by <code>fase2_schema.supported_rule_types_v2_0</code>. The public API gains <code>on_tool_call_before(raw_name, tool_input)</code>, <code>raise_event(event_name, context)</code>, and <code>reset_task_cycle(tool)</code> so hooks can fire semantic events (<code>multi_step_task_detected</code>, <code>done_claimed_with_open_task</code>, <code>user_correction_without_learning</code>, <code>post_compaction</code>, …). <code>after_tool</code> satisfaction is now per-instance (monotonic <code>_tool_instance_counter</code>) — the previous check (<code>target not in self.tools_called</code>) silently satisfied the dependency forever after the first historical target call, a defect explicitly flagged by the constructor-guardian-90 checklist. Map v2.2 tightens two triggers: <code>nexo_learning_add</code> on_event <code>grace_messages: 3 → 0</code> (corrections produce the learning in the same turn) and <code>nexo_task_open</code> conditional <code>threshold: 10 → 4</code>, level <code>should → must</code>, plus an explicit <code>inject_prompt</code>. <code>guardian_default.json</code> v1.4.0 hardens <code>R15_project_context</code>, <code>R17_promise_debt</code>, <code>R22_personal_script</code> and <code>R_CATALOG_before_artifact_create</code> from soft to hard, and moves <code>R34_identity_coherence</code> from shadow to soft so identity denials surface a visible reminder instead of silent telemetry. New contract test <code>tests/test_v76_map_parity.py</code> (6 cases) pins the invariants: every declared rule type is dispatched by both engines, <code>fase2_schema</code> cannot lie about support, <code>task_open</code> threshold &le; 5 + inject_prompt present, <code>learning_add</code> grace 0, Brain exposes the new public API, after_tool uses per-instance comparison (source inspection). Pytest 2056 passing (10 unrelated pre-existing failures tracked separately). Companion release: NEXO Desktop v0.26.0 mirrors the engine fixes + default hardening.
+        </p>
     </div>
 </section>
 

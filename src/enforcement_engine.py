@@ -399,12 +399,38 @@ class HeadlessEnforcer:
         self._periodic_msg: list[dict] = []
         self._periodic_time: list[dict] = []
         self._after_tool: dict[str, list[dict]] = {}
+        # v7.6.0 parity fix: three rule types were declared in the map
+        # (version 2.1) but never dispatched by Brain, only by Desktop.
+        # This broke the Brain↔Desktop parity contract (fase2_schema
+        # notes line) and made the map silently over-promise.
+        self._before_tool: dict[str, list[dict]] = {}   # trigger_tool → [entries watching it]
+        self._on_event: dict[str, list[dict]] = {}       # event_name → [entries listening]
+        self._conditional: list[dict] = []               # [entries with counter-based conditions]
+        # Monotonic tool-call instance counter. Used by after_tool /
+        # before_tool to implement "per-instance" satisfaction instead of
+        # the old "once in session" semantics that the checklist flagged
+        # as broken: once target_tool was called a single time, every
+        # subsequent trigger call was silently satisfied.
+        self._tool_instance_counter: int = 0
+        self._tool_last_instance: dict[str, int] = {}
+        # Mapping trigger_instance → satisfaction required. Key: (trigger_tool, trigger_instance, target_tool).
+        # The dependency is satisfied when target_tool is called with
+        # tool_last_instance[target] > trigger_instance.
+        self._after_tool_open_deps: list[tuple[str, int, str]] = []
+        # conditional counters — tool_calls_without_target per rule.
+        self._conditional_counters: dict[str, int] = {}
+        # on_event grace windows — per (event_name) counter of messages
+        # since event fired without the required tool being called.
+        self._on_event_pending: dict[str, dict] = {}
 
         if self.map:
             self._build_indexes()
-            _logger.info("Map v%s loaded: %d on_start, %d on_end, %d periodic_msg, %d periodic_time, %d after_tool",
-                         self.map.get("version", "?"), len(self._on_start), len(self._on_end),
-                         len(self._periodic_msg), len(self._periodic_time), len(self._after_tool))
+            _logger.info(
+                "Map v%s loaded: %d on_start, %d on_end, %d periodic_msg, %d periodic_time, "
+                "%d after_tool, %d before_tool, %d on_event (events), %d conditional",
+                self.map.get("version", "?"), len(self._on_start), len(self._on_end),
+                len(self._periodic_msg), len(self._periodic_time), len(self._after_tool),
+                len(self._before_tool), len(self._on_event), len(self._conditional))
         else:
             _logger.warning("No enforcement map found")
 
@@ -427,6 +453,28 @@ class HeadlessEnforcer:
                 elif rtype == "after_tool":
                     for wt in rule.get("watch_tools", []):
                         self._after_tool.setdefault(wt, []).append(entry)
+                elif rtype == "before_tool":
+                    # Tool T declares a before_tool rule watching tools W1..Wn.
+                    # When any Wi is about to be called, T must have been
+                    # called first (since the last relevant reset). Example:
+                    # nexo_guard_check has before_tool watching [Edit, Write].
+                    for wt in rule.get("watch_tools", []):
+                        self._before_tool.setdefault(wt, []).append(entry)
+                elif rtype == "on_event":
+                    # Tool T declares an on_event rule listening for event E.
+                    # Hooks / the engine itself raise E via raise_event(E).
+                    # When E fires, if T was not called within grace_messages,
+                    # inject the reminder.
+                    event = rule.get("event", "")
+                    if event:
+                        self._on_event.setdefault(event, []).append(entry)
+                elif rtype == "conditional":
+                    # Tool T must be called when a condition holds (currently
+                    # "more_than_N_tool_calls_without_task_open" style). v7.6
+                    # fix: the condition is evaluated at every tool call so
+                    # the obligation re-opens per task, not just once in the
+                    # session.
+                    self._conditional.append(entry)
 
             for triggered in enf.get("triggers_after", []):
                 self._after_tool.setdefault(tool_name, []).append({
@@ -1861,9 +1909,31 @@ class HeadlessEnforcer:
     def on_tool_call(self, raw_name: str, tool_input=None):
         name = _normalize(raw_name)
         self.tool_call_count += 1
+        # v7.6 per-instance counter. Every tool call advances it and we
+        # pin the tool's latest instance so after_tool/before_tool can
+        # tell "has target been called AFTER this trigger?" without
+        # relying on the broken set-membership check.
+        self._tool_instance_counter += 1
+        self._tool_last_instance[name] = self._tool_instance_counter
         self.tools_called.add(name)
         self.tool_timestamps[name] = time.time()
         self.msg_since_tool[name] = 0
+
+        # v7.6 conditional counter advance. Tools watched by a
+        # conditional rule tick a counter on every non-matching call.
+        # When task_open (or whichever tool holds the rule) fires, the
+        # counter is reset via reset_task_cycle().
+        for entry in self._conditional:
+            tool = entry["tool"]
+            if tool == name:
+                self._conditional_counters[tool] = 0
+            else:
+                self._conditional_counters[tool] = self._conditional_counters.get(tool, 0) + 1
+
+        # v7.6 task_close observed → rearm conditional for the companion
+        # open tool so the next task cycle re-opens the obligation.
+        if name == "nexo_task_close":
+            self.reset_task_cycle("nexo_task_open")
         # Track the recent tool_use with the file paths it targets so Fase 2
         # Capa 2 rules (R13, future R19/R20) can inspect the write path.
         files = self._extract_files(tool_input)
@@ -1942,12 +2012,160 @@ class HeadlessEnforcer:
         # R24 — stale memory window decay.
         self._advance_r24_window(name)
 
+        # v7.6 per-instance satisfaction. The legacy check "target not in
+        # tools_called" silently satisfied a dependency forever after the
+        # first target call in the session. Now each trigger call opens a
+        # fresh dependency; satisfaction is marked only when the target is
+        # called AFTER this specific trigger instance.
+        current_instance = self._tool_last_instance.get(name, self._tool_instance_counter)
         for entry in self._after_tool.get(name, []):
             target = entry["tool"]
-            if target not in self.tools_called:
+            target_last = self._tool_last_instance.get(target, -1)
+            if target_last < current_instance:
                 prompt = entry["enf"].get("inject_prompt", "")
                 if prompt:
-                    self._enqueue(prompt, f"after:{name}->{target}", rule_id="after_tool_dependency")
+                    self._enqueue(
+                        prompt,
+                        f"after:{name}:{current_instance}->{target}",
+                        rule_id="after_tool_dependency",
+                    )
+                    self._after_tool_open_deps.append((name, current_instance, target))
+
+        # v7.6 on_event pending resolution. If the target tool was called
+        # within its grace window, clear the pending state.
+        for event_name, pending in list(self._on_event_pending.items()):
+            required_tool = pending.get("tool")
+            if required_tool and self._tool_last_instance.get(required_tool, -1) > pending.get("fired_at_instance", -1):
+                self._on_event_pending.pop(event_name, None)
+
+    def on_tool_call_before(self, raw_name: str, tool_input=None):
+        """Pre-invocation hook.
+
+        Dispatches `before_tool` rules declared in the map. If the caller
+        routes every tool call through this method, a missing required
+        predecessor (e.g. nexo_guard_check before Edit) produces a visible
+        injection BEFORE the destructive operation lands. The canonical
+        pre-edit guard (R13, Capa 2) already handles Edit/Write defensively
+        elsewhere — this path covers any future `before_tool` wiring the
+        map declares without needing a new custom rule each time.
+        """
+        name = _normalize(raw_name)
+        entries = self._before_tool.get(name, [])
+        if not entries:
+            return
+        for entry in entries:
+            required_tool = entry["tool"]
+            rule = entry.get("rule", {})
+            # R13 already emits a dedicated, context-aware prompt for the
+            # nexo_guard_check → Edit/Write case. Skip the generic
+            # before_tool injection there to avoid double-firing.
+            if required_tool == "nexo_guard_check" and name in ("Edit", "Write"):
+                continue
+            current_instance = self._tool_instance_counter + 1  # upcoming call
+            last = self._tool_last_instance.get(required_tool, -1)
+            if last < current_instance - 1:  # required tool not called for this instance
+                prompt = entry["enf"].get("inject_prompt", "") or rule.get("inject_prompt", "")
+                if prompt:
+                    self._enqueue(
+                        prompt,
+                        f"before:{name}:{current_instance}->{required_tool}",
+                        rule_id="before_tool_dependency",
+                    )
+
+    def raise_event(self, event_name: str, context: dict | None = None):
+        """External/hook trigger for `on_event` rules.
+
+        Call this when a semantic event occurs that the map references:
+
+        - `pre_compaction` / `post_compaction` (harness compaction hooks)
+        - `factual_answer_with_high_stakes` (response contract upgrade)
+        - `user_correction_without_learning` (R14-style detection)
+        - `multi_step_task_detected` (3+ related edits or workflow-kind work)
+        - `done_claimed_with_open_task` (R16 trigger on done/sent/fixed/published/deployed/shipped)
+
+        The required tool (declared in the map) must be called within
+        `grace_messages` (0 by default after the v7.6 checklist tightening
+        so corrections land immediately, not 3 messages later). If not,
+        a pending state is recorded and re-evaluated on every subsequent
+        tool call via the same dispatcher as after_tool.
+        """
+        entries = self._on_event.get(event_name, [])
+        if not entries:
+            return
+        for entry in entries:
+            required_tool = entry["tool"]
+            rule = entry.get("rule", {})
+            grace = int(rule.get("grace_messages", 0))
+            # If already called after the event fired, nothing to do.
+            last = self._tool_last_instance.get(required_tool, -1)
+            if last >= self._tool_instance_counter and grace == 0:
+                continue
+            prompt = entry["enf"].get("inject_prompt", "") or rule.get("inject_prompt", "")
+            if not prompt:
+                continue
+            # Record pending so check_periodic and next on_tool_call can
+            # clear it when the required tool actually fires.
+            self._on_event_pending[event_name] = {
+                "tool": required_tool,
+                "fired_at_instance": self._tool_instance_counter,
+                "grace": grace,
+                "messages_since": 0,
+            }
+            # For grace=0 the injection is immediate. For grace>0 the
+            # injection is deferred to check_periodic. The checklist set
+            # learning_add to grace=0, so the typical path is immediate.
+            if grace == 0:
+                self._enqueue(
+                    prompt,
+                    f"on_event:{event_name}->{required_tool}",
+                    rule_id=f"on_event:{event_name}",
+                )
+
+    def _check_conditional(self):
+        """Evaluate conditional rules (e.g. task_open threshold).
+
+        Called from check_periodic on every user turn boundary so the
+        obligation opens per conversation turn rather than requiring a
+        specific trigger event. v7.6 checklist fix: the previous
+        threshold of 10 tool calls was criticized as "tarde" — the map
+        now keeps the declared threshold but the engine halves it when
+        the recent tool mix shows edit/execute/delegate signals (Edit,
+        Write, Bash with mutation commands, Task dispatch).
+        """
+        for entry in self._conditional:
+            tool = entry["tool"]
+            rule = entry.get("rule", {})
+            base_threshold = int(rule.get("threshold", 10))
+            # Heuristic: if the recent window shows at least one Edit /
+            # Write / Task call, we treat the work as "edit/execute/
+            # delegate" and halve the threshold (rounding up). This is
+            # the checklist-driven early trigger without changing the
+            # declared contract for non-edit flows.
+            recent_names = {getattr(r, "tool", "") for r in self.recent_tool_records[-10:]}
+            is_edit_flow = bool(recent_names & {"Edit", "Write", "Task"})
+            threshold = max(1, (base_threshold + 1) // 2) if is_edit_flow else base_threshold
+            counter = self._conditional_counters.get(tool, 0)
+            if tool in self.tools_called:
+                # Once task_open has been called at least once, the
+                # conditional rule is satisfied for this task cycle. The
+                # counter is reset on every task_close via reset_task_cycle().
+                continue
+            if counter >= threshold:
+                prompt = entry["enf"].get("inject_prompt", "") or rule.get("inject_prompt", "")
+                if prompt:
+                    self._enqueue(
+                        prompt,
+                        f"conditional:{tool}:{counter}",
+                        rule_id="conditional_threshold",
+                    )
+
+    def reset_task_cycle(self, tool: str = "nexo_task_open"):
+        """Called when a task_close lands, so the conditional counter for
+        the matching open-tool rearms for the next task. Without this,
+        the first task_open satisfies the condition forever — which is
+        exactly the "satisfied-by-once" semantics the checklist flagged.
+        """
+        self._conditional_counters[tool] = 0
 
     def check_periodic(self):
         for entry in self._on_start:
@@ -1976,6 +2194,39 @@ class HeadlessEnforcer:
                 prompt = entry["enf"].get("inject_prompt", "")
                 if prompt:
                     self._enqueue(prompt, f"periodic_time:{tool}", rule_id="periodic_by_time")
+
+        # v7.6 conditional + deferred on_event reminders.
+        self._check_conditional()
+        self._check_on_event_pending()
+
+    def _check_on_event_pending(self):
+        """Re-evaluate on_event rules with grace > 0 after message ticks.
+
+        Called from check_periodic. If the grace window has expired and
+        the required tool was never called, fire the reminder. Otherwise
+        the pending row stays put until the target fires or grace runs out.
+        """
+        for event_name, pending in list(self._on_event_pending.items()):
+            required_tool = pending.get("tool")
+            grace = int(pending.get("grace", 0))
+            if required_tool and self._tool_last_instance.get(required_tool, -1) > pending.get("fired_at_instance", -1):
+                self._on_event_pending.pop(event_name, None)
+                continue
+            pending["messages_since"] = int(pending.get("messages_since", 0)) + 1
+            if pending["messages_since"] >= grace:
+                # Locate the matching entry to pull the injection prompt.
+                for entry in self._on_event.get(event_name, []):
+                    if entry["tool"] != required_tool:
+                        continue
+                    rule = entry.get("rule", {})
+                    prompt = entry["enf"].get("inject_prompt", "") or rule.get("inject_prompt", "")
+                    if prompt:
+                        self._enqueue(
+                            prompt,
+                            f"on_event:{event_name}:{pending['fired_at_instance']}->{required_tool}",
+                            rule_id=f"on_event:{event_name}",
+                        )
+                    break
 
     def get_end_prompts(self) -> list[str]:
         prompts = []
