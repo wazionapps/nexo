@@ -1,5 +1,101 @@
 # Changelog
 
+## [7.6.0] - 2026-04-22
+
+Minor release. Closes the drift between `tool-enforcement-map.json`
+v2.2 and the two enforcement engines (Brain Python + Desktop JS), and
+moves several default rule modes closer to the obedience target the
+constructor-guardian-90 checklist asks for.
+
+### Added — rule type dispatch parity (Brain caught up to Desktop)
+
+- `src/enforcement_engine.py::_build_indexes` now dispatches
+  `before_tool`, `on_event`, and `conditional` alongside the existing
+  `on_session_start` / `on_session_end` / `periodic_by_messages` /
+  `periodic_by_time` / `after_tool` branches. Before v7.6 the Brain
+  engine silently ignored these three types — they were declared in the
+  map but only Desktop honoured them, so Brain users got the weaker
+  contract despite the map promising otherwise.
+- New Brain public API:
+  - `on_tool_call_before(raw_name, tool_input)` — pre-invocation hook
+    driving `before_tool` rules.
+  - `raise_event(event_name, context=None)` — called by hooks / the
+    engine when a semantic event fires (`multi_step_task_detected`,
+    `done_claimed_with_open_task`, `user_correction_without_learning`,
+    `post_compaction`, etc).
+  - `reset_task_cycle(tool)` — rearms `conditional` counters after a
+    matching close tool fires, so the next task re-opens the obligation
+    instead of inheriting the previous cycle's satisfaction.
+  - `_check_conditional()` — evaluates conditional rules on every
+    periodic tick. Uses a heuristic that halves the threshold when the
+    recent window shows `Edit` / `Write` / `Task` calls so
+    edit/execute/delegate work gets nudged earlier.
+
+### Changed — per-instance satisfaction, not once-per-session
+
+- `after_tool` dependencies are now satisfied only when the target tool
+  is called AFTER this specific trigger instance. The previous check
+  (`target not in self.tools_called`) was silently satisfied forever
+  after the first historical target call — a defect the checklist
+  called out explicitly ("Elimina la semántica rota de 'ya se llamó una
+  vez en la sesión'"). Both engines now compare a monotonic
+  `_tool_instance_counter` per trigger call.
+- Desktop's `onToolCall` mirrors the change (`toolLastInstance` /
+  `toolInstanceCounter` in session state).
+
+### Changed — map tightenings
+
+- `tool-enforcement-map.json` version bumped to **2.2.0**.
+- `nexo_learning_add` on_event rule `grace_messages: 3 → 0`. Checklist
+  quote: "No quiero que quede limitada a 3 mensajes". A correction now
+  produces the learning in the same turn it lands.
+- `nexo_task_open` conditional rule `threshold: 10 → 4`, level `should
+  → must`, and adds an explicit `inject_prompt` so the dispatcher has a
+  concrete reminder to emit when the threshold trips. The heuristic in
+  `_check_conditional` further halves the threshold when the recent
+  window shows edit/execute/delegate signals.
+
+### Changed — guardian_default.json v1.4.0
+
+Default rule modes hardened where false-positive telemetry was low
+enough to justify the upgrade:
+
+- `R15_project_context`: soft → **hard**
+- `R17_promise_debt`: soft → **hard**
+- `R22_personal_script`: soft → **hard**
+- `R_CATALOG_before_artifact_create`: soft → **hard**
+- `R34_identity_coherence`: shadow → **soft** (identity denials without
+  shared-brain lookup now surface a visible reminder instead of silent
+  telemetry).
+
+Desktop mirror (`nexo-desktop/enforcement-engine.js`) updated in
+lock-step as v0.26.0.
+
+### Tests
+
+- New `tests/test_v76_map_parity.py` pins six invariants:
+  - Every rule type declared in the map is dispatched by both engines.
+  - `fase2_schema.supported_rule_types_v2_0` is not allowed to lie
+    about engine coverage.
+  - `task_open` conditional threshold ≤ 5 + inject_prompt present.
+  - `learning_add` grace_messages = 0.
+  - Brain engine exposes `raise_event` + `reset_task_cycle` +
+    `on_tool_call_before`.
+  - `after_tool` satisfaction is per-instance (source inspection for
+    the `target_last < current_instance` comparison + presence of
+    `_tool_instance_counter`).
+- Full pytest: 2056 passing. Ten unrelated pre-existing failures in
+  `test_cli_scripts` / `test_client_sync` / `test_doctor` /
+  `test_evolution` persist — confirmed against clean main and tracked
+  as environment-specific (TTY / client-selection edge cases).
+
+### Companion release
+
+- **NEXO Desktop v0.26.0** ships at the same time. It adds
+  `conditional` dispatch, per-instance satisfaction, `raiseEvent()` and
+  `resetTaskCycle()` public API, and mirrors the guardian default
+  hardening.
+
 ## [7.5.0] - 2026-04-22
 
 Minor release. Promotes `nexo_lifecycle_event` from ledger + reconciliation

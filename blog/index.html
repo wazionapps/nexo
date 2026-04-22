@@ -145,22 +145,22 @@
                 <div class="blog-featured-meta">
                     <span class="compare-chip">April 22, 2026</span>
                     <span class="compare-chip">Minor release</span>
-                    <span class="compare-chip">Canonical authority of session-end</span>
+                    <span class="compare-chip">Enforcement parity + per-instance</span>
                 </div>
-                <h2>NEXO 7.5.0: canonical authority of session-end — Brain decides, Desktop executes, no polling</h2>
-                <p>v7.5.0 promotes <code>nexo_lifecycle_event</code> from ledger + reconciliation authority to <strong>canonical authority of session-end</strong>. Brain now owns the prompt, the sequence, and the timing of diary+stop; NEXO Desktop v0.25.0 (closed-source companion) is the conduit that executes Brain's plan against the live Claude process stdin. The new 2-call contract (<code>nexo_lifecycle_event</code> returns a versioned <code>canonical_plan</code>; <code>nexo_lifecycle_complete_canonical</code> confirms execution with per-action results) replaces polling with explicit acknowledgement. <code>canonical_plan_id</code> is deterministic so retries reuse the same id. Migration m52 adds six <code>canonical_*</code> columns to <code>lifecycle_events</code>. <code>session_diary</code> dedupes re-delivery so crashes between inject and confirm cannot produce a duplicate diary. Seven explicit delivery_status values (accepted / processed / canonical_pending / canonical_done / already_processed / retryable_error / rejected). 24/24 lifecycle tests green. MCP tools 262 → 263.</p>
+                <h2>NEXO 7.6.0: enforcement parity — Brain catches up on before_tool / on_event / conditional, after_tool goes per-instance, defaults hardened</h2>
+                <p>v7.6.0 closes the drift between <code>tool-enforcement-map.json</code> v2.2 and the two enforcement engines. Before this release, the Brain engine silently ignored <code>before_tool</code>, <code>on_event</code>, and <code>conditional</code> rules that the map declared — only Desktop honoured them. v7.6 dispatches all eight declared types in both engines and exposes new public API (<code>on_tool_call_before</code>, <code>raise_event</code>, <code>reset_task_cycle</code>). <code>after_tool</code> satisfaction now compares a monotonic per-instance counter instead of a session-wide set, so the checklist's "satisfied-by-once" defect is gone. Map v2.2 tightens <code>nexo_learning_add</code> grace 3→0 and <code>nexo_task_open</code> conditional threshold 10→4 with level must + explicit inject_prompt. <code>guardian_default.json</code> v1.4.0 hardens R15/R17/R22/R_CATALOG from soft to hard, and moves R34_identity_coherence from shadow to soft. New contract test pins six invariants including Brain↔Desktop dispatch parity. 2056 passing pytest. Companion: NEXO Desktop v0.26.0.</p>
                 <div class="hero-actions" style="justify-content:flex-start;margin-bottom:18px;">
-                    <a href="/blog/nexo-7-5-0/" class="btn btn-primary">Open article</a>
-                    <a href="/changelog/#v750" class="btn btn-secondary">Open changelog</a>
+                    <a href="/blog/nexo-7-6-0/" class="btn btn-primary">Open article</a>
+                    <a href="/changelog/#v760" class="btn btn-secondary">Open changelog</a>
                 </div>
                 <div class="blog-mini-stack">
                     <div class="blog-mini-card">
                         <strong>Companion view</strong>
-                        <span><a href="/changelog/#v750">See the full v7.5.0 changelog</a></span>
+                        <span><a href="/changelog/#v760">See the full v7.6.0 changelog</a></span>
                     </div>
                     <div class="blog-mini-card">
                         <strong>Previous release</strong>
-                        <span><a href="/blog/nexo-7-4-1/">NEXO 7.4.1: guardian-claude-desktop lifecycle closure — ledger/authority split made explicit</a>.</span>
+                        <span><a href="/blog/nexo-7-5-0/">NEXO 7.5.0: canonical authority of session-end — Brain decides, Desktop executes, no polling</a>.</span>
                     </div>
                 </div>
             </div>
@@ -172,6 +172,15 @@
 <section class="section-flush-top">
     <div class="container">
         <div class="blog-grid">
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 22, 2026</div>
+                <h2><a href="/blog/nexo-7-6-0/">NEXO 7.6.0: enforcement parity — Brain catches up on before_tool / on_event / conditional, after_tool goes per-instance</a></h2>
+                <p>Minor release. Closes drift between map v2.2 and the two engines: Brain dispatches all eight declared rule types (not just 5). <code>after_tool</code> is per-instance, not once-per-session. Map tightens learning_add grace 3→0 and task_open threshold 10→4 must. guardian_default v1.4.0 hardens R15/R17/R22/R_CATALOG and raises R34 from shadow to soft. Six new contract parity invariants. MCP tools unchanged (263). Companion: NEXO Desktop v0.26.0.</p>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/blog/nexo-7-6-0/" class="btn btn-secondary">Read more</a>
+                </div>
+            </div>
 
             <div class="blog-card">
                 <div class="blog-card-date">April 22, 2026</div>
