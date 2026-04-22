@@ -250,6 +250,64 @@ if os.path.exists(evolution_file):
     except Exception:
         pass
 
+# Guardian health (Block K G8 — Francisco 2026-04-22): surface the
+# metrics the Guardian already tracks so Francisco sees them every
+# morning without asking. Soft query: missing tables or schema drift
+# must not fail the briefing; fall back to silence.
+try:
+    _conn = sqlite3.connect(db_path)
+    _health = {}
+    # protocol_debt open count + breakdown by debt_type (top 5)
+    try:
+        row = _conn.execute(
+            \"SELECT COUNT(*) FROM protocol_debt WHERE resolved_at IS NULL\"
+        ).fetchone()
+        _health['open_debts_total'] = int(row[0] or 0) if row else 0
+        breakdown = _conn.execute(
+            \"SELECT debt_type, COUNT(*) AS n FROM protocol_debt \"
+            \"WHERE resolved_at IS NULL GROUP BY debt_type ORDER BY n DESC LIMIT 5\"
+        ).fetchall()
+        _health['open_debts_by_type'] = [(r[0] or 'unknown', int(r[1] or 0)) for r in breakdown]
+    except Exception:
+        pass
+    # Guard-check activity in the last 24h
+    try:
+        row = _conn.execute(
+            \"SELECT COUNT(*) FROM guard_checks \"
+            \"WHERE ts > (strftime('%s','now') - 24*3600)\"
+        ).fetchone()
+        _health['guard_checks_24h'] = int(row[0] or 0) if row else 0
+    except Exception:
+        pass
+    # Failing hook runs in the last 24h (non-zero exit)
+    try:
+        row = _conn.execute(
+            \"SELECT COUNT(*) FROM hook_runs \"
+            \"WHERE exit_code != 0 AND started_at > datetime('now', '-1 day')\"
+        ).fetchone()
+        _health['failing_hooks_24h'] = int(row[0] or 0) if row else 0
+    except Exception:
+        pass
+    _conn.close()
+    if _health:
+        lines.append('## Guardian Health')
+        debts_total = _health.get('open_debts_total', 0)
+        lines.append(f\"Open debts: {debts_total}\")
+        if debts_total > 10:
+            lines.append('  -> ACTION NEEDED: >10 open debts — run nexo_protocol_debt_list and resolve error-severity entries.')
+        for debt_type, count in _health.get('open_debts_by_type', []):
+            lines.append(f\"  - {debt_type}: {count}\")
+        if 'guard_checks_24h' in _health:
+            lines.append(f\"guard_checks last 24h: {_health['guard_checks_24h']}\")
+        if 'failing_hooks_24h' in _health:
+            fh = _health['failing_hooks_24h']
+            lines.append(f\"failing hooks last 24h: {fh}\")
+            if fh > 0:
+                lines.append('  -> check nexo_hook_runs for details.')
+        lines.append('')
+except Exception:
+    pass
+
 print('\n'.join(lines))
 " > "$BRIEFING_FILE" 2>/dev/null
 
