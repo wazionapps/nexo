@@ -395,6 +395,55 @@ class TestCoreFiltering:
         text = script.read_text()
         assert "# nexo: cron_id=wake-recovery" in text
 
+    def test_classify_scripts_dir_dedups_symlinked_file(self, tmp_path, monkeypatch):
+        """F0.6 transitional: same physical file surfaces from two candidate
+        dirs via symlink (AUDITOR-V700-PASS2 §5). Dedup by realpath keeps
+        it to a single entry without hiding genuinely distinct files.
+        """
+        import paths
+        import script_registry
+
+        core_dir = tmp_path / "core" / "scripts"
+        core_dir.mkdir(parents=True)
+        real_script = core_dir / "shared-tool.sh"
+        real_script.write_text(
+            "#!/bin/bash\n# nexo: name=shared-tool\necho shared\n"
+        )
+        os.chmod(real_script, 0o755)
+
+        personal_dir = tmp_path / "personal" / "scripts"
+        personal_dir.mkdir(parents=True)
+        (personal_dir / "shared-tool.sh").symlink_to(real_script)
+        # A genuinely distinct file with a different name should survive.
+        unique_personal = personal_dir / "my-unique.sh"
+        unique_personal.write_text(
+            "#!/bin/bash\n# nexo: name=my-unique\necho unique\n"
+        )
+        os.chmod(unique_personal, 0o755)
+
+        core_dev_dir = tmp_path / "core-dev" / "scripts"
+        core_dev_dir.mkdir(parents=True)
+
+        monkeypatch.setattr(
+            paths, "all_scripts_dirs", lambda: [core_dir, personal_dir, core_dev_dir]
+        )
+        monkeypatch.setattr(script_registry, "get_scripts_dir", lambda: personal_dir)
+        monkeypatch.setattr(script_registry, "load_core_script_names", lambda: set())
+        monkeypatch.setattr(
+            script_registry, "load_core_script_identities", lambda: set()
+        )
+        monkeypatch.setattr(
+            script_registry, "_apply_legacy_personal_script_backfills", lambda: None
+        )
+
+        report = classify_scripts_dir()
+        shared_entries = [e for e in report["entries"] if e["name"] == "shared-tool"]
+        assert (
+            len(shared_entries) == 1
+        ), f"expected realpath dedup to collapse symlink duplicates, got {shared_entries}"
+        unique_entries = [e for e in report["entries"] if e["name"] == "my-unique"]
+        assert len(unique_entries) == 1, "genuinely distinct files must survive dedup"
+
 
 class TestResolveScript:
     def test_resolve_by_name(self, scripts_dir):
