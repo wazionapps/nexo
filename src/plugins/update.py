@@ -84,37 +84,67 @@ _THIS_DIR = Path(__file__).resolve().parent
 CODE_ROOT = _THIS_DIR.parent
 _REPO_CANDIDATE = CODE_ROOT.parent
 
+# B10 mini-refactor (AUDITOR-V700-PASS2 §11): the pieces below that look up
+# env-dependent or filesystem-dependent state now go through lazy helpers so
+# tests can monkeypatch NEXO_HOME / the .git location after the module was
+# imported without snapshotting a stale value. The module-level constants
+# (NEXO_HOME, DATA_DIR, BACKUP_BASE, REPO_DIR, SRC_DIR, PACKAGE_JSON) are
+# kept for the existing 77 callsites; they will migrate to the helpers in
+# followup NF-B10-UPDATE-PY-LAZY-CALLSITES-COSMETIC post-release.
+
+
+def _nexo_home() -> Path:
+    """Resolve the current NEXO_HOME on every call.
+
+    export_resolved_nexo_home() reads the env var + runtime config each time,
+    so fixtures that monkeypatch NEXO_HOME mid-test pick up the new path.
+    """
+    return export_resolved_nexo_home()
+
+
+def _is_packaged_install() -> bool:
+    """Return True iff we are running inside a packaged NEXO install.
+
+    Evaluated on every call because tests may stage a fake repo (or drop a
+    synthetic .git marker) after the module has already been imported.
+    """
+    return not (_REPO_CANDIDATE / ".git").exists() and not (_REPO_CANDIDATE / ".git").is_file()
+
+
 NEXO_HOME = export_resolved_nexo_home()
 DATA_DIR = paths.data_dir()
 BACKUP_BASE = paths.backups_dir()
 
 # In packaged installs, update.py lives at <NEXO_HOME>/plugins/update.py.
-_PACKAGED_INSTALL = not (_REPO_CANDIDATE / ".git").exists() and not (_REPO_CANDIDATE / ".git").is_file()
+_PACKAGED_INSTALL = _is_packaged_install()
 REPO_DIR = CODE_ROOT if _PACKAGED_INSTALL else _REPO_CANDIDATE
 SRC_DIR = CODE_ROOT
 PACKAGE_JSON = REPO_DIR / "package.json"
 
 
-def _venv_python_path(runtime_root: Path = NEXO_HOME) -> Path:
+def _venv_python_path(runtime_root: Path | None = None) -> Path:
+    root = runtime_root or _nexo_home()
     if sys.platform == "win32":
-        return runtime_root / ".venv" / "Scripts" / "python.exe"
-    return runtime_root / ".venv" / "bin" / "python3"
+        return root / ".venv" / "Scripts" / "python.exe"
+    return root / ".venv" / "bin" / "python3"
 
 
-def _venv_pip_path(runtime_root: Path = NEXO_HOME) -> Path:
+def _venv_pip_path(runtime_root: Path | None = None) -> Path:
+    root = runtime_root or _nexo_home()
     if sys.platform == "win32":
-        return runtime_root / ".venv" / "Scripts" / "pip.exe"
-    return runtime_root / ".venv" / "bin" / "pip"
+        return root / ".venv" / "Scripts" / "pip.exe"
+    return root / ".venv" / "bin" / "pip"
 
 
-def _ensure_managed_venv(runtime_root: Path = NEXO_HOME) -> str | None:
-    venv_python = _venv_python_path(runtime_root)
+def _ensure_managed_venv(runtime_root: Path | None = None) -> str | None:
+    root = runtime_root or _nexo_home()
+    venv_python = _venv_python_path(root)
     if venv_python.exists():
         return None
     try:
-        runtime_root.mkdir(parents=True, exist_ok=True)
+        root.mkdir(parents=True, exist_ok=True)
         result = subprocess.run(
-            [sys.executable, "-m", "venv", str(runtime_root / ".venv")],
+            [sys.executable, "-m", "venv", str(root / ".venv")],
             capture_output=True,
             text=True,
             timeout=120,
@@ -173,7 +203,7 @@ def _runtime_code_root(runtime_root: Path | None = None) -> Path:
 
 def _core_artifact_source_dir() -> Path | None:
     """Return the canonical source directory for packaged core artifacts."""
-    if _PACKAGED_INSTALL:
+    if _is_packaged_install():
         return _find_npm_pkg_src()
     return SRC_DIR
 
@@ -241,7 +271,7 @@ def _cleanup_retired_runtime_files() -> list[str]:
 
 def _read_version() -> str:
     """Read the installed/runtime version."""
-    if _PACKAGED_INSTALL:
+    if _is_packaged_install():
         # version.json is the runtime truth for packaged installs.
         try:
             version_file = NEXO_HOME / "version.json"
@@ -286,7 +316,7 @@ def _requirements_hash() -> str:
     """Return a content hash of requirements.txt, or empty string if missing."""
     import hashlib
     req_file = SRC_DIR / "requirements.txt"
-    if not req_file.exists() and _PACKAGED_INSTALL:
+    if not req_file.exists() and _is_packaged_install():
         npm_src = _find_npm_pkg_src()
         if npm_src:
             req_file = npm_src / "requirements.txt"
@@ -441,7 +471,7 @@ def _restore_databases(backup_dir: str):
 def _reinstall_pip_deps() -> str | None:
     """Reinstall Python dependencies from requirements.txt into the managed venv."""
     req_file = SRC_DIR / "requirements.txt"
-    if not req_file.exists() and _PACKAGED_INSTALL:
+    if not req_file.exists() and _is_packaged_install():
         # In packaged mode, requirements.txt lives in the npm package's src/ dir
         npm_src = _find_npm_pkg_src()
         if npm_src:
@@ -714,7 +744,7 @@ def _format_dep_results(dep_results: list[dict]) -> list[str]:
 def _run_migrations() -> str | None:
     """Run init_db() to apply pending migrations. Returns error or None."""
     # In packaged mode, db/ lives in NEXO_HOME; in dev mode, in SRC_DIR
-    cwd = str(NEXO_HOME) if _PACKAGED_INSTALL else str(SRC_DIR)
+    cwd = str(NEXO_HOME) if _is_packaged_install() else str(SRC_DIR)
     try:
         result = subprocess.run(
             [sys.executable, "-c", "import db; db.init_db()"],
@@ -733,7 +763,7 @@ def _run_migrations() -> str | None:
 def _verify_import() -> str | None:
     """Verify server.py can be imported successfully."""
     # In packaged mode, server.py lives in NEXO_HOME; in dev mode, in SRC_DIR
-    cwd = str(NEXO_HOME) if _PACKAGED_INSTALL else str(SRC_DIR)
+    cwd = str(NEXO_HOME) if _is_packaged_install() else str(SRC_DIR)
     try:
         result = subprocess.run(
             [sys.executable, "-c", "import server"],
