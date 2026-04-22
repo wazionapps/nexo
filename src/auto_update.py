@@ -4648,6 +4648,26 @@ def _run_runtime_post_sync(dest: Path = NEXO_HOME, progress_fn=None) -> tuple[bo
     except Exception as exc:
         actions.append(f"classifier-install-warning:{exc.__class__.__name__}")
 
+    try:
+        _emit_progress(progress_fn, "Persisting Guardian enforcement defaults...")
+        persisted, persist_message = _persist_guardian_hard_defaults(dest)
+        if persisted:
+            actions.append("guardian-hard-persisted")
+        if persist_message:
+            actions.append(persist_message)
+    except Exception as exc:
+        actions.append(f"guardian-hard-persist-warning:{exc.__class__.__name__}")
+
+    try:
+        _emit_progress(progress_fn, "Promoting adaptive weights if enough data...")
+        promoted, promote_message = _maybe_promote_adaptive_weights_empirically(dest)
+        if promoted:
+            actions.append("adaptive-weights-promoted")
+        if promote_message:
+            actions.append(promote_message)
+    except Exception as exc:
+        actions.append(f"adaptive-weights-promote-warning:{exc.__class__.__name__}")
+
     _emit_progress(progress_fn, "Verifying runtime imports...")
     verify = subprocess.run(
         [sys.executable, "-c", "import server"],
@@ -4693,6 +4713,177 @@ def _emit_progress(progress_fn, message: str) -> None:
             progress_fn(message)
         except Exception:
             pass
+
+
+_GUARDIAN_PERSIST_HARD_DEFAULTS = {
+    "G1_ENFORCER_ACTIVE": "hard",
+    "G3_ENFORCE_DESTRUCTIVE": "hard",
+    "G3_SSH_ENFORCE_REMOTE_WRITE": "hard",
+    "G4_ENFORCE_GUARD_CHECK": "hard",
+}
+
+
+def _persist_guardian_hard_defaults(dest: Path) -> tuple[bool, str | None]:
+    """Write ``~/.nexo/config/guardian-runtime-overrides.json`` with the
+    v7.2.0 "Guardian-on by default" matrix so operators get the active
+    enforcer experience without setting env vars every shell.
+
+    Returns (persisted, message). ``persisted`` is True when the file was
+    written or updated during this call; False when we left it alone
+    (operator opt-out, or file already matches the defaults).
+
+    Contract:
+        - Operator opt-out with ``NEXO_GUARDIAN_PERSIST_HARD=off`` in env
+          at update time: leave the file untouched.
+        - Ephemeral runtimes: skip.
+        - Never overwrite a key the operator already customized to a
+          non-default value (``shadow`` / ``off`` / anything else). Only
+          fills missing keys or upgrades explicit defaults.
+    """
+    if _is_ephemeral_runtime_install(dest):
+        return False, "guardian-hard-persist-skipped:ephemeral"
+    if os.environ.get("NEXO_GUARDIAN_PERSIST_HARD", "").strip().lower() == "off":
+        return False, "guardian-hard-persist-skipped:operator-opt-out"
+
+    config_path = dest / "personal" / "config" / "guardian-runtime-overrides.json"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+
+    current: dict[str, str] = {}
+    if config_path.is_file():
+        try:
+            raw = json.loads(config_path.read_text())
+            if isinstance(raw, dict):
+                current = {str(k): str(v) for k, v in raw.items()}
+        except Exception:
+            # Malformed file — treat as empty. We write the fresh defaults
+            # and keep the malformed copy for the operator to inspect.
+            try:
+                config_path.rename(
+                    config_path.with_suffix(
+                        config_path.suffix + f".broken-{int(time.time())}"
+                    )
+                )
+            except Exception:
+                pass
+            current = {}
+
+    original = dict(current)
+    for key, default in _GUARDIAN_PERSIST_HARD_DEFAULTS.items():
+        if key not in current:
+            current[key] = default
+
+    if current == original and config_path.is_file():
+        return False, None
+
+    try:
+        tmp_path = config_path.with_suffix(config_path.suffix + ".tmp")
+        tmp_path.write_text(json.dumps(current, indent=2, ensure_ascii=False) + "\n")
+        tmp_path.replace(config_path)
+    except Exception as exc:  # pragma: no cover - filesystem failures
+        return False, f"guardian-hard-persist-error:{exc.__class__.__name__}"
+
+    return True, None
+
+
+from datetime import datetime as _adaptive_datetime  # isolated alias; other modules use ``time.time()``
+
+_ADAPTIVE_PROMOTE_MIN_SAMPLES = 200
+_ADAPTIVE_PROMOTE_MIN_DAYS = 2
+
+
+def _maybe_promote_adaptive_weights_empirically(dest: Path) -> tuple[bool, str | None]:
+    """Promote ``shadow_weights`` to ``learned_weights`` during ``nexo update``
+    when the install already has enough empirical signal.
+
+    Mirrors the empirical path in ``adaptive_mode.learn_weights`` (the
+    background learner cron). Without this, operators upgrading to v7.2.0
+    with a mature shadow dataset would still have to wait for the next
+    learner tick to feel the calibration — which can be hours or days.
+
+    Conditions to promote:
+        - adaptive_state.json exists and parses.
+        - ``shadow_weights`` dict is present.
+        - ``shadow_weights_samples >= 200`` AND the learner has been
+          running for at least 2 calendar days
+          (``learned_weights_first_date`` ≥ 2 days ago).
+        - ``learned_weights`` is absent or empty (never overwrite an
+          already-active set of weights).
+        - Operator opt-out flag ``NEXO_ADAPTIVE_EMPIRICAL_PROMOTION=off``
+          is NOT set. Same flag the learner already honours, so
+          operators who opted out stay opted out everywhere.
+
+    Returns ``(promoted, message)``:
+        - ``(True, None)``: weights were promoted, audit trail written.
+        - ``(False, None)``: no-op (no shadow data, not enough samples,
+          already promoted, or ephemeral install).
+        - ``(False, "adaptive-promote-skipped:<reason>")``: explicit skip
+          for the install log.
+    """
+    if _is_ephemeral_runtime_install(dest):
+        return False, "adaptive-promote-skipped:ephemeral"
+    if os.environ.get("NEXO_ADAPTIVE_EMPIRICAL_PROMOTION", "").strip().lower() == "off":
+        return False, "adaptive-promote-skipped:operator-opt-out"
+
+    state_path = dest / "personal" / "brain" / "adaptive_state.json"
+    if not state_path.is_file():
+        # Fall back to the legacy pre-F0.6 location for half-migrated
+        # installs; the migrator will eventually move it.
+        legacy = dest / "brain" / "adaptive_state.json"
+        if legacy.is_file():
+            state_path = legacy
+        else:
+            return False, None  # no data yet — nothing to promote
+
+    try:
+        raw = json.loads(state_path.read_text())
+    except Exception:
+        return False, "adaptive-promote-skipped:state-parse-error"
+    if not isinstance(raw, dict):
+        return False, "adaptive-promote-skipped:state-not-dict"
+
+    learned = raw.get("learned_weights")
+    if isinstance(learned, dict) and learned:
+        return False, None  # already active — nothing to do
+
+    shadow = raw.get("shadow_weights")
+    if not isinstance(shadow, dict) or not shadow:
+        return False, None  # no shadow data yet
+
+    samples = 0
+    try:
+        samples = int(raw.get("shadow_weights_samples", 0) or 0)
+    except (TypeError, ValueError):
+        samples = 0
+    if samples < _ADAPTIVE_PROMOTE_MIN_SAMPLES:
+        return False, None
+
+    first_date_raw = str(raw.get("learned_weights_first_date") or "").strip()
+    if not first_date_raw:
+        return False, None
+    try:
+        first_dt = _adaptive_datetime.strptime(first_date_raw[:19], "%Y-%m-%dT%H:%M:%S")
+    except ValueError:
+        return False, "adaptive-promote-skipped:first-date-parse-error"
+    days_since_first = (_adaptive_datetime.utcnow() - first_dt).days
+    if days_since_first < _ADAPTIVE_PROMOTE_MIN_DAYS:
+        return False, None
+
+    # Promote — deep-copy so callers holding references to the original
+    # dict don't see phantom mutations mid-update.
+    raw["learned_weights"] = {str(k): v for k, v in shadow.items()}
+    raw["learned_weights_date"] = _adaptive_datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
+    raw["learned_weights_samples"] = samples
+    raw["learned_weights_promoted_by"] = "nexo_update_empirical_v7_2_0"
+    raw["learned_weights_promoted_at"] = _adaptive_datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
+
+    try:
+        tmp_path = state_path.with_suffix(state_path.suffix + ".tmp")
+        tmp_path.write_text(json.dumps(raw, indent=2, ensure_ascii=False) + "\n")
+        tmp_path.replace(state_path)
+    except Exception as exc:  # pragma: no cover - filesystem failures
+        return False, f"adaptive-promote-error:{exc.__class__.__name__}"
+
+    return True, None
 
 
 def _parse_runtime_init_payload(stdout: str) -> dict:

@@ -156,6 +156,82 @@ def _classify_destructive_intent(command: str) -> str | None:
     return None
 
 
+# Block K G3 (SSH wrapper): remote-write patterns the local destructive
+# gate never sees because they run inside ``ssh host '...'`` / rsync /
+# scp / sftp. Matched against the raw Bash command string.
+# Each regex aims to catch a well-known write primitive *inside* a remote
+# invocation. ``ssh host 'ls'`` must not match — only write-verbs do.
+_SSH_REMOTE_SHELL_RE = re.compile(
+    r"\bssh\b[^'\"`]*?(?:['\"`])(?P<remote>[^'\"`]+)(?:['\"`])",
+    re.IGNORECASE,
+)
+_SSH_REMOTE_WRITE_VERBS = (
+    re.compile(r"^\s*cat\s*>\s*\S", re.IGNORECASE),                  # cat > file
+    re.compile(r"^\s*cat\s*>>\s*\S", re.IGNORECASE),                 # cat >> file
+    re.compile(r"\btee\s+(?:-\S+\s+)*[^\s|&;]+", re.IGNORECASE),      # tee [-a] file
+    re.compile(r"^\s*(?:echo|printf)\s+.*\s+>>?\s*\S", re.IGNORECASE),  # echo ... > file
+    re.compile(r"\bsed\s+-i\b", re.IGNORECASE),                      # sed -i ...
+    re.compile(r"(?:^|\s)>\s*\S", re.IGNORECASE),                    # bare > file
+    re.compile(r"(?:^|\s)>>\s*\S", re.IGNORECASE),                   # bare >> file
+    re.compile(r"\brm\s+-\S*[rRfF]", re.IGNORECASE),                 # remote rm -rf
+    re.compile(r"\bmv\s+\S+\s+\S+", re.IGNORECASE),                  # remote mv
+    re.compile(r"\bcp\s+\S+\s+\S+", re.IGNORECASE),                  # remote cp
+)
+_SCP_WRITE_RE = re.compile(
+    r"\bscp\b[^|&;]*?\s\S+\s+[^:\s]+:[^\s]+",
+    re.IGNORECASE,
+)
+_RSYNC_WRITE_RE = re.compile(
+    r"\brsync\b[^|&;]*?\s\S+\s+[^:\s]+:[^\s]+",
+    re.IGNORECASE,
+)
+_SFTP_BATCH_RE = re.compile(
+    r"\bsftp\b(?:[^|&;]*\s)?-b\s+\S+",
+    re.IGNORECASE,
+)
+
+
+def _classify_ssh_remote_write(command: str) -> str | None:
+    """Return the matching pattern name when ``command`` writes to a remote host.
+
+    Covers four shapes:
+        1. ``ssh host '<remote-shell-that-writes>'`` with or without
+           ``-o`` flags, using single/double/backtick quoting.
+        2. ``scp LOCAL_PATH host:REMOTE_PATH`` (upload direction).
+        3. ``rsync [opts] LOCAL_PATH host:REMOTE_PATH`` (upload direction).
+        4. ``sftp -b batchfile host`` (any -b invocation is considered a
+           write candidate because the batch may mutate).
+
+    Ignores read-only invocations such as ``ssh host 'ls /etc'`` or
+    ``scp host:REMOTE /local/`` (download), which is the common case.
+    """
+    cmd = str(command or "")
+
+    if _SCP_WRITE_RE.search(cmd):
+        # Disambiguate download (host:remote local) vs upload (local host:remote).
+        # Simple rule: if the FIRST ``host:path`` argument is preceded by a
+        # local-looking arg, treat as upload.
+        download = re.search(r"\bscp\b[^|&;]*?\s[^:\s]+:\S+\s+\S+", cmd)
+        if not download:
+            return "scp_remote_write"
+    if _RSYNC_WRITE_RE.search(cmd):
+        download = re.search(r"\brsync\b[^|&;]*?\s[^:\s]+:\S+\s+\S+", cmd)
+        if not download:
+            return "rsync_remote_write"
+    if _SFTP_BATCH_RE.search(cmd):
+        return "sftp_batch_remote_write"
+
+    for match in _SSH_REMOTE_SHELL_RE.finditer(cmd):
+        remote = match.group("remote") or ""
+        # Strip leading "sudo ", "env VAR=x ", "cd dir &&" — they never mean
+        # a write by themselves, and may hide real writes behind them.
+        trimmed = re.sub(r"^\s*(?:sudo\s+|env\s+\S+=\S+\s+|cd\s+\S+\s*&&\s*)+", "", remote)
+        for pattern in _SSH_REMOTE_WRITE_VERBS:
+            if pattern.search(trimmed):
+                return "ssh_remote_shell_write"
+    return None
+
+
 def _operation_kind(tool_name: str) -> str:
     if tool_name in READ_LIKE_TOOLS:
         return "read"
@@ -1011,7 +1087,11 @@ def process_pre_tool_event(payload: dict) -> dict:
     # NEXO_G3_ENFORCE_DESTRUCTIVE (default "shadow"): shadow records a
     # warn-severity debt for observability; hard blocks the operation
     # with error severity; off disables the gate entirely.
-    g3_mode = os.environ.get("NEXO_G3_ENFORCE_DESTRUCTIVE", "shadow").strip().lower()
+    try:
+        from guardian_runtime_config import resolve_guardian_flag
+        g3_mode = resolve_guardian_flag("G3_ENFORCE_DESTRUCTIVE", default="shadow")
+    except Exception:
+        g3_mode = os.environ.get("NEXO_G3_ENFORCE_DESTRUCTIVE", "shadow").strip().lower()
     if g3_mode in {"shadow", "hard"} and tool_name == "Bash":
         shell_command = _extract_bash_command(tool_input)
         destructive_pattern = _classify_destructive_intent(shell_command)
@@ -1053,6 +1133,62 @@ def process_pre_tool_event(payload: dict) -> dict:
                     "g3_mode": g3_mode,
                 }
 
+    # Block K G3 SSH wrapper (Francisco 2026-04-22 v7.2.0): remote-write
+    # commands routed through ssh/rsync/scp/sftp never reach the local
+    # destructive gate. Gated by NEXO_G3_SSH_ENFORCE_REMOTE_WRITE (default
+    # "shadow") mirroring the destructive-local flag shape. Shadow logs a
+    # warn debt row; hard blocks with error severity; off disables.
+    try:
+        from guardian_runtime_config import resolve_guardian_flag
+        g3_ssh_mode = resolve_guardian_flag(
+            "G3_SSH_ENFORCE_REMOTE_WRITE", default="shadow"
+        )
+    except Exception:
+        g3_ssh_mode = os.environ.get(
+            "NEXO_G3_SSH_ENFORCE_REMOTE_WRITE", "shadow"
+        ).strip().lower()
+    if g3_ssh_mode in {"shadow", "hard"} and tool_name == "Bash":
+        shell_command = _extract_bash_command(tool_input)
+        ssh_pattern = _classify_ssh_remote_write(shell_command)
+        if ssh_pattern:
+            severity = "error" if g3_ssh_mode == "hard" else "warn"
+            debt = _ensure_protocol_debt(
+                conn,
+                session_id=sid,
+                task_id="",
+                debt_type="g3_ssh_remote_write_requires_cortex",
+                severity=severity,
+                evidence=(
+                    f"Bash command matched SSH remote-write pattern '{ssh_pattern}'. "
+                    f"Command head: {shell_command[:160]}. "
+                    "Run nexo_cortex_decide (or nexo_task_open for the session) "
+                    "and record evidence before retrying."
+                ),
+                file_token=ssh_pattern,
+            )
+            if g3_ssh_mode == "hard":
+                return {
+                    "ok": True,
+                    "session_id": sid,
+                    "tool_name": tool_name,
+                    "operation": op,
+                    "strictness": strictness,
+                    "blocks": [
+                        {
+                            "file": "",
+                            "task_id": "",
+                            "debt_id": debt.get("id"),
+                            "debt_type": "g3_ssh_remote_write_requires_cortex",
+                            "reason_code": "g3_ssh_remote_write_blocked",
+                            "severity": "error",
+                            "pattern": ssh_pattern,
+                            "g3_ssh_mode": g3_ssh_mode,
+                        }
+                    ],
+                    "status": "blocked",
+                    "g3_ssh_mode": g3_ssh_mode,
+                }
+
     # Block K G4 (Francisco 2026-04-22): require nexo_guard_check to have
     # run within the session for every file about to be written. Opt-in
     # via NEXO_G4_ENFORCE_GUARD_CHECK (default "shadow"): ``shadow``
@@ -1061,7 +1197,11 @@ def process_pre_tool_event(payload: dict) -> dict:
     # so the operator must run guard_check explicitly. Skipped entirely
     # in lenient mode or when there are no files, since the existing
     # strict-mode path already covers those cases with its own gating.
-    g4_mode = os.environ.get("NEXO_G4_ENFORCE_GUARD_CHECK", "shadow").strip().lower()
+    try:
+        from guardian_runtime_config import resolve_guardian_flag
+        g4_mode = resolve_guardian_flag("G4_ENFORCE_GUARD_CHECK", default="shadow")
+    except Exception:
+        g4_mode = os.environ.get("NEXO_G4_ENFORCE_GUARD_CHECK", "shadow").strip().lower()
     if g4_mode in {"shadow", "hard"} and files and sid:
         g4_blocks: list[dict] = []
         g4_warnings: list[dict] = []
