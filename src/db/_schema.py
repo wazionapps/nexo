@@ -1222,6 +1222,21 @@ def _m45_personal_scripts_origin(conn):
     _migrate_add_index(conn, "idx_personal_scripts_origin", "personal_scripts", "origin")
 
 
+def _m49_protocol_guard_ack_backfill(conn):
+    """Backfill protocol guard-ack columns for installs that already marked
+    migration v22 as applied before those columns were added to the migration
+    body.
+
+    This must remain a standalone migration instead of reusing v22 because
+    real runtimes can legitimately sit at schema version 48 with an older
+    ``protocol_tasks`` shape. Re-running ``init_db()`` skips v22 once it is
+    recorded in ``schema_migrations``, so the missing columns never land
+    without a new version.
+    """
+    _migrate_add_column(conn, "protocol_tasks", "guard_acknowledged", "INTEGER NOT NULL DEFAULT 0")
+    _migrate_add_column(conn, "protocol_tasks", "guard_acknowledged_at", "TEXT DEFAULT NULL")
+
+
 def _m44_entities_extended_schema(conn):
     """Plan Consolidado 0.3 — extend entities with aliases/metadata/source/confidence/access_mode.
 
@@ -1291,6 +1306,7 @@ MIGRATIONS = [
     (46, "email_accounts", _m46_email_accounts),
     (47, "email_operator_accounts", _m47_email_operator_accounts),
     (48, "email_agent_contract_backfill", _m48_email_agent_contract_backfill),
+    (49, "protocol_guard_ack_backfill", _m49_protocol_guard_ack_backfill),
 ]
 
 
