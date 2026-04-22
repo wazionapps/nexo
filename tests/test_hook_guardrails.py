@@ -937,3 +937,96 @@ def test_g3_off_records_nothing(guardrail_env, monkeypatch):
         "SELECT COUNT(*) FROM protocol_debt WHERE debt_type = 'g3_destructive_command_requires_cortex'"
     ).fetchone()[0]
     assert count == 0
+
+
+# --- Block K G4: guard_check required before Edit/Write --------------------
+# G4 ships in shadow mode by default (warn-only) so existing sessions do
+# not break. Setting NEXO_G4_ENFORCE_GUARD_CHECK=hard promotes the
+# violation to a hard block.
+
+
+def test_g4_shadow_mode_is_default_and_does_not_block(guardrail_env, monkeypatch):
+    monkeypatch.setenv("NEXO_HOME", str(guardrail_env))
+    monkeypatch.delenv("NEXO_G4_ENFORCE_GUARD_CHECK", raising=False)
+    db, hook_guardrails = _reload_guardrail_stack()
+    db.init_db()
+    monkeypatch.setattr(hook_guardrails, "get_protocol_strictness", lambda: "lenient")
+    monkeypatch.setattr(hook_guardrails, "core_writes_allowed", lambda: False)
+    db.register_session(
+        "nexo-2040-3040",
+        "g4 shadow default",
+        external_session_id="claude-g4-shadow",
+        session_client="claude_code",
+    )
+
+    result = hook_guardrails.process_pre_tool_event(
+        {
+            "session_id": "claude-g4-shadow",
+            "tool_name": "Edit",
+            "tool_input": {"file_path": "/tmp/nexo-g4-target.py"},
+        }
+    )
+    # Shadow mode does not inject into ``blocks`` and falls through to
+    # the lenient skip branch.
+    assert result.get("status") != "blocked"
+    # But it DID record a warn-severity debt so the telemetry / morning
+    # briefing can flag it later.
+    debt_row = db.get_db().execute(
+        "SELECT severity FROM protocol_debt WHERE debt_type = 'g4_guard_check_required'"
+    ).fetchone()
+    assert debt_row is not None
+    assert debt_row["severity"] == "warn"
+
+
+def test_g4_hard_mode_blocks_write_without_guard_check(guardrail_env, monkeypatch):
+    monkeypatch.setenv("NEXO_HOME", str(guardrail_env))
+    monkeypatch.setenv("NEXO_G4_ENFORCE_GUARD_CHECK", "hard")
+    db, hook_guardrails = _reload_guardrail_stack()
+    db.init_db()
+    monkeypatch.setattr(hook_guardrails, "get_protocol_strictness", lambda: "lenient")
+    monkeypatch.setattr(hook_guardrails, "core_writes_allowed", lambda: False)
+    db.register_session(
+        "nexo-2041-3041",
+        "g4 hard mode",
+        external_session_id="claude-g4-hard",
+        session_client="claude_code",
+    )
+
+    result = hook_guardrails.process_pre_tool_event(
+        {
+            "session_id": "claude-g4-hard",
+            "tool_name": "Edit",
+            "tool_input": {"file_path": "/tmp/nexo-g4-target.py"},
+        }
+    )
+    assert result["status"] == "blocked"
+    assert result["blocks"][0]["debt_type"] == "g4_guard_check_required"
+    assert result["blocks"][0]["severity"] == "error"
+    assert result["g4_mode"] == "hard"
+
+
+def test_g4_off_does_not_record_debt(guardrail_env, monkeypatch):
+    monkeypatch.setenv("NEXO_HOME", str(guardrail_env))
+    monkeypatch.setenv("NEXO_G4_ENFORCE_GUARD_CHECK", "off")
+    db, hook_guardrails = _reload_guardrail_stack()
+    db.init_db()
+    monkeypatch.setattr(hook_guardrails, "get_protocol_strictness", lambda: "lenient")
+    monkeypatch.setattr(hook_guardrails, "core_writes_allowed", lambda: False)
+    db.register_session(
+        "nexo-2042-3042",
+        "g4 off",
+        external_session_id="claude-g4-off",
+        session_client="claude_code",
+    )
+
+    hook_guardrails.process_pre_tool_event(
+        {
+            "session_id": "claude-g4-off",
+            "tool_name": "Edit",
+            "tool_input": {"file_path": "/tmp/nexo-g4-target.py"},
+        }
+    )
+    debt_count = db.get_db().execute(
+        "SELECT COUNT(*) FROM protocol_debt WHERE debt_type = 'g4_guard_check_required'"
+    ).fetchone()[0]
+    assert debt_count == 0
