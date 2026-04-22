@@ -42,17 +42,57 @@ VALID_STATUSES = {
     STATUS_OFF,
 }
 
-NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+# Path resolution moved to lazy functions (AUDITOR-V700-PASS2 §11, B10 item
+# 3). The previous module-level constants were evaluated at import time, so
+# any caller that monkeypatched NEXO_HOME or ``paths.operations_dir()`` after
+# import kept seeing the stale values. PEP 562 ``__getattr__`` below still
+# exposes ``public_contribution.NEXO_HOME`` / ``CONTRIB_ROOT`` / etc. for
+# legacy callers that access them as module attributes — re-evaluated on
+# every access. A call like ``from public_contribution import CONTRIB_ROOT``
+# still snapshots at import, which is the intended behaviour for scripts
+# whose NEXO_HOME is fixed before they start.
+
+
+def _nexo_home() -> Path:
+    return Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+
+
 # Public-contribution staging lives under ``NEXO_HOME / contrib`` (the mirror
 # clone of the public repo plus per-proposal worktrees). It is intentionally
 # outside ``paths.operations_dir()`` because it holds an actual git clone, not
-# operational artifacts. Artifacts (logs, proposal payloads) live at
-# ``CONTRIB_ARTIFACTS_DIR`` below. If this ever relocates, migrate the existing
-# clone + open worktrees — do NOT delete and reclone blindly.
-CONTRIB_ROOT = NEXO_HOME / "contrib" / "public-core"
-CONTRIB_REPO_DIR = CONTRIB_ROOT / "repo"
-CONTRIB_WORKTREES_DIR = CONTRIB_ROOT / "worktrees"
-CONTRIB_ARTIFACTS_DIR = paths.operations_dir() / "public-contrib"
+# operational artifacts. Artifacts (logs, proposal payloads) live under
+# ``_contrib_artifacts_dir()`` below. If this ever relocates, migrate the
+# existing clone + open worktrees — do NOT delete and reclone blindly.
+def _contrib_root() -> Path:
+    return _nexo_home() / "contrib" / "public-core"
+
+
+def _contrib_repo_dir() -> Path:
+    return _contrib_root() / "repo"
+
+
+def _contrib_worktrees_dir() -> Path:
+    return _contrib_root() / "worktrees"
+
+
+def _contrib_artifacts_dir() -> Path:
+    return paths.operations_dir() / "public-contrib"
+
+
+_LAZY_PATHS = {
+    "NEXO_HOME": _nexo_home,
+    "CONTRIB_ROOT": _contrib_root,
+    "CONTRIB_REPO_DIR": _contrib_repo_dir,
+    "CONTRIB_WORKTREES_DIR": _contrib_worktrees_dir,
+    "CONTRIB_ARTIFACTS_DIR": _contrib_artifacts_dir,
+}
+
+
+def __getattr__(name: str):
+    resolver = _LAZY_PATHS.get(name)
+    if resolver is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    return resolver()
 
 
 def _utcnow() -> datetime:
