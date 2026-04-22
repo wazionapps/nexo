@@ -1755,6 +1755,21 @@ def _terminal_client_label(client: str) -> str:
 
 
 def _ordered_available_terminal_clients(preferences: dict, detected: dict) -> list[str]:
+    """Return the terminal clients we should offer the operator, in priority order.
+
+    Policy:
+      1. Clients that are BOTH detected installed AND enabled in preferences
+         keep their priority (``last_used`` → ``default`` → TERMINAL_CLIENT_ORDER).
+      2. If that primary list ends up with ≤1 choice, we also surface every
+         other DETECTED-INSTALLED client even when it is not yet marked
+         ``enabled`` in preferences. Rationale (bug Francisco 2026-04-22):
+         operators with both Claude Code and Codex installed were being
+         dropped straight into whichever one was last used (or the only one
+         ever enabled) with no chance to pick. ``nexo chat`` must offer the
+         picker whenever more than one interactive client is available on
+         the machine; the preferences flag stays as a *priority* signal, not
+         as a hard filter that hides a legitimately installed CLI.
+    """
     enabled = preferences.get("interactive_clients", {})
     last_used = str(preferences.get("last_terminal_client", "")).strip()
     preferred = str(preferences.get("default_terminal_client", "")).strip()
@@ -1764,11 +1779,22 @@ def _ordered_available_terminal_clients(preferences: dict, detected: dict) -> li
         if client in TERMINAL_CLIENT_ORDER and client not in ordered:
             ordered.append(client)
 
-    return [
+    primary = [
         client
         for client in ordered
         if enabled.get(client, False) and detected.get(client, {}).get("installed", False)
     ]
+    if len(primary) <= 1:
+        # Surface additional installed clients so the operator gets to pick
+        # whenever there is a genuine competing install on disk. We preserve
+        # the priority order built above so the picker still highlights the
+        # last-used/default client first.
+        for client in ordered:
+            if client in primary:
+                continue
+            if detected.get(client, {}).get("installed", False):
+                primary.append(client)
+    return primary
 
 
 def _preferred_terminal_client_label(preferences: dict, clients: list[str]) -> str:
