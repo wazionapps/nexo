@@ -1,5 +1,62 @@
 # Changelog
 
+## [7.4.0] - 2026-04-22
+
+Minor release. Ships the Brain-side half of the
+`guardian-claude-desktop-plan.md` pipeline that NEXO Desktop v0.24.0
+now depends on. Every conversation lifecycle transition on Desktop
+(close / delete / archive / switch / window-close / app-exit) is
+persisted to a durable queue BEFORE any UI mutation and then relayed
+to Brain through a new MCP tool for canonical processing with strict
+idempotency.
+
+### Added
+
+- **`nexo_lifecycle_event` MCP tool** (`src/plugins/lifecycle_events.py`).
+  Records a durable conversation lifecycle event from any client.
+  Returns a canonical ack — one of `processed`, `already_processed`,
+  `accepted`, `rejected`, `retryable_error`. Re-delivery of the same
+  `event_id` returns `already_processed` without re-running any side
+  effect: this is the backbone of "5. Idempotencia real" in the plan.
+  Companion `nexo_lifecycle_status(event_id)` exposes the stored row
+  for Desktop's boot-time reconciliation.
+- **`lifecycle_events` table** (migration m51). Keyed by `event_id`
+  (primary key / idempotency key) with `action`, `conversation_id`,
+  `session_id`, `reason`, `payload_snapshot`, `delivery_status`,
+  `retry_count`, `created_at`, `processed_at`, `last_error`. Indexed
+  on status / conv / action for fast reconciliation queries.
+- **`nexo lifecycle record` / `nexo lifecycle status` CLI
+  subcommands** (`src/cli.py`). Desktop main.js bridges to the plugin
+  through these without needing a new IPC surface. Exit codes map
+  cleanly onto the service ack: 0 terminal, 2 retryable_error, 3
+  rejected.
+- **`tool-enforcement-map.json`**: both tools registered under
+  category `lifecycle`, source `plugin:lifecycle_events`, enforcement
+  `none`. Total tools bumped 260 → 262; `verify_tool_map.py` passes.
+
+### Tests
+
+- `tests/test_lifecycle_events.py` (12 cases): first delivery marks
+  processed and sets `diary_triggered` per action; duplicate
+  `event_id` returns `already_processed` without side effects even
+  when the second call passes a different action / conversation;
+  `switch` does NOT trigger diary; malformed action / missing
+  event_id / missing conversation_id → `rejected` with specific
+  reasons; `payload_snapshot` roundtrip through the status tool;
+  status returns `not_found` for unknown ids; malformed JSON payload
+  falls back to `{_raw: ...}`; handler exception surfaces as
+  `retryable_error`; all four diary-triggering actions
+  (close/delete/archive/app-exit) set the flag, window-close does
+  not; `VALID_ACTIONS` constant is frozen to the plan set.
+
+### Notes
+
+- Desktop v0.24.0 consumes this release through `runNexoCommand("nexo
+  lifecycle ...")`. No new IPC added on the Desktop side beyond the
+  already-shipped `lifecycle-record` handler.
+- Install coordinates automatically via `nexo update`; DB migration
+  m51 is idempotent and runs on the next startup.
+
 ## [7.3.0] - 2026-04-22
 
 Hotfix minor release. Three critical bugs surfaced right after v7.2.0 went live and are all corrected here: the PreToolUse hook wire that made `guardian-runtime-overrides.json` a no-op, the post-sync hook ordering bug that ran new post-install hooks against the pre-upgrade module in memory, and the distribution gap that kept Desktop from ever discovering `tool-enforcement-map.json` on fresh installs. Also ships the remaining PE1 rapid items promised for this milestone.
