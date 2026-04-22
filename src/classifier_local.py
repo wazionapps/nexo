@@ -11,7 +11,12 @@ Contract:
         "lo hemos dejado, ya estaría",
         labels=("done_claim", "status_update", "question", "noise"),
     )
-    result == {"label": "done_claim", "confidence": 0.87, "scores": {...}}
+    # result is a ``ClassificationResult`` dataclass (see below):
+    #   result.label       == "done_claim"
+    #   result.confidence  == 0.87
+    #   result.scores      == {"done_claim": 0.87, ...}
+    # The dataclass keeps attribute access + ``asdict()`` compatibility
+    # for callers that previously consumed it as a dict.
 
 When transformers is not installed or the download fails (offline),
 `classify` returns `None` and `classify_fail_closed` returns a
