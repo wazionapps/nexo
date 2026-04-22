@@ -134,7 +134,7 @@
                     <span class="page-chip">Shared brain product notes</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="/blog/nexo-7-1-6/" class="btn btn-primary">Read latest release</a>
+                    <a href="/blog/nexo-7-1-10/" class="btn btn-primary">Read latest release</a>
                     <a href="/changelog/" class="btn btn-secondary">Latest release notes</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -144,23 +144,23 @@
                 <div class="section-label">Latest release</div>
                 <div class="blog-featured-meta">
                     <span class="compare-chip">April 22, 2026</span>
-                    <span class="compare-chip">Batch release</span>
-                    <span class="compare-chip">Guardian / Enforcer</span>
+                    <span class="compare-chip">Follow-up release</span>
+                    <span class="compare-chip">Autonomy mandate + release verifier</span>
                 </div>
-                <h2>NEXO 7.1.8: batch — Guardian/Enforcer roadmap G2/G3/G4/G7/G8 + hardcode cleanup + product guards</h2>
-                <p>v7.1.8 lands Block K Guardian/Enforcer roadmap items (auto-drain of stale <code>protocol_debt</code>, destructive-command pre-tool gate, <code>guard_check</code>-required gate, inline guard ack, Guardian Health in the morning briefing), Block D hardcode cleanup (classifier-backed <code>backfill_task_owner</code>, duplicate-learning migration v50, semantic-hardcodes audit), and Block E product guards (LaunchAgent plist protection, agent-name fallbacks, <code>francisco_emails</code> removed from exports).</p>
+                <h2>NEXO 7.1.10: follow-up — autonomy-mandate vocabulary + compact hooks + checkpoint_policy + smoke-artifact release verifier</h2>
+                <p>v7.1.10 is a follow-up over v7.1.8 that ships two rescue batches of WIP that were stashed aside during the v7.1.8 release window. First rescue: <code>src/autonomy_mandate.py</code> expands the mandate-detection vocabulary, adds three honest flags (<code>execute_until_blocker</code>, <code>suppress_mid_task_menus</code>, <code>revalidate_after_compaction</code>) with session filtering, wires post/pre-compact hooks, and introduces the new <code>src/checkpoint_policy.py</code> module. Second rescue: <code>scripts/verify_release_readiness.py</code> gains a smoke-artifact contract pass, the release-final audit skill references the new contract, and core prompts get wording polish.</p>
                 <div class="hero-actions" style="justify-content:flex-start;margin-bottom:18px;">
-                    <a href="/blog/nexo-7-1-8/" class="btn btn-primary">Open article</a>
-                    <a href="/changelog/#v718" class="btn btn-secondary">Open changelog</a>
+                    <a href="/blog/nexo-7-1-10/" class="btn btn-primary">Open article</a>
+                    <a href="/changelog/#v7110" class="btn btn-secondary">Open changelog</a>
                 </div>
                 <div class="blog-mini-stack">
                     <div class="blog-mini-card">
                         <strong>Companion view</strong>
-                        <span><a href="/changelog/#v718">See the full v7.1.8 changelog</a></span>
+                        <span><a href="/changelog/#v7110">See the full v7.1.10 changelog</a></span>
                     </div>
                     <div class="blog-mini-card">
                         <strong>Previous release</strong>
-                        <span><a href="/blog/nexo-7-1-7/">NEXO 7.1.7: patch — operator-facing email automation respects calibration language</a>.</span>
+                        <span><a href="/blog/nexo-7-1-8/">NEXO 7.1.8: batch — Guardian/Enforcer roadmap G2/G3/G4/G7/G8 + hardcode cleanup + product guards</a>.</span>
                     </div>
                 </div>
             </div>
@@ -172,6 +172,13 @@
 <section class="section-flush-top">
     <div class="container">
         <div class="blog-grid">
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 22, 2026</div>
+                <h2><a href="/blog/nexo-7-1-10/">NEXO 7.1.10: follow-up — autonomy-mandate vocabulary + compact hooks + checkpoint_policy + smoke-artifact release verifier</a></h2>
+                <p>Follow-up over v7.1.8. Ships two rescue batches: autonomy-mandate vocabulary expansion + session flags + post/pre-compact hooks + new <code>checkpoint_policy</code> module; and <code>verify_release_readiness.py</code> smoke-artifact contract pass + core prompt polish.</p>
+                <a href="/blog/nexo-7-1-10/" class="read-more">Read more &rarr;</a>
+            </div>
 
             <div class="blog-card">
                 <div class="blog-card-date">April 22, 2026</div>
