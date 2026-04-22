@@ -1,5 +1,64 @@
 # Changelog
 
+## [7.1.10] - 2026-04-22
+
+Follow-up release over v7.1.8. Ships two rescue batches of WIP that
+was stashed aside during the v7.1.8 release window so that commit
+could land clean. Both rescues are ortogonal to the v7.1.8 patchset,
+both are fully covered by tests, and both are shipped together here
+to keep the runtime coherent.
+
+### Added
+
+- `src/autonomy_mandate.py` expands the mandate-detection vocabulary
+  ("hazlo todo", "no pares", "estás al mando", "te dejo al mando",
+  "sigue sin parar", "haz el plan completo") and adds three
+  honest-to-state flags on `MandateState`:
+  `execute_until_blocker`, `suppress_mid_task_menus`,
+  `revalidate_after_compaction`, with session filtering via
+  `_state_applies_to_session`.
+- `src/hooks/post-compact.sh` + `src/hooks/pre-compact.sh`: hook
+  wiring that reads the new mandate flags so autonomous sessions
+  stay on course across context compactions.
+- `src/plugins/protocol.py` + `src/plugins/workflow.py` +
+  `src/tools_sessions.py`: surface the mandate flags through the
+  protocol + workflow handlers and propagate them on the session
+  payload.
+- `src/checkpoint_policy.py` (new) + `tests/test_checkpoint_policy.py`
+  (new): dedicated checkpoint policy module so long-horizon work has
+  an explicit place to store and evaluate its checkpoint cadence.
+- `scripts/verify_release_readiness.py` gains a smoke-artifact
+  contract pass: looks up
+  `release-contracts/smoke/v<version>.json`, validates timestamps +
+  schema, and surfaces mismatches before any tag pushes. ~250 new
+  lines of validator code. Covered by
+  `tests/test_verify_release_readiness.py` (+172 lines).
+- `src/skills/run-release-final-audit/{guide.md,script.py}`:
+  release-final audit skill now references the new smoke-artifact
+  contract.
+- `src/hook_guardrails.py` + `src/hooks/post_tool_use.py`: refine the
+  post-tool protocol reminder path. New contract test:
+  `tests/test_post_tool_use_protocol_reminder.py`.
+- `templates/core-prompts/hook-protocol-warning-task-close-evidence.md`
+  and `templates/core-prompts/r14-correction-learning-injection.md`:
+  small wording polish on the operator-visible prompts.
+- Test updates: `tests/test_autonomy_mandate.py`,
+  `tests/test_hot_context.py`,
+  `tests/test_shell_runtime_path_contract.py`,
+  `tests/test_core_prompts.py`, `tests/test_hook_guardrails.py`.
+
+### Verification
+
+- `pytest tests/test_autonomy_mandate.py tests/test_shell_runtime_path_contract.py
+  tests/test_checkpoint_policy.py tests/test_hot_context.py -q` → 38 passed.
+- `pytest tests/test_verify_release_readiness.py tests/test_core_prompts.py
+  tests/test_hook_guardrails.py tests/test_post_tool_use_protocol_reminder.py -q`
+  → 63 passed.
+- `scripts/verify_release_readiness.py --ci` → OK (changelog, repo
+  public surfaces, duplicate artifact hygiene, sync_release_artifacts
+  check, verify_client_parity, website).
+
+
 ## [7.1.8] - 2026-04-22
 
 Batch release of the overnight 2026-04-21 → 04-22 session: Block K
