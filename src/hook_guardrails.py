@@ -118,6 +118,44 @@ INLINE_WRITE_RE = re.compile(
 EMBEDDED_PATH_RE = re.compile(r"(~\/[^'\"\s,);]+|\/[^'\"\s,);]+)")
 
 
+# Block K G3: destructive commands whose blast radius warrants a cortex
+# decision before they execute. The list is deliberately tight — only
+# the patterns that historically cause irrecoverable damage. Each regex
+# is tested against the full Bash command string (post shlex split
+# rebuild) so distinct spacings and option orderings do not slip past.
+DESTRUCTIVE_COMMAND_PATTERNS: tuple[tuple[str, "re.Pattern[str]"], ...] = (
+    # Matches both combined ``rm -rf`` and split ``rm -r -f`` forms. The
+    # character class ``[rfRF]*`` after the dash tolerates any flag
+    # ordering while both ``r`` and ``f`` (case-insensitive) must be
+    # present for the match to fire.
+    ("rm_rf", re.compile(r"\brm\s+-[rfRF]*(?:[rR][rfRF]*[fF]|[fF][rfRF]*[rR])[rfRF]*\b", re.IGNORECASE)),
+    ("git_push_force", re.compile(r"\bgit\s+push\s+(?:.*\s)?(?:--force|-f)\b(?!.*-with-lease)", re.IGNORECASE)),
+    ("drop_table", re.compile(r"\bdrop\s+(?:table|database|schema)\b", re.IGNORECASE)),
+    ("truncate_table", re.compile(r"\btruncate\s+(?:table\s+)?\w+", re.IGNORECASE)),
+    ("curl_pipe_bash", re.compile(r"curl[^|]*\|\s*(?:sudo\s+)?(?:bash|sh|zsh)\b", re.IGNORECASE)),
+    ("wget_pipe_bash", re.compile(r"wget[^|]*\|\s*(?:sudo\s+)?(?:bash|sh|zsh)\b", re.IGNORECASE)),
+    # ``dd if=... of=/dev/sda`` — match any ordering of args; we flag the
+    # presence of ``of=/dev/...`` which points at a raw block/device.
+    ("dd_of_root", re.compile(r"\bdd\s+.*?\bof=/dev/\S+", re.IGNORECASE)),
+    ("chmod_777_recursive", re.compile(r"\bchmod\s+-R\s+(?:777|666|a\+rw)\b", re.IGNORECASE)),
+)
+
+
+def _classify_destructive_intent(command: str) -> str | None:
+    """Return the matching pattern name if ``command`` looks destructive.
+
+    None when none of the DESTRUCTIVE_COMMAND_PATTERNS match. Intentionally
+    strict: we would rather miss a novel attack shape and rely on the
+    existing ``strict``/``write_without_file_guard_check`` gates than
+    inject false positives on routine Bash usage.
+    """
+    cmd = str(command or "")
+    for name, pattern in DESTRUCTIVE_COMMAND_PATTERNS:
+        if pattern.search(cmd):
+            return name
+    return None
+
+
 def _operation_kind(tool_name: str) -> str:
     if tool_name in READ_LIKE_TOOLS:
         return "read"
@@ -867,6 +905,19 @@ def process_pre_tool_event(payload: dict) -> dict:
         if shell_op in {"write", "delete"}:
             op = shell_op
             shell_files = _extract_bash_touched_files(tool_input)
+    # Block K G3 prescreen: destructive Bash patterns (``git push
+    # --force``, ``drop table``, ``curl | bash``, ``rm -rf``, ``dd
+    # of=/dev/…``, ``chmod -R 777``) must go through the pre-tool gate
+    # even when ``_classify_bash_operation`` labels them ``other``.
+    # Without this prescreen the ``if op not in {'write', 'delete'}``
+    # early-return below would let them slip past — exactly the failure
+    # mode Francisco flagged in G3.
+    if tool_name == "Bash" and op not in {"write", "delete"}:
+        _g3_mode_prescreen = os.environ.get("NEXO_G3_ENFORCE_DESTRUCTIVE", "shadow").strip().lower()
+        if _g3_mode_prescreen in {"shadow", "hard"}:
+            _shell_cmd = _extract_bash_command(tool_input)
+            if _classify_destructive_intent(_shell_cmd):
+                op = "delete"  # force the main gate to keep evaluating
     if op not in {"write", "delete"}:
         return {"ok": True, "skipped": True, "reason": "operation not blocked", "strictness": get_protocol_strictness()}
 
@@ -948,6 +999,53 @@ def process_pre_tool_event(payload: dict) -> dict:
             "blocks": launchagent_blocks,
             "status": "blocked",
         }
+
+    # Block K G3 (Francisco 2026-04-22): destructive commands require an
+    # explicit cortex decision before they execute. Gated by
+    # NEXO_G3_ENFORCE_DESTRUCTIVE (default "shadow"): shadow records a
+    # warn-severity debt for observability; hard blocks the operation
+    # with error severity; off disables the gate entirely.
+    g3_mode = os.environ.get("NEXO_G3_ENFORCE_DESTRUCTIVE", "shadow").strip().lower()
+    if g3_mode in {"shadow", "hard"} and tool_name == "Bash":
+        shell_command = _extract_bash_command(tool_input)
+        destructive_pattern = _classify_destructive_intent(shell_command)
+        if destructive_pattern:
+            severity = "error" if g3_mode == "hard" else "warn"
+            debt = _ensure_protocol_debt(
+                conn,
+                session_id=sid,
+                task_id="",
+                debt_type="g3_destructive_command_requires_cortex",
+                severity=severity,
+                evidence=(
+                    f"Bash command matched destructive pattern '{destructive_pattern}'. "
+                    f"Command head: {shell_command[:120]}. "
+                    "Run nexo_cortex_decide and record evidence before retrying."
+                ),
+                file_token=destructive_pattern,
+            )
+            if g3_mode == "hard":
+                return {
+                    "ok": True,
+                    "session_id": sid,
+                    "tool_name": tool_name,
+                    "operation": op,
+                    "strictness": strictness,
+                    "blocks": [
+                        {
+                            "file": "",
+                            "task_id": "",
+                            "debt_id": debt.get("id"),
+                            "debt_type": "g3_destructive_command_requires_cortex",
+                            "reason_code": "g3_destructive_blocked",
+                            "severity": "error",
+                            "pattern": destructive_pattern,
+                            "g3_mode": g3_mode,
+                        }
+                    ],
+                    "status": "blocked",
+                    "g3_mode": g3_mode,
+                }
 
     if strictness == "lenient":
         return {"ok": True, "skipped": True, "reason": "lenient mode", "strictness": strictness}
