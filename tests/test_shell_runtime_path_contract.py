@@ -65,12 +65,14 @@ def test_compaction_and_tool_log_hooks_use_runtime_layout() -> None:
     assert 'OPERATIONS_DIR="$NEXO_HOME/runtime/operations"' in pre_compact
     assert 'NEXO_DB="$DATA_DIR/nexo.db"' in pre_compact
     assert 'LOG_FILE="$OPERATIONS_DIR/tool-logs/${TODAY}.jsonl"' in pre_compact
+    assert "import checkpoint_policy" in pre_compact
 
     post_compact = _read("src/hooks/post-compact.sh")
     assert 'DATA_DIR="$NEXO_HOME/runtime/data"' in post_compact
     assert 'OPERATIONS_DIR="$NEXO_HOME/runtime/operations"' in post_compact
     assert 'NEXO_DB="$DATA_DIR/nexo.db"' in post_compact
     assert 'LOG_FILE="$OPERATIONS_DIR/tool-logs/${TODAY}.jsonl"' in post_compact
+    assert 'AUTONOMY_STATE_FILE="$DATA_DIR/autonomy_mandate.json"' in post_compact
 
 
 def test_auxiliary_hooks_use_runtime_or_core_locations_first() -> None:

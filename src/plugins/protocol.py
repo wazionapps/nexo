@@ -1648,6 +1648,28 @@ def handle_task_close(
             status = "debt-open"
             next_action = "Resolve the open protocol debt next."
 
+    durable_checkpoint = None
+    try:
+        from checkpoint_policy import record_milestone
+
+        checkpoint_blockers = ""
+        if clean_outcome in {"partial", "failed"}:
+            checkpoint_blockers = (outcome_notes or clean_evidence or next_action).strip()
+        durable_checkpoint = record_milestone(
+            task.get("session_id") or sid,
+            reason=f"task_close:{clean_outcome}",
+            task=task.get("goal", ""),
+            task_status=("blocked" if clean_outcome in {"partial", "failed"} else "active"),
+            active_files=effective_files,
+            current_goal=task.get("goal", ""),
+            decisions_summary=(clean_change_summary or clean_outcome),
+            blockers=checkpoint_blockers,
+            reasoning_thread=(clean_evidence or outcome_notes or "")[:800],
+            next_step=(next_action if clean_outcome != "done" else ""),
+        )
+    except Exception:
+        durable_checkpoint = None
+
     response = {
         "ok": True,
         "task_id": task_id,
@@ -1668,6 +1690,8 @@ def handle_task_close(
         "status": status,
         "next_action": next_action,
     }
+    if durable_checkpoint:
+        response["durable_checkpoint"] = durable_checkpoint
     return json.dumps(response, ensure_ascii=False, indent=2)
 
 
