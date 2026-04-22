@@ -117,10 +117,17 @@ except Exception:
 fi
 
 # ── Layer 2: Emergency auto-diary before compaction ──────────────────
-# Write an actual session_diary entry (not draft) with mechanical summary
-# This is the parachute — if the LLM never wrote a diary, at least this exists
-if [ -f "$NEXO_DB" ]; then
-    python3 -c "
+# Write an actual session_diary entry (not draft) with mechanical summary.
+# This is the parachute — if the LLM never wrote a diary, at least this exists.
+#
+# v7.8.1 hotfix: must target the EXACT session compacting. Pre-v7.8.1 used
+# "latest active session" (ORDER BY last_update_epoch DESC LIMIT 1) which in
+# multi-conversation Desktop routinely wrote the diary onto the wrong conv.
+# Now we read TARGET_SID resolved from CLAUDE_SESSION_ID above. If it is
+# missing or does not exist in sessions, we fail-closed: no emergency diary
+# > wrong emergency diary. Layer 3 auto_flush is wired to the same SID.
+if [ -f "$NEXO_DB" ] && [ -n "$TARGET_SID" ] && [[ "$TARGET_SID" =~ ^nexo-[0-9]+-[0-9]+$ ]]; then
+    NEXO_PRECOMPACT_SID="$TARGET_SID" python3 -c "
 import json, sqlite3, os, sys
 from datetime import datetime
 
@@ -130,15 +137,21 @@ log_file = '$LOG_FILE'
 conn = sqlite3.connect(db_path, timeout=3)
 conn.row_factory = sqlite3.Row
 
-# Get latest active session
-row = conn.execute(
-    'SELECT sid, task FROM sessions ORDER BY last_update_epoch DESC LIMIT 1'
-).fetchone()
-if not row:
+# v7.8.1 — use the EXACT SID resolved by Layer 1 (from CLAUDE_SESSION_ID),
+# not the pre-v7.8 latest-active row which routinely belongs to a
+# different conversation.
+sid = os.environ.get('NEXO_PRECOMPACT_SID', '')
+if not sid:
     conn.close()
     sys.exit(0)
-
-sid = row['sid']
+row = conn.execute(
+    'SELECT sid, task FROM sessions WHERE sid = ? LIMIT 1', (sid,)
+).fetchone()
+if not row:
+    # SID not present — fail-closed, better skip than write against the
+    # wrong session.
+    conn.close()
+    sys.exit(0)
 task = row['task'] or 'unknown'
 
 # Check if a real diary already exists for this session
@@ -149,9 +162,12 @@ if has_diary:
     conn.close()
     sys.exit(0)  # LLM already wrote one, no need for emergency diary
 
-# Find last diary timestamp to know where to start reading logs
+# v7.8.1 — last_diary_ts must be scoped to THIS session too. Otherwise
+# a recent diary of another conversation would truncate this conv's
+# mechanical summary window.
 last_diary = conn.execute(
-    'SELECT created_at FROM session_diary ORDER BY created_at DESC LIMIT 1'
+    'SELECT created_at FROM session_diary WHERE session_id = ? ORDER BY created_at DESC LIMIT 1',
+    (sid,),
 ).fetchone()
 last_diary_ts = last_diary['created_at'] if last_diary else '1970-01-01T00:00:00Z'
 
