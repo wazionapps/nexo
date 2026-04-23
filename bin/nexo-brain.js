@@ -2128,11 +2128,15 @@ async function main() {
         log("  Scripts updated.");
 
         // Update templates/ root (core-prompts/, CLAUDE.md.template, etc.) — recursive
+        // Managed surface: copyDirRec overwrites without diffing, so any
+        // hand-edited template under ~/.nexo/templates/ is replaced on
+        // upgrade. Keep local forks under personal/ or outside the runtime
+        // home to avoid silent loss.
         const migTemplatesSrc = path.join(__dirname, "..", "templates");
         const migTemplatesDest = path.join(NEXO_HOME, "templates");
         if (fs.existsSync(migTemplatesSrc)) {
           copyDirRec(migTemplatesSrc, migTemplatesDest);
-          log("  Templates updated.");
+          log("  Templates updated (user-edited templates/ files are overwritten).");
         }
 
         // Register ALL 8 core hooks in settings.json (additive — don't remove user's custom hooks)
