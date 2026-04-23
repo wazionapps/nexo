@@ -87,19 +87,23 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v7.9.2 live</span>
+                    <span class="page-chip">v7.9.3 live</span>
                     <span class="page-chip">Guardian active</span>
                     <span class="page-chip">F0.6 hardening</span>
                     <span class="page-chip">Adaptive empirical</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v792" class="btn btn-primary">Start with v7.9.2</a>
-                    <a href="#v791" class="btn btn-secondary">See v7.9.1</a>
+                    <a href="#v793" class="btn btn-primary">Start with v7.9.3</a>
+                    <a href="#v792" class="btn btn-secondary">See v7.9.2</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
             </div>
             <div class="page-visual">
                 <div class="page-stack">
+                    <div class="page-stack-card">
+                        <strong>v7.9.3</strong>
+                        <span>Patch — canonical lifecycle plan shape v2 for Desktop exact-once diary flows. canonical_actions now publish type and payload.prompt while retaining one-release kind/top-level prompt mirrors for older clients. 25 lifecycle tests plus release artifact sync and release-readiness.</span>
+                    </div>
                     <div class="page-stack-card">
                         <strong>v7.9.2</strong>
                         <span>Patch — completes Brain semantic-router site migration and fixes packaged headless Guardian map loading. Remaining decision callers route through named decision_kind policies: r20, R34, T4 gates, followup attention, Drive signal/area, reply event, query intent, sentiment intent. enforcement_engine and agent_runner now check ~/.nexo/core/tool-enforcement-map.json. 225 targeted tests plus release-readiness.</span>
@@ -232,6 +236,16 @@
 <section class="section-compact" style="background:rgba(124,58,237,0.08);">
     <div class="container desktop-disclaimer" style="max-width:860px;font-size:13px;line-height:1.55;">
         <p><strong>Sobre NEXO Desktop.</strong> NEXO Desktop es un cliente acompa&ntilde;ante closed-source distribuido aparte en <a href="https://nexo-desktop.com/">nexo-desktop.com</a>. Cuando una entrada de changelog menciona "NEXO Desktop" se refiere a una versi&oacute;n coordinada de ese cliente que consume el contrato CLI/MCP del Brain. El c&oacute;digo de Desktop no vive en este repo; el Brain (AGPL-3.0) es 100% usable por s&iacute; solo desde terminal, Codex, Claude Code, o cualquier cliente MCP.</p>
+    </div>
+</section>
+
+<section id="v793" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.9.3 <span style="opacity:.5;font-weight:400;">&mdash; April 23, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">Canonical lifecycle plan shape v2 for exact-once Desktop diary</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            Patch over v7.9.2. Brain's canonical lifecycle plan now publishes the action shape Desktop needs for reliable close/archive/delete/app-exit diary execution: <code>type</code> is the canonical action discriminator and the diary prompt lives in <code>payload.prompt</code>. The old <code>kind</code> and top-level <code>prompt</code> fields remain for one release as compatibility mirrors, so Desktop clients up to v0.28.1 keep working while v0.28.2 consumes the normalized contract. <code>canonical_plan_version</code> is bumped to <code>2</code>. Tests pin resume_session &rarr; inject_prompt &rarr; stop_session action shape, payload prompt round-trip, and app-exit parity. Targeted validation: <code>pytest tests/test_lifecycle_events.py</code> (25 passing), release artifact sync, and release-readiness.
+        </p>
     </div>
 </section>
 
