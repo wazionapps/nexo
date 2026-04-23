@@ -127,6 +127,41 @@ def test_multipass_requires_labels():
     assert "requires labels" in (result.error or "")
 
 
+def test_multipass_local_classifies_context_when_present(monkeypatch):
+    import classifier_local
+    import semantic_reasoner as sr
+
+    seen = {}
+
+    class RecordingClassifier:
+        def __init__(self, **_kwargs):
+            self._idx = 0
+
+        def classify(self, text, labels, *, multi_label=False):  # noqa: ARG002
+            seen.setdefault("texts", []).append(text)
+            self._idx += 1
+            return classifier_local.ClassificationResult(
+                label="correction",
+                confidence=0.90,
+                scores={"correction": 0.90, "not_correction": 0.10},
+                latency_ms=1.0,
+            )
+
+    monkeypatch.setattr(classifier_local, "LocalZeroShotClassifier", RecordingClassifier)
+
+    result = sr.reason(
+        decision_kind="r14_correction",
+        question="Static correction prompt",
+        context="no es así, te equivocaste",
+        labels=("correction", "not_correction"),
+        mode="multipass_local",
+        confidence_floor=0.75,
+    )
+    assert result.ok is True
+    assert all("te equivocaste" in text for text in seen["texts"])
+    assert all("Static correction prompt" not in text for text in seen["texts"])
+
+
 # ---------------------------------------------------------------------------
 # Mode B — cached_llm
 # ---------------------------------------------------------------------------

@@ -143,6 +143,7 @@ def _reason_multipass_local(
     *,
     decision_kind: str,
     question: str,
+    context: str = "",
     labels: tuple[str, ...] | None,
     confidence_floor: float,
 ):
@@ -156,7 +157,8 @@ def _reason_multipass_local(
             error="multipass_local requires labels",
         )
 
-    votes = _collect_local_votes(question, labels)
+    semantic_input = (context or "").strip() or question
+    votes = _collect_local_votes(semantic_input, labels)
     label, confidence, meta = _aggregate_votes(votes, confidence_floor)
     if label is None:
         return RouterResult(
@@ -557,6 +559,7 @@ def reason(
         return _reason_multipass_local(
             decision_kind=decision_kind,
             question=question,
+            context=context,
             labels=labels_tuple,
             confidence_floor=confidence_floor,
         )

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Blog — NEXO Brain</title>
-    <meta name="description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.1.7 email-monitor language patch and the earlier 7.1.6 core-schedules release.">
+    <meta name="description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.9.1 semantic-router site migration patch.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/blog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/blog/">
     <meta property="og:title" content="Blog — NEXO Brain">
-    <meta property="og:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.1.7 email-monitor language patch and the earlier 7.1.6 core-schedules release.">
+    <meta property="og:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.9.1 semantic-router site migration patch.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Blog — NEXO Brain">
-    <meta name="twitter:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.1.7 email-monitor language patch and the earlier 7.1.6 core-schedules release.">
+    <meta name="twitter:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.9.1 semantic-router site migration patch.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Blog — NEXO Brain",
-        "description": "Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.1.7 email-monitor language patch and the earlier 7.1.6 core-schedules release.",
+        "description": "Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.9.1 semantic-router site migration patch.",
         "url": "https://nexo-brain.com/blog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -134,7 +134,7 @@
                     <span class="page-chip">Shared brain product notes</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="/blog/nexo-7-4-1/" class="btn btn-primary">Read latest release</a>
+                    <a href="/blog/nexo-7-9-1/" class="btn btn-primary">Read latest release</a>
                     <a href="/changelog/" class="btn btn-secondary">Latest release notes</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -144,23 +144,23 @@
                 <div class="section-label">Latest release</div>
                 <div class="blog-featured-meta">
                     <span class="compare-chip">April 23, 2026</span>
-                    <span class="compare-chip">Minor</span>
-                    <span class="compare-chip">semantic stack scaffolding + 2 bug fixes</span>
+                    <span class="compare-chip">Patch</span>
+                    <span class="compare-chip">semantic router site migration batch 1</span>
                 </div>
-                <h2>NEXO 7.9.0: semantic router + reasoner scaffolding, bootstrap preload fix, templates sync fix</h2>
-                <p>Minor release under the ONEPASS LLM Coverage plan. Ships src/semantic_router.py with 18 named decision_kinds + per-kind policy + layer chain fast_local → semantic_reasoner → remote_fallback, and src/semantic_reasoner.py with Mode A (multipass_local: reuses the mDeBERTa pin with stricter 3-pass majority vote) and Mode B (cached_llm: call_model_raw wrapper with pid+uuid atomic-write 24h-TTL disk cache, LRU 2000 entries, corrupt entries dropped). New scripts/semantic-classify.py JSON-in JSON-out CLI lets external MCP clients query Brain as the single semantic authority. New NEXO_SEMANTIC_REASONER runtime kill switch. Plus: bin/nexo-brain.js upgrade flow now syncs templates/ root (Maria iMac upgrade had lost 27 core-prompts), and tool-enforcement-map.json inject_prompt preloads 13 mcp__nexo__* protocol tools via ToolSearch to close the deferred-schema bootstrap failure. 50 new tests. Companion: NEXO Desktop v0.28.0.</p>
+                <h2>NEXO 7.9.1: first semantic-router site migration batch</h2>
+                <p>Patch over v7.9.0. The semantic stack is no longer just scaffolding for the first conversational group: session_end_intent, r14_correction, r16_declared_done, r17_promise_debt, autonomy_mandate, and guard_verbal_ack now call semantic_router.route with explicit decision_kind policies and semantic labels. Existing classifier injection seams remain intact for tests, and router/reasoner local paths now classify the live context instead of the static prompt template. 105 targeted tests cover the migrated callers and the context-classification regression.</p>
                 <div class="hero-actions" style="justify-content:flex-start;margin-bottom:18px;">
-                    <a href="/blog/nexo-7-9-0/" class="btn btn-primary">Open article</a>
-                    <a href="/changelog/#v790" class="btn btn-secondary">Open changelog</a>
+                    <a href="/blog/nexo-7-9-1/" class="btn btn-primary">Open article</a>
+                    <a href="/changelog/#v791" class="btn btn-secondary">Open changelog</a>
                 </div>
                 <div class="blog-mini-stack">
                     <div class="blog-mini-card">
                         <strong>Companion view</strong>
-                        <span><a href="/changelog/#v790">See the full v7.9.0 changelog</a></span>
+                        <span><a href="/changelog/#v791">See the full v7.9.1 changelog</a></span>
                     </div>
                     <div class="blog-mini-card">
                         <strong>Previous release</strong>
-                        <span><a href="/blog/nexo-7-8-2/">NEXO 7.8.2: hook_runs sid observability</a>.</span>
+                        <span><a href="/blog/nexo-7-9-0/">NEXO 7.9.0: semantic stack scaffolding</a>.</span>
                     </div>
                 </div>
             </div>
@@ -191,6 +191,15 @@
 <section class="section-flush-top">
     <div class="container">
         <div class="blog-grid">
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 23, 2026</div>
+                <h2><a href="/blog/nexo-7-9-1/">NEXO 7.9.1: first semantic-router site migration batch</a></h2>
+                <p>Patch over v7.9.0. Six conversational Brain decisions now route through semantic_router with explicit decision_kind policies and semantic labels: session_end_intent, r14_correction, r16_declared_done, r17_promise_debt, autonomy_mandate, and guard_verbal_ack. Router/reasoner local paths now classify live context, not static prompt templates. 105 targeted tests.</p>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/blog/nexo-7-9-1/" class="btn btn-secondary">Read more</a>
+                </div>
+            </div>
 
             <div class="blog-card">
                 <div class="blog-card-date">April 23, 2026</div>

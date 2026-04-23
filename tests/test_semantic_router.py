@@ -6,6 +6,9 @@ router's policy and dispatch logic is verified in isolation.
 """
 from __future__ import annotations
 
+import sys
+from types import SimpleNamespace
+
 import pytest
 
 
@@ -109,7 +112,7 @@ def _fake_router_result(**kwargs):
 def test_route_returns_fast_local_result_when_confidence_is_high(monkeypatch):
     import semantic_router as sr
 
-    def fake_fast_local(*, question, labels, confidence_floor):
+    def fake_fast_local(*, question, context, labels, confidence_floor):
         return _fake_router_result(
             ok=True,
             decision_kind="",
@@ -379,3 +382,39 @@ def test_remote_fallback_degrades_when_call_model_raw_missing(monkeypatch):
     assert result is not None
     assert result.ok is False
     assert "call_model_raw callable missing" in (result.error or "")
+
+
+def test_fast_local_classifies_context_not_static_prompt(monkeypatch):
+    """Guard callers pass stable prompt templates as ``question`` and the
+    actual user/assistant text as ``context``. The fast-local layer must
+    classify the live text, not the static prompt template."""
+    import semantic_router as sr
+
+    seen = {}
+
+    class FakeClassifier:
+        def __init__(self, confidence_floor):
+            seen["confidence_floor"] = confidence_floor
+
+        def classify(self, question, labels):
+            seen["question"] = question
+            seen["labels"] = labels
+            return SimpleNamespace(
+                label="yes",
+                confidence=0.95,
+                scores={"yes": 0.95, "no": 0.05},
+                latency_ms=1.0,
+            )
+
+    fake_module = SimpleNamespace(LocalZeroShotClassifier=FakeClassifier)
+    monkeypatch.setitem(sys.modules, "classifier_local", fake_module)
+
+    result = sr._run_fast_local(
+        question="Is this a session-end intent?",
+        context="hasta mañana, cerramos aquí",
+        labels=("yes", "no"),
+        confidence_floor=0.60,
+    )
+    assert result is not None and result.ok is True
+    assert seen["question"] == "hasta mañana, cerramos aquí"
+    assert seen["labels"] == ("yes", "no")

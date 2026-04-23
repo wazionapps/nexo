@@ -9,10 +9,9 @@ Fase 2 Protocol Enforcer Fase C (Capa 2) item R14. Plan doc 1 reads:
 
 Implementation contract:
 
-  - Correction detection goes through the enforcement_classifier
-    (triple-reinforced yes/no on call_model_raw). Learning #122
-    prohibits keyword-based semantic detection; the classifier path
-    is the sanctioned alternative.
+  - Correction detection goes through semantic_router decision_kind
+    ``r14_correction``. Learning #122 prohibits keyword-based semantic
+    detection; the router path is the sanctioned alternative.
   - Fail-closed: when the classifier is unavailable (no API key,
     automation_backend=none, timeout, 5xx), is_correction returns
     False. Downstream R28 (system prompt) and the auto_capture hook
@@ -31,6 +30,8 @@ from __future__ import annotations
 from core_prompts import render_core_prompt
 
 CLASSIFIER_QUESTION = render_core_prompt("r14-correction-learning-question")
+SEMANTIC_LABELS = ("negative_feedback", "ordinary_request")
+POSITIVE_LABEL = "negative_feedback"
 
 
 INJECTION_PROMPT_TEMPLATE = render_core_prompt("r14-correction-learning-injection")
@@ -45,7 +46,7 @@ def detect_correction(user_text: str, *, classifier=None) -> bool:
     Args:
         user_text: Raw user-role text from the stream.
         classifier: Injection point for tests. Defaults to
-            enforcement_classifier.classify.
+            semantic_router.route(decision_kind="r14_correction").
 
     Fail-closed on ClassifierUnavailableError — returns False rather
     than raising so the caller's enforcement loop never crashes on a
@@ -62,7 +63,17 @@ def detect_correction(user_text: str, *, classifier=None) -> bool:
         return False
     if classifier is None:
         try:
-            from enforcement_classifier import classify as classifier  # type: ignore
+            from semantic_router import route as semantic_route
+        except Exception:
+            return False
+        try:
+            result = semantic_route(
+                decision_kind="r14_correction",
+                question=CLASSIFIER_QUESTION,
+                context=text,
+                labels=SEMANTIC_LABELS,
+            )
+            return bool(result.ok and (result.label or result.verdict) == POSITIVE_LABEL)
         except Exception:
             return False
     try:

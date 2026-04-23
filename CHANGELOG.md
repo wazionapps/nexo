@@ -1,5 +1,51 @@
 # Changelog
 
+## [7.9.1] - 2026-04-23
+
+Patch release. First semantic-router site-migration batch after v7.9.0.
+
+### Changed — semantic router call-site migration
+
+- Migrated the six safe textual-conversational decision callers from
+  direct `enforcement_classifier.classify` usage to
+  `semantic_router.route(...)`:
+  - `src/session_end_intent.py` → `decision_kind="session_end_intent"`
+  - `src/r14_correction_learning.py` → `decision_kind="r14_correction"`
+  - `src/r16_declared_done.py` → `decision_kind="r16_declared_done"`
+  - `src/r17_promise_debt.py` → `decision_kind="r17_promise_debt"`
+  - `src/autonomy_mandate.py` → `decision_kind="autonomy_mandate"`
+  - `src/guard_verbal_ack.py` → `decision_kind="guard_verbal_ack"`
+- Each migrated caller keeps its existing fail-closed behaviour and
+  test injection seam, but production traffic now flows through the
+  named router policy instead of directly importing the legacy yes/no
+  classifier.
+
+### Fixed — router/reasoner context handling
+
+- `semantic_router._run_fast_local` now classifies the live
+  user/assistant text from `context` when present, falling back to
+  `question` only for direct callers. The previous implementation
+  included the static prompt template in the zero-shot input, which
+  could make the prompt dominate the decision.
+- `semantic_reasoner` Mode A (`multipass_local`) now uses `context`
+  for its local vote input when present, preserving parity with the
+  router fast-local layer and the remote fallback prompt.
+- Migrated callers use semantic labels (`session_end` /
+  `continue_session`, `negative_feedback` / `ordinary_request`, etc.)
+  instead of generic `yes` / `no` labels so the local zero-shot layer
+  does not confuse unrelated text with affirmative answers.
+
+### Tests
+
+- Added `tests/test_semantic_router_site_migration.py` to pin the six
+  migrated call sites and their `decision_kind` / label contracts.
+- Added regression coverage ensuring both `semantic_router` and
+  `semantic_reasoner` classify the live `context`, not only the static
+  prompt template.
+- Targeted verification: 105 tests passing across semantic router,
+  semantic reasoner, the six migrated callers, and their enforcement
+  integrations.
+
 ## [7.9.0] - 2026-04-23
 
 Minor release. Ships the foundation of the semantic stack (router +

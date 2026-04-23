@@ -10,9 +10,9 @@ Exposes detect_declared_done(assistant_text, classifier=None) → bool and
 the reminder prompt template. The window-and-state tracking lives in
 the HeadlessEnforcer / Desktop EnforcementEngine, not here.
 
-Classifier contract: same triple-reinforced yes/no path as R14
-(enforcement_classifier.classify → call_model_raw). Fail-closed on
-unavailable backend → detect returns False rather than raising.
+Classifier contract: same semantic_router yes/no path as R14
+(``decision_kind=r16_declared_done``). Fail-closed on unavailable backend →
+detect returns False rather than raising.
 
 Mirror: nexo-desktop/lib/r16-declared-done.js (pending, landing in the
 next tranche alongside the JS classifier infrastructure).
@@ -22,6 +22,7 @@ from __future__ import annotations
 from core_prompts import render_core_prompt
 
 CLASSIFIER_QUESTION = render_core_prompt("r16-declared-done-question")
+SEMANTIC_LABELS = ("declared_done", "not_done")
 
 
 INJECTION_PROMPT_TEMPLATE = render_core_prompt("r16-declared-done-injection")
@@ -43,7 +44,17 @@ def detect_declared_done(assistant_text: str, *, classifier=None) -> bool:
         return False
     if classifier is None:
         try:
-            from enforcement_classifier import classify as classifier  # type: ignore
+            from semantic_router import route as semantic_route
+        except Exception:
+            return False
+        try:
+            result = semantic_route(
+                decision_kind="r16_declared_done",
+                question=CLASSIFIER_QUESTION,
+                context=text,
+                labels=SEMANTIC_LABELS,
+            )
+            return bool(result.ok and (result.label or result.verdict) == "declared_done")
         except Exception:
             return False
     try:
