@@ -124,14 +124,14 @@ if [ -n "$RELEASE_TARGET" ]; then
     else
         echo "  - tag ${RELEASE_TARGET} is free"
     fi
-    if grep -qE "^## \[?${RELEASE_TARGET}\]?" CHANGELOG.md 2>/dev/null; then
+    WANT="${RELEASE_TARGET#v}"
+    if grep -qE "^## \[?v?${WANT}\]?" CHANGELOG.md 2>/dev/null; then
         echo "  - CHANGELOG.md has entry for ${RELEASE_TARGET}"
     else
         echo -e "${RED}  - CHANGELOG.md missing entry for ${RELEASE_TARGET}${NC}"
         TARGET_FAIL=1
     fi
     PKG_VER=$(python3 -c "import json; print(json.load(open('package.json'))['version'])" 2>/dev/null || echo "")
-    WANT="${RELEASE_TARGET#v}"
     if [ "$PKG_VER" = "$WANT" ]; then
         echo "  - package.json version matches (${PKG_VER})"
     else

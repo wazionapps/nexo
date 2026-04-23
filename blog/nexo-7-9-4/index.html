@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.9.4: diary evidence gate, onboarding fixes, and model warmup</title>
+<meta name="description" content="NEXO Brain v7.9.4 patch release. Requires real session_diary evidence before Desktop stop/archive/delete/quit, fixes npm onboarding, and adds model warmup.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-9-4/">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.9.4: diary evidence gate, onboarding fixes, and model warmup","datePublished":"2026-04-23","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head><body><main><article style="max-width:760px;margin:80px auto;padding:0 24px;line-height:1.75;">
+<h1>NEXO 7.9.4 — diary evidence gate, onboarding fixes, and model warmup</h1>
+<p><em>Published 2026-04-23. Patch release over v7.9.3.</em></p>
+
+<p>v7.9.4 blocks the Brain 7.9.3 + Desktop 0.28.2 regression where Desktop could time out diary injection, still execute <code>stop_session</code>, and archive a conversation without confirmed <code>session_diary</code> evidence.</p>
+
+<h2>Canonical diary is now evidence-gated</h2>
+<p>Brain canonical plans now run <code>resume_session → inject_prompt → wait_for_diary_write → stop_session</code>. Brain records a diary checkpoint when dispatching the event and only accepts canonical completion when a real diary row exists after that checkpoint.</p>
+
+<h2>CLI onboarding no longer traps subcommands</h2>
+<p><code>nexo-brain --version</code>, <code>--help</code>, and known subcommands no longer open stdin or launch the wizard. Legacy calibration files with a real <code>user.name</code> and <code>user.language</code> are accepted as complete, while aborted setup no longer writes placeholder defaults.</p>
+
+<h2>Warm up local models explicitly and during install/update</h2>
+<p><code>nexo-brain warmup-models</code> predownloads the pinned mDeBERTa zero-shot classifier, BGE embeddings, and fastembed reranker. Fresh install, update migration, and repair paths run this warmup unless CI/offline tests explicitly set <code>NEXO_SKIP_MODEL_WARMUP=1</code>.</p>
+
+<h2>Verification</h2>
+<p>Full Brain suite: <code>2189 passed, 3 skipped, 1 xfailed, 5 xpassed</code>. Release readiness passed after surface sync. Coordinated Desktop v0.28.3 passed <code>npm run check</code> with <code>710 passed, 1 skipped</code>.</p>
+
+<p><a href="/changelog/#v794">Full changelog entry &rarr;</a></p>
+</article></main></body></html>

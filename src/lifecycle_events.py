@@ -51,7 +51,8 @@ Actions that carry a canonical plan: ``close``, ``delete``, ``archive``,
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, Optional
+import time
+from typing import Any, Dict, List, Optional
 
 from db import get_db
 import lifecycle_prompts
@@ -83,24 +84,150 @@ def _normalise_payload(obj: Any) -> str:
         return "{}"
 
 
-def _session_diary_since(conn, session_id: str, dispatched_at: Optional[str]) -> bool:
-    """True if session_diary has a row for ``session_id`` created after
-    ``dispatched_at``. Used by the canonical-authority idempotency
-    guard: if the live session already produced a diary since the
-    plan was handed out, we must NOT re-dispatch it.
+def _session_diary_session_ids(conn, session_id: str) -> List[str]:
+    """Return all session ids that can contain diary evidence for a lifecycle session.
+
+    Desktop passes Claude's conversation/session UUID as ``lifecycle_events.session_id``.
+    ``nexo_session_diary_write`` stores rows under the active NEXO SID (``nexo-...``).
+    The alias table links both values, so canonical diary confirmation must check the
+    direct id and its NEXO aliases.
     """
-    if not session_id or not dispatched_at:
-        return False
+    raw = str(session_id or "").strip()
+    if not raw:
+        return []
+    ids: List[str] = [raw]
+    try:
+        rows = conn.execute(
+            "SELECT sid FROM session_claude_aliases "
+            "WHERE claude_session_id = ? ORDER BY last_seen DESC",
+            (raw,),
+        ).fetchall()
+        ids.extend(str(row[0]) for row in rows if row and row[0])
+    except Exception:
+        pass
+    try:
+        rows = conn.execute(
+            "SELECT sid FROM sessions "
+            "WHERE claude_session_id = ? OR external_session_id = ? "
+            "ORDER BY last_update_epoch DESC",
+            (raw, raw),
+        ).fetchall()
+        ids.extend(str(row[0]) for row in rows if row and row[0])
+    except Exception:
+        pass
+
+    deduped: List[str] = []
+    seen = set()
+    for sid in ids:
+        if sid and sid not in seen:
+            seen.add(sid)
+            deduped.append(sid)
+    return deduped
+
+
+def _max_session_diary_id(conn, session_id: str) -> int:
+    session_ids = _session_diary_session_ids(conn, session_id)
+    if not session_ids:
+        return 0
+    placeholders = ",".join("?" for _ in session_ids)
     try:
         row = conn.execute(
-            "SELECT 1 FROM session_diary "
-            "WHERE session_id = ? AND created_at > ? LIMIT 1",
-            (str(session_id), str(dispatched_at)),
+            f"SELECT COALESCE(MAX(id), 0) FROM session_diary WHERE session_id IN ({placeholders})",
+            tuple(session_ids),
         ).fetchone()
     except Exception:
+        return 0
+    try:
+        return int(row[0] or 0) if row else 0
+    except Exception:
+        return 0
+
+
+def _diary_checkpoint_from_actions_json(actions_json: Optional[str]) -> int:
+    if not actions_json:
+        return 0
+    try:
+        actions = json.loads(actions_json)
+    except Exception:
+        return 0
+    if not isinstance(actions, list):
+        return 0
+    for action in actions:
+        if not isinstance(action, dict):
+            continue
+        action_type = action.get("type") or action.get("kind")
+        if action_type != "wait_for_diary_write":
+            continue
+        payload = action.get("payload") if isinstance(action.get("payload"), dict) else {}
+        raw = payload.get("after_session_diary_id", action.get("after_session_diary_id", 0))
+        try:
+            return int(raw or 0)
+        except Exception:
+            return 0
+    return 0
+
+
+def _attach_diary_checkpoint(plan: Dict[str, Any], checkpoint_id: int) -> Dict[str, Any]:
+    """Store the session_diary high-water mark inside the persisted plan.
+
+    ``created_at`` only has second precision in old installs. The
+    checkpoint makes diary confirmation robust even when dispatch and
+    diary write happen in the same second.
+    """
+    actions = []
+    for action in list((plan or {}).get("canonical_actions") or []):
+        item = dict(action or {})
+        action_type = item.get("type") or item.get("kind")
+        if action_type == "wait_for_diary_write":
+            payload = dict(item.get("payload") or {})
+            payload["after_session_diary_id"] = int(checkpoint_id or 0)
+            item["payload"] = payload
+            item["after_session_diary_id"] = int(checkpoint_id or 0)
+        actions.append(item)
+    updated = dict(plan or {})
+    updated["canonical_actions"] = actions
+    return updated
+
+
+def _session_diary_evidence(
+    conn,
+    session_id: str,
+    dispatched_at: Optional[str],
+    actions_json: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    """Return the concrete session_diary row that satisfies a plan."""
+    if not session_id or not dispatched_at:
+        return None
+    checkpoint_id = _diary_checkpoint_from_actions_json(actions_json)
+    session_ids = _session_diary_session_ids(conn, session_id)
+    if not session_ids:
+        return None
+    placeholders = ",".join("?" for _ in session_ids)
+    try:
+        if checkpoint_id > 0:
+            row = conn.execute(
+                "SELECT id, created_at, session_id FROM session_diary "
+                f"WHERE session_id IN ({placeholders}) AND id > ? ORDER BY id ASC LIMIT 1",
+                (*session_ids, int(checkpoint_id)),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT id, created_at, session_id FROM session_diary "
+                f"WHERE session_id IN ({placeholders}) AND created_at >= ? "
+                "ORDER BY created_at ASC, id ASC LIMIT 1",
+                (*session_ids, str(dispatched_at)),
+            ).fetchone()
+    except Exception:
         # Missing table on a minimal test harness — treat as "no diary".
-        return False
-    return row is not None
+        return None
+    if row is None:
+        return None
+    return {"session_diary_id": row[0], "created_at": row[1], "diary_session_id": row[2]}
+
+
+def _session_diary_since(conn, session_id: str, dispatched_at: Optional[str], actions_json: Optional[str] = None) -> bool:
+    """True if session_diary has evidence satisfying the canonical plan."""
+    return _session_diary_evidence(conn, session_id, dispatched_at, actions_json) is not None
 
 
 def record_lifecycle_event(
@@ -145,6 +272,8 @@ def record_lifecycle_event(
         session_id=str(session_id) if session_id else None,
         payload_snapshot=payload_snapshot or {},
     )
+    if plan is not None and session_id:
+        plan = _attach_diary_checkpoint(plan, _max_session_diary_id(conn, str(session_id)))
 
     if existing is not None:
         status = str(existing[0] or "")
@@ -171,7 +300,12 @@ def record_lifecycle_event(
         # the intent has already been satisfied by the model and we
         # must NOT ask Desktop to re-run the plan.
         if prior_plan_id and prior_dispatched_at and not prior_done_at:
-            if session_id and _session_diary_since(conn, str(session_id), str(prior_dispatched_at)):
+            if session_id and _session_diary_since(
+                conn,
+                str(session_id),
+                str(prior_dispatched_at),
+                str(prior_actions_json or ""),
+            ):
                 conn.execute(
                     "UPDATE lifecycle_events "
                     "SET delivery_status = 'already_processed', "
@@ -340,7 +474,8 @@ def record_complete_canonical(
 
     conn = get_db()
     row = conn.execute(
-        "SELECT delivery_status, canonical_plan_id, canonical_done_at "
+        "SELECT delivery_status, canonical_plan_id, canonical_done_at, "
+        "action, session_id, canonical_dispatched_at, canonical_actions_json "
         "FROM lifecycle_events WHERE event_id = ?",
         (str(event_id),),
     ).fetchone()
@@ -349,6 +484,10 @@ def record_complete_canonical(
     current_status = str(row[0] or "")
     expected_plan = row[1]
     already_done_at = row[2]
+    action = str(row[3] or "")
+    session_id = str(row[4] or "")
+    dispatched_at = row[5]
+    actions_json = row[6]
 
     if expected_plan and canonical_plan_id != expected_plan:
         return {
@@ -369,18 +508,27 @@ def record_complete_canonical(
         str((r or {}).get("status", "")).lower() not in {"ok", "success", "already_processed"}
         for r in results_list
     )
-    effective = "retryable_error" if any_failure else "canonical_done"
+    diary_evidence = _session_diary_evidence(conn, session_id, dispatched_at, actions_json)
+    diary_required = action in _DIARY_TRIGGERING and bool(session_id)
+    diary_missing = diary_required and diary_evidence is None
+    effective = "retryable_error" if (any_failure or diary_missing) else "canonical_done"
+    last_error = None
+    if any_failure:
+        last_error = "one-or-more-actions-failed"
+    elif diary_missing:
+        last_error = "canonical-diary-not-confirmed"
     conn.execute(
         "UPDATE lifecycle_events "
         "SET delivery_status = ?, "
-        "    canonical_done_at = datetime('now'), "
+        "    canonical_done_at = CASE WHEN ? = 'canonical_done' THEN datetime('now') ELSE NULL END, "
         "    canonical_done_results = ?, "
         "    last_error = ? "
         "WHERE event_id = ?",
         (
             effective,
+            effective,
             json.dumps(results_list, ensure_ascii=False),
-            "one-or-more-actions-failed" if any_failure else None,
+            last_error,
             str(event_id),
         ),
     )
@@ -390,7 +538,56 @@ def record_complete_canonical(
         "event_id": event_id,
         "canonical_plan_id": canonical_plan_id,
         "failed_actions": any_failure,
+        "diary_confirmed": diary_evidence is not None,
+        "diary_required": diary_required,
+        "session_diary_id": diary_evidence.get("session_diary_id") if diary_evidence else None,
+        "reason": "canonical-diary-not-confirmed" if diary_missing else None,
     }
+
+
+def wait_for_canonical_diary(
+    event_id: str,
+    timeout_ms: int = 45_000,
+    poll_ms: int = 500,
+) -> Dict[str, Any]:
+    """Poll until the lifecycle event has concrete session_diary evidence."""
+    if not event_id:
+        return {"status": "rejected", "reason": "missing-event-id"}
+    timeout_s = max(0.0, float(timeout_ms or 0) / 1000.0)
+    poll_s = max(0.05, float(poll_ms or 500) / 1000.0)
+    deadline = time.monotonic() + timeout_s
+    last_error: Optional[str] = None
+
+    while True:
+        conn = get_db()
+        row = conn.execute(
+            "SELECT session_id, canonical_dispatched_at, canonical_actions_json "
+            "FROM lifecycle_events WHERE event_id = ?",
+            (str(event_id),),
+        ).fetchone()
+        if row is None:
+            return {"status": "rejected", "reason": "unknown-event-id", "event_id": event_id}
+        session_id = str(row[0] or "")
+        if not session_id:
+            return {"status": "rejected", "reason": "missing-session-id", "event_id": event_id}
+        evidence = _session_diary_evidence(conn, session_id, row[1], row[2])
+        if evidence is not None:
+            return {
+                "status": "ok",
+                "event_id": event_id,
+                "session_id": session_id,
+                "diary_confirmed": True,
+                **evidence,
+            }
+        if time.monotonic() >= deadline:
+            return {
+                "status": "retryable_error",
+                "event_id": event_id,
+                "session_id": session_id,
+                "diary_confirmed": False,
+                "reason": last_error or "diary-confirm-timeout",
+            }
+        time.sleep(min(poll_s, max(0.0, deadline - time.monotonic())))
 
 
 def get_lifecycle_event(event_id: str) -> Optional[Dict[str, Any]]:

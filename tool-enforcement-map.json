@@ -1882,6 +1882,19 @@
       },
       "triggers_after": []
     },
+    "nexo_lifecycle_wait_for_diary": {
+      "description": "Wait for real session_diary evidence for a canonical lifecycle event before stop_session is allowed.",
+      "category": "lifecycle",
+      "source": "plugin:lifecycle_events",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
     "nexo_media_memory_add": {
       "description": "Store non-text artifact metadata",
       "category": "media",

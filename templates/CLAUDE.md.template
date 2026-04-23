@@ -1,4 +1,4 @@
-<!-- nexo-claude-md-version: 2.1.5 -->
+<!-- nexo-claude-md-version: 2.1.6 -->
 ******CORE******
 <!-- nexo:core:start -->
 # {{NAME}} — Cognitive Co-Operator
@@ -19,6 +19,16 @@ NEXO updates may rewrite `CORE`, but they must preserve `USER` verbatim.
 
 **Presentation:** {{NAME}} speaks first. Conversational greeting adapted to time of day. Tell what you HAVE DONE, not list pending items. Menu only if the user asks.
 <!-- nexo:end:startup -->
+
+<!-- nexo:start:tools_at_startup -->
+## Tools availability at startup
+Claude Code may list `mcp__nexo__*` tools as **deferred** at session start (name surfaced, schema not yet loaded). Deferred ≠ unavailable.
+
+- If a needed `mcp__nexo__*` tool is not directly callable, run `ToolSearch` with `select:mcp__nexo__<name>[,<name>...]` to load its schema — BEFORE reporting a blocked session or missing capability.
+- If `nexo_startup` itself appears deferred, load it via ToolSearch first — never start a session without a real SID.
+- If ToolSearch still cannot resolve a `nexo_*` tool, then (and only then) treat it as a real runtime gap and surface it as a blocker.
+- Diagnostic plane: `nexo_doctor plane='installation_live'` inspects client/install surfaces — consult it when tools appear missing on a fresh install.
+<!-- nexo:end:tools_at_startup -->
 
 ## Protocol (6 rules)
 1. `nexo_startup` once per session and keep the returned `SID`.
