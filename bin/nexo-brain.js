@@ -177,13 +177,27 @@ function isEphemeralInstall(nexoHome) {
     .some((candidate) => Array.from(tempRoots).some((root) => isWithin(candidate, root)));
 }
 
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout,
-});
+let rl = null;
+
+function getReadline() {
+  if (!rl) {
+    rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
+  }
+  return rl;
+}
 
 function ask(question) {
-  return new Promise((resolve) => rl.question(question, resolve));
+  return new Promise((resolve) => getReadline().question(question, resolve));
+}
+
+function closeReadline() {
+  if (rl) {
+    rl.close();
+    rl = null;
+  }
 }
 
 function run(cmd, opts = {}) {
@@ -196,6 +210,277 @@ function run(cmd, opts = {}) {
 
 function log(msg) {
   console.log(`  ${msg}`);
+}
+
+function readPackageJson() {
+  return JSON.parse(fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf8"));
+}
+
+function writeJsonAtomic(targetPath, payload) {
+  fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+  const tmpPath = path.join(
+    path.dirname(targetPath),
+    `.${path.basename(targetPath)}.${process.pid}.${Date.now()}.tmp`
+  );
+  fs.writeFileSync(tmpPath, JSON.stringify(payload, null, 2) + "\n");
+  fs.renameSync(tmpPath, targetPath);
+}
+
+function readJsonFile(filePath) {
+  try {
+    return JSON.parse(fs.readFileSync(filePath, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function calibrationPathCandidates(nexoHome) {
+  return [
+    path.join(nexoHome, "personal", "brain", "calibration.json"),
+    path.join(nexoHome, "brain", "calibration.json"),
+  ];
+}
+
+function readRuntimeCalibration(nexoHome = NEXO_HOME) {
+  for (const filePath of calibrationPathCandidates(nexoHome)) {
+    if (!fs.existsSync(filePath)) continue;
+    const payload = readJsonFile(filePath);
+    if (payload && typeof payload === "object") {
+      return { path: filePath, payload };
+    }
+  }
+  return { path: null, payload: null };
+}
+
+function nonEmptyString(value) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function isPlaceholderUserName(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  return normalized === "" || normalized === "usuario";
+}
+
+function isOnboardingComplete(calibration) {
+  if (!calibration || typeof calibration !== "object") return false;
+  const user = calibration.user && typeof calibration.user === "object" ? calibration.user : {};
+  const name = user.name;
+  const language = user.language || calibration.language;
+  const meta = calibration.meta && typeof calibration.meta === "object" ? calibration.meta : {};
+
+  if (meta.onboarding_completed === true) {
+    return nonEmptyString(name) && nonEmptyString(language);
+  }
+
+  // Legacy fallback: v7.8/v7.9-era calibration files may not carry the
+  // current schema marker, but a real operator name + language is enough to
+  // prove the setup was completed. Placeholder defaults stay incomplete.
+  return nonEmptyString(name) && !isPlaceholderUserName(name) && nonEmptyString(language);
+}
+
+function hasPartialPlaceholderCalibration(calibration) {
+  if (!calibration || typeof calibration !== "object") return false;
+  const meta = calibration.meta && typeof calibration.meta === "object" ? calibration.meta : {};
+  if (meta.onboarding_completed === true) return false;
+  const user = calibration.user && typeof calibration.user === "object" ? calibration.user : {};
+  const name = user.name;
+  const language = user.language || calibration.language;
+  return isPlaceholderUserName(name) || !nonEmptyString(language);
+}
+
+function ensureOnboardingCompletionMarker(nexoHome = NEXO_HOME) {
+  const record = readRuntimeCalibration(nexoHome);
+  if (!record.path || !isOnboardingComplete(record.payload)) {
+    return { changed: false, complete: false, path: record.path };
+  }
+  const meta = record.payload.meta && typeof record.payload.meta === "object"
+    ? { ...record.payload.meta }
+    : {};
+  if (meta.onboarding_completed === true) {
+    return { changed: false, complete: true, path: record.path };
+  }
+  const next = {
+    ...record.payload,
+    version: Math.max(Number(record.payload.version) || 1, 2),
+    meta: {
+      ...meta,
+      onboarding_completed: true,
+      onboarding_completed_at: meta.onboarding_completed_at || new Date().toISOString(),
+      migrated_from_legacy_calibration: true,
+    },
+  };
+  writeJsonAtomic(record.path, next);
+  return { changed: true, complete: true, path: record.path };
+}
+
+const WARMUP_SCRIPT = path.join(__dirname, "..", "src", "model_warmup.py");
+const WARMUP_PIP_PACKAGES = [
+  "transformers",
+  "torch",
+  "sentencepiece",
+  "sentence-transformers",
+];
+const WARMUP_TIMEOUT_MS = 60 * 60 * 1000;
+
+function shouldSkipModelWarmup() {
+  const flag = String(process.env.NEXO_SKIP_MODEL_WARMUP || "").trim().toLowerCase();
+  return ["1", "true", "yes", "on"].includes(flag);
+}
+
+function resolveSystemPython() {
+  return run("which python3") || run("which python") || "python3";
+}
+
+function ensureWarmupPython(nexoHome = NEXO_HOME) {
+  const existing = findVenvPython(nexoHome);
+  if (existing) return existing;
+
+  const basePython = resolveSystemPython();
+  const venvPath = path.join(nexoHome, ".venv");
+  const venvPython = process.platform === "win32"
+    ? path.join(venvPath, "Scripts", "python.exe")
+    : path.join(venvPath, "bin", "python3");
+  fs.mkdirSync(nexoHome, { recursive: true });
+  if (!fs.existsSync(venvPython)) {
+    log("  Creating Python virtual environment for model warmup...");
+    const result = spawnSync(basePython, ["-m", "venv", venvPath], { stdio: "inherit", timeout: 120000 });
+    if (result.status !== 0) {
+      throw new Error("could not create Python virtual environment for model warmup");
+    }
+  }
+  return venvPython;
+}
+
+function installWarmupPythonDependencies(pythonPath, { quiet = false, installRuntimeDeps = true } = {}) {
+  const requirementsFile = path.join(__dirname, "..", "src", "requirements.txt");
+  const pipCommon = ["-m", "pip", "install"];
+  if (quiet) pipCommon.push("--quiet");
+  const stdio = quiet ? "pipe" : "inherit";
+
+  if (installRuntimeDeps && fs.existsSync(requirementsFile)) {
+    const reqResult = spawnSync(
+      pythonPath,
+      [...pipCommon, "-r", requirementsFile],
+      { stdio, timeout: WARMUP_TIMEOUT_MS }
+    );
+    if (reqResult.status !== 0) {
+      throw new Error("failed to install runtime Python dependencies for model warmup");
+    }
+  }
+
+  const classifierResult = spawnSync(
+    pythonPath,
+    [...pipCommon, ...WARMUP_PIP_PACKAGES],
+    { stdio, timeout: WARMUP_TIMEOUT_MS }
+  );
+  if (classifierResult.status !== 0) {
+    throw new Error("failed to install local classifier dependencies for model warmup");
+  }
+}
+
+function runModelWarmup(pythonPath, {
+  nexoHome = NEXO_HOME,
+  dryRun = false,
+  json = false,
+  strict = true,
+  quiet = false,
+} = {}) {
+  if (!fs.existsSync(WARMUP_SCRIPT)) {
+    throw new Error(`model warmup script not found: ${WARMUP_SCRIPT}`);
+  }
+  const args = [WARMUP_SCRIPT];
+  if (dryRun) args.push("--dry-run");
+  if (json) args.push("--json");
+  if (strict) args.push("--strict");
+  const result = spawnSync(pythonPath, args, {
+    cwd: path.join(__dirname, "..", "src"),
+    env: { ...process.env, NEXO_HOME: nexoHome, NEXO_CODE: path.join(__dirname, "..", "src") },
+    stdio: json ? "pipe" : (quiet ? "pipe" : "inherit"),
+    encoding: json || quiet ? "utf8" : undefined,
+    timeout: WARMUP_TIMEOUT_MS,
+  });
+  if (json && result.stdout) process.stdout.write(result.stdout);
+  if (json && result.stderr) process.stderr.write(result.stderr);
+  if (result.status !== 0) {
+    const details = json || quiet
+      ? String(result.stderr || result.stdout || "").trim()
+      : "";
+    throw new Error(details || `model warmup failed with exit ${result.status}`);
+  }
+}
+
+function runMandatoryModelWarmup(pythonPath, nexoHome = NEXO_HOME, { reason = "install", installRuntimeDeps = true } = {}) {
+  if (shouldSkipModelWarmup()) {
+    log(`Model warmup skipped by NEXO_SKIP_MODEL_WARMUP during ${reason}.`);
+    return;
+  }
+  log(`Warming up local Brain/Desktop models (${reason})...`);
+  installWarmupPythonDependencies(pythonPath, { quiet: false, installRuntimeDeps });
+  runModelWarmup(pythonPath, { nexoHome, strict: true });
+  log("Local model warmup complete.");
+}
+
+async function runWarmupModelsCommand(args) {
+  const dryRun = args.includes("--dry-run");
+  const json = args.includes("--json");
+  const force = args.includes("--force");
+  const quiet = args.includes("--postinstall") || args.includes("--quiet");
+
+  if (shouldSkipModelWarmup() && !force) {
+    if (json) {
+      process.stdout.write(JSON.stringify({ ok: true, skipped: true, reason: "NEXO_SKIP_MODEL_WARMUP" }) + "\n");
+    } else {
+      log("Model warmup skipped by NEXO_SKIP_MODEL_WARMUP.");
+    }
+    return;
+  }
+
+  const pythonPath = dryRun ? resolveSystemPython() : ensureWarmupPython(NEXO_HOME);
+  if (!dryRun) {
+    installWarmupPythonDependencies(pythonPath, { quiet });
+  }
+  runModelWarmup(pythonPath, {
+    nexoHome: NEXO_HOME,
+    dryRun,
+    json,
+    strict: !args.includes("--best-effort"),
+    quiet,
+  });
+}
+
+function printHelp() {
+  const version = readPackageJson().version;
+  console.log(`nexo-brain ${version}`);
+  console.log("");
+  console.log("Usage:");
+  console.log("  nexo-brain [--yes|--skip|--defaults]");
+  console.log("  nexo-brain --version");
+  console.log("  nexo-brain warmup-models [--dry-run] [--json] [--force]");
+}
+
+async function maybeHandleTopLevelCommand(argv = process.argv.slice(2)) {
+  if (argv.includes("--version") || argv.includes("-v") || argv[0] === "version") {
+    console.log(`nexo-brain ${readPackageJson().version}`);
+    return true;
+  }
+  if (argv.includes("--help") || argv.includes("-h") || argv[0] === "help") {
+    printHelp();
+    return true;
+  }
+  if (argv[0] === "warmup-models") {
+    await runWarmupModelsCommand(argv.slice(1));
+    return true;
+  }
+
+  const setupFlags = new Set(["--defaults", "--yes", "--skip", "-y"]);
+  const unknownCommand = argv.find((arg) => !setupFlags.has(arg));
+  if (unknownCommand && !unknownCommand.startsWith("-")) {
+    console.error(`Unknown nexo-brain command: ${unknownCommand}`);
+    console.error("Run 'nexo-brain --help' for usage.");
+    process.exitCode = 2;
+    return true;
+  }
+  return false;
 }
 
 function duplicateArtifactCanonicalName(name) {
@@ -1946,7 +2231,7 @@ WantedBy=timers.target
   }
 }
 
-async function main() {
+async function runSetup() {
   // Non-interactive mode: --defaults, --yes, --skip, or -y all skip prompts
   // and apply the recommended defaults end-to-end (v6.0.0 adds --skip).
   const useDefaults = process.argv.includes("--defaults")
@@ -1993,12 +2278,22 @@ async function main() {
     process.exit(1);
   }
 
+  const onboardingMigration = ensureOnboardingCompletionMarker(NEXO_HOME);
+  if (onboardingMigration.changed) {
+    log("Migrated legacy calibration completion marker.");
+  } else {
+    const calibrationRecord = readRuntimeCalibration(NEXO_HOME);
+    if (hasPartialPlaceholderCalibration(calibrationRecord.payload)) {
+      log("Incomplete calibration detected; restarting onboarding cleanly.");
+    }
+  }
+
   // Auto-migration: detect existing installation
   const versionFile = path.join(NEXO_HOME, "version.json");
   if (fs.existsSync(versionFile)) {
     try {
       const installed = JSON.parse(fs.readFileSync(versionFile, "utf8"));
-      const currentPkg = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf8"));
+      const currentPkg = readPackageJson();
       const installedVersion = installed.version || "0.0.0";
       const currentVersion = currentPkg.version;
 
@@ -2078,6 +2373,9 @@ async function main() {
           }
           log("  Python dependencies reconciled.");
         }
+
+        const migPythonForWarmup = findVenvPython(NEXO_HOME) || "python3";
+        runMandatoryModelWarmup(migPythonForWarmup, NEXO_HOME, { reason: "update", installRuntimeDeps: false });
 
         // Update plugins (all .py files in plugins/)
         const pluginsSrc = path.join(srcDir, "plugins");
@@ -2246,11 +2544,12 @@ async function main() {
         log(`Migration complete: v${installedVersion} → v${currentVersion}`);
         log("Your data (memories, learnings, preferences) is untouched.");
         console.log("");
-        rl.close();
+        closeReadline();
         return;
       }
 
       // Same version — backfill crons/ if missing (for installs before crons was shipped)
+      const syncPython = findVenvPython(NEXO_HOME) || run("which python3") || "python3";
       const cronsDest = resolveRuntimeCronsDir(NEXO_HOME);
       const cronsSrc = path.join(__dirname, "..", "src", "crons");
       if (fs.existsSync(cronsSrc)) {
@@ -2268,7 +2567,6 @@ async function main() {
         log("Refreshed crons/ directory.");
 
         const cronSyncPath = path.join(cronsSrc, "sync.py");
-        const syncPython = findVenvPython(NEXO_HOME) || run("which python3") || "python3";
         if (fs.existsSync(cronSyncPath)) {
           const syncResult = spawnSync(syncPython, [cronSyncPath], {
             env: { ...process.env, NEXO_HOME, NEXO_CODE: path.join(__dirname, "..", "src") },
@@ -2340,10 +2638,11 @@ async function main() {
         throw new Error(`F0.6 layout finalization failed: ${syncLayoutFinalize.error}`);
       }
 
+      runMandatoryModelWarmup(syncPython, NEXO_HOME, { reason: "repair" });
       logMacPermissionsNotice(NEXO_HOME, syncPython);
 
       log(`Already at v${currentVersion}. No migration needed.`);
-      rl.close();
+      closeReadline();
       return;
     } catch (e) {
       // Version file corrupt — proceed with fresh install
@@ -2732,18 +3031,14 @@ async function main() {
       report_style: "essentials_only",
       execution_first: true,
     },
-    meta: {},
+    meta: {
+      onboarding_completed: true,
+      onboarding_completed_at: new Date().toISOString(),
+    },
     auto_install: "ask", // updated later if user answers P11
     calibrated_at: new Date().toISOString(),
   };
-  // Ensure NEXO_HOME and brain dir exist before writing calibration
   const runtimeBrainDir = resolveRuntimeBrainDir(NEXO_HOME);
-  fs.mkdirSync(NEXO_HOME, { recursive: true });
-  fs.mkdirSync(runtimeBrainDir, { recursive: true });
-  fs.writeFileSync(
-    path.join(runtimeBrainDir, "calibration.json"),
-    JSON.stringify(calibration, null, 2)
-  );
 
   // Step 5: Deep scan (P9) — v6.0.0 defaults flip to ON when running in
   // --yes/--skip mode; the interactive prompt below defaults to "yes" too
@@ -2792,28 +3087,18 @@ async function main() {
     console.log("");
   }
 
-  // Persist the updated calibration (auto_install may have changed post-write above).
-  try {
-    fs.writeFileSync(
-      path.join(runtimeBrainDir, "calibration.json"),
-      JSON.stringify(calibration, null, 2)
-    );
-  } catch (_) {}
+  // Commit calibration only after the wizard completed. This prevents Ctrl-C
+  // from leaving placeholder defaults that look like real onboarding.
+  fs.mkdirSync(NEXO_HOME, { recursive: true });
+  writeJsonAtomic(path.join(runtimeBrainDir, "calibration.json"), calibration);
 
   if (smokeTestMode) {
     // Pytest fresh-install smoke only needs to prove that the non-interactive
     // onboarding path writes the current calibration shape. Skip the rest of
     // the heavy bootstrap (client installs, pip, scan, LaunchAgents) so the
     // smoke does not sit on long dependency timeouts inside sandboxes.
-    try {
-      fs.mkdirSync(runtimeBrainDir, { recursive: true });
-      fs.writeFileSync(
-        path.join(runtimeBrainDir, "calibration.json"),
-        JSON.stringify(calibration, null, 2)
-      );
-    } catch (_) {}
     log("Smoke test mode detected — wrote calibration and skipped heavy bootstrap.");
-    rl.close();
+    closeReadline();
     return;
   }
 
@@ -2862,6 +3147,7 @@ async function main() {
     python = venvPython;
   }
   log("Dependencies installed.");
+  runMandatoryModelWarmup(python, NEXO_HOME, { reason: "install", installRuntimeDeps: false });
 
   // Step 4: Create ~/.nexo/
   log("Setting up NEXO home...");
@@ -3915,10 +4201,18 @@ See ~/.nexo/ for configuration.
   console.log(`  \u255A${"═".repeat(bw - 2)}\u255D`);
   console.log("");
 
-  rl.close();
+  closeReadline();
+}
+
+async function main() {
+  const handled = await maybeHandleTopLevelCommand();
+  if (!handled) {
+    await runSetup();
+  }
 }
 
 main().catch((err) => {
+  closeReadline();
   console.error("Setup failed:", err.message);
   process.exit(1);
 });

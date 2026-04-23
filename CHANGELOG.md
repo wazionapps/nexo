@@ -1,5 +1,55 @@
 # Changelog
 
+## [7.9.4] - 2026-04-23
+
+Patch release. Blocks the release regression found in Brain 7.9.3 +
+Desktop 0.28.2 where Desktop could time out diary injection, still execute
+`stop_session`, and archive/delete/close without confirmed canonical diary
+evidence.
+
+### Fixed — canonical diary evidence gate
+
+- `canonical_plan_version` is bumped to `3` and now emits
+  `resume_session -> inject_prompt -> wait_for_diary_write -> stop_session`.
+- Brain records a `session_diary` high-water checkpoint on dispatch and only
+  accepts canonical completion when a real diary row exists after that
+  checkpoint for the same lifecycle event/session.
+- `stop_session` is no longer considered valid evidence that the canonical
+  diary happened. Missing diary evidence keeps the lifecycle event retryable.
+- Added `nexo lifecycle wait-for-diary --event-id ...` so Desktop can poll a
+  Brain-owned evidence check instead of using inject timeout as success.
+- Re-delivery stays idempotent: if a diary arrives after a retryable timeout,
+  Brain can mark the original event processed without injecting a duplicate
+  diary prompt.
+
+### Fixed — npm onboarding guard
+
+- `nexo-brain --version`, `--help`, and known subcommands no longer create a
+  readline interface or launch onboarding.
+- Legacy calibration files count as complete when `user.name` and
+  `user.language` are present and the name is not the placeholder `Usuario`,
+  even if the schema version predates the current marker.
+- The setup wizard commits `calibration.json` atomically only after the final
+  prompt. Ctrl-C mid-wizard no longer persists partial defaults such as
+  `Usuario` / `en` without `meta.onboarding_completed=true`.
+
+### Added — model warmup
+
+- New `nexo-brain warmup-models` command predownloads the local models used by
+  Brain/Desktop flows: pinned mDeBERTa zero-shot classifier, BGE base/small
+  embeddings, and the fastembed cross-encoder reranker.
+- Fresh npm postinstall, update migration, and manual install/repair paths run
+  the warmup as part of setup. `NEXO_SKIP_MODEL_WARMUP=1` is reserved for
+  CI/offline tests and prints an explicit skip message.
+
+### Tests
+
+- Full Brain suite: `NEXO_SKIP_MODEL_WARMUP=1 python3 -m pytest`
+  (`2189 passed, 3 skipped, 1 xfailed, 5 xpassed`).
+- Release readiness: `python3 scripts/verify_release_readiness.py --ci`
+  (`182 passed`, website/release surfaces OK).
+- Packaging dry run: `npm pack --dry-run` includes `src/model_warmup.py`.
+
 ## [7.9.3] - 2026-04-23
 
 Patch release. Hardens the canonical lifecycle plan shape used by Desktop for

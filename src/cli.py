@@ -3104,6 +3104,14 @@ def main():
         help="JSON array of per-action outcomes, e.g. '[{\"action_id\":\"a1\",\"status\":\"ok\"}]'",
     )
 
+    lwait_p = lifecycle_sub.add_parser(
+        "wait-for-diary",
+        help="v7.9: wait for concrete session_diary evidence before canonical stop_session",
+    )
+    lwait_p.add_argument("--event-id", required=True)
+    lwait_p.add_argument("--timeout-ms", type=int, default=45_000)
+    lwait_p.add_argument("--poll-ms", type=int, default=500)
+
     # Fase E.5 — quarantine ops surfaced via Desktop Guardian Proposals panel.
     quarantine_parser = sub.add_parser("quarantine", help="Quarantine proposals (Fase E.5 Desktop UI)")
     quarantine_sub = quarantine_parser.add_subparsers(dest="quarantine_command")
@@ -3366,6 +3374,23 @@ def main():
             except Exception:
                 status = ""
             if status in ("canonical_done", "already_processed"):
+                return 0
+            if status == "retryable_error":
+                return 2
+            return 3
+        if args.lifecycle_command == "wait-for-diary":
+            out = _lifecycle_plugin.handle_nexo_lifecycle_wait_for_diary(
+                event_id=args.event_id,
+                timeout_ms=args.timeout_ms,
+                poll_ms=args.poll_ms,
+            )
+            print(out)
+            try:
+                parsed = _json.loads(out)
+                status = str(parsed.get("status", ""))
+            except Exception:
+                status = ""
+            if status == "ok":
                 return 0
             if status == "retryable_error":
                 return 2

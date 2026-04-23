@@ -147,6 +147,27 @@ def handle_nexo_lifecycle_complete_canonical(
     return json.dumps(ack, ensure_ascii=False)
 
 
+def handle_nexo_lifecycle_wait_for_diary(
+    event_id: str,
+    timeout_ms: int = 45_000,
+    poll_ms: int = 500,
+) -> str:
+    """Wait until a canonical lifecycle event has real diary evidence."""
+    try:
+        ack = lifecycle_events.wait_for_canonical_diary(
+            event_id=str(event_id or ""),
+            timeout_ms=int(timeout_ms or 0),
+            poll_ms=int(poll_ms or 500),
+        )
+    except Exception as exc:
+        return json.dumps({
+            "status": "retryable_error",
+            "reason": f"{type(exc).__name__}: {exc}",
+            "handler_threw": True,
+        }, ensure_ascii=False)
+    return json.dumps(ack, ensure_ascii=False)
+
+
 TOOLS = [
     (
         handle_nexo_lifecycle_event,
@@ -162,5 +183,10 @@ TOOLS = [
         handle_nexo_lifecycle_complete_canonical,
         "nexo_lifecycle_complete_canonical",
         "Confirm that Desktop finished executing the canonical_actions Brain handed out in a prior nexo_lifecycle_event call. Brain marks canonical_done_at only on this confirmation.",
+    ),
+    (
+        handle_nexo_lifecycle_wait_for_diary,
+        "nexo_lifecycle_wait_for_diary",
+        "Wait for concrete session_diary evidence for a canonical lifecycle event before Desktop stops the session.",
     ),
 ]

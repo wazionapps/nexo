@@ -19,7 +19,7 @@ import json
 from typing import Any, Dict, List, Optional
 
 
-PLAN_VERSION = 2
+PLAN_VERSION = 3
 
 
 # Actions that trigger a canonical diary+stop plan. `switch` and
@@ -34,7 +34,8 @@ DIARY_TRIGGERING_ACTIONS = {"close", "delete", "archive", "app-exit"}
 # executes each action; on timeout it reports status=failed and Brain
 # flips delivery_status to retryable_error.
 DEFAULT_RESUME_TIMEOUT_MS = 2_000
-DEFAULT_INJECT_TIMEOUT_MS = 6_000
+DEFAULT_INJECT_TIMEOUT_MS = 30_000
+DEFAULT_DIARY_WAIT_TIMEOUT_MS = 45_000
 DEFAULT_STOP_TIMEOUT_MS = 3_000
 
 
@@ -139,7 +140,16 @@ def build_canonical_plan(
             prompt=prompt,
             expected_tool_call="nexo_session_diary_write",
         ),
-        _canonical_action("a3", "stop_session", str(session_id), DEFAULT_STOP_TIMEOUT_MS),
+        _canonical_action(
+            "a3",
+            "wait_for_diary_write",
+            str(session_id),
+            DEFAULT_DIARY_WAIT_TIMEOUT_MS,
+            event_id=str(event_id),
+            expected_tool_call="nexo_session_diary_write",
+            evidence="session_diary",
+        ),
+        _canonical_action("a4", "stop_session", str(session_id), DEFAULT_STOP_TIMEOUT_MS),
     ]
     return {
         "canonical_plan_id": canonical_plan_id(event_id, PLAN_VERSION),

@@ -114,3 +114,19 @@ Use this order every time:
 6. Check the relevant release/public surfaces if the change is user-visible.
 
 If the answer is still unclear after that, add/update docs before adding more product surface.
+
+## 9. Deferred MCP tools at bootstrap
+
+Claude Code (and similar MCP clients) may list `mcp__nexo__*` tools as **deferred** on fresh installs or after MCP restarts. Deferred means the tool name is surfaced but its JSON schema is not loaded yet — not that the tool is missing. This ambiguity has silently broken bootstrap before (Brain learning #554).
+
+Runbook for agents before declaring NEXO blocked:
+
+1. If an expected `mcp__nexo__*` tool is not directly callable, resolve its schema via the client's discovery path. In Claude Code: run `ToolSearch` with `query="select:mcp__nexo__<name>[,<name>...]"`. After the schema arrives, call the tool normally.
+2. If `nexo_startup` itself is deferred, load it via the same discovery call first — never start a session without a real SID.
+3. Only treat it as a real runtime gap (and surface it as a blocker) after discovery still cannot resolve the tool.
+4. For install-level diagnostics, use `nexo_doctor plane='installation_live'` to inspect client/install surfaces (hooks, MCP registration, managed config). This plane is the canonical place to extend with deferred-vs-loaded tool reporting over time.
+
+Runbook for operators debugging a fresh install:
+
+- If an agent reports that NEXO is missing, confirm first whether the tools are deferred or truly absent. `claude mcp list` shows whether the NEXO MCP server is attached at all.
+- If attached but deferred, the fix is the agent-side discovery call above. The tools are healthy; only the schema load was lazy.

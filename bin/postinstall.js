@@ -8,13 +8,27 @@
 
 const fs = require("fs");
 const path = require("path");
+const { execFileSync } = require("child_process");
 
 const NEXO_HOME = process.env.NEXO_HOME || path.join(require("os").homedir(), ".nexo");
 const VERSION_FILE = path.join(NEXO_HOME, "version.json");
+const INSTALLER = path.join(__dirname, "nexo-brain.js");
 
 if (process.env.NEXO_SKIP_POSTINSTALL === "1") {
   // Called during rollback — skip migration to avoid loops
   process.exit(0);
+}
+
+function runModelWarmup(reason) {
+  if (process.env.NEXO_SKIP_MODEL_WARMUP === "1") {
+    console.log(`\n  NEXO Brain: model warmup skipped by NEXO_SKIP_MODEL_WARMUP (${reason}).`);
+    return;
+  }
+  console.log(`\n  NEXO Brain: warming up local models (${reason})...`);
+  execFileSync(process.execPath, [INSTALLER, "warmup-models", "--postinstall"], {
+    stdio: "inherit",
+    env: { ...process.env, NEXO_POSTINSTALL: "1", NEXO_HOME: NEXO_HOME }
+  });
 }
 
 if (fs.existsSync(VERSION_FILE)) {
@@ -32,9 +46,8 @@ if (fs.existsSync(VERSION_FILE)) {
   // Run the main installer in --yes mode (non-interactive)
   // It will detect the existing version and do migration only
   // Let errors propagate so npm reports the failure correctly
-  const { execFileSync } = require("child_process");
   try {
-    execFileSync(process.execPath, [path.join(__dirname, "nexo-brain.js"), "--yes"], {
+    execFileSync(process.execPath, [INSTALLER, "--yes"], {
       stdio: "inherit",
       env: { ...process.env, NEXO_POSTINSTALL: "1", NEXO_HOME: NEXO_HOME }
     });
@@ -44,6 +57,14 @@ if (fs.existsSync(VERSION_FILE)) {
     process.exit(1);
   }
 } else {
+  try {
+    runModelWarmup("fresh install");
+  } catch (e) {
+    console.error(`\n  NEXO Brain: model warmup FAILED — ${e.message}`);
+    console.error("  Set NEXO_SKIP_MODEL_WARMUP=1 only for CI/offline testing, then run 'nexo-brain warmup-models'.");
+    process.exit(1);
+  }
+
   // Fresh install — just show instructions
   console.log("\n  ╔════════════════════════════════════════════╗");
   console.log("  ║  NEXO Brain installed successfully!       ║");
