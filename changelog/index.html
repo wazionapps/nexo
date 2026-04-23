@@ -87,19 +87,23 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v7.9.1 live</span>
+                    <span class="page-chip">v7.9.2 live</span>
                     <span class="page-chip">Guardian active</span>
                     <span class="page-chip">F0.6 hardening</span>
                     <span class="page-chip">Adaptive empirical</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v791" class="btn btn-primary">Start with v7.9.1</a>
-                    <a href="#v790" class="btn btn-secondary">See v7.9.0</a>
+                    <a href="#v792" class="btn btn-primary">Start with v7.9.2</a>
+                    <a href="#v791" class="btn btn-secondary">See v7.9.1</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
             </div>
             <div class="page-visual">
                 <div class="page-stack">
+                    <div class="page-stack-card">
+                        <strong>v7.9.2</strong>
+                        <span>Patch — completes Brain semantic-router site migration and fixes packaged headless Guardian map loading. Remaining decision callers route through named decision_kind policies: r20, R34, T4 gates, followup attention, Drive signal/area, reply event, query intent, sentiment intent. enforcement_engine and agent_runner now check ~/.nexo/core/tool-enforcement-map.json. 225 targeted tests plus release-readiness.</span>
+                    </div>
                     <div class="page-stack-card">
                         <strong>v7.9.1</strong>
                         <span>Patch — first semantic-router site migration batch. Six conversational Brain decisions now route through semantic_router with explicit decision_kind policies and semantic labels: session_end_intent, r14_correction, r16_declared_done, r17_promise_debt, autonomy_mandate, and guard_verbal_ack. Router/reasoner local paths classify live context, not static prompt templates. 105 targeted tests.</span>
@@ -228,6 +232,16 @@
 <section class="section-compact" style="background:rgba(124,58,237,0.08);">
     <div class="container desktop-disclaimer" style="max-width:860px;font-size:13px;line-height:1.55;">
         <p><strong>Sobre NEXO Desktop.</strong> NEXO Desktop es un cliente acompa&ntilde;ante closed-source distribuido aparte en <a href="https://nexo-desktop.com/">nexo-desktop.com</a>. Cuando una entrada de changelog menciona "NEXO Desktop" se refiere a una versi&oacute;n coordinada de ese cliente que consume el contrato CLI/MCP del Brain. El c&oacute;digo de Desktop no vive en este repo; el Brain (AGPL-3.0) es 100% usable por s&iacute; solo desde terminal, Codex, Claude Code, o cualquier cliente MCP.</p>
+    </div>
+</section>
+
+<section id="v792" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.9.2 <span style="opacity:.5;font-weight:400;">&mdash; April 23, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">Semantic-router migration complete + packaged headless Guardian map loading fixed</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            Patch over v7.9.1. Brain's remaining semantic decision callers now route through <code>semantic_router.route(...)</code> with named <code>decision_kind</code> policies instead of each file owning local classifier or LLM fallback policy. The migrated decisions are <code>r20_constant_change</code>, <code>r34_identity_coherence</code>, <code>t4_r15</code>, <code>t4_r23e</code>, <code>t4_r23f</code>, <code>t4_r23h</code>, <code>followup_operator_attention</code>, <code>drive_signal_type</code>, <code>drive_area</code>, <code>reply_event_type</code>, <code>query_intent</code>, and <code>sentiment_intent</code>. Structural fallbacks remain where they protect degraded operation, but Brain's router owns model choice, thresholds, and fallback behaviour centrally. Runtime audit also found a packaged-headless bug: <code>tool-enforcement-map.json</code> existed under <code>~/.nexo/core</code>, while the Python loaders never checked the installed core directory. <code>enforcement_engine._load_map()</code> and <code>agent_runner._build_enforcement_system_prompt()</code> now check <code>Path(__file__).parent / tool-enforcement-map.json</code>, so followup-runner, morning-agent, digest, email-monitor, and other packaged headless jobs load the Guardian map instead of logging <code>No enforcement map found</code>. Tests: 100 semantic/router/enforcer tests, 125 Drive/cognitive/productization tests, and release-readiness passing.
+        </p>
     </div>
 </section>
 
