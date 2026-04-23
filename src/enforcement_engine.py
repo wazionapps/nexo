@@ -322,6 +322,7 @@ def _redact_for_log(text: str, max_len: int = 200) -> str:
 
 def _load_map() -> dict | None:
     for candidate in [
+        Path(__file__).parent / MAP_FILENAME,
         paths.home() / MAP_FILENAME,
         paths.brain_dir() / MAP_FILENAME,
         paths.legacy_brain_dir() / MAP_FILENAME,
@@ -613,7 +614,7 @@ class HeadlessEnforcer:
 
         correction_detector is an injection point for tests. In production it
         defaults to r14_correction_learning.detect_correction which routes
-        through enforcement_classifier + call_model_raw. Fail-closed: a
+        through semantic_router. Fail-closed: a
         broken classifier keeps the window closed (no false positives).
         """
         self.user_message_count += 1
@@ -1134,7 +1135,6 @@ class HeadlessEnforcer:
             self._t4_gate_warned = set()
         try:
             from t4_llm_gate import build_prompt, classify_with_llm
-            from enforcement_classifier import classify as _classifier_raw
         except Exception as exc:
             key = (rule_id, f"import:{exc.__class__.__name__}")
             if key not in self._t4_gate_warned:
@@ -1147,15 +1147,40 @@ class HeadlessEnforcer:
             )
             return False
 
-        # Auditor H1 fix: the legacy bool contract of `classify` collapses
-        # "classifier said no" and "classifier response unparseable after
-        # two retries — conservative fallback" into the same False, which
-        # would silently suppress destructive rules (R23e/R23f/R23h) when
-        # the backend responds with garbage. Force the tristate path so
-        # "unknown" falls through to regex behaviour instead of becoming
-        # a silent rule disable.
+        # Auditor H1 invariant: only an explicit semantic "no" may suppress
+        # a regex hit. Router unavailable/no_route/ambiguous answers fall
+        # through as "unknown" so the original rule still protects us.
         def _classifier_tristate(q: str, ctx: str) -> str:
-            return _classifier_raw(q, ctx, tristate=True)
+            decision_kind_by_rule = {
+                "R15": "t4_r15",
+                "R23e": "t4_r23e",
+                "R23f": "t4_r23f",
+                "R23h": "t4_r23h",
+            }
+            decision_kind = decision_kind_by_rule.get(rule_id)
+            if not decision_kind:
+                return "unknown"
+            try:
+                from semantic_router import route as semantic_route
+            except Exception:
+                return "unknown"
+            try:
+                result = semantic_route(
+                    decision_kind=decision_kind,
+                    question=q,
+                    context=ctx,
+                    labels=("rule_applies", "false_positive"),
+                )
+            except Exception:
+                return "unknown"
+            if not result.ok:
+                return "unknown"
+            label = result.label or result.verdict
+            if label == "rule_applies":
+                return "yes"
+            if label == "false_positive":
+                return "no"
+            return "unknown"
 
         prompt = build_prompt(rule_id, span=span, context=context)
         if not prompt:
@@ -1885,6 +1910,31 @@ class HeadlessEnforcer:
         if mode == "off":
             return
         recent_names = [r.tool for r in self.recent_tool_records]
+        if classifier is None:
+            def _semantic_classifier(question: str, context: str):
+                try:
+                    from semantic_router import route as semantic_route
+                except Exception:
+                    return "unknown"
+                try:
+                    result = semantic_route(
+                        decision_kind="r34_identity_coherence",
+                        question=question,
+                        context=context,
+                        labels=("past_action_denial", "not_a_denial"),
+                    )
+                except Exception:
+                    return "unknown"
+                if not result.ok:
+                    return "unknown"
+                label = result.label or result.verdict
+                if label == "past_action_denial":
+                    return "yes"
+                if label == "not_a_denial":
+                    return "no"
+                return "unknown"
+
+            classifier = _semantic_classifier
         try:
             inject, prompt, matched = _r34_should(
                 text, recent_tool_names=recent_names, classifier=classifier,

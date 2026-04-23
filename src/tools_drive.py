@@ -8,7 +8,6 @@ heartbeat, task_close, and diary consolidation.
 import json
 import os
 import re
-import subprocess
 import time
 import unicodedata
 from core_prompts import render_core_prompt
@@ -30,29 +29,14 @@ _SEMANTIC_THRESHOLD = 0.75
 _SEMANTIC_MARGIN = 0.15
 _LLM_MIN_TEXT_CHARS = int(os.environ.get("NEXO_DRIVE_LLM_MIN_CHARS", "24"))
 _LOCAL_CONFIDENCE_THRESHOLD = float(os.environ.get("NEXO_DRIVE_LOCAL_CONFIDENCE", "0.72"))
-_LLM_TIMEOUT_SECONDS = int(os.environ.get("NEXO_DRIVE_LLM_TIMEOUT", "20"))
 _LLM_CONFIDENCE_THRESHOLD = float(os.environ.get("NEXO_DRIVE_LLM_CONFIDENCE", "0.62"))
 _LLM_CACHE_TTL_SECONDS = int(os.environ.get("NEXO_DRIVE_LLM_CACHE_TTL", "21600"))
-_LLM_ALLOWED_LABELS = {"anomaly", "pattern", "gap", "opportunity", "none"}
 _LLM_CLASSIFICATION_CACHE: dict[str, dict] = {}
-_AREA_LLM_ALLOWED_LABELS = {
-    "shopify",
-    "google-ads",
-    "meta-ads",
-    "wazion",
-    "nexo",
-    "canaririural",
-    "seo",
-    "email",
-    "none",
-}
 _LLM_AREA_CLASSIFICATION_CACHE: dict[str, dict] = {}
 _LOCAL_ALLOWED_LABELS = ("anomaly", "pattern", "gap", "opportunity", "none")
-_LOCAL_SIGNAL_CLASSIFIER = None
 _AREA_SCORE_THRESHOLD = 0.64
 _AREA_SCORE_MARGIN = 0.14
 _AREA_LOCAL_CONFIDENCE_THRESHOLD = float(os.environ.get("NEXO_DRIVE_AREA_LOCAL_CONFIDENCE", "0.66"))
-_LOCAL_AREA_CLASSIFIER = None
 
 _SIGNAL_CUES = {
     "anomaly": {
@@ -323,29 +307,29 @@ def _local_classify_signal(text: str) -> dict:
     if len(text_norm) < _LLM_MIN_TEXT_CHARS:
         return {"available": False, "label": None, "reason": "text_too_short"}
 
-    global _LOCAL_SIGNAL_CLASSIFIER
     try:
-        if _LOCAL_SIGNAL_CLASSIFIER is None:
-            from classifier_local import LocalZeroShotClassifier
-
-            _LOCAL_SIGNAL_CLASSIFIER = LocalZeroShotClassifier(
-                confidence_floor=_LOCAL_CONFIDENCE_THRESHOLD,
-            )
-        if not _LOCAL_SIGNAL_CLASSIFIER.is_available():
-            return {"available": False, "label": None, "reason": "classifier_unavailable"}
-        result = _LOCAL_SIGNAL_CLASSIFIER.classify(text, _LOCAL_ALLOWED_LABELS)
-        if result is None:
-            return {"available": False, "label": None, "reason": "classifier_failed"}
+        from semantic_router import route as semantic_route
+    except Exception as exc:
+        return {"available": False, "label": None, "reason": f"router_unavailable:{exc}"}
+    try:
+        result = semantic_route(
+            decision_kind="drive_signal_type",
+            question=render_core_prompt("drive-signal-classifier-system"),
+            context=text.strip()[:3000],
+            labels=_LOCAL_ALLOWED_LABELS,
+        )
+        if not result.ok:
+            return {"available": False, "label": None, "reason": result.error or "router_no_route"}
         label = result.label if result.label in _LOCAL_ALLOWED_LABELS else None
         return {
             "available": label is not None,
             "label": None if label == "none" else label,
             "confidence": float(result.confidence or 0.0),
-            "reason": "local_zero_shot",
-            "source": "local",
+            "reason": result.route_used,
+            "source": "semantic_router",
         }
     except Exception as exc:
-        return {"available": False, "label": None, "reason": f"classifier_error:{exc}"}
+        return {"available": False, "label": None, "reason": f"router_error:{exc}"}
 
 
 def _llm_classify_signal(text: str) -> dict:
@@ -359,54 +343,7 @@ def _llm_classify_signal(text: str) -> dict:
     if cached and cached.get("expires_at", 0) > now:
         return {k: v for k, v in cached.items() if k != "expires_at"}
 
-    try:
-        from agent_runner import AutomationBackendUnavailableError, run_automation_prompt
-    except Exception as exc:
-        return {"available": False, "label": None, "reason": f"runner_unavailable:{exc}"}
-
-    json_system_prompt = render_core_prompt("drive-signal-classifier-system")
-    prompt = render_core_prompt(
-        "drive-signal-classifier-user",
-        text=text.strip()[:3000],
-    )
-
-    try:
-        result = run_automation_prompt(
-            prompt,
-            caller="tools/drive_search",
-            task_profile="fast",
-            timeout=_LLM_TIMEOUT_SECONDS,
-            output_format="text",
-            append_system_prompt=json_system_prompt,
-        )
-    except (AutomationBackendUnavailableError, subprocess.TimeoutExpired) as exc:
-        return {"available": False, "label": None, "reason": f"automation_unavailable:{exc}"}
-    except Exception as exc:
-        return {"available": False, "label": None, "reason": f"automation_error:{exc}"}
-
-    if result.returncode != 0:
-        return {"available": False, "label": None, "reason": f"automation_returncode:{result.returncode}"}
-
-    parsed = _extract_json_object(result.stdout)
-    if not parsed:
-        return {"available": False, "label": None, "reason": "invalid_json"}
-
-    label = str(parsed.get("label", "") or "").strip().lower()
-    if label not in _LLM_ALLOWED_LABELS:
-        return {"available": False, "label": None, "reason": "invalid_label"}
-
-    try:
-        confidence = float(parsed.get("confidence", 0.0) or 0.0)
-    except (TypeError, ValueError):
-        confidence = 0.0
-
-    classification = {
-        "available": True,
-        "label": None if label == "none" else label,
-        "confidence": confidence,
-        "reason": str(parsed.get("reason", "") or ""),
-        "source": "llm",
-    }
+    classification = _local_classify_signal(text)
     _LLM_CLASSIFICATION_CACHE[cache_key] = {
         **classification,
         "expires_at": now + _LLM_CACHE_TTL_SECONDS,
@@ -425,54 +362,7 @@ def _llm_classify_area(text: str) -> dict:
     if cached and cached.get("expires_at", 0) > now:
         return {k: v for k, v in cached.items() if k != "expires_at"}
 
-    try:
-        from agent_runner import AutomationBackendUnavailableError, run_automation_prompt
-    except Exception as exc:
-        return {"available": False, "label": None, "reason": f"runner_unavailable:{exc}"}
-
-    json_system_prompt = render_core_prompt("drive-area-classifier-system")
-    prompt = render_core_prompt(
-        "drive-area-classifier-user",
-        text=text.strip()[:3000],
-    )
-
-    try:
-        result = run_automation_prompt(
-            prompt,
-            caller="tools/drive_area",
-            task_profile="fast",
-            timeout=_LLM_TIMEOUT_SECONDS,
-            output_format="text",
-            append_system_prompt=json_system_prompt,
-        )
-    except (AutomationBackendUnavailableError, subprocess.TimeoutExpired) as exc:
-        return {"available": False, "label": None, "reason": f"automation_unavailable:{exc}"}
-    except Exception as exc:
-        return {"available": False, "label": None, "reason": f"automation_error:{exc}"}
-
-    if result.returncode != 0:
-        return {"available": False, "label": None, "reason": f"automation_returncode:{result.returncode}"}
-
-    parsed = _extract_json_object(result.stdout)
-    if not parsed:
-        return {"available": False, "label": None, "reason": "invalid_json"}
-
-    label = str(parsed.get("label", "") or "").strip().lower()
-    if label not in _AREA_LLM_ALLOWED_LABELS:
-        return {"available": False, "label": None, "reason": "invalid_label"}
-
-    try:
-        confidence = float(parsed.get("confidence", 0.0) or 0.0)
-    except (TypeError, ValueError):
-        confidence = 0.0
-
-    classification = {
-        "available": True,
-        "label": None if label == "none" else label,
-        "confidence": confidence,
-        "reason": str(parsed.get("reason", "") or ""),
-        "source": "llm",
-    }
+    classification = _local_classify_area(text)
     _LLM_AREA_CLASSIFICATION_CACHE[cache_key] = {
         **classification,
         "expires_at": now + _LLM_CACHE_TTL_SECONDS,
@@ -554,31 +444,31 @@ def _local_classify_area(text: str) -> dict:
     if len(text_norm) < _LLM_MIN_TEXT_CHARS:
         return {"available": False, "label": None, "reason": "text_too_short"}
 
-    global _LOCAL_AREA_CLASSIFIER
     try:
-        if _LOCAL_AREA_CLASSIFIER is None:
-            from classifier_local import LocalZeroShotClassifier
-
-            _LOCAL_AREA_CLASSIFIER = LocalZeroShotClassifier(
-                confidence_floor=_AREA_LOCAL_CONFIDENCE_THRESHOLD,
-            )
-        if not _LOCAL_AREA_CLASSIFIER.is_available():
-            return {"available": False, "label": None, "reason": "classifier_unavailable"}
+        from semantic_router import route as semantic_route
+    except Exception as exc:
+        return {"available": False, "label": None, "reason": f"router_unavailable:{exc}"}
+    try:
         label_texts = [label for label, _canonical in _AREA_LOCAL_LABELS]
         canonical_by_label = {label: canonical for label, canonical in _AREA_LOCAL_LABELS}
-        result = _LOCAL_AREA_CLASSIFIER.classify(text, label_texts)
-        if result is None:
-            return {"available": False, "label": None, "reason": "classifier_failed"}
+        result = semantic_route(
+            decision_kind="drive_area",
+            question=render_core_prompt("drive-area-classifier-system"),
+            context=text.strip()[:3000],
+            labels=tuple(label_texts),
+        )
+        if not result.ok:
+            return {"available": False, "label": None, "reason": result.error or "router_no_route"}
         canonical = canonical_by_label.get(result.label)
         return {
             "available": canonical is not None,
             "label": None if canonical == "none" else canonical,
             "confidence": float(result.confidence or 0.0),
-            "reason": "local_zero_shot",
-            "source": "local",
+            "reason": result.route_used,
+            "source": "semantic_router",
         }
     except Exception as exc:
-        return {"available": False, "label": None, "reason": f"classifier_error:{exc}"}
+        return {"available": False, "label": None, "reason": f"router_error:{exc}"}
 
 
 def _legacy_keyword_area(text: str) -> str:

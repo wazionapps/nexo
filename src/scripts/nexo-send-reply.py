@@ -94,7 +94,6 @@ RESOLUTION_PATTERNS = (
 )
 
 _REPLY_EVENT_CONFIDENCE = float(os.environ.get("NEXO_REPLY_EVENT_CONFIDENCE", "0.72"))
-_LOCAL_REPLY_EVENT_CLASSIFIER = None
 _REPLY_EVENT_LABELS = (
     ("The reply acknowledges receipt or says the work starts now", "ack"),
     ("The reply makes a future commitment or promises an update later", "commitment"),
@@ -180,20 +179,20 @@ def _classify_reply_event_semantically(body_text):
     if len(text) < 20:
         return None
 
-    global _LOCAL_REPLY_EVENT_CLASSIFIER
     try:
-        if _LOCAL_REPLY_EVENT_CLASSIFIER is None:
-            from classifier_local import LocalZeroShotClassifier
-
-            _LOCAL_REPLY_EVENT_CLASSIFIER = LocalZeroShotClassifier(
-                confidence_floor=_REPLY_EVENT_CONFIDENCE,
-            )
-        if not _LOCAL_REPLY_EVENT_CLASSIFIER.is_available():
-            return None
+        from semantic_router import route as semantic_route
+    except Exception:
+        return None
+    try:
         label_texts = [label for label, _canonical in _REPLY_EVENT_LABELS]
         canonical_by_label = {label: canonical for label, canonical in _REPLY_EVENT_LABELS}
-        result = _LOCAL_REPLY_EVENT_CLASSIFIER.classify(text, label_texts)
-        if result is None:
+        result = semantic_route(
+            decision_kind="reply_event_type",
+            question="Classify the email reply lifecycle event.",
+            context=text,
+            labels=tuple(label_texts),
+        )
+        if not result.ok:
             return None
         if float(result.confidence or 0.0) < _REPLY_EVENT_CONFIDENCE:
             return None

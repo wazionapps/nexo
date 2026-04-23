@@ -9,10 +9,11 @@ Fase 2 Protocol Enforcer Fase D item R20. Plan doc 1 reads:
 Decision logic is split in two:
 
   1. classify_edit_is_constant_change(file_path, new_string, classifier)
-     → bool. Uses enforcement_classifier over a prompt that asks whether
-     the edited region looks like a module-level constant, enum member,
-     configuration key, or shared global (as opposed to a local variable,
-     helper body, or doc-string edit).
+     → bool. Uses semantic_router decision_kind ``r20_constant_change``
+     over a prompt that asks whether the edited region looks like a
+     module-level constant, enum member, configuration key, or shared
+     global (as opposed to a local variable, helper body, or doc-string
+     edit).
 
   2. recent_grep_covers_symbol(symbol, recent_tool_records) → bool.
      Structural — walks the recent tool records (same shape as R13) and
@@ -30,6 +31,8 @@ import re
 from core_prompts import render_core_prompt
 
 CLASSIFIER_QUESTION = render_core_prompt("r20-constant-change-question")
+SEMANTIC_LABELS = ("shared_constant_change", "local_or_non_constant_change")
+POSITIVE_LABEL = "shared_constant_change"
 
 INJECTION_PROMPT_TEMPLATE = render_core_prompt(
     "r20-constant-change-injection",
@@ -62,10 +65,21 @@ def classify_edit_is_constant_change(
         return False
     if classifier is None:
         try:
-            from enforcement_classifier import classify as classifier  # type: ignore
+            from semantic_router import route as semantic_route
         except Exception:
             return False
     context = f"File: {file_path}\n\nEdited region:\n{new_string[:400]}"
+    if classifier is None:
+        try:
+            result = semantic_route(
+                decision_kind="r20_constant_change",
+                question=CLASSIFIER_QUESTION,
+                context=context,
+                labels=SEMANTIC_LABELS,
+            )
+            return bool(result.ok and (result.label or result.verdict) == POSITIVE_LABEL)
+        except Exception:
+            return False
     try:
         return bool(classifier(question=CLASSIFIER_QUESTION, context=context))
     except Exception:

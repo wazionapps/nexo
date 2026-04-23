@@ -19,7 +19,7 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
@@ -248,6 +248,25 @@ def _check_website(version: str, website_root: Path) -> None:
         include_readme=False,
         include_well_known=True,
     )
+    _check_version_blog_post(version, website_root)
+
+
+def _check_version_blog_post(version: str, website_root: Path) -> None:
+    """Fail-hard guard: the per-version blog post directory must exist in main before tag.
+
+    Prior failure mode: v7.9.0 merged with the aggregator linking /blog/nexo-7-9-0/
+    but the actual blog/nexo-7-9-0/index.html was missing (patched afterwards in PR #278).
+    Checking aggregator markers is not enough — the target file must really exist.
+    """
+    version_slug = version.replace(".", "-")
+    blog_post = website_root / "blog" / f"nexo-{version_slug}" / "index.html"
+    if not blog_post.is_file():
+        raise SystemExit(
+            f"[release-readiness] per-version blog post missing: {blog_post}. "
+            f"Create blog/nexo-{version_slug}/index.html in the website tree and merge it "
+            "into main before tagging."
+        )
+    print(f"[release-readiness] per-version blog post OK ({blog_post})")
 
 
 def _check_repo_public_surfaces(version: str, repo_root: Path = ROOT) -> None:
@@ -492,6 +511,162 @@ def _check_critical_surfaces(
     print(f"[release-readiness] critical installed surfaces OK ({checked})")
 
 
+def _check_required_skills(
+    contract: dict,
+    *,
+    nexo_home: Path,
+    repo_root: Path = ROOT,
+) -> None:
+    """Block release if SK-AUDIT-* skills declared in the contract did not actually run.
+
+    Accepts both an explicit `required_skills` list and bare `SK-AUDIT-*`/`SK-RUN-*-AUDIT`
+    mentions inside gate evidence strings, so operators cannot claim "we ran the audit"
+    with a grep while the skill_usage audit log proves otherwise.
+    """
+    declared: dict[str, dict] = {}
+
+    raw_required = contract.get("required_skills")
+    if raw_required is not None:
+        if not isinstance(raw_required, list) or not raw_required:
+            raise SystemExit("[release-readiness] contract required_skills must be a non-empty list when present")
+        for index, entry in enumerate(raw_required, start=1):
+            if not isinstance(entry, dict):
+                raise SystemExit(f"[release-readiness] required_skills entry #{index} must be an object")
+            skill_id = str(entry.get("id", "") or "").strip()
+            if not skill_id:
+                raise SystemExit(f"[release-readiness] required_skills entry #{index} missing id")
+            min_success_raw = entry.get("min_success", 1)
+            try:
+                min_success = int(min_success_raw)
+            except (TypeError, ValueError) as exc:
+                raise SystemExit(
+                    f"[release-readiness] required_skills[{skill_id}] min_success must be integer"
+                ) from exc
+            if min_success < 1:
+                raise SystemExit(f"[release-readiness] required_skills[{skill_id}] min_success must be >= 1")
+            max_age_raw = entry.get("max_age_hours", 168)
+            try:
+                max_age_hours = float(max_age_raw)
+            except (TypeError, ValueError) as exc:
+                raise SystemExit(
+                    f"[release-readiness] required_skills[{skill_id}] max_age_hours must be numeric"
+                ) from exc
+            if max_age_hours <= 0:
+                raise SystemExit(f"[release-readiness] required_skills[{skill_id}] max_age_hours must be > 0")
+            declared[skill_id] = {"min_success": min_success, "max_age_hours": max_age_hours}
+
+    implicit_pattern = re.compile(r"\bSK-[A-Z0-9-]*AUDIT[A-Z0-9-]*\b")
+
+    def _collect_text(value) -> str:
+        if isinstance(value, str):
+            return value
+        if isinstance(value, list):
+            return "\n".join(_collect_text(item) for item in value)
+        if isinstance(value, dict):
+            return "\n".join(_collect_text(item) for item in value.values())
+        return ""
+
+    implicit_sources: list[str] = []
+    for key in ("gates", "critical_surfaces", "publication", "description", "notes"):
+        if key in contract:
+            implicit_sources.append(_collect_text(contract.get(key)))
+    implicit_ids = {
+        match.strip()
+        for chunk in implicit_sources
+        for match in implicit_pattern.findall(chunk)
+        if match.strip()
+    }
+    drift = sorted(skill_id for skill_id in implicit_ids if skill_id not in declared)
+    if drift:
+        raise SystemExit(
+            "[release-readiness] contract mentions SK-AUDIT-* skills but they are missing from required_skills:\n- "
+            + "\n- ".join(drift)
+            + "\n  Declare each one in required_skills (id + min_success + max_age_hours) so the audit log gate can enforce real execution."
+        )
+
+    if not declared:
+        return
+
+    db_path = nexo_home / "data" / "nexo.db"
+    if not db_path.is_file():
+        raise SystemExit(
+            f"[release-readiness] cannot verify required_skills: runtime DB missing at {db_path}. "
+            "Set NEXO_HOME or --nexo-home to the live install before re-running."
+        )
+
+    failures: list[str] = []
+    checked = 0
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        try:
+            skill_rows = {
+                str(row["id"]): row
+                for row in conn.execute("SELECT id, name, level FROM skills WHERE id IN (%s)"
+                    % ",".join("?" * len(declared)), tuple(declared.keys())).fetchall()
+            }
+        except sqlite3.OperationalError as exc:
+            raise SystemExit(f"[release-readiness] cannot read skills table: {exc}") from exc
+
+        for skill_id, rules in declared.items():
+            checked += 1
+            if skill_id not in skill_rows:
+                failures.append(f"{skill_id}: not registered in skills table (typo or stale contract)")
+                continue
+            try:
+                usage_rows = conn.execute(
+                    """
+                    SELECT created_at, success, session_id, context
+                    FROM skill_usage
+                    WHERE skill_id = ? AND success = 1
+                    ORDER BY created_at DESC
+                    LIMIT 25
+                    """,
+                    (skill_id,),
+                ).fetchall()
+            except sqlite3.OperationalError as exc:
+                raise SystemExit(f"[release-readiness] cannot read skill_usage for {skill_id}: {exc}") from exc
+
+            cutoff = datetime.now(timezone.utc) - timedelta(hours=rules["max_age_hours"])
+            fresh: list[sqlite3.Row] = []
+            for row in usage_rows:
+                raw_ts = str(row["created_at"] or "").strip()
+                if not raw_ts:
+                    continue
+                try:
+                    when = _parse_iso_timestamp(f"skill_usage[{skill_id}].created_at", raw_ts)
+                except SystemExit:
+                    candidate = raw_ts
+                    if " " in candidate and "T" not in candidate:
+                        candidate = candidate.replace(" ", "T")
+                    if not candidate.endswith("Z") and "+" not in candidate[10:]:
+                        candidate += "Z"
+                    try:
+                        when = _parse_iso_timestamp(f"skill_usage[{skill_id}].created_at", candidate)
+                    except SystemExit:
+                        continue
+                if when >= cutoff:
+                    fresh.append(row)
+
+            if len(fresh) < rules["min_success"]:
+                most_recent = str(usage_rows[0]["created_at"]) if usage_rows else "never"
+                failures.append(
+                    f"{skill_id}: only {len(fresh)} successful run(s) in the last {rules['max_age_hours']:.0f}h "
+                    f"(need {rules['min_success']}, most recent overall: {most_recent}). "
+                    f"Run the skill or supersede the contract."
+                )
+
+    finally:
+        conn.close()
+
+    if failures:
+        raise SystemExit(
+            "[release-readiness] declared audit skills never ran (skill_usage gate):\n- "
+            + "\n- ".join(failures)
+        )
+    print(f"[release-readiness] required skills OK ({checked} audit skill(s) verified against skill_usage)")
+
+
 def _check_publication_state(contract: dict, *, require_complete: bool) -> None:
     publication = contract.get("publication")
     if publication is None:
@@ -608,6 +783,7 @@ def _check_contract(
         website_root=website_root,
         nexo_home=nexo_home,
     )
+    _check_required_skills(contract, nexo_home=nexo_home, repo_root=repo_root)
     _check_publication_state(contract, require_complete=require_complete)
 
     print(

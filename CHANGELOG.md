@@ -1,5 +1,48 @@
 # Changelog
 
+## [7.9.2] - 2026-04-23
+
+Patch release. Completes the Brain semantic-router site migration that started
+in v7.9.1 and fixes a headless Guardian map-loading gap found in runtime audit.
+
+### Changed — semantic router call-site migration
+
+- Migrated the remaining Brain semantic decision callers to
+  `semantic_router.route(...)` with named `decision_kind` policies:
+  - `src/r20_constant_change.py` → `decision_kind="r20_constant_change"`
+  - `src/enforcement_engine.py` R34 → `decision_kind="r34_identity_coherence"`
+  - `src/enforcement_engine.py` T4 gates → `decision_kind="t4_r15"`,
+    `decision_kind="t4_r23e"`, `decision_kind="t4_r23f"`,
+    `decision_kind="t4_r23h"`
+  - `src/scripts/nexo-followup-runner.py` →
+    `decision_kind="followup_operator_attention"`
+  - `src/tools_drive.py` → `decision_kind="drive_signal_type"` and
+    `decision_kind="drive_area"`
+  - `src/scripts/nexo-send-reply.py` → `decision_kind="reply_event_type"`
+  - `src/cognitive/_search.py` → `decision_kind="query_intent"`
+  - `src/cognitive/_trust.py` → `decision_kind="sentiment_intent"`
+- Callers no longer choose local-vs-reasoner policy directly. They declare the
+  decision kind and Brain's router owns model choice, thresholds and fallback
+  behaviour. Existing structural fallbacks remain in place where they protect
+  degraded operation.
+
+### Fixed — headless Guardian enforcement map
+
+- `enforcement_engine._load_map()` now checks the installed core directory
+  (`Path(__file__).parent / tool-enforcement-map.json`) before legacy/home
+  fallback paths. Packaged headless jobs such as followup-runner, morning-agent,
+  digest and email monitor can now load the Guardian map from `~/.nexo/core`
+  instead of logging `No enforcement map found`.
+- `agent_runner._build_enforcement_system_prompt()` uses the same installed
+  core fallback, so headless client prompts also receive the enforcement map
+  when running from a packaged install.
+
+### Tests
+
+- Added regression coverage for every migrated call site plus the installed
+  core map path. Targeted validation: 100 semantic/router/enforcer tests,
+  125 Drive/cognitive/productization tests, and release-readiness passing.
+
 ## [7.9.1] - 2026-04-23
 
 Patch release. First semantic-router site-migration batch after v7.9.0.

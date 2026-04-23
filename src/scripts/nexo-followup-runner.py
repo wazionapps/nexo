@@ -159,30 +159,8 @@ def _classifier_requires_operator_attention(text: str, operator_name: str = "") 
     clean_text = " ".join(str(text or "").split())
     if len(clean_text) < 12:
         return None
-    try:
-        from classifier_local import LocalZeroShotClassifier
-    except Exception:
-        return None
-
-    classifier = LocalZeroShotClassifier(confidence_floor=0.72)
-    if not classifier.is_available():
-        return None
 
     needs_attention, can_continue, waiting_external = _operator_attention_label_set(operator_name)
-    result = classifier.classify(clean_text, labels=(needs_attention, can_continue, waiting_external))
-    if result is None or result.confidence < 0.72:
-        return None
-    if result.label == needs_attention:
-        return True
-    if result.label in {can_continue, waiting_external}:
-        return False
-    return None
-
-
-def _llm_requires_operator_attention(text: str, operator_name: str = "") -> bool | None:
-    clean_text = " ".join(str(text or "").split())
-    if len(clean_text) < 24:
-        return None
     clean_operator = " ".join(str(operator_name or "").split()).strip()
     subject = clean_operator if clean_operator else "the operator"
     question = render_core_prompt(
@@ -194,20 +172,30 @@ def _llm_requires_operator_attention(text: str, operator_name: str = "") -> bool
         pending_item=clean_text,
     )
     try:
-        from enforcement_classifier import ClassifierUnavailableError, classify
+        from semantic_router import route as semantic_route
     except Exception:
         return None
     try:
-        verdict = classify(question, context=context, tier="muy_bajo", tristate=True)
-    except ClassifierUnavailableError:
-        return None
+        result = semantic_route(
+            decision_kind="followup_operator_attention",
+            question=question,
+            context=context,
+            labels=(needs_attention, can_continue, waiting_external),
+        )
     except Exception:
         return None
-    if verdict == "yes":
+    if not result.ok:
+        return None
+    label = result.label or result.verdict
+    if label == needs_attention:
         return True
-    if verdict == "no":
+    if label in {can_continue, waiting_external}:
         return False
     return None
+
+
+def _llm_requires_operator_attention(text: str, operator_name: str = "") -> bool | None:
+    return _classifier_requires_operator_attention(text, operator_name=operator_name)
 
 
 def _followup_needs_operator_attention(followup: dict, operator_name: str = "") -> bool:

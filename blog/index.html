@@ -134,7 +134,7 @@
                     <span class="page-chip">Shared brain product notes</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="/blog/nexo-7-9-1/" class="btn btn-primary">Read latest release</a>
+                    <a href="/blog/nexo-7-9-2/" class="btn btn-primary">Read latest release</a>
                     <a href="/changelog/" class="btn btn-secondary">Latest release notes</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -145,22 +145,22 @@
                 <div class="blog-featured-meta">
                     <span class="compare-chip">April 23, 2026</span>
                     <span class="compare-chip">Patch</span>
-                    <span class="compare-chip">semantic router site migration batch 1</span>
+                    <span class="compare-chip">semantic router migration complete</span>
                 </div>
-                <h2>NEXO 7.9.1: first semantic-router site migration batch</h2>
-                <p>Patch over v7.9.0. The semantic stack is no longer just scaffolding for the first conversational group: session_end_intent, r14_correction, r16_declared_done, r17_promise_debt, autonomy_mandate, and guard_verbal_ack now call semantic_router.route with explicit decision_kind policies and semantic labels. Existing classifier injection seams remain intact for tests, and router/reasoner local paths now classify the live context instead of the static prompt template. 105 targeted tests cover the migrated callers and the context-classification regression.</p>
+                <h2>NEXO 7.9.2: semantic-router migration complete + headless Guardian map fix</h2>
+                <p>Patch over v7.9.1. Brain's remaining semantic decision callers now route through named semantic_router decision_kind policies, so model choice, thresholds, and fallback behaviour live in one authority. Packaged headless Guardian jobs now load the enforcement map from ~/.nexo/core instead of logging No enforcement map found. 225 targeted tests plus release-readiness.</p>
                 <div class="hero-actions" style="justify-content:flex-start;margin-bottom:18px;">
-                    <a href="/blog/nexo-7-9-1/" class="btn btn-primary">Open article</a>
-                    <a href="/changelog/#v791" class="btn btn-secondary">Open changelog</a>
+                    <a href="/blog/nexo-7-9-2/" class="btn btn-primary">Open article</a>
+                    <a href="/changelog/#v792" class="btn btn-secondary">Open changelog</a>
                 </div>
                 <div class="blog-mini-stack">
                     <div class="blog-mini-card">
                         <strong>Companion view</strong>
-                        <span><a href="/changelog/#v791">See the full v7.9.1 changelog</a></span>
+                        <span><a href="/changelog/#v792">See the full v7.9.2 changelog</a></span>
                     </div>
                     <div class="blog-mini-card">
                         <strong>Previous release</strong>
-                        <span><a href="/blog/nexo-7-9-0/">NEXO 7.9.0: semantic stack scaffolding</a>.</span>
+                        <span><a href="/blog/nexo-7-9-1/">NEXO 7.9.1: first semantic-router site migration batch</a>.</span>
                     </div>
                 </div>
             </div>
@@ -191,6 +191,15 @@
 <section class="section-flush-top">
     <div class="container">
         <div class="blog-grid">
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 23, 2026</div>
+                <h2><a href="/blog/nexo-7-9-2/">NEXO 7.9.2: semantic-router migration complete + headless Guardian map fix</a></h2>
+                <p>Patch over v7.9.1. Remaining Brain decision callers now declare named semantic_router decision_kinds, and packaged headless Guardian jobs load the map from ~/.nexo/core. 225 targeted tests plus release-readiness.</p>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/blog/nexo-7-9-2/" class="btn btn-secondary">Read more</a>
+                </div>
+            </div>
 
             <div class="blog-card">
                 <div class="blog-card-date">April 23, 2026</div>
