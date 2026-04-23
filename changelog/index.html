@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.1.7 makes operator-facing email automation respect calibration language end-to-end, so monitor escalations stop drifting into English on Spanish setups.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.1 migrates the first six conversational decisions onto the semantic router.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.1.7 makes operator-facing email automation respect calibration language end-to-end, so monitor escalations stop drifting into English on Spanish setups.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.1 migrates the first six conversational decisions onto the semantic router.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.1.7 makes operator-facing email automation respect calibration language end-to-end, so monitor escalations stop drifting into English on Spanish setups.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.1 migrates the first six conversational decisions onto the semantic router.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.1.7 makes operator-facing email automation respect calibration language end-to-end, so monitor escalations stop drifting into English on Spanish setups.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.1 migrates the first six conversational decisions onto the semantic router.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -87,19 +87,23 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v7.2.0 live</span>
+                    <span class="page-chip">v7.9.1 live</span>
                     <span class="page-chip">Guardian active</span>
                     <span class="page-chip">F0.6 hardening</span>
                     <span class="page-chip">Adaptive empirical</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v790" class="btn btn-primary">Start with v7.9.0</a>
-                    <a href="#v782" class="btn btn-secondary">See v7.8.2</a>
+                    <a href="#v791" class="btn btn-primary">Start with v7.9.1</a>
+                    <a href="#v790" class="btn btn-secondary">See v7.9.0</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
             </div>
             <div class="page-visual">
                 <div class="page-stack">
+                    <div class="page-stack-card">
+                        <strong>v7.9.1</strong>
+                        <span>Patch — first semantic-router site migration batch. Six conversational Brain decisions now route through semantic_router with explicit decision_kind policies and semantic labels: session_end_intent, r14_correction, r16_declared_done, r17_promise_debt, autonomy_mandate, and guard_verbal_ack. Router/reasoner local paths classify live context, not static prompt templates. 105 targeted tests.</span>
+                    </div>
                     <div class="page-stack-card">
                         <strong>v7.9.0</strong>
                         <span>Minor — semantic stack scaffolding under ONEPASS LLM Coverage plan. 18 named decision_kinds in semantic_router (13 textual + 5 code-aware) with policy table + layer chain. semantic_reasoner Mode A (multipass_local: reuses mDeBERTa pin with 3-pass majority vote + 0.75 floor) and Mode B (cached_llm: call_model_raw wrapper with pid+uuid atomic-write 24h-TTL disk cache). scripts/semantic-classify.py JSON CLI. NEXO_SEMANTIC_REASONER runtime kill switch. Bug fixes: templates/ root sync in upgrade path (Maria iMac upgrade had lost 27 core-prompts) + 13-tool preload in nexo_startup inject_prompt (closes Claude-Code-with-many-MCPs deferred-schema bootstrap failure). 50 new tests. Companion: NEXO Desktop v0.28.0.</span>
@@ -224,6 +228,16 @@
 <section class="section-compact" style="background:rgba(124,58,237,0.08);">
     <div class="container desktop-disclaimer" style="max-width:860px;font-size:13px;line-height:1.55;">
         <p><strong>Sobre NEXO Desktop.</strong> NEXO Desktop es un cliente acompa&ntilde;ante closed-source distribuido aparte en <a href="https://nexo-desktop.com/">nexo-desktop.com</a>. Cuando una entrada de changelog menciona "NEXO Desktop" se refiere a una versi&oacute;n coordinada de ese cliente que consume el contrato CLI/MCP del Brain. El c&oacute;digo de Desktop no vive en este repo; el Brain (AGPL-3.0) es 100% usable por s&iacute; solo desde terminal, Codex, Claude Code, o cualquier cliente MCP.</p>
+    </div>
+</section>
+
+<section id="v791" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.9.1 <span style="opacity:.5;font-weight:400;">&mdash; April 23, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">First semantic-router site migration batch &mdash; six conversational decisions now use Brain's semantic authority</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            Patch over v7.9.0. The semantic stack is now used by the first safe conversational group instead of sitting as scaffolding only. <code>session_end_intent.py</code>, <code>r14_correction_learning.py</code>, <code>r16_declared_done.py</code>, <code>r17_promise_debt.py</code>, <code>autonomy_mandate.py</code>, and <code>guard_verbal_ack.py</code> call <code>semantic_router.route(...)</code> with explicit <code>decision_kind</code> values and semantic labels. Existing test seams remain intact: callers still accept an injected classifier where they did before, so unit tests and specialized harnesses do not need to boot the router. The router and semantic_reasoner local paths also now classify the live <code>context</code> first, falling back to the prompt only when context is empty; this prevents static prompt wording from creating false positives such as a correction sentence being interpreted as a session-end request. Tests: 105 targeted passing across router, reasoner, site-migration, and the six migrated caller suites.
+        </p>
     </div>
 </section>
 

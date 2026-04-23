@@ -39,6 +39,7 @@ from core_prompts import render_core_prompt
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 STATE_PATH = NEXO_HOME / "runtime" / "data" / "autonomy_mandate.json"
 CLASSIFIER_QUESTION = render_core_prompt("autonomy-mandate-question")
+SEMANTIC_LABELS = ("autonomy_mandate", "not_mandate")
 
 # Marker list per NF-DS-45569A27. Case-insensitive substring match.
 MARKERS = (
@@ -119,9 +120,21 @@ def _detect_marker(text: str, *, classifier=None) -> Optional[str]:
             return marker
     if classifier is None:
         try:
-            from enforcement_classifier import classify as classifier  # type: ignore
+            from semantic_router import route as semantic_route
         except Exception:
             return None
+        try:
+            result = semantic_route(
+                decision_kind="autonomy_mandate",
+                question=CLASSIFIER_QUESTION,
+                context=text.strip()[:1200],
+                labels=SEMANTIC_LABELS,
+            )
+            if bool(result.ok and (result.label or result.verdict) == "autonomy_mandate"):
+                return _SEMANTIC_MARKER
+        except Exception:
+            return None
+        return None
     try:
         if bool(classifier(question=CLASSIFIER_QUESTION, context=text.strip()[:1200])):
             return _SEMANTIC_MARKER

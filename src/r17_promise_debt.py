@@ -9,9 +9,9 @@ Fase 2 Protocol Enforcer Fase D item R17. Plan doc 1 reads:
 Exposes detect_promise(text, classifier) → bool. State (promise window
 countdown) lives in the caller — mirrors the R14 / R16 pattern.
 
-Classifier path is the same as R14 / R16: enforcement_classifier.classify
-routes through call_model_raw with triple reinforcement. Fail-closed on
-any unavailable backend (no promise flagged rather than a false positive).
+Classifier path is the same as R14 / R16:
+semantic_router decision_kind ``r17_promise_debt``. Fail-closed on any
+unavailable backend (no promise flagged rather than a false positive).
 
 Mirror: nexo-desktop/lib/r17-promise-debt.js (bundled with Fase D JS
 twins at the end of the tranche).
@@ -21,6 +21,7 @@ from __future__ import annotations
 from core_prompts import render_core_prompt
 
 CLASSIFIER_QUESTION = render_core_prompt("r17-promise-debt-question")
+SEMANTIC_LABELS = ("promise", "no_promise")
 
 INJECTION_PROMPT_TEMPLATE = render_core_prompt("r17-promise-debt-injection")
 
@@ -37,7 +38,17 @@ def detect_promise(assistant_text: str, *, classifier=None) -> bool:
         return False
     if classifier is None:
         try:
-            from enforcement_classifier import classify as classifier  # type: ignore
+            from semantic_router import route as semantic_route
+        except Exception:
+            return False
+        try:
+            result = semantic_route(
+                decision_kind="r17_promise_debt",
+                question=CLASSIFIER_QUESTION,
+                context=text,
+                labels=SEMANTIC_LABELS,
+            )
+            return bool(result.ok and (result.label or result.verdict) == "promise")
         except Exception:
             return False
     try:

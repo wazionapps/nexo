@@ -173,11 +173,19 @@ def policy_for(decision_kind: str) -> dict[str, Any] | None:
 def _run_fast_local(
     *,
     question: str,
+    context: str = "",
     labels: tuple[str, ...],
     confidence_floor: float,
 ) -> RouterResult | None:
     """Try ``LocalZeroShotClassifier``. Return None on unavailable or
-    below-threshold so the router advances."""
+    below-threshold so the router advances.
+
+    The first layer must classify the actual user/assistant payload. For
+    guard decisions the ``question`` is usually a stable prompt template and
+    the live text lives in ``context``; feeding both into a zero-shot NLI
+    classifier makes the static prompt dominate the decision. Use context
+    when present, and fall back to question for simple direct callers.
+    """
     try:
         from classifier_local import LocalZeroShotClassifier
     except Exception as exc:  # pragma: no cover — install not ready
@@ -185,7 +193,8 @@ def _run_fast_local(
         return None
 
     clf = LocalZeroShotClassifier(confidence_floor=confidence_floor)
-    result = clf.classify(question, labels)
+    classifier_input = (context or "").strip() or question
+    result = clf.classify(classifier_input, labels)
     if result is None:
         return None
     if result.confidence < confidence_floor:
@@ -403,6 +412,7 @@ def route(
     if policy["fast_local_threshold"] is not None and labels_tuple:
         fast = _run_fast_local(
             question=question,
+            context=context,
             labels=labels_tuple,
             confidence_floor=float(policy["fast_local_threshold"]),
         )

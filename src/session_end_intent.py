@@ -8,6 +8,7 @@ from __future__ import annotations
 from core_prompts import render_core_prompt
 
 CLASSIFIER_QUESTION = render_core_prompt("session-end-intent-question")
+SEMANTIC_LABELS = ("session_end", "continue_session")
 
 
 def detect_session_end_intent(user_text: str, *, classifier=None) -> bool:
@@ -16,7 +17,17 @@ def detect_session_end_intent(user_text: str, *, classifier=None) -> bool:
         return False
     if classifier is None:
         try:
-            from enforcement_classifier import classify as classifier  # type: ignore
+            from semantic_router import route as semantic_route
+        except Exception:
+            return False
+        try:
+            result = semantic_route(
+                decision_kind="session_end_intent",
+                question=CLASSIFIER_QUESTION,
+                context=text,
+                labels=SEMANTIC_LABELS,
+            )
+            return bool(result.ok and (result.label or result.verdict) == "session_end")
         except Exception:
             return False
     try:

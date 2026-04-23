@@ -10,6 +10,7 @@ from core_prompts import render_core_prompt
 
 
 CLASSIFIER_QUESTION = render_core_prompt("guard-verbal-ack-question")
+SEMANTIC_LABELS = ("explicit_ack", "not_ack")
 
 
 def _build_context(
@@ -44,7 +45,7 @@ def detect_guard_verbal_ack(
         return False
     if classifier is None:
         try:
-            from enforcement_classifier import classify as classifier  # type: ignore
+            from semantic_router import route as semantic_route
         except Exception:
             return False
     context = _build_context(
@@ -54,6 +55,17 @@ def detect_guard_verbal_ack(
         file_path=file_path,
         guard_summary=guard_summary,
     )
+    if classifier is None:
+        try:
+            result = semantic_route(
+                decision_kind="guard_verbal_ack",
+                question=CLASSIFIER_QUESTION,
+                context=context,
+                labels=SEMANTIC_LABELS,
+            )
+            return bool(result.ok and (result.label or result.verdict) == "explicit_ack")
+        except Exception:
+            return False
     try:
         return bool(classifier(question=CLASSIFIER_QUESTION, context=context))
     except Exception:
