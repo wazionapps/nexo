@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.1 migrates the first six conversational decisions onto the semantic router.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.6 closes continuity runtime + MCP restart stability for installed users.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.1 migrates the first six conversational decisions onto the semantic router.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.6 closes continuity runtime + MCP restart stability for installed users.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.1 migrates the first six conversational decisions onto the semantic router.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.6 closes continuity runtime + MCP restart stability for installed users.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.1 migrates the first six conversational decisions onto the semantic router.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.6 closes continuity runtime + MCP restart stability for installed users.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -87,26 +87,26 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v7.9.5 live</span>
+                    <span class="page-chip">v7.9.6 live</span>
                     <span class="page-chip">Guardian active</span>
                     <span class="page-chip">F0.6 hardening</span>
                     <span class="page-chip">Adaptive empirical</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v795" class="btn btn-primary">Start with v7.9.5</a>
-                    <a href="#v794" class="btn btn-secondary">See v7.9.4</a>
+                    <a href="#v796" class="btn btn-primary">Start with v7.9.6</a>
+                    <a href="#v795" class="btn btn-secondary">See v7.9.5</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
             </div>
             <div class="page-visual">
                 <div class="page-stack">
                     <div class="page-stack-card">
-                        <strong>v7.9.5</strong>
-                        <span>Patch — Desktop canonical diary confirmation now resolves session aliases before checking session_diary, so archive/delete/close/quit can confirm diaries written under the active NEXO SID. Targeted lifecycle tests and coordinated Desktop v0.28.6 checks passed.</span>
+                        <strong>v7.9.6</strong>
+                        <span>Patch — continuity runtime + MCP restart stability for installed users. Brain now persists conversation-scoped resume bundles, activates packaged runtimes atomically, writes a durable restart-required marker, and self-drains old MCP processes until clients restart against the installed runtime. Coordinated Desktop v0.28.7 passes the same contract.</span>
                     </div>
                     <div class="page-stack-card">
-                        <strong>v7.9.2</strong>
-                        <span>Patch — completes Brain semantic-router site migration and fixes packaged headless Guardian map loading. Remaining decision callers route through named decision_kind policies: r20, R34, T4 gates, followup attention, Drive signal/area, reply event, query intent, sentiment intent. enforcement_engine and agent_runner now check ~/.nexo/core/tool-enforcement-map.json. 225 targeted tests plus release-readiness.</span>
+                        <strong>v7.9.5</strong>
+                        <span>Patch — Desktop canonical diary confirmation now resolves session aliases before checking session_diary, so archive/delete/close/quit can confirm diaries written under the active NEXO SID. Targeted lifecycle tests and coordinated Desktop v0.28.6 checks passed.</span>
                     </div>
                     <div class="page-stack-card">
                         <strong>v7.9.1</strong>
@@ -236,6 +236,16 @@
 <section class="section-compact" style="background:rgba(124,58,237,0.08);">
     <div class="container desktop-disclaimer" style="max-width:860px;font-size:13px;line-height:1.55;">
         <p><strong>Sobre NEXO Desktop.</strong> NEXO Desktop es un cliente acompa&ntilde;ante closed-source distribuido aparte en <a href="https://nexo-desktop.com/">nexo-desktop.com</a>. Cuando una entrada de changelog menciona "NEXO Desktop" se refiere a una versi&oacute;n coordinada de ese cliente que consume el contrato CLI/MCP del Brain. El c&oacute;digo de Desktop no vive en este repo; el Brain (AGPL-3.0) es 100% usable por s&iacute; solo desde terminal, Codex, Claude Code, o cualquier cliente MCP.</p>
+    </div>
+</section>
+
+<section id="v796" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.9.6 <span style="opacity:.5;font-weight:400;">&mdash; April 23, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">Continuity runtime + MCP restart stability for installed users</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            Patch over v7.9.5. Brain now persists conversation-scoped continuity snapshots and resume bundles keyed by <code>conversation_id</code> + <code>session_id</code>, with fail-closed <code>unsafe_sid</code> handling when it cannot prove that a restore belongs to the current conversation/client. The packaged runtime now installs under <code>~/.nexo/core/versions/&lt;version&gt;</code> and activates through the atomic <code>~/.nexo/core/current</code> pointer, so <code>nexo update</code> no longer overwrites code under a live MCP process. Real version changes write a durable <code>mcp-restart-required.json</code> marker, <code>nexo mcp status</code> exposes the installed/process split, and old MCP processes self-drain with structured <code>mcp_restart_required</code> responses until the client restarts against the installed runtime. This closes the installed-user update contract for both <code>brain-only</code> and coordinated <code>brain+desktop</code> installs without shipping a separate stdio supervisor in this architecture. Validation: targeted Brain continuity/runtime suite (<code>27 passed</code>) plus coordinated Desktop full suite (<code>727 pass, 0 fail, 1 skipped</code>).
+        </p>
     </div>
 </section>
 
