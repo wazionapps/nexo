@@ -1,5 +1,147 @@
 # Changelog
 
+## [7.9.0] - 2026-04-23
+
+Minor release. Ships the foundation of the semantic stack (router +
+reasoner + CLI) under the ONEPASS LLM Coverage plan, and closes two
+product bugs observed on 2026-04-23 that would bite any client
+upgrading from earlier versions or running Claude Code with many MCPs.
+All code in this release passed a 4-auditor pre-release review; the
+issues that review flagged are fixed in this same train.
+
+### Added — semantic stack scaffolding
+
+- `src/semantic_router.py` — central router for every model-backed
+  semantic decision in Brain. 18 named `decision_kinds` (13 textual +
+  5 code-aware). `RouterResult` dataclass. Policy table + layer
+  dispatch `fast_local -> semantic_reasoner -> remote_fallback`.
+  Call sites name their decision; per-kind policy lives in this
+  module, not scattered across callers.
+- `src/semantic_reasoner.py` — second-layer reasoner with two modes:
+  - **Mode A (`multipass_local`)**: reuses the existing mDeBERTa pin
+    from `src/classifier_local.py` with three prompt-perturbed passes,
+    majority vote, and a stricter 0.75 confidence floor. No new model
+    download. Same pin, stricter aggregation.
+  - **Mode B (`cached_llm`)**: thin wrapper around `call_model_raw`
+    with a pid+uuid atomic-write disk cache under
+    `~/.nexo/runtime/operations/semantic-reasoner-cache.json`.
+    SHA-256 key scoped by `(decision_kind, normalized_question,
+    normalized_context, labels)`. 24h TTL. LRU-bound at 2000 entries.
+    Corrupt entries (verdict missing or non-string) are dropped on
+    read instead of returned as `ok=true`.
+- `scripts/semantic-classify.py` — JSON-in JSON-out CLI wrapper.
+  Brain-side endpoint that the NEXO Desktop bridge
+  (`lib/brain-semantic-router.js` in the closed-source Desktop
+  product) spawns over stdio. Malformed input exits 1 with a JSON
+  body so the parent process never chokes; well-formed input always
+  exits 0 with the full `RouterResult` shape.
+- `docs/semantic-reasoner-model-notes.md` — honest pin strategy,
+  upgrade policy, env-var reference (`NEXO_SEMANTIC_REASONER`,
+  `NEXO_SEMANTIC_REASONER_CACHE_PATH`, `NEXO_SEMANTIC_REASONER_TTL`),
+  and an explicit deferral of a dedicated stronger local LLM to a
+  future release with the install-time + pin-verifiability rationale.
+
+Explicitly not in this release (tracked in
+`NF-SEMANTIC-ROUTER-SITE-MIGRATION`): per-site migration of existing
+callers (`session_end_intent.py`, `autonomy_mandate.py`, `r14_*`,
+`r16_*`, `r17_*`, `r20_*`, `r34_*`, T4 gates, `tools_drive.py`,
+`nexo-followup-runner.py`). The scaffolding can be imported today
+without changing current behaviour; themed follow-up patch releases
+will migrate the call sites.
+
+### Added — env kill switch
+
+- `NEXO_SEMANTIC_REASONER` runtime opt-out (plan-mandated). Accepts
+  `0`, `off`, `false`, `no`, `disable`, `disabled` case-insensitively.
+  When active every `reason()` call refuses with
+  `error=reasoner_disabled_by_env` and the router falls through to
+  `remote_fallback` on its own (or returns `no_route` if that is also
+  disallowed). This is separate from `NEXO_LOCAL_CLASSIFIER`, which
+  only gates install-time provisioning of the fast-local model.
+
+### Fixed — upgrade path templates sync (product bug)
+
+- `bin/nexo-brain.js` upgrade flow (`installedVersion !==
+  currentVersion`) now copies `templates/` root the same way fresh
+  install and same-version refresh already did. Before this fix, every
+  client upgrading from <7.8.1 kept its old `templates/core-prompts/`
+  tree and the post-update import verification failed because the new
+  `autonomy_mandate.py` required `autonomy-mandate-question.md` which
+  was never copied. Observed in the wild on Maria iMac upgrade
+  7.1.10→7.8.1; manual rsync was the workaround.
+- The upgrade log line now reads `Templates updated (user-edited
+  templates/ files are overwritten).` so an operator who did customise
+  a template sees the incident in the upgrade transcript. An inline
+  comment points future readers at `personal/` as the safer place for
+  local forks. The diff-before-overwrite behaviour itself is a larger
+  contract decision and is **not** changed in this release.
+
+### Fixed — silent bootstrap failure when the MCP host defers schemas
+
+- `tool-enforcement-map.json`: `nexo_startup.enforcement.inject_prompt`
+  now tells the model to preload `mcp__nexo__*` schemas via
+  `ToolSearch` before calling `nexo_startup` when the host MCP client
+  defers tool schemas (Claude Code with many MCPs installed).
+  Observed in session `nexo-1776899231-34499`: the model interpreted
+  "`mcp__nexo__*` not in available tools" as "NEXO is unavailable" and
+  skipped `nexo_startup` / `nexo_heartbeat` / `nexo_guard_check` /
+  `nexo_task_open` for the entire session. The new prompt preloads 13
+  protocol tools explicitly (startup, heartbeat, diary_read, reminders,
+  smart_startup, task_open, task_close, task_acknowledge_guard,
+  guard_check, learning_add, confidence_check, followup_create,
+  protocol_debt_resolve) and instructs the model to preload further
+  `nexo_*` tools the same way when they surface deferred later.
+
+The companion change for the NEXO Desktop product (closed-source,
+separate repository) carries the same instruction in its bootstrap
+injection; Desktop ships this in its coordinated v0.28.0 release.
+
+### Hardening — audit-driven fixes
+
+- `semantic_router._run_remote_fallback` and
+  `semantic_reasoner._reason_cached_llm` now tolerate `call_model_raw`
+  modules that expose only one of the two symbols (the callable or
+  `ClassifierUnavailableError`). Before, a missing attribute crashed
+  the layer with `NameError` at `except`-time instead of degrading.
+  A trailing `except Exception` also ensures provider-specific errors
+  (APIError, TimeoutError, KeyError) degrade with
+  `error="remote_error: <cause>"` instead of propagating.
+- `_write_cache` uses a per-pid+uuid temporary filename plus
+  `fsync(fileno)` + `os.replace` so concurrent Brain and Desktop CLI
+  writers cannot stomp each other's temp file and corrupt
+  `semantic-reasoner-cache.json`.
+- `NEXO_SEMANTIC_REASONER_TTL` parsing tolerates malformed values
+  (non-integer, negative, zero) with a logger warning + default
+  fallback instead of raising `ValueError` on first call.
+- `raw[:80]` slice now tolerates `None` returns from LLM stubs that
+  fail to produce a body.
+
+### Tests
+
+- `tests/test_semantic_router.py` — 22 tests covering policy table
+  integrity, dispatch logic, fallback chain, `allow_remote_fallback`
+  gate, code-aware fast-local skip, and the two audit-driven fail-
+  closed contracts.
+- `tests/test_semantic_reasoner.py` — 20 tests covering Mode A
+  majority-vote, threshold refusal, missing labels, Mode B cache
+  miss/hit/TTL expiry, per-decision_kind scope, LLM unavailable,
+  unrelated-exception propagation, missing call_model_raw callable,
+  `NEXO_SEMANTIC_REASONER` kill switch, corrupt-cache-entry drop,
+  null-LLM-response safety, TTL defensive parse, concurrent-write
+  safety.
+- `tests/test_semantic_classify_cli.py` — 8 CLI contract tests.
+
+### Operator notes
+
+- No new runtime dependency. No changes to `src/auto_update.py`.
+- The on-disk reasoner cache under `~/.nexo/runtime/operations/` is
+  advisory: deleting the file forces a cold start but does not break
+  anything.
+- Per-site migration of existing callers into the new router is
+  tracked as followup `NF-SEMANTIC-ROUTER-SITE-MIGRATION` and ships
+  in themed follow-up patch releases; nothing in this release changes
+  the behaviour of the existing callers.
+
 ## [7.8.2] - 2026-04-23
 
 Patch release. Fixes a narrow observability gap Francisco flagged:

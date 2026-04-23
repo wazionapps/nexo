@@ -51,7 +51,7 @@
         "operatingSystem": "macOS, Linux, Windows",
         "url": "https://nexo-brain.com",
         "downloadUrl": "https://www.npmjs.com/package/nexo-brain",
-        "softwareVersion": "7.8.2",
+        "softwareVersion": "7.9.0",
         "license": "https://www.gnu.org/licenses/agpl-3.0",
         "author": {
             "@type": "Organization",
@@ -697,7 +697,7 @@
     <div class="container">
         <div class="hero-badge fade-up">
             <span class="dot"></span>
-            <span id="version-badge">v7.8.2</span> Patch release — hook_runs sid observability for compact hooks. pre_compact.py and post_compact.py now store the resolved NEXO sid in hook_runs.session_id (ending the 7/8 empty-row rate) via a new compact_session_resolver helper that walks sessions → aliases → per-conv sidecar → legacy global sidecar, plus claude_session_id + sid_source in metadata. 9 new tests. No Desktop bump.
+            <span id="version-badge">v7.9.0</span> Minor release — semantic stack foundation (router + reasoner + CLI) under the ONEPASS LLM Coverage plan, plus bootstrap preload fix for MCP hosts that defer schemas (Claude Code with many MCPs) and an upgrade-path fix that syncs templates/ root. Mode A multipass_local reuses the mDeBERTa pin with stricter aggregation; Mode B cached_llm wraps call_model_raw with a pid+uuid atomic-write 24h-TTL disk cache. NEXO_SEMANTIC_REASONER kill switch for runtime opt-out. 50 new tests. Companion: NEXO Desktop v0.28.0.
         </div>
         <div class="fade-up" style="display:flex;gap:8px;justify-content:center;margin-bottom:12px;">
             <img src="https://img.shields.io/npm/v/nexo-brain?color=7C3AED&label=npm" alt="npm version">
@@ -1232,7 +1232,7 @@
         <div class="release-evolution-actions">
             <a href="/evolution/" class="btn btn-primary">How Evolution works</a>
             <a href="/changelog/" class="btn btn-secondary">Read the full changelog</a>
-            <a href="/changelog/#v782" class="btn btn-secondary">Read the latest release notes</a>
+            <a href="/changelog/#v790" class="btn btn-secondary">Read the latest release notes</a>
         </div>
     </div>
 </section>
