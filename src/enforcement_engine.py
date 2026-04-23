@@ -321,7 +321,13 @@ def _redact_for_log(text: str, max_len: int = 200) -> str:
 
 
 def _load_map() -> dict | None:
+    # .resolve() is required: at runtime this module is usually imported via
+    # the symlink $NEXO_HOME/enforcement_engine.py -> core/enforcement_engine.py,
+    # so the non-resolved Path(__file__).parent points at NEXO_HOME instead
+    # of the core/ dir where the map actually sits. Keeping the non-resolved
+    # variant too covers in-repo test imports.
     for candidate in [
+        Path(__file__).resolve().parent / MAP_FILENAME,
         Path(__file__).parent / MAP_FILENAME,
         paths.home() / MAP_FILENAME,
         paths.brain_dir() / MAP_FILENAME,

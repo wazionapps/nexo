@@ -792,6 +792,8 @@ def _build_enforcement_system_prompt() -> str:
     map_path = NEXO_HOME / "tool-enforcement-map.json"
     if not map_path.exists():
         for candidate in [
+            # .resolve() handles the $NEXO_HOME symlink -> core/ case.
+            Path(__file__).resolve().parent / "tool-enforcement-map.json",
             Path(__file__).parent / "tool-enforcement-map.json",
             Path(__file__).parent.parent / "tool-enforcement-map.json",
         ]:
