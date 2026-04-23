@@ -1,5 +1,25 @@
 # Changelog
 
+## [7.9.3] - 2026-04-23
+
+Patch release. Hardens the canonical lifecycle plan shape used by Desktop for
+close/archive/delete/app-exit diary guarantees.
+
+### Fixed — canonical lifecycle action shape
+
+- `src/lifecycle_prompts.py` now emits canonical action objects with `type`
+  and `payload.prompt`, matching the Desktop action executor contract.
+- The previous `kind` and top-level `prompt` fields remain as one-release
+  compatibility mirrors for Desktop clients up to v0.28.1.
+- `canonical_plan_version` is bumped to `2`, so callers can distinguish the
+  normalized action contract from the older compatibility-only shape.
+
+### Tests
+
+- Updated lifecycle event tests to pin `type`, `kind`, `payload.prompt`, and
+  app-exit action shape parity.
+- Targeted validation: `pytest tests/test_lifecycle_events.py` (25 passing).
+
 ## [7.9.2] - 2026-04-23
 
 Patch release. Completes the Brain semantic-router site migration that started
