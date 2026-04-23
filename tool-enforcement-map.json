@@ -3214,7 +3214,7 @@
             "threshold": 1
           }
         ],
-        "inject_prompt": "You must start by calling nexo_startup to register this session. If mcp__nexo__* tools appear as deferred in the tool list (names visible but JSONSchemas not loaded), first call ToolSearch with query \"select:mcp__nexo__nexo_startup,mcp__nexo__nexo_heartbeat,mcp__nexo__nexo_session_diary_read,mcp__nexo__nexo_reminders,mcp__nexo__nexo_smart_startup\" to load the schemas — deferred is not absent. Then execute nexo_startup with a brief task description. Do not produce visible text.",
+        "inject_prompt": "You must start by calling nexo_startup to register this session. If mcp__nexo__* tools appear as deferred in the tool list (names visible but JSONSchemas not loaded), first call ToolSearch with query \"select:mcp__nexo__nexo_startup,mcp__nexo__nexo_heartbeat,mcp__nexo__nexo_session_diary_read,mcp__nexo__nexo_reminders,mcp__nexo__nexo_smart_startup,mcp__nexo__nexo_task_open,mcp__nexo__nexo_task_close,mcp__nexo__nexo_task_acknowledge_guard,mcp__nexo__nexo_guard_check,mcp__nexo__nexo_learning_add,mcp__nexo__nexo_confidence_check,mcp__nexo__nexo_followup_create,mcp__nexo__nexo_protocol_debt_resolve\" to load the schemas — deferred is not absent. If more nexo_* tools appear deferred later in the session, preload them the same way instead of giving up on them. Then execute nexo_startup with a brief task description. Do not produce visible text.",
         "triggers_after": [
           "nexo_smart_startup",
           "nexo_session_diary_read",
