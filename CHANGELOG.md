@@ -1,5 +1,18 @@
 # Changelog
 
+## [7.9.5] - 2026-04-23
+
+### Fixed — Desktop canonical diary alias confirmation
+
+- Canonical lifecycle diary confirmation now resolves Desktop/Claude session
+  UUIDs through `session_claude_aliases` and `sessions` before checking
+  `session_diary`. This fixes the real Desktop archive/app-exit failure where
+  the model wrote the required diary under the active `nexo-...` SID, but
+  `wait_for_diary_write` kept polling the Desktop UUID and timed out.
+- The diary high-water checkpoint now includes alias-linked NEXO SIDs, so new
+  archive/delete/app-exit attempts cannot be satisfied by stale diary rows from
+  earlier attempts.
+
 ## [7.9.4] - 2026-04-23
 
 Patch release. Blocks the release regression found in Brain 7.9.3 +
