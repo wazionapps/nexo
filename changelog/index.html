@@ -87,22 +87,22 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v7.9.4 live</span>
+                    <span class="page-chip">v7.9.5 live</span>
                     <span class="page-chip">Guardian active</span>
                     <span class="page-chip">F0.6 hardening</span>
                     <span class="page-chip">Adaptive empirical</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v794" class="btn btn-primary">Start with v7.9.4</a>
-                    <a href="#v793" class="btn btn-secondary">See v7.9.3</a>
+                    <a href="#v795" class="btn btn-primary">Start with v7.9.5</a>
+                    <a href="#v794" class="btn btn-secondary">See v7.9.4</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
             </div>
             <div class="page-visual">
                 <div class="page-stack">
                     <div class="page-stack-card">
-                        <strong>v7.9.4</strong>
-                        <span>Patch — diary evidence gate for Desktop close/archive/delete/quit, npm onboarding guard fixes, atomic calibration writes, and install/update model warmup. Full Brain pytest, release-readiness, npm pack dry-run, and Desktop v0.28.3 checks passed.</span>
+                        <strong>v7.9.5</strong>
+                        <span>Patch — Desktop canonical diary confirmation now resolves session aliases before checking session_diary, so archive/delete/close/quit can confirm diaries written under the active NEXO SID. Targeted lifecycle tests and coordinated Desktop v0.28.6 checks passed.</span>
                     </div>
                     <div class="page-stack-card">
                         <strong>v7.9.2</strong>
@@ -236,6 +236,16 @@
 <section class="section-compact" style="background:rgba(124,58,237,0.08);">
     <div class="container desktop-disclaimer" style="max-width:860px;font-size:13px;line-height:1.55;">
         <p><strong>Sobre NEXO Desktop.</strong> NEXO Desktop es un cliente acompa&ntilde;ante closed-source distribuido aparte en <a href="https://nexo-desktop.com/">nexo-desktop.com</a>. Cuando una entrada de changelog menciona "NEXO Desktop" se refiere a una versi&oacute;n coordinada de ese cliente que consume el contrato CLI/MCP del Brain. El c&oacute;digo de Desktop no vive en este repo; el Brain (AGPL-3.0) es 100% usable por s&iacute; solo desde terminal, Codex, Claude Code, o cualquier cliente MCP.</p>
+    </div>
+</section>
+
+<section id="v795" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.9.5 <span style="opacity:.5;font-weight:400;">&mdash; April 23, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">Desktop diary alias confirmation</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            Patch over v7.9.4. Brain now resolves Desktop/Claude session UUIDs through <code>session_claude_aliases</code> and <code>sessions</code> before checking <code>session_diary</code>. This fixes the real archive/app-exit failure where the canonical prompt wrote the required diary under the active <code>nexo-...</code> SID while diary confirmation kept polling the Desktop UUID and timed out. The diary high-water checkpoint also includes alias-linked NEXO SIDs, so old manual or previous canonical diary rows cannot satisfy a new lifecycle event. Validation: <code>pytest tests/test_lifecycle_events.py</code> (28 passing) plus coordinated Desktop v0.28.6 archive/delete/app-exit checks.
+        </p>
     </div>
 </section>
 
