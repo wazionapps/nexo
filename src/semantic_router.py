@@ -249,10 +249,27 @@ def _run_remote_fallback(
     result as ``degraded=True`` so telemetry shows when the stack fell
     through."""
     try:
-        from call_model_raw import ClassifierUnavailableError, call_model_raw
+        import call_model_raw as _cmr
     except Exception as exc:  # pragma: no cover
         _logger.debug("semantic_router: call_model_raw unavailable (%s)", exc)
         return None
+
+    # Resolve symbols defensively. Tests sometimes stub only ``call_model_raw``
+    # and forget ``ClassifierUnavailableError`` (or vice versa); without this
+    # guard a missing attribute later becomes NameError at ``except`` time and
+    # crashes the router instead of degrading.
+    call_model_raw_fn = getattr(_cmr, "call_model_raw", None)
+    classifier_unavailable_cls = getattr(
+        _cmr, "ClassifierUnavailableError", Exception
+    )
+    if call_model_raw_fn is None:
+        return RouterResult(
+            ok=False,
+            decision_kind=decision_kind,
+            route_used="remote_fallback",
+            degraded=True,
+            error="call_model_raw callable missing",
+        )
 
     prompt = _build_remote_prompt(
         decision_kind=decision_kind,
@@ -267,7 +284,7 @@ def _run_remote_fallback(
     )
 
     try:
-        raw = call_model_raw(
+        raw = call_model_raw_fn(
             prompt,
             system=system,
             caller="semantic_reasoner",
@@ -275,7 +292,7 @@ def _run_remote_fallback(
             max_tokens=32,
             temperature=0.0,
         )
-    except ClassifierUnavailableError as exc:
+    except classifier_unavailable_cls as exc:
         return RouterResult(
             ok=False,
             decision_kind=decision_kind,
@@ -283,8 +300,17 @@ def _run_remote_fallback(
             degraded=True,
             error=f"remote_unavailable: {exc}",
         )
+    except Exception as exc:  # noqa: BLE001 — fail-closed, never re-raise
+        return RouterResult(
+            ok=False,
+            decision_kind=decision_kind,
+            route_used="remote_fallback",
+            degraded=True,
+            error=f"remote_error: {exc}",
+        )
 
     verdict = _normalize_remote_answer(raw, labels)
+    raw_preview = (raw or "")[:120]
     return RouterResult(
         ok=verdict is not None,
         decision_kind=decision_kind,
@@ -293,7 +319,7 @@ def _run_remote_fallback(
         confidence=0.55 if verdict is not None else 0.0,
         route_used="remote_fallback",
         degraded=True,  # always degraded relative to the local-first ideal
-        meta={"raw_response": raw[:120]},
+        meta={"raw_response": raw_preview},
     )
 
 

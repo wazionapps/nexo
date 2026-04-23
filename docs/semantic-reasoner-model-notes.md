@@ -1,6 +1,6 @@
 # Semantic reasoner — pin + design notes
 
-Plan ONEPASS LLM Coverage, release stage. Companion to
+Plan ONEPASS LLM Coverage (target release v7.9.0). Companion to
 [classifier-model-notes.md](./classifier-model-notes.md).
 
 ## What the reasoner is
@@ -18,11 +18,14 @@ fast_local  ->  semantic_reasoner  ->  remote_fallback
 stack. Call sites name their `decision_kind` and the router applies the
 per-kind policy.
 
-## Two reasoner modes — honest pin strategy
+## Two reasoner modes — same pin, stricter aggregation (A) or remote LLM via resonance map (B)
 
-The plan asked for a "stronger, pinned model" as the second layer. This
-release ships that stronger layer using a split strategy that avoids
-falsifying a pin we cannot reproducibly verify. The two modes are:
+The plan asked for a "stronger, pinned" second layer. The honest shape of
+what this release ships is **not** a new downloadable model. Mode A reuses
+the existing mDeBERTa pin with stricter aggregation semantics (three
+passes, majority vote, higher threshold); Mode B delegates to the LLM
+resolved by the resonance map. Neither adds a new model SHA to the repo,
+and the docs are careful not to imply otherwise. The two modes are:
 
 ### Mode A — `multipass_local`
 
@@ -101,13 +104,16 @@ LLM without changing the `semantic_router` contract. Call sites only see
 
 | Variable | Default | Effect |
 |----------|---------|--------|
-| `NEXO_SEMANTIC_REASONER_CACHE_PATH` | *(unset)* | Override cache file path. Used in tests and for debug isolation. |
-| `NEXO_SEMANTIC_REASONER_TTL` | `86400` | Cache TTL in seconds. Lower for aggressive re-validation; raise for offline-heavy usage. |
+| `NEXO_SEMANTIC_REASONER` | *(unset, i.e. enabled)* | Dedicated runtime kill switch. Set to `0`, `off`, `false`, `no`, `disable`, or `disabled` to force every `reason()` call to refuse. The router then falls through to `remote_fallback` on its own, or returns `no_route` if that is also disallowed. Mandated by the plan as the opt-out dedicated to this module, separate from `NEXO_LOCAL_CLASSIFIER`. |
+| `NEXO_SEMANTIC_REASONER_CACHE_PATH` | *(unset)* | Override cache file path (under `paths.operations_dir()` by default). Used in tests and for debug isolation. |
+| `NEXO_SEMANTIC_REASONER_TTL` | `86400` | Cache TTL in seconds for Mode B entries. Malformed or non-positive values fall back to the default and emit a logger warning — no crash on operator typos. |
 
-There is **no** `NEXO_SEMANTIC_REASONER=0` opt-out: the reasoner is
-always available when its dependencies are. Opt-out happens at the
-router level via `allow_remote_fallback=False` plus the existing
-`NEXO_LOCAL_CLASSIFIER` flag for Mode A.
+Note that `NEXO_LOCAL_CLASSIFIER` still exists but **only gates install-time
+provisioning** of the fast-local weights (see `src/auto_update.py`). Once
+the model is on disk it keeps loading. If you need a pure runtime kill
+switch for the reasoner layer specifically, use `NEXO_SEMANTIC_REASONER`.
+The router also accepts `allow_remote_fallback=False` per call to force
+local-only behaviour for a specific decision.
 
 ## Upgrade policy
 
@@ -137,6 +143,14 @@ router level via `allow_remote_fallback=False` plus the existing
       etc.) — ships in a **follow-up PR**. That PR does not change the
       router/reasoner contract, only replaces per-site classifier policy
       trees with `semantic_router.route(decision_kind=…)` calls.
-- [ ] Desktop bridge (`lib/brain-semantic-router.js` + `nexo semantic
-      classify` CLI) — ships in the nexo-desktop release PR that pairs
-      with this one.
+- [x] Desktop bridge — `nexo-desktop/lib/brain-semantic-router.js` (PR #19)
+      spawns this repo's `scripts/semantic-classify.py` (Brain-side CLI)
+      and parses the `RouterResult` from stdout. There is no `nexo
+      semantic classify` subcommand in `src/cli.py`; the bridge targets
+      the Python script directly to keep the surface minimal.
+- [ ] Per-site migration of existing callers (`session_end_intent.py`,
+      `autonomy_mandate.py`, `r14_*`, `r16_*`, `r17_*`, `r20_*`, `r34_*`,
+      T4 gates, `tools_drive.py`, `nexo-followup-runner.py`) — tracked
+      in followup `NF-SEMANTIC-ROUTER-SITE-MIGRATION` and ships in
+      themed follow-up PRs. No call site currently consumes the router;
+      this release is scaffolding only.

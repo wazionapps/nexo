@@ -313,3 +313,69 @@ def test_normalize_remote_answer(raw, labels, expected):
     normalize = getattr(sr, "_normalize_remote_answer", None)
     assert normalize is not None
     assert normalize(raw, labels) == expected
+
+
+# ---------------------------------------------------------------------------
+# Audit-driven hardening — fail-closed contract
+# ---------------------------------------------------------------------------
+
+
+def test_remote_fallback_degrades_on_unexpected_exception(monkeypatch):
+    """Audit A2: call_model_raw can raise exception types other than
+    ClassifierUnavailableError (provider APIError, TimeoutError, etc.).
+    The router MUST degrade instead of propagating.
+
+    Both symbols are exposed on the stub so the unrelated exception
+    type is NOT a subclass of the declared ClassifierUnavailableError,
+    and must therefore be routed to the catch-all ``except Exception``
+    branch.
+    """
+    import sys
+
+    import semantic_router as sr
+
+    class _ClassifierUnavailableError(RuntimeError):
+        pass
+
+    class _UnrelatedError(RuntimeError):
+        pass
+
+    def stub(*args, **kwargs):  # noqa: ARG001
+        raise _UnrelatedError("unexpected")
+
+    fake_module = type("m", (), {})()
+    fake_module.call_model_raw = stub
+    fake_module.ClassifierUnavailableError = _ClassifierUnavailableError
+    monkeypatch.setitem(sys.modules, "call_model_raw", fake_module)
+
+    result = sr._run_remote_fallback(
+        decision_kind="t4_r15",
+        question="rm -rf /",
+        labels=("t4_bypass", "safe"),
+        context="",
+    )
+    assert result is not None
+    assert result.ok is False
+    assert result.route_used == "remote_fallback"
+    assert result.degraded is True
+    assert "remote_error" in (result.error or "")
+
+
+def test_remote_fallback_degrades_when_call_model_raw_missing(monkeypatch):
+    """Stub module present but without call_model_raw attribute."""
+    import sys
+
+    import semantic_router as sr
+
+    fake_module = type("m", (), {})()
+    monkeypatch.setitem(sys.modules, "call_model_raw", fake_module)
+
+    result = sr._run_remote_fallback(
+        decision_kind="t4_r15",
+        question="anything",
+        labels=("t4_bypass", "safe"),
+        context="",
+    )
+    assert result is not None
+    assert result.ok is False
+    assert "call_model_raw callable missing" in (result.error or "")

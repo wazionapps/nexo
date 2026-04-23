@@ -248,12 +248,26 @@ def _read_cache() -> dict[str, Any]:
 
 
 def _write_cache(cache: dict[str, Any]) -> None:
+    """Atomic write with pid+uuid suffix so concurrent Brain / Desktop CLI
+    writers do not stomp each other's temp file."""
     try:
         path = _cache_path()
         path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(cache, ensure_ascii=False, sort_keys=True))
-        tmp.replace(path)
+        import os as _os
+        import uuid as _uuid
+
+        tmp = path.with_name(
+            f"{path.name}.tmp.{_os.getpid()}.{_uuid.uuid4().hex[:8]}"
+        )
+        payload = json.dumps(cache, ensure_ascii=False, sort_keys=True)
+        with open(tmp, "w", encoding="utf-8") as handle:
+            handle.write(payload)
+            handle.flush()
+            try:
+                _os.fsync(handle.fileno())
+            except OSError:
+                pass
+        _os.replace(tmp, path)
     except Exception as exc:  # pragma: no cover
         _logger.warning("semantic_reasoner: cache write failed (%s)", exc)
 
@@ -282,6 +296,30 @@ def _cache_put(key: str, entry: dict[str, Any]) -> None:
     _write_cache(cache)
 
 
+def _parse_ttl_env() -> int:
+    """Read ``NEXO_SEMANTIC_REASONER_TTL`` defensively.
+
+    Malformed values (non-integer, negative) fall back to the default so
+    operator typos never crash the reasoner on first call.
+    """
+    raw = os.environ.get("NEXO_SEMANTIC_REASONER_TTL", "")
+    if not raw:
+        return _DEFAULT_CACHE_TTL_SECONDS
+    try:
+        parsed = int(raw)
+    except (TypeError, ValueError):
+        _logger.warning(
+            "semantic_reasoner: invalid NEXO_SEMANTIC_REASONER_TTL=%r; "
+            "using default %d",
+            raw,
+            _DEFAULT_CACHE_TTL_SECONDS,
+        )
+        return _DEFAULT_CACHE_TTL_SECONDS
+    if parsed <= 0:
+        return _DEFAULT_CACHE_TTL_SECONDS
+    return parsed
+
+
 def _reason_cached_llm(
     *,
     decision_kind: str,
@@ -291,7 +329,7 @@ def _reason_cached_llm(
     confidence_floor: float,
 ):
     RouterResult = _import_router_result()
-    ttl = int(os.environ.get("NEXO_SEMANTIC_REASONER_TTL", _DEFAULT_CACHE_TTL_SECONDS))
+    ttl = _parse_ttl_env()
     key = _cache_key(
         decision_kind=decision_kind,
         question=question,
@@ -301,23 +339,32 @@ def _reason_cached_llm(
 
     cached = _cache_get(key, ttl)
     if cached is not None:
-        return RouterResult(
-            ok=True,
-            decision_kind=decision_kind,
-            verdict=cached.get("verdict"),
-            label=cached.get("verdict"),
-            confidence=float(cached.get("confidence", 0.6)),
-            route_used="semantic_reasoner",
-            degraded=False,
-            meta={
-                "mode": "cached_llm",
-                "cache_hit": True,
-                "cache_key": key[:12],
-            },
+        cached_verdict = cached.get("verdict")
+        if isinstance(cached_verdict, str) and cached_verdict.strip():
+            return RouterResult(
+                ok=True,
+                decision_kind=decision_kind,
+                verdict=cached_verdict,
+                label=cached_verdict,
+                confidence=float(cached.get("confidence", 0.6)),
+                route_used="semantic_reasoner",
+                degraded=False,
+                meta={
+                    "mode": "cached_llm",
+                    "cache_hit": True,
+                    "cache_key": key[:12],
+                },
+            )
+        # Corrupt entry (verdict missing or non-string). Drop it and fall
+        # through to a live call so the caller is never handed a cached
+        # "ok=True, verdict=None" sentinel.
+        _logger.warning(
+            "semantic_reasoner: dropping corrupt cache entry for key=%s",
+            key[:12],
         )
 
     try:
-        from call_model_raw import ClassifierUnavailableError, call_model_raw
+        import call_model_raw as _cmr
     except Exception as exc:  # pragma: no cover
         return RouterResult(
             ok=False,
@@ -325,6 +372,20 @@ def _reason_cached_llm(
             route_used="semantic_reasoner",
             degraded=True,
             error=f"call_model_raw unavailable: {exc}",
+            meta={"mode": "cached_llm", "cache_hit": False},
+        )
+
+    call_model_raw_fn = getattr(_cmr, "call_model_raw", None)
+    classifier_unavailable_cls = getattr(
+        _cmr, "ClassifierUnavailableError", Exception
+    )
+    if call_model_raw_fn is None:
+        return RouterResult(
+            ok=False,
+            decision_kind=decision_kind,
+            route_used="semantic_reasoner",
+            degraded=True,
+            error="call_model_raw callable missing",
             meta={"mode": "cached_llm", "cache_hit": False},
         )
 
@@ -340,7 +401,7 @@ def _reason_cached_llm(
         "label fits, answer 'unknown'."
     )
     try:
-        raw = call_model_raw(
+        raw = call_model_raw_fn(
             prompt,
             system=system,
             caller="semantic_reasoner",
@@ -348,13 +409,22 @@ def _reason_cached_llm(
             max_tokens=32,
             temperature=0.0,
         )
-    except ClassifierUnavailableError as exc:
+    except classifier_unavailable_cls as exc:
         return RouterResult(
             ok=False,
             decision_kind=decision_kind,
             route_used="semantic_reasoner",
             degraded=True,
             error=f"remote_unavailable: {exc}",
+            meta={"mode": "cached_llm", "cache_hit": False},
+        )
+    except Exception as exc:  # noqa: BLE001 — fail-closed
+        return RouterResult(
+            ok=False,
+            decision_kind=decision_kind,
+            route_used="semantic_reasoner",
+            degraded=True,
+            error=f"remote_error: {exc}",
             meta={"mode": "cached_llm", "cache_hit": False},
         )
 
@@ -366,7 +436,11 @@ def _reason_cached_llm(
             route_used="semantic_reasoner",
             degraded=True,
             error="llm_returned_unknown_or_unparseable",
-            meta={"mode": "cached_llm", "cache_hit": False, "raw": raw[:80]},
+            meta={
+                "mode": "cached_llm",
+                "cache_hit": False,
+                "raw": (raw or "")[:80],
+            },
         )
 
     _cache_put(
@@ -435,6 +509,23 @@ def _normalize_verdict(
 # ---------------------------------------------------------------------------
 
 
+_REASONER_OFF_VALUES = {"0", "off", "false", "no", "disable", "disabled"}
+
+
+def _is_reasoner_disabled() -> bool:
+    """Honour the ``NEXO_SEMANTIC_REASONER`` runtime kill switch.
+
+    The plan (ONEPASS LLM Coverage) explicitly required an env opt-out
+    dedicated to the reasoner, separate from ``NEXO_LOCAL_CLASSIFIER``
+    (which only gates install-time provisioning). Operators who hit a
+    reasoner regression in production can set ``NEXO_SEMANTIC_REASONER=0``
+    to force every ``reason()`` call to refuse; the router then falls
+    through to ``remote_fallback`` on its own.
+    """
+    raw = os.environ.get("NEXO_SEMANTIC_REASONER", "").strip().lower()
+    return raw in _REASONER_OFF_VALUES
+
+
 def reason(
     *,
     decision_kind: str,
@@ -449,6 +540,18 @@ def reason(
     Returns a ``RouterResult``. The router knows how to keep going to
     ``remote_fallback`` if this layer refuses.
     """
+    RouterResult = _import_router_result()
+
+    if _is_reasoner_disabled():
+        return RouterResult(
+            ok=False,
+            decision_kind=decision_kind,
+            route_used="semantic_reasoner",
+            degraded=True,
+            error="reasoner_disabled_by_env",
+            meta={"env": "NEXO_SEMANTIC_REASONER"},
+        )
+
     labels_tuple: tuple[str, ...] | None = tuple(labels) if labels else None
     if mode == "multipass_local":
         return _reason_multipass_local(
@@ -466,7 +569,6 @@ def reason(
             confidence_floor=confidence_floor,
         )
 
-    RouterResult = _import_router_result()
     return RouterResult(
         ok=False,
         decision_kind=decision_kind,
