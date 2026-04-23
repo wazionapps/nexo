@@ -93,13 +93,17 @@
                     <span class="page-chip">Adaptive empirical</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v782" class="btn btn-primary">Start with v7.8.2</a>
-                    <a href="#v781" class="btn btn-secondary">See v7.8.1</a>
+                    <a href="#v790" class="btn btn-primary">Start with v7.9.0</a>
+                    <a href="#v782" class="btn btn-secondary">See v7.8.2</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
             </div>
             <div class="page-visual">
                 <div class="page-stack">
+                    <div class="page-stack-card">
+                        <strong>v7.9.0</strong>
+                        <span>Minor — semantic stack scaffolding under ONEPASS LLM Coverage plan. 18 named decision_kinds in semantic_router (13 textual + 5 code-aware) with policy table + layer chain. semantic_reasoner Mode A (multipass_local: reuses mDeBERTa pin with 3-pass majority vote + 0.75 floor) and Mode B (cached_llm: call_model_raw wrapper with pid+uuid atomic-write 24h-TTL disk cache). scripts/semantic-classify.py JSON CLI. NEXO_SEMANTIC_REASONER runtime kill switch. Bug fixes: templates/ root sync in upgrade path (Maria iMac upgrade had lost 27 core-prompts) + 13-tool preload in nexo_startup inject_prompt (closes Claude-Code-with-many-MCPs deferred-schema bootstrap failure). 50 new tests. Companion: NEXO Desktop v0.28.0.</span>
+                    </div>
                     <div class="page-stack-card">
                         <strong>v7.8.2</strong>
                         <span>Patch — hook_runs sid observability for compact hooks. compact_session_resolver walks sessions → aliases → per-conv sidecar → legacy global sidecar. pre_compact.py and post_compact.py now store the resolved NEXO sid in hook_runs.session_id (ending the 7/8 empty-row rate) plus claude_session_id + sid_source in metadata. 9 new tests. No Desktop bump.</span>
@@ -220,6 +224,16 @@
 <section class="section-compact" style="background:rgba(124,58,237,0.08);">
     <div class="container desktop-disclaimer" style="max-width:860px;font-size:13px;line-height:1.55;">
         <p><strong>Sobre NEXO Desktop.</strong> NEXO Desktop es un cliente acompa&ntilde;ante closed-source distribuido aparte en <a href="https://nexo-desktop.com/">nexo-desktop.com</a>. Cuando una entrada de changelog menciona "NEXO Desktop" se refiere a una versi&oacute;n coordinada de ese cliente que consume el contrato CLI/MCP del Brain. El c&oacute;digo de Desktop no vive en este repo; el Brain (AGPL-3.0) es 100% usable por s&iacute; solo desde terminal, Codex, Claude Code, o cualquier cliente MCP.</p>
+    </div>
+</section>
+
+<section id="v790" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.9.0 <span style="opacity:.5;font-weight:400;">&mdash; April 23, 2026 &mdash; <strong>MINOR</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">Semantic stack scaffolding &mdash; router + reasoner + CLI under the ONEPASS LLM Coverage plan, plus bootstrap preload fix and templates-sync fix</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            Minor release under the ONEPASS LLM Coverage plan. New <code>src/semantic_router.py</code> is the central router for every model-backed semantic decision in Brain: 18 named <code>decision_kinds</code> (13 textual + 5 code-aware), a <code>RouterResult</code> dataclass, and the per-kind policy-driven layer chain <code>fast_local &rarr; semantic_reasoner &rarr; remote_fallback</code>. New <code>src/semantic_reasoner.py</code> introduces two modes: <strong>Mode A (<code>multipass_local</code>)</strong> reuses the already-pinned <code>LocalZeroShotClassifier</code> (same <code>MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7</code> pin from <code>classifier-model-notes.md</code>) with three prompt-perturbed passes, majority vote, and a stricter 0.75 confidence floor &mdash; no new model download, just stricter aggregation; <strong>Mode B (<code>cached_llm</code>)</strong> wraps <code>call_model_raw</code> with a pid+uuid atomic-write disk cache under <code>~/.nexo/runtime/operations/semantic-reasoner-cache.json</code>, SHA-256 keyed by <code>(decision_kind, normalized_question, normalized_context, labels)</code>, 24h TTL, LRU-bound at 2000 entries, corrupt entries dropped on read. New <code>scripts/semantic-classify.py</code> JSON-in JSON-out CLI lets external MCP clients (including the closed-source NEXO Desktop companion) query Brain as the single semantic authority. New <code>NEXO_SEMANTIC_REASONER</code> kill switch (<code>0</code>/<code>off</code>/<code>false</code>/<code>no</code>/<code>disable</code>/<code>disabled</code>) honours the ONEPASS plan mandate for a dedicated runtime opt-out, separate from <code>NEXO_LOCAL_CLASSIFIER</code> (which only gates install-time provisioning). <strong>Two product-bug fixes</strong>: <code>bin/nexo-brain.js</code> upgrade flow now copies <code>templates/</code> root the same way fresh install and same-version refresh already did (Maria iMac upgrade <code>7.1.10&rarr;7.8.1</code> had lost 27 core-prompts templates and broken post-update import verification); and <code>tool-enforcement-map.json</code> <code>nexo_startup.enforcement.inject_prompt</code> now instructs the model to preload the 13 <code>mcp__nexo__*</code> protocol tools via <code>ToolSearch</code> before calling <code>nexo_startup</code> when the MCP host defers tool schemas (Claude Code with many MCPs installed), closing the silent-bootstrap-failure mode observed live in session <code>nexo-1776899231-34499</code>. <strong>Audit-driven hardening</strong> from the 4-auditor pre-release review: router/reasoner use <code>getattr</code> over the <code>call_model_raw</code> module and catch plain <code>Exception</code> as a trailing clause so provider errors (<code>APIError</code>, <code>TimeoutError</code>, <code>KeyError</code>) degrade with <code>error="remote_error: &lt;cause&gt;"</code> instead of propagating; cache writes use pid+uuid temp + <code>fsync</code> + <code>os.replace</code> to survive concurrent Brain+Desktop-CLI writers; <code>NEXO_SEMANTIC_REASONER_TTL</code> parse tolerates malformed values with a logger warning + default fallback. Tests: +50 (22 router, 20 reasoner, 8 CLI). Per-site migration of existing callers (<code>session_end_intent</code>, <code>r14</code>, <code>r16</code>, <code>r17</code>, <code>r20</code>, <code>r34</code>, T4 gates, <code>tools_drive</code>, <code>nexo-followup-runner</code>) is explicitly deferred to follow-up patch releases under <code>NF-SEMANTIC-ROUTER-SITE-MIGRATION</code>; nothing in this release changes the behaviour of the existing callers. Companion coordinated release: NEXO Desktop v0.28.0.
+        </p>
     </div>
 </section>
 
