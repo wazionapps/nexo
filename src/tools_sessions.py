@@ -198,6 +198,7 @@ def _session_portability_bundle(sid: str = "") -> dict:
             "task": session_row["task"],
             "client": session_row["session_client"],
             "external_session_id": session_row["external_session_id"],
+            "conversation_id": session_row["conversation_id"],
             "started_epoch": session_row["started_epoch"],
             "last_update_epoch": session_row["last_update_epoch"],
             "local_time": session_row["local_time"],
@@ -363,6 +364,7 @@ def handle_startup(
     claude_session_id: str = "",
     session_token: str = "",
     session_client: str = "",
+    conversation_id: str = "",
 ) -> str:
     """Full startup sequence: register, clean, report.
 
@@ -393,12 +395,28 @@ def handle_startup(
         # If we recovered the UUID from the coordination file, the only
         # client that writes there is Claude Code.
         inferred_client = "claude_code"
+    conversation = str(conversation_id or "").strip()
+    conflicts = []
+    if conversation:
+        cutoff = now_epoch() - SESSION_STALE_SECONDS
+        conn = get_db()
+        rows = conn.execute(
+            """
+            SELECT sid, task, last_update_epoch, external_session_id, session_client
+            FROM sessions
+            WHERE conversation_id = ? AND last_update_epoch > ?
+            ORDER BY last_update_epoch DESC
+            """,
+            (conversation, cutoff),
+        ).fetchall()
+        conflicts = [dict(row) for row in rows if row["sid"] != sid]
     register_session(
         sid,
         task,
         claude_session_id=linked_session_id,
         external_session_id=linked_session_id,
         session_client=inferred_client,
+        conversation_id=conversation,
     )
     # v43 hotfix: also register in session_claude_aliases so multi-
     # conversation NEXO Desktop spawns (each with its own claude UUID)
@@ -420,6 +438,8 @@ def handle_startup(
     inbox = get_inbox(sid)
 
     lines = [f"SID: {sid}"]
+    if conversation:
+        lines.append(f"CONVERSATION_ID: {conversation}")
 
     if cleaned > 0:
         lines.append(f"Cleaned {cleaned} stale sessions.")
@@ -432,6 +452,16 @@ def handle_startup(
             lines.append(f"  {s['sid']} ({age}) — {s['task']}")
     else:
         lines.append("No other active sessions.")
+
+    if conflicts:
+        lines.append("")
+        lines.append("CONVERSATION CONFLICT:")
+        for row in conflicts[:3]:
+            age = _format_age(row["last_update_epoch"])
+            lines.append(
+                f"  {row['sid']} ({age}) — {row['task']} "
+                f"[client={row.get('session_client') or '?'} external={row.get('external_session_id') or '?'}]"
+            )
 
     if inbox:
         lines.append("")

@@ -265,6 +265,16 @@ def test_handle_packaged_update_reloads_launchagents_after_successful_bump(monke
         "_reload_launch_agents_after_bump",
         lambda: {"scanned": 3, "reloaded": 3, "errors": []},
     )
+    monkeypatch.setattr(
+        update,
+        "activate_versioned_runtime_snapshot",
+        lambda source_root, version: {"ok": True, "version": version},
+    )
+    monkeypatch.setattr(
+        update,
+        "write_restart_required_marker",
+        lambda from_version, to_version: {"path": f"/tmp/mcp-restart-required-{to_version}.json"},
+    )
 
     def fake_run(args, **kwargs):
         if args == ["npm", "update", "-g", "nexo-brain"]:
@@ -308,6 +318,16 @@ def test_handle_packaged_update_uses_desktop_managed_npm_runtime(monkeypatch):
         update,
         "_reload_launch_agents_after_bump",
         lambda: {"scanned": 1, "reloaded": 1, "errors": []},
+    )
+    monkeypatch.setattr(
+        update,
+        "activate_versioned_runtime_snapshot",
+        lambda source_root, version: {"ok": True, "version": version},
+    )
+    monkeypatch.setattr(
+        update,
+        "write_restart_required_marker",
+        lambda from_version, to_version: {"path": f"/tmp/mcp-restart-required-{to_version}.json"},
     )
     monkeypatch.setattr(update.Path, "exists", lambda self: str(self) == desktop_node)
 
@@ -357,6 +377,16 @@ def test_handle_packaged_update_finalizes_layout_before_import_verification(monk
         update,
         "_reload_launch_agents_after_bump",
         lambda: {"scanned": 1, "reloaded": 1, "errors": []},
+    )
+    monkeypatch.setattr(
+        update,
+        "activate_versioned_runtime_snapshot",
+        lambda source_root, version: {"ok": True, "version": version},
+    )
+    monkeypatch.setattr(
+        update,
+        "write_restart_required_marker",
+        lambda from_version, to_version: {"path": f"/tmp/mcp-restart-required-{to_version}.json"},
     )
 
     def fake_run(args, **kwargs):

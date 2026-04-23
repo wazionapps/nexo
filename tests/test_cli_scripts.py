@@ -266,7 +266,7 @@ class TestRuntimeUpdate:
             "client_preferences.py",
     "paths.py", "agent_runner.py", "bootstrap_docs.py",
             "hook_guardrails.py", "protocol_settings.py", "public_evolution_queue.py",
-            "auto_update.py", "tools_sessions.py", "tools_coordination.py",
+            "auto_update.py", "runtime_versioning.py", "tools_sessions.py", "tools_coordination.py",
             "tools_hot_context.py",
             "tools_reminders.py", "tools_reminders_crud.py", "tools_learnings.py",
             "tools_credentials.py", "tools_task_history.py", "tools_menu.py",
@@ -322,6 +322,7 @@ class TestRuntimeUpdate:
         (runtime_home / "auto_update.py").write_text((current_src / "auto_update.py").read_text())
         (runtime_home / "product_mode.py").write_text((current_src / "product_mode.py").read_text())
         (runtime_home / "runtime_home.py").write_text((current_src / "runtime_home.py").read_text())
+        (runtime_home / "runtime_versioning.py").write_text((current_src / "runtime_versioning.py").read_text())
         (runtime_home / "tree_hygiene.py").write_text((current_src / "tree_hygiene.py").read_text())
         (runtime_home / "paths.py").write_text((current_src / "paths.py").read_text())
         (runtime_home / "runtime_power.py").write_text(
@@ -388,7 +389,7 @@ class TestRuntimeUpdate:
             "maintenance.py", "storage_router.py", "claim_graph.py", "hnsw_index.py",
             "evolution_cycle.py", "migrate_embeddings.py", "auto_close_sessions.py",
             "client_sync.py", "client_preferences.py",
-    "paths.py", "agent_runner.py", "bootstrap_docs.py", "auto_update.py", "tools_sessions.py", "tools_coordination.py",
+    "paths.py", "agent_runner.py", "bootstrap_docs.py", "auto_update.py", "runtime_versioning.py", "tools_sessions.py", "tools_coordination.py",
             "tools_hot_context.py",
             "tools_reminders.py", "tools_reminders_crud.py", "tools_learnings.py",
             "tools_credentials.py", "tools_task_history.py", "tools_menu.py", "cli.py",
@@ -487,7 +488,7 @@ class TestRuntimeUpdate:
             "maintenance.py", "storage_router.py", "claim_graph.py", "hnsw_index.py",
             "evolution_cycle.py", "migrate_embeddings.py", "auto_close_sessions.py",
             "client_sync.py", "client_preferences.py",
-    "paths.py", "agent_runner.py", "bootstrap_docs.py", "auto_update.py", "tools_sessions.py", "tools_coordination.py",
+    "paths.py", "agent_runner.py", "bootstrap_docs.py", "auto_update.py", "runtime_versioning.py", "tools_sessions.py", "tools_coordination.py",
             "tools_hot_context.py",
             "tools_reminders.py", "tools_reminders_crud.py", "tools_learnings.py",
             "tools_credentials.py", "tools_task_history.py", "tools_menu.py", "cli.py",
@@ -536,6 +537,9 @@ class TestRuntimeUpdate:
         )
         (runtime_home / "paths.py").write_text(
             (Path(os.path.dirname(__file__)).parent / "src" / "paths.py").read_text()
+        )
+        (runtime_home / "runtime_versioning.py").write_text(
+            (Path(os.path.dirname(__file__)).parent / "src" / "runtime_versioning.py").read_text()
         )
 
         probe = (

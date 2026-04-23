@@ -14,6 +14,11 @@ def test_server_exposes_protocol_runtime_tools(isolated_db):
 
     for name in (
         "nexo_cortex_check",
+        "nexo_continuity_snapshot_write",
+        "nexo_continuity_snapshot_read",
+        "nexo_continuity_resume_bundle",
+        "nexo_continuity_compaction_event",
+        "nexo_continuity_audit",
         "nexo_guard_check",
         "nexo_task_open",
         "nexo_task_acknowledge_guard",

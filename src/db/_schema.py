@@ -1393,6 +1393,37 @@ def _m52_lifecycle_canonical_plan(conn):
     _migrate_add_index(conn, "idx_lifecycle_events_plan_id", "lifecycle_events", "canonical_plan_id")
 
 
+def _m53_session_conversation_identity(conn):
+    """Stable Desktop conversation identity independent from the runtime SID."""
+    _migrate_add_column(conn, "sessions", "conversation_id", "TEXT DEFAULT ''")
+    _migrate_add_index(conn, "idx_sessions_conversation_id", "sessions", "conversation_id")
+
+
+def _m54_continuity_snapshots(conn):
+    """Durable continuity snapshots for Desktop/Brain handoff and audit."""
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS continuity_snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            conversation_id TEXT NOT NULL,
+            session_id TEXT DEFAULT '',
+            external_session_id TEXT DEFAULT '',
+            client TEXT DEFAULT '',
+            event_type TEXT NOT NULL DEFAULT 'turn_end',
+            payload_json TEXT NOT NULL DEFAULT '{}',
+            trace_id TEXT DEFAULT '',
+            idempotency_key TEXT NOT NULL DEFAULT '',
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now')),
+            UNIQUE(conversation_id, idempotency_key)
+        )
+        """
+    )
+    _migrate_add_index(conn, "idx_continuity_snapshots_conv", "continuity_snapshots", "conversation_id")
+    _migrate_add_index(conn, "idx_continuity_snapshots_sid", "continuity_snapshots", "session_id")
+    _migrate_add_index(conn, "idx_continuity_snapshots_created", "continuity_snapshots", "created_at")
+
+
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
     (2, "followups_reasoning", _m2_followups_reasoning),
@@ -1446,6 +1477,8 @@ MIGRATIONS = [
     (50, "dedupe_nexo_product_learning_pair", _m50_dedupe_nexo_product_learning_pair),
     (51, "lifecycle_events", _m51_lifecycle_events),
     (52, "lifecycle_canonical_plan", _m52_lifecycle_canonical_plan),
+    (53, "session_conversation_identity", _m53_session_conversation_identity),
+    (54, "continuity_snapshots", _m54_continuity_snapshots),
 ]
 
 

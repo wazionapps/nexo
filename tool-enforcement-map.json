@@ -838,6 +838,81 @@
       },
       "triggers_after": []
     },
+    "nexo_continuity_audit": {
+      "description": "Read the forensic continuity timeline for a conversation",
+      "category": "continuity",
+      "source": "server",
+      "requires": [],
+      "provides": [
+        "continuity_timeline"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_continuity_compaction_event": {
+      "description": "Persist a compaction-related continuity event",
+      "category": "continuity",
+      "source": "server",
+      "requires": [],
+      "provides": [
+        "continuity_snapshot"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_continuity_resume_bundle": {
+      "description": "Build the small continuity bundle used after restore/restart",
+      "category": "continuity",
+      "source": "server",
+      "requires": [],
+      "provides": [
+        "resume_bundle"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_continuity_snapshot_read": {
+      "description": "Read recent continuity snapshots by conversation or session",
+      "category": "continuity",
+      "source": "server",
+      "requires": [],
+      "provides": [
+        "continuity_snapshots"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_continuity_snapshot_write": {
+      "description": "Write a durable continuity snapshot",
+      "category": "continuity",
+      "source": "server",
+      "requires": [],
+      "provides": [
+        "continuity_snapshot"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
     "nexo_cortex_check": {
       "description": "Cognitive pre-action check",
       "category": "cortex",

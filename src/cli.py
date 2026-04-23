@@ -47,6 +47,7 @@ import time
 from pathlib import Path
 
 from runtime_home import export_resolved_nexo_home
+from runtime_versioning import build_mcp_status, clear_restart_required_marker
 
 NEXO_HOME = export_resolved_nexo_home()
 NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(Path(__file__).resolve().parent)))
@@ -118,6 +119,82 @@ def _fetch_latest_version(timeout_seconds: int = 2) -> str | None:
     except Exception:
         pass
     return latest
+
+
+def _print_json_or_text(payload: dict, *, as_json: bool = False) -> int:
+    if as_json:
+        print(json.dumps(payload, ensure_ascii=False))
+    else:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+    return 0 if payload.get("ok", True) else 1
+
+
+def _mcp_status(args) -> int:
+    return _print_json_or_text(
+        build_mcp_status(client=getattr(args, "client", "") or ""),
+        as_json=bool(getattr(args, "json", False)),
+    )
+
+
+def _mcp_clear_restart(args) -> int:
+    return _print_json_or_text(
+        clear_restart_required_marker(
+            client=getattr(args, "client", "") or "",
+            installed_version=getattr(args, "installed_version", "") or "",
+            process_version=getattr(args, "process_version", "") or "",
+        ),
+        as_json=bool(getattr(args, "json", False)),
+    )
+
+
+def _continuity_snapshot_write(args) -> int:
+    from continuity import write_snapshot
+
+    result = write_snapshot(
+        conversation_id=args.conversation_id,
+        session_id=args.session_id or "",
+        external_session_id=args.external_session_id or "",
+        client=args.client or "",
+        event_type=args.event_type or "turn_end",
+        payload=args.payload or "",
+        trace_id=args.trace_id or "",
+        idempotency_key=args.idempotency_key or "",
+    )
+    return _print_json_or_text(result, as_json=bool(getattr(args, "json", False)))
+
+
+def _continuity_snapshot_read(args) -> int:
+    from continuity import read_snapshot
+
+    result = read_snapshot(
+        conversation_id=args.conversation_id or "",
+        session_id=args.session_id or "",
+        limit=args.limit or 20,
+    )
+    return _print_json_or_text(result, as_json=bool(getattr(args, "json", False)))
+
+
+def _continuity_resume_bundle(args) -> int:
+    from continuity import build_resume_bundle
+
+    result = build_resume_bundle(
+        conversation_id=args.conversation_id or "",
+        session_id=args.session_id or "",
+        external_session_id=args.external_session_id or "",
+        client=args.client or "",
+        token_budget=args.token_budget or 2000,
+    )
+    return _print_json_or_text(result, as_json=bool(getattr(args, "json", False)))
+
+
+def _continuity_audit(args) -> int:
+    from continuity import continuity_audit
+
+    result = continuity_audit(
+        conversation_id=args.conversation_id,
+        limit=args.limit or 50,
+    )
+    return _print_json_or_text(result, as_json=bool(getattr(args, "json", False)))
 
 
 def _should_refresh_latest_version() -> bool:
@@ -3075,6 +3152,49 @@ def main():
     dashboard_parser = sub.add_parser("dashboard", help="Web dashboard control")
     dashboard_parser.add_argument("action", choices=["on", "off", "status"], help="Start, stop, or check dashboard")
 
+    mcp_parser = sub.add_parser("mcp", help="MCP runtime status and restart state")
+    mcp_sub = mcp_parser.add_subparsers(dest="mcp_command")
+    mcp_status_p = mcp_sub.add_parser("status", help="Read the current runtime/MCP alignment state")
+    mcp_status_p.add_argument("--client", default="", help="Optional client label such as claude_desktop or codex")
+    mcp_status_p.add_argument("--json", action="store_true", help="JSON output")
+    mcp_clear_p = mcp_sub.add_parser("clear-restart", help="Acknowledge that a client/session reloaded the new runtime")
+    mcp_clear_p.add_argument("--client", default="", help="Client label such as claude_desktop or codex")
+    mcp_clear_p.add_argument("--installed-version", default="")
+    mcp_clear_p.add_argument("--process-version", default="")
+    mcp_clear_p.add_argument("--json", action="store_true", help="JSON output")
+
+    continuity_parser = sub.add_parser("continuity", help="Continuity snapshots and resume bundles")
+    continuity_sub = continuity_parser.add_subparsers(dest="continuity_command")
+    cwrite_p = continuity_sub.add_parser("snapshot-write", help="Write a continuity snapshot")
+    cwrite_p.add_argument("--conversation-id", required=True)
+    cwrite_p.add_argument("--session-id", default="")
+    cwrite_p.add_argument("--external-session-id", default="")
+    cwrite_p.add_argument("--client", default="")
+    cwrite_p.add_argument("--event-type", default="turn_end")
+    cwrite_p.add_argument("--payload", default="")
+    cwrite_p.add_argument("--trace-id", default="")
+    cwrite_p.add_argument("--idempotency-key", default="")
+    cwrite_p.add_argument("--json", action="store_true", help="JSON output")
+
+    cread_p = continuity_sub.add_parser("snapshot-read", help="Read continuity snapshots")
+    cread_p.add_argument("--conversation-id", default="")
+    cread_p.add_argument("--session-id", default="")
+    cread_p.add_argument("--limit", type=int, default=20)
+    cread_p.add_argument("--json", action="store_true", help="JSON output")
+
+    cbundle_p = continuity_sub.add_parser("resume-bundle", help="Build a continuity resume bundle")
+    cbundle_p.add_argument("--conversation-id", default="")
+    cbundle_p.add_argument("--session-id", default="")
+    cbundle_p.add_argument("--external-session-id", default="")
+    cbundle_p.add_argument("--client", default="")
+    cbundle_p.add_argument("--token-budget", type=int, default=2000)
+    cbundle_p.add_argument("--json", action="store_true", help="JSON output")
+
+    caudit_p = continuity_sub.add_parser("audit", help="Read the continuity audit timeline")
+    caudit_p.add_argument("--conversation-id", required=True)
+    caudit_p.add_argument("--limit", type=int, default=50)
+    caudit_p.add_argument("--json", action="store_true", help="JSON output")
+
     # -- desktop bridge (read-only, for NEXO Desktop and any external UI) --
     # v7.4.0 — lifecycle event bridge (guardian-claude-desktop-plan).
     lifecycle_parser = sub.add_parser("lifecycle", help="Conversation lifecycle event handler (v7.4 Desktop bridge)")
@@ -3267,6 +3387,24 @@ def main():
         if args.clients_command == "sync":
             return _clients_sync(args)
         clients_parser.print_help()
+        return 0
+    elif args.command == "mcp":
+        if args.mcp_command == "status":
+            return _mcp_status(args)
+        if args.mcp_command == "clear-restart":
+            return _mcp_clear_restart(args)
+        mcp_parser.print_help()
+        return 0
+    elif args.command == "continuity":
+        if args.continuity_command == "snapshot-write":
+            return _continuity_snapshot_write(args)
+        elif args.continuity_command == "snapshot-read":
+            return _continuity_snapshot_read(args)
+        elif args.continuity_command == "resume-bundle":
+            return _continuity_resume_bundle(args)
+        elif args.continuity_command == "audit":
+            return _continuity_audit(args)
+        continuity_parser.print_help()
         return 0
     elif args.command == "preferences":
         return _preferences(args)

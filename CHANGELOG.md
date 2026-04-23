@@ -1,5 +1,56 @@
 # Changelog
 
+## [7.9.6] - 2026-04-23
+
+Patch release. Closes the continuity + MCP restart-stability one-pass
+contract for existing installs and coordinated Desktop relaunch/update.
+
+### Added — continuity runtime and resume bundles
+
+- Brain now persists continuity snapshots in a dedicated
+  `continuity_snapshots` table keyed by `session_id` and
+  `conversation_id`, with idempotent dedupe and helpers for latest snapshot,
+  audit, and compaction event recording.
+- `nexo_startup` now accepts `conversation_id`, keeps the Brain-side mapping to
+  the active `session_id`, and warns on conflicting live sessions for the same
+  conversation.
+- New continuity MCP/CLI surfaces expose snapshot write/read, compact-event
+  recording, audit, and a small fail-closed `resume_bundle` with
+  `unsafe_sid=true` when Brain cannot prove that the requested session belongs
+  to the current conversation/client.
+
+### Added — versioned runtime activation and MCP restart contract
+
+- `nexo update` now installs the new packaged runtime under
+  `~/.nexo/core/versions/<version>` and flips `~/.nexo/core/current`
+  atomically only after validation succeeds.
+- Brain writes a durable
+  `~/.nexo/runtime/operations/mcp-restart-required.json` marker on real Brain
+  version changes, exposes it through `nexo mcp status`, and allows explicit
+  acknowledgement through `nexo mcp clear-restart`.
+- Running MCP processes now self-drain when their `process_version` no longer
+  matches the installed runtime: normal tools return structured
+  `mcp_restart_required` instead of continuing to serve mixed old/new code.
+
+### Changed — update path for installed users
+
+- Existing installs are now covered end-to-end: `nexo update` installs the new
+  Brain runtime, new processes spawn from `core/current`, old processes stay on
+  their old code until restart and are prevented from serving normal traffic,
+  and coordinated Desktop v0.28.7 can verify when the runtime is truly loaded.
+- This release closes the "MCP supervisor" decision for the current stdio host
+  architecture in favour of atomic runtime activation + durable restart marker
+  + self-drain + Desktop relaunch gating. No separate supervisor ships in
+  v7.9.6.
+
+### Tests
+
+- Targeted Brain validation:
+  `pytest -q tests/test_continuity_runtime.py tests/test_server_protocol_exports.py tests/test_startup_preflight.py tests/test_runtime_update_contract.py`
+  (`27 passed`).
+- Coordinated Desktop validation: `npm test` in NEXO Desktop
+  (`727 pass, 0 fail, 1 skipped`).
+
 ## [7.9.5] - 2026-04-23
 
 ### Fixed — Desktop canonical diary alias confirmation

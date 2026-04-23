@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import signal
 import sys
+import json
 
 from fastmcp import FastMCP
 from core_prompts import render_core_prompt
@@ -16,6 +17,15 @@ from tools_sessions import (
     handle_smart_startup_query,
     handle_session_portable_context,
     handle_session_export_bundle,
+)
+from continuity import (
+    build_resume_bundle,
+    continuity_audit,
+    format_bundle_text,
+    json_dumps as _continuity_json_dumps,
+    read_snapshot,
+    record_compaction_event,
+    write_snapshot,
 )
 from tools_hot_context import (
     handle_recent_context_capture,
@@ -81,6 +91,11 @@ from plugins.workflow import (
 )
 from plugin_loader import load_all_plugins, load_plugin, remove_plugin, list_plugins
 from tools_guardian import handle_guardian_rule_override
+from runtime_versioning import (
+    RestartRequiredMiddleware,
+    build_mcp_status,
+    prime_process_version,
+)
 
 
 # ── Graceful shutdown: close DB on any termination signal ──────────
@@ -260,6 +275,10 @@ mcp = FastMCP(
         assistant_name=_get_ctx().assistant_name,
     ),
 )
+prime_process_version()
+mcp.add_middleware(
+    RestartRequiredMiddleware(client=str(os.environ.get("NEXO_MCP_CLIENT", "") or "").strip())
+)
 
 
 def _run_kwargs_from_env() -> dict:
@@ -290,7 +309,7 @@ def _run_kwargs_from_env() -> dict:
 # ── Session management (3 tools) ──────────────────────────────────
 
 @mcp.tool
-def nexo_startup(task: str = "Startup", claude_session_id: str = "", session_token: str = "", session_client: str = "") -> str:
+def nexo_startup(task: str = "Startup", claude_session_id: str = "", session_token: str = "", session_client: str = "", conversation_id: str = "") -> str:
     """Register new session, clean stale ones, return active sessions + alerts.
 
     Call this ONCE at the start of every conversation.
@@ -303,12 +322,14 @@ def nexo_startup(task: str = "Startup", claude_session_id: str = "", session_tok
                       other clients may pass a synthetic durable token when useful.
                       Pass this to enable automatic inter-terminal inbox detection when available.
         session_client: Optional client label such as `claude_code` or `codex`.
+        conversation_id: Stable client-side conversation identifier when available.
     """
     return handle_startup(
         task,
         claude_session_id=claude_session_id,
         session_token=session_token,
         session_client=session_client,
+        conversation_id=conversation_id,
     )
 
 
@@ -563,6 +584,87 @@ def nexo_workflow_update(
 def nexo_status(keyword: str = "") -> str:
     """List active sessions. Filter by keyword if provided."""
     return handle_status(keyword if keyword else None)
+
+
+@mcp.tool
+def nexo_continuity_snapshot_write(
+    conversation_id: str,
+    session_id: str = "",
+    external_session_id: str = "",
+    client: str = "",
+    event_type: str = "turn_end",
+    payload: str = "",
+    trace_id: str = "",
+    idempotency_key: str = "",
+) -> str:
+    """Write a durable continuity snapshot for Desktop/Brain handoff."""
+    return _continuity_json_dumps(
+        write_snapshot(
+            conversation_id=conversation_id,
+            session_id=session_id,
+            external_session_id=external_session_id,
+            client=client,
+            event_type=event_type,
+            payload=payload,
+            trace_id=trace_id,
+            idempotency_key=idempotency_key,
+        )
+    )
+
+
+@mcp.tool
+def nexo_continuity_snapshot_read(conversation_id: str = "", session_id: str = "", limit: int = 20) -> str:
+    """Read recent continuity snapshots by conversation_id or session_id."""
+    return _continuity_json_dumps(
+        read_snapshot(conversation_id=conversation_id, session_id=session_id, limit=limit)
+    )
+
+
+@mcp.tool
+def nexo_continuity_resume_bundle(
+    conversation_id: str = "",
+    session_id: str = "",
+    external_session_id: str = "",
+    client: str = "",
+    token_budget: int = 2000,
+) -> str:
+    """Build the small continuity bundle Desktop injects after restore or stale resume loss."""
+    bundle = build_resume_bundle(
+        conversation_id=conversation_id,
+        session_id=session_id,
+        external_session_id=external_session_id,
+        client=client,
+        token_budget=token_budget,
+    )
+    if not bundle.get("unsafe_sid"):
+        bundle["message"] = format_bundle_text(bundle)
+    return _continuity_json_dumps(bundle)
+
+
+@mcp.tool
+def nexo_continuity_compaction_event(
+    conversation_id: str,
+    session_id: str = "",
+    payload: str = "",
+    trace_id: str = "",
+    event_type: str = "post_compact",
+) -> str:
+    """Persist a compaction-related continuity event into the canonical snapshot stream."""
+    return _continuity_json_dumps(
+        record_compaction_event(
+            conversation_id=conversation_id,
+            session_id=session_id,
+            payload=payload,
+            trace_id=trace_id,
+            event_type=event_type,
+        )
+    )
+
+
+@mcp.tool
+def nexo_continuity_audit(conversation_id: str, limit: int = 50) -> str:
+    """Return the forensic continuity timeline for a conversation."""
+    return _continuity_json_dumps(continuity_audit(conversation_id=conversation_id, limit=limit))
 
 
 @mcp.tool

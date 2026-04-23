@@ -12,6 +12,7 @@ import time
 from pathlib import Path
 
 from runtime_home import export_resolved_nexo_home
+from runtime_versioning import activate_versioned_runtime_snapshot, write_restart_required_marker
 
 try:
     from tree_hygiene import is_duplicate_artifact_name
@@ -1228,6 +1229,25 @@ def _handle_packaged_update(progress_fn=None, *, include_clis: bool = True) -> s
         except Exception as e:
             launchagent_reload_warning = f"launchagent reload error: {e}"
 
+    versioned_runtime_summary = None
+    restart_marker_summary = None
+    if old_version != new_version:
+        try:
+            _emit_progress(progress_fn, "Activating versioned runtime snapshot...")
+            versioned_runtime_summary = activate_versioned_runtime_snapshot(
+                source_root=_runtime_code_root(),
+                version=new_version,
+            )
+        except Exception as e:
+            errors.append(f"versioned runtime activation: {e}")
+        try:
+            restart_marker_summary = write_restart_required_marker(
+                from_version=old_version,
+                to_version=new_version,
+            )
+        except Exception as e:
+            errors.append(f"restart marker: {e}")
+
     if errors:
         # 5. Full rollback: restore code tree + DBs + pip deps + rollback npm package
         if code_backup_dir:
@@ -1289,6 +1309,10 @@ def _handle_packaged_update(progress_fn=None, *, include_clis: bool = True) -> s
             )
         else:
             lines.append(f"  WARNING: launchagent reload: {launchagent_reload_warning}")
+    if versioned_runtime_summary and versioned_runtime_summary.get("ok"):
+        lines.append(f"  Runtime activation: core/current -> versions/{new_version}")
+    if restart_marker_summary:
+        lines.append(f"  Restart marker: {restart_marker_summary.get('path')}")
     lines.append("")
     lines.append("MCP server restart needed to load new code.")
     return "\n".join(lines)
@@ -1499,6 +1523,27 @@ def handle_update(
         except Exception:
             pass  # Non-critical, configs can be re-synced later
 
+        versioned_runtime_summary = None
+        restart_marker_summary = None
+        if version_changed:
+            try:
+                _emit_progress(progress_fn, "Activating versioned runtime snapshot...")
+                versioned_runtime_summary = activate_versioned_runtime_snapshot(
+                    source_root=SRC_DIR,
+                    version=new_version,
+                )
+                steps_done.append("versioned-runtime")
+            except Exception as e:
+                raise RuntimeError(f"Versioned runtime activation failed: {e}")
+            try:
+                restart_marker_summary = write_restart_required_marker(
+                    from_version=old_version,
+                    to_version=new_version,
+                )
+                steps_done.append("restart-marker")
+            except Exception as e:
+                raise RuntimeError(f"Restart marker write failed: {e}")
+
         # Build result
         dep_summary_lines = _format_dep_results(dep_results)
         if pull_out == "Already up to date.":
@@ -1529,6 +1574,10 @@ def handle_update(
         lines.extend(external_cli_lines)
         if "client-sync" in steps_done:
             lines.append("  Clients: configured client targets synced")
+        if versioned_runtime_summary and versioned_runtime_summary.get("ok"):
+            lines.append(f"  Runtime activation: core/current -> versions/{new_version}")
+        if restart_marker_summary:
+            lines.append(f"  Restart marker: {restart_marker_summary.get('path')}")
         lines.append("")
         lines.append("MCP server restart needed to load new code.")
         return "\n".join(lines)

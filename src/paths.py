@@ -70,7 +70,17 @@ def home() -> Path:
 # Core (shipped with the package, replaced on every `nexo update`)
 # ---------------------------------------------------------------------------
 def core_dir() -> Path:
-    return home() / "core"
+    container = home() / "core"
+    current = container / "current"
+    if current.exists():
+        try:
+            resolved = current.resolve(strict=False)
+            if resolved.exists():
+                return resolved
+        except Exception:
+            return current
+        return current
+    return container
 
 
 def core_scripts_dir() -> Path:

@@ -54,6 +54,7 @@ _hot_context = _load_submodule("db._hot_context")
 _drive = _load_submodule("db._drive")
 _outcomes = _load_submodule("db._outcomes")
 _goal_profiles = _load_submodule("db._goal_profiles")
+_continuity = _load_submodule("db._continuity")
 
 # Core: connection, constants, init, utils
 from db._core import (
@@ -83,6 +84,13 @@ from db._sessions import (
     ask_question, answer_question, get_pending_questions, check_answer,
     update_last_heartbeat_ts, get_last_heartbeat_ts,
     count_pending_inbox_messages, resolve_sid_from_external,
+)
+
+from db._continuity import (
+    build_snapshot_idempotency_key,
+    write_continuity_snapshot,
+    list_continuity_snapshots,
+    latest_continuity_snapshot,
 )
 
 # PostToolUse inbox-reminder rate limit (v6.0.1)
