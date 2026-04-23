@@ -134,7 +134,7 @@
                     <span class="page-chip">Shared brain product notes</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="/blog/nexo-7-9-3/" class="btn btn-primary">Read latest release</a>
+                    <a href="/blog/nexo-7-9-5/" class="btn btn-primary">Read latest release</a>
                     <a href="/changelog/" class="btn btn-secondary">Latest release notes</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -145,22 +145,22 @@
                 <div class="blog-featured-meta">
                     <span class="compare-chip">April 23, 2026</span>
                     <span class="compare-chip">Patch</span>
-                    <span class="compare-chip">canonical lifecycle v2</span>
+                    <span class="compare-chip">diary alias confirmation</span>
                 </div>
-                <h2>NEXO 7.9.3: canonical lifecycle plan shape v2 for exact-once Desktop diary</h2>
-                <p>Patch over v7.9.2. Brain canonical_actions now publish the v2 contract Desktop needs for exact-once diary+stop execution: action.type plus payload.prompt, with one-release mirrors for older clients. This is the Brain-side half of restoring archive/delete/app-exit diary semantics.</p>
+                <h2>NEXO 7.9.5: Desktop diary alias confirmation</h2>
+                <p>Patch over v7.9.4. Brain now resolves Desktop/Claude session UUIDs through NEXO SID aliases before checking session_diary, so canonical archive/delete/close/quit can confirm the diary that was actually written before Desktop stops the session.</p>
                 <div class="hero-actions" style="justify-content:flex-start;margin-bottom:18px;">
-                    <a href="/blog/nexo-7-9-3/" class="btn btn-primary">Open article</a>
-                    <a href="/changelog/#v793" class="btn btn-secondary">Open changelog</a>
+                    <a href="/blog/nexo-7-9-5/" class="btn btn-primary">Open article</a>
+                    <a href="/changelog/#v795" class="btn btn-secondary">Open changelog</a>
                 </div>
                 <div class="blog-mini-stack">
                     <div class="blog-mini-card">
                         <strong>Companion view</strong>
-                        <span><a href="/changelog/#v793">See the full v7.9.3 changelog</a></span>
+                        <span><a href="/changelog/#v795">See the full v7.9.5 changelog</a></span>
                     </div>
                     <div class="blog-mini-card">
                         <strong>Previous release</strong>
-                        <span><a href="/blog/nexo-7-9-2/">NEXO 7.9.2: semantic-router migration complete + headless Guardian map fix</a>.</span>
+                        <span><a href="/blog/nexo-7-9-4/">NEXO 7.9.4: diary evidence gate, onboarding fixes, and model warmup</a>.</span>
                     </div>
                 </div>
             </div>
@@ -191,6 +191,24 @@
 <section class="section-flush-top">
     <div class="container">
             <div class="blog-grid">
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 23, 2026</div>
+                <h2><a href="/blog/nexo-7-9-5/">NEXO 7.9.5: Desktop diary alias confirmation</a></h2>
+                <p>Patch over v7.9.4. Brain canonical diary confirmation now follows Desktop/Claude session aliases to the active NEXO SID, preventing false timeouts when the diary exists under the real writer session.</p>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/blog/nexo-7-9-5/" class="btn btn-secondary">Read more</a>
+                </div>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 23, 2026</div>
+                <h2><a href="/blog/nexo-7-9-4/">NEXO 7.9.4: diary evidence gate, onboarding fixes, and model warmup</a></h2>
+                <p>Patch over v7.9.3. Brain canonical lifecycle now requires real diary evidence before stop/archive/delete/quit, fixes CLI onboarding guard regressions, and adds install/update model warmup.</p>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/blog/nexo-7-9-4/" class="btn btn-secondary">Read more</a>
+                </div>
+            </div>
 
             <div class="blog-card">
                 <div class="blog-card-date">April 23, 2026</div>
