@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.9.1: first semantic-router site migration batch</title>
+<meta name="description" content="NEXO Brain v7.9.1 patch release. Six conversational Brain decisions now route through semantic_router with explicit decision_kind policies and semantic labels; router/reasoner local paths classify live context instead of static prompt templates. 105 targeted tests.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-9-1/">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.9.1: first semantic-router site migration batch","datePublished":"2026-04-23","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head><body><main><article style="max-width:760px;margin:80px auto;padding:0 24px;line-height:1.75;">
+<h1>NEXO 7.9.1 — first semantic-router site migration batch</h1>
+<p><em>Published 2026-04-23. Patch release over v7.9.0.</em></p>
+
+<p>v7.9.0 shipped the semantic router, semantic reasoner, and CLI contract. v7.9.1 turns that foundation on for the first safe conversational group: six Brain decisions now use the router as the central semantic authority instead of calling the enforcement classifier directly.</p>
+
+<h2>What moved</h2>
+<p>The migrated callers are <code>session_end_intent.py</code>, <code>r14_correction_learning.py</code>, <code>r16_declared_done.py</code>, <code>r17_promise_debt.py</code>, <code>autonomy_mandate.py</code>, and <code>guard_verbal_ack.py</code>. Each caller now invokes <code>semantic_router.route(...)</code> with an explicit <code>decision_kind</code> and semantic labels:</p>
+<ul>
+<li><code>session_end_intent</code> uses <code>("session_end", "continue_session")</code>.</li>
+<li><code>r14_correction</code> uses <code>("negative_feedback", "ordinary_request")</code>.</li>
+<li><code>r16_declared_done</code> uses <code>("declared_done", "not_done")</code>.</li>
+<li><code>r17_promise_debt</code> uses <code>("promise", "no_promise")</code>.</li>
+<li><code>autonomy_mandate</code> uses <code>("autonomy_mandate", "not_mandate")</code>.</li>
+<li><code>guard_verbal_ack</code> uses <code>("explicit_ack", "not_ack")</code>.</li>
+</ul>
+
+<h2>Why this patch matters</h2>
+<p>The first implementation attempt exposed a real failure mode: generic <code>("yes", "no")</code> labels and prompt-template classification could make unrelated correction text look like a session-end request. v7.9.1 fixes that before release. Router and reasoner local paths now classify the live <code>context</code> first and only fall back to the static prompt when context is empty; the migrated callers use domain-specific labels so the classifier sees the decision it is actually making.</p>
+
+<h2>Compatibility</h2>
+<p>Existing injected-classifier seams remain intact. If a caller receives a test classifier or specialized harness classifier, it still uses that injected object exactly as before. Production paths route through <code>semantic_router</code>; tests and narrow harnesses do not need to boot the router unless they are explicitly testing the integration.</p>
+
+<h2>Verification</h2>
+<p>The targeted release suite covers the router, reasoner, migration contracts, and all six caller groups: 105 tests passing. The migration test file asserts the exact <code>decision_kind</code>, labels, and context sent by every migrated caller so future refactors cannot silently bypass the router or collapse back to generic labels.</p>
+
+<p><a href="/changelog/#v791">Full changelog entry &rarr;</a></p>
+</article></main></body></html>

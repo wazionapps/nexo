@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.5.0: canonical authority of session-end — Brain decides, Desktop executes, no polling</title>
+<meta name="description" content="NEXO Brain v7.5.0 promotes nexo_lifecycle_event to canonical authority of session-end. New 2-call contract (event + complete_canonical), deterministic canonical_plan_id, session_diary dedupe, seven delivery_status values. Paired with Desktop v0.25.0.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-5-0/">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.5.0: canonical authority of session-end — Brain decides, Desktop executes, no polling","datePublished":"2026-04-22","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head><body><main><article style="max-width:760px;margin:80px auto;padding:0 24px;line-height:1.75;">
+<h1>NEXO 7.5.0 — canonical authority of session-end: Brain decides, Desktop executes, no polling</h1>
+<p><em>Published 2026-04-22. Minor release over v7.4.1.</em></p>
+
+<p>v7.4.1 shipped with an explicit followup — <code>NF-V75-CANONICAL-DIARY-AUTHORITY</code> — acknowledging that diary+stop injection still lived on the Desktop side, inside <code>closeConversationGraceful</code>. Francisco's call was simple: no wait, do it now. v7.5.0 is that work.</p>
+
+<h2>What changed</h2>
+<p><code>nexo_lifecycle_event</code> is no longer a ledger + reconciliation authority. It is the <strong>canonical authority of session-end</strong>. Brain now decides the prompt, the sequence, and the timing of diary+stop for every close/delete/archive/app-exit with a live <code>session_id</code>. Desktop v0.25.0 &mdash; the closed-source companion at <a href="https://nexo-desktop.com">nexo-desktop.com</a> &mdash; is the conduit that executes Brain's plan against the live Claude process stdin. No other process has access to that stdin, so only Desktop can execute; but no other process decides <em>what</em> to execute anymore either.</p>
+
+<h2>The 2-call contract</h2>
+<p>No polling, no periodic ticks, no background loops waiting for state to converge. The contract is explicit:</p>
+<ol>
+  <li><strong><code>nexo_lifecycle_event</code></strong> returns a versioned <code>canonical_plan</code> when the action is diary-triggering and a live session_id is present. The plan is three actions (<code>resume_session</code> &rarr; <code>inject_prompt</code> &rarr; <code>stop_session</code>) with stable <code>id</code>s and per-action <code>timeout_ms</code>. Status: <code>canonical_pending</code>.</li>
+  <li>Desktop executes the plan inline, then calls the new <strong><code>nexo_lifecycle_complete_canonical</code></strong> tool with a per-action <code>results</code> array. Brain flips the row to <code>canonical_done</code> (or <code>retryable_error</code> if any action failed) and records <code>canonical_done_at</code>.</li>
+</ol>
+<p>That is the whole handshake. The pipeline is one event, one plan, one confirm — three writes against <code>lifecycle_events</code>.</p>
+
+<h2>Deterministic plan id</h2>
+<p><code>canonical_plan_id</code> is computed as <code>"cpl-" + sha256(event_id + "|v" + plan_version)[:24]</code>. Retries reuse the same id, so clients can deduplicate by <code>(event_id, canonical_plan_id)</code> without consulting Brain. If a replay produces a different plan_id, something is wrong — that is a hard signal, not a degraded path.</p>
+
+<h2>Idempotency via session_diary, not just event_id</h2>
+<p>The harder case is not the first call. It is the second call after Desktop crashed between running the inject and sending the confirm. The event_id still exists on the queue; the model already wrote a <code>session_diary</code> row; Brain has no <code>canonical_done_at</code> yet. A naive re-dispatch would mint a second diary.</p>
+<p>v7.5.0's <code>record_lifecycle_event</code> checks the <code>session_diary</code> table directly: for the existing row in <code>canonical_pending</code>, is there any diary row with <code>created_at > canonical_dispatched_at</code> for the same <code>session_id</code>? If yes &mdash; short-circuit to <code>already_processed</code> and refuse to re-dispatch. If no &mdash; re-hand the <em>same</em> plan (same <code>canonical_plan_id</code>) so Desktop resumes execution, not restarts it. This is the contract test <code>test_session_diary_dedup_guards_against_duplicate_plan_execution</code>.</p>
+
+<h2>Seven explicit delivery_status values</h2>
+<p>The old 5-state machine (<code>processed / already_processed / accepted / retryable_error / rejected</code>) grew by two: <code>canonical_pending</code> (plan dispatched, awaiting confirm) and <code>canonical_done</code> (confirm landed with all actions ok). Every transition is visible: <code>canonical_dispatched_at</code> and <code>canonical_done_at</code> are persistent columns, not derived.</p>
+
+<h2>Migration m52</h2>
+<p>Non-destructive. Adds six columns to <code>lifecycle_events</code> (<code>canonical_plan_id</code>, <code>canonical_plan_version</code>, <code>canonical_actions_json</code>, <code>canonical_dispatched_at</code>, <code>canonical_done_at</code>, <code>canonical_done_results</code>) plus <code>idx_lifecycle_events_plan_id</code>. Pre-v7.5 rows carry NULL in the new columns; no backfill needed.</p>
+
+<h2>What stays observational</h2>
+<p><code>switch</code> and <code>window-close</code> never produce a canonical_plan, even with a live <code>session_id</code>. A switch away or a window hide is not a real close; issuing diary+stop for it would be wrong. These still land on the ledger for observability but return plain <code>processed</code>. Pinned by <code>test_switch_never_produces_canonical_plan_even_with_session_id</code> and <code>test_window_close_never_produces_canonical_plan_even_with_session_id</code>.</p>
+
+<h2>Fallback legacy</h2>
+<p>Desktop v0.25.0 still carries the hardcoded <code>FALLBACK_SESSION_END_PROMPTS</code> from v0.24.x, but only as a fallback: when Brain is &lt; v7.5 (older install), or when the canonical call times out, or when Brain returns <code>processed</code> without a plan. The v7.5 happy path is the canonical call; the legacy path is a safety net that keeps older Brains working.</p>
+
+<h2>Tests</h2>
+<ul>
+  <li><strong>Brain</strong>: 24/24 lifecycle tests green (<code>tests/test_lifecycle_events.py</code>). New coverage: plan_id determinism, complete-canonical done/failed/rejected branches, redelivery after canonical_done, session_diary dedup (the crash-before-confirm case), retry-after-failed-inject, JSON round-trip via <code>get_lifecycle_event</code>. Full pytest suite: 2050 passing, 10 pre-existing unrelated failures confirmed against main.</li>
+  <li><strong>Desktop v0.25.0</strong>: 673/673 green. New <code>lifecycle-brain-bridge.test.js</code> (8 tests on the three factories), extended <code>conversation-lifecycle-service.test.js</code> (4 new canonical tests), new <code>lifecycle-canonical-e2e.test.js</code> (3 e2e scenarios: exactly 1 diary per close, crash-between-inject-and-confirm, retry after failed inject).</li>
+</ul>
+
+<h2>Tool count</h2>
+<p>262 → 263. The new tool is <code>nexo_lifecycle_complete_canonical</code>; <code>nexo_lifecycle_event</code> and <code>nexo_lifecycle_status</code> keep their signatures but <code>nexo_lifecycle_event</code> now returns the canonical_plan payload when applicable.</p>
+
+<h2>What this unlocks</h2>
+<p>Before v7.5 any change to the session-end prompt needed a Desktop release. Now the prompt lives in <code>src/lifecycle_prompts.py</code> and ships with Brain. That is the load-bearing property: iterating on the diary prompt, the plan shape, or the timeouts no longer requires rebuilding a DMG. The clients just execute whatever plan Brain hands them, versioned and idempotent.</p>
+
+<p><strong>Related:</strong> <a href="/changelog/#v750">full v7.5.0 changelog</a> &middot; <a href="/blog/nexo-7-4-1/">v7.4.1 release notes</a> &middot; <a href="https://github.com/wazionapps/nexo">source on GitHub</a></p>
+
+</article></main></body></html>

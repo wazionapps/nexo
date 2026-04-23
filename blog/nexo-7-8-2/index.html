@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.8.2: hook_runs sid observability — compact hooks now store the resolved NEXO sid, not the raw Claude token</title>
+<meta name="description" content="NEXO Brain v7.8.2 patch release. pre_compact.py and post_compact.py now store the resolved NEXO sid in hook_runs.session_id (plus claude_session_id + sid_source in metadata) instead of the raw Claude Code token. Ends the 7-out-of-8 empty-sid rate on compact hook_runs. New compact_session_resolver helper walks sessions → aliases → per-conv sidecar → legacy sidecar.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-8-2/">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.8.2: hook_runs sid observability — compact hooks now store the resolved NEXO sid, not the raw Claude token","datePublished":"2026-04-23","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head><body><main><article style="max-width:760px;margin:80px auto;padding:0 24px;line-height:1.75;">
+<h1>NEXO 7.8.2 — hook_runs sid observability closed</h1>
+<p><em>Published 2026-04-23. Patch release over v7.8.1.</em></p>
+
+<p>v7.8.0 shipped compaction continuity (PostCompact as a real registered hook, exact SID via <code>CLAUDE_SESSION_ID</code>, per-conv sidecar, fail-closed on mismatch). v7.8.1 patched the Layer-2 emergency auto-diary and Layer-3 <code>record_auto_flush</code> to use the same exact target SID instead of "latest active session". Francisco audited the resulting telemetry and found one remaining gap: <strong><code>hook_runs.session_id</code> was empty for 7 out of 8 recent compaction rows</strong>, and when populated it stored the raw Claude Code token instead of the NEXO sid. Per-session queries over <code>hook_runs</code> for compact events therefore could not be joined back to the NEXO session that actually compacted.</p>
+
+<h2>What v7.8.2 changes</h2>
+<ul>
+  <li><strong>New</strong> <code>src/hooks/compact_session_resolver.py</code> with <code>resolve_nexo_sid(claude_session_id)</code>. It walks the same rails the shell uses: <code>sessions.claude_session_id</code> match, then <code>session_claude_aliases.claude_session_id</code> (most recent <code>last_seen</code> wins), then the per-conversation sidecar under <code>runtime/data/compacting/&lt;safe-claude-id&gt;.txt</code>, then the legacy global sidecar for single-conversation setups. Returns <code>(nexo_sid, source)</code>.</li>
+  <li><code>src/hooks/pre_compact.py</code> and <code>src/hooks/post_compact.py</code> now call the resolver and store the real NEXO sid in <code>hook_runs.session_id</code>. Both wrappers also stash <code>{claude_session_id, sid_source}</code> in <code>hook_runs.metadata</code>, so "why is this row still empty?" becomes a one-query answer.</li>
+</ul>
+
+<h2>Tests — the empty-state rail is the one we actually care about</h2>
+<p>Nine new tests in <code>tests/test_hook_runs_compact_sid_resolution.py</code>:</p>
+<ul>
+  <li>Five resolver rails: sessions match, alias match (newest wins), per-conv sidecar fallback, legacy global sidecar, and the <code>none</code> outcome when nothing matches.</li>
+  <li>Malformed sidecar rejection: non-NEXO-shaped content must not poison <code>hook_runs.session_id</code> — the resolver returns <code>("", "none")</code> instead.</li>
+  <li>Pre-compact and post-compact wrappers end-to-end via a stubbed <code>hook_observability</code>: assert both <code>session_id</code> and <code>metadata</code> are captured with the correct values on a sessions hit and an alias hit respectively.</li>
+  <li>Empty-state wrapper path: when nothing resolves, the row is still written with <code>session_id=''</code> and <code>sid_source='none'</code> so the audit trail stays diffable instead of being silently skipped.</li>
+</ul>
+
+<h2>No Desktop bump</h2>
+<p>Entirely Brain-side. Desktop v0.27.0 continues to ship.</p>
+
+<h2>Live smoke</h2>
+<p>First compaction after the update emitted a <code>hook_runs</code> row carrying the resolved NEXO sid (<code>nexo-NNNNNN-N</code>) plus the raw Claude token in <code>metadata.claude_session_id</code> and <code>metadata.sid_source='alias'</code>. Per-session <code>SELECT * FROM hook_runs WHERE session_id = ?</code> joins work again end-to-end.</p>
+
+<p><strong>Related:</strong> <a href="/changelog/#v782">full v7.8.2 changelog</a> &middot; <a href="/blog/nexo-7-8-1/">v7.8.1 release notes</a> &middot; <a href="https://github.com/wazionapps/nexo">source on GitHub</a></p>
+
+</article></main></body></html>

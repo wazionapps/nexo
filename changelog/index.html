@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.1.7 makes operator-facing email automation respect calibration language end-to-end, so monitor escalations stop drifting into English on Spanish setups.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.1 migrates the first six conversational decisions onto the semantic router.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.1.7 makes operator-facing email automation respect calibration language end-to-end, so monitor escalations stop drifting into English on Spanish setups.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.1 migrates the first six conversational decisions onto the semantic router.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.1.7 makes operator-facing email automation respect calibration language end-to-end, so monitor escalations stop drifting into English on Spanish setups.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.1 migrates the first six conversational decisions onto the semantic router.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.1.7 makes operator-facing email automation respect calibration language end-to-end, so monitor escalations stop drifting into English on Spanish setups.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.1 migrates the first six conversational decisions onto the semantic router.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -87,19 +87,59 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v7.1.10 live</span>
-                    <span class="page-chip">Autonomy mandate</span>
-                    <span class="page-chip">Compact hooks</span>
-                    <span class="page-chip">Release verifier</span>
+                    <span class="page-chip">v7.9.1 live</span>
+                    <span class="page-chip">Guardian active</span>
+                    <span class="page-chip">F0.6 hardening</span>
+                    <span class="page-chip">Adaptive empirical</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v7110" class="btn btn-primary">Start with v7.1.10</a>
-                    <a href="#v718" class="btn btn-secondary">See v7.1.8</a>
+                    <a href="#v791" class="btn btn-primary">Start with v7.9.1</a>
+                    <a href="#v790" class="btn btn-secondary">See v7.9.0</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
             </div>
             <div class="page-visual">
                 <div class="page-stack">
+                    <div class="page-stack-card">
+                        <strong>v7.9.1</strong>
+                        <span>Patch — first semantic-router site migration batch. Six conversational Brain decisions now route through semantic_router with explicit decision_kind policies and semantic labels: session_end_intent, r14_correction, r16_declared_done, r17_promise_debt, autonomy_mandate, and guard_verbal_ack. Router/reasoner local paths classify live context, not static prompt templates. 105 targeted tests.</span>
+                    </div>
+                    <div class="page-stack-card">
+                        <strong>v7.9.0</strong>
+                        <span>Minor — semantic stack scaffolding under ONEPASS LLM Coverage plan. 18 named decision_kinds in semantic_router (13 textual + 5 code-aware) with policy table + layer chain. semantic_reasoner Mode A (multipass_local: reuses mDeBERTa pin with 3-pass majority vote + 0.75 floor) and Mode B (cached_llm: call_model_raw wrapper with pid+uuid atomic-write 24h-TTL disk cache). scripts/semantic-classify.py JSON CLI. NEXO_SEMANTIC_REASONER runtime kill switch. Bug fixes: templates/ root sync in upgrade path (Maria iMac upgrade had lost 27 core-prompts) + 13-tool preload in nexo_startup inject_prompt (closes Claude-Code-with-many-MCPs deferred-schema bootstrap failure). 50 new tests. Companion: NEXO Desktop v0.28.0.</span>
+                    </div>
+                    <div class="page-stack-card">
+                        <strong>v7.8.2</strong>
+                        <span>Patch — hook_runs sid observability for compact hooks. compact_session_resolver walks sessions → aliases → per-conv sidecar → legacy global sidecar. pre_compact.py and post_compact.py now store the resolved NEXO sid in hook_runs.session_id (ending the 7/8 empty-row rate) plus claude_session_id + sid_source in metadata. 9 new tests. No Desktop bump.</span>
+                    </div>
+                    <div class="page-stack-card">
+                        <strong>v7.8.1</strong>
+                        <span>Patch — pre-compact.sh Layer 2 emergency diary + Layer 3 record_auto_flush now use exact TARGET_SID (from CLAUDE_SESSION_ID), not "latest active". Fail-closed when no SID resolves. last_diary_ts scoped by session_id. Fixed latent bash-escape bug in python3 -c heredoc. 2 new behavioural tests drive real shell. No Desktop bump.</span>
+                    </div>
+                    <div class="page-stack-card">
+                        <strong>v7.8.0</strong>
+                        <span>Minor release — compaction continuity. PostCompact is a real hook (canonical 8 &rarr; 9). pre-compact.sh uses exact SID via CLAUDE_SESSION_ID (LATEST_SID fallback gone). Sidecar /tmp &rarr; $NEXO_HOME (no multi-conv race). post-compact.sh fail-closed on SID mismatch, no cross-conv leak. Engine drains hook NDJSON events per tick. 11 new invariants. No Desktop bump.</span>
+                    </div>
+                    <div class="page-stack-card">
+                        <strong>v7.7.0</strong>
+                        <span>Minor release — constructor-guardian-90 pass 2. Closes the 6 gaps left partial in v7.6: autonomous multi_step_task_detected detector, R16 vocabulary expansion (sent/fixed/deployed/released/…), R_CATALOG extended to plain Edit/Write of artefacts, new R_PRIMITIVE_CHOICE rule, R11_plugin_load soft&rarr;hard, 12 new contract tests across 6 rails. 2070 pytest passing. Companion: NEXO Desktop v0.27.0.</span>
+                    </div>
+                    <div class="page-stack-card">
+                        <strong>v7.6.0</strong>
+                        <span>Minor release. Enforcement parity: Brain engine dispatches <code>before_tool</code>, <code>on_event</code>, <code>conditional</code> (previously only Desktop did). <code>after_tool</code> is per-instance instead of once-per-session. Map v2.2 tightens learning_add grace 3&rarr;0 and task_open threshold 10&rarr;4 must. guardian_default v1.4.0 hardens R15/R17/R22/R_CATALOG and raises R34 from shadow to soft. 6 new contract parity tests. Companion: NEXO Desktop v0.26.0.</span>
+                    </div>
+                    <div class="page-stack-card">
+                        <strong>v7.5.0</strong>
+                        <span>Minor release. <code>nexo_lifecycle_event</code> promoted to canonical authority of session-end: Brain owns prompt + sequence + timing, Desktop v0.25.0 executes the plan inline. New 2-call contract (event + complete_canonical), deterministic <code>canonical_plan_id</code>, session_diary dedupe, seven <code>delivery_status</code> values. Migration m52. MCP tools 262 &rarr; 263.</span>
+                    </div>
+                    <div class="page-stack-card">
+                        <strong>v7.4.1</strong>
+                        <span>Patch release. Honest correction of v7.4.0 role: <code>nexo_lifecycle_event</code> is a ledger + reconciliation authority, NOT the canonical executor of diary+stop. Partner Desktop v0.24.1 wires switch/window-close/app-exit through the same durable service with NDJSON telemetry + exponential backoff reconciler.</span>
+                    </div>
+                    <div class="page-stack-card">
+                        <strong>v7.2.0</strong>
+                        <span>Minor release consolidating three parallel workstreams into a Guardian-active-by-default train. G1 enforcer + G3 SSH wrapper + persist hard defaults during <code>nexo update</code>. F0.6 hardening: <code>nexo rollback f06</code>, layout contract, doctor checks, Nora migration workflow. Adaptive weights empirical promotion. B10 path constants lazy. Schedule audit log. Pre-release discipline pack.</span>
+                    </div>
                     <div class="page-stack-card">
                         <strong>v7.1.10</strong>
                         <span>Follow-up over v7.1.8. Two rescue batches: autonomy-mandate vocabulary expansion + session flags + post/pre-compact hooks + new <code>checkpoint_policy</code> module; and <code>verify_release_readiness.py</code> smoke-artifact contract pass + core prompt polish.</span>
@@ -188,6 +228,126 @@
 <section class="section-compact" style="background:rgba(124,58,237,0.08);">
     <div class="container desktop-disclaimer" style="max-width:860px;font-size:13px;line-height:1.55;">
         <p><strong>Sobre NEXO Desktop.</strong> NEXO Desktop es un cliente acompa&ntilde;ante closed-source distribuido aparte en <a href="https://nexo-desktop.com/">nexo-desktop.com</a>. Cuando una entrada de changelog menciona "NEXO Desktop" se refiere a una versi&oacute;n coordinada de ese cliente que consume el contrato CLI/MCP del Brain. El c&oacute;digo de Desktop no vive en este repo; el Brain (AGPL-3.0) es 100% usable por s&iacute; solo desde terminal, Codex, Claude Code, o cualquier cliente MCP.</p>
+    </div>
+</section>
+
+<section id="v791" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.9.1 <span style="opacity:.5;font-weight:400;">&mdash; April 23, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">First semantic-router site migration batch &mdash; six conversational decisions now use Brain's semantic authority</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            Patch over v7.9.0. The semantic stack is now used by the first safe conversational group instead of sitting as scaffolding only. <code>session_end_intent.py</code>, <code>r14_correction_learning.py</code>, <code>r16_declared_done.py</code>, <code>r17_promise_debt.py</code>, <code>autonomy_mandate.py</code>, and <code>guard_verbal_ack.py</code> call <code>semantic_router.route(...)</code> with explicit <code>decision_kind</code> values and semantic labels. Existing test seams remain intact: callers still accept an injected classifier where they did before, so unit tests and specialized harnesses do not need to boot the router. The router and semantic_reasoner local paths also now classify the live <code>context</code> first, falling back to the prompt only when context is empty; this prevents static prompt wording from creating false positives such as a correction sentence being interpreted as a session-end request. Tests: 105 targeted passing across router, reasoner, site-migration, and the six migrated caller suites.
+        </p>
+    </div>
+</section>
+
+<section id="v790" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.9.0 <span style="opacity:.5;font-weight:400;">&mdash; April 23, 2026 &mdash; <strong>MINOR</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">Semantic stack scaffolding &mdash; router + reasoner + CLI under the ONEPASS LLM Coverage plan, plus bootstrap preload fix and templates-sync fix</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            Minor release under the ONEPASS LLM Coverage plan. New <code>src/semantic_router.py</code> is the central router for every model-backed semantic decision in Brain: 18 named <code>decision_kinds</code> (13 textual + 5 code-aware), a <code>RouterResult</code> dataclass, and the per-kind policy-driven layer chain <code>fast_local &rarr; semantic_reasoner &rarr; remote_fallback</code>. New <code>src/semantic_reasoner.py</code> introduces two modes: <strong>Mode A (<code>multipass_local</code>)</strong> reuses the already-pinned <code>LocalZeroShotClassifier</code> (same <code>MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7</code> pin from <code>classifier-model-notes.md</code>) with three prompt-perturbed passes, majority vote, and a stricter 0.75 confidence floor &mdash; no new model download, just stricter aggregation; <strong>Mode B (<code>cached_llm</code>)</strong> wraps <code>call_model_raw</code> with a pid+uuid atomic-write disk cache under <code>~/.nexo/runtime/operations/semantic-reasoner-cache.json</code>, SHA-256 keyed by <code>(decision_kind, normalized_question, normalized_context, labels)</code>, 24h TTL, LRU-bound at 2000 entries, corrupt entries dropped on read. New <code>scripts/semantic-classify.py</code> JSON-in JSON-out CLI lets external MCP clients (including the closed-source NEXO Desktop companion) query Brain as the single semantic authority. New <code>NEXO_SEMANTIC_REASONER</code> kill switch (<code>0</code>/<code>off</code>/<code>false</code>/<code>no</code>/<code>disable</code>/<code>disabled</code>) honours the ONEPASS plan mandate for a dedicated runtime opt-out, separate from <code>NEXO_LOCAL_CLASSIFIER</code> (which only gates install-time provisioning). <strong>Two product-bug fixes</strong>: <code>bin/nexo-brain.js</code> upgrade flow now copies <code>templates/</code> root the same way fresh install and same-version refresh already did (Maria iMac upgrade <code>7.1.10&rarr;7.8.1</code> had lost 27 core-prompts templates and broken post-update import verification); and <code>tool-enforcement-map.json</code> <code>nexo_startup.enforcement.inject_prompt</code> now instructs the model to preload the 13 <code>mcp__nexo__*</code> protocol tools via <code>ToolSearch</code> before calling <code>nexo_startup</code> when the MCP host defers tool schemas (Claude Code with many MCPs installed), closing the silent-bootstrap-failure mode observed live in session <code>nexo-1776899231-34499</code>. <strong>Audit-driven hardening</strong> from the 4-auditor pre-release review: router/reasoner use <code>getattr</code> over the <code>call_model_raw</code> module and catch plain <code>Exception</code> as a trailing clause so provider errors (<code>APIError</code>, <code>TimeoutError</code>, <code>KeyError</code>) degrade with <code>error="remote_error: &lt;cause&gt;"</code> instead of propagating; cache writes use pid+uuid temp + <code>fsync</code> + <code>os.replace</code> to survive concurrent Brain+Desktop-CLI writers; <code>NEXO_SEMANTIC_REASONER_TTL</code> parse tolerates malformed values with a logger warning + default fallback. Tests: +50 (22 router, 20 reasoner, 8 CLI). Per-site migration of existing callers (<code>session_end_intent</code>, <code>r14</code>, <code>r16</code>, <code>r17</code>, <code>r20</code>, <code>r34</code>, T4 gates, <code>tools_drive</code>, <code>nexo-followup-runner</code>) is explicitly deferred to follow-up patch releases under <code>NF-SEMANTIC-ROUTER-SITE-MIGRATION</code>; nothing in this release changes the behaviour of the existing callers. Companion coordinated release: NEXO Desktop v0.28.0.
+        </p>
+    </div>
+</section>
+
+<section id="v782" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.8.2 <span style="opacity:.5;font-weight:400;">&mdash; April 23, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">hook_runs sid observability &mdash; compact hooks now store the resolved NEXO sid, not the raw Claude token</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            v7.8.0 and v7.8.1 closed the compaction restore path and the Layer-2/3 emergency-diary SID targeting. Francisco audited the resulting telemetry and flagged one remaining hole: <code>hook_runs.session_id</code> was empty for 7 out of 8 recent compaction rows, and when populated it stored the raw <code>CLAUDE_SESSION_ID</code> token instead of the NEXO sid — per-session joins over <code>hook_runs</code> were therefore useless for compact events. v7.8.2 adds <code>src/hooks/compact_session_resolver.py</code> with <code>resolve_nexo_sid(claude_session_id)</code>, which walks the same rails the shell already uses: <code>sessions.claude_session_id</code> match, then <code>session_claude_aliases.claude_session_id</code> (most recent <code>last_seen</code> wins), then the per-conversation sidecar under <code>runtime/data/compacting/&lt;safe-claude-id&gt;.txt</code>, then the legacy global sidecar for single-conversation setups. Returns <code>(nexo_sid, source)</code> so callers can stash <code>source</code> in <code>hook_runs.metadata</code> for empty-row triage. <code>src/hooks/pre_compact.py</code> and <code>src/hooks/post_compact.py</code> now call the resolver and store the real NEXO sid in <code>hook_runs.session_id</code>; both wrappers also stash <code>{claude_session_id, sid_source}</code> in <code>hook_runs.metadata</code> so "why is this row still empty?" has a one-query answer. Nine new tests in <code>tests/test_hook_runs_compact_sid_resolution.py</code> pin the five resolver rails (sessions / alias / sidecar / legacy / none), malformed-sidecar rejection, the pre- and post-compact wrapper end-to-end paths, and the empty-state wrapper rail so a clean audit trail is written even when nothing resolves. Pytest remains green. No Desktop bump.
+        </p>
+    </div>
+</section>
+
+<section id="v781" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.8.1 <span style="opacity:.5;font-weight:400;">&mdash; April 22, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">v7.8 emergency-diary SID targeting &mdash; Layer 2 + Layer 3 now use exact TARGET_SID, fail-closed, behavioural tests added</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            v7.8.0 closed the main compaction restore path (checkpoint sidecar, post-compact fail-closed on SID mismatch, per-session queue). Francisco flagged one last hole: <code>pre-compact.sh</code>'s <strong>Layer 2</strong> emergency auto-diary and <strong>Layer 3</strong> <code>compaction_memory.record_auto_flush</code> were still querying <code>SELECT sid FROM sessions ORDER BY last_update_epoch DESC LIMIT 1</code> — "latest active session". In multi-conversation Desktop that routinely wrote the emergency diary against the WRONG conversation even though the main restore was already exact-SID. v7.8.1 changes both layers to use the <code>TARGET_SID</code> already resolved from <code>CLAUDE_SESSION_ID</code>, scopes <code>last_diary_ts</code> by <code>session_id</code>, and fails-closed when no SID resolves (skipping the emergency diary is better than writing against the wrong conversation). Two new behavioural tests drive the real shell script against a fixture DB with two sessions where the "latest" is NOT the target — pre-v7.8.1 regressions would write against the wrong SID, the new behaviour writes against TARGET_SID. Adding the tests surfaced a latent bash-escape bug: a double-quoted phrase inside a Python comment embedded in a <code>python3 -c "..."</code> heredoc silently closed the argument early, so the entire Layer-2 block had been no-oping in production on the first hook run. The comment was reworded to remove any bash-meta characters. Pytest 2092 passing (+2 new behavioural). No Desktop bump.
+        </p>
+    </div>
+</section>
+
+<section id="v780" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.8.0 <span style="opacity:.5;font-weight:400;">&mdash; April 22, 2026 &mdash; <strong>MINOR</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">Compaction continuity closed end-to-end &mdash; PostCompact is a real hook, SID targeting is exact, fail-closed on cross-conv</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            v7.7 shipped pass 2 of constructor-guardian-90. v7.8 closes the PostCompact work Francisco flagged right after: <code>src/hooks/post_compact.py</code> is now a <strong>real registered hook</strong> (the canonical set grows from 8 to 9, both in <code>src/hooks/manifest.json</code> and <code>hooks/hooks.json</code>; <code>test_manifest_has_nine_hooks</code> pins the floor). <code>pre-compact.sh</code> resolves the NEXO SID from <code>CLAUDE_SESSION_ID</code> via <code>sessions.claude_session_id</code> + <code>session_claude_aliases</code> — the pre-v7.8 <code>LATEST_SID</code> fallback was actively wrong in multi-conversation Desktop (it compacted whichever conv was touched last, not the one Claude Code actually compacted). The sidecar moves from <code>/tmp/nexo-compacting-sid</code> to <code>$NEXO_HOME/runtime/data/compacting-sid.txt</code> so two concurrent compactions on two conversations cannot race on <code>/tmp</code>. <code>post-compact.sh</code> <strong>removes the "latest checkpoint" fallback</strong>: fail-closed with a small "SID mismatch" / "no checkpoint for this exact session" <code>systemMessage</code> instead of restoring the wrong conversation. It also cross-checks the sidecar SID against the env-resolved one and refuses the restore on mismatch. Pre- and post-compact now append one NDJSON row per event to <code>pending_enforcer_events.ndjson</code>; the engine's new <code>_consume_pending_hook_events()</code> drains the queue on every periodic tick and fires the matching <code>on_event</code> rule — the map's <code>pre_compaction</code> / <code>post_compaction</code> triggers finally fire from the live stream, not only via tests. The queue file is truncated after read so a row never fires twice. <code>compaction_count</code> is pinned to increment only inside the real-restore branch (a test now catches if a refactor moves it into the fallback path). New contract test <code>tests/test_v78_compaction_continuity.py</code> (11 invariants across all ten rails). Pytest 2086 passing (+16 vs v7.7). No Desktop bump — v7.8 is entirely server/hooks-side.
+        </p>
+    </div>
+</section>
+
+<section id="v770" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.7.0 <span style="opacity:.5;font-weight:400;">&mdash; April 22, 2026 &mdash; <strong>MINOR</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">Constructor-guardian-90 pass 2 &mdash; the six gaps left partial in v7.6 are now closed</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            v7.6.0 shipped contract parity (all eight rule types dispatched by both engines) and four default-mode bumps, but listed six gaps as honestly still-partial. v7.7.0 closes them. <strong>Gap 1</strong>: autonomous detector for <code>multi_step_task_detected</code> — three recent <code>Edit</code>/<code>Write</code>/<code>Task</code> calls without a prior <code>nexo_skill_match</code> now raise the event automatically through <code>raise_event()</code> (v7.6 exposed the API but nothing invoked it). The latch clears on both <code>nexo_skill_match</code> and <code>nexo_task_close</code>. <strong>Gap 2</strong>: the R16 classifier prompt (<code>templates/core-prompts/r16-declared-done-question.md</code>) now matches <em>sent / delivered / published / deployed / released / fixed / resolved / merged / pushed</em> plus Spanish equivalents, so the on_event trigger <code>done_claimed_with_open_task</code> fires on the full close-claim vocabulary the checklist called out. <strong>Gap 3</strong>: R_CATALOG extends its trigger set beyond <code>nexo_*_create/_open/_add</code> to plain <code>Edit</code>/<code>Write</code> into artefact-bearing paths (<code>skills/</code>, <code>plugins/</code>, <code>personal/scripts/</code>, <code>templates/core-prompts/</code>, …). Discovery set grows from 6 to 8 (adds <code>nexo_personal_scripts_list</code> + <code>nexo_plugin_list</code>). <strong>Gap 4</strong>: new runtime rule <code>R_PRIMITIVE_CHOICE</code> (module <code>src/r_primitive_choice.py</code>) gates Edit/Write of a brand-new artefact file without a recent primitive-choice probe — SK-CREATE-NEXO-PRIMITIVE becomes enforcement-backed instead of advisory. Disjoint from R_CATALOG: R_CATALOG fires on every artefact-path write without inventory consultation; R_PRIMITIVE_CHOICE fires only when the file is actually new. <strong>Gap 5</strong>: <code>guardian_default.json</code> v1.5.0 raises <code>R11_plugin_load_pre_inventory</code> soft &rarr; hard and adds the new rule at soft so its FP rate can be observed. <strong>Gap 6</strong>: new <code>tests/test_v77_enforcement_gaps.py</code> pins 12 invariants across all six rails. Pytest 2070 passing (+14 vs v7.6). Companion release: NEXO Desktop v0.27.0 mirrors the guardian default bumps (no new dispatch changes beyond v0.26).
+        </p>
+    </div>
+</section>
+
+<section id="v760" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.6.0 <span style="opacity:.5;font-weight:400;">&mdash; April 22, 2026 &mdash; <strong>MINOR</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">Enforcement parity &mdash; Brain catches up to Desktop on before_tool / on_event / conditional, after_tool becomes per-instance, default modes hardened</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            v7.6.0 closes the drift between <code>tool-enforcement-map.json</code> v2.2 and the two enforcement engines. Before this release the Brain engine (<code>src/enforcement_engine.py::_build_indexes</code>) silently ignored <code>before_tool</code>, <code>on_event</code>, and <code>conditional</code> rules even though the map declared them — so Brain users got the weaker contract while Desktop honoured them correctly. The v7.6 engine dispatches all eight rule types declared by <code>fase2_schema.supported_rule_types_v2_0</code>. The public API gains <code>on_tool_call_before(raw_name, tool_input)</code>, <code>raise_event(event_name, context)</code>, and <code>reset_task_cycle(tool)</code> so hooks can fire semantic events (<code>multi_step_task_detected</code>, <code>done_claimed_with_open_task</code>, <code>user_correction_without_learning</code>, <code>post_compaction</code>, …). <code>after_tool</code> satisfaction is now per-instance (monotonic <code>_tool_instance_counter</code>) — the previous check (<code>target not in self.tools_called</code>) silently satisfied the dependency forever after the first historical target call, a defect explicitly flagged by the constructor-guardian-90 checklist. Map v2.2 tightens two triggers: <code>nexo_learning_add</code> on_event <code>grace_messages: 3 → 0</code> (corrections produce the learning in the same turn) and <code>nexo_task_open</code> conditional <code>threshold: 10 → 4</code>, level <code>should → must</code>, plus an explicit <code>inject_prompt</code>. <code>guardian_default.json</code> v1.4.0 hardens <code>R15_project_context</code>, <code>R17_promise_debt</code>, <code>R22_personal_script</code> and <code>R_CATALOG_before_artifact_create</code> from soft to hard, and moves <code>R34_identity_coherence</code> from shadow to soft so identity denials surface a visible reminder instead of silent telemetry. New contract test <code>tests/test_v76_map_parity.py</code> (6 cases) pins the invariants: every declared rule type is dispatched by both engines, <code>fase2_schema</code> cannot lie about support, <code>task_open</code> threshold &le; 5 + inject_prompt present, <code>learning_add</code> grace 0, Brain exposes the new public API, after_tool uses per-instance comparison (source inspection). Pytest 2056 passing (10 unrelated pre-existing failures tracked separately). Companion release: NEXO Desktop v0.26.0 mirrors the engine fixes + default hardening.
+        </p>
+    </div>
+</section>
+
+<section id="v750" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.5.0 <span style="opacity:.5;font-weight:400;">&mdash; April 22, 2026 &mdash; <strong>MINOR</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">Canonical authority of session-end &mdash; Brain decides, Desktop executes, no polling</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            v7.5.0 promotes <code>nexo_lifecycle_event</code> from ledger + reconciliation authority to <strong>canonical authority of session-end</strong>. Brain now owns the prompt, the sequence, and the timing of diary+stop; NEXO Desktop v0.25.0 (closed-source companion at <a href="https://nexo-desktop.com" style="color:#C4B5FD;">nexo-desktop.com</a>) is the conduit that executes Brain's plan against the live Claude process stdin. The new 2-call contract &mdash; <code>nexo_lifecycle_event</code> returns a versioned <code>canonical_plan</code> (resume_session &rarr; inject_prompt &rarr; stop_session, with stable ids and per-action <code>timeout_ms</code>) and the new <code>nexo_lifecycle_complete_canonical</code> confirms execution with a per-action results array &mdash; replaces polling with explicit acknowledgement. <code>canonical_plan_id</code> is deterministic: <code>sha256(event_id + "|v" + plan_version)[:24]</code>, so retries reuse the same id and clients deduplicate by <code>(event_id, canonical_plan_id)</code>. Schema migration <strong>m52</strong> extends <code>lifecycle_events</code> with six <code>canonical_*</code> columns plus an index; pre-v7.5 rows simply carry <code>NULL</code>. <code>session_diary</code> is the dedupe key on re-delivery: if Desktop crashes between executing the inject and sending the complete call, the next <code>nexo_lifecycle_event</code> call for the same <code>event_id</code> inspects <code>session_diary</code> for a row written after <code>canonical_dispatched_at</code>; if one exists, Brain short-circuits to <code>already_processed</code> and refuses to re-dispatch. Seven explicit <code>delivery_status</code> values (<code>accepted</code> / <code>processed</code> / <code>canonical_pending</code> / <code>canonical_done</code> / <code>already_processed</code> / <code>retryable_error</code> / <code>rejected</code>) give the pipeline a diffable state machine. <code>switch</code> and <code>window-close</code> stay observational (no plan ever issued, even with a live <code>session_id</code>). <code>nexo lifecycle record</code> exit code 0 now covers <code>canonical_pending</code>; older wrappers that treated it as an error are incompatible with v7.5. Tests: 24/24 lifecycle canonical green (plan_id determinism, complete-canonical branches, redelivery after canonical_done, session_diary dedup, retry-after-failed-inject, JSON round-trip). Full pytest suite 2050 passing, 10 pre-existing failures unrelated to v7.5. Total MCP tools 262 &rarr; 263.
+        </p>
+    </div>
+</section>
+
+<section id="v741" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.4.1 <span style="opacity:.5;font-weight:400;">&mdash; April 22, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">guardian-claude-desktop lifecycle closure &mdash; ledger/authority split made explicit, partner Desktop v0.24.1 covers the last 3 routes</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            v7.4.1 corrects the over-promise in the v7.4.0 release notes and locks in the exact role of <code>nexo_lifecycle_event</code>: a <strong>ledger + reconciliation authority</strong>, NOT the canonical executor of <code>diary+stop</code>. Diary+stop injection still happens in Desktop's <code>closeConversationGraceful</code> (the only place that writes to the live Claude process's stdin). Moving that responsibility to Brain requires a Brain&harr;Claude-session bridge that does not exist yet and is scheduled for v7.5 (followup <code>NF-V75-CANONICAL-DIARY-AUTHORITY</code>). The paired Desktop v0.24.1 wires the remaining <code>switch</code> / <code>window-close</code> / <code>app-exit</code> transitions through the same durable service, adds an NDJSON telemetry trail keyed by <code>event_id</code> (kinds: <em>enqueued, sent, acked, retry, reconciled, failed</em>), and an exponential backoff schedule in the reconciler (2s, 8s, 30s, 2m, 10m, 30m, 1h, 2h, 4h, 8h). Brain needed no code change for any of that &mdash; the ledger already accepted every action from day one. No schema migration in this patch; the <code>lifecycle_events</code> table shipped by migration m51 in v7.4.0 already covers all six actions. <code>VALID_ACTIONS</code> stays frozen at <code>close / delete / archive / switch / app-exit / window-close</code>, enforced by a contract test. Total MCP tool count unchanged (262).
+        </p>
+    </div>
+</section>
+
+<section id="v740" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.4.0 <span style="opacity:.5;font-weight:400;">&mdash; April 22, 2026 &mdash; <strong>MINOR</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">guardian-claude-desktop lifecycle pipeline — <code>nexo_lifecycle_event</code> + idempotency + Desktop durable queue</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            v7.4.0 ships the Brain-side of the <code>guardian-claude-desktop-plan.md</code> pipeline that NEXO Desktop v0.24.0 now depends on. Every conversation lifecycle transition on Desktop (<em>close / delete / archive / switch / window-close / app-exit</em>) is persisted to a durable queue BEFORE any UI mutation becomes visible and then relayed to Brain through <code>nexo_lifecycle_event</code> for canonical processing. Re-delivery of the same <code>event_id</code> returns <code>already_processed</code> without re-running any side effect &mdash; strict idempotency per "5. Idempotencia real" in the plan. Companion <code>nexo_lifecycle_status(event_id)</code> exposes the stored row for Desktop's boot-time reconciliation. Backed by the new <code>lifecycle_events</code> table (migration m51) keyed by <code>event_id</code> with columns action, conversation_id, session_id, reason, payload_snapshot, delivery_status, retry_count, created_at, processed_at, last_error. A <code>nexo lifecycle record</code> / <code>nexo lifecycle status</code> CLI subcommand lets Desktop bridge through <code>runNexoCommand</code> without any new IPC surface; exit codes 0/2/3 map onto terminal / retryable / rejected acks. 12 new contract tests pin idempotency, diary-triggering action flags, malformed input rejection paths, payload roundtrip, and the frozen <code>VALID_ACTIONS</code> set. Total MCP tools 260 → 262 (<code>verify_tool_map.py</code> passes). No breaking changes; install coordinates automatically via <code>nexo update</code>.
+        </p>
+    </div>
+</section>
+
+<section id="v730" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.3.0 <span style="opacity:.5;font-weight:400;">&mdash; April 22, 2026 &mdash; <strong>HOTFIX MINOR</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">Guardian wire hotfix — PreToolUse properly registered, post-sync runs the fresh tree, tool-enforcement-map now shipped via npm</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            Hotfix minor release correcting three critical bugs that surfaced right after <code>v7.2.0</code>. <strong>B11 Guardian wire:</strong> new <code>src/hooks/pre_tool_use.py</code> entrypoint is now registered in <code>src/hooks/manifest.json</code> and <code>hooks/hooks.json</code> so the Claude Code <code>PreToolUse</code> event actually reaches Guardian &mdash; before this, <code>guardian-runtime-overrides.json</code> in hard mode was silently inert for G3-destructive, G3-SSH, and G4-guard_check gates. A parallel SSH prescreen in <code>hook_guardrails.process_pre_tool_event</code> forces <code>op=write</code> on remote-write patterns the local shell classifier could not see. <strong>B10 post-sync:</strong> <code>_run_post_install_hooks_fresh(dest, env)</code> invokes each whitelisted hook (<code>_persist_guardian_hard_defaults</code>, <code>_maybe_promote_adaptive_weights_empirically</code>) in a clean subprocess against the newly copied tree, so the first <code>nexo update</code> that introduces a new post-install hook actually runs it &mdash; previously the hook dispatch used the pre-upgrade module held in memory and silently no-op'd. <strong>B12 map distribution:</strong> <code>tool-enforcement-map.json</code> is now part of the npm <code>files</code> whitelist so fresh <code>npm install -g nexo-brain</code> ships it, closing the three-way gap (Brain npm + Desktop bundle + runtime sync) that prevented Desktop from ever discovering the map on new installs. <strong>PE1 rapid items:</strong> 5 additional <code>destructive_command</code> presets in <code>src/presets/entities_universal.json</code> (<code>curl_pipe_shell</code>, <code>dd_to_device</code>, <code>chmod_recursive_wide_open</code>, <code>ssh_remote_overwrite</code>, <code>scp_rsync_upload</code>; coverage floor raised from 7 to 12) and the <code>guardian-metrics</code> daily cron at 02:15 that feeds Fase C gate and the Guardian Proposals panel. Desktop v0.23.0 ships the renderer-side half of B12 plus B13/B14 (the "Parar &rarr; Enviar cola" recovery loop).
+        </p>
+    </div>
+</section>
+
+<section id="v720" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.2.0 <span style="opacity:.5;font-weight:400;">&mdash; April 22, 2026 &mdash; <strong>MINOR</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">Guardian active by default — G1 enforcer + G3 SSH wrapper + persist hard + F0.6 hardening + adaptive empirical promotion</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            Minor release consolidating three parallel workstreams into a single Guardian-active-by-default train. Block K closure: G1 enforcer (PostToolUse nudge when <code>nexo_task_open</code> returned <code>mode &isin; {defer, ask, verify}</code> without the paired <code>next_action</code>), G3 SSH remote-write detector (catches <code>ssh host "cat &gt; ..."</code>, <code>scp upload</code>, <code>rsync upload</code>, <code>sftp -b batch</code> and 10+ other patterns the local destructive gate never saw), new <code>src/guardian_runtime_config.py</code> resolver unifying gate modes (env &gt; <code>~/.nexo/personal/config/guardian-runtime-overrides.json</code> &gt; default), and <code>_persist_guardian_hard_defaults</code> during <code>nexo update</code> so every non-ephemeral install gets Guardian in <code>hard</code> without env vars. F0.6 hardening: <code>nexo rollback f06</code> CLI with two-stage safe swap, <code>src/scripts/prune_runtime_backups.py</code> promoted from personal to core, authoritative <code>docs/f06-layout-contract.md</code>, three new doctor boot-tier checks (<code>check_core_dev_packaged_install</code>, <code>check_dashboard_desktop_contract</code>, <code>check_f06_migration_consistency</code>), <code>scripts/nexo-migrate-nora.sh</code> + <code>scripts/f0-safe-apply-remote.sh</code> idempotent migration workflow, v6.x&rarr;F0.6 rollback hardening tests. Adaptive weights: flips from "14-day calendar" to "14 days OR (&ge;200 samples AND &ge;2 days)" + <code>_maybe_promote_adaptive_weights_empirically</code> auto-promotes shadow&rarr;learned during <code>nexo update</code> so mature installs feel Cortex calibration immediately. Small fixes: R34 <code>bool("unknown")==True</code> corrected, <code>classify_scripts_dir</code> dedup by realpath, B10 module-level path constants lazy-evaluated in <code>public_contribution.py</code> / <code>tools_sessions.py</code> / <code>plugins/recover.py</code> / <code>plugins/update.py</code>, schedule-override audit log at <code>runtime/logs/core-schedule-overrides.log</code>, <code>scripts/pre-release-verify.sh</code> + <code>docs/release-discipline.md</code>, pre-commit hook for <code>tool-enforcement-map.json</code> drift. Desktop v0.22.6 compatible; MCP external contract unchanged.
+        </p>
     </div>
 </section>
 

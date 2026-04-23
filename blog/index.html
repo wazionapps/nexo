@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Blog — NEXO Brain</title>
-    <meta name="description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.1.7 email-monitor language patch and the earlier 7.1.6 core-schedules release.">
+    <meta name="description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.9.1 semantic-router site migration patch.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/blog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/blog/">
     <meta property="og:title" content="Blog — NEXO Brain">
-    <meta property="og:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.1.7 email-monitor language patch and the earlier 7.1.6 core-schedules release.">
+    <meta property="og:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.9.1 semantic-router site migration patch.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Blog — NEXO Brain">
-    <meta name="twitter:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.1.7 email-monitor language patch and the earlier 7.1.6 core-schedules release.">
+    <meta name="twitter:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.9.1 semantic-router site migration patch.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Blog — NEXO Brain",
-        "description": "Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.1.7 email-monitor language patch and the earlier 7.1.6 core-schedules release.",
+        "description": "Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.9.1 semantic-router site migration patch.",
         "url": "https://nexo-brain.com/blog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -134,7 +134,7 @@
                     <span class="page-chip">Shared brain product notes</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="/blog/nexo-7-1-10/" class="btn btn-primary">Read latest release</a>
+                    <a href="/blog/nexo-7-9-1/" class="btn btn-primary">Read latest release</a>
                     <a href="/changelog/" class="btn btn-secondary">Latest release notes</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -143,24 +143,43 @@
             <div class="blog-featured-card">
                 <div class="section-label">Latest release</div>
                 <div class="blog-featured-meta">
-                    <span class="compare-chip">April 22, 2026</span>
-                    <span class="compare-chip">Follow-up release</span>
-                    <span class="compare-chip">Autonomy mandate + release verifier</span>
+                    <span class="compare-chip">April 23, 2026</span>
+                    <span class="compare-chip">Patch</span>
+                    <span class="compare-chip">semantic router site migration batch 1</span>
                 </div>
-                <h2>NEXO 7.1.10: follow-up — autonomy-mandate vocabulary + compact hooks + checkpoint_policy + smoke-artifact release verifier</h2>
-                <p>v7.1.10 is a follow-up over v7.1.8 that ships two rescue batches of WIP that were stashed aside during the v7.1.8 release window. First rescue: <code>src/autonomy_mandate.py</code> expands the mandate-detection vocabulary, adds three honest flags (<code>execute_until_blocker</code>, <code>suppress_mid_task_menus</code>, <code>revalidate_after_compaction</code>) with session filtering, wires post/pre-compact hooks, and introduces the new <code>src/checkpoint_policy.py</code> module. Second rescue: <code>scripts/verify_release_readiness.py</code> gains a smoke-artifact contract pass, the release-final audit skill references the new contract, and core prompts get wording polish.</p>
+                <h2>NEXO 7.9.1: first semantic-router site migration batch</h2>
+                <p>Patch over v7.9.0. The semantic stack is no longer just scaffolding for the first conversational group: session_end_intent, r14_correction, r16_declared_done, r17_promise_debt, autonomy_mandate, and guard_verbal_ack now call semantic_router.route with explicit decision_kind policies and semantic labels. Existing classifier injection seams remain intact for tests, and router/reasoner local paths now classify the live context instead of the static prompt template. 105 targeted tests cover the migrated callers and the context-classification regression.</p>
                 <div class="hero-actions" style="justify-content:flex-start;margin-bottom:18px;">
-                    <a href="/blog/nexo-7-1-10/" class="btn btn-primary">Open article</a>
-                    <a href="/changelog/#v7110" class="btn btn-secondary">Open changelog</a>
+                    <a href="/blog/nexo-7-9-1/" class="btn btn-primary">Open article</a>
+                    <a href="/changelog/#v791" class="btn btn-secondary">Open changelog</a>
                 </div>
                 <div class="blog-mini-stack">
                     <div class="blog-mini-card">
                         <strong>Companion view</strong>
-                        <span><a href="/changelog/#v7110">See the full v7.1.10 changelog</a></span>
+                        <span><a href="/changelog/#v791">See the full v7.9.1 changelog</a></span>
                     </div>
                     <div class="blog-mini-card">
                         <strong>Previous release</strong>
-                        <span><a href="/blog/nexo-7-1-8/">NEXO 7.1.8: batch — Guardian/Enforcer roadmap G2/G3/G4/G7/G8 + hardcode cleanup + product guards</a>.</span>
+                        <span><a href="/blog/nexo-7-9-0/">NEXO 7.9.0: semantic stack scaffolding</a>.</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="blog-featured-card" style="display:none;">
+                <h2>NEXO 7.8.0: compaction continuity closed end-to-end</h2>
+                <p>v7.7 closed 6 obedience gaps. v7.8 closes the PostCompact continuity work.</p>
+                <div class="hero-actions" style="justify-content:flex-start;margin-bottom:18px;">
+                    <a href="/blog/nexo-7-8-0/" class="btn btn-primary">Open article</a>
+                    <a href="/changelog/#v780" class="btn btn-secondary">Open changelog</a>
+                </div>
+                <div class="blog-mini-stack">
+                    <div class="blog-mini-card">
+                        <strong>Companion view</strong>
+                        <span><a href="/changelog/#v780">See the full v7.8.0 changelog</a></span>
+                    </div>
+                    <div class="blog-mini-card">
+                        <strong>Previous release</strong>
+                        <span><a href="/blog/nexo-7-7-0/">NEXO 7.7.0: constructor-guardian-90 pass 2 — the six gaps left partial in v7.6 are now closed</a>.</span>
                     </div>
                 </div>
             </div>
@@ -172,6 +191,114 @@
 <section class="section-flush-top">
     <div class="container">
         <div class="blog-grid">
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 23, 2026</div>
+                <h2><a href="/blog/nexo-7-9-1/">NEXO 7.9.1: first semantic-router site migration batch</a></h2>
+                <p>Patch over v7.9.0. Six conversational Brain decisions now route through semantic_router with explicit decision_kind policies and semantic labels: session_end_intent, r14_correction, r16_declared_done, r17_promise_debt, autonomy_mandate, and guard_verbal_ack. Router/reasoner local paths now classify live context, not static prompt templates. 105 targeted tests.</p>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/blog/nexo-7-9-1/" class="btn btn-secondary">Read more</a>
+                </div>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 23, 2026</div>
+                <h2><a href="/blog/nexo-7-9-0/">NEXO 7.9.0: semantic router + reasoner scaffolding, bootstrap preload fix, templates sync fix</a></h2>
+                <p>Minor release under the ONEPASS LLM Coverage plan. 18 decision_kinds, router + reasoner (Mode A multipass_local + Mode B cached_llm), scripts/semantic-classify.py CLI, NEXO_SEMANTIC_REASONER runtime kill switch. Two product-bug fixes: templates/ root sync in upgrade path, and 13-tool preload in the nexo_startup inject_prompt. 50 new tests. Companion: Desktop v0.28.0.</p>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/blog/nexo-7-9-0/" class="btn btn-secondary">Read more</a>
+                </div>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 23, 2026</div>
+                <h2><a href="/blog/nexo-7-8-2/">NEXO 7.8.2: hook_runs sid observability — compact hooks now store the resolved NEXO sid, not the raw Claude token</a></h2>
+                <p>Patch over v7.8.1. New compact_session_resolver walks sessions → aliases → per-conv sidecar → legacy global sidecar to resolve the NEXO sid. pre_compact.py + post_compact.py store the real sid in hook_runs.session_id (ending the 7/8 empty-row rate) and stash claude_session_id + sid_source in metadata. 9 new tests. No Desktop bump.</p>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/blog/nexo-7-8-2/" class="btn btn-secondary">Read more</a>
+                </div>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 22, 2026</div>
+                <h2><a href="/blog/nexo-7-8-1/">NEXO 7.8.1: v7.8 emergency-diary SID targeting — Layer 2 + Layer 3 use exact TARGET_SID, fail-closed, behavioural tests</a></h2>
+                <p>Patch over v7.8.0. pre-compact.sh Layer 2 emergency auto-diary + Layer 3 record_auto_flush now use exact TARGET_SID resolved from CLAUDE_SESSION_ID (not "latest active"). Fail-closed when no SID resolves. last_diary_ts scoped by session_id. Two new behavioural tests drive the real shell. Fixed latent bash-escape bug where a double-quoted phrase inside a Python comment silently closed the python3 -c argument.</p>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/blog/nexo-7-8-1/" class="btn btn-secondary">Read more</a>
+                </div>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 22, 2026</div>
+                <h2><a href="/blog/nexo-7-8-0/">NEXO 7.8.0: compaction continuity closed end-to-end — PostCompact is a real hook, SID targeting is exact, fail-closed on cross-conv</a></h2>
+                <p>Minor release. PostCompact is now a real registered hook (canonical 8→9). pre-compact.sh uses exact CLAUDE_SESSION_ID (LATEST_SID fallback gone). Sidecar /tmp → $NEXO_HOME so multi-conv cannot race. post-compact.sh fail-closed on SID mismatch — no cross-conv leak. Engine drains hook-emitted NDJSON events each tick. 11 new invariants. No Desktop bump.</p>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/blog/nexo-7-8-0/" class="btn btn-secondary">Read more</a>
+                </div>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 22, 2026</div>
+                <h2><a href="/blog/nexo-7-7-0/">NEXO 7.7.0: constructor-guardian-90 pass 2 — the six gaps left partial in v7.6 are now closed</a></h2>
+                <p>Minor release. Pass 2 of the obedience checklist: autonomous <code>multi_step_task_detected</code> detector, R16 vocabulary expansion, R_CATALOG extended to plain Edit/Write, new <code>R_PRIMITIVE_CHOICE</code> rule gating SK-CREATE-NEXO-PRIMITIVE, R11_plugin_load soft→hard, 12 new contract tests across 6 rails. 2070 pytest passing. Companion: NEXO Desktop v0.27.0.</p>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/blog/nexo-7-7-0/" class="btn btn-secondary">Read more</a>
+                </div>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 22, 2026</div>
+                <h2><a href="/blog/nexo-7-6-0/">NEXO 7.6.0: enforcement parity — Brain catches up on before_tool / on_event / conditional, after_tool goes per-instance</a></h2>
+                <p>Minor release. Closes drift between map v2.2 and the two engines: Brain dispatches all eight declared rule types (not just 5). <code>after_tool</code> is per-instance, not once-per-session. Map tightens learning_add grace 3→0 and task_open threshold 10→4 must. guardian_default v1.4.0 hardens R15/R17/R22/R_CATALOG and raises R34 from shadow to soft. Six new contract parity invariants. MCP tools unchanged (263). Companion: NEXO Desktop v0.26.0.</p>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/blog/nexo-7-6-0/" class="btn btn-secondary">Read more</a>
+                </div>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 22, 2026</div>
+                <h2><a href="/blog/nexo-7-5-0/">NEXO 7.5.0: canonical authority of session-end — Brain decides, Desktop executes, no polling</a></h2>
+                <p>Minor release. <code>nexo_lifecycle_event</code> is now the canonical authority of session-end: Brain owns prompt + sequence + timing; Desktop v0.25.0 executes Brain's plan against the live Claude process. New 2-call contract with <code>nexo_lifecycle_complete_canonical</code>, deterministic <code>canonical_plan_id</code>, <code>session_diary</code> dedupe on re-delivery, seven delivery_status values. Migration m52. 24/24 lifecycle tests green. MCP tools 262 → 263.</p>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/blog/nexo-7-5-0/" class="btn btn-secondary">Read more</a>
+                </div>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 22, 2026</div>
+                <h2><a href="/blog/nexo-7-4-1/">NEXO 7.4.1: guardian-claude-desktop lifecycle closure — ledger/authority split made explicit, partner Desktop v0.24.1 covers the last 3 routes</a></h2>
+                <p>Patch release. Honest correction of v7.4.0's role: <code>nexo_lifecycle_event</code> is a ledger + reconciliation authority, NOT the canonical executor of <code>diary+stop</code>. Canonical diary+stop execution inside the handler is explicitly deferred to v7.5 (needs a Brain↔Claude-session bridge that does not exist yet). Paired Desktop v0.24.1 wires the remaining switch/window-close/app-exit routes through the durable service, adds NDJSON telemetry and exponential backoff. No schema migration; VALID_ACTIONS stays frozen.</p>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/blog/nexo-7-4-1/" class="btn btn-secondary">Read more</a>
+                </div>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 22, 2026</div>
+                <h2><a href="/blog/nexo-7-4-0/">NEXO 7.4.0: guardian-claude-desktop lifecycle pipeline — nexo_lifecycle_event + idempotency + Desktop durable queue</a></h2>
+                <p>Minor release. Ships the Brain-side first slice of the guardian-claude-desktop-plan.md pipeline: new <code>nexo_lifecycle_event</code> and <code>nexo_lifecycle_status</code> MCP tools, a <code>lifecycle_events</code> table (migration m51) keyed by event_id, and a <code>nexo lifecycle</code> CLI subcommand so Desktop v0.24.0 can persist close/delete/archive transitions durably and replay on the next boot. 12 new contract tests. No breaking changes.</p>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/blog/nexo-7-4-0/" class="btn btn-secondary">Read more</a>
+                </div>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 22, 2026</div>
+                <h2><a href="/blog/nexo-7-3-0/">NEXO 7.3.0: Guardian wire hotfix — PreToolUse properly registered, post-sync runs the fresh tree, tool-enforcement-map now shipped via npm</a></h2>
+                <p>Hotfix minor release. B11 wires the new <code>pre_tool_use.py</code> entrypoint so Claude Code's PreToolUse event actually reaches Guardian (<code>guardian-runtime-overrides.json</code> hard mode was silently inert before this). B10 runs post-install hooks from the freshly copied tree via subprocess so the first <code>nexo update</code> that introduces them actually executes. B12 ships <code>tool-enforcement-map.json</code> via the npm bundle so Desktop can discover it on fresh installs. Also PE1 0.4 (5 new destructive presets, floor 7→12) and PE1 0.25 (guardian-metrics daily cron).</p>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/blog/nexo-7-3-0/" class="btn btn-secondary">Read more</a>
+                </div>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 22, 2026</div>
+                <h2><a href="/blog/nexo-7-2-0/">NEXO 7.2.0: Guardian active by default — G1 enforcer + G3 SSH wrapper + persist hard + adaptive empirical promotion + F0.6 hardening</a></h2>
+                <p>Minor release consolidating three parallel workstreams. Block K closure: G1 enforcer, G3 SSH wrapper, persist hard defaults during <code>nexo update</code>. F0.6 hardening: <code>nexo rollback f06</code>, layout contract, doctor checks, Nora migration. Adaptive weights empirical promotion. B10 path constants lazy. Schedule audit log. Pre-release discipline pack.</p>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/blog/nexo-7-2-0/" class="btn btn-secondary">Read more</a>
+                </div>
+            </div>
 
             <div class="blog-card">
                 <div class="blog-card-date">April 22, 2026</div>
