@@ -53,13 +53,18 @@ def test_first_delivery_with_session_id_returns_canonical_pending():
     )
     assert res["status"] == "canonical_pending"
     assert res["canonical_plan_id"].startswith("cpl-")
-    assert res["canonical_plan_version"] >= 1
+    assert res["canonical_plan_version"] >= 2
+    types = [a["type"] for a in res["canonical_actions"]]
+    assert types == ["resume_session", "inject_prompt", "stop_session"]
     kinds = [a["kind"] for a in res["canonical_actions"]]
-    assert kinds == ["resume_session", "inject_prompt", "stop_session"]
+    assert kinds == types
     # The inject_prompt action must carry the actual prompt text (no
     # Desktop hardcoding).
-    inject = next(a for a in res["canonical_actions"] if a["kind"] == "inject_prompt")
-    assert "nexo_session_diary_write" in inject["prompt"]
+    inject = next(a for a in res["canonical_actions"] if a["type"] == "inject_prompt")
+    assert "nexo_session_diary_write" in inject["payload"]["prompt"]
+    # One-release compatibility mirrors for Desktop <= 0.28.1.
+    assert inject["kind"] == "inject_prompt"
+    assert inject["prompt"] == inject["payload"]["prompt"]
     assert inject["expected_tool_call"] == "nexo_session_diary_write"
     assert inject["timeout_ms"] >= 1_000
 
@@ -288,6 +293,18 @@ def test_window_close_never_produces_canonical_plan_even_with_session_id():
     assert "canonical_actions" not in res
 
 
+def test_app_exit_with_live_session_uses_real_desktop_action_shape():
+    res = _call(event_id="evt-app-exit", action="app-exit", conversation_id="c", session_id="sess-live")
+    assert res["status"] == "canonical_pending"
+    assert res["canonical_plan_version"] >= 2
+    actions = res["canonical_actions"]
+    assert [a["type"] for a in actions] == ["resume_session", "inject_prompt", "stop_session"]
+    assert [a["kind"] for a in actions] == ["resume_session", "inject_prompt", "stop_session"]
+    inject = actions[1]
+    assert inject["payload"]["prompt"] == inject["prompt"]
+    assert "NEXO Desktop" in inject["payload"]["prompt"]
+
+
 def test_canonical_plan_id_deterministic_function():
     # Pure-function contract: same input → same plan id.
     import lifecycle_prompts as lp
@@ -307,7 +324,11 @@ def test_canonical_actions_json_round_trip_via_status():
     assert row["canonical_plan_version"] == res["canonical_plan_version"]
     # Actions stored verbatim so a crashed Desktop can re-execute the
     # exact same plan on next boot.
+    assert row["canonical_actions"][0]["type"] == "resume_session"
+    assert row["canonical_actions"][1]["type"] == "inject_prompt"
+    assert row["canonical_actions"][2]["type"] == "stop_session"
     assert row["canonical_actions"][0]["kind"] == "resume_session"
     assert row["canonical_actions"][1]["kind"] == "inject_prompt"
     assert row["canonical_actions"][2]["kind"] == "stop_session"
+    assert row["canonical_actions"][1]["payload"]["prompt"] == row["canonical_actions"][1]["prompt"]
     assert row["canonical_dispatched_at"]

@@ -19,7 +19,7 @@ import json
 from typing import Any, Dict, List, Optional
 
 
-PLAN_VERSION = 1
+PLAN_VERSION = 2
 
 
 # Actions that trigger a canonical diary+stop plan. `switch` and
@@ -79,6 +79,27 @@ def _diary_prompt_for_action(
     )
 
 
+def _canonical_action(
+    action_id: str,
+    action_type: str,
+    session_id: str,
+    timeout_ms: int,
+    **extra: Any,
+) -> Dict[str, Any]:
+    """Build one Desktop action with the v2 shape plus one-release mirrors."""
+    action: Dict[str, Any] = {
+        "id": action_id,
+        "type": action_type,
+        # Compatibility mirror for Desktop <= 0.28.1. Remove after one
+        # release once every supported Desktop consumes `type`.
+        "kind": action_type,
+        "session_id": str(session_id),
+        "timeout_ms": timeout_ms,
+    }
+    action.update(extra)
+    return action
+
+
 def build_canonical_plan(
     event_id: str,
     action: str,
@@ -106,26 +127,19 @@ def build_canonical_plan(
     prompt = _diary_prompt_for_action(action, conversation_id, payload_snapshot)
 
     actions: List[Dict[str, Any]] = [
-        {
-            "id": "a1",
-            "kind": "resume_session",
-            "session_id": str(session_id),
-            "timeout_ms": DEFAULT_RESUME_TIMEOUT_MS,
-        },
-        {
-            "id": "a2",
-            "kind": "inject_prompt",
-            "session_id": str(session_id),
-            "prompt": prompt,
-            "expected_tool_call": "nexo_session_diary_write",
-            "timeout_ms": DEFAULT_INJECT_TIMEOUT_MS,
-        },
-        {
-            "id": "a3",
-            "kind": "stop_session",
-            "session_id": str(session_id),
-            "timeout_ms": DEFAULT_STOP_TIMEOUT_MS,
-        },
+        _canonical_action("a1", "resume_session", str(session_id), DEFAULT_RESUME_TIMEOUT_MS),
+        _canonical_action(
+            "a2",
+            "inject_prompt",
+            str(session_id),
+            DEFAULT_INJECT_TIMEOUT_MS,
+            payload={"prompt": prompt},
+            # Compatibility mirror for Desktop <= 0.28.1. Remove after one
+            # release once every supported Desktop consumes `payload.prompt`.
+            prompt=prompt,
+            expected_tool_call="nexo_session_diary_write",
+        ),
+        _canonical_action("a3", "stop_session", str(session_id), DEFAULT_STOP_TIMEOUT_MS),
     ]
     return {
         "canonical_plan_id": canonical_plan_id(event_id, PLAN_VERSION),
