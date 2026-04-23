@@ -274,7 +274,6 @@ _LOCAL_SENTIMENT_CONFIDENCE_THRESHOLD = float(
 _LOCAL_SENTIMENT_CACHE_TTL_SECONDS = int(
     os.environ.get("NEXO_SENTIMENT_LOCAL_CACHE_TTL", "21600")
 )
-_LOCAL_SENTIMENT_CLASSIFIER = None
 _LOCAL_SENTIMENT_CACHE: dict[str, dict] = {}
 _LOCAL_SENTIMENT_LABELS = (
     ("The user is correcting the assistant or saying the assistant is wrong", "correction"),
@@ -304,27 +303,27 @@ def _local_classify_sentiment_intent(text: str) -> dict:
     if cached and cached.get("expires_at", 0) > now:
         return {k: v for k, v in cached.items() if k != "expires_at"}
 
-    global _LOCAL_SENTIMENT_CLASSIFIER
     try:
-        if _LOCAL_SENTIMENT_CLASSIFIER is None:
-            from classifier_local import LocalZeroShotClassifier
-
-            _LOCAL_SENTIMENT_CLASSIFIER = LocalZeroShotClassifier(
-                confidence_floor=_LOCAL_SENTIMENT_CONFIDENCE_THRESHOLD,
-            )
-        if not _LOCAL_SENTIMENT_CLASSIFIER.is_available():
-            return {"available": False, "label": None, "reason": "classifier_unavailable"}
+        from semantic_router import route as semantic_route
+    except Exception as exc:
+        return {"available": False, "label": None, "reason": f"router_unavailable:{exc}"}
+    try:
         label_texts = [label for label, _intent in _LOCAL_SENTIMENT_LABELS]
         intent_by_label = {label: intent for label, intent in _LOCAL_SENTIMENT_LABELS}
-        result = _LOCAL_SENTIMENT_CLASSIFIER.classify(text, label_texts)
-        if result is None:
-            return {"available": False, "label": None, "reason": "classifier_failed"}
+        result = semantic_route(
+            decision_kind="sentiment_intent",
+            question="Classify the operator message sentiment intent.",
+            context=text,
+            labels=tuple(label_texts),
+        )
+        if not result.ok:
+            return {"available": False, "label": None, "reason": result.error or "router_no_route"}
         intent = intent_by_label.get(result.label)
         payload = {
             "available": intent in SENTIMENT_INTENTS,
             "label": intent,
             "confidence": float(result.confidence or 0.0),
-            "reason": "local_zero_shot",
+            "reason": result.route_used,
         }
         _LOCAL_SENTIMENT_CACHE[key] = {
             **payload,
@@ -332,7 +331,7 @@ def _local_classify_sentiment_intent(text: str) -> dict:
         }
         return payload
     except Exception as exc:
-        return {"available": False, "label": None, "reason": f"classifier_error:{exc}"}
+        return {"available": False, "label": None, "reason": f"router_error:{exc}"}
 
 
 def detect_sentiment(text: str) -> dict:

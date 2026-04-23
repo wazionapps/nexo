@@ -27,7 +27,6 @@ _QUERY_INTENT_LOCAL_CONFIDENCE_THRESHOLD = float(
 _QUERY_INTENT_CACHE_TTL_SECONDS = int(
     os.environ.get("NEXO_QUERY_INTENT_LOCAL_CACHE_TTL", "21600")
 )
-_LOCAL_QUERY_INTENT_CLASSIFIER = None
 _QUERY_INTENT_CACHE: dict[str, dict] = {}
 _QUERY_INTENT_LABELS = (
     ("A how-to guide, procedure, or step-by-step instruction request", "howto"),
@@ -75,27 +74,27 @@ def _local_classify_query_intent(query: str) -> dict:
     if cached and cached.get("expires_at", 0) > time.time():
         return {k: v for k, v in cached.items() if k != "expires_at"}
 
-    global _LOCAL_QUERY_INTENT_CLASSIFIER
     try:
-        if _LOCAL_QUERY_INTENT_CLASSIFIER is None:
-            from classifier_local import LocalZeroShotClassifier
-
-            _LOCAL_QUERY_INTENT_CLASSIFIER = LocalZeroShotClassifier(
-                confidence_floor=_QUERY_INTENT_LOCAL_CONFIDENCE_THRESHOLD,
-            )
-        if not _LOCAL_QUERY_INTENT_CLASSIFIER.is_available():
-            return {"available": False, "label": None, "reason": "classifier_unavailable"}
+        from semantic_router import route as semantic_route
+    except Exception as exc:
+        return {"available": False, "label": None, "reason": f"router_unavailable:{exc}"}
+    try:
         label_texts = [label for label, _intent in _QUERY_INTENT_LABELS]
         intent_by_label = {label: intent for label, intent in _QUERY_INTENT_LABELS}
-        result = _LOCAL_QUERY_INTENT_CLASSIFIER.classify(query, label_texts)
-        if result is None:
-            return {"available": False, "label": None, "reason": "classifier_failed"}
+        result = semantic_route(
+            decision_kind="query_intent",
+            question="Classify the user's search query intent.",
+            context=query,
+            labels=tuple(label_texts),
+        )
+        if not result.ok:
+            return {"available": False, "label": None, "reason": result.error or "router_no_route"}
         intent = intent_by_label.get(result.label)
         payload = {
             "available": intent is not None,
             "label": intent,
             "confidence": float(result.confidence or 0.0),
-            "reason": "local_zero_shot",
+            "reason": result.route_used,
         }
         _QUERY_INTENT_CACHE[key] = {
             **payload,
@@ -103,7 +102,7 @@ def _local_classify_query_intent(query: str) -> dict:
         }
         return payload
     except Exception as exc:
-        return {"available": False, "label": None, "reason": f"classifier_error:{exc}"}
+        return {"available": False, "label": None, "reason": f"router_error:{exc}"}
 
 def bm25_search(query_text: str, stores: str = "both", top_k: int = 20,
                 source_type_filter: str = "") -> list[dict]:

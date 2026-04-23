@@ -14,7 +14,7 @@ Detection strategy (two layers):
      positive rate (any agent message saying "I haven't done X" today
      would match even when the action is plainly something NEXO has not
      done).
-  2. LLM classifier confirmation (shared with T4). When the regex fires
+  2. Semantic router confirmation. When the regex fires
      AND no shared-brain tool has been called this turn, the classifier
      decides whether the message is really a past-tense denial worth
      nudging. Tests use a fake classifier to avoid hitting the SDK.
@@ -34,8 +34,8 @@ from core_prompts import render_core_prompt
 def _verdict_to_bool(verdict: Any) -> bool:
     """Normalize a classifier verdict to an inject/no-inject decision.
 
-    The shared ``enforcement_classifier.classify`` exposes a ``tristate``
-    mode that returns ``"yes"``/``"no"``/``"unknown"`` strings. A naive
+    The engine-level semantic router adapter returns ``"yes"``/``"no"``/
+    ``"unknown"`` strings. A naive
     ``bool(verdict)`` wrap treats ``"unknown"`` (and any non-empty string
     the model may produce) as truthy, which is fail-OPEN for R34. Only
     a real ``True`` or an explicit ``"yes"`` should trigger an injection;
@@ -122,10 +122,9 @@ def should_inject_r34(
         return False, "", ""
     if classifier is None:
         return True, INJECTION_PROMPT, matched
-    # LLM disambiguation — reuses T4 infra. The engine passes a lambda
-    # that calls enforcement_classifier.classify under the hood. Parse
-    # the verdict via _verdict_to_bool so tristate "unknown" does not
-    # coerce to True.
+    # Semantic disambiguation — the engine passes a lambda that routes
+    # through semantic_router. Parse the verdict via _verdict_to_bool so
+    # tristate "unknown" does not coerce to True.
     try:
         raw_verdict = classifier(CLASSIFIER_QUESTION, message)
     except Exception:

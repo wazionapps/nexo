@@ -279,7 +279,7 @@ def test_followup_runner_no_longer_depends_on_bilingual_keyword_lists(tmp_path, 
     ) is False
 
 
-def test_followup_runner_local_classifier_labels_include_operator_name(tmp_path, monkeypatch):
+def test_followup_runner_semantic_router_labels_include_operator_name(tmp_path, monkeypatch):
     home = tmp_path / "nexo-home"
     home.mkdir(parents=True)
     monkeypatch.setenv("NEXO_HOME", str(home))
@@ -287,34 +287,26 @@ def test_followup_runner_local_classifier_labels_include_operator_name(tmp_path,
 
     seen = {}
 
-    class _Result:
-        label = ""
-        confidence = 0.91
+    def route(**kwargs):
+        seen.update(kwargs)
+        label = tuple(kwargs["labels"])[0]
+        return types.SimpleNamespace(
+            ok=True,
+            label=label,
+            verdict=label,
+            confidence=0.91,
+            route_used="fast_local",
+            error=None,
+        )
 
-    class _FakeClassifier:
-        def __init__(self, confidence_floor=0.72):
-            seen["confidence_floor"] = confidence_floor
-
-        def is_available(self):
-            return True
-
-        def classify(self, text, labels, multi_label=False):
-            seen["text"] = text
-            seen["labels"] = tuple(labels)
-            seen["multi_label"] = multi_label
-            result = _Result()
-            result.label = labels[0]
-            return result
-
-    fake_module = type("FakeClassifierModule", (), {"LocalZeroShotClassifier": _FakeClassifier})
-    monkeypatch.setitem(sys.modules, "classifier_local", fake_module)
+    monkeypatch.setitem(sys.modules, "semantic_router", types.SimpleNamespace(route=route))
 
     assert module._classifier_requires_operator_attention(
         "Laura needs to approve the quote before we continue",
         operator_name="Laura",
     ) is True
-    assert seen["confidence_floor"] == 0.72
     assert "Laura" in seen["labels"][0]
+    assert "Laura" in seen["context"]
     assert "keyword" not in seen["labels"][0].lower()
 
 
