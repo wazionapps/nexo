@@ -161,6 +161,7 @@ class TestReloadLaunchAgentsAfterBump:
         import runtime_power
         monkeypatch.setattr(auto_update.sys, "platform", "darwin")
         monkeypatch.setattr(runtime_power.os, "getuid", lambda: 501)
+        monkeypatch.setenv("NEXO_ALLOW_EPHEMERAL_INSTALL", "1")
         fake_home = tmp_path / "home"
         la_dir = fake_home / "Library" / "LaunchAgents"
         la_dir.mkdir(parents=True)
@@ -193,6 +194,7 @@ class TestReloadLaunchAgentsAfterBump:
         import runtime_power
         monkeypatch.setattr(auto_update.sys, "platform", "darwin")
         monkeypatch.setattr(runtime_power.os, "getuid", lambda: 501)
+        monkeypatch.setenv("NEXO_ALLOW_EPHEMERAL_INSTALL", "1")
         fake_home = tmp_path / "home"
         la_dir = fake_home / "Library" / "LaunchAgents"
         la_dir.mkdir(parents=True)
@@ -220,6 +222,7 @@ class TestReloadLaunchAgentsAfterBump:
         import auto_update
         import runtime_power
         monkeypatch.setattr(auto_update.sys, "platform", "darwin")
+        monkeypatch.setenv("NEXO_ALLOW_EPHEMERAL_INSTALL", "1")
         fake_home = tmp_path / "home"
         la_dir = fake_home / "Library" / "LaunchAgents"
         la_dir.mkdir(parents=True)
