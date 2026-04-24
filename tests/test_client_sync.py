@@ -10,6 +10,22 @@ from pathlib import Path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
 
 
+def test_bootstrap_docs_imports_without_nexo_home(tmp_path):
+    env = {**os.environ, "HOME": str(tmp_path)}
+    env.pop("NEXO_HOME", None)
+    env["PYTHONPATH"] = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+
+    result = subprocess.run(
+        [sys.executable, "-c", "import bootstrap_docs; print(bootstrap_docs.TEMPLATES_DIR)"],
+        capture_output=True,
+        text=True,
+        timeout=10,
+        env=env,
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
 def _make_runtime(root: Path, *, operator_name: str = "Atlas") -> Path:
     runtime = root / "runtime"
     (runtime / ".venv" / "bin").mkdir(parents=True)

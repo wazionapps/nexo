@@ -19,6 +19,11 @@ from client_preferences import (
 )
 from runtime_home import resolve_nexo_home
 
+
+def _user_home() -> Path:
+    return Path(os.environ.get("HOME", str(Path.home()))).expanduser()
+
+
 def _resolve_templates_dir(module_file: str | os.PathLike[str]) -> Path:
     module_dir = Path(module_file).resolve().parent
     direct = module_dir / "templates"
@@ -64,10 +69,6 @@ BOOTSTRAP_SPECS = {
         "version_file": "codex_agents_version.txt",
     },
 }
-
-
-def _user_home() -> Path:
-    return Path(os.environ.get("HOME", str(Path.home()))).expanduser()
 
 
 def _default_nexo_home() -> Path:
