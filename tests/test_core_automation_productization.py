@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import sqlite3
 import sys
 import types
 from pathlib import Path
@@ -602,3 +603,24 @@ def test_immune_prompt_is_catalog_backed_and_generic(tmp_path, monkeypatch):
     assert "NEXO Immune System triage analyst" in prompt
     assert "/tmp/immune-triage.md" in prompt
     assert '"FAIL":1' in prompt
+
+
+def test_immune_database_check_skips_missing_legacy_claude_mem(tmp_path, monkeypatch):
+    home = tmp_path / "nexo-home"
+    data_dir = home / "runtime" / "data"
+    data_dir.mkdir(parents=True)
+    for name in ("nexo.db", "cognitive.db"):
+        conn = sqlite3.connect(str(data_dir / name))
+        conn.execute("CREATE TABLE IF NOT EXISTS t (id INTEGER PRIMARY KEY)")
+        conn.commit()
+        conn.close()
+
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("NEXO_HOME", str(home))
+    module = _load_script_module("nexo_immune_db_test", "nexo-immune.py")
+
+    results = module.check_databases()
+    names = [row["name"] for row in results]
+
+    assert names == ["nexo.db", "cognitive.db"]
+    assert all(row["status"] == "OK" for row in results)

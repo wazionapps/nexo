@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.9.19` is the current packaged-runtime line. Patch release over `7.9.18`: runtime doctor now distinguishes real install breakage from tracked in-progress work, interactive Desktop sessions no longer poison automation telemetry scoring, stale filesystem skill rows are pruned during sync, stale protocol debt draining marks rows resolved, and watchdog treats LaunchAgent SIGTERM reloads as supervisor interruptions instead of failures. It includes the v7.9.18 client-sync bootstrap fix.
+Version `7.9.20` is the current packaged-runtime line. Patch release over `7.9.19`: packaged update/doctor repair now finds `runtime/crons/sync.py`, LaunchAgent PATH includes the managed Claude runtime installed under `~/.nexo/runtime/bootstrap/npm-global/bin`, root runtime backfill includes `claude_cli.py`, and Immune no longer treats the legacy optional `~/.claude-mem/claude-mem.db` as a required database.
+
+Previously in `7.9.19`: runtime doctor now distinguishes real install breakage from tracked in-progress work, interactive Desktop sessions no longer poison automation telemetry scoring, stale filesystem skill rows are pruned during sync, stale protocol debt draining marks rows resolved, and watchdog treats LaunchAgent SIGTERM reloads as supervisor interruptions instead of failures.
 
 Previously in `7.9.18`: packaged client-sync imports now work when `NEXO_HOME` is unset, so `nexo clients sync`, `nexo update`, and runtime doctor bootstrap checks no longer hit the `_user_home` import-order crash.
 

@@ -39,8 +39,15 @@ except ImportError:
     def resolve_launchagent_path() -> str:
         """Fallback when runtime_power is not importable."""
         home = Path.home()
-        parts = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin",
-                 str(home / ".local/bin"), str(home / ".nexo/bin")]
+        parts = [
+            str(home / ".nexo/runtime/bootstrap/npm-global/bin"),
+            "/opt/homebrew/bin",
+            "/usr/local/bin",
+            "/usr/bin",
+            "/bin",
+            str(home / ".local/bin"),
+            str(home / ".nexo/bin"),
+        ]
         nvm_dir = home / ".nvm/versions/node"
         if nvm_dir.is_dir():
             versions = sorted(nvm_dir.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True)

@@ -367,8 +367,9 @@ def check_databases():
     dbs = [
         ("nexo.db", paths.db_path()),
         ("cognitive.db", paths.data_dir() / "cognitive.db"),
-        ("claude-mem.db", CLAUDE_MEM_DB),
     ]
+    if CLAUDE_MEM_DB.exists():
+        dbs.append(("claude-mem.db", CLAUDE_MEM_DB))
 
     for name, path in dbs:
         result = {"name": name, "status": "OK", "detail": ""}

@@ -1131,17 +1131,20 @@ def _repair_special_launchagent_plists(items: list[tuple[str, Path]]) -> tuple[b
 
 
 def _sync_launchagents_from_manifest() -> tuple[bool, list[str]]:
-    sync_path = NEXO_CODE / "crons" / "sync.py"
+    sync_path = paths.crons_dir() / "sync.py"
+    if not sync_path.is_file():
+        sync_path = NEXO_CODE / "crons" / "sync.py"
     if not sync_path.is_file():
         return False, [f"cron sync script not found at {sync_path}"]
 
     try:
+        runtime_code = paths.core_dir()
         result = subprocess.run(
             [sys.executable, str(sync_path)],
             capture_output=True,
             text=True,
             timeout=30,
-            env={**os.environ, "NEXO_HOME": str(NEXO_HOME), "NEXO_CODE": str(NEXO_CODE)},
+            env={**os.environ, "NEXO_HOME": str(NEXO_HOME), "NEXO_CODE": str(runtime_code)},
         )
     except Exception as e:
         return False, [f"cron sync failed: {e}"]

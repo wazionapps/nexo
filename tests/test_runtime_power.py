@@ -65,6 +65,20 @@ def test_ensure_power_policy_choice_skips_when_noninteractive(tmp_path, monkeypa
     assert result["prompted"] is False
 
 
+def test_resolve_launchagent_path_includes_managed_claude_bin(tmp_path, monkeypatch):
+    import runtime_power
+
+    home = tmp_path / "home"
+    managed_bin = home / ".nexo" / "runtime" / "bootstrap" / "npm-global" / "bin"
+    managed_bin.mkdir(parents=True)
+
+    monkeypatch.setenv("HOME", str(home))
+
+    path_parts = runtime_power.resolve_launchagent_path().split(":")
+
+    assert path_parts[0] == str(managed_bin)
+
+
 def test_describe_power_policy_macos_reports_best_effort(tmp_path, monkeypatch):
     import runtime_power
 
