@@ -1,5 +1,15 @@
 # Changelog
 
+## [7.9.21] - 2026-04-24
+
+### Fixed
+- LaunchAgent reload and runtime doctor repair now tolerate macOS already-loaded races: repair boots out by label and plist path, falls back to legacy `launchctl load -w`, and treats `Bootstrap failed: 5` as successful only when launchd confirms the job is already loaded from the expected plist.
+- Cron manifest sync now uses the same robust LaunchAgent reload helper when installing or removing core cron plists, avoiding duplicate-bootstrap false failures after sync has already loaded a job.
+- Packaged and source update flows now reuse the hardened LaunchAgent reload path after version bumps.
+
+### Tests
+- Added regression coverage for already-loaded LaunchAgent bootstrap races, bootstrap+legacy-load failure reporting, doctor repair, and update reload behavior.
+
 ## [7.9.20] - 2026-04-24
 
 ### Fixed

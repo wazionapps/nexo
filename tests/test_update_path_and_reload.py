@@ -130,9 +130,11 @@ class TestReloadLaunchAgentsAfterBump:
         assert result["scanned"] == 0
         assert result["reloaded"] == 0
 
-    def test_calls_launchctl_unload_then_load_for_each_plist(self, monkeypatch, tmp_path):
+    def test_calls_launchctl_bootout_then_bootstrap_for_each_plist(self, monkeypatch, tmp_path):
         import auto_update
+        import runtime_power
         monkeypatch.setattr(auto_update.sys, "platform", "darwin")
+        monkeypatch.setattr(runtime_power.os, "getuid", lambda: 501)
         fake_home = tmp_path / "home"
         la_dir = fake_home / "Library" / "LaunchAgents"
         la_dir.mkdir(parents=True)
@@ -147,22 +149,24 @@ class TestReloadLaunchAgentsAfterBump:
             calls.append(list(args))
             return mock.Mock(returncode=0, stdout="", stderr="")
 
-        monkeypatch.setattr(auto_update.subprocess, "run", _fake_run)
+        monkeypatch.setattr(runtime_power.subprocess, "run", _fake_run)
 
         result = auto_update._reload_launch_agents_after_bump()
         assert result["scanned"] == 3
         assert result["reloaded"] == 3
         assert result["errors"] == []
 
-        unload_targets = [c[2] for c in calls if c[:2] == ["launchctl", "unload"]]
-        load_targets = [c[3] for c in calls if c[:3] == ["launchctl", "load", "-w"]]
-        assert len(unload_targets) == 3
-        assert len(load_targets) == 3
-        assert all("com.other.app" not in t for t in unload_targets + load_targets)
+        bootout_targets = [c[2] for c in calls if c[:2] == ["launchctl", "bootout"] and len(c) == 3]
+        bootstrap_targets = [c[3] for c in calls if c[:2] == ["launchctl", "bootstrap"]]
+        assert len(bootout_targets) == 3
+        assert len(bootstrap_targets) == 3
+        assert all("com.other.app" not in t for t in bootout_targets + bootstrap_targets)
 
     def test_records_errors_when_launchctl_load_fails(self, monkeypatch, tmp_path):
         import auto_update
+        import runtime_power
         monkeypatch.setattr(auto_update.sys, "platform", "darwin")
+        monkeypatch.setattr(runtime_power.os, "getuid", lambda: 501)
         fake_home = tmp_path / "home"
         la_dir = fake_home / "Library" / "LaunchAgents"
         la_dir.mkdir(parents=True)
@@ -170,20 +174,25 @@ class TestReloadLaunchAgentsAfterBump:
         monkeypatch.setattr(auto_update.Path, "home", lambda: fake_home)
 
         def _fake_run(args, *_a, **_k):
+            if args[1] == "print":
+                return mock.Mock(returncode=1, stdout="", stderr='Could not find service "com.nexo.evolution"')
+            if args[1] == "bootstrap":
+                return mock.Mock(returncode=5, stdout="", stderr="bootstrap denied")
             if args[1] == "load":
-                return mock.Mock(returncode=1, stdout="", stderr="bootstrap denied")
+                return mock.Mock(returncode=1, stdout="", stderr="legacy load denied")
             return mock.Mock(returncode=0, stdout="", stderr="")
 
-        monkeypatch.setattr(auto_update.subprocess, "run", _fake_run)
+        monkeypatch.setattr(runtime_power.subprocess, "run", _fake_run)
 
         result = auto_update._reload_launch_agents_after_bump()
         assert result["scanned"] == 1
         assert result["reloaded"] == 0
         assert len(result["errors"]) == 1
-        assert "bootstrap denied" in result["errors"][0]["stderr"]
+        assert "legacy load denied" in result["errors"][0]["stderr"]
 
     def test_handles_subprocess_timeout_gracefully(self, monkeypatch, tmp_path):
         import auto_update
+        import runtime_power
         monkeypatch.setattr(auto_update.sys, "platform", "darwin")
         fake_home = tmp_path / "home"
         la_dir = fake_home / "Library" / "LaunchAgents"
@@ -194,7 +203,7 @@ class TestReloadLaunchAgentsAfterBump:
         def _fake_run(args, *_a, **_k):
             raise subprocess.TimeoutExpired(cmd=args, timeout=10)
 
-        monkeypatch.setattr(auto_update.subprocess, "run", _fake_run)
+        monkeypatch.setattr(runtime_power.subprocess, "run", _fake_run)
 
         result = auto_update._reload_launch_agents_after_bump()
         assert result["scanned"] == 1

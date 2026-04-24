@@ -1043,25 +1043,16 @@ def _reload_launch_agents_after_bump() -> dict:
             if not plist.is_file():
                 result["skipped_missing"] += 1
                 continue
-            subprocess.run(
-                ["launchctl", "unload", str(plist)],
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
-            load_proc = subprocess.run(
-                ["launchctl", "load", "-w", str(plist)],
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
-            if load_proc.returncode == 0:
+            from runtime_power import reload_launchagent_plist
+
+            reload_result = reload_launchagent_plist(plist)
+            if reload_result.get("ok"):
                 result["reloaded"] += 1
             else:
                 result["errors"].append(
                     {
                         "plist": plist.name,
-                        "stderr": (load_proc.stderr or load_proc.stdout or "load failed")[:300],
+                        "stderr": str(reload_result.get("error") or "reload failed")[:300],
                     }
                 )
         except subprocess.TimeoutExpired:
