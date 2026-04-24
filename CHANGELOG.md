@@ -1,5 +1,19 @@
 # Changelog
 
+## [7.9.13] - 2026-04-24
+
+### Fixed
+- Shared system prompts are now centralized for the remaining lifecycle + enforcement rails that were still inline: the canonical `diary + stop` close reminder now lives in `templates/core-prompts/lifecycle-diary-stop.md`, and Desktop consumes the same shared classifier prompt catalog that Brain already ships.
+- New `operator-language-contract` template is now appended to lifecycle close reminders, guard/protocol reminders, post-tool inbox nudges, G1 enforcement messages, and the followup-runner prompt, so operator-facing diary text, summaries, reminder notes, escalations, and guard replies stay in the operator language even when the underlying prompt is English.
+- Packaged installs now copy `src/presets/guardian_default.json` into the managed runtime again, closing the degraded `guardian defaults missing -> shadow mode` trap on broken or fresh packaged installs.
+- `session_start.py` now suppresses duplicate shell hook recording, so `hook_runs` no longer double-count `session_start` / `session-start` for one logical startup.
+- Guardian Health in `session-start.sh` now queries `hook_runs.started_at` as UNIX epoch instead of comparing a REAL column against `datetime(...)`, so the startup briefing stops reporting false green `0 failing hooks`.
+
+### Tests
+- Prompt/language/runtime validation: `pytest -q tests/test_operator_language.py tests/test_core_prompts.py tests/test_shell_runtime_path_contract.py tests/test_startup_preflight.py tests/test_core_automation_productization.py` (`64 passed`).
+- Guardian/runtime/update validation: `pytest -q tests/test_install_guardian.py tests/test_v77_enforcement_gaps.py tests/test_hook_guardrails.py tests/test_cli_scripts.py tests/test_auto_update_f06_shims.py tests/test_personal_scripts_enabled.py tests/test_semantic_router_site_migration.py` (`134 passed`).
+- Coordinated Desktop validation on the same patch line: `npm test` (`746 pass, 0 fail, 1 skipped`) and `npm run smoke:syntax`.
+
 ## [7.9.12] - 2026-04-24
 
 ### Fixed

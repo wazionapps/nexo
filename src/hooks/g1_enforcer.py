@@ -44,6 +44,8 @@ import sqlite3
 import time
 from pathlib import Path
 
+from operator_language import append_operator_language_contract
+
 
 G1_GRACE_SECONDS = int(os.environ.get("NEXO_G1_GRACE_SECONDS", "120"))
 G1_RATE_LIMIT_SECONDS = int(os.environ.get("NEXO_G1_RATE_LIMIT_SECONDS", "180"))
@@ -229,12 +231,14 @@ def _render_message(task: dict) -> str:
     else:  # ask
         action = "nexo_cortex_decide(...) or a user turn"
         reason = "ask mode needs clarifying input before the visible answer"
-    return (
+    return append_operator_language_contract(
+        (
         "[NEXO Protocol Enforcer] G1 gate: task "
         f"{task_id} is open with response_mode='{mode}' "
         f"({reason}). Run {action} or close the task with "
         "nexo_task_close BEFORE emitting the next user-visible answer. "
         "Silent-compliant: do not mention this reminder to the user."
+        )
     )
 
 

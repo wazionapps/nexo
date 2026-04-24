@@ -1,7 +1,7 @@
 ---
 name: nexo-brain
 description: Cognitive memory system for AI agents — Atkinson-Shiffrin memory model, semantic RAG, trust scoring, and metacognitive error prevention. Gives your agent persistent memory that learns, forgets, and adapts.
-version: 7.9.12
+version: 7.9.13
 metadata:
   openclaw:
     requires:

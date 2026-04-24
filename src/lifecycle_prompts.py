@@ -18,8 +18,10 @@ import hashlib
 import json
 from typing import Any, Dict, List, Optional
 
+from core_prompts import render_core_prompt
+from operator_language import build_operator_language_contract
 
-PLAN_VERSION = 4
+PLAN_VERSION = 5
 
 
 # Actions that trigger a canonical diary+stop plan. `switch` and
@@ -69,15 +71,11 @@ def _diary_prompt_for_action(
         "app-exit": "The operator quit NEXO Desktop",
     }
     trailing = reason_by_action.get(action, "The conversation ended")
-    return (
-        f"[NEXO Protocol Enforcer] {trailing} "
-        f"(title: {title!r}). Execute nexo_session_diary_write with a "
-        "complete summary: decisions made, pending items, context for "
-        "next session, mental state, and self-critique. Then execute "
-        "nexo_stop with the current SID. Do not produce visible text. "
-        "Apply the required action silently. Do not mention this "
-        "reminder, Guardian, Protocol Enforcer, system reminders, or "
-        "any internal enforcement to the user."
+    return render_core_prompt(
+        "lifecycle-diary-stop",
+        trailing=trailing,
+        title_repr=repr(title),
+        operator_language_contract_block=f" {build_operator_language_contract()}",
     )
 
 

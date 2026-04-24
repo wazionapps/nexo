@@ -17,6 +17,7 @@ from pathlib import Path
 import re
 import paths
 from core_prompts import render_core_prompt
+from operator_language import append_operator_language_contract
 
 try:
     from r13_pre_edit_guard import should_inject_r13, ToolCallRecord, WATCHED_WRITE_TOOLS
@@ -2493,7 +2494,7 @@ class HeadlessEnforcer:
             if entry["enf"].get("level") == "must":
                 p = entry["enf"].get("session_end_inject_prompt") or entry["enf"].get("inject_prompt", "")
                 if p:
-                    prompts.append(p)
+                    prompts.append(append_operator_language_contract(p))
         _logger.info("END_PROMPTS: %d prompts to inject", len(prompts))
         return prompts
 
@@ -2545,7 +2546,8 @@ class HeadlessEnforcer:
             if tool in self.tools_called and not tag.startswith("periodic_"):
                 _logger.info("SKIP: %s — already called", tag)
                 return
-        self.injection_queue.append({"prompt": prompt, "tag": tag, "at": time.time(), "rule_id": rule_id})
+        localized_prompt = append_operator_language_contract(prompt)
+        self.injection_queue.append({"prompt": localized_prompt, "tag": tag, "at": time.time(), "rule_id": rule_id})
         _logger.info("ENQUEUED: %s (queue size: %d rule_id=%s)", tag, len(self.injection_queue), rule_id or "?")
         # Fase F telemetry — log one "injection" event per enqueue. The
         # engine does not see the final event lifecycle (compliance / FP);

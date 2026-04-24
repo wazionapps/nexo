@@ -35,6 +35,9 @@ fi
 NEXO_HOOK_START_MS=$(python3 -c "import time; print(int(time.time()*1000))" 2>/dev/null || echo 0)
 NEXO_HOOK_NAME="session-start"
 _nexo_record_hook_run() {
+    if [ "${NEXO_DISABLE_SHELL_HOOK_RECORD:-0}" = "1" ]; then
+        return
+    fi
     local exit_code=$?
     local duration_ms=0
     if [ "$NEXO_HOOK_START_MS" != "0" ]; then
@@ -283,7 +286,7 @@ try:
     try:
         row = _conn.execute(
             \"SELECT COUNT(*) FROM hook_runs \"
-            \"WHERE exit_code != 0 AND started_at > datetime('now', '-1 day')\"
+            \"WHERE exit_code != 0 AND started_at > (strftime('%s','now') - 24*3600)\"
         ).fetchone()
         _health['failing_hooks_24h'] = int(row[0] or 0) if row else 0
     except Exception:

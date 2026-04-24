@@ -31,6 +31,7 @@ if str(_DIR.parent) not in sys.path:
     sys.path.insert(0, str(_DIR.parent))
 
 from core_prompts import render_core_prompt
+from operator_language import append_operator_language_contract
 
 _NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 
@@ -112,9 +113,11 @@ def check_inbox_and_emit_reminder(sid: str, now: float | None = None) -> str | N
     if current - last_rem < INBOX_CHECK_THRESHOLD_SECONDS:
         return None  # rate limit: max 1 reminder/min/session
     mark_reminder_sent(sid, current)
-    return render_core_prompt(
-        "post-tool-inbox-reminder",
-        pending=str(pending),
+    return append_operator_language_contract(
+        render_core_prompt(
+            "post-tool-inbox-reminder",
+            pending=str(pending),
+        )
     )
 
 

@@ -46,6 +46,8 @@ def test_prompt_catalog_dir_exists_and_contains_automation_prompts():
     assert (core_prompts.PROMPTS_DIR / "followup-runner.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "followup-runner-operator-attention-context.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "followup-runner-operator-attention-question.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "lifecycle-diary-stop.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "operator-language-contract.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "heartbeat-diary-overdue.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "heartbeat-guard-reminder.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "heartbeat-learning-reminder.md").is_file()
@@ -187,9 +189,26 @@ def test_render_core_prompt_supports_catchup_and_immune_templates():
         "followup-runner-operator-attention-context",
         pending_item="Laura still needs to approve the quote.",
     )
+    followup_runner = core_prompts.render_core_prompt(
+        "followup-runner",
+        assistant_name="Nova",
+        work_intro="Execute the work",
+        operator_language_contract_block="Write operator-facing text in Spanish (es).\n\n",
+        followup_block="[1] NF-1\n\n",
+        recent_block="",
+        proactive_block="",
+        extra_instructions_block="",
+        python_executable="/usr/bin/python3",
+        send_reply_script=Path("/tmp/nexo-send-reply.py"),
+        send_target="owner@example.com",
+        operator_name="Laura",
+        results_path=Path("/tmp/results.json"),
+    )
     assert "require Laura to intervene" in followup_question
     assert "Laura still needs to approve the quote." in followup_context
     assert "do not depend on literal keyword matching" in followup_context
+    assert "Write operator-facing text in Spanish (es)." in followup_runner
+    assert "summary`, `options`, and any operator-facing text MUST stay in the operator's language" in followup_runner
 
     audit = core_prompts.render_core_prompt(
         "daily-self-audit",

@@ -1,0 +1,1 @@
+CRITICAL LANGUAGE CONTRACT: even when this reminder or automation prompt is written in English, any operator-facing reply, diary entry, reminder/followup note, summary, escalation, or answer you generate while handling it MUST be written in [[operator_language_label]]. Keep machine identifiers, JSON keys, and explicit code/tool names unchanged only when the schema requires them.

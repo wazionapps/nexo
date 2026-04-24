@@ -4257,7 +4257,7 @@ def _restore_runtime_tree(backup_dir: str, dest: Path = NEXO_HOME) -> None:
 def _copy_runtime_from_source(src_dir: Path, repo_dir: Path, dest: Path = NEXO_HOME, progress_fn=None) -> dict:
     import shutil
 
-    packages = ["db", "cognitive", "doctor", "dashboard", "rules", "crons", "hooks"]
+    packages = ["db", "cognitive", "doctor", "dashboard", "rules", "crons", "hooks", "presets"]
     flat_files = _runtime_flat_files(src_dir)
     copied_packages = 0
     copied_files = 0

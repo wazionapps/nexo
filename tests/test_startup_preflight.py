@@ -270,6 +270,7 @@ def test_copy_runtime_from_source_creates_skill_scaffold_dirs(tmp_path, monkeypa
     src_dir.mkdir()
     repo_dir.mkdir()
     (src_dir / "db").mkdir()
+    (src_dir / "presets").mkdir()
     (src_dir / "scripts").mkdir()
     (src_dir / "skills" / "demo-skill").mkdir(parents=True)
     (repo_dir / "templates").mkdir()
@@ -277,6 +278,7 @@ def test_copy_runtime_from_source_creates_skill_scaffold_dirs(tmp_path, monkeypa
     (src_dir / "server.py").write_text("print('server')\n")
     (src_dir / "cli.py").write_text("print('cli')\n")
     (src_dir / "requirements.txt").write_text("fastmcp\n")
+    (src_dir / "presets" / "guardian_default.json").write_text("{}\n")
     (src_dir / "skills" / "demo-skill" / "skill.json").write_text("{}\n")
     (repo_dir / "templates" / "skill-template.md").write_text("# template\n")
     (repo_dir / "package.json").write_text("{}\n")
@@ -290,6 +292,7 @@ def test_copy_runtime_from_source_creates_skill_scaffold_dirs(tmp_path, monkeypa
     assert (dest / "skills").is_dir()
     assert (dest / "skills-runtime").is_dir()
     assert (dest / "skills-core" / "demo-skill" / "skill.json").is_file()
+    assert (dest / "presets" / "guardian_default.json").is_file()
 
 
 def test_copy_runtime_from_source_replaces_f06_symlink_package_targets(tmp_path, monkeypatch):

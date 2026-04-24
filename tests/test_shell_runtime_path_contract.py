@@ -35,9 +35,11 @@ def test_session_start_uses_runtime_and_personal_layout() -> None:
     text = _read("src/hooks/session-start.sh")
     assert 'BRIEFING_FILE="$COORDINATION_DIR/session-briefing.txt"' in text
     assert 'date +%s > "$OPERATIONS_DIR/.session-start-ts"' in text
+    assert 'NEXO_DISABLE_SHELL_HOOK_RECORD' in text
     assert "os.path.join(nexo_home, 'runtime', 'data', 'nexo.db')" in text
     assert "os.path.join(nexo_home, 'runtime', 'logs', 'self-audit-summary.json')" in text
     assert "os.path.join(nexo_home, 'personal', 'brain', 'evolution-objective.json')" in text
+    assert "started_at > (strftime('%s','now') - 24*3600)" in text
 
 
 def test_watchdog_uses_runtime_paths_and_personal_config() -> None:

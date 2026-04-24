@@ -59,6 +59,7 @@ from automation_controls import (
 )
 from client_preferences import resolve_automation_backend, resolve_client_runtime_profile
 from core_prompts import render_core_prompt
+from operator_language import build_operator_language_contract, normalize_operator_language
 import db as nexo_db
 
 NEXO_DB = db_path()
@@ -73,6 +74,7 @@ LOCK_FILE = LOG_DIR / "followup-runner.lock"
 MAX_FOLLOWUPS_PER_RUN = 5  # Focus: Opus can actually execute 5, not 30
 COOLDOWN_DAYS = 3  # Don't retry needs_decision/blocked for 3 days
 DEFAULT_ASSISTANT_NAME = "Nova"
+DEFAULT_OPERATOR_LANGUAGE = "en"
 
 # ── Logging ─────────────────────────────────────────────────────────────
 def log(msg: str):
@@ -135,6 +137,17 @@ def _operator_attention_label_set(operator_name: str = "") -> tuple[str, str, st
         "this pending item can continue without operator input and the automation should keep working on its own",
         "this pending item is only waiting on a customer, vendor, colleague, or external system rather than on the operator",
     )
+
+
+def _operator_language(operator: dict | None = None) -> str:
+    payload = operator if isinstance(operator, dict) else get_operator_profile()
+    return normalize_operator_language(
+        str(payload.get("language") or DEFAULT_OPERATOR_LANGUAGE).strip() or DEFAULT_OPERATOR_LANGUAGE
+    )
+
+
+def _uses_spanish(language: str) -> bool:
+    return _operator_language({"language": language}).startswith("es")
 
 
 def _fallback_operator_attention_hint(followup: dict) -> bool:
@@ -428,15 +441,25 @@ def attention_reminder_category(status: str) -> str:
     return "decisions" if status == "needs_decision" else "waiting"
 
 
-def attention_reminder_description(fu_id: str, *, summary: str, options, status: str) -> str:
-    prefix = "Decision needed" if status == "needs_decision" else "Execution blocked"
+def attention_reminder_description(
+    fu_id: str,
+    *,
+    summary: str,
+    options,
+    status: str,
+    operator_language: str,
+) -> str:
     detail = " ".join((summary or "").split())
     if not detail:
-        detail = "The runner cannot close this item without operator input."
-    description = f"{prefix} en {fu_id}: {detail}"
+        detail = (
+            "El runner no puede cerrar este punto sin intervención del operador."
+            if _uses_spanish(operator_language)
+            else "The runner cannot close this item without operator input."
+        )
+    description = f"{fu_id}: {detail}"
     opts_text = render_options(options)
     if opts_text:
-        description += f" Options: {opts_text}"
+        description += f" {'Opciones' if _uses_spanish(operator_language) else 'Options'}: {opts_text}"
     return description[:480]
 
 
@@ -446,9 +469,16 @@ def upsert_attention_reminder(
     summary: str,
     options,
     status: str,
+    operator_language: str,
 ):
     reminder_id = attention_reminder_id(fu_id)
-    description = attention_reminder_description(fu_id, summary=summary, options=options, status=status)
+    description = attention_reminder_description(
+        fu_id,
+        summary=summary,
+        options=options,
+        status=status,
+        operator_language=operator_language,
+    )
     category = attention_reminder_category(status)
     today = date.today().isoformat()
     existing = nexo_db.get_reminder(reminder_id)
@@ -462,7 +492,7 @@ def upsert_attention_reminder(
             category=category,
             history_actor="followup-runner",
             history_event="updated",
-            history_note=f"{fu_id}: refreshed after {status}.",
+            history_note=f"{fu_id}: status={status}",
         )
         if result.get("error"):
             log(f"  {fu_id}: failed to update reminder {reminder_id} ({result['error']})")
@@ -482,7 +512,7 @@ def upsert_attention_reminder(
         return
     nexo_db.add_reminder_note(
         reminder_id,
-        f"Creado desde {fu_id} tras resultado {status}.",
+        f"source_followup={fu_id} status={status}",
         actor="followup-runner",
     )
     log(f"  {fu_id}: reminder {reminder_id} creado para orchestrator")
@@ -516,6 +546,7 @@ def defer_followup_after_attention(
     options,
     status: str,
     priority: str = "",
+    operator_language: str,
 ):
     next_review = (date.today() + timedelta(days=1)).isoformat()
     details = summary.strip()
@@ -536,7 +567,7 @@ def defer_followup_after_attention(
         status="PENDING",
         priority=priority,
         history_event="rescheduled",
-        history_note=f"Runner deferred after {status}; next review scheduled for {next_review}.",
+        history_note=f"status={status}; next_review={next_review}",
     )
     if ok:
         log(f"  {fu_id}: {status} → reprogramado para {next_review}")
@@ -545,6 +576,7 @@ def defer_followup_after_attention(
         summary=summary,
         options=options,
         status=status,
+        operator_language=operator_language,
     )
 
 
@@ -636,6 +668,7 @@ def build_prompt(actionable: list[dict]) -> str:
     operator = get_operator_profile()
     operator_name = str(operator.get("operator_name") or "the operator")
     assistant_name = str(operator.get("assistant_name") or DEFAULT_ASSISTANT_NAME)
+    operator_language = _operator_language(operator)
     operator_email = str(operator.get("operator_email") or "").strip()
     send_reply_script = get_send_reply_script_path(local_script_dir=_script_dir)
     send_target = operator_email or "OPERATOR_EMAIL_NOT_CONFIGURED"
@@ -691,6 +724,7 @@ Do not repeat queries, verifications, or operator emails that already happened t
         recent_block=recent_block,
         proactive_block=proactive_block,
         extra_instructions_block=(extra_instructions_block + "\n\n") if extra_instructions_block else "",
+        operator_language_contract_block=build_operator_language_contract(operator_language) + "\n\n",
         python_executable=sys.executable,
         send_reply_script=send_reply_script,
         send_target=send_target,
@@ -810,6 +844,7 @@ def main():
                 options=options,
                 status=r["status"],
                 priority=priority,
+                operator_language=_operator_language(),
             )
             # Cooldown: don't retry for COOLDOWN_DAYS
             record_attempt(state, fid, r["status"])

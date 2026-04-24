@@ -47,12 +47,16 @@ def _record(duration_ms: int, exit_code: int, summary: str) -> None:
 
 
 def _run_step(cmd: list[str], timeout: int) -> tuple[int, str]:
+    env = os.environ.copy()
+    if cmd and str(cmd[-1]).endswith("session-start.sh"):
+        env["NEXO_DISABLE_SHELL_HOOK_RECORD"] = "1"
     try:
         result = subprocess.run(
             cmd,
             timeout=timeout,
             capture_output=True,
             text=True,
+            env=env,
         )
         tail = (result.stdout or result.stderr or "").strip().splitlines()[-1:] or [""]
         return result.returncode, tail[0][:200]

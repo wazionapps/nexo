@@ -13,6 +13,7 @@ import paths
 
 from core_prompts import render_core_prompt
 from db import create_protocol_debt, get_db
+from operator_language import append_operator_language_contract
 from plugins.guard import _load_conditioned_learnings, _normalize_path_token
 from protocol_settings import get_protocol_strictness
 from product_mode import core_writes_allowed, is_protected_runtime_core_path
@@ -709,7 +710,7 @@ def _task_needs_workflow(task: dict | None) -> bool:
 
 
 def _append_protocol_warning(warnings: list[dict], message: str) -> None:
-    clean = (message or "").strip()
+    clean = append_operator_language_contract(message)
     if not clean:
         return
     if any((item.get("message") or "").strip() == clean for item in warnings):
