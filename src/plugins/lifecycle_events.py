@@ -217,11 +217,14 @@ def handle_nexo_lifecycle_stop_nexo_session(
     try:
         from tools_sessions import handle_stop
 
-        message = handle_stop(str(sid or ""))
+        raw_sid = str(sid or "").strip()
+        stop_sids = lifecycle_events.registered_stop_session_ids(raw_sid) or [raw_sid]
+        messages = [handle_stop(stop_sid) for stop_sid in stop_sids]
         return json.dumps({
             "status": "ok",
-            "sid": str(sid or ""),
-            "message": message,
+            "sid": raw_sid,
+            "stopped_session_ids": stop_sids,
+            "message": " ".join(messages),
         }, ensure_ascii=False)
     except Exception as exc:
         return json.dumps({

@@ -1,5 +1,14 @@
 # Changelog
 
+## [7.9.24] - 2026-04-24
+
+### Fixed
+- Desktop lifecycle fallback diaries now prefer the registered NEXO session over newer alias-only rows, so the subsequent canonical stop closes the real active session instead of an orphan alias.
+- `nexo lifecycle stop-nexo-session` now resolves orphan aliases back to their registered sibling sessions before calling `nexo_stop`, covering live-agent diary and fallback-diary paths.
+
+### Tests
+- Added regression coverage for fallback diary SID selection and orphan-alias stop resolution.
+
 ## [7.9.23] - 2026-04-24
 
 ### Fixed

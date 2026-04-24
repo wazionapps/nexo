@@ -508,6 +508,106 @@ def test_wait_for_diary_accepts_nexo_sid_alias_for_desktop_session_uuid():
     assert hit["diary_session_id"] == "nexo-alias-sid"
 
 
+def test_fallback_diary_prefers_registered_session_over_latest_orphan_alias():
+    from db import complete_session, get_db, register_session
+    from plugins.lifecycle_events import (
+        handle_nexo_lifecycle_wait_for_stop,
+        handle_nexo_lifecycle_write_fallback_diary,
+    )
+
+    conn = get_db()
+    register_session(
+        "nexo-9200-1",
+        "desktop lifecycle close",
+        external_session_id="desktop-session-uuid",
+        session_client="desktop",
+        conversation_id="c",
+    )
+    conn.execute(
+        "INSERT INTO session_claude_aliases (sid, claude_session_id, first_seen, last_seen) "
+        "VALUES (?, ?, ?, ?)",
+        ("nexo-9200-2", "desktop-session-uuid", 1, 200),
+    )
+    conn.execute(
+        "INSERT INTO session_claude_aliases (sid, claude_session_id, first_seen, last_seen) "
+        "VALUES (?, ?, ?, ?)",
+        ("nexo-9200-1", "desktop-session-uuid", 1, 100),
+    )
+    conn.commit()
+
+    res = _call(
+        event_id="evt-fallback-real-session",
+        action="app-exit",
+        conversation_id="c",
+        session_id="desktop-session-uuid",
+        payload_snapshot=json.dumps({
+            "title": "real desktop close",
+            "messages": [
+                {"role": "user", "content": "mensaje 1"},
+                {"role": "assistant", "content": "respuesta 1"},
+            ],
+        }),
+    )
+    assert res["status"] == "canonical_pending"
+
+    fallback = json.loads(handle_nexo_lifecycle_write_fallback_diary(
+        "evt-fallback-real-session",
+        reason="inject-response-timeout",
+    ))
+    assert fallback["status"] == "ok"
+    assert fallback["diary_session_id"] == "nexo-9200-1"
+
+    miss = json.loads(handle_nexo_lifecycle_wait_for_stop(
+        "evt-fallback-real-session",
+        timeout_ms=1,
+        poll_ms=1,
+    ))
+    assert miss["status"] == "retryable_error"
+    assert "nexo-9200-1" in miss["active_session_ids"]
+
+    complete_session("nexo-9200-1")
+
+    hit = json.loads(handle_nexo_lifecycle_wait_for_stop(
+        "evt-fallback-real-session",
+        timeout_ms=100,
+        poll_ms=1,
+    ))
+    assert hit["status"] == "ok"
+    assert hit["stop_confirmed"] is True
+
+
+def test_stop_nexo_session_resolves_orphan_alias_to_registered_session():
+    from db import get_db, register_session
+    from plugins.lifecycle_events import handle_nexo_lifecycle_stop_nexo_session
+
+    conn = get_db()
+    register_session(
+        "nexo-9300-1",
+        "desktop lifecycle close",
+        external_session_id="desktop-session-stop",
+        session_client="desktop",
+        conversation_id="c",
+    )
+    conn.execute(
+        "INSERT INTO session_claude_aliases (sid, claude_session_id, first_seen, last_seen) "
+        "VALUES (?, ?, ?, ?)",
+        ("nexo-9300-2", "desktop-session-stop", 1, 200),
+    )
+    conn.execute(
+        "INSERT INTO session_claude_aliases (sid, claude_session_id, first_seen, last_seen) "
+        "VALUES (?, ?, ?, ?)",
+        ("nexo-9300-1", "desktop-session-stop", 1, 100),
+    )
+    conn.commit()
+
+    ack = json.loads(handle_nexo_lifecycle_stop_nexo_session("nexo-9300-2"))
+    assert ack["status"] == "ok"
+    assert ack["stopped_session_ids"] == ["nexo-9300-1"]
+
+    row = conn.execute("SELECT 1 FROM sessions WHERE sid = ?", ("nexo-9300-1",)).fetchone()
+    assert row is None
+
+
 def test_complete_canonical_returns_session_not_linked_reason_for_unregistered_session():
     res = _call(
         event_id="evt-unregistered-complete",
