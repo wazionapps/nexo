@@ -219,6 +219,7 @@ SYSTEM_OWNED_CALLERS: dict[str, str] = {
     "learning_validator":               "medio",
     "outcome_checker":                  "medio",
     "check_context":                    "medio",
+    "semantic_reasoner":                "muy_bajo",
 
     # ---- Agent orchestration ----------------------------------------------
     "agent_run/generic":                "alto",

@@ -70,6 +70,18 @@ def test_system_owned_caller_ignores_user_default():
     assert (model, effort) == rmap._RESONANCE_TABLE["alto"]["claude_code"]
 
 
+def test_semantic_reasoner_caller_is_registered_and_resolves():
+    tier = rmap.resolve_tier_for_caller("semantic_reasoner")
+    assert tier == "muy_bajo"
+
+    model, effort = rmap.resolve_model_and_effort(
+        "semantic_reasoner",
+        "claude_code",
+        user_default="maximo",
+    )
+    assert (model, effort) == rmap._RESONANCE_TABLE["muy_bajo"]["claude_code"]
+
+
 def test_system_owned_synthesize_is_maximo():
     """synthesize consolidates findings across every session and benefits
     from the most reasoning budget we have. Locked at MAXIMO."""
