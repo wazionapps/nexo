@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.9.21: LaunchAgent repair race hardening</title>
+<meta name="description" content="NEXO Brain v7.9.21 patch release. Hardens LaunchAgent repair against macOS already-loaded races.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-9-21/">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.9.21: LaunchAgent repair race hardening","datePublished":"2026-04-24","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head><body><main><article style="max-width:760px;margin:80px auto;padding:0 24px;line-height:1.75;">
+<h1>NEXO 7.9.21 — LaunchAgent repair race hardening</h1>
+<p><em>Published 2026-04-24. Patch release over v7.9.20.</em></p>
+
+<p>v7.9.21 closes the installed-runtime gap found while validating v7.9.20 on a live Mac. The product had synced the correct LaunchAgent plist, but a follow-up repair could still call <code>launchctl bootstrap</code> while macOS considered the job already loaded, producing the generic <code>Bootstrap failed: 5</code> error.</p>
+
+<h2>What is fixed</h2>
+<p>LaunchAgent reload now boots out jobs by label and plist path, then bootstraps the expected plist. If macOS still reports an already-loaded race, NEXO verifies that launchd is actually serving the expected plist before treating the repair as successful. If modern bootstrap fails for a real reason, the updater falls back to legacy <code>launchctl load -w</code> and reports the concrete failure.</p>
+
+<h2>Why it matters</h2>
+<p>This is the fleet-safety layer behind self-healing updates. A customer install should not need manual launchd cleanup just because a previous sync already loaded the correct job. At the same time, NEXO must not hide real failures by blindly accepting any bootstrap error.</p>
+
+<h2>Verification</h2>
+<p>Regression coverage includes runtime power LaunchAgent reload behavior, doctor repair, and update reload tests. Release validation also runs release artifact sync before publication.</p>
+
+<p><a href="/changelog/#v7921">Full changelog entry &rarr;</a></p>
+</article></main></body></html>
