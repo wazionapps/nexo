@@ -32,6 +32,7 @@ from claude_cli import (
 )
 from cron_recovery import is_cron_enabled, resolve_declared_schedule, should_run_at_load
 from doctor.models import DoctorCheck, safe_check
+from runtime_power import reload_launchagent_plist
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(Path(__file__).resolve().parents[2])))
@@ -1080,25 +1081,13 @@ def _recent_permission_denial(cron_id: str, max_age_seconds: int = 7 * 86400) ->
 
 def _repair_launchagents(items: list[tuple[str, Path]]) -> tuple[bool, list[str]]:
     evidence = []
-    uid = str(os.getuid())
     ok = True
     for cron_id, plist_path in items:
         label = f"com.nexo.{cron_id}"
-        subprocess.run(
-            ["launchctl", "bootout", f"gui/{uid}/{label}"],
-            capture_output=True,
-            text=True,
-            timeout=3,
-        )
-        result = subprocess.run(
-            ["launchctl", "bootstrap", f"gui/{uid}", str(plist_path)],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        if result.returncode != 0:
+        result = reload_launchagent_plist(plist_path, label=label, timeout=5)
+        if not result.get("ok"):
             ok = False
-            evidence.append(f"{label}: {result.stderr.strip() or result.stdout.strip() or 'bootstrap failed'}")
+            evidence.append(f"{label}: {result.get('error') or result.get('bootstrap_error') or 'reload failed'}")
     return ok, evidence
 
 

@@ -34,7 +34,11 @@ if str(_runtime_root) not in sys.path:
 import paths
 from cron_recovery import is_cron_enabled, resolve_declared_schedule, should_run_at_load
 try:
-    from runtime_power import resolve_launchagent_path
+    from runtime_power import (
+        reload_launchagent_plist,
+        resolve_launchagent_path,
+        unload_launchagent_plist,
+    )
 except ImportError:
     def resolve_launchagent_path() -> str:
         """Fallback when runtime_power is not importable."""
@@ -57,6 +61,17 @@ except ImportError:
                     parts.insert(0, str(node_bin))
                     break
         return ":".join(parts)
+
+    def reload_launchagent_plist(plist_path: Path, label: str | None = None, timeout: int = 10) -> dict:
+        subprocess.run(["launchctl", "unload", str(plist_path)], capture_output=True)
+        proc = subprocess.run(["launchctl", "load", "-w", str(plist_path)], capture_output=True, text=True, timeout=timeout)
+        if proc.returncode == 0:
+            return {"ok": True, "label": label or Path(plist_path).stem}
+        return {"ok": False, "label": label or Path(plist_path).stem, "error": proc.stderr or proc.stdout or "load failed"}
+
+    def unload_launchagent_plist(plist_path: Path, label: str | None = None, timeout: int = 10) -> dict:
+        proc = subprocess.run(["launchctl", "unload", str(plist_path)], capture_output=True, text=True, timeout=timeout)
+        return {"ok": proc.returncode == 0, "label": label or Path(plist_path).stem}
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 SOURCE_ROOT = Path(os.environ.get("NEXO_CODE", str(Path(__file__).resolve().parent.parent)))
@@ -437,14 +452,14 @@ def install_plist(label: str, plist: dict, plist_path: Path, dry_run: bool):
         log(f"  DRY-RUN: would install {plist_path.name}")
         return
 
-    # Unload if already loaded
-    subprocess.run(["launchctl", "unload", str(plist_path)], capture_output=True)
-
     with open(plist_path, "wb") as f:
         plistlib.dump(plist, f)
 
-    subprocess.run(["launchctl", "load", str(plist_path)], capture_output=True)
-    log(f"  Installed + loaded: {plist_path.name}")
+    result = reload_launchagent_plist(plist_path, label=label)
+    if result.get("ok"):
+        log(f"  Installed + loaded: {plist_path.name}")
+    else:
+        log(f"  Installed but launchctl reload failed: {plist_path.name}: {result.get('error') or 'unknown error'}")
 
 
 def unload_plist(plist_path: Path, dry_run: bool):
@@ -453,7 +468,7 @@ def unload_plist(plist_path: Path, dry_run: bool):
         log(f"  DRY-RUN: would remove {plist_path.name}")
         return
 
-    subprocess.run(["launchctl", "unload", str(plist_path)], capture_output=True)
+    unload_launchagent_plist(plist_path)
     plist_path.unlink(missing_ok=True)
     log(f"  Removed: {plist_path.name}")
 

@@ -17,9 +17,11 @@ import json
 import os
 import paths
 import platform
+import plistlib
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 
@@ -99,6 +101,163 @@ def resolve_launchagent_path() -> str:
                 parts.insert(0, str(node_bin))
                 break
     return ":".join(parts)
+
+
+def launchagent_label_from_plist(plist_path: Path, label: str | None = None) -> str:
+    """Resolve a launchd label from a plist, falling back to the filename."""
+    if label:
+        return label
+    try:
+        with Path(plist_path).open("rb") as fh:
+            payload = plistlib.load(fh)
+        plist_label = payload.get("Label")
+        if plist_label:
+            return str(plist_label)
+    except Exception:
+        pass
+    name = Path(plist_path).stem
+    return name
+
+
+def _launchctl_text(proc: subprocess.CompletedProcess) -> str:
+    return (proc.stderr or proc.stdout or "").strip()
+
+
+def _launchctl_print(label: str, timeout: int = 5) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["launchctl", "print", f"gui/{os.getuid()}/{label}"],
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+    )
+
+
+def launchagent_loaded_from_plist(plist_path: Path, label: str | None = None) -> bool:
+    """Return True when launchd has the label loaded from this exact plist."""
+    plist_path = Path(plist_path)
+    resolved_label = launchagent_label_from_plist(plist_path, label)
+    try:
+        proc = _launchctl_print(resolved_label)
+    except Exception:
+        return False
+    if proc.returncode != 0:
+        return False
+    stdout = proc.stdout or ""
+    candidates = {
+        str(plist_path),
+        str(plist_path.expanduser()),
+        str(plist_path.resolve(strict=False)),
+    }
+    return any(f"path = {candidate}" in stdout or candidate in stdout for candidate in candidates)
+
+
+def unload_launchagent_plist(
+    plist_path: Path,
+    label: str | None = None,
+    timeout: int = 10,
+    wait_seconds: float = 0.25,
+) -> dict:
+    """Best-effort unload using modern and legacy launchctl forms.
+
+    macOS can report a generic bootstrap error when a job is still loaded.
+    We therefore boot out by label, boot out by plist path, and finally call
+    the legacy unload form for older installs.
+    """
+    plist_path = Path(plist_path)
+    resolved_label = launchagent_label_from_plist(plist_path, label)
+    domain = f"gui/{os.getuid()}"
+    commands = [
+        ["launchctl", "bootout", f"{domain}/{resolved_label}"],
+        ["launchctl", "bootout", domain, str(plist_path)],
+        ["launchctl", "unload", str(plist_path)],
+    ]
+    evidence: list[str] = []
+    for command in commands:
+        try:
+            proc = subprocess.run(command, capture_output=True, text=True, timeout=timeout)
+            if proc.returncode != 0:
+                text = _launchctl_text(proc)
+                if text:
+                    evidence.append(text[:300])
+        except subprocess.TimeoutExpired:
+            evidence.append("launchctl timeout")
+        except Exception as exc:
+            evidence.append(str(exc)[:300])
+
+    deadline = time.monotonic() + max(0.0, wait_seconds)
+    while time.monotonic() < deadline:
+        if not launchagent_loaded_from_plist(plist_path, resolved_label):
+            return {"ok": True, "label": resolved_label, "errors": evidence}
+        time.sleep(0.05)
+
+    still_loaded = launchagent_loaded_from_plist(plist_path, resolved_label)
+    return {"ok": not still_loaded, "label": resolved_label, "errors": evidence}
+
+
+def reload_launchagent_plist(
+    plist_path: Path,
+    label: str | None = None,
+    timeout: int = 10,
+) -> dict:
+    """Reload one LaunchAgent and tolerate already-loaded launchd races."""
+    plist_path = Path(plist_path)
+    resolved_label = launchagent_label_from_plist(plist_path, label)
+    if not plist_path.is_file():
+        return {"ok": False, "label": resolved_label, "error": "plist missing"}
+
+    unload_launchagent_plist(plist_path, resolved_label, timeout=timeout)
+    domain = f"gui/{os.getuid()}"
+    try:
+        bootstrap = subprocess.run(
+            ["launchctl", "bootstrap", domain, str(plist_path)],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "label": resolved_label, "error": "launchctl timeout"}
+    except Exception as exc:
+        return {"ok": False, "label": resolved_label, "error": str(exc)[:300]}
+
+    if bootstrap.returncode == 0:
+        return {"ok": True, "label": resolved_label, "action": "bootstrap"}
+
+    bootstrap_error = _launchctl_text(bootstrap) or "bootstrap failed"
+    if launchagent_loaded_from_plist(plist_path, resolved_label):
+        return {
+            "ok": True,
+            "label": resolved_label,
+            "action": "already-loaded",
+            "warning": bootstrap_error[:300],
+        }
+
+    try:
+        fallback = subprocess.run(
+            ["launchctl", "load", "-w", str(plist_path)],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "label": resolved_label, "error": "launchctl timeout"}
+    except Exception as exc:
+        return {"ok": False, "label": resolved_label, "error": str(exc)[:300]}
+
+    if fallback.returncode == 0 or launchagent_loaded_from_plist(plist_path, resolved_label):
+        return {
+            "ok": True,
+            "label": resolved_label,
+            "action": "legacy-load",
+            "warning": bootstrap_error[:300],
+        }
+
+    fallback_error = _launchctl_text(fallback) or "load failed"
+    return {
+        "ok": False,
+        "label": resolved_label,
+        "error": fallback_error[:300],
+        "bootstrap_error": bootstrap_error[:300],
+    }
 
 
 def _schedule_defaults() -> dict:

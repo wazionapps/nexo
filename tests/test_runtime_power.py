@@ -1,5 +1,6 @@
 """Tests for runtime power policy helpers."""
 import os
+import plistlib
 import sys
 import types
 
@@ -77,6 +78,65 @@ def test_resolve_launchagent_path_includes_managed_claude_bin(tmp_path, monkeypa
     path_parts = runtime_power.resolve_launchagent_path().split(":")
 
     assert path_parts[0] == str(managed_bin)
+
+
+def test_reload_launchagent_treats_already_loaded_from_same_plist_as_success(tmp_path, monkeypatch):
+    import runtime_power
+
+    plist_path = tmp_path / "com.nexo.catchup.plist"
+    with plist_path.open("wb") as fh:
+        plistlib.dump({"Label": "com.nexo.catchup"}, fh)
+
+    calls: list[list[str]] = []
+
+    def fake_run(args, **kwargs):
+        calls.append(list(args))
+        if args[1] == "print":
+            return types.SimpleNamespace(
+                returncode=0,
+                stdout=f"gui/501/com.nexo.catchup = {{\n\tpath = {plist_path}\n}}\n",
+                stderr="",
+            )
+        if args[1] == "bootstrap":
+            return types.SimpleNamespace(returncode=5, stdout="", stderr="Bootstrap failed: 5: Input/output error")
+        return types.SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(runtime_power.os, "getuid", lambda: 501)
+    monkeypatch.setattr(runtime_power.subprocess, "run", fake_run)
+    monkeypatch.setattr(runtime_power.time, "sleep", lambda _seconds: None)
+
+    result = runtime_power.reload_launchagent_plist(plist_path)
+
+    assert result["ok"] is True
+    assert result["action"] == "already-loaded"
+    assert ["launchctl", "bootout", "gui/501/com.nexo.catchup"] in calls
+    assert ["launchctl", "bootstrap", "gui/501", str(plist_path)] in calls
+
+
+def test_reload_launchagent_reports_error_when_bootstrap_and_legacy_load_fail(tmp_path, monkeypatch):
+    import runtime_power
+
+    plist_path = tmp_path / "com.nexo.catchup.plist"
+    with plist_path.open("wb") as fh:
+        plistlib.dump({"Label": "com.nexo.catchup"}, fh)
+
+    def fake_run(args, **kwargs):
+        if args[1] == "print":
+            return types.SimpleNamespace(returncode=1, stdout="", stderr='Could not find service "com.nexo.catchup"')
+        if args[1] == "bootstrap":
+            return types.SimpleNamespace(returncode=5, stdout="", stderr="Bootstrap failed: 5")
+        if args[1] == "load":
+            return types.SimpleNamespace(returncode=1, stdout="", stderr="legacy load denied")
+        return types.SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(runtime_power.os, "getuid", lambda: 501)
+    monkeypatch.setattr(runtime_power.subprocess, "run", fake_run)
+
+    result = runtime_power.reload_launchagent_plist(plist_path)
+
+    assert result["ok"] is False
+    assert result["error"] == "legacy load denied"
+    assert result["bootstrap_error"] == "Bootstrap failed: 5"
 
 
 def test_describe_power_policy_macos_reports_best_effort(tmp_path, monkeypatch):

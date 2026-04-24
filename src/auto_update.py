@@ -1267,26 +1267,15 @@ def _reload_launch_agents_after_bump() -> dict:
             if not plist.is_file():
                 result["skipped_missing"] += 1
                 continue
-            # launchctl bootout / bootstrap is the modern API but requires
-            # the GUI session id ($UID/Background or gui/$UID). The legacy
-            # unload + load -w pair still works on every macOS NEXO supports
-            # and does not need a session id, so we use it here.
-            unload_proc = subprocess.run(
-                ["launchctl", "unload", str(plist)],
-                capture_output=True, text=True, timeout=10,
-            )
-            # unload returns non-zero if the agent was not loaded — that
-            # is fine, we still try to load fresh.
-            load_proc = subprocess.run(
-                ["launchctl", "load", "-w", str(plist)],
-                capture_output=True, text=True, timeout=10,
-            )
-            if load_proc.returncode == 0:
+            from runtime_power import reload_launchagent_plist
+
+            reload_result = reload_launchagent_plist(plist)
+            if reload_result.get("ok"):
                 result["reloaded"] += 1
             else:
                 result["errors"].append({
                     "plist": plist.name,
-                    "stderr": (load_proc.stderr or load_proc.stdout or "load failed")[:300],
+                    "stderr": str(reload_result.get("error") or "reload failed")[:300],
                 })
         except subprocess.TimeoutExpired:
             result["errors"].append({"plist": plist.name, "stderr": "launchctl timeout"})

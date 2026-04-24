@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.9.20` is the current packaged-runtime line. Patch release over `7.9.19`: packaged update/doctor repair now finds `runtime/crons/sync.py`, LaunchAgent PATH includes the managed Claude runtime installed under `~/.nexo/runtime/bootstrap/npm-global/bin`, root runtime backfill includes `claude_cli.py`, and Immune no longer treats the legacy optional `~/.claude-mem/claude-mem.db` as a required database.
+Version `7.9.21` is the current packaged-runtime line. Patch release over `7.9.20`: LaunchAgent reload/repair now handles macOS already-loaded races by booting out jobs with modern launchctl forms, falling back to legacy load, and treating an already-loaded job as healthy only when it points at the expected plist.
+
+Previously in `7.9.20`: packaged update/doctor repair now finds `runtime/crons/sync.py`, LaunchAgent PATH includes the managed Claude runtime installed under `~/.nexo/runtime/bootstrap/npm-global/bin`, root runtime backfill includes `claude_cli.py`, and Immune no longer treats the legacy optional `~/.claude-mem/claude-mem.db` as a required database.
 
 Previously in `7.9.19`: runtime doctor now distinguishes real install breakage from tracked in-progress work, interactive Desktop sessions no longer poison automation telemetry scoring, stale filesystem skill rows are pruned during sync, stale protocol debt draining marks rows resolved, and watchdog treats LaunchAgent SIGTERM reloads as supervisor interruptions instead of failures.
 
