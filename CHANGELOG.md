@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.9.18] - 2026-04-24
+
+### Fixed
+- `bootstrap_docs.py` now defines `_user_home()` before resolving module-level template paths, so `nexo clients sync` and packaged update client-sync checks no longer crash when `NEXO_HOME` is unset.
+
+### Tests
+- Added regression coverage for importing `bootstrap_docs` without `NEXO_HOME`, plus the existing clients-sync shared config test.
+
 ## [7.9.17] - 2026-04-24
 
 ### Fixed

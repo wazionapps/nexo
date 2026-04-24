@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.9.18: client-sync bootstrap fix</title>
+<meta name="description" content="NEXO Brain v7.9.18 patch release. Fixes packaged client-sync bootstrap imports when NEXO_HOME is unset.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-9-18/">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.9.18: client-sync bootstrap fix","datePublished":"2026-04-24","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head><body><main><article style="max-width:760px;margin:80px auto;padding:0 24px;line-height:1.75;">
+<h1>NEXO 7.9.18 — client-sync bootstrap fix</h1>
+<p><em>Published 2026-04-24. Patch release over v7.9.17.</em></p>
+
+<p>v7.9.18 fixes a packaged-runtime import-order bug found during post-release doctor validation. When <code>NEXO_HOME</code> was unset, <code>bootstrap_docs.py</code> resolved template paths before <code>_user_home()</code> had been defined, causing client sync to fail at import time.</p>
+
+<h2>What is fixed</h2>
+<p><code>nexo clients sync</code>, packaged update client-sync checks, and runtime doctor bootstrap checks now import cleanly in the default packaged environment. The fix moves <code>_user_home()</code> above module-level template path resolution and adds regression coverage for importing <code>bootstrap_docs</code> without <code>NEXO_HOME</code>.</p>
+
+<h2>Included fixes</h2>
+<p>This patch includes the v7.9.17 Bandit gate fix and the v7.9.16 restart-marker deadlock fix.</p>
+
+<h2>Verification</h2>
+<p>Release validation includes the bootstrap import regression, clients-sync shared config test, release-readiness, Bandit high/high, root npm pack, and OpenClaw build/test/pack before publication.</p>
+
+<p><a href="/changelog/#v7918">Full changelog entry &rarr;</a></p>
+</article></main></body></html>

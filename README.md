@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.9.17` is the current packaged-runtime line. Patch release over `7.9.16`: continuity snapshot idempotency now marks its SHA-1 digest as non-security usage, keeping the high-severity Bandit gate green while preserving stable idempotency keys. It includes the v7.9.16 restart-marker deadlock fix.
+Version `7.9.18` is the current packaged-runtime line. Patch release over `7.9.17`: packaged client-sync imports now work when `NEXO_HOME` is unset, so `nexo clients sync`, `nexo update`, and runtime doctor bootstrap checks no longer hit the `_user_home` import-order crash. It includes the v7.9.17 Bandit gate fix and the v7.9.16 restart-marker deadlock fix.
+
+Previously in `7.9.17`: continuity snapshot idempotency marks its SHA-1 digest as non-security usage, keeping the high-severity Bandit gate green while preserving stable idempotency keys.
 
 Previously in `7.9.5`: patch release that fixes canonical diary confirmation for Desktop: Brain resolves the Desktop/Claude session UUID through NEXO SID aliases before checking `session_diary`, so archive/delete/app-exit can confirm diaries written by `nexo_session_diary_write` under the active `nexo-...` SID. Verification: `pytest tests/test_lifecycle_events.py` (28 passing) plus coordinated Desktop v0.28.6 shutdown/archive/delete/app-exit checks.
 
