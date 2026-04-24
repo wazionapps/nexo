@@ -1,0 +1,113 @@
+{
+  "version": 1,
+  "models": [
+    {
+      "name": "bge-base-embeddings",
+      "kind": "fastembed_embedding",
+      "model_id": "BAAI/bge-base-en-v1.5",
+      "source_repo": "qdrant/bge-base-en-v1.5-onnx-q",
+      "revision": "738cad1c108e2f23649db9e44b2eab988626493b",
+      "model_file": "model_optimized.onnx",
+      "source": "src/cognitive/_core.py",
+      "required_files": [
+        {
+          "path": "config.json",
+          "size": 740,
+          "sha256": "86f84a5285de7f1ee673f712387219ef1e261ec27dcd870e793a80f9da1aaa3b"
+        },
+        {
+          "path": "model_optimized.onnx",
+          "size": 217824172,
+          "sha256": "4e556722bc4f65716c544c8a931f1e90fb3f866e5741fd93a96f051d673339c7"
+        },
+        {
+          "path": "special_tokens_map.json",
+          "size": 695,
+          "sha256": "5d5b662e421ea9fac075174bb0688ee0d9431699900b90662acd44b2a350503a"
+        },
+        {
+          "path": "tokenizer.json",
+          "size": 711396,
+          "sha256": "d241a60d5e8f04cc1b2b3e9ef7a4921b27bf526d9f6050ab90f9267a1f9e5c66"
+        },
+        {
+          "path": "tokenizer_config.json",
+          "size": 1242,
+          "sha256": "0b29c7bfc889e53b36d9dd3e686dd4300f6525110eaa98c76a5dafceb2029f53"
+        }
+      ]
+    },
+    {
+      "name": "bge-small-embeddings",
+      "kind": "fastembed_embedding",
+      "model_id": "BAAI/bge-small-en-v1.5",
+      "source_repo": "qdrant/bge-small-en-v1.5-onnx-q",
+      "revision": "52398278842ec682c6f32300af41344b1c0b0bb2",
+      "model_file": "model_optimized.onnx",
+      "source": "src/migrate_embeddings.py",
+      "required_files": [
+        {
+          "path": "config.json",
+          "size": 706,
+          "sha256": "13582bcf2effc85b7bf3d3f5532e686bc1c9ce86bb009d10f0ec33cbe92299dd"
+        },
+        {
+          "path": "model_optimized.onnx",
+          "size": 66465124,
+          "sha256": "51f1bd0addd6e859e42c2c8021a5e5461385bb676a649f4b269aa445449f2431"
+        },
+        {
+          "path": "special_tokens_map.json",
+          "size": 695,
+          "sha256": "5d5b662e421ea9fac075174bb0688ee0d9431699900b90662acd44b2a350503a"
+        },
+        {
+          "path": "tokenizer.json",
+          "size": 711396,
+          "sha256": "d241a60d5e8f04cc1b2b3e9ef7a4921b27bf526d9f6050ab90f9267a1f9e5c66"
+        },
+        {
+          "path": "tokenizer_config.json",
+          "size": 1242,
+          "sha256": "0b29c7bfc889e53b36d9dd3e686dd4300f6525110eaa98c76a5dafceb2029f53"
+        }
+      ]
+    },
+    {
+      "name": "cross-encoder-reranker",
+      "kind": "fastembed_reranker",
+      "model_id": "Xenova/ms-marco-MiniLM-L-6-v2",
+      "source_repo": "Xenova/ms-marco-MiniLM-L-6-v2",
+      "revision": "a09144355adeed5f58c8ed011d209bf8ee5a1fec",
+      "model_file": "onnx/model.onnx",
+      "source": "src/cognitive/_core.py",
+      "required_files": [
+        {
+          "path": "config.json",
+          "size": 824,
+          "sha256": "d827779a72d27ae68cf878a6fc2e954542663fe21ca515d9f4783fc96be2d37e"
+        },
+        {
+          "path": "onnx/model.onnx",
+          "size": 90992115,
+          "sha256": "c623d0bcb99f4622beb413eaef00cfbe5db20df9f1dd982da4b4f26022881870"
+        },
+        {
+          "path": "special_tokens_map.json",
+          "size": 125,
+          "sha256": "b6d346be366a7d1d48332dbc9fdf3bf8960b5d879522b7799ddba59e76237ee3"
+        },
+        {
+          "path": "tokenizer.json",
+          "size": 711396,
+          "sha256": "d241a60d5e8f04cc1b2b3e9ef7a4921b27bf526d9f6050ab90f9267a1f9e5c66"
+        },
+        {
+          "path": "tokenizer_config.json",
+          "size": 1242,
+          "sha256": "0b29c7bfc889e53b36d9dd3e686dd4300f6525110eaa98c76a5dafceb2029f53"
+        }
+      ]
+    }
+  ]
+}

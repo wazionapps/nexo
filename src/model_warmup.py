@@ -28,40 +28,37 @@ class WarmupTarget:
     kind: str
     model_id: str
     source: str
+    source_repo: str | None = None
     revision: str | None = None
     required: bool = True
 
 
 def warmup_targets() -> list[WarmupTarget]:
     from classifier_local import MODEL_ID, MODEL_REVISION
+    from local_models import list_local_model_specs
 
-    return [
+    targets = [
         WarmupTarget(
             name="local-zero-shot-classifier",
             kind="transformers_sequence_classifier",
             model_id=MODEL_ID,
             revision=MODEL_REVISION,
             source="src/classifier_local.py",
-        ),
-        WarmupTarget(
-            name="bge-base-embeddings",
-            kind="fastembed_embedding",
-            model_id="BAAI/bge-base-en-v1.5",
-            source="src/cognitive/_core.py",
-        ),
-        WarmupTarget(
-            name="bge-small-embeddings",
-            kind="fastembed_embedding",
-            model_id="BAAI/bge-small-en-v1.5",
-            source="src/migrate_embeddings.py",
-        ),
-        WarmupTarget(
-            name="cross-encoder-reranker",
-            kind="fastembed_reranker",
-            model_id="Xenova/ms-marco-MiniLM-L-6-v2",
-            source="src/cognitive/_core.py",
+            source_repo=MODEL_ID,
         ),
     ]
+    for spec in list_local_model_specs():
+        targets.append(
+            WarmupTarget(
+                name=spec.name,
+                kind=spec.kind,
+                model_id=spec.model_id,
+                revision=spec.revision,
+                source=spec.source,
+                source_repo=spec.source_repo,
+            )
+        )
+    return targets
 
 
 def _state_path() -> Path:
@@ -86,16 +83,16 @@ def _warm_transformers(target: WarmupTarget) -> None:
 
 
 def _warm_fastembed_embedding(target: WarmupTarget) -> None:
-    from fastembed import TextEmbedding
+    from local_models import build_fastembed_embedding
 
-    model = TextEmbedding(target.model_id)
+    model = build_fastembed_embedding(target.name)
     list(model.embed(["NEXO model warmup"]))
 
 
 def _warm_fastembed_reranker(target: WarmupTarget) -> None:
-    from fastembed.rerank.cross_encoder import TextCrossEncoder
+    from local_models import build_fastembed_reranker
 
-    TextCrossEncoder(target.model_id)
+    build_fastembed_reranker(target.name)
 
 
 def warm_target(target: WarmupTarget) -> None:

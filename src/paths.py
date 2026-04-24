@@ -336,6 +336,14 @@ def cognitive_dir() -> Path:
     return new
 
 
+def models_dir() -> Path:
+    new = runtime_dir() / "models"
+    legacy = home() / "models"
+    if not new.exists() and legacy.exists():
+        return legacy
+    return new
+
+
 def coordination_dir() -> Path:
     new = runtime_dir() / "coordination"
     legacy = home() / "coordination"
@@ -488,6 +496,7 @@ __all__ = [
     "backups_dir",
     "memory_dir",
     "cognitive_dir",
+    "models_dir",
     "coordination_dir",
     "exports_dir",
     "nexo_email_dir",

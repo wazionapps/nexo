@@ -23,6 +23,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from db import VALID_IMPACT_LEVELS, VALID_TASK_TYPES, validate_impact_level, validate_task_type
+from db._semantic_similarity import hybrid_similarity_score
 
 
 def _get_db():
@@ -89,6 +90,10 @@ STOP_WORDS = {
 }
 HISTORICAL_OUTCOME_MIN_RESOLVED = 2
 HISTORICAL_OUTCOME_LOOKBACK = 12
+SEMANTIC_HISTORY_LOOKBACK = 24
+SEMANTIC_HISTORY_MATCH_THRESHOLD = 0.58
+CRITIQUE_TOP_CANDIDATES = 3
+CRITIQUE_MAX_MARGIN = 0.45
 
 
 def _term_hits(text: str, terms: set[str]) -> int:
@@ -279,50 +284,80 @@ def _constraint_penalty(text: str, constraints: list[str]) -> tuple[float, list[
 
 def _history_signal(text: str, *, area: str = "", goal: str = "") -> dict:
     conn = _get_db()
-    tokens = _tokenize(" ".join(part for part in [text, area, goal] if part), limit=6)
-    if not tokens:
+    query_text = " ".join(part for part in [text, area, goal] if part).strip()
+    if not query_text:
         return {"positive": 0.0, "negative": 0.0, "matched_decisions": 0, "matched_outcomes": 0}
 
-    decision_positive = 0
-    decision_negative = 0
+    def _keyword_extractor(value: str) -> list[str]:
+        return _tokenize(value, limit=8)
+
+    decision_positive = 0.0
+    decision_negative = 0.0
     matched_decisions = 0
-    for token in tokens[:3]:
+    if conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='decisions'").fetchone():
         rows = conn.execute(
-            """SELECT outcome FROM decisions
-               WHERE lower(decision) LIKE ? OR lower(alternatives) LIKE ? OR lower(based_on) LIKE ?
-               ORDER BY created_at DESC LIMIT 6""",
-            tuple(f"%{token}%" for _ in range(3)),
+            """SELECT decision, alternatives, based_on, outcome
+               FROM decisions
+               ORDER BY created_at DESC LIMIT ?""",
+            (SEMANTIC_HISTORY_LOOKBACK,),
         ).fetchall()
         for row in rows:
+            candidate_text = " ".join(
+                str(row[key] or "")
+                for key in ("decision", "alternatives", "based_on")
+            ).strip()
+            similarity = hybrid_similarity_score(
+                query_text,
+                candidate_text,
+                keyword_extractor=_keyword_extractor,
+                strong_semantic_threshold=0.82,
+                moderate_semantic_threshold=0.74,
+                moderate_keyword_floor=0.12,
+            )
+            if similarity < SEMANTIC_HISTORY_MATCH_THRESHOLD:
+                continue
             matched_decisions += 1
             outcome = (row["outcome"] or "").lower()
             if _contains_any(outcome, NEGATIVE_OUTCOME_TERMS):
-                decision_negative += 1
+                decision_negative += min(1.0, similarity)
             elif _contains_any(outcome, POSITIVE_OUTCOME_TERMS):
-                decision_positive += 1
+                decision_positive += min(1.0, similarity)
 
-    outcome_positive = 0
-    outcome_negative = 0
+    outcome_positive = 0.0
+    outcome_negative = 0.0
     matched_outcomes = 0
     if conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='outcomes'").fetchone():
-        for token in tokens[:3]:
-            rows = conn.execute(
-                """SELECT status FROM outcomes
-                   WHERE lower(description) LIKE ? OR lower(expected_result) LIKE ? OR lower(action_type) LIKE ?
-                   ORDER BY created_at DESC LIMIT 6""",
-                tuple(f"%{token}%" for _ in range(3)),
-            ).fetchall()
-            for row in rows:
-                matched_outcomes += 1
-                status = (row["status"] or "").lower()
-                if status == "met":
-                    outcome_positive += 1
-                elif status in {"missed", "expired"}:
-                    outcome_negative += 1
+        rows = conn.execute(
+            """SELECT description, expected_result, action_type, status
+               FROM outcomes
+               ORDER BY created_at DESC LIMIT ?""",
+            (SEMANTIC_HISTORY_LOOKBACK,),
+        ).fetchall()
+        for row in rows:
+            candidate_text = " ".join(
+                str(row[key] or "")
+                for key in ("description", "expected_result", "action_type")
+            ).strip()
+            similarity = hybrid_similarity_score(
+                query_text,
+                candidate_text,
+                keyword_extractor=_keyword_extractor,
+                strong_semantic_threshold=0.82,
+                moderate_semantic_threshold=0.74,
+                moderate_keyword_floor=0.12,
+            )
+            if similarity < SEMANTIC_HISTORY_MATCH_THRESHOLD:
+                continue
+            matched_outcomes += 1
+            status = (row["status"] or "").lower()
+            if status == "met":
+                outcome_positive += min(1.0, similarity)
+            elif status in {"missed", "expired"}:
+                outcome_negative += min(1.0, similarity)
 
     return {
-        "positive": min(2.5, (decision_positive * 0.4) + (outcome_positive * 0.5)),
-        "negative": min(3.0, (decision_negative * 0.6) + (outcome_negative * 0.7)),
+        "positive": round(min(2.5, (decision_positive * 0.9) + (outcome_positive * 1.0)), 2),
+        "negative": round(min(3.0, (decision_negative * 1.1) + (outcome_negative * 1.2)), 2),
         "matched_decisions": matched_decisions,
         "matched_outcomes": matched_outcomes,
     }
@@ -702,6 +737,172 @@ def _format_decision_summary(recommended: dict, alternatives_scored: list[dict])
     return f"Recomendada por el mejor balance entre impacto, éxito, riesgo y huella somática; {notes}."
 
 
+def _parse_json_object_response(raw: str) -> dict:
+    text = (raw or "").strip()
+    if not text:
+        return {}
+    try:
+        parsed = json.loads(text)
+        return parsed if isinstance(parsed, dict) else {}
+    except json.JSONDecodeError:
+        match = re.search(r"\{.*\}", text, re.DOTALL)
+        if not match:
+            return {}
+        try:
+            parsed = json.loads(match.group(0))
+            return parsed if isinstance(parsed, dict) else {}
+        except json.JSONDecodeError:
+            return {}
+
+
+def _critique_tier(
+    *,
+    impact_level: str,
+    scored: list[dict],
+    constraints: list[str],
+    evidence_refs: list[str],
+) -> str:
+    if impact_level != "critical":
+        return "alto"
+    gap = 99.0
+    if len(scored) > 1:
+        gap = scored[0]["total_score"] - scored[1]["total_score"]
+    if gap <= CRITIQUE_MAX_MARGIN or len(constraints) >= 3 or len(evidence_refs) <= 1:
+        return "maximo"
+    return "alto"
+
+
+def _run_llm_critique(
+    *,
+    goal: str,
+    task_type: str,
+    impact_level: str,
+    area: str,
+    context_hint: str,
+    constraints: list[str],
+    evidence_refs: list[str],
+    goal_profile: dict,
+    scored: list[dict],
+) -> dict:
+    if impact_level not in {"high", "critical"} or len(scored) < 2:
+        return {"active": False}
+
+    try:
+        from call_model_raw import call_model_raw, ClassifierUnavailableError
+        from core_prompts import render_core_prompt
+        from operator_language import append_operator_language_contract
+    except Exception as exc:
+        return {"active": True, "ok": False, "error": f"critic_unavailable:{exc}"}
+
+    tier = _critique_tier(
+        impact_level=impact_level,
+        scored=scored,
+        constraints=constraints,
+        evidence_refs=evidence_refs,
+    )
+    payload = {
+        "goal": goal,
+        "task_type": task_type,
+        "impact_level": impact_level,
+        "area": area,
+        "context_hint": context_hint,
+        "constraints": constraints,
+        "evidence_refs": evidence_refs,
+        "goal_profile": {
+            "profile_id": goal_profile.get("profile_id", ""),
+            "profile_name": goal_profile.get("profile_name", ""),
+            "goal_labels": goal_profile.get("goal_labels", []),
+            "weights": goal_profile.get("weights", {}),
+        },
+        "heuristic_recommendation": scored[0]["name"],
+        "candidates": [
+            {
+                "name": item["name"],
+                "impact": item["impact"],
+                "success_probability": item["success_probability"],
+                "risk_level": item["risk_level"],
+                "somatic_penalty": item["somatic_penalty"],
+                "total_score": item["total_score"],
+                "notes": item.get("notes") or [],
+                "historical_signal": item.get("historical_signal") or {},
+                "pattern_learning_signal": item.get("pattern_learning_signal") or {},
+            }
+            for item in scored[:CRITIQUE_TOP_CANDIDATES]
+        ],
+    }
+    prompt = render_core_prompt(
+        "cortex-decision-critic",
+        payload_json=json.dumps(payload, ensure_ascii=False, indent=2),
+    )
+    prompt = append_operator_language_contract(prompt)
+    try:
+        raw = call_model_raw(
+            prompt,
+            caller="cortex_decision_critic",
+            tier=tier,
+            system=render_core_prompt("json-object-only"),
+            max_tokens=500,
+            temperature=0.0,
+            stop_sequences=[],
+            timeout=20.0,
+        )
+    except ClassifierUnavailableError as exc:
+        return {"active": True, "ok": False, "tier": tier, "error": str(exc)}
+
+    parsed = _parse_json_object_response(raw)
+    candidate_names = [item["name"] for item in scored]
+    recommended_choice = str(parsed.get("recommended_choice") or "").strip()
+    if recommended_choice not in candidate_names:
+        return {
+            "active": True,
+            "ok": False,
+            "tier": tier,
+            "error": "invalid_recommended_choice",
+            "raw_response": raw[:1200],
+        }
+
+    ranking = parsed.get("confirmed_ranking")
+    clean_ranking: list[str] = []
+    if isinstance(ranking, list):
+        for item in ranking:
+            name = str(item or "").strip()
+            if name in candidate_names and name not in clean_ranking:
+                clean_ranking.append(name)
+    for name in candidate_names:
+        if name not in clean_ranking:
+            clean_ranking.append(name)
+
+    try:
+        confidence = float(parsed.get("confidence"))
+    except (TypeError, ValueError):
+        confidence = 0.0
+    confidence = max(0.0, min(1.0, confidence))
+    risk_flags = parsed.get("risk_flags")
+    if not isinstance(risk_flags, list):
+        risk_flags = []
+    reasoning_summary = str(parsed.get("reasoning_summary") or "").strip()
+    disagreement = bool(parsed.get("disagreement_with_heuristic"))
+    return {
+        "active": True,
+        "ok": True,
+        "tier": tier,
+        "recommended_choice": recommended_choice,
+        "confirmed_ranking": clean_ranking,
+        "confidence": round(confidence, 3),
+        "risk_flags": [str(item).strip() for item in risk_flags if str(item).strip()][:5],
+        "reasoning_summary": reasoning_summary,
+        "disagreement_with_heuristic": disagreement or (recommended_choice != scored[0]["name"]),
+    }
+
+
+def _reorder_scores_by_names(scored: list[dict], ranking: list[str]) -> list[dict]:
+    order = {name: idx for idx, name in enumerate(ranking)}
+    return sorted(
+        scored,
+        key=lambda item: (order.get(item["name"], len(order)), -item["total_score"]),
+    )
+
+
 def handle_cortex_check(
     goal: str,
     task_type: str = "answer",
@@ -858,6 +1059,7 @@ def handle_cortex_decide(
     linked_outcome_id: int = 0,
     goal_profile_id: str = "",
     goal_id: str = "",
+    auto_create_outcome: bool = False,
 ) -> str:
     """Evaluate concrete alternatives for a high-impact task using the existing Cortex."""
     clean_goal = (goal or "").strip()
@@ -927,16 +1129,39 @@ def handle_cortex_decide(
         for item in parsed_alternatives
     ]
     scored.sort(key=lambda item: item["total_score"], reverse=True)
-    recommended = scored[0]
-    reasoning = _format_decision_summary(recommended, scored)
+    heuristic_recommended = scored[0]
+    heuristic_reasoning = _format_decision_summary(heuristic_recommended, scored)
+    critique = _run_llm_critique(
+        goal=clean_goal,
+        task_type=clean_type,
+        impact_level=clean_level,
+        area=area.strip(),
+        context_hint=context_hint.strip(),
+        constraints=parsed_constraints,
+        evidence_refs=parsed_evidence,
+        goal_profile=resolved_goal_profile,
+        scored=scored,
+    )
+    decision_mode = "heuristic"
+    if critique.get("ok"):
+        scored = _reorder_scores_by_names(scored, critique.get("confirmed_ranking") or [])
+        recommended = next(
+            (item for item in scored if item["name"] == critique["recommended_choice"]),
+            heuristic_recommended,
+        )
+        reasoning = (critique.get("reasoning_summary") or "").strip() or heuristic_reasoning
+        decision_mode = "heuristic_plus_llm"
+    else:
+        recommended = heuristic_recommended
+        reasoning = heuristic_reasoning
     resolved_outcome_id = _resolve_linked_outcome_id(
         linked_outcome_id=linked_outcome_id,
         task_id=task_id,
     )
 
-    # Auto-create outcome when none exists, so cortex decisions
-    # get verified by outcome-checker and close the feedback loop.
-    if resolved_outcome_id is None and clean_goal and task_id:
+    # Outcome auto-creation is opt-in so analytics can distinguish
+    # persisted decisions from explicitly tracked outcomes.
+    if auto_create_outcome and resolved_outcome_id is None and clean_goal and task_id:
         try:
             from db import create_outcome
 
@@ -974,6 +1199,10 @@ def handle_cortex_decide(
             goal_profile_id=resolved_goal_profile.get("profile_id", ""),
             goal_profile_labels=resolved_goal_profile.get("goal_labels", []),
             goal_profile_weights=resolved_goal_profile.get("weights", {}),
+            heuristic_choice=heuristic_recommended["name"],
+            heuristic_reasoning=heuristic_reasoning,
+            critique_payload=critique,
+            decision_mode=decision_mode,
             selected_choice=recommended["name"],
             selection_reason=reasoning,
             selection_source="recommended",
@@ -997,6 +1226,10 @@ def handle_cortex_decide(
             "impact_level": clean_level,
             "recommendation": recommended["name"],
             "reasoning": reasoning,
+            "heuristic_recommendation": heuristic_recommended["name"],
+            "heuristic_reasoning": heuristic_reasoning,
+            "decision_mode": decision_mode,
+            "critique": critique,
             "selected_choice": record.get("selected_choice"),
             "selection_source": record.get("selection_source"),
             "linked_outcome_id": record.get("linked_outcome_id"),

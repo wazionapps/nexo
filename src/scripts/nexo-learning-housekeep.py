@@ -145,8 +145,8 @@ def detect_duplicates(conn):
     """Find semantically similar learnings using fastembed."""
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     try:
-        from fastembed import TextEmbedding
         import numpy as np
+        from local_models import build_fastembed_embedding
     except ImportError:
         print(f"[{ts}] Dedup skipped: fastembed not available")
         return []
@@ -158,7 +158,7 @@ def detect_duplicates(conn):
     if len(learnings) < 2:
         return []
 
-    model = TextEmbedding("BAAI/bge-base-en-v1.5")
+    model = build_fastembed_embedding("bge-base-embeddings")
     texts = [f"{l['title']}: {l['content'][:300]}" for l in learnings]
     embeddings = list(model.embed(texts))
     embeddings = np.array(embeddings)

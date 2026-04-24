@@ -82,6 +82,18 @@ def test_semantic_reasoner_caller_is_registered_and_resolves():
     assert (model, effort) == rmap._RESONANCE_TABLE["muy_bajo"]["claude_code"]
 
 
+def test_cortex_decision_critic_caller_is_registered_and_resolves():
+    tier = rmap.resolve_tier_for_caller("cortex_decision_critic")
+    assert tier == "alto"
+
+    model, effort = rmap.resolve_model_and_effort(
+        "cortex_decision_critic",
+        "claude_code",
+        user_default="bajo",
+    )
+    assert (model, effort) == rmap._RESONANCE_TABLE["alto"]["claude_code"]
+
+
 def test_system_owned_synthesize_is_maximo():
     """synthesize consolidates findings across every session and benefits
     from the most reasoning budget we have. Locked at MAXIMO."""

@@ -16,6 +16,7 @@ import time
 import numpy as np
 
 import paths
+from local_models import build_fastembed_embedding, get_local_model_spec
 
 NEXO_HOME = os.environ.get("NEXO_HOME", os.path.expanduser("~/.nexo"))
 _cognitive_dir = paths.cognitive_dir()
@@ -24,8 +25,8 @@ DB_PATH = str(_cognitive_dir / "cognitive.db")
 BACKUP_PATH = DB_PATH + ".bak-384dims-pre-upgrade"
 
 MODELS = {
-    "small": ("BAAI/bge-small-en-v1.5", 384),
-    "base": ("BAAI/bge-base-en-v1.5", 768),
+    "small": ("bge-small-embeddings", 384),
+    "base": ("bge-base-embeddings", 768),
 }
 
 
@@ -47,8 +48,6 @@ def verify():
 
 def upgrade():
     """Re-embed all memories from bge-small (384) to bge-base (768)."""
-    from fastembed import TextEmbedding
-
     # Verify current state
     print("Current state:")
     verify()
@@ -62,8 +61,9 @@ def upgrade():
 
     # Load new model
     model_name, expected_dim = MODELS["base"]
-    print(f"\nLoading {model_name}...")
-    model = TextEmbedding(model_name)
+    spec = get_local_model_spec(model_name)
+    print(f"\nLoading {spec.model_id}@{spec.revision}...")
+    model = build_fastembed_embedding(model_name)
 
     conn = sqlite3.connect(DB_PATH)
     try:

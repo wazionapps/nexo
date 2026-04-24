@@ -558,8 +558,9 @@ def _get_model():
     """Lazy-load fastembed TextEmbedding model."""
     global _model
     if _model is None:
-        from fastembed import TextEmbedding
-        _model = TextEmbedding("BAAI/bge-base-en-v1.5")
+        from local_models import build_fastembed_embedding
+
+        _model = build_fastembed_embedding("bge-base-embeddings")
     return _model
 
 
@@ -568,8 +569,9 @@ def _get_reranker():
     global _reranker
     if _reranker is None:
         try:
-            from fastembed.rerank.cross_encoder import TextCrossEncoder
-            _reranker = TextCrossEncoder("Xenova/ms-marco-MiniLM-L-6-v2")
+            from local_models import build_fastembed_reranker
+
+            _reranker = build_fastembed_reranker("cross-encoder-reranker")
         except Exception:
             _reranker = False  # Mark as unavailable
     return _reranker if _reranker is not False else None

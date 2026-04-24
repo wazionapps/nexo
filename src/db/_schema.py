@@ -909,6 +909,14 @@ def _m38_evolution_log_proposal_payload(conn):
     _migrate_add_column(conn, "evolution_log", "proposal_payload", "TEXT DEFAULT NULL")
 
 
+def _m55_cortex_critique_trace(conn):
+    """Persist heuristic-vs-LLM critique traces for Cortex decisions."""
+    _migrate_add_column(conn, "cortex_evaluations", "heuristic_choice", "TEXT DEFAULT ''")
+    _migrate_add_column(conn, "cortex_evaluations", "heuristic_reasoning", "TEXT DEFAULT ''")
+    _migrate_add_column(conn, "cortex_evaluations", "critique_payload", "TEXT DEFAULT '{}'")
+    _migrate_add_column(conn, "cortex_evaluations", "decision_mode", "TEXT DEFAULT 'heuristic'")
+
+
 def _m39_hook_runs(conn):
     """Persist hook lifecycle observability — closes Fase 3 item 7.
 
@@ -1479,6 +1487,7 @@ MIGRATIONS = [
     (52, "lifecycle_canonical_plan", _m52_lifecycle_canonical_plan),
     (53, "session_conversation_identity", _m53_session_conversation_identity),
     (54, "continuity_snapshots", _m54_continuity_snapshots),
+    (55, "cortex_critique_trace", _m55_cortex_critique_trace),
 ]
 
 

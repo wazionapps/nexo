@@ -220,6 +220,7 @@ SYSTEM_OWNED_CALLERS: dict[str, str] = {
     "outcome_checker":                  "medio",
     "check_context":                    "medio",
     "semantic_reasoner":                "muy_bajo",
+    "cortex_decision_critic":           "alto",
 
     # ---- Agent orchestration ----------------------------------------------
     "agent_run/generic":                "alto",

@@ -2,6 +2,7 @@ import importlib
 import json
 import os
 import sys
+import types
 
 import pytest
 
@@ -582,3 +583,184 @@ def test_cortex_quality_summarises_acceptance_override_and_linked_outcomes():
     assert payload["recommended_success_rate"] == 100.0
     assert payload["override_success_rate"] == 0.0
     assert payload["top_goal_profiles"][0]["goal_profile_id"] in {"business_growth", "release_safety"}
+
+
+def test_cortex_decide_uses_llm_critique_for_high_stakes_and_persists_trace(monkeypatch):
+    from db import get_db
+    from plugins.cortex import handle_cortex_decide
+
+    calls: list[dict] = []
+
+    def stub_call_model_raw(prompt, **kwargs):
+        calls.append({"prompt": prompt, **kwargs})
+        return json.dumps(
+            {
+                "recommended_choice": "direct_release",
+                "confirmed_ranking": ["direct_release", "staged_release"],
+                "confidence": 0.82,
+                "risk_flags": ["La ventana de lanzamiento favorece velocidad."],
+                "disagreement_with_heuristic": True,
+                "reasoning_summary": "La opción directa maximiza impacto con riesgo operativo asumible.",
+            },
+            ensure_ascii=False,
+        )
+
+    fake_module = types.SimpleNamespace(
+        call_model_raw=stub_call_model_raw,
+        ClassifierUnavailableError=RuntimeError,
+    )
+    monkeypatch.setitem(sys.modules, "call_model_raw", fake_module)
+
+    payload = json.loads(
+        handle_cortex_decide(
+            goal="Choose a release strategy",
+            task_type="execute",
+            impact_level="critical",
+            area="release",
+            evidence_refs='["release contract", "rollback ready"]',
+            alternatives=json.dumps([
+                {"name": "staged_release", "description": "Run staged release with smoke tests and rollback ready"},
+                {"name": "direct_release", "description": "Push straight to production during the only launch window"},
+            ]),
+        )
+    )
+
+    assert payload["ok"] is True
+    assert payload["heuristic_recommendation"] == "staged_release"
+    assert payload["recommendation"] == "direct_release"
+    assert payload["decision_mode"] == "heuristic_plus_llm"
+    assert payload["critique"]["ok"] is True
+    assert payload["critique"]["recommended_choice"] == "direct_release"
+    assert calls and calls[0]["caller"] == "cortex_decision_critic"
+
+    row = get_db().execute(
+        "SELECT heuristic_choice, decision_mode, critique_payload FROM cortex_evaluations WHERE id = ?",
+        (payload["evaluation_id"],),
+    ).fetchone()
+    assert row["heuristic_choice"] == "staged_release"
+    assert row["decision_mode"] == "heuristic_plus_llm"
+    critique_payload = json.loads(row["critique_payload"])
+    assert critique_payload["recommended_choice"] == "direct_release"
+
+
+def test_cortex_decide_falls_back_to_heuristic_when_critique_unavailable(monkeypatch):
+    from plugins.cortex import handle_cortex_decide
+
+    class _CritiqueUnavailable(RuntimeError):
+        pass
+
+    def stub_call_model_raw(prompt, **kwargs):  # noqa: ARG001
+        raise _CritiqueUnavailable("backend offline")
+
+    fake_module = types.SimpleNamespace(
+        call_model_raw=stub_call_model_raw,
+        ClassifierUnavailableError=_CritiqueUnavailable,
+    )
+    monkeypatch.setitem(sys.modules, "call_model_raw", fake_module)
+
+    payload = json.loads(
+        handle_cortex_decide(
+            goal="Choose a release strategy",
+            task_type="execute",
+            impact_level="high",
+            area="release",
+            alternatives=json.dumps([
+                {"name": "staged_release", "description": "Run staged release with smoke tests and rollback ready"},
+                {"name": "direct_release", "description": "Push straight to production and skip staged verification"},
+            ]),
+        )
+    )
+
+    assert payload["ok"] is True
+    assert payload["recommendation"] == "staged_release"
+    assert payload["decision_mode"] == "heuristic"
+    assert payload["critique"]["ok"] is False
+
+
+def test_cortex_history_uses_semantic_similarity_not_only_literal_keywords(monkeypatch):
+    from db import get_db
+    from plugins.cortex import _history_signal
+
+    conn = get_db()
+    conn.execute(
+        "INSERT INTO decisions (session_id, domain, decision, alternatives, based_on, outcome, created_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))",
+        (
+            "nexo-cortex-history",
+            "release",
+            "Roll out with phased canary validation and rollback checks",
+            "phased canary | direct blast",
+            "release governance",
+            "success",
+        ),
+    )
+    conn.commit()
+
+    def semantic_win(text_a, text_b, **kwargs):  # noqa: ARG001
+        if "staged validation" in text_a.lower() and "phased canary" in text_b.lower():
+            return 0.9
+        return 0.0
+
+    monkeypatch.setattr("plugins.cortex.hybrid_similarity_score", semantic_win)
+    signal = _history_signal(
+        "staged validation with smoke tests and rollback ready",
+        area="release",
+        goal="Ship safely",
+    )
+
+    assert signal["matched_decisions"] == 1
+    assert signal["positive"] > 0.0
+
+
+def test_cortex_decide_does_not_auto_create_outcome_by_default():
+    from db import get_db
+    from plugins.cortex import handle_cortex_decide
+
+    payload = json.loads(
+        handle_cortex_decide(
+            goal="Choose a release strategy",
+            task_type="execute",
+            impact_level="critical",
+            area="release",
+            task_id="PT-CORTEX-NO-AUTO",
+            alternatives=json.dumps([
+                {"name": "staged_release", "description": "Run staged release with smoke tests and rollback ready"},
+                {"name": "direct_release", "description": "Push straight to production and skip staged verification"},
+            ]),
+        )
+    )
+
+    assert payload["ok"] is True
+    assert payload["linked_outcome_id"] is None
+    row = get_db().execute(
+        "SELECT COUNT(*) FROM outcomes WHERE action_id = ? AND metric_source = 'decision_outcome'",
+        ("PT-CORTEX-NO-AUTO",),
+    ).fetchone()
+    assert row[0] == 0
+
+
+def test_cortex_decide_can_auto_create_outcome_when_explicitly_requested():
+    from db import get_db
+    from plugins.cortex import handle_cortex_decide
+
+    payload = json.loads(
+        handle_cortex_decide(
+            goal="Choose a release strategy",
+            task_type="execute",
+            impact_level="critical",
+            area="release",
+            task_id="PT-CORTEX-AUTO",
+            auto_create_outcome=True,
+            alternatives=json.dumps([
+                {"name": "staged_release", "description": "Run staged release with smoke tests and rollback ready"},
+                {"name": "direct_release", "description": "Push straight to production and skip staged verification"},
+            ]),
+        )
+    )
+
+    assert payload["ok"] is True
+    assert payload["linked_outcome_id"] is not None
+    row = get_db().execute(
+        "SELECT COUNT(*) FROM outcomes WHERE action_id = ? AND metric_source = 'decision_outcome'",
+        ("PT-CORTEX-AUTO",),
+    ).fetchone()
+    assert row[0] == 1
