@@ -128,6 +128,9 @@ Rule:
 
 - treat these as managed bootstrap surfaces, not as free-form scratchpads
 - if the credential rule or source-of-truth order changes, update the template, not just one generated copy
+- Claude and Codex bootstraps must both include `User-Facing Agent Contract` with equivalent identity, continuity, autonomy, and safety wording
+- generated sync may rewrite `CORE`, but it must preserve the operator-managed `USER` block
+- Desktop conversation bootstrap should carry a short equivalent reminder without duplicating the full technical protocol
 
 ## Navigating templates from `~/.nexo/personal/`
 
