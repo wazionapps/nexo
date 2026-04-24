@@ -629,11 +629,7 @@ def test_task_close_creates_change_log_and_stays_clean():
     assert row["change_log_id"] == closed["change_log_id"]
 
 
-@pytest.mark.xfail(
-    reason="API refactor pending — handle_task_close no longer returns 'status' key; tracked in followup NF-TEST-PROTOCOL-API-REFACTOR",
-    strict=False,
-)
-def test_task_close_opens_protocol_debt_when_done_without_evidence():
+def test_task_close_rejects_done_without_evidence_and_keeps_task_open():
     from db import get_db
     from plugins.protocol import handle_task_open, handle_task_close
 
@@ -659,9 +655,59 @@ def test_task_close_opens_protocol_debt_when_done_without_evidence():
         )
     )
 
-    assert closed["status"] == "done_with_debts"
-    debt_types = {item["debt_type"] for item in closed["open_debts"]}
-    assert "claimed_done_without_evidence" in debt_types
+    assert closed["ok"] is False
+    assert closed["blocked_by"] == "g1_verify"
+    assert closed["debt_type"] == "claimed_done_without_evidence"
+    count = get_db().execute(
+        "SELECT COUNT(*) FROM protocol_debt WHERE task_id = ? AND debt_type = 'claimed_done_without_evidence' AND status = 'open'",
+        (opened["task_id"],),
+    ).fetchone()[0]
+    assert count == 1
+    row = get_db().execute(
+        "SELECT status, closed_at FROM protocol_tasks WHERE task_id = ?",
+        (opened["task_id"],),
+    ).fetchone()
+    assert row["status"] == "open"
+    assert row["closed_at"] is None
+
+
+def test_task_close_reject_done_without_evidence_dedupes_protocol_debt():
+    from db import get_db
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    sid = _register_session("nexo-1003-2003b")
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Edit without evidence twice",
+            task_type="edit",
+            area="nexo-ops",
+            files="/Users/franciscoc/Documents/_PhpstormProjects/nexo/src/plugins/protocol.py",
+            plan='["inspect", "patch"]',
+            verification_step="run pytest",
+        )
+    )
+
+    first = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="done",
+            change_summary="First close attempt",
+        )
+    )
+    second = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="done",
+            change_summary="Second close attempt",
+        )
+    )
+
+    assert first["ok"] is False
+    assert second["ok"] is False
+    assert first["debt_id"] == second["debt_id"]
     count = get_db().execute(
         "SELECT COUNT(*) FROM protocol_debt WHERE task_id = ? AND debt_type = 'claimed_done_without_evidence' AND status = 'open'",
         (opened["task_id"],),
@@ -770,7 +816,8 @@ def test_task_close_auto_captures_learning_when_correction_has_no_learning():
     assert "/Users/franciscoc/Documents/_PhpstormProjects/nexo/src/plugins/guard.py" in learning["applies_to"]
 
 
-def test_high_stakes_action_close_opens_debt_without_cortex_evaluation():
+def test_high_stakes_action_close_rejects_done_without_cortex_evaluation():
+    from db import get_db
     from plugins.protocol import handle_task_open, handle_task_close
 
     sid = _register_session("nexo-1013-2013")
@@ -796,9 +843,66 @@ def test_high_stakes_action_close_opens_debt_without_cortex_evaluation():
         )
     )
 
-    assert closed["status"] == "done_with_debts"
-    debt_types = {item["debt_type"] for item in closed["open_debts"]}
-    assert "missing_cortex_evaluation" in debt_types
+    assert closed["ok"] is False
+    assert closed["blocked_by"] == "g1_cortex"
+    assert closed["debt_type"] == "missing_cortex_evaluation"
+    count = get_db().execute(
+        "SELECT COUNT(*) FROM protocol_debt WHERE task_id = ? AND debt_type = 'missing_cortex_evaluation' AND status = 'open'",
+        (opened["task_id"],),
+    ).fetchone()[0]
+    assert count == 1
+    row = get_db().execute(
+        "SELECT status, closed_at FROM protocol_tasks WHERE task_id = ?",
+        (opened["task_id"],),
+    ).fetchone()
+    assert row["status"] == "open"
+    assert row["closed_at"] is None
+
+
+def test_task_close_rejects_done_when_change_log_creation_fails(monkeypatch):
+    from db import get_db
+    from plugins import protocol
+
+    sid = _register_session("nexo-1013-2013b")
+    opened = json.loads(
+        protocol.handle_task_open(
+            sid=sid,
+            goal="Edit with broken change log",
+            task_type="edit",
+            area="nexo-ops",
+            files='["/Users/franciscoc/Documents/_PhpstormProjects/nexo/src/plugins/protocol.py"]',
+            plan='["inspect", "patch", "verify"]',
+            verification_step="run pytest",
+        )
+    )
+    monkeypatch.setattr(protocol, "log_change", lambda *args, **kwargs: {"error": "sqlite locked"})
+
+    closed = json.loads(
+        protocol.handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="done",
+            evidence="pytest -q tests/test_protocol.py passed: 12 passed, 0 failed in 0.40s; protocol path validated",
+            change_summary="Touched protocol close flow",
+            change_why="Exercise G1 change_log gate",
+        )
+    )
+
+    assert closed["ok"] is False
+    assert closed["blocked_by"] == "g1_change_log"
+    assert closed["debt_type"] == "missing_change_log"
+    count = get_db().execute(
+        "SELECT COUNT(*) FROM protocol_debt WHERE task_id = ? AND debt_type = 'missing_change_log' AND status = 'open'",
+        (opened["task_id"],),
+    ).fetchone()[0]
+    assert count == 1
+    row = get_db().execute(
+        "SELECT status, closed_at, change_log_id FROM protocol_tasks WHERE task_id = ?",
+        (opened["task_id"],),
+    ).fetchone()
+    assert row["status"] == "open"
+    assert row["closed_at"] is None
+    assert row["change_log_id"] is None
 
 
 def test_high_stakes_action_close_stays_clean_with_cortex_evaluation():

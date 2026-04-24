@@ -18,6 +18,7 @@ Runs via launchd at 7:00 AM daily.
 """
 import json
 import hashlib
+import importlib.util
 import os
 import py_compile
 import re
@@ -1901,6 +1902,31 @@ def _sync_managed_bootstraps_inline() -> list[str]:
     return results
 
 
+def _run_protocol_debt_drain_inline() -> dict:
+    try:
+        phase_path = NEXO_CODE / "scripts" / "deep-sleep" / "phase_protocol_debt_drain.py"
+        spec = importlib.util.spec_from_file_location("phase_protocol_debt_drain_inline", phase_path)
+        if not spec or not spec.loader:
+            raise RuntimeError(f"Cannot load phase module from {phase_path}")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+    except Exception as exc:
+        return {"ok": False, "error": f"import_failed: {exc}"}
+
+    try:
+        report = module.run()
+    except Exception as exc:
+        return {"ok": False, "error": f"run_failed: {exc}"}
+
+    return {
+        "ok": "error" not in report,
+        "error": report.get("error", ""),
+        "drained_count": len(report.get("drained_ids") or []),
+        "requires_user_summary": report.get("requires_user_summary") or [],
+        "audit_path": report.get("audit_path", ""),
+    }
+
+
 def _sanitize_watchdog_registry_inline() -> dict:
     hash_registry = _hash_registry_path()
     if not hash_registry.exists():
@@ -1984,6 +2010,24 @@ def _disable_broken_personal_plugins_inline(conn: sqlite3.Connection | None) -> 
 def run_mechanical_autofixes():
     conn = None
     try:
+        debt_drain = _run_protocol_debt_drain_inline()
+        if debt_drain.get("ok"):
+            drained_count = int(debt_drain.get("drained_count") or 0)
+            requires_user_summary = debt_drain.get("requires_user_summary") or []
+            if drained_count or requires_user_summary:
+                detail_bits: list[str] = []
+                if drained_count:
+                    detail_bits.append(f"drained {drained_count} stale protocol debt item(s)")
+                if requires_user_summary:
+                    summary = ", ".join(
+                        f"{item.get('debt_type')} x{int(item.get('count') or 0)}"
+                        for item in requires_user_summary[:4]
+                    )
+                    detail_bits.append(f"still needs user review: {summary}")
+                finding("INFO", "autofix", "Self-audit protocol debt drain: " + " | ".join(detail_bits))
+        elif debt_drain.get("error"):
+            finding("WARN", "autofix", f"Protocol debt drain inline failed: {debt_drain['error']}")
+
         if NEXO_DB.exists():
             conn = sqlite3.connect(str(NEXO_DB))
             conn.row_factory = sqlite3.Row

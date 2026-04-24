@@ -898,6 +898,46 @@ def _auto_capture_learning(task: dict, task_id: str, effective_files: list[str],
     )
 
 
+def _append_debt_ref(debts: list[dict], debt: dict, *, debt_type: str, severity: str):
+    debt_id = debt.get("id")
+    if debt_id and any(item.get("id") == debt_id for item in debts):
+        return
+    debts.append(
+        {
+            "id": debt_id,
+            "debt_type": debt_type,
+            "severity": severity,
+        }
+    )
+
+
+def _ensure_open_debt(
+    session_id: str,
+    task_id: str,
+    debt_type: str,
+    *,
+    severity: str,
+    evidence: str,
+    debts: list[dict],
+) -> dict:
+    existing = list_protocol_debts(
+        status="open",
+        task_id=task_id,
+        session_id="" if task_id else session_id,
+        debt_type=debt_type,
+        limit=1,
+    )
+    debt = existing[0] if existing else create_protocol_debt(
+        session_id,
+        debt_type,
+        severity=severity,
+        task_id=task_id,
+        evidence=evidence,
+    )
+    _append_debt_ref(debts, debt, debt_type=debt_type, severity=severity)
+    return debt
+
+
 def _record_debt(session_id: str, task_id: str, debt_type: str, *, severity: str, evidence: str, debts: list[dict]):
     debt = create_protocol_debt(
         session_id,
@@ -906,13 +946,7 @@ def _record_debt(session_id: str, task_id: str, debt_type: str, *, severity: str
         task_id=task_id,
         evidence=evidence,
     )
-    debts.append(
-        {
-            "id": debt.get("id"),
-            "debt_type": debt_type,
-            "severity": severity,
-        }
-    )
+    _append_debt_ref(debts, debt, debt_type=debt_type, severity=severity)
 
 
 def handle_confidence_check(
@@ -1336,10 +1370,10 @@ def handle_task_close(
         high_stakes=bool(task.get("response_high_stakes")),
     )
 
-    # ── Evidence enforcement: reject 'done' without proof in strict mode ──
-    # Fase 2 R03 extension: "evidence" must not be empty, nor <50 chars, nor
-    # a single filler word like "done" / "listo" / "ok". Trivial evidence is
-    # rejected in strict mode and logged as protocol debt in any other mode.
+    # ── Evidence enforcement: reject 'done' without proof ──
+    # G1 hardening: "done" is no longer allowed to degrade into a debt-only
+    # close when verify evidence is missing. Keep the task open, open/dedupe
+    # the debt, and force the caller to provide real proof before closing.
     if task.get("must_verify") and clean_outcome == "done":
         is_trivial, trivial_reason = _is_trivial_evidence(clean_evidence)
         if not is_trivial:
@@ -1349,39 +1383,7 @@ def handle_task_close(
                 resolution="Verification evidence supplied during task_close",
             )
         else:
-            protocol_strictness = get_protocol_strictness()
-            if protocol_strictness == "strict":
-                if trivial_reason == "empty":
-                    err = "Cannot close task as 'done' without evidence."
-                    hint = (
-                        "Provide the `evidence` parameter with verifiable proof: "
-                        "test output, curl response, screenshot path, or real "
-                        "command output."
-                    )
-                else:
-                    err = (
-                        "Cannot close task as 'done' with trivial evidence "
-                        f"({trivial_reason})."
-                    )
-                    hint = (
-                        f"Evidence must be substantive: >= {R03_MIN_EVIDENCE_CHARS} "
-                        "characters AND not a single filler word. Attach real "
-                        "proof — test output excerpt, curl response, DB row, "
-                        "screenshot path, or command stdout."
-                    )
-                return json.dumps(
-                    {
-                        "ok": False,
-                        "error": err,
-                        "hint": hint,
-                        "task_id": task_id,
-                        "protocol_strictness": protocol_strictness,
-                        "evidence_quality_reason": trivial_reason,
-                    },
-                    ensure_ascii=False,
-                    indent=2,
-                )
-            _record_debt(
+            debt = _ensure_open_debt(
                 task["session_id"],
                 task_id,
                 "claimed_done_without_evidence",
@@ -1392,6 +1394,39 @@ def handle_task_close(
                     f"Evidence provided: {clean_evidence[:200]!r}"
                 ),
                 debts=debts_created,
+            )
+            if trivial_reason == "empty":
+                err = "Cannot close task as 'done' without evidence."
+                hint = (
+                    "Provide the `evidence` parameter with verifiable proof: "
+                    "test output, curl response, screenshot path, or real "
+                    "command output."
+                )
+            else:
+                err = (
+                    "Cannot close task as 'done' with trivial evidence "
+                    f"({trivial_reason})."
+                )
+                hint = (
+                    f"Evidence must be substantive: >= {R03_MIN_EVIDENCE_CHARS} "
+                    "characters AND not a single filler word. Attach real "
+                    "proof — test output excerpt, curl response, DB row, "
+                    "screenshot path, or command stdout."
+                )
+            return json.dumps(
+                {
+                    "ok": False,
+                    "error": err,
+                    "hint": hint,
+                    "task_id": task_id,
+                    "blocked_by": "g1_verify",
+                    "debt_id": debt.get("id"),
+                    "debt_type": "claimed_done_without_evidence",
+                    "evidence_quality_reason": trivial_reason,
+                    "protocol_strictness": get_protocol_strictness(),
+                },
+                ensure_ascii=False,
+                indent=2,
             )
 
     # ── Release checklist: require channel alignment evidence for release tasks ──
@@ -1430,7 +1465,7 @@ def handle_task_close(
                 (clean_change_verify or clean_evidence)[:500],
             )
             if "error" in change:
-                _record_debt(
+                debt = _ensure_open_debt(
                     task["session_id"],
                     task_id,
                     "missing_change_log",
@@ -1438,6 +1473,21 @@ def handle_task_close(
                     evidence=f"change_log failed: {change['error']}",
                     debts=debts_created,
                 )
+                if clean_outcome == "done":
+                    return json.dumps(
+                        {
+                            "ok": False,
+                            "error": "Cannot close task as 'done' because change_log creation failed.",
+                            "hint": "Capture the changed files and create the change log successfully before closing as done.",
+                            "task_id": task_id,
+                            "blocked_by": "g1_change_log",
+                            "debt_id": debt.get("id"),
+                            "debt_type": "missing_change_log",
+                            "change_log_error": change.get("error"),
+                        },
+                        ensure_ascii=False,
+                        indent=2,
+                    )
             else:
                 change_log_id = change.get("id")
                 resolve_protocol_debts(
@@ -1446,7 +1496,7 @@ def handle_task_close(
                     resolution="Change log created by nexo_task_close",
                 )
         else:
-            _record_debt(
+            debt = _ensure_open_debt(
                 task["session_id"],
                 task_id,
                 "missing_change_log",
@@ -1454,6 +1504,20 @@ def handle_task_close(
                 evidence="Task required change_log but no changed files were supplied or recorded.",
                 debts=debts_created,
             )
+            if clean_outcome == "done":
+                return json.dumps(
+                    {
+                        "ok": False,
+                        "error": "Cannot close task as 'done' without changed files for the required change_log.",
+                        "hint": "Pass `files_changed` (or open the task with files) so nexo_task_close can persist the change log before closing as done.",
+                        "task_id": task_id,
+                        "blocked_by": "g1_change_log",
+                        "debt_id": debt.get("id"),
+                        "debt_type": "missing_change_log",
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                )
 
     if correction:
         if (learning_title or "").strip() and (learning_content or "").strip():
@@ -1564,7 +1628,7 @@ def handle_task_close(
                 resolution="High-stakes action task has a persisted Cortex evaluation.",
             )
         else:
-            _record_debt(
+            debt = _ensure_open_debt(
                 task["session_id"],
                 task_id,
                 "missing_cortex_evaluation",
@@ -1572,6 +1636,20 @@ def handle_task_close(
                 evidence="High-stakes action task closed without nexo_cortex_decide / persisted evaluation.",
                 debts=debts_created,
             )
+            if clean_outcome == "done":
+                return json.dumps(
+                    {
+                        "ok": False,
+                        "error": "Cannot close high-stakes action task as 'done' without a persisted cortex evaluation.",
+                        "hint": "Run `nexo_cortex_decide(...)` for this task and then close it again with the final evidence.",
+                        "task_id": task_id,
+                        "blocked_by": "g1_cortex",
+                        "debt_id": debt.get("id"),
+                        "debt_type": "missing_cortex_evaluation",
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                )
 
     if task.get("guard_has_blocking") and not files_changed_list:
         open_task_debts = list_protocol_debts(status="open", task_id=task_id, limit=200)

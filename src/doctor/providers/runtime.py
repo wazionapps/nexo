@@ -2112,14 +2112,32 @@ def check_codex_session_parity() -> DoctorCheck:
     status = "healthy"
     severity = "info"
     repair_plan: list[str] = []
-    if audit["bootstrap_sessions"] == 0:
+    missing_bootstrap = max(0, audit["files"] - audit["bootstrap_sessions"])
+    missing_startup = max(0, audit["files"] - audit["startup_sessions"])
+    missing_heartbeat = max(0, audit["files"] - audit["heartbeat_sessions"])
+    if missing_bootstrap:
         status = "degraded"
         severity = "warn"
-        repair_plan.append("Run `nexo update` or `nexo clients sync` so plain Codex sessions inherit the managed bootstrap")
-    if audit["startup_sessions"] == 0:
+        repair_plan.append(
+            "Run `nexo update` or `nexo clients sync` so every Codex session inherits the managed bootstrap, not just a subset"
+        )
+    if missing_startup:
         status = "degraded"
         severity = "warn"
-        repair_plan.append("Use `nexo chat` or keep the global Codex bootstrap intact so sessions actually call `nexo_startup`")
+        repair_plan.append(
+            "Use `nexo chat` or keep the global Codex bootstrap intact so every Codex session actually calls `nexo_startup`"
+        )
+    if missing_heartbeat:
+        status = "degraded"
+        severity = "warn"
+        repair_plan.append("Keep `nexo_heartbeat` on every user turn so restored/plain Codex sessions do not drift off-protocol")
+    if missing_bootstrap or missing_startup or missing_heartbeat:
+        evidence.append(
+            "session drift: "
+            f"{missing_bootstrap} missing bootstrap, "
+            f"{missing_startup} missing startup, "
+            f"{missing_heartbeat} missing heartbeat"
+        )
 
     return DoctorCheck(
         id="runtime.codex_sessions",

@@ -1030,6 +1030,7 @@ def test_run_mechanical_autofixes_sanitizes_registry_and_refreshes_snapshots(sel
 
     monkeypatch.setattr(module, "_sync_managed_bootstraps_inline", lambda: [])
     monkeypatch.setattr(module, "_disable_broken_personal_plugins_inline", lambda conn: {"disabled": [], "registry_pruned": 0})
+    monkeypatch.setattr(module, "_run_protocol_debt_drain_inline", lambda: {"ok": True, "drained_count": 0, "requires_user_summary": [], "audit_path": ""})
 
     module.run_mechanical_autofixes()
 
@@ -1073,6 +1074,7 @@ def test_run_mechanical_autofixes_disables_broken_personal_plugins(self_audit_en
     monkeypatch.setattr(module, "_sync_managed_bootstraps_inline", lambda: [])
     monkeypatch.setattr(module, "_sanitize_watchdog_registry_inline", lambda: {"ok": False, "removed": []})
     monkeypatch.setattr(module, "_refresh_golden_snapshots_inline", lambda: {"ok": False, "refreshed": []})
+    monkeypatch.setattr(module, "_run_protocol_debt_drain_inline", lambda: {"ok": True, "drained_count": 0, "requires_user_summary": [], "audit_path": ""})
 
     module.run_mechanical_autofixes()
 
@@ -1083,6 +1085,33 @@ def test_run_mechanical_autofixes_disables_broken_personal_plugins(self_audit_en
     conn.close()
     assert remaining == 0
     assert any("plugin autofix" in item["msg"] for item in module.findings if item["area"] == "autofix")
+
+
+def test_run_mechanical_autofixes_reports_protocol_debt_drain(self_audit_env, monkeypatch):
+    module = _load_self_audit_module()
+    module.findings.clear()
+
+    monkeypatch.setattr(
+        module,
+        "_run_protocol_debt_drain_inline",
+        lambda: {
+            "ok": True,
+            "drained_count": 2,
+            "requires_user_summary": [{"debt_type": "missing_cortex_evaluation", "count": 1}],
+            "audit_path": "/tmp/protocol-debt-drain.json",
+        },
+    )
+    monkeypatch.setattr(module, "_sync_managed_bootstraps_inline", lambda: [])
+    monkeypatch.setattr(module, "_sanitize_watchdog_registry_inline", lambda: {"ok": False, "removed": []})
+    monkeypatch.setattr(module, "_refresh_golden_snapshots_inline", lambda: {"ok": False, "refreshed": []})
+    monkeypatch.setattr(module, "_disable_broken_personal_plugins_inline", lambda conn: {"disabled": [], "registry_pruned": 0})
+
+    module.run_mechanical_autofixes()
+
+    messages = [item["msg"] for item in module.findings if item["area"] == "autofix"]
+    assert any("protocol debt drain" in msg for msg in messages)
+    assert any("drained 2 stale protocol debt item(s)" in msg for msg in messages)
+    assert any("missing_cortex_evaluation x1" in msg for msg in messages)
 
 
 def test_check_evolution_health_treats_desktop_product_disable_as_info(self_audit_env):

@@ -1,5 +1,18 @@
 # Changelog
 
+## [7.9.14] - 2026-04-24
+
+### Fixed
+- G1 protocol closeout is now a real gate for `done`: `nexo_task_close(...)` keeps the task open when verify evidence is trivial/missing, when the required change log cannot be written, or when a high-stakes action lacks a persisted `cortex_evaluation`, instead of silently returning `done_with_debts`.
+- Repeated failed close attempts now dedupe the same open protocol debt (`claimed_done_without_evidence`, `missing_change_log`, `missing_cortex_evaluation`) instead of spawning duplicates on every retry.
+- Daily self-audit now runs the stale `protocol_debt` drainer inline, so old closed-task debt gets auto-resolved every morning even if a Deep Sleep cycle was skipped or degraded.
+- Codex session parity is now stricter: the runtime no longer treats recent Codex behavior as healthy when only a subset of sessions carried the managed bootstrap / `nexo_startup` / `nexo_heartbeat`.
+
+### Tests
+- Protocol / debt / Codex parity validation: `pytest -q tests/test_protocol.py tests/test_self_audit.py tests/test_doctor.py` (`166 passed, 2 xpassed`).
+- Debt drain phase validation: `pytest -q tests/test_phase_protocol_debt_drain.py` (`8 passed`).
+- Packaging sanity: `npm pack --dry-run`.
+
 ## [7.9.13] - 2026-04-24
 
 ### Fixed

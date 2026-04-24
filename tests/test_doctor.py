@@ -1285,6 +1285,43 @@ class TestRuntimeChecks:
         assert check.status == "degraded"
         assert any("nexo_startup seen in 0/" in item for item in check.evidence)
 
+    def test_codex_session_parity_warns_when_only_some_recent_sessions_are_compliant(self, nexo_home, monkeypatch):
+        from doctor.providers import runtime
+
+        schedule_file = nexo_home / "config" / "schedule.json"
+        schedule_file.parent.mkdir(parents=True, exist_ok=True)
+        schedule_file.write_text(json.dumps({
+            "interactive_clients": {
+                "claude_code": False,
+                "codex": True,
+                "claude_desktop": False,
+            },
+            "default_terminal_client": "codex",
+            "automation_enabled": False,
+            "automation_backend": "none",
+        }))
+        good_file = nexo_home / ".codex" / "sessions" / "2026" / "04" / "05" / "good.jsonl"
+        good_file.parent.mkdir(parents=True, exist_ok=True)
+        good_file.write_text(
+            "<!-- nexo-codex-agents-version: 1.2.5 -->\n"
+            + json.dumps({"type": "session_meta", "payload": {"originator": "codex_cli_rs"}}) + "\n"
+            + json.dumps({"type": "response_item", "payload": {"type": "function_call", "name": "nexo_startup"}}) + "\n"
+            + json.dumps({"type": "response_item", "payload": {"type": "function_call", "name": "nexo_heartbeat"}}) + "\n"
+        )
+        drift_file = nexo_home / ".codex" / "sessions" / "2026" / "04" / "05" / "drift.jsonl"
+        drift_file.write_text(
+            json.dumps({"type": "session_meta", "payload": {"originator": "codex_cli_rs"}}) + "\n"
+            + json.dumps({"type": "event_msg", "payload": {"type": "user_message", "message": "hola"}}) + "\n"
+        )
+
+        monkeypatch.setattr(runtime, "SCHEDULE_FILE", schedule_file)
+        monkeypatch.setattr(runtime.Path, "home", lambda: nexo_home)
+
+        check = runtime.check_codex_session_parity()
+        assert check.status == "degraded"
+        assert any("bootstrap markers seen in 1/2" in item for item in check.evidence)
+        assert any("session drift: 1 missing bootstrap, 1 missing startup, 1 missing heartbeat" in item for item in check.evidence)
+
     def test_codex_conditioned_file_discipline_warns_on_read_without_protocol(self, nexo_home, monkeypatch):
         from doctor.providers import runtime
 
