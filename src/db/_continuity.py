@@ -46,7 +46,7 @@ def build_snapshot_idempotency_key(
             normalized,
         ]
     )
-    return hashlib.sha1(seed.encode("utf-8")).hexdigest()
+    return hashlib.sha1(seed.encode("utf-8"), usedforsecurity=False).hexdigest()
 
 
 def write_continuity_snapshot(

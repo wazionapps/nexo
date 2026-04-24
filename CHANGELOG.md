@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.9.17] - 2026-04-24
+
+### Fixed
+- Continuity snapshot idempotency now marks its SHA-1 digest as non-security usage (`usedforsecurity=False`), keeping the high-severity Bandit CI gate green while preserving stable idempotency keys.
+
+### Tests
+- Full pytest suite, release-readiness, Bandit high/high security scan, root npm pack, and OpenClaw build/test/pack are required before publication.
+
 ## [7.9.16] - 2026-04-24
 
 ### Fixed
