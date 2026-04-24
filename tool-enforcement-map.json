@@ -1983,6 +1983,19 @@
       },
       "triggers_after": []
     },
+    "nexo_lifecycle_write_fallback_diary": {
+      "description": "Write a Brain-side fallback session_diary for a Desktop lifecycle event when live diary injection cannot complete.",
+      "category": "lifecycle",
+      "source": "plugin:lifecycle_events",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
     "nexo_lifecycle_stop_nexo_session": {
       "description": "Best-effort explicit stop of a NEXO SID for Desktop lifecycle cleanup.",
       "category": "lifecycle",

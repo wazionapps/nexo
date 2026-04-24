@@ -260,6 +260,138 @@ def _session_diary_since(conn, session_id: str, dispatched_at: Optional[str], ac
     return _session_diary_evidence(conn, session_id, dispatched_at, actions_json) is not None
 
 
+def _preferred_diary_session_id(conn, session_id: str) -> str:
+    """Return the best session id to store fallback diary evidence under."""
+    raw = str(session_id or "").strip()
+    candidates = _session_diary_session_ids(conn, raw)
+    for sid in candidates:
+        if str(sid or "").startswith("nexo-"):
+            return str(sid)
+    return candidates[0] if candidates else raw
+
+
+def _payload_lines(payload: Dict[str, Any]) -> List[str]:
+    lines: List[str] = []
+    if not isinstance(payload, dict):
+        return lines
+    for raw in payload.get("transcript_tail") or []:
+        text = str(raw or "").strip()
+        if text:
+            lines.append(text)
+    if not lines:
+        user = str(payload.get("last_user_message") or payload.get("latest_user_text") or "").strip()
+        assistant = str(payload.get("last_assistant_message") or payload.get("latest_assistant_text") or "").strip()
+        if user:
+            lines.append(f"user: {user}")
+        if assistant:
+            lines.append(f"assistant: {assistant}")
+    return lines[-12:]
+
+
+def write_fallback_diary_for_lifecycle_event(
+    event_id: str,
+    reason: str = "",
+    source: str = "desktop-lifecycle-fallback",
+) -> Dict[str, Any]:
+    """Write minimum durable diary evidence when live-agent injection fails.
+
+    This is the safety net for Desktop close/archive/app-exit. The preferred
+    path remains an agent-authored ``nexo_session_diary_write``. If the agent is
+    busy or stdin never produces a response, Desktop can call this command so
+    session continuity still has a concrete ``session_diary`` row instead of
+    silently losing the last context.
+    """
+    if not event_id:
+        return {"status": "rejected", "reason": "missing-event-id"}
+
+    conn = get_db()
+    row = conn.execute(
+        "SELECT action, conversation_id, session_id, reason, payload_snapshot, "
+        "canonical_dispatched_at, canonical_actions_json "
+        "FROM lifecycle_events WHERE event_id = ?",
+        (str(event_id),),
+    ).fetchone()
+    if row is None:
+        return {"status": "rejected", "reason": "unknown-event-id", "event_id": event_id}
+
+    action = str(row[0] or "")
+    conversation_id = str(row[1] or "")
+    session_id = str(row[2] or "")
+    lifecycle_reason = str(row[3] or "")
+    dispatched_at = row[5]
+    actions_json = row[6]
+    if action not in _DIARY_TRIGGERING:
+        return {"status": "processed", "event_id": event_id, "diary_required": False}
+    if not session_id:
+        return {"status": "rejected", "reason": "missing-session-id", "event_id": event_id}
+
+    existing = _session_diary_evidence(conn, session_id, dispatched_at, actions_json)
+    if existing is not None:
+        return {
+            "status": "ok",
+            "event_id": event_id,
+            "fallback_written": False,
+            "diary_confirmed": True,
+            **existing,
+        }
+
+    try:
+        payload = json.loads(row[4] or "{}")
+        if not isinstance(payload, dict):
+            payload = {}
+    except Exception:
+        payload = {}
+
+    title = str(payload.get("title") or conversation_id or event_id).strip()
+    transcript_lines = _payload_lines(payload)
+    technical_reason = str(reason or lifecycle_reason or "fallback-diary").strip()
+    diary_session_id = _preferred_diary_session_id(conn, session_id)
+    summary = (
+        "Diario automatico de emergencia generado por NEXO Desktop al cerrar "
+        f"'{title}'. No se confirmo un diario escrito por el agente vivo, asi "
+        "que se preserva el snapshot disponible para continuidad."
+    )
+    decisions = (
+        f"Accion de ciclo de vida: {action}. Evento: {event_id}. "
+        f"Motivo tecnico: {technical_reason}."
+    )
+    pending = str(payload.get("current_goal") or payload.get("last_user_message") or "").strip()
+    if not pending:
+        pending = "Revisar la conversacion al reabrir y continuar desde el snapshot preservado."
+    context_next_parts = [
+        f"conversation_id={conversation_id}",
+        f"session_id={session_id}",
+    ]
+    if transcript_lines:
+        context_next_parts.append("Transcript tail:\n" + "\n".join(transcript_lines))
+    context_next = "\n".join(context_next_parts)[:8000]
+
+    from db import write_session_diary
+
+    diary = write_session_diary(
+        diary_session_id,
+        decisions=decisions,
+        summary=summary,
+        discarded="",
+        pending=pending,
+        context_next=context_next,
+        mental_state="Fallback automatico: el agente vivo no confirmo el cierre dentro del timeout.",
+        domain="nexo-desktop",
+        user_signals="Cierre/archivo de conversacion; preservar informacion antes de salir.",
+        self_critique="El cierre no debe depender exclusivamente de que el agente responda a tiempo.",
+        source=source or "desktop-lifecycle-fallback",
+    )
+    return {
+        "status": "ok",
+        "event_id": event_id,
+        "fallback_written": True,
+        "diary_confirmed": True,
+        "session_diary_id": diary.get("id"),
+        "diary_session_id": diary_session_id,
+        "source": source or "desktop-lifecycle-fallback",
+    }
+
+
 def _session_stop_state(conn, session_id: str) -> Dict[str, Any]:
     """Return whether the lifecycle session can be verified as fully stopped."""
     raw = str(session_id or "").strip()
