@@ -26,6 +26,7 @@ def continuity_runtime(tmp_path, monkeypatch, isolated_db):
         "db",
         "tools_sessions",
         "continuity",
+        "runtime_power",
         "runtime_versioning",
     ):
         sys.modules.pop(name, None)
@@ -205,14 +206,14 @@ def test_runtime_versioning_creates_current_symlink_and_marker(continuity_runtim
         to_version="9.9.9",
     )
     runtime_versioning.PROCESS_VERSION = "9.9.8"
-    status = runtime_versioning.build_mcp_status(client="claude_desktop")
+    status = runtime_versioning.build_mcp_status(client="claude_code")
 
     assert activated["ok"] is True
     assert (home / "core" / "current").exists()
     assert (home / "core" / "versions" / "9.9.9" / "cli.py").is_file()
     assert marker["required"] is True
     assert status["restart_required"] is True
-    assert status["client_action"] == "restart_client_required"
+    assert status["client_action"] == "restart_session_required"
 
 
 def test_runtime_versioning_respects_explicit_source_root_over_stale_current(continuity_runtime):
@@ -252,7 +253,7 @@ def test_restart_required_middleware_wraps_string_tool_schema(continuity_runtime
         return fake_tool
 
     context = SimpleNamespace(
-        message=SimpleNamespace(name="nexo_startup"),
+        message=SimpleNamespace(name="nexo_memory_save"),
         fastmcp_context=SimpleNamespace(fastmcp=SimpleNamespace(get_tool=_get_tool)),
     )
 
@@ -278,7 +279,7 @@ def test_restart_required_middleware_wraps_string_tool_schema(continuity_runtime
                 "error": "mcp_restart_required",
                 "message": "NEXO Brain was updated. Restart this MCP client/session.",
                 "restart_required": True,
-                "tool": "nexo_startup",
+                "tool": "nexo_memory_save",
                 "installed_version": "7.9.6",
                 "process_version": "7.9.6",
                 "reason": "marker_required",
@@ -292,6 +293,21 @@ def test_restart_required_middleware_wraps_string_tool_schema(continuity_runtime
 
 def test_clear_restart_marker_waits_until_all_clients_ack(continuity_runtime):
     runtime_versioning = continuity_runtime["runtime_versioning"]
+    home = continuity_runtime["home"]
+    config_dir = home / "personal" / "config"
+    config_dir.mkdir(parents=True)
+    (config_dir / "schedule.json").write_text(
+        json.dumps(
+            {
+                "interactive_clients": {
+                    "claude_desktop": True,
+                    "claude_code": True,
+                    "codex": True,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
 
     runtime_versioning.write_restart_required_marker(
         from_version="1.0.0",
@@ -317,3 +333,82 @@ def test_clear_restart_marker_waits_until_all_clients_ack(continuity_runtime):
     assert claude["cleared"] is False
     assert codex["cleared"] is True
     assert not runtime_versioning.restart_required_marker_path().exists()
+
+
+def test_restart_marker_uses_enabled_interactive_clients_only(continuity_runtime):
+    runtime_versioning = continuity_runtime["runtime_versioning"]
+    home = continuity_runtime["home"]
+    config_dir = home / "personal" / "config"
+    config_dir.mkdir(parents=True)
+    (config_dir / "schedule.json").write_text(
+        json.dumps(
+            {
+                "interactive_clients": {
+                    "claude_code": True,
+                    "codex": False,
+                    "claude_desktop": False,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    marker = runtime_versioning.write_restart_required_marker(
+        from_version="1.0.0",
+        to_version="1.1.0",
+    )
+    cleared = runtime_versioning.clear_restart_required_marker(
+        client="claude_code",
+        installed_version="1.1.0",
+        process_version="1.1.0",
+    )
+
+    assert marker["clients"] == {"claude_code": "restart_session_required"}
+    assert cleared["cleared"] is True
+    assert not runtime_versioning.restart_required_marker_path().exists()
+
+
+def test_restart_middleware_auto_acks_current_client_when_versions_match(continuity_runtime):
+    runtime_versioning = continuity_runtime["runtime_versioning"]
+    home = continuity_runtime["home"]
+    home.mkdir(parents=True, exist_ok=True)
+    (home / "version.json").write_text(json.dumps({"version": "1.1.0"}), encoding="utf-8")
+    runtime_versioning.PROCESS_VERSION = "1.1.0"
+    runtime_versioning.write_restart_required_marker(
+        from_version="1.0.0",
+        to_version="1.1.0",
+        client="claude_code",
+    )
+    middleware = runtime_versioning.RestartRequiredMiddleware(client="claude_code")
+    context = SimpleNamespace(message=SimpleNamespace(name="nexo_memory_save"))
+
+    async def _next(_context):
+        return {"ok": True}
+
+    result = asyncio.run(middleware.on_call_tool(context, _next))
+
+    assert result == {"ok": True}
+    assert not runtime_versioning.restart_required_marker_path().exists()
+
+
+def test_startup_is_allowed_during_restart_marker(continuity_runtime, monkeypatch):
+    runtime_versioning = continuity_runtime["runtime_versioning"]
+    middleware = runtime_versioning.RestartRequiredMiddleware(client="")
+    context = SimpleNamespace(message=SimpleNamespace(name="nexo_startup"))
+    monkeypatch.setattr(
+        runtime_versioning,
+        "resolve_restart_required",
+        lambda **_kwargs: {
+            "restart_required": True,
+            "reason": "marker_required",
+            "client_action": "",
+            "installed_version": "7.9.15",
+            "process_version": "7.9.15",
+            "marker": {"required": True},
+        },
+    )
+
+    async def _next(_context):
+        return {"ok": True}
+
+    assert asyncio.run(middleware.on_call_tool(context, _next)) == {"ok": True}

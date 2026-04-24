@@ -18,7 +18,7 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.9.14` is the current packaged-runtime line. Patch release over `7.9.13`: `task_close(done)` now hard-blocks missing verify/change-log/cortex evidence instead of silently degrading to debt-only closes, self-audit auto-drains stale `protocol_debt` every day, and Codex session parity now flags partial bootstrap/startup/heartbeat drift instead of passing as healthy when only one recent session behaved correctly. Coordinated Desktop release remains v0.28.14.
+Version `7.9.16` is the current packaged-runtime line. Patch release over `7.9.15`: restart-required MCP markers are now adaptive to the user's active clients, `nexo_startup` remains reachable during restart recovery, and identified clients auto-ack once the process version matches the installed runtime. The release also keeps release artifacts and public surfaces aligned before npm publication.
 
 Previously in `7.9.5`: patch release that fixes canonical diary confirmation for Desktop: Brain resolves the Desktop/Claude session UUID through NEXO SID aliases before checking `session_diary`, so archive/delete/app-exit can confirm diaries written by `nexo_session_diary_write` under the active `nexo-...` SID. Verification: `pytest tests/test_lifecycle_events.py` (28 passing) plus coordinated Desktop v0.28.6 shutdown/archive/delete/app-exit checks.
 

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.6 closes continuity runtime + MCP restart stability for installed users.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.16 fixes MCP restart marker deadlocks after Brain updates.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.6 closes continuity runtime + MCP restart stability for installed users.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.16 fixes MCP restart marker deadlocks after Brain updates.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.6 closes continuity runtime + MCP restart stability for installed users.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.16 fixes MCP restart marker deadlocks after Brain updates.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.6 closes continuity runtime + MCP restart stability for installed users.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.16 fixes MCP restart marker deadlocks after Brain updates.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -87,22 +87,22 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v7.9.6 live</span>
+                    <span class="page-chip">v7.9.16 live</span>
                     <span class="page-chip">Guardian active</span>
                     <span class="page-chip">F0.6 hardening</span>
                     <span class="page-chip">Adaptive empirical</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v796" class="btn btn-primary">Start with v7.9.6</a>
-                    <a href="#v795" class="btn btn-secondary">See v7.9.5</a>
+                    <a href="#v7916" class="btn btn-primary">Start with v7.9.16</a>
+                    <a href="#v7915" class="btn btn-secondary">See v7.9.15</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
             </div>
             <div class="page-visual">
                 <div class="page-stack">
                     <div class="page-stack-card">
-                        <strong>v7.9.6</strong>
-                        <span>Patch — continuity runtime + MCP restart stability for installed users. Brain now persists conversation-scoped resume bundles, activates packaged runtimes atomically, writes a durable restart-required marker, and self-drains old MCP processes until clients restart against the installed runtime. Coordinated Desktop v0.28.7 passes the same contract.</span>
+                        <strong>v7.9.16</strong>
+                        <span>Patch — restart-required markers now adapt to active clients, startup remains reachable during recovery, and restarted clients auto-ack when installed and process versions match. Also ships cortex critique persistence and local model pins.</span>
                     </div>
                     <div class="page-stack-card">
                         <strong>v7.9.5</strong>
@@ -236,6 +236,26 @@
 <section class="section-compact" style="background:rgba(124,58,237,0.08);">
     <div class="container desktop-disclaimer" style="max-width:860px;font-size:13px;line-height:1.55;">
         <p><strong>Sobre NEXO Desktop.</strong> NEXO Desktop es un cliente acompa&ntilde;ante closed-source distribuido aparte en <a href="https://nexo-desktop.com/">nexo-desktop.com</a>. Cuando una entrada de changelog menciona "NEXO Desktop" se refiere a una versi&oacute;n coordinada de ese cliente que consume el contrato CLI/MCP del Brain. El c&oacute;digo de Desktop no vive en este repo; el Brain (AGPL-3.0) es 100% usable por s&iacute; solo desde terminal, Codex, Claude Code, o cualquier cliente MCP.</p>
+    </div>
+</section>
+
+<section id="v7916" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.9.16 <span style="opacity:.5;font-weight:400;">&mdash; April 24, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">Restart marker deadlock fix</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            Patch over v7.9.15. Brain restart-required markers now include only the active interactive clients configured for the user instead of hardcoding Claude Desktop, Claude Code, and Codex as mandatory acknowledgers. <code>nexo_startup</code> remains reachable while a restart marker exists, and the MCP middleware auto-acks the identified client once the installed runtime and process runtime versions match. This prevents the post-update deadlock where users without all three clients, or clients missing <code>NEXO_MCP_CLIENT</code>, could be blocked from every normal NEXO MCP call after update. The release also keeps release artifacts and public surfaces aligned with the package version before npm publication.
+        </p>
+    </div>
+</section>
+
+<section id="v7915" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.9.15 <span style="opacity:.5;font-weight:400;">&mdash; April 24, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">Cortex critique and local model pins</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            Patch over v7.9.14. Brain registers the semantic reasoner caller, persists cortex decision critique metadata for high-stakes decisions, and pins local embedding/model choices through a manifest-backed resolver used by warmup and migration paths.
+        </p>
     </div>
 </section>
 

@@ -911,6 +911,12 @@ def _m38_evolution_log_proposal_payload(conn):
 
 def _m55_cortex_critique_trace(conn):
     """Persist heuristic-vs-LLM critique traces for Cortex decisions."""
+    # Some legacy/minimal runtimes have schema_migrations backfilled through
+    # v48 without the optional Cortex table present. Repair the dependency
+    # before adding v55 columns so update never bricks those installs.
+    _m34_cortex_evaluations(conn)
+    _m35_cortex_evaluation_outcome_link(conn)
+    _m37_cortex_goal_profile_trace(conn)
     _migrate_add_column(conn, "cortex_evaluations", "heuristic_choice", "TEXT DEFAULT ''")
     _migrate_add_column(conn, "cortex_evaluations", "heuristic_reasoning", "TEXT DEFAULT ''")
     _migrate_add_column(conn, "cortex_evaluations", "critique_payload", "TEXT DEFAULT '{}'")

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Blog — NEXO Brain</title>
-    <meta name="description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.9.6 continuity runtime + MCP restart stability patch.">
+    <meta name="description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.9.16 MCP restart marker deadlock fix.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/blog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/blog/">
     <meta property="og:title" content="Blog — NEXO Brain">
-    <meta property="og:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.9.6 continuity runtime + MCP restart stability patch.">
+    <meta property="og:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.9.16 MCP restart marker deadlock fix.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Blog — NEXO Brain">
-    <meta name="twitter:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.9.6 continuity runtime + MCP restart stability patch.">
+    <meta name="twitter:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.9.16 MCP restart marker deadlock fix.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Blog — NEXO Brain",
-        "description": "Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.9.6 continuity runtime + MCP restart stability patch.",
+        "description": "Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.9.16 MCP restart marker deadlock fix.",
         "url": "https://nexo-brain.com/blog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -134,7 +134,7 @@
                     <span class="page-chip">Shared brain product notes</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="/blog/nexo-7-9-6/" class="btn btn-primary">Read latest release</a>
+                    <a href="/blog/nexo-7-9-16/" class="btn btn-primary">Read latest release</a>
                     <a href="/changelog/" class="btn btn-secondary">Latest release notes</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -143,24 +143,24 @@
             <div class="blog-featured-card">
                 <div class="section-label">Latest release</div>
                 <div class="blog-featured-meta">
-                    <span class="compare-chip">April 23, 2026</span>
+                    <span class="compare-chip">April 24, 2026</span>
                     <span class="compare-chip">Patch</span>
-                    <span class="compare-chip">continuity + MCP restart stability</span>
+                    <span class="compare-chip">restart marker deadlock fix</span>
                 </div>
-                <h2>NEXO 7.9.6: continuity runtime + MCP restart stability</h2>
-                <p>Patch over v7.9.5. Brain now persists continuity snapshots and resume bundles, activates packaged runtimes atomically, and forces old MCP processes to self-drain until the client restarts against the installed runtime.</p>
+                <h2>NEXO 7.9.16: restart marker deadlock fix</h2>
+                <p>Patch over v7.9.15. Brain restart-required markers now include only active interactive clients, keep startup reachable during recovery, and auto-ack restarted clients once process and installed versions match.</p>
                 <div class="hero-actions" style="justify-content:flex-start;margin-bottom:18px;">
-                    <a href="/blog/nexo-7-9-6/" class="btn btn-primary">Open article</a>
-                    <a href="/changelog/#v796" class="btn btn-secondary">Open changelog</a>
+                    <a href="/blog/nexo-7-9-16/" class="btn btn-primary">Open article</a>
+                    <a href="/changelog/#v7916" class="btn btn-secondary">Open changelog</a>
                 </div>
                 <div class="blog-mini-stack">
                     <div class="blog-mini-card">
                         <strong>Companion view</strong>
-                        <span><a href="/changelog/#v796">See the full v7.9.6 changelog</a></span>
+                        <span><a href="/changelog/#v7916">See the full v7.9.16 changelog</a></span>
                     </div>
                     <div class="blog-mini-card">
                         <strong>Previous release</strong>
-                        <span><a href="/blog/nexo-7-9-5/">NEXO 7.9.5: Desktop diary alias confirmation</a>.</span>
+                        <span><a href="/changelog/#v7914">NEXO 7.9.14: protocol close gates and Codex parity</a>.</span>
                     </div>
                 </div>
             </div>
@@ -191,6 +191,15 @@
 <section class="section-flush-top">
     <div class="container">
             <div class="blog-grid">
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 24, 2026</div>
+                <h2><a href="/blog/nexo-7-9-16/">NEXO 7.9.16: restart marker deadlock fix</a></h2>
+                <p>Patch over v7.9.15. Restart-required markers now adapt to active clients, startup stays reachable during restart recovery, and identified clients auto-ack once the updated runtime is actually loaded.</p>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/blog/nexo-7-9-16/" class="btn btn-secondary">Read more</a>
+                </div>
+            </div>
 
             <div class="blog-card">
                 <div class="blog-card-date">April 23, 2026</div>

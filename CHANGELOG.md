@@ -1,5 +1,26 @@
 # Changelog
 
+## [7.9.16] - 2026-04-24
+
+### Fixed
+- Restart-required MCP markers now target only the user's active interactive clients instead of hardcoding Claude Desktop, Claude Code, and Codex as mandatory acknowledgers after every Brain update.
+- `nexo_startup` is allowed during restart recovery, so sessions can start and surface actionable status while the marker exists.
+- Identified MCP clients now auto-ack their restart marker once the process runtime version matches the installed runtime version, preventing permanent `mcp_restart_required` blocks after a successful restart.
+- Release artifacts and public surfaces now stay aligned with the published package version before npm publication.
+
+### Tests
+- Added regression coverage for adaptive restart-marker clients, single-client marker unlink, startup allowlisting during restart recovery, and middleware auto-ack on version match.
+
+## [7.9.15] - 2026-04-24
+
+### Fixed
+- Registered the semantic reasoner caller in the resonance map so semantic reasoning routes are covered by caller classification tests.
+- Added the cortex decision critic prompt and persistence path so high-stakes decisions can store explicit critique metadata instead of relying only on transient reasoning.
+- Pinned local embedding/model choices in a manifest-backed resolver, including canonical runtime paths and migration/warmup integration.
+
+### Tests
+- Added regression coverage for resonance caller registration, cortex decision metadata, local model resolution, and canonical runtime paths.
+
 ## [7.9.14] - 2026-04-24
 
 ### Fixed

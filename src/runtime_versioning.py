@@ -16,7 +16,13 @@ import paths
 CONTINUITY_API_LEVEL = 1
 MCP_STATUS_SCHEMA_VERSION = 1
 PROCESS_VERSION = ""
+RESTART_CLIENT_ACTIONS = {
+    "claude_desktop": "restart_client_required",
+    "claude_code": "restart_session_required",
+    "codex": "restart_session_required",
+}
 RESTART_ALLOWLIST = {
+    "nexo_startup",
     "nexo_status",
     "nexo_system_catalog",
     "nexo_tool_explain",
@@ -46,6 +52,61 @@ def _write_json_atomic(path: Path, payload: dict) -> None:
     tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
     tmp.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     tmp.replace(path)
+
+
+def _normalize_restart_client(value: str | None) -> str:
+    candidate = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+    aliases = {
+        "claude": "claude_code",
+        "claudecode": "claude_code",
+        "claude_code": "claude_code",
+        "claude_desktop": "claude_desktop",
+        "claude_desktop_app": "claude_desktop",
+        "desktop": "claude_desktop",
+        "codex": "codex",
+    }
+    resolved = aliases.get(candidate, candidate)
+    if resolved in RESTART_CLIENT_ACTIONS:
+        return resolved
+    return ""
+
+
+def _enabled_flag(value) -> bool:
+    if isinstance(value, str):
+        return value.strip().lower() not in {"", "0", "false", "no", "off", "disabled", "none"}
+    return bool(value)
+
+
+def _restart_clients_from_preferences() -> dict[str, str]:
+    try:
+        from runtime_power import load_schedule_config
+
+        prefs = load_schedule_config()
+    except Exception:
+        prefs = {}
+
+    raw_clients = prefs.get("interactive_clients") if isinstance(prefs, dict) else {}
+    clients: dict[str, str] = {}
+    if isinstance(raw_clients, dict):
+        for raw_key, raw_enabled in raw_clients.items():
+            key = _normalize_restart_client(str(raw_key or ""))
+            if key and _enabled_flag(raw_enabled):
+                clients[key] = RESTART_CLIENT_ACTIONS[key]
+    return clients
+
+
+def _restart_clients_for_marker(*, client: str = "") -> dict[str, str]:
+    explicit_client = _normalize_restart_client(client or os.environ.get("NEXO_MCP_CLIENT", ""))
+    if explicit_client:
+        return {explicit_client: RESTART_CLIENT_ACTIONS[explicit_client]}
+
+    clients = _restart_clients_from_preferences()
+    if clients:
+        return clients
+
+    # Safe default for fresh/legacy installs: Claude Code is the primary
+    # terminal client, and avoiding absent clients prevents permanent markers.
+    return {"claude_code": RESTART_CLIENT_ACTIONS["claude_code"]}
 
 
 def core_container_dir() -> Path:
@@ -135,6 +196,7 @@ def write_restart_required_marker(
     from_version: str,
     to_version: str,
     reason: str = "brain_update",
+    client: str = "",
 ) -> dict:
     path = restart_required_marker_path()
     payload = {
@@ -144,11 +206,7 @@ def write_restart_required_marker(
         "to_version": str(to_version or "").strip(),
         "reason": str(reason or "brain_update"),
         "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "clients": {
-            "claude_desktop": "restart_client_required",
-            "claude_code": "restart_session_required",
-            "codex": "restart_session_required",
-        },
+        "clients": _restart_clients_for_marker(client=client),
     }
     _write_json_atomic(path, payload)
     payload["path"] = str(path)
@@ -206,6 +264,7 @@ def activate_versioned_runtime_snapshot(*, source_root: Path | None = None, vers
 
 
 def clear_restart_required_marker(*, client: str = "", installed_version: str = "", process_version: str = "") -> dict:
+    client = _normalize_restart_client(client)
     path = restart_required_marker_path()
     marker = read_restart_required_marker()
     if not marker.get("required"):
@@ -244,6 +303,7 @@ def clear_restart_required_marker(*, client: str = "", installed_version: str = 
 
 
 def resolve_restart_required(*, client: str = "", installed_version: str = "", process_version: str = "") -> dict:
+    client = _normalize_restart_client(client)
     marker = read_restart_required_marker()
     installed = str(installed_version or installed_runtime_version() or "").strip()
     process = str(process_version or PROCESS_VERSION or installed).strip()
@@ -277,6 +337,7 @@ def resolve_restart_required(*, client: str = "", installed_version: str = "", p
 
 
 def build_mcp_status(*, client: str = "") -> dict:
+    client = _normalize_restart_client(client)
     state = resolve_restart_required(client=client)
     marker = state["marker"]
     return {
@@ -319,6 +380,28 @@ def prime_process_version() -> str:
 class RestartRequiredMiddleware(Middleware):
     client: str = ""
 
+    def __post_init__(self) -> None:
+        self.client = _normalize_restart_client(self.client)
+
+    def _ack_current_client_if_restarted(self, state: dict) -> dict:
+        if not self.client or not state.get("restart_required"):
+            return state
+        installed = str(state.get("installed_version") or "").strip()
+        process = str(state.get("process_version") or "").strip()
+        if not installed or not process or installed != process:
+            return state
+
+        clear_restart_required_marker(
+            client=self.client,
+            installed_version=installed,
+            process_version=process,
+        )
+        return resolve_restart_required(
+            client=self.client,
+            installed_version=installed,
+            process_version=process,
+        )
+
     async def _tool_result_for_restart_required(self, context, payload: dict) -> ToolResult:
         payload_text = json.dumps(payload, ensure_ascii=False)
         tool = None
@@ -344,6 +427,7 @@ class RestartRequiredMiddleware(Middleware):
     async def on_call_tool(self, context, call_next):
         tool_name = str(getattr(context.message, "name", "") or "").strip()
         state = resolve_restart_required(client=self.client)
+        state = self._ack_current_client_if_restarted(state)
         if not state["restart_required"] or tool_name in RESTART_ALLOWLIST:
             return await call_next(context)
 
