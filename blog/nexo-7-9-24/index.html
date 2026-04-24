@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.9.24: Lifecycle alias stop resolution</title>
+<meta name="description" content="NEXO Brain v7.9.24 patch release. Resolves Desktop lifecycle diary aliases back to the registered NEXO session before stopping.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-9-24/">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.9.24: Lifecycle alias stop resolution","datePublished":"2026-04-24","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head><body><main><article style="max-width:760px;margin:80px auto;padding:0 24px;line-height:1.75;">
+<h1>NEXO 7.9.24 — Lifecycle alias stop resolution</h1>
+<p><em>Published 2026-04-24. Patch release over v7.9.23.</em></p>
+
+<p>v7.9.24 closes the remaining Desktop app-exit lifecycle gap found during a real installed-app test. v7.9.23 preserved the fallback diary contents, but a newer alias-only NEXO SID could still be selected as the diary evidence owner. Desktop then stopped that alias while the registered active session remained open.</p>
+
+<h2>What is fixed</h2>
+<p>Fallback diary writes now prefer the registered NEXO session linked to the Desktop/Claude session UUID. The explicit <code>nexo lifecycle stop-nexo-session</code> path also resolves orphan aliases back to their registered sibling sessions before calling <code>nexo_stop</code>.</p>
+
+<h2>Why it matters</h2>
+<p>Desktop shutdown needs two independent guarantees: the diary must preserve the conversation, and the canonical lifecycle must prove that the real active session closed. Resolving aliases at both diary and stop time keeps those guarantees aligned.</p>
+
+<h2>Verification</h2>
+<p>Regression coverage reproduces the alias drift: a newer alias-only SID and an older registered session point at the same Desktop session. The fallback diary now stores under the registered SID, and stop resolution closes that real session even when invoked with the orphan alias.</p>
+
+<p><a href="/changelog/#v7924">Full changelog entry &rarr;</a></p>
+</article></main></body></html>
