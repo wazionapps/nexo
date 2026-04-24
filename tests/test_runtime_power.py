@@ -139,6 +139,34 @@ def test_reload_launchagent_reports_error_when_bootstrap_and_legacy_load_fail(tm
     assert result["bootstrap_error"] == "Bootstrap failed: 5"
 
 
+def test_reload_launchagent_skips_launchctl_when_home_is_ephemeral(tmp_path, monkeypatch):
+    import runtime_power
+
+    home = tmp_path / "pytest-of-user" / "pytest-1" / "test_case0"
+    nexo_home = home / "nexo"
+    plist_path = home / "Library" / "LaunchAgents" / "com.nexo.watchdog.plist"
+    plist_path.parent.mkdir(parents=True)
+    with plist_path.open("wb") as fh:
+        plistlib.dump({"Label": "com.nexo.watchdog"}, fh)
+
+    calls: list[list[str]] = []
+
+    def fake_run(args, **kwargs):
+        calls.append(list(args))
+        raise AssertionError("launchctl must not be called for pytest temp homes")
+
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("NEXO_HOME", str(nexo_home))
+    monkeypatch.delenv("NEXO_ALLOW_EPHEMERAL_INSTALL", raising=False)
+    monkeypatch.setattr(runtime_power.subprocess, "run", fake_run)
+
+    result = runtime_power.reload_launchagent_plist(plist_path)
+
+    assert result["ok"] is True
+    assert result["action"] == "skipped-ephemeral-runtime"
+    assert calls == []
+
+
 def test_describe_power_policy_macos_reports_best_effort(tmp_path, monkeypatch):
     import runtime_power
 

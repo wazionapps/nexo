@@ -6,9 +6,13 @@
 - Managed Claude Code and Codex bootstrap templates now include `User-Facing Agent Contract`, aligning configured assistant identity, cross-client continuity, professional autonomy, safety boundaries, and calm user-facing tone.
 - Product docs now define the user-facing identity/autonomy contract so future Brain/Desktop changes do not drift between clients.
 
+### Fixed
+- LaunchAgent reload paths now skip `launchctl` side effects when `HOME` or `NEXO_HOME` points at pytest/macOS temp directories, preventing local test runs from loading temporary `com.nexo.*` services into the operator's real launchd session.
+
 ### Tests
 - Added bootstrap regression coverage for Claude/Codex parity, assistant-name substitution, safe autonomy wording, and `USER` block preservation during managed sync.
 - Verified `clients sync --json` in a temporary HOME/NEXO_HOME writes updated Claude/Codex `CORE` blocks while preserving `USER`.
+- Added regression coverage for runtime power reload, cron manifest sync, and post-bump LaunchAgent reload skipping real `launchctl` calls in ephemeral test homes.
 
 ## [7.9.24] - 2026-04-24
 

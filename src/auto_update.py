@@ -1250,6 +1250,9 @@ def _reload_launch_agents_after_bump() -> dict:
     if sys.platform != "darwin":
         # macOS-only for now. systemd path tracked separately.
         return result
+    if _is_ephemeral_runtime_install():
+        result["skipped_reason"] = "ephemeral-runtime"
+        return result
 
     launch_agents_dir = Path.home() / "Library" / "LaunchAgents"
     if not launch_agents_dir.is_dir():

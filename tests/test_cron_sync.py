@@ -495,6 +495,57 @@ def test_sync_script_runs_directly_from_runtime_root(tmp_path):
     assert "ModuleNotFoundError" not in result.stderr
 
 
+def test_sync_writes_plist_but_skips_launchctl_when_home_is_ephemeral(tmp_path, monkeypatch):
+    from crons import sync as cron_sync
+
+    home = tmp_path / "pytest-of-user" / "pytest-1" / "test_case0"
+    launch_agents_dir = home / "Library" / "LaunchAgents"
+    runtime_root = home / "nexo"
+    source_root = tmp_path / "repo-src"
+    launch_agents_dir.mkdir(parents=True)
+    (runtime_root / "runtime" / "logs").mkdir(parents=True)
+    (source_root / "scripts").mkdir(parents=True)
+    script = source_root / "scripts" / "nexo-watchdog.sh"
+    script.write_text("#!/bin/bash\nexit 0\n")
+    script.chmod(0o755)
+    wrapper = source_root / "scripts" / "nexo-cron-wrapper.sh"
+    wrapper.write_text("#!/bin/bash\nexit 0\n")
+    wrapper.chmod(0o755)
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(
+        json.dumps({
+            "crons": [
+                {"id": "watchdog", "script": "scripts/nexo-watchdog.sh", "type": "shell", "interval_seconds": 1800}
+            ]
+        })
+    )
+
+    calls: list[dict] = []
+
+    def fail_reload(*_args, **_kwargs):
+        calls.append({"called": True})
+        raise AssertionError("launchctl reload must not run for pytest temp homes")
+
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("NEXO_HOME", str(runtime_root))
+    monkeypatch.delenv("NEXO_ALLOW_EPHEMERAL_INSTALL", raising=False)
+    monkeypatch.setattr(cron_sync.platform, "system", lambda: "Darwin")
+    monkeypatch.setattr(cron_sync, "LAUNCH_AGENTS_DIR", launch_agents_dir)
+    monkeypatch.setattr(cron_sync, "SOURCE_ROOT", source_root)
+    monkeypatch.setattr(cron_sync, "RUNTIME_ROOT", runtime_root)
+    monkeypatch.setattr(cron_sync, "NEXO_HOME", runtime_root)
+    monkeypatch.setattr(cron_sync, "LOG_DIR", runtime_root / "runtime" / "logs")
+    monkeypatch.setattr(cron_sync, "MANIFEST", manifest)
+    monkeypatch.setattr(cron_sync, "OPTIONALS_FILE", runtime_root / "config" / "optionals.json")
+    monkeypatch.setattr(cron_sync, "SCHEDULE_FILE", runtime_root / "config" / "schedule.json")
+    monkeypatch.setattr(cron_sync, "reload_launchagent_plist", fail_reload)
+
+    cron_sync.sync()
+
+    assert (launch_agents_dir / "com.nexo.watchdog.plist").is_file()
+    assert calls == []
+
+
 def test_sync_linux_weekday_uses_launchd_convention(tmp_path, monkeypatch):
     """Manifest weekday follows launchd convention (0=Sunday).
 

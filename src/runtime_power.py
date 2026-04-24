@@ -21,6 +21,7 @@ import plistlib
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -123,6 +124,60 @@ def _launchctl_text(proc: subprocess.CompletedProcess) -> str:
     return (proc.stderr or proc.stdout or "").strip()
 
 
+def _normalize_runtime_probe_path(candidate: str | os.PathLike[str] | None) -> str:
+    if not candidate:
+        return ""
+    try:
+        resolved = Path(candidate).expanduser().resolve(strict=False)
+    except Exception:
+        try:
+            resolved = Path(candidate).expanduser()
+        except Exception:
+            return ""
+    return str(resolved).replace("\\", "/").rstrip("/")
+
+
+def _is_within_path(candidate: str, root: str) -> bool:
+    return bool(candidate) and bool(root) and (candidate == root or candidate.startswith(f"{root}/"))
+
+
+def launchctl_side_effects_allowed() -> bool:
+    """Return False for pytest/CI temp homes that must never touch launchd."""
+    if str(os.environ.get("NEXO_ALLOW_EPHEMERAL_INSTALL", "")).strip() == "1":
+        return True
+
+    temp_roots: set[str] = set()
+    for root in (
+        tempfile.gettempdir(),
+        "/tmp",
+        "/private/tmp",
+        "/var/folders",
+        "/private/var/folders",
+    ):
+        normalized = _normalize_runtime_probe_path(root)
+        if not normalized:
+            continue
+        temp_roots.add(normalized)
+        if normalized == "/tmp":
+            temp_roots.add("/private/tmp")
+        elif normalized == "/private/tmp":
+            temp_roots.add("/tmp")
+        elif normalized.startswith("/var/"):
+            temp_roots.add(f"/private{normalized}")
+        elif normalized.startswith("/private/var/"):
+            temp_roots.add(normalized.removeprefix("/private"))
+
+    candidates = (
+        _normalize_runtime_probe_path(os.environ.get("HOME", str(Path.home()))),
+        _normalize_runtime_probe_path(os.environ.get("NEXO_HOME", str(NEXO_HOME))),
+    )
+    return not any(
+        _is_within_path(candidate, root)
+        for candidate in candidates
+        for root in temp_roots
+    )
+
+
 def _launchctl_print(label: str, timeout: int = 5) -> subprocess.CompletedProcess:
     return subprocess.run(
         ["launchctl", "print", f"gui/{os.getuid()}/{label}"],
@@ -165,6 +220,13 @@ def unload_launchagent_plist(
     """
     plist_path = Path(plist_path)
     resolved_label = launchagent_label_from_plist(plist_path, label)
+    if not launchctl_side_effects_allowed():
+        return {
+            "ok": True,
+            "label": resolved_label,
+            "action": "skipped-ephemeral-runtime",
+            "errors": [],
+        }
     domain = f"gui/{os.getuid()}"
     commands = [
         ["launchctl", "bootout", f"{domain}/{resolved_label}"],
@@ -204,6 +266,8 @@ def reload_launchagent_plist(
     resolved_label = launchagent_label_from_plist(plist_path, label)
     if not plist_path.is_file():
         return {"ok": False, "label": resolved_label, "error": "plist missing"}
+    if not launchctl_side_effects_allowed():
+        return {"ok": True, "label": resolved_label, "action": "skipped-ephemeral-runtime"}
 
     unload_launchagent_plist(plist_path, resolved_label, timeout=timeout)
     domain = f"gui/{os.getuid()}"
