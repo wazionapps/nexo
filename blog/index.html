@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Blog — NEXO Brain</title>
-    <meta name="description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.9.21 LaunchAgent repair patch.">
+    <meta name="description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.9.22 Desktop lifecycle diary fallback patch.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/blog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/blog/">
     <meta property="og:title" content="Blog — NEXO Brain">
-    <meta property="og:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.9.21 LaunchAgent repair patch.">
+    <meta property="og:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.9.22 Desktop lifecycle diary fallback patch.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Blog — NEXO Brain">
-    <meta name="twitter:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.9.21 LaunchAgent repair patch.">
+    <meta name="twitter:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.9.22 Desktop lifecycle diary fallback patch.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Blog — NEXO Brain",
-        "description": "Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.9.21 LaunchAgent repair patch.",
+        "description": "Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.9.22 Desktop lifecycle diary fallback patch.",
         "url": "https://nexo-brain.com/blog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -134,7 +134,7 @@
                     <span class="page-chip">Shared brain product notes</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="/blog/nexo-7-9-21/" class="btn btn-primary">Read latest release</a>
+                    <a href="/blog/nexo-7-9-22/" class="btn btn-primary">Read latest release</a>
                     <a href="/changelog/" class="btn btn-secondary">Latest release notes</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -145,22 +145,22 @@
                 <div class="blog-featured-meta">
                     <span class="compare-chip">April 24, 2026</span>
                     <span class="compare-chip">Patch</span>
-                    <span class="compare-chip">LaunchAgent repair</span>
+                    <span class="compare-chip">Lifecycle diary</span>
                 </div>
-                <h2>NEXO 7.9.21: LaunchAgent repair race hardening</h2>
-                <p>Patch over v7.9.20. Runtime update and doctor repair now handle macOS already-loaded LaunchAgent races without turning successful self-heal into Bootstrap failed: 5 noise.</p>
+                <h2>NEXO 7.9.22: Desktop lifecycle fallback diary</h2>
+                <p>Patch over v7.9.21. Desktop close/archive/app-exit can now preserve shutdown context through a Brain-side fallback diary when the live agent cannot answer before the app exits.</p>
                 <div class="hero-actions" style="justify-content:flex-start;margin-bottom:18px;">
-                    <a href="/blog/nexo-7-9-21/" class="btn btn-primary">Open article</a>
-                    <a href="/changelog/#v7921" class="btn btn-secondary">Open changelog</a>
+                    <a href="/blog/nexo-7-9-22/" class="btn btn-primary">Open article</a>
+                    <a href="/changelog/#v7922" class="btn btn-secondary">Open changelog</a>
                 </div>
                 <div class="blog-mini-stack">
                     <div class="blog-mini-card">
                         <strong>Companion view</strong>
-                        <span><a href="/changelog/#v7921">See the full v7.9.21 changelog</a></span>
+                        <span><a href="/changelog/#v7922">See the full v7.9.22 changelog</a></span>
                     </div>
                     <div class="blog-mini-card">
                         <strong>Previous release</strong>
-                        <span><a href="/blog/nexo-7-9-20/">NEXO 7.9.20: packaged update self-heal</a>.</span>
+                        <span><a href="/blog/nexo-7-9-21/">NEXO 7.9.21: LaunchAgent repair race hardening</a>.</span>
                     </div>
                 </div>
             </div>
@@ -191,6 +191,15 @@
 <section class="section-flush-top">
     <div class="container">
             <div class="blog-grid">
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 24, 2026</div>
+                <h2><a href="/blog/nexo-7-9-22/">NEXO 7.9.22: Desktop lifecycle fallback diary</a></h2>
+                <p>Patch over v7.9.21. Desktop close/archive/app-exit can preserve title, goal, session ids, and transcript tail through a Brain fallback diary when the live shutdown prompt cannot complete.</p>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/blog/nexo-7-9-22/" class="btn btn-secondary">Read more</a>
+                </div>
+            </div>
 
             <div class="blog-card">
                 <div class="blog-card-date">April 24, 2026</div>
