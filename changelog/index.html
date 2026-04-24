@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.18 fixes packaged client-sync bootstrap imports and includes the restart-marker fix.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.19 cleans runtime doctor product-health scoring after the final Brain audit.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.18 fixes packaged client-sync bootstrap imports and includes the restart-marker fix.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.19 cleans runtime doctor product-health scoring after the final Brain audit.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.18 fixes packaged client-sync bootstrap imports and includes the restart-marker fix.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.19 cleans runtime doctor product-health scoring after the final Brain audit.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.18 fixes packaged client-sync bootstrap imports and includes the restart-marker fix.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.19 cleans runtime doctor product-health scoring after the final Brain audit.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -87,19 +87,23 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v7.9.18 live</span>
+                    <span class="page-chip">v7.9.19 live</span>
                     <span class="page-chip">Guardian active</span>
                     <span class="page-chip">F0.6 hardening</span>
                     <span class="page-chip">Adaptive empirical</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v7918" class="btn btn-primary">Start with v7.9.18</a>
-                    <a href="#v7917" class="btn btn-secondary">See v7.9.17</a>
+                    <a href="#v7919" class="btn btn-primary">Start with v7.9.19</a>
+                    <a href="#v7918" class="btn btn-secondary">See v7.9.18</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
             </div>
             <div class="page-visual">
                 <div class="page-stack">
+                    <div class="page-stack-card">
+                        <strong>v7.9.19</strong>
+                        <span>Patch — runtime doctor now separates real install health from in-progress work, excludes interactive Desktop sessions from automation scoring, prunes stale filesystem skills, resolves drained stale debt rows, and treats watchdog SIGTERM 143 as a supervisor reload/interruption.</span>
+                    </div>
                     <div class="page-stack-card">
                         <strong>v7.9.18</strong>
                         <span>Patch — packaged client-sync imports no longer crash when NEXO_HOME is unset, restoring nexo clients sync, update client-sync checks, and doctor bootstrap checks. Includes the v7.9.17 Bandit gate fix and v7.9.16 restart-marker deadlock fix.</span>
@@ -236,6 +240,16 @@
 <section class="section-compact" style="background:rgba(124,58,237,0.08);">
     <div class="container desktop-disclaimer" style="max-width:860px;font-size:13px;line-height:1.55;">
         <p><strong>Sobre NEXO Desktop.</strong> NEXO Desktop es un cliente acompa&ntilde;ante closed-source distribuido aparte en <a href="https://nexo-desktop.com/">nexo-desktop.com</a>. Cuando una entrada de changelog menciona "NEXO Desktop" se refiere a una versi&oacute;n coordinada de ese cliente que consume el contrato CLI/MCP del Brain. El c&oacute;digo de Desktop no vive en este repo; el Brain (AGPL-3.0) es 100% usable por s&iacute; solo desde terminal, Codex, Claude Code, o cualquier cliente MCP.</p>
+    </div>
+</section>
+
+<section id="v7919" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.9.19 <span style="opacity:.5;font-weight:400;">&mdash; April 24, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">Runtime doctor cleanup</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            Patch over v7.9.18. Runtime doctor now separates current product health from work still in progress, excludes interactive Desktop sessions from automation telemetry scoring, prunes stale filesystem-backed skills, downgrades missing executable skill definitions to guide mode, marks stale drained protocol debt as resolved, and treats watchdog SIGTERM 143 exits as supervisor reloads instead of cron failures.
+        </p>
     </div>
 </section>
 
