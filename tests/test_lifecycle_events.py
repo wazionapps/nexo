@@ -364,6 +364,74 @@ def test_write_fallback_diary_preserves_payload_snapshot_when_injection_fails():
     assert ack["diary_confirmed"] is True
 
 
+def test_write_fallback_diary_enriches_minimal_lifecycle_payload_from_continuity():
+    from db import get_db, register_session
+    from plugins.lifecycle_events import handle_nexo_lifecycle_write_fallback_diary
+
+    register_session("nexo-9103-1", "desktop close fallback continuity")
+    conn = get_db()
+    snapshots = [
+        {
+            "current_goal": "mensaje 1",
+            "last_user_message": "mensaje 1",
+            "last_assistant_message": "OK 1",
+            "transcript_tail": ["user: mensaje 1", "assistant: OK 1"],
+        },
+        {
+            "current_goal": "mensaje 2",
+            "last_user_message": "mensaje 2",
+            "last_assistant_message": "OK 2",
+            "transcript_tail": ["user: mensaje 2", "assistant: OK 2"],
+        },
+        {
+            "current_goal": "mensaje 3",
+            "last_user_message": "mensaje 3",
+            "last_assistant_message": "OK 3",
+            "transcript_tail": ["user: mensaje 3", "assistant: OK 3"],
+        },
+    ]
+    for idx, payload in enumerate(snapshots, start=1):
+        conn.execute(
+            """
+            INSERT INTO continuity_snapshots (
+                conversation_id, session_id, event_type, payload_json,
+                trace_id, idempotency_key
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "conv-continuity-fallback",
+                "nexo-9103-1",
+                "turn_end",
+                json.dumps(payload, ensure_ascii=False),
+                f"trace-{idx}",
+                f"idem-{idx}",
+            ),
+        )
+    conn.commit()
+
+    _call(
+        event_id="evt-fallback-continuity",
+        action="app-exit",
+        conversation_id="conv-continuity-fallback",
+        session_id="nexo-9103-1",
+        payload_snapshot=json.dumps({"title": "New conversation", "is_active": True}, ensure_ascii=False),
+    )
+    fallback = json.loads(handle_nexo_lifecycle_write_fallback_diary(
+        "evt-fallback-continuity",
+        reason="inject-response-timeout",
+    ))
+    assert fallback["status"] == "ok"
+
+    row = conn.execute(
+        "SELECT pending, context_next, source FROM session_diary WHERE id = ?",
+        (fallback["session_diary_id"],),
+    ).fetchone()
+    assert row["pending"] == "mensaje 3"
+    assert "user: mensaje 1" in row["context_next"]
+    assert "assistant: OK 3" in row["context_next"]
+    assert row["source"] == "desktop-lifecycle-fallback"
+
+
 def test_wait_for_stop_uses_active_session_absence_as_evidence():
     from db import register_session, complete_session
     from plugins.lifecycle_events import handle_nexo_lifecycle_wait_for_stop
