@@ -1,5 +1,16 @@
 # Changelog
 
+## [7.9.20] - 2026-04-24
+
+### Fixed
+- Packaged update and runtime doctor repair now resolve cron sync from `~/.nexo/runtime/crons/sync.py`, with a source-tree fallback, so packaged installs can self-heal LaunchAgent drift instead of reporting a missing `core/current/crons/sync.py`.
+- LaunchAgent PATH generation now includes `~/.nexo/runtime/bootstrap/npm-global/bin`, allowing background jobs to find the managed Claude runtime after client sync installs it.
+- Runtime CLI module backfill now includes `claude_cli.py`, preventing legacy root `agent_runner.py` imports from missing the shared Claude resolver.
+- Immune database checks now skip the legacy optional `~/.claude-mem/claude-mem.db` when absent; current runtime health is based on `nexo.db` and `cognitive.db`.
+
+### Tests
+- Added regression coverage for managed LaunchAgent PATH, packaged doctor cron-sync repair, and Immune legacy DB handling.
+
 ## [7.9.19] - 2026-04-24
 
 ### Fixed

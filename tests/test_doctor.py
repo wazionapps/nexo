@@ -1912,6 +1912,9 @@ class TestRuntimeChecks:
         from doctor.providers import runtime
 
         plist_path = nexo_home / "com.nexo.watchdog.plist"
+        sync_path = nexo_home / "runtime" / "crons" / "sync.py"
+        sync_path.parent.mkdir(parents=True)
+        sync_path.write_text("print('ok')\n")
         with plist_path.open("wb") as fh:
             plistlib.dump({
                 "EnvironmentVariables": {

@@ -80,8 +80,15 @@ DEFAULT_CODEX_REASONING_EFFORT = _CODEX_DEFAULTS["reasoning_effort"]
 def resolve_launchagent_path() -> str:
     """Build a PATH string for LaunchAgent plists that includes nvm node if present."""
     home = Path.home()
-    parts = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin",
-             str(home / ".local/bin"), str(home / ".nexo/bin")]
+    parts = [
+        str(home / ".nexo/runtime/bootstrap/npm-global/bin"),
+        "/opt/homebrew/bin",
+        "/usr/local/bin",
+        "/usr/bin",
+        "/bin",
+        str(home / ".local/bin"),
+        str(home / ".nexo/bin"),
+    ]
     # Detect nvm node
     nvm_dir = home / ".nvm/versions/node"
     if nvm_dir.is_dir():
