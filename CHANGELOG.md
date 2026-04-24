@@ -1,5 +1,19 @@
 # Changelog
 
+## [7.9.19] - 2026-04-24
+
+### Fixed
+- Runtime doctor now separates current product health from in-progress operator work: protocol debt attached to open tasks is reported as pending work instead of blocking install health.
+- Automation telemetry scoring now excludes interactive Desktop session rows, so normal open-ended UI sessions do not make automation coverage look broken.
+- Skill directory sync now prunes stale filesystem-backed skills whose definitions disappeared and downgrades missing executable skill definitions to guide mode instead of keeping invalid executable metadata.
+- Deep Sleep protocol-debt draining now sets stale rows to `status='resolved'`, not only `resolved_at`, so doctor and reporting agree on debt state.
+- The watchdog now treats cron exit `143` with SIGTERM as a LaunchAgent/supervisor reload or interruption instead of a failed cron.
+- Codex runtime parity now treats managed bootstrap presence as the product install gate while keeping missing startup/heartbeat evidence visible as behavioral guidance.
+
+### Tests
+- Added regression coverage for stale skill pruning, missing executable skill downgrade, active-task protocol debt handling, interactive Desktop telemetry exclusion, Codex conditioned-file drift handling, and stale debt drain status resolution.
+- Validated with targeted pytest, ruff, watchdog shell syntax, source runtime doctor, npm pack, OpenClaw build/test/pack, release readiness, and installed runtime doctor before publication.
+
 ## [7.9.18] - 2026-04-24
 
 ### Fixed

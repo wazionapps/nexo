@@ -175,11 +175,12 @@ def test_run_drains_stale_without_touching_open_or_recent(seeded_db, tmp_path):
     # Mutation landed on the stale row only.
     with sqlite3.connect(seeded_db) as conn:
         rows = {
-            r[0]: (r[1], r[2])
-            for r in conn.execute("SELECT id, resolved_at, resolution FROM protocol_debt").fetchall()
+            r[0]: (r[1], r[2], r[3])
+            for r in conn.execute("SELECT id, resolved_at, resolution, status FROM protocol_debt").fetchall()
         }
     assert rows[debt_stale][0] is not None
     assert rows[debt_stale][1] == PHASE.AUTO_DRAIN_NOTE
+    assert rows[debt_stale][2] == "resolved"
     assert rows[debt_open][0] is None
     assert rows[debt_recent][0] is None
 

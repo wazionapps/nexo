@@ -144,6 +144,59 @@ class TestSkillsRuntime:
         assert skill["mode"] == "execute"
         assert skill["file_path"].startswith(str(skills_env / "skills-runtime"))
 
+    def test_sync_prunes_filesystem_skill_whose_definition_was_removed(self, skills_env):
+        personal_dir = _write_skill_definition(
+            skills_env / "skills",
+            "stale-skill",
+            {
+                "id": "SK-STALE",
+                "name": "Stale Skill",
+                "description": "Filesystem-backed skill that disappears.",
+                "level": "published",
+                "mode": "guide",
+            },
+        )
+        db, skills_runtime, _, _ = _reload_skill_stack()
+        db.init_db()
+
+        first = skills_runtime.sync_skills()
+        assert "SK-STALE" in first["ids"]
+        assert db.get_skill("SK-STALE") is not None
+
+        for child in personal_dir.iterdir():
+            child.unlink()
+        personal_dir.rmdir()
+        second = skills_runtime.sync_skills()
+
+        assert "SK-STALE" in second["pruned"]
+        assert db.get_skill("SK-STALE") is None
+
+    def test_sync_downgrades_missing_executable_skill_to_guide(self, skills_env):
+        _write_skill_definition(
+            skills_env / "skills",
+            "missing-executable",
+            {
+                "id": "SK-MISSING-EXEC",
+                "name": "Missing Executable",
+                "description": "A hybrid declaration without its script should remain usable as guidance.",
+                "level": "draft",
+                "mode": "hybrid",
+                "execution_level": "local",
+                "executable_entry": "scripts/missing.sh",
+            },
+            guide="# Missing executable\n",
+        )
+        db, skills_runtime, doctor_runtime, _ = _reload_skill_stack()
+        db.init_db()
+
+        skills_runtime.sync_skills()
+        skill = db.get_skill("SK-MISSING-EXEC")
+
+        assert skill["mode"] == "guide"
+        assert skill["execution_level"] == "none"
+        assert skill["file_path"] == ""
+        assert doctor_runtime.check_skill_health().status == "healthy"
+
     def test_apply_core_skill_dry_run(self, skills_env):
         db, skills_runtime, _, _ = _reload_skill_stack()
         db.init_db()

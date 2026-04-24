@@ -1537,7 +1537,7 @@ class TestRuntimeChecks:
 
         check = runtime.check_codex_conditioned_file_discipline()
         assert check.status == "healthy"
-        assert "Tracked Codex conditioned-file drift has no open protocol debt" in check.summary
+        assert "Tracked Codex conditioned-file mutation drift has no open protocol debt" in check.summary
         assert any("write touches without protocol task: 1" in item for item in check.evidence)
 
     def test_codex_conditioned_file_discipline_heals_old_write_drift_without_open_debt(self, nexo_home, monkeypatch):
@@ -1593,7 +1593,7 @@ class TestRuntimeChecks:
 
         check = runtime.check_codex_conditioned_file_discipline()
         assert check.status == "healthy"
-        assert "Tracked Codex conditioned-file drift has no open protocol debt" in check.summary
+        assert "Tracked Codex conditioned-file mutation drift has no open protocol debt" in check.summary
         assert any("write touches without protocol task: 1" in item for item in check.evidence)
 
     def test_codex_conditioned_file_discipline_accepts_protocol_open_and_guard_ack(self, nexo_home, monkeypatch):
@@ -2149,6 +2149,34 @@ class TestRuntimeChecks:
         assert check.status == "healthy"
         assert any("live in-progress guard acknowledgements pending: 1" in item for item in check.evidence)
 
+    def test_protocol_compliance_ignores_debt_attached_to_open_task(self, nexo_home):
+        db_path = nexo_home / "data" / "nexo.db"
+        _create_protocol_tables(db_path)
+        conn = sqlite3.connect(str(db_path))
+        conn.execute("ALTER TABLE protocol_tasks ADD COLUMN response_high_stakes INTEGER DEFAULT 0")
+        conn.execute(
+            """INSERT INTO protocol_tasks (
+                task_id, session_id, status, must_verify, close_evidence, must_change_log,
+                change_log_id, correction_happened, learning_id, task_type,
+                cortex_mode, response_high_stakes, opened_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))""",
+            ("PT-OPEN", "nexo-open", "open", 1, "", 0, None, 0, None, "execute", "propose", 0),
+        )
+        conn.execute(
+            """INSERT INTO protocol_debt (
+                session_id, task_id, debt_type, severity, status, created_at
+            ) VALUES (?, ?, ?, ?, ?, datetime('now'))""",
+            ("nexo-open", "PT-OPEN", "missing_cortex_evaluation", "error", "open"),
+        )
+        conn.commit()
+        conn.close()
+
+        from doctor.providers.runtime import check_protocol_compliance
+
+        check = check_protocol_compliance()
+        assert check.status == "healthy"
+        assert any("in-progress task protocol debt pending: 1" in item for item in check.evidence)
+
     def test_automation_telemetry_goes_critical_when_cost_coverage_is_missing(self, nexo_home):
         db_path = nexo_home / "data" / "nexo.db"
         conn = sqlite3.connect(str(db_path))
@@ -2271,6 +2299,46 @@ class TestRuntimeChecks:
         check = check_automation_telemetry()
         assert check.status == "healthy"
         assert any("missing_usage_runs=1" in item for item in check.evidence)
+
+    def test_automation_telemetry_excludes_interactive_desktop_sessions_from_scored_coverage(self, nexo_home):
+        db_path = nexo_home / "data" / "nexo.db"
+        conn = sqlite3.connect(str(db_path))
+        conn.execute(
+            """CREATE TABLE automation_runs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                backend TEXT DEFAULT '',
+                model TEXT DEFAULT '',
+                reasoning_effort TEXT DEFAULT '',
+                input_tokens INTEGER DEFAULT 0,
+                cached_input_tokens INTEGER DEFAULT 0,
+                output_tokens INTEGER DEFAULT 0,
+                total_cost_usd REAL,
+                telemetry_source TEXT DEFAULT '',
+                cost_source TEXT DEFAULT '',
+                status TEXT DEFAULT 'ok',
+                session_type TEXT DEFAULT 'headless',
+                created_at TEXT DEFAULT (datetime('now'))
+            )"""
+        )
+        conn.executemany(
+            """INSERT INTO automation_runs (
+                backend, input_tokens, output_tokens, total_cost_usd, cost_source, status, session_type, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))""",
+            [
+                ("claude_code", 120, 20, 0.12, "backend", "ok", "headless"),
+                ("claude_code", 0, 0, None, "", "ok", "interactive_desktop"),
+                ("claude_code", 0, 0, None, "", "ok", "interactive_chat"),
+            ],
+        )
+        conn.commit()
+        conn.close()
+
+        from doctor.providers.runtime import check_automation_telemetry
+
+        check = check_automation_telemetry()
+        assert check.status == "healthy"
+        assert any("scored_successful_runs=1" in item for item in check.evidence)
+        assert any("interactive_unmetered_runs_excluded=2" in item for item in check.evidence)
 
 
 class TestDeepChecks:

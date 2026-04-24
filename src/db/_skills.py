@@ -90,8 +90,16 @@ def _normalize_level(value: str | None) -> str:
 
 def _normalize_mode(value: str | None, *, has_script: bool = False, has_content: bool = False) -> str:
     mode = (value or "").strip().lower()
-    if mode in VALID_MODES:
+    if mode == "guide":
         return mode
+    if mode == "execute":
+        return "execute" if has_script else "guide"
+    if mode == "hybrid":
+        if has_script and has_content:
+            return "hybrid"
+        if has_script:
+            return "execute"
+        return "guide"
     if has_script and has_content:
         return "hybrid"
     if has_script:
@@ -159,6 +167,14 @@ def _sync_dirs() -> list[tuple[str, Path]]:
         ("core", CORE_SKILLS_DIR),
         ("personal", PERSONAL_SKILLS_DIR),
     ]
+
+
+def _is_relative_to(path: Path, parent: Path) -> bool:
+    try:
+        path.resolve(strict=False).relative_to(parent.resolve(strict=False))
+        return True
+    except (OSError, ValueError):
+        return False
 
 
 def _ensure_skill_dirs():
@@ -1379,7 +1395,50 @@ def sync_skill_directories() -> dict:
     for skill in discovered.values():
         synced.append(_upsert_filesystem_skill(skill)["id"])
 
-    return {"synced": len(synced), "ids": sorted(synced), "issues": issues}
+    pruned: list[str] = []
+    discovered_ids = set(discovered)
+    conn = get_db()
+    rows = conn.execute(
+        """SELECT id, source_kind, definition_path, file_path
+           FROM skills
+           WHERE source_kind IN ('core', 'community', 'personal')
+             AND definition_path != ''"""
+    ).fetchall()
+    sync_roots = [root.resolve(strict=False) for _source_kind, root in _sync_dirs()]
+    sync_roots.extend(
+        path.resolve(strict=False)
+        for path in (
+            NEXO_HOME / "core" / "skills",
+            NEXO_HOME / "skills-core",
+            NEXO_HOME / "personal" / "skills",
+            NEXO_HOME / "skills",
+            NEXO_HOME / "community" / "skills",
+        )
+    )
+    for row in rows:
+        skill_id = str(row["id"] or "")
+        if not skill_id or skill_id in discovered_ids:
+            continue
+        definition_path = Path(str(row["definition_path"] or "")).expanduser()
+        try:
+            definition_resolved = definition_path.resolve(strict=False)
+        except OSError:
+            definition_resolved = definition_path
+        if not any(_is_relative_to(definition_resolved, root) for root in sync_roots):
+            continue
+        if definition_path.is_file():
+            continue
+        runtime_file = Path(str(row["file_path"] or "")).expanduser()
+        conn.execute("DELETE FROM skill_usage WHERE skill_id = ?", (skill_id,))
+        conn.execute("DELETE FROM skills WHERE id = ?", (skill_id,))
+        conn.execute("DELETE FROM unified_search WHERE source = 'skill' AND source_id = ?", (skill_id,))
+        if runtime_file.is_file() and _is_relative_to(runtime_file, RUNTIME_SKILLS_DIR):
+            runtime_file.unlink(missing_ok=True)
+        pruned.append(skill_id)
+    if pruned:
+        conn.commit()
+
+    return {"synced": len(synced), "ids": sorted(synced), "pruned": sorted(pruned), "issues": issues}
 
 
 def import_skill_from_directory(path: str, source_kind: str = "personal") -> dict:

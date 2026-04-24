@@ -652,10 +652,14 @@ for monitor in "${MONITORS[@]}"; do
         fi
       else
         if [ -n "$last_exit" ] && [ "$last_exit" != "0" ]; then
-          latest_run_failed=true
-          status="FAIL"
-          details="${details}Last run exited ${last_exit}. "
-          [ -n "$last_error" ] && details="${details}Error: ${last_error}. "
+          if [ "$last_exit" = "143" ] && echo "$last_error" | grep -qi "SIGTERM"; then
+            details="${details}Last run ended by SIGTERM; treated as supervisor reload/interruption, not cron failure. "
+          else
+            latest_run_failed=true
+            status="FAIL"
+            details="${details}Last run exited ${last_exit}. "
+            [ -n "$last_error" ] && details="${details}Error: ${last_error}. "
+          fi
         fi
         if [ "$age" -gt $(( max_stale * 3 )) ]; then
           if [ "$recovery_policy" = "catchup" ]; then
