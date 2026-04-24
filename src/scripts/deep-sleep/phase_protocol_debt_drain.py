@@ -207,7 +207,7 @@ def run(
                 report["drained_ids"].append(int(row["id"]))
                 if not dry_run:
                     conn.execute(
-                        "UPDATE protocol_debt SET resolved_at = ?, resolution = ? "
+                        "UPDATE protocol_debt SET status = 'resolved', resolved_at = ?, resolution = ? "
                         "WHERE id = ? AND resolved_at IS NULL",
                         (
                             now.strftime("%Y-%m-%d %H:%M:%S"),

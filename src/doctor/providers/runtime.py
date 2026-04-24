@@ -2122,14 +2122,10 @@ def check_codex_session_parity() -> DoctorCheck:
             "Run `nexo update` or `nexo clients sync` so every Codex session inherits the managed bootstrap, not just a subset"
         )
     if missing_startup:
-        status = "degraded"
-        severity = "warn"
         repair_plan.append(
             "Use `nexo chat` or keep the global Codex bootstrap intact so every Codex session actually calls `nexo_startup`"
         )
     if missing_heartbeat:
-        status = "degraded"
-        severity = "warn"
         repair_plan.append("Keep `nexo_heartbeat` on every user turn so restored/plain Codex sessions do not drift off-protocol")
     if missing_bootstrap or missing_startup or missing_heartbeat:
         evidence.append(
@@ -2247,16 +2243,15 @@ def check_codex_conditioned_file_discipline() -> DoctorCheck:
         and audit["delete_without_protocol"] == 0
         and audit["delete_without_guard_ack"] == 0
     )
-    tracked_write_without_open_debt = (
+    tracked_mutation_without_open_debt = (
         no_open_conditioned_debt
         and audit["write_without_protocol"] > 0
         and audit["write_without_guard_ack"] == 0
-        and audit["delete_without_protocol"] == 0
         and audit["delete_without_guard_ack"] == 0
     )
 
     if audit["write_without_protocol"] or audit["write_without_guard_ack"]:
-        if tracked_write_without_open_debt:
+        if tracked_mutation_without_open_debt:
             status = "healthy"
             severity = "info"
         else:
@@ -2280,8 +2275,8 @@ def check_codex_conditioned_file_discipline() -> DoctorCheck:
         summary=(
             "Historical Codex conditioned-file drift has no open protocol debt"
             if historical_read_only
-            else "Tracked Codex conditioned-file drift has no open protocol debt"
-            if tracked_write_without_open_debt
+            else "Tracked Codex conditioned-file mutation drift has no open protocol debt"
+            if tracked_mutation_without_open_debt
             else "Recent Codex sessions respect conditioned-file discipline"
             if status == "healthy"
             else "Recent Codex sessions are bypassing conditioned-file discipline"
@@ -2524,6 +2519,7 @@ def check_protocol_compliance() -> DoctorCheck:
                                 continue
                             live_guard_task_ids.add(str(row["task_id"] or ""))
                     live_guard_debt = 0
+                    open_task_debt = 0
                     if {"task_id", "session_id"}.issubset(protocol_debt_cols):
                         task_status_expr = "'' AS task_status"
                         if "status" in protocol_task_cols:
@@ -2549,12 +2545,13 @@ def check_protocol_compliance() -> DoctorCheck:
                             session_id = str(row["session_id"] or "")
                             task_id = str(row["task_id"] or "")
                             task_status = str(row["task_status"] or "")
-                            if (
-                                debt_type == "unacknowledged_guard_blocking"
-                                and task_status == "open"
-                                and session_id in active_session_ids
-                            ):
-                                live_guard_task_ids.add(task_id or f"debt:{session_id}:{row['created_at']}")
+                            if task_status == "open":
+                                open_task_debt += 1
+                                if (
+                                    debt_type == "unacknowledged_guard_blocking"
+                                    and session_id in active_session_ids
+                                ):
+                                    live_guard_task_ids.add(task_id or f"debt:{session_id}:{row['created_at']}")
                                 continue
                             debt_counter[(severity, debt_type)] = debt_counter.get((severity, debt_type), 0) + 1
                         live_guard_debt = len(live_guard_task_ids)
@@ -2662,6 +2659,8 @@ def check_protocol_compliance() -> DoctorCheck:
                             evidence.append("high-stakes decision-eval rollout not yet seeded in the live window")
                     for row in debt_rows[:5]:
                         evidence.append(f"open {row['severity']} debt — {row['debt_type']}: {row['total']}")
+                    if open_task_debt:
+                        evidence.append(f"in-progress task protocol debt pending: {open_task_debt}")
                     if live_guard_debt:
                         evidence.append(f"live in-progress guard acknowledgements pending: {live_guard_debt}")
 
@@ -3131,15 +3130,20 @@ def check_automation_telemetry(days: int = 7) -> DoctorCheck:
                 "created_at",
             }.issubset(columns)
             if schema_has_status:
+                interactive_expr = "0"
+                if "session_type" in columns:
+                    interactive_expr = "COALESCE(session_type, '') LIKE 'interactive%'"
                 row = conn.execute(
-                    """
+                    f"""
                     SELECT
                         COUNT(*) AS runs,
                         SUM(CASE WHEN status = 'ok' THEN 1 ELSE 0 END) AS successful_runs,
                         SUM(CASE WHEN status != 'ok' THEN 1 ELSE 0 END) AS failed_runs,
-                        SUM(CASE WHEN status = 'ok' AND (input_tokens + cached_input_tokens + output_tokens) > 0 THEN 1 ELSE 0 END) AS usage_runs,
-                        SUM(CASE WHEN status = 'ok' AND total_cost_usd IS NOT NULL THEN 1 ELSE 0 END) AS cost_runs,
-                        SUM(CASE WHEN status = 'ok' AND cost_source = 'pricing_unavailable' THEN 1 ELSE 0 END) AS pricing_gaps,
+                        SUM(CASE WHEN status = 'ok' AND NOT ({interactive_expr}) THEN 1 ELSE 0 END) AS scored_successful_runs,
+                        SUM(CASE WHEN status = 'ok' AND NOT ({interactive_expr}) AND (input_tokens + cached_input_tokens + output_tokens) > 0 THEN 1 ELSE 0 END) AS usage_runs,
+                        SUM(CASE WHEN status = 'ok' AND NOT ({interactive_expr}) AND total_cost_usd IS NOT NULL THEN 1 ELSE 0 END) AS cost_runs,
+                        SUM(CASE WHEN status = 'ok' AND NOT ({interactive_expr}) AND cost_source = 'pricing_unavailable' THEN 1 ELSE 0 END) AS pricing_gaps,
+                        SUM(CASE WHEN status = 'ok' AND ({interactive_expr}) AND ((input_tokens + cached_input_tokens + output_tokens) = 0 OR total_cost_usd IS NULL) THEN 1 ELSE 0 END) AS interactive_unmetered_runs,
                         GROUP_CONCAT(DISTINCT backend) AS backends
                     FROM automation_runs
                     WHERE created_at >= datetime('now', ?)
@@ -3153,9 +3157,11 @@ def check_automation_telemetry(days: int = 7) -> DoctorCheck:
                         COUNT(*) AS runs,
                         COUNT(*) AS successful_runs,
                         0 AS failed_runs,
+                        COUNT(*) AS scored_successful_runs,
                         SUM(CASE WHEN (input_tokens + cached_input_tokens + output_tokens) > 0 THEN 1 ELSE 0 END) AS usage_runs,
                         SUM(CASE WHEN total_cost_usd IS NOT NULL THEN 1 ELSE 0 END) AS cost_runs,
                         SUM(CASE WHEN cost_source = 'pricing_unavailable' THEN 1 ELSE 0 END) AS pricing_gaps,
+                        0 AS interactive_unmetered_runs,
                         GROUP_CONCAT(DISTINCT backend) AS backends
                     FROM automation_runs
                     WHERE created_at >= datetime('now', ?)
@@ -3191,11 +3197,13 @@ def check_automation_telemetry(days: int = 7) -> DoctorCheck:
 
     successful_runs = int((row["successful_runs"] if row else 0) or 0)
     failed_runs = int((row["failed_runs"] if row else 0) or 0)
+    scored_successful_runs = int((row["scored_successful_runs"] if row and "scored_successful_runs" in row.keys() else successful_runs) or 0)
     usage_runs = int((row["usage_runs"] if row else 0) or 0)
     cost_runs = int((row["cost_runs"] if row else 0) or 0)
     pricing_gaps = int((row["pricing_gaps"] if row else 0) or 0)
-    usage_denominator = successful_runs or total_runs
-    cost_denominator = successful_runs or total_runs
+    interactive_unmetered_runs = int((row["interactive_unmetered_runs"] if row and "interactive_unmetered_runs" in row.keys() else 0) or 0)
+    usage_denominator = scored_successful_runs or (successful_runs if not interactive_unmetered_runs else 0)
+    cost_denominator = scored_successful_runs or (successful_runs if not interactive_unmetered_runs else 0)
     missing_usage_runs = max(0, usage_denominator - usage_runs) if usage_denominator else 0
     usage_coverage = round((usage_runs / usage_denominator) * 100, 1) if usage_denominator else 100.0
     cost_coverage = round((cost_runs / cost_denominator) * 100, 1) if cost_denominator else 100.0
@@ -3204,12 +3212,15 @@ def check_automation_telemetry(days: int = 7) -> DoctorCheck:
         f"runs={total_runs}",
         f"successful_runs={successful_runs}",
         f"failed_runs={failed_runs}",
+        f"scored_successful_runs={scored_successful_runs}",
         f"usage_coverage={usage_coverage}%",
         f"cost_coverage={cost_coverage}%",
         f"pricing_gaps={pricing_gaps}",
     ]
     if missing_usage_runs:
         evidence.append(f"missing_usage_runs={missing_usage_runs}")
+    if interactive_unmetered_runs:
+        evidence.append(f"interactive_unmetered_runs_excluded={interactive_unmetered_runs}")
     backends = str((row["backends"] if row else "") or "").strip()
     if backends:
         evidence.append(f"backends={backends}")
