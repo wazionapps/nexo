@@ -130,11 +130,38 @@ class TestReloadLaunchAgentsAfterBump:
         assert result["scanned"] == 0
         assert result["reloaded"] == 0
 
+    def test_skips_reload_when_home_is_ephemeral(self, monkeypatch, tmp_path):
+        import auto_update
+        import runtime_power
+
+        fake_home = tmp_path / "pytest-of-user" / "pytest-1" / "test_case0"
+        la_dir = fake_home / "Library" / "LaunchAgents"
+        la_dir.mkdir(parents=True)
+        (la_dir / "com.nexo.watchdog.plist").write_text("<plist/>")
+
+        monkeypatch.setattr(auto_update.sys, "platform", "darwin")
+        monkeypatch.setenv("HOME", str(fake_home))
+        monkeypatch.setenv("NEXO_HOME", str(fake_home / "nexo"))
+        monkeypatch.delenv("NEXO_ALLOW_EPHEMERAL_INSTALL", raising=False)
+        monkeypatch.setattr(auto_update.Path, "home", lambda: fake_home)
+        monkeypatch.setattr(
+            runtime_power.subprocess,
+            "run",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("launchctl must not run")),
+        )
+
+        result = auto_update._reload_launch_agents_after_bump()
+
+        assert result["scanned"] == 0
+        assert result["reloaded"] == 0
+        assert result["skipped_reason"] == "ephemeral-runtime"
+
     def test_calls_launchctl_bootout_then_bootstrap_for_each_plist(self, monkeypatch, tmp_path):
         import auto_update
         import runtime_power
         monkeypatch.setattr(auto_update.sys, "platform", "darwin")
         monkeypatch.setattr(runtime_power.os, "getuid", lambda: 501)
+        monkeypatch.setenv("NEXO_ALLOW_EPHEMERAL_INSTALL", "1")
         fake_home = tmp_path / "home"
         la_dir = fake_home / "Library" / "LaunchAgents"
         la_dir.mkdir(parents=True)
@@ -167,6 +194,7 @@ class TestReloadLaunchAgentsAfterBump:
         import runtime_power
         monkeypatch.setattr(auto_update.sys, "platform", "darwin")
         monkeypatch.setattr(runtime_power.os, "getuid", lambda: 501)
+        monkeypatch.setenv("NEXO_ALLOW_EPHEMERAL_INSTALL", "1")
         fake_home = tmp_path / "home"
         la_dir = fake_home / "Library" / "LaunchAgents"
         la_dir.mkdir(parents=True)
@@ -194,6 +222,7 @@ class TestReloadLaunchAgentsAfterBump:
         import auto_update
         import runtime_power
         monkeypatch.setattr(auto_update.sys, "platform", "darwin")
+        monkeypatch.setenv("NEXO_ALLOW_EPHEMERAL_INSTALL", "1")
         fake_home = tmp_path / "home"
         la_dir = fake_home / "Library" / "LaunchAgents"
         la_dir.mkdir(parents=True)

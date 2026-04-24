@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.9.24` is the current packaged-runtime line. Patch release over `7.9.23`: Desktop lifecycle shutdown now resolves alias-only diary SIDs back to the registered NEXO session before stopping, so app-exit can preserve the diary and confirm the real session is closed.
+Version `7.9.25` is the current packaged-runtime line. Patch release over `7.9.24`: managed Claude Code and Codex bootstraps now ship the shared user-facing agent contract, so the configured assistant identity, continuity checks, professional autonomy, safety boundaries, and calm user-facing tone stay aligned across clients.
+
+Previously in `7.9.24`: Desktop lifecycle shutdown resolves alias-only diary SIDs back to the registered NEXO session before stopping, so app-exit can preserve the diary and confirm the real session is closed.
 
 Previously in `7.9.23`: Desktop lifecycle fallback diaries now enrich sparse lifecycle events from continuity snapshots, so app-exit fallback evidence preserves recent turn context even when the live agent does not answer the injected diary prompt before shutdown.
 

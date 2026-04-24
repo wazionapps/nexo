@@ -1927,6 +1927,7 @@ class TestRuntimeChecks:
         monkeypatch.setattr(runtime.platform, "system", lambda: "Darwin")
         monkeypatch.setattr(runtime, "_managed_launchagent_plists", lambda: [("watchdog", plist_path)])
         monkeypatch.setattr(runtime.os, "getuid", lambda: 501)
+        monkeypatch.setenv("NEXO_ALLOW_EPHEMERAL_INSTALL", "1")
 
         calls = []
         bootstrapped = {"done": False}

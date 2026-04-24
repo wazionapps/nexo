@@ -23,6 +23,7 @@ import plistlib
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 _CRONS_DIR = Path(__file__).resolve().parent
@@ -35,6 +36,7 @@ import paths
 from cron_recovery import is_cron_enabled, resolve_declared_schedule, should_run_at_load
 try:
     from runtime_power import (
+        launchctl_side_effects_allowed,
         reload_launchagent_plist,
         resolve_launchagent_path,
         unload_launchagent_plist,
@@ -62,7 +64,51 @@ except ImportError:
                     break
         return ":".join(parts)
 
+    def launchctl_side_effects_allowed() -> bool:
+        """Fallback guard when runtime_power is unavailable."""
+        if str(os.environ.get("NEXO_ALLOW_EPHEMERAL_INSTALL", "")).strip() == "1":
+            return True
+
+        def normalize(candidate: str | os.PathLike[str] | None) -> str:
+            if not candidate:
+                return ""
+            try:
+                resolved = Path(candidate).expanduser().resolve(strict=False)
+            except Exception:
+                try:
+                    resolved = Path(candidate).expanduser()
+                except Exception:
+                    return ""
+            return str(resolved).replace("\\", "/").rstrip("/")
+
+        temp_roots: set[str] = set()
+        for root in (tempfile.gettempdir(), "/tmp", "/private/tmp", "/var/folders", "/private/var/folders"):
+            normalized = normalize(root)
+            if not normalized:
+                continue
+            temp_roots.add(normalized)
+            if normalized == "/tmp":
+                temp_roots.add("/private/tmp")
+            elif normalized == "/private/tmp":
+                temp_roots.add("/tmp")
+            elif normalized.startswith("/var/"):
+                temp_roots.add(f"/private{normalized}")
+            elif normalized.startswith("/private/var/"):
+                temp_roots.add(normalized.removeprefix("/private"))
+
+        candidates = (
+            normalize(os.environ.get("HOME", str(Path.home()))),
+            normalize(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo"))),
+        )
+        return not any(
+            candidate and root and (candidate == root or candidate.startswith(f"{root}/"))
+            for candidate in candidates
+            for root in temp_roots
+        )
+
     def reload_launchagent_plist(plist_path: Path, label: str | None = None, timeout: int = 10) -> dict:
+        if not launchctl_side_effects_allowed():
+            return {"ok": True, "label": label or Path(plist_path).stem, "action": "skipped-ephemeral-runtime"}
         subprocess.run(["launchctl", "unload", str(plist_path)], capture_output=True)
         proc = subprocess.run(["launchctl", "load", "-w", str(plist_path)], capture_output=True, text=True, timeout=timeout)
         if proc.returncode == 0:
@@ -70,6 +116,8 @@ except ImportError:
         return {"ok": False, "label": label or Path(plist_path).stem, "error": proc.stderr or proc.stdout or "load failed"}
 
     def unload_launchagent_plist(plist_path: Path, label: str | None = None, timeout: int = 10) -> dict:
+        if not launchctl_side_effects_allowed():
+            return {"ok": True, "label": label or Path(plist_path).stem, "action": "skipped-ephemeral-runtime"}
         proc = subprocess.run(["launchctl", "unload", str(plist_path)], capture_output=True, text=True, timeout=timeout)
         return {"ok": proc.returncode == 0, "label": label or Path(plist_path).stem}
 
@@ -455,7 +503,14 @@ def install_plist(label: str, plist: dict, plist_path: Path, dry_run: bool):
     with open(plist_path, "wb") as f:
         plistlib.dump(plist, f)
 
+    if not launchctl_side_effects_allowed():
+        log(f"  Installed but skipped launchctl in ephemeral runtime: {plist_path.name}")
+        return
+
     result = reload_launchagent_plist(plist_path, label=label)
+    if result.get("action") == "skipped-ephemeral-runtime":
+        log(f"  Installed but skipped launchctl in ephemeral runtime: {plist_path.name}")
+        return
     if result.get("ok"):
         log(f"  Installed + loaded: {plist_path.name}")
     else:
@@ -468,9 +523,17 @@ def unload_plist(plist_path: Path, dry_run: bool):
         log(f"  DRY-RUN: would remove {plist_path.name}")
         return
 
-    unload_launchagent_plist(plist_path)
+    if not launchctl_side_effects_allowed():
+        plist_path.unlink(missing_ok=True)
+        log(f"  Removed without launchctl in ephemeral runtime: {plist_path.name}")
+        return
+
+    result = unload_launchagent_plist(plist_path)
     plist_path.unlink(missing_ok=True)
-    log(f"  Removed: {plist_path.name}")
+    if result.get("action") == "skipped-ephemeral-runtime":
+        log(f"  Removed without launchctl in ephemeral runtime: {plist_path.name}")
+    else:
+        log(f"  Removed: {plist_path.name}")
 
 
 def _plist_is_personal(existing: dict) -> bool:
