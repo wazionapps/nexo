@@ -18,7 +18,7 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.9.6` is the current packaged-runtime line. Patch release that closes continuity + MCP restart stability for installed users: Brain now persists conversation-scoped continuity snapshots and resume bundles, activates packaged runtimes atomically under `~/.nexo/core/current`, writes a durable `mcp-restart-required` marker on real version changes, and self-drains old MCP processes until the client restarts against the installed runtime. Coordinated Desktop v0.28.7 consumes the same contract so existing `brain-only` and `brain+desktop` installs reroute to the new runtime instead of running mixed old/new MCP code.
+Version `7.9.12` is the current packaged-runtime line. Patch release over `7.9.11`: managed `~/.nexo/bin/nexo` wrappers now self-repair `core/current` when it lags behind `~/.nexo/core`, so installed users stop executing stale snapshots and `nexo update` no longer gets stuck claiming “Already up to date” from the old runtime. Coordinated Desktop release: v0.28.13.
 
 Previously in `7.9.5`: patch release that fixes canonical diary confirmation for Desktop: Brain resolves the Desktop/Claude session UUID through NEXO SID aliases before checking `session_diary`, so archive/delete/app-exit can confirm diaries written by `nexo_session_diary_write` under the active `nexo-...` SID. Verification: `pytest tests/test_lifecycle_events.py` (28 passing) plus coordinated Desktop v0.28.6 shutdown/archive/delete/app-exit checks.
 

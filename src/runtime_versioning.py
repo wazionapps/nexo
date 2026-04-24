@@ -158,7 +158,7 @@ def write_restart_required_marker(
 def activate_versioned_runtime_snapshot(*, source_root: Path | None = None, version: str = "") -> dict:
     container = core_container_dir()
     source = Path(source_root or container)
-    if source == container and core_current_link().exists():
+    if source_root is None and source == container and core_current_link().exists():
         try:
             source = core_current_link().resolve(strict=False)
         except Exception:
@@ -319,6 +319,28 @@ def prime_process_version() -> str:
 class RestartRequiredMiddleware(Middleware):
     client: str = ""
 
+    async def _tool_result_for_restart_required(self, context, payload: dict) -> ToolResult:
+        payload_text = json.dumps(payload, ensure_ascii=False)
+        tool = None
+        try:
+            fastmcp_context = getattr(context, "fastmcp_context", None)
+            fastmcp_server = getattr(fastmcp_context, "fastmcp", None)
+            if fastmcp_server is not None:
+                tool = await fastmcp_server.get_tool(str(getattr(context.message, "name", "") or "").strip())
+        except Exception:
+            tool = None
+
+        output_schema = getattr(tool, "output_schema", None)
+        if isinstance(output_schema, dict) and output_schema.get("x-fastmcp-wrap-result"):
+            return ToolResult(
+                content=payload_text,
+                structured_content={"result": payload_text},
+            )
+        return ToolResult(
+            content=payload_text,
+            structured_content=payload,
+        )
+
     async def on_call_tool(self, context, call_next):
         tool_name = str(getattr(context.message, "name", "") or "").strip()
         state = resolve_restart_required(client=self.client)
@@ -336,7 +358,4 @@ class RestartRequiredMiddleware(Middleware):
             "reason": state["reason"],
             "client_action": state["client_action"],
         }
-        return ToolResult(
-            content=json.dumps(payload, ensure_ascii=False),
-            structured_content=payload,
-        )
+        return await self._tool_result_for_restart_required(context, payload)

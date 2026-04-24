@@ -593,6 +593,31 @@ def _runtime_cli_wrapper_text() -> str:
         '  echo "NEXO runtime Python not found. Run nexo-brain or nexo update to repair the installation." >&2\n'
         '  exit 1\n'
         'fi\n'
+        'read_runtime_version() {\n'
+        '  local base="${1:-}"\n'
+        '  [ -n "$base" ] || return 0\n'
+        '  local candidate=""\n'
+        '  for candidate in "$base/version.json" "$base/package.json"; do\n'
+        '    [ -f "$candidate" ] || continue\n'
+        '    "$PYTHON" -c "import json, sys; from pathlib import Path; payload=json.loads(Path(sys.argv[1]).read_text(encoding=\\"utf-8\\")); version=str(payload.get(\\"version\\", \\"\\")).strip(); sys.stdout.write(version); sys.exit(0 if version else 1)" "$candidate" 2>/dev/null || continue\n'
+        '    return 0\n'
+        '  done\n'
+        '  return 0\n'
+        '}\n'
+        'repair_stale_current_runtime() {\n'
+        '  local core_root="$NEXO_HOME/core"\n'
+        '  local current_root="$NEXO_HOME/core/current"\n'
+        '  [ -d "$core_root" ] || return 0\n'
+        '  [ -e "$current_root" ] || return 0\n'
+        '  local core_version=""\n'
+        '  local current_version=""\n'
+        '  core_version="$(read_runtime_version "$core_root")"\n'
+        '  current_version="$(read_runtime_version "$current_root")"\n'
+        '  [ -n "$core_version" ] || return 0\n'
+        '  [ "$core_version" = "$current_version" ] && return 0\n'
+        '  NEXO_HOME="$NEXO_HOME" NEXO_CODE="$core_root" "$PYTHON" -c "import os, sys; from pathlib import Path; home=Path(os.environ[\\"NEXO_HOME\\"]); core=home / \\"core\\"; sys.path.insert(0, str(core)); from runtime_versioning import activate_versioned_runtime_snapshot, read_version_for_path; version=read_version_for_path(core); result=activate_versioned_runtime_snapshot(source_root=core, version=str(version or \\"\\").strip()); sys.exit(0 if result.get(\\"ok\\") else 1)" >/dev/null 2>&1 || return 0\n'
+        '}\n'
+        'repair_stale_current_runtime\n'
         'CLI_PY="$NEXO_CODE/cli.py"\n'
         'if [ ! -f "$CLI_PY" ] && [ -f "$NEXO_HOME/core/current/cli.py" ]; then\n'
         '  NEXO_CODE="$NEXO_HOME/core/current"\n'
@@ -2262,19 +2287,20 @@ def _maybe_backfill_task_owner() -> None:
 
 
 def _f06_legacy_shim_map() -> list[tuple[str, Path]]:
+    core_root = NEXO_HOME / "core"
     return [
-        ("scripts", NEXO_HOME / "core" / "scripts"),
-        ("skills-core", paths.core_skills_dir(allow_legacy_fallback=False)),
-        ("db", paths.core_db_dir(allow_legacy_fallback=False)),
-        ("cognitive", paths.core_cognitive_dir(allow_legacy_fallback=False)),
-        ("doctor", paths.core_doctor_dir(allow_legacy_fallback=False)),
-        ("dashboard", paths.core_dashboard_dir(allow_legacy_fallback=False)),
+        ("scripts", core_root / "scripts"),
+        ("skills-core", core_root / "skills"),
+        ("db", core_root / "db"),
+        ("cognitive", core_root / "cognitive"),
+        ("doctor", core_root / "doctor"),
+        ("dashboard", core_root / "dashboard"),
         ("brain", NEXO_HOME / "personal" / "brain"),
         ("config", NEXO_HOME / "personal" / "config"),
         ("skills", NEXO_HOME / "personal" / "skills"),
-        ("plugins", NEXO_HOME / "core" / "plugins"),
-        ("hooks", NEXO_HOME / "core" / "hooks"),
-        ("rules", NEXO_HOME / "core" / "rules"),
+        ("plugins", core_root / "plugins"),
+        ("hooks", core_root / "hooks"),
+        ("rules", core_root / "rules"),
         ("data", NEXO_HOME / "runtime" / "data"),
         ("logs", NEXO_HOME / "runtime" / "logs"),
         ("operations", NEXO_HOME / "runtime" / "operations"),
@@ -2300,7 +2326,7 @@ def _f06_legacy_file_shim_map() -> list[tuple[str, Path]]:
 def _f06_packaged_code_file_targets() -> list[tuple[str, Path]]:
     names = list(_discover_runtime_root_python_modules(NEXO_HOME))
     names.extend(_discover_runtime_root_python_modules(NEXO_HOME / "core"))
-    for extra in ("requirements.txt", "model_defaults.json"):
+    for extra in ("requirements.txt", "model_defaults.json", "package.json", "version.json"):
         candidate = NEXO_HOME / extra
         canonical_candidate = NEXO_HOME / "core" / extra
         if candidate.exists() or canonical_candidate.exists():
@@ -2422,12 +2448,13 @@ def _promote_packaged_runtime_code_to_core() -> None:
             return resolved
         return path
 
+    core_root = NEXO_HOME / "core"
     dir_targets = [
-        ("db", paths.core_db_dir(allow_legacy_fallback=False)),
-        ("cognitive", paths.core_cognitive_dir(allow_legacy_fallback=False)),
-        ("doctor", paths.core_doctor_dir(allow_legacy_fallback=False)),
-        ("dashboard", paths.core_dashboard_dir(allow_legacy_fallback=False)),
-        ("skills-core", paths.core_skills_dir(allow_legacy_fallback=False)),
+        ("db", core_root / "db"),
+        ("cognitive", core_root / "cognitive"),
+        ("doctor", core_root / "doctor"),
+        ("dashboard", core_root / "dashboard"),
+        ("skills-core", core_root / "skills"),
     ]
 
     for legacy_name, canonical in dir_targets:
@@ -2904,11 +2931,11 @@ def _maybe_migrate_to_f06_layout() -> None:
             ("state", NEXO_HOME / "runtime" / "state"),
             ("backups", NEXO_HOME / "runtime" / "backups"),
             ("memory", NEXO_HOME / "runtime" / "memory"),
-            ("cognitive", paths.core_cognitive_dir(allow_legacy_fallback=False)),
+            ("cognitive", NEXO_HOME / "core" / "cognitive"),
             ("coordination", NEXO_HOME / "runtime" / "coordination"),
             ("exports", NEXO_HOME / "runtime" / "exports"),
             ("nexo-email", NEXO_HOME / "runtime" / "nexo-email"),
-            ("doctor", paths.core_doctor_dir(allow_legacy_fallback=False)),
+            ("doctor", NEXO_HOME / "core" / "doctor"),
             ("snapshots", NEXO_HOME / "runtime" / "snapshots"),
             ("crons", NEXO_HOME / "runtime" / "crons"),
             ("skills", NEXO_HOME / "personal" / "skills"),
@@ -3954,34 +3981,46 @@ UPDATE_HISTORY_FILE = paths.logs_dir() / "update-history.jsonl"
 def _resolve_sync_source() -> tuple[Path | None, Path | None]:
     dest = NEXO_HOME
 
-    def _runtime_version_source() -> Path | None:
-        version_file = NEXO_HOME / "version.json"
-        if not version_file.is_file():
-            return None
+    def _is_relative_to(path: Path, parent: Path) -> bool:
         try:
-            data = json.loads(version_file.read_text())
+            path.relative_to(parent)
+            return True
         except Exception:
-            return None
-        source = str(data.get("source", "")).strip()
-        if not source:
-            return None
-        candidate = Path(source).expanduser()
-        if (candidate / "src").is_dir() and (candidate / "package.json").is_file():
-            return candidate
+            return False
+
+    def _runtime_version_source() -> Path | None:
+        for version_file in (NEXO_HOME / "version.json", NEXO_HOME / "core" / "version.json"):
+            if not version_file.is_file():
+                continue
+            try:
+                data = json.loads(version_file.read_text())
+            except Exception:
+                continue
+            source = str(data.get("source", "")).strip()
+            if not source:
+                continue
+            candidate = Path(source).expanduser()
+            if (candidate / "src").is_dir() and (candidate / "package.json").is_file():
+                return candidate
         return None
 
     try:
         runtime_core = (dest / "core").resolve()
+        runtime_versions = (runtime_core / "versions").resolve(strict=False)
         code_resolved = NEXO_CODE.resolve()
     except Exception:
         runtime_core = dest / "core"
+        runtime_versions = runtime_core / "versions"
         code_resolved = NEXO_CODE
 
     # Packaged/runtime-only installs resolve the launcher to ``~/.nexo/core``.
     # Those must use the packaged updater path instead of treating the managed
-    # runtime itself as a mutable source repository. Only a recorded external
-    # source repo in ``version.json`` should reactivate source-sync mode.
-    if code_resolved == runtime_core:
+    # runtime itself as a mutable source repository. That also applies once the
+    # launcher resolves through ``core/current`` into ``core/versions/X.Y.Z``:
+    # the active snapshot is still managed runtime state, not a dev checkout.
+    # Only a recorded external source repo in ``version.json`` should
+    # reactivate source-sync mode.
+    if code_resolved == runtime_core or _is_relative_to(code_resolved, runtime_versions):
         version_source = _runtime_version_source()
         if version_source:
             return version_source / "src", version_source

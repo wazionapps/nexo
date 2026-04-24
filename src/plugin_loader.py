@@ -290,7 +290,13 @@ def load_plugin(mcp, filename: str, plugins_dir: str | None = None) -> int:
             mcp.local_provider.remove_tool(name)
         except Exception:
             pass
-        t = Tool.from_function(func, name=name, description=description)
+        # output_schema=None disables FastMCP's auto-generated
+        # `x-fastmcp-wrap-result` wrapper that otherwise makes str-returning
+        # plugin tools unexecutable in Claude Code. See server.py and
+        # followup NF-FASTMCP-OUTPUT-SCHEMA-1776969764.
+        t = Tool.from_function(
+            func, name=name, description=description, output_schema=None
+        )
         mcp.add_tool(t)
         tool_names.append(name)
 

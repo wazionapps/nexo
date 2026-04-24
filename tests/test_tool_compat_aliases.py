@@ -211,12 +211,11 @@ def test_personal_scripts_list_supports_limit_filter_source_and_summary(monkeypa
     assert payload["scripts"][0]["name"] == "alpha"
 
 
-def test_doctor_requires_plane_as_input_error(monkeypatch):
+def test_doctor_defaults_blank_plane(monkeypatch):
     import plugins.doctor as doctor_plugin
 
     rendered = doctor_plugin.handle_doctor(output="json")
     payload = json.loads(rendered)
 
-    assert payload["ok"] is False
-    assert payload["missing_argument"] == "plane"
-    assert "installation_live" in payload["valid_planes"]
+    assert "overall_status" in payload
+    assert "checks" in payload

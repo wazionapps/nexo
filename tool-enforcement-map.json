@@ -1970,6 +1970,32 @@
       },
       "triggers_after": []
     },
+    "nexo_lifecycle_wait_for_stop": {
+      "description": "Wait until a canonical lifecycle event no longer has an active NEXO session.",
+      "category": "lifecycle",
+      "source": "plugin:lifecycle_events",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_lifecycle_stop_nexo_session": {
+      "description": "Best-effort explicit stop of a NEXO SID for Desktop lifecycle cleanup.",
+      "category": "lifecycle",
+      "source": "plugin:lifecycle_events",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
     "nexo_media_memory_add": {
       "description": "Store non-text artifact metadata",
       "category": "media",

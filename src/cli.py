@@ -3232,6 +3232,20 @@ def main():
     lwait_p.add_argument("--timeout-ms", type=int, default=45_000)
     lwait_p.add_argument("--poll-ms", type=int, default=500)
 
+    lwait_stop_p = lifecycle_sub.add_parser(
+        "wait-for-stop",
+        help="v7.9.10: wait until the linked NEXO session is no longer active",
+    )
+    lwait_stop_p.add_argument("--event-id", required=True)
+    lwait_stop_p.add_argument("--timeout-ms", type=int, default=10_000)
+    lwait_stop_p.add_argument("--poll-ms", type=int, default=500)
+
+    lstop_sid_p = lifecycle_sub.add_parser(
+        "stop-nexo-session",
+        help="v7.9.10: explicit best-effort stop of a NEXO SID for Desktop lifecycle cleanup",
+    )
+    lstop_sid_p.add_argument("--sid", required=True)
+
     # Fase E.5 — quarantine ops surfaced via Desktop Guardian Proposals panel.
     quarantine_parser = sub.add_parser("quarantine", help="Quarantine proposals (Fase E.5 Desktop UI)")
     quarantine_sub = quarantine_parser.add_subparsers(dest="quarantine_command")
@@ -3521,6 +3535,38 @@ def main():
                 event_id=args.event_id,
                 timeout_ms=args.timeout_ms,
                 poll_ms=args.poll_ms,
+            )
+            print(out)
+            try:
+                parsed = _json.loads(out)
+                status = str(parsed.get("status", ""))
+            except Exception:
+                status = ""
+            if status == "ok":
+                return 0
+            if status == "retryable_error":
+                return 2
+            return 3
+        if args.lifecycle_command == "wait-for-stop":
+            out = _lifecycle_plugin.handle_nexo_lifecycle_wait_for_stop(
+                event_id=args.event_id,
+                timeout_ms=args.timeout_ms,
+                poll_ms=args.poll_ms,
+            )
+            print(out)
+            try:
+                parsed = _json.loads(out)
+                status = str(parsed.get("status", ""))
+            except Exception:
+                status = ""
+            if status == "ok":
+                return 0
+            if status == "retryable_error":
+                return 2
+            return 3
+        if args.lifecycle_command == "stop-nexo-session":
+            out = _lifecycle_plugin.handle_nexo_lifecycle_stop_nexo_session(
+                sid=args.sid,
             )
             print(out)
             try:

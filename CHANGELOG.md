@@ -1,5 +1,76 @@
 # Changelog
 
+## [7.9.12] - 2026-04-24
+
+### Fixed
+- Managed `~/.nexo/bin/nexo` wrappers now self-repair `core/current` when it lags behind the canonical `~/.nexo/core/` tree, so commands stop executing stale snapshots after a packaged install/update drift.
+- This specifically closes the installed-user trap where `nexo update` could keep running the old updater from `core/current`, report “Already up to date”, and never advance the runtime even though the packaged Brain metadata was already newer.
+
+### Tests
+- Targeted packaged-runtime / continuity / MCP validation: `python3 -m pytest tests/test_packaged_update_runtime.py tests/test_continuity_runtime.py tests/test_client_sync.py tests/test_nexo_brain_onboarding_cli.py tests/test_verify_claude_code_mcp.py tests/test_lifecycle_events.py tests/test_doctor.py -q` (`188 passed`).
+
+## [7.9.11] - 2026-04-24
+
+### Fixed
+- Canonical Desktop lifecycle completion no longer treats a confirmed diary as enough. Brain now requires both `session_diary` evidence and real stop evidence before archive/delete/app-exit are marked done.
+- Canonical plans are bumped to v4 and now include `wait_for_stop` after `stop_session`, so retries and replays stay pending until the linked NEXO session is actually inactive instead of leaving duplicate live sessions behind the same `conversation_id`.
+- New lifecycle surfaces expose `wait-for-stop` and a direct `stop-nexo-session` path so Desktop can close the exact NEXO SID recovered from the diary confirmation instead of relying only on local Claude process teardown.
+
+### Tests
+- Targeted lifecycle/update/runtime validation: `python3 -m pytest tests/test_lifecycle_events.py tests/test_doctor.py tests/test_tool_compat_aliases.py tests/test_nexo_brain_onboarding_cli.py tests/test_packaged_update_runtime.py tests/test_continuity_runtime.py tests/test_auto_update_f06_shims.py tests/test_startup_preflight.py -q` (`195 passed`).
+
+## [7.9.10] - 2026-04-24
+
+### Fixed
+- `nexo_doctor` no longer fails on blank `plane`; doctor-compatible calls now default to `runtime_personal` and only reject truly invalid/incompatible planes.
+- Non-interactive installer/setup now seeds `user.name`, `user.language`, and `user.assistant_name` from existing runtime calibration/profile/version metadata before falling back to generic defaults, preventing updates from overwriting operator identity on partially migrated installs.
+
+## [7.9.9] - 2026-04-24
+
+Hotfix release over `7.9.8`. Closes the second half of the packaged-runtime repair discovered during installed-user validation.
+
+- installer/runtime repair: when `version.json` already says the new version but `core/current` still points at an older snapshot, the installer now treats that as a real repair case instead of printing “Already at vX”.
+- versioned activation: post-repair installs now explicitly re-activate `core/current -> versions/<new>` so the active runtime and metadata cannot drift apart again after a global npm upgrade.
+- validation: reproduced on Francisco’s Mac, repaired locally, and confirmed with `nexo update --json` after the fix.
+
+## [7.9.8] - 2026-04-23
+
+Hotfix release over `7.9.7`. Closes a release-blocking updater gap discovered during the final installed-user validation.
+
+### Fixed — packaged update no longer self-syncs from stale `core/current`
+
+- `nexo update` now treats `~/.nexo/core/current -> versions/<version>` as managed runtime state, not as a mutable source checkout.
+- Packaged installs only re-enter source-sync mode when `version.json` points to a real external repo; otherwise they stay on the packaged updater path and can advance the active runtime snapshot correctly.
+- This closes the class of bugs where metadata (`package.json` / `version.json`) moved to the new version but `core/current` kept executing the old one.
+
+### Tests
+
+- Targeted Brain validation:
+  `pytest -q tests/test_startup_preflight.py tests/test_packaged_update_runtime.py`
+  (`34 passed`).
+
+## [7.9.7] - 2026-04-23
+
+Patch release. Hardens the managed MCP/update path after the live Desktop archive/restart validation.
+
+### Fixed — managed runtime truth for MCP clients
+
+- Client sync now normalizes managed runtime targets back to the stable `~/.nexo/core` root instead of writing Claude Code, Codex, or Desktop configs against `~/.nexo/core/versions/<version>` snapshots.
+- Claude Code sync now mirrors the managed NEXO server into `~/.claude.json`, `~/.claude/settings.json`, and `~/.claude/mcp-cortex.json`, stamps `NEXO_MCP_CLIENT`, and the verifier now flags drift across all three surfaces plus any workspace override.
+- `paths.core_dir()` now prefers a populated `~/.nexo/core` root over blindly following `core/current`, which closes the class of bugs where hooks or helpers resolved a stale versioned snapshot even after update.
+
+### Fixed — MCP output schema and packaged-runtime metadata
+
+- FastMCP's implicit wrapped output schema is now disabled by default for NEXO tools, so Claude Code stops rejecting plain-text `nexo_*` tool responses with `result is a required property`.
+- Packaged update helpers now treat `package.json` and `version.json` as canonical runtime artifacts and can recover the recorded source repo from either the root or `core/version.json`.
+
+### Tests
+
+- Targeted Brain validation:
+  `pytest -q tests/test_client_sync.py tests/test_packaged_update_runtime.py tests/test_verify_claude_code_mcp.py tests/test_runtime_paths_canonical.py tests/test_server_output_schema.py`
+  (`61 passed`).
+- Coordinated Desktop validation on the same patch line: live `archive -> reopen -> quit -> reopen` check passed in NEXO Desktop plus focused Desktop close/runtime tests.
+
 ## [7.9.6] - 2026-04-23
 
 Patch release. Closes the continuity + MCP restart-stability one-pass

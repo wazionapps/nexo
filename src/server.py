@@ -280,6 +280,25 @@ mcp.add_middleware(
     RestartRequiredMiddleware(client=str(os.environ.get("NEXO_MCP_CLIENT", "") or "").strip())
 )
 
+# FastMCP (both 2.14.7 and 3.2.4) auto-generates an outputSchema wrapper
+# (`{required: [result], x-fastmcp-wrap-result: true}`) for every tool whose
+# return annotation is a non-object type such as `str`. Claude Code validates
+# MCP tool responses strictly against outputSchema and rejects our plain-text
+# replies with `Output validation error: result is a required property`,
+# which makes every `nexo_*` tool inexecutable from Claude Code. We opt out
+# of output_schema globally by wrapping `mcp.tool` so every decorator here
+# and in plugins defaults to `output_schema=None` unless the caller passes
+# something explicit. See followup NF-FASTMCP-OUTPUT-SCHEMA-1776969764.
+_mcp_tool_original = mcp.tool
+
+
+def _mcp_tool_without_output_schema(name_or_fn=None, **kwargs):
+    kwargs.setdefault("output_schema", None)
+    return _mcp_tool_original(name_or_fn, **kwargs)
+
+
+mcp.tool = _mcp_tool_without_output_schema  # type: ignore[method-assign]
+
 
 def _run_kwargs_from_env() -> dict:
     transport = str(os.environ.get("NEXO_MCP_TRANSPORT", "stdio") or "stdio").strip().lower()

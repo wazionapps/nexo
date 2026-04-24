@@ -10,15 +10,27 @@ from pathlib import Path
 _TOKEN_RE = re.compile(r"\[\[([a-zA-Z0-9_]+)\]\]")
 
 
+def _find_templates_root(start: Path) -> Path | None:
+    current = start.expanduser()
+    try:
+        current = current.resolve()
+    except Exception:
+        current = current.absolute()
+    if current.is_file():
+        current = current.parent
+    for candidate in (current, *current.parents):
+        if (candidate / "templates" / "core-prompts").is_dir():
+            return candidate
+    return None
+
+
 def _resolve_repo_root() -> Path:
-    candidate = Path(os.environ.get("NEXO_CODE", str(Path(__file__).resolve().parent))).expanduser().resolve()
-    if candidate.name == "src":
-        return candidate.parent
-    if (candidate / "templates").is_dir():
-        return candidate
-    if (candidate.parent / "templates").is_dir():
-        return candidate.parent
-    return Path(__file__).resolve().parents[1]
+    configured = Path(os.environ.get("NEXO_CODE", str(Path(__file__).resolve().parent)))
+    resolved = _find_templates_root(configured)
+    if resolved is not None:
+        return resolved
+    fallback = Path(__file__).resolve().parents[1]
+    return _find_templates_root(fallback) or fallback
 
 
 PROMPTS_DIR = _resolve_repo_root() / "templates" / "core-prompts"

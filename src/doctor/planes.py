@@ -28,6 +28,7 @@ VALID_DIAGNOSTIC_PLANES = {
 }
 
 DOCTOR_COMPATIBLE_PLANES = {"runtime_personal", "installation_live", "database_real"}
+DEFAULT_DOCTOR_PLANE = "runtime_personal"
 
 
 def normalize_diagnostic_plane(plane: str = "") -> str:
@@ -40,15 +41,19 @@ def diagnostic_plane_choices() -> list[str]:
 
 
 def diagnostic_plane_preflight(plane: str = "") -> tuple[str, DoctorCheck | None]:
-    clean_plane = normalize_diagnostic_plane(plane)
+    raw_plane = str(plane or "").strip()
+    if not raw_plane:
+        return DEFAULT_DOCTOR_PLANE, None
+
+    clean_plane = normalize_diagnostic_plane(raw_plane)
     if not clean_plane:
         options = ", ".join(diagnostic_plane_choices())
         return "", DoctorCheck(
-            id="orchestrator.diagnostic_plane_required",
+            id="orchestrator.diagnostic_plane_invalid",
             tier="orchestrator",
             status="critical",
             severity="error",
-            summary="El diagnóstico está bloqueado hasta fijar explícitamente el plano",
+            summary=f"Plano diagnóstico desconocido: {raw_plane}",
             evidence=[
                 f"planes válidos: {options}",
                 "Usa `runtime_personal` para ~/.nexo y hábitos del runtime; `installation_live` para hooks/clientes/instalación; `database_real` para filas y schema reales.",
@@ -58,8 +63,7 @@ def diagnostic_plane_preflight(plane: str = "") -> tuple[str, DoctorCheck | None
                 "Si el problema pertenece a producto público o al co-operador, usa el surface correcto en vez de NEXO Doctor.",
             ],
             escalation_prompt=(
-                "NEXO mezcló planos en diagnósticos anteriores. El doctor no debe correr hasta que se elija "
-                "explícitamente si el problema está en producto público, runtime personal, instalación viva, BD real o co-operador."
+                "El plano elegido no existe. Repite el diagnóstico con un plano válido para evitar mezclar runtime, instalación, BD real o surfaces ajenas al doctor."
             ),
         )
 

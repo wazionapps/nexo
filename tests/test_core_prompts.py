@@ -105,6 +105,23 @@ def test_prompt_catalog_dir_exists_and_contains_automation_prompts():
     assert (core_prompts.PROMPTS_DIR / "watchdog-repair.md").is_file()
 
 
+def test_prompt_catalog_resolves_templates_from_runtime_home_when_versioned_runtime_is_active(tmp_path, monkeypatch):
+    runtime_home = tmp_path / ".nexo"
+    versioned_root = runtime_home / "core" / "versions" / "7.9.6"
+    prompts_dir = runtime_home / "templates" / "core-prompts"
+    prompts_dir.mkdir(parents=True, exist_ok=True)
+    (prompts_dir / "autonomy-mandate-question.md").write_text("Question [[value]]", encoding="utf-8")
+
+    monkeypatch.setenv("NEXO_CODE", str(versioned_root))
+    importlib.reload(core_prompts)
+    try:
+        assert core_prompts.PROMPTS_DIR == prompts_dir
+        assert core_prompts.render_core_prompt("autonomy-mandate-question", value="ok") == "Question ok"
+    finally:
+        monkeypatch.setenv("NEXO_CODE", str(SRC))
+        importlib.reload(core_prompts)
+
+
 def test_render_core_prompt_replaces_named_tokens():
     prompt = core_prompts.render_core_prompt(
         "email-monitor",

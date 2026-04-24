@@ -55,6 +55,7 @@ import time
 from typing import Any, Dict, List, Optional
 
 from db import get_db
+from db._core import SESSION_STALE_SECONDS
 import lifecycle_prompts
 
 
@@ -75,6 +76,7 @@ TERMINAL_STATUSES = {
     "rejected",
 }
 _DIARY_TRIGGERING = lifecycle_prompts.DIARY_TRIGGERING_ACTIONS
+SESSION_NOT_LINKED_REASON = "session-not-linked-to-nexo"
 
 
 def _normalise_payload(obj: Any) -> str:
@@ -123,6 +125,34 @@ def _session_diary_session_ids(conn, session_id: str) -> List[str]:
             seen.add(sid)
             deduped.append(sid)
     return deduped
+
+
+def _session_is_linked_to_nexo(conn, session_id: str) -> bool:
+    """True when the external Claude/Desktop session is linked to a NEXO SID."""
+    raw = str(session_id or "").strip()
+    if not raw:
+        return False
+    if raw.startswith("nexo-"):
+        return True
+    try:
+        row = conn.execute(
+            "SELECT 1 FROM session_claude_aliases WHERE claude_session_id = ? LIMIT 1",
+            (raw,),
+        ).fetchone()
+        if row is not None:
+            return True
+    except Exception:
+        pass
+    try:
+        row = conn.execute(
+            "SELECT 1 FROM sessions "
+            "WHERE external_session_id = ? OR claude_session_id = ? "
+            "LIMIT 1",
+            (raw, raw),
+        ).fetchone()
+        return row is not None
+    except Exception:
+        return False
 
 
 def _max_session_diary_id(conn, session_id: str) -> int:
@@ -230,6 +260,103 @@ def _session_diary_since(conn, session_id: str, dispatched_at: Optional[str], ac
     return _session_diary_evidence(conn, session_id, dispatched_at, actions_json) is not None
 
 
+def _session_stop_state(conn, session_id: str) -> Dict[str, Any]:
+    """Return whether the lifecycle session can be verified as fully stopped."""
+    raw = str(session_id or "").strip()
+    if not raw:
+        return {
+            "verifiable": False,
+            "session_registered": False,
+            "stop_confirmed": False,
+            "active_session_ids": [],
+        }
+
+    candidate_ids: List[str] = []
+    verifiable = False
+
+    if raw.startswith("nexo-"):
+        candidate_ids.append(raw)
+        verifiable = True
+
+    try:
+        rows = conn.execute(
+            "SELECT sid FROM session_claude_aliases "
+            "WHERE claude_session_id = ? ORDER BY last_seen DESC",
+            (raw,),
+        ).fetchall()
+        alias_ids = [str(row[0]) for row in rows if row and row[0]]
+        if alias_ids:
+            candidate_ids.extend(alias_ids)
+            verifiable = True
+    except Exception:
+        pass
+
+    try:
+        rows = conn.execute(
+            "SELECT sid FROM sessions "
+            "WHERE external_session_id = ? OR claude_session_id = ? OR sid = ? "
+            "ORDER BY last_update_epoch DESC",
+            (raw, raw, raw),
+        ).fetchall()
+        live_ids = [str(row[0]) for row in rows if row and row[0]]
+        if live_ids:
+            candidate_ids.extend(live_ids)
+            verifiable = True
+    except Exception:
+        pass
+
+    deduped_candidates: List[str] = []
+    seen = set()
+    for sid in candidate_ids:
+        if sid and sid not in seen:
+            seen.add(sid)
+            deduped_candidates.append(sid)
+
+    if not verifiable:
+        return {
+            "verifiable": False,
+            "session_registered": False,
+            "stop_confirmed": False,
+            "active_session_ids": [],
+        }
+
+    cutoff = time.time() - float(SESSION_STALE_SECONDS)
+    active_ids: List[str] = []
+    try:
+        if deduped_candidates:
+            placeholders = ",".join("?" for _ in deduped_candidates)
+            rows = conn.execute(
+                "SELECT sid FROM sessions "
+                f"WHERE last_update_epoch > ? AND (sid IN ({placeholders}) OR external_session_id = ? OR claude_session_id = ?) "
+                "ORDER BY last_update_epoch DESC",
+                (cutoff, *deduped_candidates, raw, raw),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT sid FROM sessions "
+                "WHERE last_update_epoch > ? AND (external_session_id = ? OR claude_session_id = ?) "
+                "ORDER BY last_update_epoch DESC",
+                (cutoff, raw, raw),
+            ).fetchall()
+        active_ids = [str(row[0]) for row in rows if row and row[0]]
+    except Exception:
+        active_ids = []
+
+    deduped_active: List[str] = []
+    seen.clear()
+    for sid in active_ids:
+        if sid and sid not in seen:
+            seen.add(sid)
+            deduped_active.append(sid)
+
+    return {
+        "verifiable": True,
+        "session_registered": True,
+        "stop_confirmed": len(deduped_active) == 0,
+        "active_session_ids": deduped_active,
+    }
+
+
 def record_lifecycle_event(
     event_id: str,
     action: str,
@@ -295,17 +422,18 @@ def record_lifecycle_event(
                 "prior_status": status,
             }
 
-        # Case B: canonical was dispatched but never confirmed. Check
-        # whether the live session wrote a diary after dispatch; if so
-        # the intent has already been satisfied by the model and we
-        # must NOT ask Desktop to re-run the plan.
+        # Case B: canonical was dispatched but never confirmed. Only
+        # short-circuit if the session already wrote the diary AND no
+        # linked NEXO session remains active.
         if prior_plan_id and prior_dispatched_at and not prior_done_at:
+            stop_state = _session_stop_state(conn, str(session_id)) if session_id else None
+            stop_confirmed = bool(stop_state and stop_state.get("verifiable") and stop_state.get("stop_confirmed"))
             if session_id and _session_diary_since(
                 conn,
                 str(session_id),
                 str(prior_dispatched_at),
                 str(prior_actions_json or ""),
-            ):
+            ) and stop_confirmed:
                 conn.execute(
                     "UPDATE lifecycle_events "
                     "SET delivery_status = 'already_processed', "
@@ -320,7 +448,7 @@ def record_lifecycle_event(
                     "event_id": event_id,
                     "duplicate": True,
                     "prior_status": status,
-                    "reason": "session_diary-already-written",
+                    "reason": "session_diary-and-stop-already-written",
                 }
             # Re-hand the exact same plan so Desktop can resume / finish
             # any actions it didn't complete before the crash.
@@ -509,14 +637,27 @@ def record_complete_canonical(
         for r in results_list
     )
     diary_evidence = _session_diary_evidence(conn, session_id, dispatched_at, actions_json)
+    stop_state = _session_stop_state(conn, session_id) if session_id else {
+        "verifiable": False,
+        "session_registered": False,
+        "stop_confirmed": True,
+        "active_session_ids": [],
+    }
     diary_required = action in _DIARY_TRIGGERING and bool(session_id)
+    session_registered = _session_is_linked_to_nexo(conn, session_id) if diary_required else bool(session_id)
+    session_unregistered = diary_required and not session_registered
     diary_missing = diary_required and diary_evidence is None
-    effective = "retryable_error" if (any_failure or diary_missing) else "canonical_done"
+    stop_missing = diary_required and bool(stop_state.get("verifiable")) and not bool(stop_state.get("stop_confirmed"))
+    effective = "retryable_error" if (any_failure or diary_missing or stop_missing) else "canonical_done"
     last_error = None
-    if any_failure:
+    if session_unregistered:
+        last_error = SESSION_NOT_LINKED_REASON
+    elif any_failure:
         last_error = "one-or-more-actions-failed"
     elif diary_missing:
         last_error = "canonical-diary-not-confirmed"
+    elif stop_missing:
+        last_error = "canonical-stop-not-confirmed"
     conn.execute(
         "UPDATE lifecycle_events "
         "SET delivery_status = ?, "
@@ -540,8 +681,12 @@ def record_complete_canonical(
         "failed_actions": any_failure,
         "diary_confirmed": diary_evidence is not None,
         "diary_required": diary_required,
+        "stop_confirmed": not stop_missing,
+        "stop_required": diary_required,
+        "session_registered": session_registered,
         "session_diary_id": diary_evidence.get("session_diary_id") if diary_evidence else None,
-        "reason": "canonical-diary-not-confirmed" if diary_missing else None,
+        "active_session_ids": list(stop_state.get("active_session_ids") or []),
+        "reason": last_error if effective == "retryable_error" else None,
     }
 
 
@@ -570,6 +715,15 @@ def wait_for_canonical_diary(
         session_id = str(row[0] or "")
         if not session_id:
             return {"status": "rejected", "reason": "missing-session-id", "event_id": event_id}
+        if not _session_is_linked_to_nexo(conn, session_id):
+            return {
+                "status": "retryable_error",
+                "event_id": event_id,
+                "session_id": session_id,
+                "diary_confirmed": False,
+                "session_registered": False,
+                "reason": SESSION_NOT_LINKED_REASON,
+            }
         evidence = _session_diary_evidence(conn, session_id, row[1], row[2])
         if evidence is not None:
             return {
@@ -577,6 +731,7 @@ def wait_for_canonical_diary(
                 "event_id": event_id,
                 "session_id": session_id,
                 "diary_confirmed": True,
+                "session_registered": True,
                 **evidence,
             }
         if time.monotonic() >= deadline:
@@ -585,7 +740,76 @@ def wait_for_canonical_diary(
                 "event_id": event_id,
                 "session_id": session_id,
                 "diary_confirmed": False,
+                "session_registered": True,
                 "reason": last_error or "diary-confirm-timeout",
+            }
+        time.sleep(min(poll_s, max(0.0, deadline - time.monotonic())))
+
+
+def wait_for_canonical_stop(
+    event_id: str,
+    timeout_ms: int = 10_000,
+    poll_ms: int = 500,
+) -> Dict[str, Any]:
+    """Poll until the canonical lifecycle session no longer has active linked SIDs."""
+    if not event_id:
+        return {"status": "rejected", "reason": "missing-event-id"}
+
+    timeout_s = max(0.0, float(timeout_ms or 0) / 1000.0)
+    poll_s = max(0.05, float(poll_ms or 500) / 1000.0)
+    deadline = time.monotonic() + timeout_s
+
+    while True:
+        conn = get_db()
+        row = conn.execute(
+            "SELECT session_id, action FROM lifecycle_events WHERE event_id = ?",
+            (str(event_id),),
+        ).fetchone()
+        if row is None:
+            return {"status": "rejected", "reason": "unknown-event-id", "event_id": event_id}
+
+        session_id = str(row[0] or "")
+        action = str(row[1] or "")
+        stop_required = action in _DIARY_TRIGGERING and bool(session_id)
+        if not stop_required:
+            return {
+                "status": "ok",
+                "event_id": event_id,
+                "stop_required": False,
+                "stop_confirmed": True,
+                "session_registered": bool(session_id),
+                "active_session_ids": [],
+            }
+
+        stop_state = _session_stop_state(conn, session_id)
+        if not stop_state.get("verifiable"):
+            return {
+                "status": "retryable_error",
+                "event_id": event_id,
+                "stop_required": True,
+                "stop_confirmed": False,
+                "session_registered": False,
+                "active_session_ids": [],
+                "reason": SESSION_NOT_LINKED_REASON,
+            }
+        if stop_state.get("stop_confirmed"):
+            return {
+                "status": "ok",
+                "event_id": event_id,
+                "stop_required": True,
+                "stop_confirmed": True,
+                "session_registered": True,
+                "active_session_ids": [],
+            }
+        if time.monotonic() >= deadline:
+            return {
+                "status": "retryable_error",
+                "event_id": event_id,
+                "stop_required": True,
+                "stop_confirmed": False,
+                "session_registered": True,
+                "active_session_ids": list(stop_state.get("active_session_ids") or []),
+                "reason": "canonical-stop-not-confirmed",
             }
         time.sleep(min(poll_s, max(0.0, deadline - time.monotonic())))
 

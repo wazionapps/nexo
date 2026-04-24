@@ -168,6 +168,48 @@ def handle_nexo_lifecycle_wait_for_diary(
     return json.dumps(ack, ensure_ascii=False)
 
 
+def handle_nexo_lifecycle_wait_for_stop(
+    event_id: str,
+    timeout_ms: int = 10_000,
+    poll_ms: int = 500,
+) -> str:
+    """Wait until a canonical lifecycle event no longer has an active NEXO session."""
+    try:
+        ack = lifecycle_events.wait_for_canonical_stop(
+            event_id=str(event_id or ""),
+            timeout_ms=int(timeout_ms or 0),
+            poll_ms=int(poll_ms or 500),
+        )
+    except Exception as exc:
+        return json.dumps({
+            "status": "retryable_error",
+            "reason": f"{type(exc).__name__}: {exc}",
+            "handler_threw": True,
+        }, ensure_ascii=False)
+    return json.dumps(ack, ensure_ascii=False)
+
+
+def handle_nexo_lifecycle_stop_nexo_session(
+    sid: str,
+) -> str:
+    """Best-effort explicit stop of a NEXO SID for Desktop lifecycle cleanup."""
+    try:
+        from tools_sessions import handle_stop
+
+        message = handle_stop(str(sid or ""))
+        return json.dumps({
+            "status": "ok",
+            "sid": str(sid or ""),
+            "message": message,
+        }, ensure_ascii=False)
+    except Exception as exc:
+        return json.dumps({
+            "status": "retryable_error",
+            "sid": str(sid or ""),
+            "reason": f"{type(exc).__name__}: {exc}",
+        }, ensure_ascii=False)
+
+
 TOOLS = [
     (
         handle_nexo_lifecycle_event,
@@ -188,5 +230,15 @@ TOOLS = [
         handle_nexo_lifecycle_wait_for_diary,
         "nexo_lifecycle_wait_for_diary",
         "Wait for concrete session_diary evidence for a canonical lifecycle event before Desktop stops the session.",
+    ),
+    (
+        handle_nexo_lifecycle_wait_for_stop,
+        "nexo_lifecycle_wait_for_stop",
+        "Wait until the linked NEXO session is no longer active for a canonical lifecycle event.",
+    ),
+    (
+        handle_nexo_lifecycle_stop_nexo_session,
+        "nexo_lifecycle_stop_nexo_session",
+        "Best-effort explicit nexo_stop by SID for Desktop lifecycle cleanup.",
     ),
 ]

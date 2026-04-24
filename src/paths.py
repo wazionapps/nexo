@@ -71,6 +71,19 @@ def home() -> Path:
 # ---------------------------------------------------------------------------
 def core_dir() -> Path:
     container = home() / "core"
+    live_markers = (
+        "cli.py",
+        "server.py",
+        "db",
+        "hooks",
+        "plugins",
+        "rules",
+        "scripts",
+        "package.json",
+        "version.json",
+    )
+    if any((container / marker).exists() for marker in live_markers):
+        return container
     current = container / "current"
     if current.exists():
         try:

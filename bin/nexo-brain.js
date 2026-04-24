@@ -252,6 +252,24 @@ function readRuntimeCalibration(nexoHome = NEXO_HOME) {
   return { path: null, payload: null };
 }
 
+function profilePathCandidates(nexoHome = NEXO_HOME) {
+  return [
+    path.join(nexoHome, "personal", "brain", "profile.json"),
+    path.join(nexoHome, "brain", "profile.json"),
+  ];
+}
+
+function readRuntimeProfile(nexoHome = NEXO_HOME) {
+  for (const filePath of profilePathCandidates(nexoHome)) {
+    if (!fs.existsSync(filePath)) continue;
+    const payload = readJsonFile(filePath);
+    if (payload && typeof payload === "object") {
+      return { path: filePath, payload };
+    }
+  }
+  return { path: null, payload: null };
+}
+
 function nonEmptyString(value) {
   return typeof value === "string" && value.trim().length > 0;
 }
@@ -286,6 +304,55 @@ function hasPartialPlaceholderCalibration(calibration) {
   const name = user.name;
   const language = user.language || calibration.language;
   return isPlaceholderUserName(name) || !nonEmptyString(language);
+}
+
+function firstMeaningfulString(...values) {
+  for (const value of values) {
+    if (typeof value !== "string") continue;
+    const clean = value.trim();
+    if (clean) return clean;
+  }
+  return "";
+}
+
+function normalizeLanguageCode(value) {
+  const clean = String(value || "").trim().toLowerCase().replace("_", "-");
+  if (!clean) return "";
+  return clean.split("-")[0];
+}
+
+function resolveExistingIdentityDefaults(nexoHome = NEXO_HOME) {
+  const calibration = readRuntimeCalibration(nexoHome).payload || {};
+  const user = calibration.user && typeof calibration.user === "object" ? calibration.user : {};
+  const profile = readRuntimeProfile(nexoHome).payload || {};
+  const version = readJsonFile(path.join(nexoHome, "version.json")) || {};
+
+  const userName = firstMeaningfulString(
+    user.name,
+    calibration.user_name,
+    profile.user_name,
+    version.user_name,
+  );
+  const language = normalizeLanguageCode(firstMeaningfulString(
+    user.language,
+    calibration.language,
+    profile.language,
+    version.language,
+  ));
+  const operatorName = firstMeaningfulString(
+    user.assistant_name,
+    calibration.assistant_name,
+    calibration.operator_name,
+    profile.assistant_name,
+    profile.operator_name,
+    version.operator_name,
+  );
+
+  return {
+    userName: !isPlaceholderUserName(userName) ? userName : "",
+    language,
+    operatorName: !isReservedAssistantName(operatorName) ? operatorName : "",
+  };
 }
 
 function ensureOnboardingCompletionMarker(nexoHome = NEXO_HOME) {
@@ -679,6 +746,59 @@ function finalizeF06Layout(python, nexoHome = NEXO_HOME) {
       throw new Error("F0.6 structure marker missing after layout finalization");
     }
     return { ok: true };
+  } catch (err) {
+    return { ok: false, error: String((err && err.message) || err) };
+  }
+}
+
+function readRuntimeVersionFrom(basePath) {
+  if (!basePath) return "";
+  for (const candidate of [
+    path.join(basePath, "version.json"),
+    path.join(basePath, "package.json"),
+  ]) {
+    try {
+      if (!fs.existsSync(candidate)) continue;
+      const payload = JSON.parse(fs.readFileSync(candidate, "utf8"));
+      const version = String(payload.version || "").trim();
+      if (version) return version;
+    } catch (_) {}
+  }
+  return "";
+}
+
+function readActiveRuntimeSnapshotVersion(nexoHome = NEXO_HOME) {
+  return readRuntimeVersionFrom(path.join(nexoHome, "core", "current"));
+}
+
+function activateVersionedRuntimeSnapshot(python, nexoHome = NEXO_HOME, version = "") {
+  try {
+    const srcDir = path.join(__dirname, "..", "src");
+    const inline = [
+      "import json, os, pathlib, sys",
+      `sys.path.insert(0, ${JSON.stringify(srcDir)})`,
+      "from runtime_versioning import activate_versioned_runtime_snapshot",
+      "home = pathlib.Path(os.environ['NEXO_HOME'])",
+      `result = activate_versioned_runtime_snapshot(source_root=home / 'core', version=${JSON.stringify(version)})`,
+      "print(json.dumps(result))",
+    ].join("; ");
+    const result = spawnSync(python, ["-c", inline], {
+      cwd: nexoHome,
+      env: {
+        ...process.env,
+        NEXO_HOME: nexoHome,
+      },
+      encoding: "utf8",
+    });
+    if (result.status !== 0) {
+      const detail = (result.stderr || result.stdout || "").trim();
+      throw new Error(detail || "activation command failed");
+    }
+    const payload = JSON.parse(String(result.stdout || "{}").trim() || "{}");
+    if (!payload || payload.ok !== true) {
+      throw new Error(payload && payload.error ? payload.error : "activation returned not-ok");
+    }
+    return payload;
   } catch (err) {
     return { ok: false, error: String((err && err.message) || err) };
   }
@@ -2296,10 +2416,17 @@ async function runSetup() {
       const currentPkg = readPackageJson();
       const installedVersion = installed.version || "0.0.0";
       const currentVersion = currentPkg.version;
+      const activeRuntimeVersion = readActiveRuntimeSnapshotVersion(NEXO_HOME);
+      const needsRuntimeRepair = activeRuntimeVersion !== currentVersion;
 
-      if (installedVersion !== currentVersion) {
-        log(`Existing installation detected: v${installedVersion} → v${currentVersion}`);
-        log("Running auto-migration...");
+      if (installedVersion !== currentVersion || needsRuntimeRepair) {
+        if (installedVersion !== currentVersion) {
+          log(`Existing installation detected: v${installedVersion} → v${currentVersion}`);
+          log("Running auto-migration...");
+        } else {
+          log(`Existing installation detected: metadata v${installedVersion}, runtime core/current v${activeRuntimeVersion || "missing"}`);
+          log("Repairing active runtime snapshot...");
+        }
 
         // Recursive copy helper (skips __pycache__, .pyc, .db files)
         const srcDir = path.join(__dirname, "..", "src");
@@ -2469,6 +2596,9 @@ async function runSetup() {
           installed_at: installed.installed_at,
           updated_at: new Date().toISOString(),
           migrated_from: installedVersion,
+          ...(installedVersion === currentVersion && activeRuntimeVersion && activeRuntimeVersion !== currentVersion
+            ? { runtime_repaired_from: activeRuntimeVersion }
+            : {}),
         }, null, 2));
         syncRuntimePackageMetadata(path.join(__dirname, ".."), NEXO_HOME);
         log("Finalizing F0.6 runtime layout...");
@@ -2476,6 +2606,11 @@ async function runSetup() {
         if (!migLayoutFinalize.ok) {
           throw new Error(`F0.6 layout finalization failed: ${migLayoutFinalize.error}`);
         }
+        const migActivation = activateVersionedRuntimeSnapshot(migPython, NEXO_HOME, currentVersion);
+        if (!migActivation.ok) {
+          throw new Error(`Runtime activation failed: ${migActivation.error}`);
+        }
+        log(`  Runtime activation: core/current -> versions/${currentVersion}`);
 
         // Keep the rendered template in-memory for version tracking, but do
         // not drop a loose reference file in NEXO_HOME root.
@@ -2898,9 +3033,11 @@ async function runSetup() {
     },
   };
 
+  const existingIdentity = resolveExistingIdentityDefaults(NEXO_HOME);
+
   // Detect language from input or use default
-  let lang = "en";
-  let t = i18n.en;
+  let lang = existingIdentity.language || "en";
+  let t = i18n[lang] || i18n.en;
   if (!useDefaults) {
     const langInput = await ask("  What's your preferred language? / ¿En qué idioma prefieres hablar?\n  > ");
     const langLower = langInput.trim().toLowerCase();
@@ -2941,7 +3078,7 @@ async function runSetup() {
   // Step 2: User's name (P2) — v6.0.0 empty input falls through to "Usuario"
   // instead of keeping an empty string. The calibration file always ships
   // with a concrete user.name so downstream tooling does not need guards.
-  let userName = "Usuario";
+  let userName = existingIdentity.userName || "Usuario";
   if (!useDefaults) {
     const nameInput = await ask(t.askUserName);
     const trimmedName = nameInput.trim();
@@ -2953,7 +3090,7 @@ async function runSetup() {
   }
 
   // Step 3: Agent name (P3)
-  let operatorName = DEFAULT_ASSISTANT_NAME;
+  let operatorName = existingIdentity.operatorName || DEFAULT_ASSISTANT_NAME;
   if (!useDefaults) {
     while (true) {
       const name = await ask(t.askAgentName);
@@ -3305,6 +3442,31 @@ async function runSetup() {
     '  echo "NEXO runtime Python not found. Run nexo-brain or nexo update to repair the installation." >&2',
     '  exit 1',
     'fi',
+    'read_runtime_version() {',
+    '  local base="${1:-}"',
+    '  [ -n "$base" ] || return 0',
+    '  local candidate=""',
+    '  for candidate in "$base/version.json" "$base/package.json"; do',
+    '    [ -f "$candidate" ] || continue',
+    '    "$PYTHON" -c "import json, sys; from pathlib import Path; payload=json.loads(Path(sys.argv[1]).read_text(encoding=\\"utf-8\\")); version=str(payload.get(\\"version\\", \\"\\")).strip(); sys.stdout.write(version); sys.exit(0 if version else 1)" "$candidate" 2>/dev/null || continue',
+    '    return 0',
+    '  done',
+    '  return 0',
+    '}',
+    'repair_stale_current_runtime() {',
+    '  local core_root="$NEXO_HOME/core"',
+    '  local current_root="$NEXO_HOME/core/current"',
+    '  [ -d "$core_root" ] || return 0',
+    '  [ -e "$current_root" ] || return 0',
+    '  local core_version=""',
+    '  local current_version=""',
+    '  core_version="$(read_runtime_version "$core_root")"',
+    '  current_version="$(read_runtime_version "$current_root")"',
+    '  [ -n "$core_version" ] || return 0',
+    '  [ "$core_version" = "$current_version" ] && return 0',
+    '  NEXO_HOME="$NEXO_HOME" NEXO_CODE="$core_root" "$PYTHON" -c "import os, sys; from pathlib import Path; home=Path(os.environ[\\"NEXO_HOME\\"]); core=home / \\"core\\"; sys.path.insert(0, str(core)); from runtime_versioning import activate_versioned_runtime_snapshot, read_version_for_path; version=read_version_for_path(core); result=activate_versioned_runtime_snapshot(source_root=core, version=str(version or \\"\\").strip()); sys.exit(0 if result.get(\\"ok\\") else 1)" >/dev/null 2>&1 || return 0',
+    '}',
+    'repair_stale_current_runtime',
     'CLI_PY="$NEXO_CODE/cli.py"',
     'if [ ! -f "$CLI_PY" ] && [ -f "$NEXO_HOME/core/current/cli.py" ]; then',
     '  NEXO_CODE="$NEXO_HOME/core/current"',

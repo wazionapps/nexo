@@ -63,6 +63,39 @@ def test_maybe_migrate_f06_promotes_packaged_code_into_core(monkeypatch, tmp_pat
     assert (home / "server.py").resolve() == (home / "core" / "server.py").resolve()
 
 
+def test_maybe_migrate_f06_ignores_stale_current_snapshot_when_promoting_runtime_code(monkeypatch, tmp_path):
+    home = tmp_path
+    (home / ".structure-version").write_text("F0.6\n")
+    version_root = home / "core" / "versions" / "5.3.7"
+    version_root.mkdir(parents=True)
+    (version_root / "server.py").write_text("print('stale snapshot')\n")
+    (home / "core" / "current").symlink_to(Path("versions") / "5.3.7")
+    (home / "db").mkdir(parents=True)
+    (home / "db" / "__init__.py").write_text("# repaired db package\n")
+    (home / "server.py").write_text("print('runtime')\n")
+
+    au = _reload_auto_update(monkeypatch, home)
+    au._maybe_migrate_to_f06_layout()
+
+    assert (home / "core" / "db" / "__init__.py").is_file()
+    assert not (version_root / "db").exists()
+    assert (home / "db").is_symlink()
+    assert (home / "db").resolve() == (home / "core" / "db").resolve()
+
+
+def test_maybe_migrate_f06_promotes_version_metadata_into_core(monkeypatch, tmp_path):
+    home = tmp_path
+    (home / ".structure-version").write_text("F0.6\n")
+    (home / "package.json").write_text('{"version":"7.9.6"}\n')
+    (home / "version.json").write_text('{"version":"7.9.6","source":"/tmp/repo"}\n')
+
+    au = _reload_auto_update(monkeypatch, home)
+    au._maybe_migrate_to_f06_layout()
+
+    assert (home / "core" / "package.json").is_file()
+    assert (home / "core" / "version.json").is_file()
+
+
 def test_maybe_migrate_f06_reads_runtime_core_manifest_from_legacy_config_before_config_move(monkeypatch, tmp_path):
     home = tmp_path
     (home / "scripts").mkdir(parents=True)

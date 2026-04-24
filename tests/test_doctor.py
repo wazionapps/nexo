@@ -2372,15 +2372,23 @@ class TestOrchestrator:
         assert report.checks[0].id == "orchestrator.invalid_tier"
         assert "nonexistent" in report.checks[0].summary
 
-    def test_doctor_requires_explicit_plane(self, nexo_home):
+    def test_doctor_defaults_blank_plane_to_runtime_personal(self, nexo_home):
         from doctor.orchestrator import run_doctor
 
         report = run_doctor(tier="boot")
 
+        assert all(c.id != "orchestrator.diagnostic_plane_required" for c in report.checks)
+        assert all(c.id != "orchestrator.diagnostic_plane_invalid" for c in report.checks)
+
+    def test_doctor_rejects_invalid_plane(self, nexo_home):
+        from doctor.orchestrator import run_doctor
+
+        report = run_doctor(tier="boot", plane="invented-plane")
+
         assert report.overall_status == "critical"
         assert len(report.checks) == 1
-        assert report.checks[0].id == "orchestrator.diagnostic_plane_required"
-        assert "plano" in report.checks[0].summary.lower()
+        assert report.checks[0].id == "orchestrator.diagnostic_plane_invalid"
+        assert "invented-plane" in report.checks[0].summary
 
     def test_doctor_rejects_cooperator_plane(self, nexo_home):
         from doctor.orchestrator import run_doctor

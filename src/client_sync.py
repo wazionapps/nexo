@@ -143,6 +143,45 @@ def _resolve_operator_name(nexo_home: Path, explicit: str = "") -> str:
     return DEFAULT_ASSISTANT_NAME
 
 
+def _is_relative_to(path: Path, base: Path) -> bool:
+    try:
+        path.relative_to(base)
+        return True
+    except Exception:
+        return False
+
+
+def _normalize_managed_runtime_root(nexo_home: Path, candidate: Path) -> Path:
+    raw = candidate.expanduser()
+    if raw.name == "server.py":
+        raw = raw.parent
+    try:
+        resolved = raw.resolve()
+    except Exception:
+        resolved = raw.absolute()
+    core_root = (nexo_home / "core").expanduser()
+    current_root = core_root / "current"
+    preferred_targets = []
+    if (core_root / "server.py").is_file():
+        preferred_targets.append(core_root)
+    if (current_root / "server.py").is_file():
+        preferred_targets.append(current_root)
+    if not preferred_targets:
+        return resolved
+    try:
+        core_resolved = core_root.resolve()
+    except Exception:
+        core_resolved = core_root.absolute()
+    version_root = core_resolved / "versions"
+    try:
+        current_resolved = current_root.resolve()
+    except Exception:
+        current_resolved = current_root.absolute()
+    if resolved == current_resolved or _is_relative_to(resolved, version_root):
+        return preferred_targets[0]
+    return resolved
+
+
 def _resolve_runtime_root(nexo_home: Path, runtime_root: str | os.PathLike[str] | None = None) -> Path:
     candidates: list[Path] = []
     if runtime_root:
@@ -155,12 +194,13 @@ def _resolve_runtime_root(nexo_home: Path, runtime_root: str | os.PathLike[str] 
 
     seen: set[Path] = set()
     for candidate in candidates:
-        resolved = candidate.resolve()
+        normalized = _normalize_managed_runtime_root(nexo_home, candidate)
+        resolved = normalized.resolve()
         if resolved in seen:
             continue
         seen.add(resolved)
-        if (resolved / "server.py").is_file():
-            return resolved
+        if (normalized / "server.py").is_file():
+            return normalized
     raise FileNotFoundError(f"Could not locate runtime root with server.py (tried {len(seen)} locations)")
 
 
@@ -409,6 +449,7 @@ def build_server_config(
     runtime_root: str | os.PathLike[str] | None = None,
     python_path: str = "",
     operator_name: str = "",
+    client: str = "",
 ) -> dict:
     nexo_home_path = Path(nexo_home).expanduser() if nexo_home else _default_nexo_home()
     runtime_root_path = _resolve_runtime_root(nexo_home_path, runtime_root)
@@ -423,6 +464,9 @@ def build_server_config(
     resolved_name = _resolve_operator_name(nexo_home_path, explicit=operator_name)
     if resolved_name:
         config["env"]["NEXO_NAME"] = resolved_name
+    resolved_client = normalize_client_key(client)
+    if resolved_client:
+        config["env"]["NEXO_MCP_CLIENT"] = resolved_client
     return config
 
 
@@ -434,6 +478,11 @@ def _claude_code_settings_path(home: Path | None = None) -> Path:
 def _claude_code_mcp_path(home: Path | None = None) -> Path:
     base = home or _user_home()
     return base / ".claude.json"
+
+
+def _claude_code_cortex_path(home: Path | None = None) -> Path:
+    base = home or _user_home()
+    return base / ".claude" / "mcp-cortex.json"
 
 
 def _claude_desktop_config_path(home: Path | None = None) -> Path:
@@ -1022,6 +1071,7 @@ def sync_claude_code(
         runtime_root=runtime_root,
         python_path=python_path,
         operator_name=operator_name,
+        client="claude_code",
     )
     home_path = Path(user_home).expanduser() if user_home else None
     result = _sync_claude_code_settings(
@@ -1039,6 +1089,13 @@ def sync_claude_code(
     )
     result["mcp"] = mcp_result
     result["mcp_path"] = mcp_result.get("path", "")
+    cortex_result = _sync_json_client(
+        _claude_code_cortex_path(home_path),
+        server_config,
+        "claude_code",
+    )
+    result["cortex_mcp"] = cortex_result
+    result["cortex_mcp_path"] = cortex_result.get("path", "")
     bootstrap_result = sync_client_bootstrap(
         "claude_code",
         nexo_home=nexo_home,
@@ -1066,6 +1123,7 @@ def sync_claude_desktop(
         runtime_root=runtime_root,
         python_path=python_path,
         operator_name=operator_name,
+        client="claude_desktop",
     )
     resolved_name = server_config.get("env", {}).get("NEXO_NAME", "") or _resolve_operator_name(
         Path(nexo_home).expanduser() if nexo_home else _default_nexo_home(),
@@ -1097,6 +1155,7 @@ def sync_codex(
         runtime_root=runtime_root,
         python_path=python_path,
         operator_name=operator_name,
+        client="codex",
     )
     codex_bin = shutil.which("codex")
     config_path = _codex_config_path(home_path)

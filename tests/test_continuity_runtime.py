@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import importlib
+import asyncio
 import json
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -211,6 +213,81 @@ def test_runtime_versioning_creates_current_symlink_and_marker(continuity_runtim
     assert marker["required"] is True
     assert status["restart_required"] is True
     assert status["client_action"] == "restart_client_required"
+
+
+def test_runtime_versioning_respects_explicit_source_root_over_stale_current(continuity_runtime):
+    runtime_versioning = continuity_runtime["runtime_versioning"]
+    home = continuity_runtime["home"]
+    core = home / "core"
+    stale = core / "versions" / "5.3.7"
+    stale.mkdir(parents=True, exist_ok=True)
+    (stale / "server.py").write_text("print('stale')\n", encoding="utf-8")
+    (core / "current").symlink_to(Path("versions") / "5.3.7")
+    (core / "server.py").write_text("print('fresh')\n", encoding="utf-8")
+    (core / "version.json").write_text(json.dumps({"version": "9.9.9"}), encoding="utf-8")
+
+    activated = runtime_versioning.activate_versioned_runtime_snapshot(
+        source_root=core,
+        version="9.9.9",
+    )
+
+    assert activated["ok"] is True
+    assert activated["source_root"] == str(core)
+    assert (home / "core" / "versions" / "9.9.9" / "server.py").read_text(encoding="utf-8") == "print('fresh')\n"
+
+
+def test_restart_required_middleware_wraps_string_tool_schema(continuity_runtime, monkeypatch):
+    runtime_versioning = continuity_runtime["runtime_versioning"]
+    middleware = runtime_versioning.RestartRequiredMiddleware(client="claude_code")
+    fake_tool = SimpleNamespace(
+        output_schema={
+            "type": "object",
+            "properties": {"result": {"type": "string"}},
+            "required": ["result"],
+            "x-fastmcp-wrap-result": True,
+        }
+    )
+
+    async def _get_tool(_name):
+        return fake_tool
+
+    context = SimpleNamespace(
+        message=SimpleNamespace(name="nexo_startup"),
+        fastmcp_context=SimpleNamespace(fastmcp=SimpleNamespace(get_tool=_get_tool)),
+    )
+
+    monkeypatch.setattr(
+        runtime_versioning,
+        "resolve_restart_required",
+        lambda **_kwargs: {
+            "restart_required": True,
+            "reason": "marker_required",
+            "client_action": "restart_session_required",
+            "installed_version": "7.9.6",
+            "process_version": "7.9.6",
+            "marker": {"required": True},
+        },
+    )
+
+    result = asyncio.run(middleware.on_call_tool(context, lambda _ctx: None))
+
+    assert result.structured_content == {
+        "result": json.dumps(
+            {
+                "ok": False,
+                "error": "mcp_restart_required",
+                "message": "NEXO Brain was updated. Restart this MCP client/session.",
+                "restart_required": True,
+                "tool": "nexo_startup",
+                "installed_version": "7.9.6",
+                "process_version": "7.9.6",
+                "reason": "marker_required",
+                "client_action": "restart_session_required",
+            },
+            ensure_ascii=False,
+        )
+    }
+    assert "mcp_restart_required" in result.content[0].text
 
 
 def test_clear_restart_marker_waits_until_all_clients_ack(continuity_runtime):

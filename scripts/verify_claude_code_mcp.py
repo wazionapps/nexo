@@ -14,7 +14,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from client_sync import _claude_code_mcp_path, _claude_code_settings_path  # noqa: E402
+from client_sync import _claude_code_cortex_path, _claude_code_mcp_path, _claude_code_settings_path  # noqa: E402
 from runtime_home import legacy_nexo_home, managed_nexo_home, resolve_nexo_home, user_home  # noqa: E402
 
 
@@ -89,6 +89,14 @@ def _find_workspace_file(start: Path, relative_path: str) -> Path | None:
     return None
 
 
+def _is_relative_to(path: Path, base: Path) -> bool:
+    try:
+        path.relative_to(base)
+        return True
+    except Exception:
+        return False
+
+
 def _run_claude_mcp_list() -> tuple[int, str, str]:
     try:
         proc = subprocess.run(
@@ -120,11 +128,14 @@ def inspect_claude_code_mcp(
     legacy_home = legacy_nexo_home(home=home)
     root_path = _claude_code_mcp_path(home)
     settings_path = _claude_code_settings_path(home)
+    cortex_path = _claude_code_cortex_path(home)
 
     root_payload = _load_json(root_path)
     settings_payload = _load_json(settings_path)
+    cortex_payload = _load_json(cortex_path)
     root_server = (root_payload.get("mcpServers") or {}).get(server_name)
     settings_server = (settings_payload.get("mcpServers") or {}).get(server_name)
+    cortex_server = (cortex_payload.get("mcpServers") or {}).get(server_name)
 
     workspace_mcp_path = _find_workspace_file(workspace, ".mcp.json")
     workspace_server = None
@@ -147,6 +158,8 @@ def inspect_claude_code_mcp(
         candidate_sources.append(("workspace", str(workspace_mcp_path), workspace_server))
     if root_server:
         candidate_sources.append(("root", str(root_path), root_server))
+    if cortex_server:
+        candidate_sources.append(("cortex", str(cortex_path), cortex_server))
     if settings_server:
         candidate_sources.append(("settings", str(settings_path), settings_server))
     if cli_server:
@@ -189,6 +202,11 @@ def inspect_claude_code_mcp(
             f"{root_path} y {settings_path} tienen {server_name} distinto. "
             f"El root es la fuente de verdad y settings.json está desincronizado."
         )
+    if root_server and cortex_server and not _is_same_file(root_server, cortex_server):
+        issues.append(
+            f"{root_path} y {cortex_path} tienen {server_name} distinto. "
+            "Hay una tercera superficie MCP desincronizada."
+        )
 
     if workspace_server and root_server and not _is_same_file(workspace_server, root_server):
         if active_source_label == "workspace":
@@ -225,6 +243,7 @@ def inspect_claude_code_mcp(
 
     legacy_tokens = [str(legacy_home), "~/claude", f"{home}/claude"]
     seen_strings = _walk_strings(root_server) + _walk_strings(settings_server) + _walk_strings(workspace_server)
+    seen_strings.extend(_walk_strings(cortex_server))
     if cli_server:
         seen_strings.append(cli_server["command"])
     legacy_hits = sorted({value for value in seen_strings for token in legacy_tokens if token and token in value})
@@ -252,6 +271,18 @@ def inspect_claude_code_mcp(
             issues.append(
                 f"NEXO_CODE sigue apuntando a legacy `{legacy_home}` en vez del runtime o repo real."
             )
+        managed_core = managed_home / "core"
+        if _is_relative_to(expanded_code, managed_core / "versions"):
+            issues.append(
+                f"NEXO_CODE apunta a un snapshot versionado `{expanded_code}`. "
+                f"Debe apuntar al runtime gestionado estable `{managed_core}`."
+            )
+
+    if server_path and _is_relative_to(server_path, managed_home / "core" / "versions"):
+        issues.append(
+            f"server.py apunta a un snapshot versionado `{server_path}` en vez del runtime gestionado estable "
+            f"`{managed_home / 'core' / 'server.py'}`."
+        )
 
     if not active_db.exists():
         issues.append(f"La DB activa esperada no existe: {active_db}")
@@ -270,6 +301,7 @@ def inspect_claude_code_mcp(
         "server_name": server_name,
         "root_path": str(root_path),
         "settings_path": str(settings_path),
+        "cortex_path": str(cortex_path),
         "workspace_mcp_path": str(workspace_mcp_path) if workspace_mcp_path else "",
         "active_source_label": active_source_label,
         "active_source_path": active_source_path,
@@ -279,6 +311,7 @@ def inspect_claude_code_mcp(
         "active_db": str(active_db),
         "root_server": root_server,
         "settings_server": settings_server,
+        "cortex_server": cortex_server,
         "workspace_server": workspace_server,
         "cli_server": cli_server,
         "issues": issues,
@@ -292,6 +325,7 @@ def _print_human(report: dict[str, Any]) -> None:
     print(f"[claude-code-mcp] {status}")
     print(f"source_of_truth: {report['root_path']}")
     print(f"settings_mirror: {report['settings_path']}")
+    print(f"cortex_mirror: {report['cortex_path']}")
     if report["workspace_mcp_path"]:
         print(f"workspace_mcp: {report['workspace_mcp_path']}")
     print(f"active_source: {report['active_source_label']} -> {report['active_source_path']}")

@@ -37,6 +37,7 @@ def _prepare_runtime(home: Path, runtime_root: Path) -> None:
     (runtime_root / "data" / "nexo.db").write_text("db")
     _write_json(home / ".claude.json", {"mcpServers": {"nexo": _base_server(runtime_root)}})
     _write_json(home / ".claude" / "settings.json", {"mcpServers": {"nexo": _base_server(runtime_root)}})
+    _write_json(home / ".claude" / "mcp-cortex.json", {"mcpServers": {"nexo": _base_server(runtime_root)}})
 
 
 def test_inspect_ok_when_root_settings_and_cli_match(tmp_path):
@@ -89,6 +90,24 @@ def test_inspect_fails_on_root_settings_drift(tmp_path):
 
     assert report["ok"] is False
     assert any("desincronizado" in issue for issue in report["issues"])
+
+
+def test_inspect_fails_on_root_cortex_drift(tmp_path):
+    home = tmp_path / "home"
+    runtime_root = home / ".nexo"
+    _prepare_runtime(home, runtime_root)
+    drifted = _base_server(runtime_root)
+    drifted["args"] = [str(runtime_root / "other-server.py")]
+    _write_json(home / ".claude" / "mcp-cortex.json", {"mcpServers": {"nexo": drifted}})
+
+    report = MODULE.inspect_claude_code_mcp(
+        home=home,
+        workspace=tmp_path,
+        cli_output=f"nexo: {runtime_root / '.venv' / 'bin' / 'python3'} {runtime_root / 'server.py'} - ✓ Connected\n",
+    )
+
+    assert report["ok"] is False
+    assert any("tercera superficie MCP desincronizada" in issue for issue in report["issues"])
 
 
 def test_inspect_fails_on_legacy_home_and_db(tmp_path):
@@ -155,3 +174,32 @@ def test_inspect_fails_when_cli_loads_another_server(tmp_path):
 
     assert report["ok"] is False
     assert any("claude mcp list" in issue for issue in report["issues"])
+
+
+def test_inspect_fails_when_config_points_to_versioned_runtime_snapshot(tmp_path):
+    home = tmp_path / "home"
+    managed_root = home / ".nexo"
+    _prepare_runtime(home, managed_root)
+    versioned_root = managed_root / "core" / "versions" / "7.9.6"
+    (versioned_root / ".venv" / "bin").mkdir(parents=True, exist_ok=True)
+    (versioned_root / ".venv" / "bin" / "python3").write_text("")
+    (versioned_root / "server.py").write_text("print('server')\n")
+    versioned_server = {
+        "command": str(versioned_root / ".venv" / "bin" / "python3"),
+        "args": [str(versioned_root / "server.py")],
+        "env": {
+            "NEXO_HOME": str(managed_root),
+            "NEXO_CODE": str(versioned_root),
+        },
+    }
+    _write_json(home / ".claude.json", {"mcpServers": {"nexo": versioned_server}})
+    _write_json(home / ".claude" / "settings.json", {"mcpServers": {"nexo": versioned_server}})
+
+    report = MODULE.inspect_claude_code_mcp(
+        home=home,
+        workspace=tmp_path,
+        cli_output=f"nexo: {versioned_root / '.venv' / 'bin' / 'python3'} {versioned_root / 'server.py'} - ✓ Connected\n",
+    )
+
+    assert report["ok"] is False
+    assert any("snapshot versionado" in issue for issue in report["issues"])

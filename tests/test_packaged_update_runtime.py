@@ -133,6 +133,28 @@ def test_refresh_installed_manifest_writes_runtime_core_artifacts(tmp_path, monk
     assert _crons_old.is_file() or _crons_new.is_file(), f"manifest at neither {_crons_old} nor {_crons_new}"
 
 
+def test_resolve_sync_source_reads_recorded_source_from_core_version_metadata(tmp_path, monkeypatch):
+    import auto_update
+
+    runtime_home = tmp_path / "runtime"
+    repo_root = tmp_path / "repo"
+    (runtime_home / "core").mkdir(parents=True)
+    (repo_root / "src").mkdir(parents=True)
+    (repo_root / "package.json").write_text('{"name":"nexo-brain"}\n')
+    (runtime_home / "core" / "version.json").write_text(
+        json.dumps({"version": "7.9.6", "source": str(repo_root)})
+    )
+
+    monkeypatch.setenv("NEXO_HOME", str(runtime_home))
+    monkeypatch.setattr(auto_update, "NEXO_HOME", runtime_home)
+    monkeypatch.setattr(auto_update, "NEXO_CODE", runtime_home / "core")
+
+    src_dir, resolved_repo = auto_update._resolve_sync_source()
+
+    assert src_dir == repo_root / "src"
+    assert resolved_repo == repo_root
+
+
 def test_refresh_installed_manifest_packaged_mode_uses_npm_src_for_core_artifacts(tmp_path, monkeypatch):
     from plugins import update
 
@@ -418,6 +440,33 @@ def test_packaged_installer_syncs_runtime_package_metadata():
     assert 'function syncRuntimePackageMetadata(repoRoot = path.join(__dirname, ".."), runtimeHome = NEXO_HOME)' in text
     assert 'fs.copyFileSync(pkgSrc, path.join(runtimeHome, "package.json"));' in text
     assert text.count('syncRuntimePackageMetadata(path.join(__dirname, ".."), NEXO_HOME);') >= 3
+
+
+def test_packaged_installer_repairs_same_version_runtime_when_core_current_lags():
+    installer = REPO_ROOT / "bin" / "nexo-brain.js"
+    text = installer.read_text(encoding="utf-8")
+
+    assert 'function readActiveRuntimeSnapshotVersion(nexoHome = NEXO_HOME)' in text
+    assert 'function activateVersionedRuntimeSnapshot(python, nexoHome = NEXO_HOME, version = "")' in text
+    assert 'const activeRuntimeVersion = readActiveRuntimeSnapshotVersion(NEXO_HOME);' in text
+    assert 'const needsRuntimeRepair = activeRuntimeVersion !== currentVersion;' in text
+    assert 'if (installedVersion !== currentVersion || needsRuntimeRepair) {' in text
+    assert 'Repairing active runtime snapshot...' in text
+    assert 'const migActivation = activateVersionedRuntimeSnapshot(migPython, NEXO_HOME, currentVersion);' in text
+    assert 'log(`  Runtime activation: core/current -> versions/${currentVersion}`);' in text
+
+
+def test_managed_runtime_wrapper_repairs_stale_core_current_before_exec():
+    installer = REPO_ROOT / "bin" / "nexo-brain.js"
+    source = REPO_ROOT / "src" / "auto_update.py"
+    installer_text = installer.read_text(encoding="utf-8")
+    source_text = source.read_text(encoding="utf-8")
+
+    for text in (installer_text, source_text):
+        assert 'read_runtime_version() {' in text
+        assert 'repair_stale_current_runtime() {' in text
+        assert 'from runtime_versioning import activate_versioned_runtime_snapshot, read_version_for_path' in text
+        assert 'repair_stale_current_runtime' in text
 
 
 def test_auto_update_falls_back_to_core_product_mode_when_root_shim_is_missing():

@@ -53,9 +53,9 @@ def test_first_delivery_with_session_id_returns_canonical_pending():
     )
     assert res["status"] == "canonical_pending"
     assert res["canonical_plan_id"].startswith("cpl-")
-    assert res["canonical_plan_version"] >= 3
+    assert res["canonical_plan_version"] >= 4
     types = [a["type"] for a in res["canonical_actions"]]
-    assert types == ["resume_session", "inject_prompt", "wait_for_diary_write", "stop_session"]
+    assert types == ["resume_session", "inject_prompt", "wait_for_diary_write", "stop_session", "wait_for_stop"]
     kinds = [a["kind"] for a in res["canonical_actions"]]
     assert kinds == types
     # The inject_prompt action must carry the actual prompt text (no
@@ -72,6 +72,10 @@ def test_first_delivery_with_session_id_returns_canonical_pending():
     assert wait["expected_tool_call"] == "nexo_session_diary_write"
     assert wait["evidence"] == "session_diary"
     assert wait["timeout_ms"] >= 30_000
+    wait_stop = next(a for a in res["canonical_actions"] if a["type"] == "wait_for_stop")
+    assert wait_stop["event_id"] == "evt-canonical"
+    assert wait_stop["expected_tool_call"] == "nexo_stop"
+    assert wait_stop["evidence"] == "session_stop"
 
 
 def test_duplicate_delivery_returns_already_processed_without_side_effects():
@@ -210,24 +214,29 @@ def test_canonical_plan_id_is_deterministic_for_same_event():
 
 
 def test_complete_canonical_marks_done_and_persists_results():
-    res = _call(event_id="evt-c1", action="close", conversation_id="c", session_id="s1")
+    from db import get_db, register_session, complete_session
+
+    register_session("nexo-9100-1", "close lifecycle")
+    res = _call(event_id="evt-c1", action="close", conversation_id="c", session_id="nexo-9100-1")
     plan_id = res["canonical_plan_id"]
-    from db import get_db
     get_db().execute(
         "INSERT INTO session_diary (session_id, created_at, summary, decisions) "
         "VALUES (?, datetime('now', '+1 minute'), ?, ?)",
-        ("s1", "canonical diary", "canonical decisions"),
+        ("nexo-9100-1", "canonical diary", "canonical decisions"),
     )
     get_db().commit()
+    complete_session("nexo-9100-1")
     ack = _complete("evt-c1", plan_id, results=[
         {"action_id": "a1", "status": "ok"},
         {"action_id": "a2", "status": "ok", "tool_called": "nexo_session_diary_write"},
         {"action_id": "a3", "type": "wait_for_diary_write", "status": "ok", "diary_confirmed": True},
         {"action_id": "a4", "status": "ok"},
+        {"action_id": "a5", "type": "wait_for_stop", "status": "ok", "stop_confirmed": True},
     ])
     assert ack["status"] == "canonical_done"
     assert ack["failed_actions"] is False
     assert ack["diary_confirmed"] is True
+    assert ack["stop_confirmed"] is True
     # Status endpoint reflects the terminal state.
     from plugins.lifecycle_events import handle_nexo_lifecycle_status
     row = json.loads(handle_nexo_lifecycle_status("evt-c1"))
@@ -248,13 +257,14 @@ def test_complete_canonical_with_failure_flips_to_retryable_error():
 
 
 def test_complete_canonical_rejects_done_without_real_diary_evidence():
-    res = _call(event_id="evt-no-diary", action="archive", conversation_id="c", session_id="s-no-diary")
+    res = _call(event_id="evt-no-diary", action="archive", conversation_id="c", session_id="nexo-9000-2")
     plan_id = res["canonical_plan_id"]
     ack = _complete("evt-no-diary", plan_id, results=[
         {"action_id": "a1", "status": "ok"},
         {"action_id": "a2", "status": "ok"},
         {"action_id": "a3", "type": "wait_for_diary_write", "status": "ok", "diary_confirmed": True},
         {"action_id": "a4", "status": "ok"},
+        {"action_id": "a5", "type": "wait_for_stop", "status": "ok", "stop_confirmed": True},
     ])
     assert ack["status"] == "retryable_error"
     assert ack["diary_confirmed"] is False
@@ -279,7 +289,7 @@ def test_complete_canonical_rejects_unknown_event():
 
 
 def test_wait_for_diary_uses_session_diary_evidence():
-    _call(event_id="evt-wait", action="archive", conversation_id="c", session_id="s-wait")
+    _call(event_id="evt-wait", action="archive", conversation_id="c", session_id="nexo-9000-1")
     from plugins.lifecycle_events import handle_nexo_lifecycle_wait_for_diary
     miss = json.loads(handle_nexo_lifecycle_wait_for_diary("evt-wait", timeout_ms=1, poll_ms=1))
     assert miss["status"] == "retryable_error"
@@ -288,7 +298,7 @@ def test_wait_for_diary_uses_session_diary_evidence():
     from db import get_db
     get_db().execute(
         "INSERT INTO session_diary (session_id, summary, decisions) VALUES (?, ?, ?)",
-        ("s-wait", "diary after dispatch", "decisions"),
+        ("nexo-9000-1", "diary after dispatch", "decisions"),
     )
     get_db().commit()
 
@@ -296,6 +306,41 @@ def test_wait_for_diary_uses_session_diary_evidence():
     assert hit["status"] == "ok"
     assert hit["diary_confirmed"] is True
     assert hit["session_diary_id"]
+
+
+def test_wait_for_stop_uses_active_session_absence_as_evidence():
+    from db import register_session, complete_session
+    from plugins.lifecycle_events import handle_nexo_lifecycle_wait_for_stop
+
+    register_session("nexo-9101-1", "archive lifecycle")
+    _call(event_id="evt-wait-stop", action="archive", conversation_id="c", session_id="nexo-9101-1")
+
+    miss = json.loads(handle_nexo_lifecycle_wait_for_stop("evt-wait-stop", timeout_ms=1, poll_ms=1))
+    assert miss["status"] == "retryable_error"
+    assert miss["stop_confirmed"] is False
+    assert miss["session_registered"] is True
+    assert "nexo-9101-1" in miss["active_session_ids"]
+
+    complete_session("nexo-9101-1")
+
+    hit = json.loads(handle_nexo_lifecycle_wait_for_stop("evt-wait-stop", timeout_ms=100, poll_ms=1))
+    assert hit["status"] == "ok"
+    assert hit["stop_confirmed"] is True
+
+
+def test_wait_for_diary_fails_fast_when_session_is_not_linked_to_nexo():
+    _call(
+        event_id="evt-unregistered-wait",
+        action="archive",
+        conversation_id="c",
+        session_id="claude-session-without-nexo-link",
+    )
+    from plugins.lifecycle_events import handle_nexo_lifecycle_wait_for_diary
+    miss = json.loads(handle_nexo_lifecycle_wait_for_diary("evt-unregistered-wait", timeout_ms=100, poll_ms=1))
+    assert miss["status"] == "retryable_error"
+    assert miss["diary_confirmed"] is False
+    assert miss["session_registered"] is False
+    assert miss["reason"] == "session-not-linked-to-nexo"
 
 
 def test_wait_for_diary_accepts_nexo_sid_alias_for_desktop_session_uuid():
@@ -339,6 +384,31 @@ def test_wait_for_diary_accepts_nexo_sid_alias_for_desktop_session_uuid():
     assert hit["diary_session_id"] == "nexo-alias-sid"
 
 
+def test_complete_canonical_returns_session_not_linked_reason_for_unregistered_session():
+    res = _call(
+        event_id="evt-unregistered-complete",
+        action="archive",
+        conversation_id="c",
+        session_id="claude-session-without-link-2",
+    )
+    ack = _complete("evt-unregistered-complete", res["canonical_plan_id"], results=[
+        {"action_id": "a1", "status": "ok"},
+        {"action_id": "a2", "status": "ok"},
+        {
+            "action_id": "a3",
+            "type": "wait_for_diary_write",
+            "status": "failed",
+            "diary_confirmed": False,
+            "reason": "session-not-linked-to-nexo",
+        },
+        {"action_id": "a4", "status": "blocked", "reason": "blocked-by-prior-failure"},
+        {"action_id": "a5", "status": "blocked", "reason": "blocked-by-prior-failure"},
+    ])
+    assert ack["status"] == "retryable_error"
+    assert ack["session_registered"] is False
+    assert ack["reason"] == "session-not-linked-to-nexo"
+
+
 def test_redelivery_after_canonical_done_is_idempotent():
     res = _call(event_id="evt-idem", action="archive", conversation_id="c", session_id="s")
     from db import get_db
@@ -377,10 +447,11 @@ def test_session_diary_dedup_guards_against_duplicate_plan_execution():
         ("sess-crash", "diary from model", "decisions from model"),
     )
     get_db().commit()
-    # Re-deliver. Must short-circuit to already_processed.
+    # Re-deliver. Diary alone is no longer enough; Brain must re-hand the
+    # same plan until the linked stop is confirmed too.
     res2 = _call(event_id="evt-crash", action="archive", conversation_id="c", session_id="sess-crash")
-    assert res2["status"] == "already_processed"
-    assert "session_diary" in (res2.get("reason") or "")
+    assert res2["status"] == "canonical_pending"
+    assert res2.get("resumed_from_dispatch") is True
 
 
 def test_switch_never_produces_canonical_plan_even_with_session_id():
@@ -401,10 +472,10 @@ def test_window_close_never_produces_canonical_plan_even_with_session_id():
 def test_app_exit_with_live_session_uses_real_desktop_action_shape():
     res = _call(event_id="evt-app-exit", action="app-exit", conversation_id="c", session_id="sess-live")
     assert res["status"] == "canonical_pending"
-    assert res["canonical_plan_version"] >= 3
+    assert res["canonical_plan_version"] >= 4
     actions = res["canonical_actions"]
-    assert [a["type"] for a in actions] == ["resume_session", "inject_prompt", "wait_for_diary_write", "stop_session"]
-    assert [a["kind"] for a in actions] == ["resume_session", "inject_prompt", "wait_for_diary_write", "stop_session"]
+    assert [a["type"] for a in actions] == ["resume_session", "inject_prompt", "wait_for_diary_write", "stop_session", "wait_for_stop"]
+    assert [a["kind"] for a in actions] == ["resume_session", "inject_prompt", "wait_for_diary_write", "stop_session", "wait_for_stop"]
     inject = actions[1]
     assert inject["payload"]["prompt"] == inject["prompt"]
     assert "NEXO Desktop" in inject["payload"]["prompt"]
@@ -433,10 +504,12 @@ def test_canonical_actions_json_round_trip_via_status():
     assert row["canonical_actions"][1]["type"] == "inject_prompt"
     assert row["canonical_actions"][2]["type"] == "wait_for_diary_write"
     assert row["canonical_actions"][3]["type"] == "stop_session"
+    assert row["canonical_actions"][4]["type"] == "wait_for_stop"
     assert row["canonical_actions"][0]["kind"] == "resume_session"
     assert row["canonical_actions"][1]["kind"] == "inject_prompt"
     assert row["canonical_actions"][2]["kind"] == "wait_for_diary_write"
     assert row["canonical_actions"][3]["kind"] == "stop_session"
+    assert row["canonical_actions"][4]["kind"] == "wait_for_stop"
     assert row["canonical_actions"][1]["payload"]["prompt"] == row["canonical_actions"][1]["prompt"]
     assert row["canonical_actions"][2]["payload"]["after_session_diary_id"] >= 0
     assert row["canonical_dispatched_at"]

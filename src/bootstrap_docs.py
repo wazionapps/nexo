@@ -27,6 +27,14 @@ def _resolve_templates_dir(module_file: str | os.PathLike[str]) -> Path:
     parent = module_dir.parent / "templates"
     if parent.is_dir():
         return parent
+    try:
+        nexo_home_templates = resolve_nexo_home(
+            os.environ.get("NEXO_HOME", str(_user_home() / ".nexo"))
+        ) / "templates"
+    except Exception:
+        nexo_home_templates = Path(os.environ.get("NEXO_HOME", str(_user_home() / ".nexo"))).expanduser() / "templates"
+    if nexo_home_templates.is_dir():
+        return nexo_home_templates
     return direct
 
 

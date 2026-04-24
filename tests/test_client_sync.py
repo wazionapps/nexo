@@ -77,6 +77,7 @@ def test_sync_claude_code_preserves_existing_settings(tmp_path):
     home = tmp_path / "home"
     settings_path = home / ".claude" / "settings.json"
     mcp_path = home / ".claude.json"
+    cortex_path = home / ".claude" / "mcp-cortex.json"
     settings_path.parent.mkdir(parents=True)
     settings_path.write_text(json.dumps({
         "mcpServers": {"other": {"command": "node", "args": ["other.js"]}},
@@ -117,11 +118,17 @@ def test_sync_claude_code_preserves_existing_settings(tmp_path):
     assert payload["mcpServers"]["nexo"]["env"]["NEXO_HOME"] == str(runtime)
     assert payload["mcpServers"]["nexo"]["env"]["NEXO_CODE"] == str(runtime)
     assert payload["mcpServers"]["nexo"]["env"]["NEXO_NAME"] == "Atlas"
+    assert payload["mcpServers"]["nexo"]["env"]["NEXO_MCP_CLIENT"] == "claude_code"
     mcp_payload = json.loads(mcp_path.read_text())
     assert mcp_payload["theme"] == "dark"
     assert mcp_payload["mcpServers"]["legacy-root"]["args"] == ["root.js"]
     assert mcp_payload["mcpServers"]["nexo"]["args"] == [str(runtime / "server.py")]
+    assert mcp_payload["mcpServers"]["nexo"]["env"]["NEXO_MCP_CLIENT"] == "claude_code"
+    cortex_payload = json.loads(cortex_path.read_text())
+    assert cortex_payload["mcpServers"]["nexo"]["args"] == [str(runtime / "server.py")]
+    assert cortex_payload["mcpServers"]["nexo"]["env"]["NEXO_MCP_CLIENT"] == "claude_code"
     assert result["mcp_path"] == str(mcp_path)
+    assert result["cortex_mcp_path"] == str(cortex_path)
     bootstrap_path = home / ".claude" / "CLAUDE.md"
     assert bootstrap_path.is_file()
     bootstrap_text = bootstrap_path.read_text()
@@ -138,6 +145,31 @@ def test_resolve_operator_name_falls_back_to_neutral_default(tmp_path):
     (runtime / "version.json").write_text(json.dumps({"operator_name": ""}))
 
     assert client_sync._resolve_operator_name(runtime) == "Nova"
+
+
+def test_build_server_config_normalizes_versioned_runtime_paths_to_managed_core(tmp_path):
+    import client_sync
+
+    nexo_home = tmp_path / ".nexo"
+    core = nexo_home / "core"
+    versioned = core / "versions" / "7.9.6"
+    (nexo_home / ".venv" / "bin").mkdir(parents=True)
+    (nexo_home / ".venv" / "bin" / "python3").write_text("")
+    (core / "server.py").parent.mkdir(parents=True, exist_ok=True)
+    (core / "server.py").write_text("print('core')\n")
+    (versioned / "server.py").parent.mkdir(parents=True, exist_ok=True)
+    (versioned / "server.py").write_text("print('versioned')\n")
+
+    config = client_sync.build_server_config(
+        nexo_home=nexo_home,
+        runtime_root=versioned,
+        operator_name="Atlas",
+        client="claude_code",
+    )
+
+    assert config["args"] == [str(core / "server.py")]
+    assert config["env"]["NEXO_CODE"] == str(core)
+    assert config["env"]["NEXO_MCP_CLIENT"] == "claude_code"
 
 
 def test_sync_claude_code_removes_legacy_managed_hooks_but_keeps_custom_hooks(tmp_path):
@@ -369,6 +401,7 @@ def test_sync_claude_desktop_preserves_preferences(tmp_path):
     assert payload["preferences"]["sidebarMode"] == "chat"
     assert payload["mcpServers"]["legacy"]["args"] == ["legacy.py"]
     assert payload["mcpServers"]["nexo"]["env"]["NEXO_NAME"] == "Atlas"
+    assert payload["mcpServers"]["nexo"]["env"]["NEXO_MCP_CLIENT"] == "claude_desktop"
     assert payload["nexo"]["claude_desktop"]["shared_brain_managed"] is True
     assert payload["nexo"]["claude_desktop"]["shared_brain_mode"] == "mcp_only"
 
@@ -400,6 +433,7 @@ def test_sync_codex_uses_codex_cli_when_available(tmp_path, monkeypatch):
     assert captured["cmd"][:4] == ["/tmp/fake-codex", "mcp", "add", "nexo"]
     assert f"NEXO_HOME={runtime}" in captured["cmd"]
     assert f"NEXO_CODE={runtime}" in captured["cmd"]
+    assert "NEXO_MCP_CLIENT=codex" in captured["cmd"]
     assert "NEXO_NAME=Atlas" in captured["cmd"]
     assert captured["cmd"][-2:] == [str(runtime / ".venv" / "bin" / "python3"), str(runtime / "server.py")]
     assert captured["env"]["HOME"] == str(home)
@@ -418,6 +452,7 @@ def test_sync_codex_uses_codex_cli_when_available(tmp_path, monkeypatch):
     assert "bootstrap_managed = true" in config_text
     assert "mcp_managed = true" in config_text
     assert "[mcp_servers.nexo]" in config_text
+    assert 'NEXO_MCP_CLIENT = "codex"' in config_text
 
 
 def test_sync_all_clients_treats_missing_codex_as_non_fatal(tmp_path, monkeypatch):
@@ -929,6 +964,21 @@ def test_bootstrap_docs_resolve_templates_for_runtime_layout(tmp_path):
     (runtime_root / "templates").mkdir(parents=True)
     module_file = runtime_root / "bootstrap_docs.py"
     module_file.write_text("# placeholder\n")
+
+    resolved = bootstrap_docs._resolve_templates_dir(module_file)
+
+    assert resolved == runtime_root / "templates"
+
+
+def test_bootstrap_docs_resolve_templates_for_versioned_runtime_uses_nexo_home_templates(tmp_path, monkeypatch):
+    import bootstrap_docs
+
+    runtime_root = tmp_path / "nexo-home"
+    module_file = runtime_root / "core" / "versions" / "5.3.7" / "bootstrap_docs.py"
+    module_file.parent.mkdir(parents=True)
+    module_file.write_text("# placeholder\n")
+    (runtime_root / "templates").mkdir(parents=True)
+    monkeypatch.setenv("NEXO_HOME", str(runtime_root))
 
     resolved = bootstrap_docs._resolve_templates_dir(module_file)
 

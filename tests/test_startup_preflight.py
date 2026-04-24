@@ -214,6 +214,52 @@ def test_resolve_sync_source_uses_recorded_source_for_runtime_core_when_present(
     assert repo_dir == recorded_repo
 
 
+def test_resolve_sync_source_uses_packaged_updater_for_versioned_runtime_snapshot_without_recorded_source(tmp_path, monkeypatch):
+    import auto_update
+
+    runtime_home = tmp_path / "runtime"
+    runtime_snapshot = runtime_home / "core" / "versions" / "7.9.6"
+    runtime_snapshot.mkdir(parents=True)
+    (runtime_snapshot / "db").mkdir()
+    (runtime_snapshot / "package.json").write_text('{"version":"7.9.6"}\n')
+    (runtime_home / "core" / "current").symlink_to(Path("versions") / "7.9.6")
+
+    monkeypatch.setenv("NEXO_HOME", str(runtime_home))
+    monkeypatch.setattr(auto_update, "NEXO_HOME", runtime_home)
+    monkeypatch.setattr(auto_update, "NEXO_CODE", runtime_home / "core" / "current")
+
+    src_dir, repo_dir = auto_update._resolve_sync_source()
+
+    assert src_dir is None
+    assert repo_dir is None
+
+
+def test_resolve_sync_source_uses_recorded_source_for_versioned_runtime_snapshot_when_present(tmp_path, monkeypatch):
+    import auto_update
+
+    runtime_home = tmp_path / "runtime"
+    runtime_snapshot = runtime_home / "core" / "versions" / "7.9.6"
+    recorded_repo = tmp_path / "repo"
+    runtime_snapshot.mkdir(parents=True)
+    (runtime_snapshot / "db").mkdir()
+    (runtime_snapshot / "package.json").write_text('{"version":"7.9.6"}\n')
+    (runtime_home / "core" / "current").symlink_to(Path("versions") / "7.9.6")
+    (recorded_repo / "src" / "db").mkdir(parents=True)
+    (recorded_repo / "package.json").write_text("{}\n")
+    (runtime_home / "version.json").write_text(
+        json.dumps({"version": "7.9.7", "source": str(recorded_repo)})
+    )
+
+    monkeypatch.setenv("NEXO_HOME", str(runtime_home))
+    monkeypatch.setattr(auto_update, "NEXO_HOME", runtime_home)
+    monkeypatch.setattr(auto_update, "NEXO_CODE", runtime_home / "core" / "current")
+
+    src_dir, repo_dir = auto_update._resolve_sync_source()
+
+    assert src_dir == recorded_repo / "src"
+    assert repo_dir == recorded_repo
+
+
 def test_copy_runtime_from_source_creates_skill_scaffold_dirs(tmp_path, monkeypatch):
     import auto_update
 

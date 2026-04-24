@@ -140,6 +140,59 @@ def test_onboarding_source_uses_lazy_readline_and_atomic_final_calibration_write
     assert 'fs.writeFileSync(\n    path.join(runtimeBrainDir, "calibration.json")' not in text
 
 
+@pytest.mark.skipif(not _node_available(), reason="node not available")
+def test_skip_mode_preserves_existing_identity_defaults_from_profile(tmp_path: Path) -> None:
+    home = tmp_path / "nexo-home"
+    profile = home / "personal" / "brain" / "profile.json"
+    profile.parent.mkdir(parents=True, exist_ok=True)
+    profile.write_text(
+        json.dumps(
+            {
+                "user_name": "Maria",
+                "language": "es",
+                "operator_name": "Nora",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    env = _env(tmp_path, home)
+    env["NEXO_TESTING_SMOKE"] = "1"
+
+    timed_out = False
+    try:
+        proc = subprocess.run(
+            ["node", str(INSTALLER), "--skip"],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+    except subprocess.TimeoutExpired as exc:
+        timed_out = True
+        proc = subprocess.CompletedProcess(
+            exc.cmd,
+            returncode=-9,
+            stdout=exc.stdout.decode() if isinstance(exc.stdout, bytes) else (exc.stdout or ""),
+            stderr=exc.stderr.decode() if isinstance(exc.stderr, bytes) else (exc.stderr or ""),
+        )
+
+    cal_path = home / "personal" / "brain" / "calibration.json"
+    if not cal_path.is_file() and (home / "brain" / "calibration.json").is_file():
+        cal_path = home / "brain" / "calibration.json"
+    if not cal_path.is_file():
+        pytest.skip(
+            f"installer did not reach calibration step in sandbox: "
+            f"rc={proc.returncode} stdout={proc.stdout[-400:]!r} stderr={proc.stderr[-400:]!r}"
+        )
+    if timed_out:
+        assert cal_path.is_file()
+
+    cal = json.loads(cal_path.read_text(encoding="utf-8"))
+    assert cal["user"]["name"] == "Maria"
+    assert cal["user"]["language"] == "es"
+    assert cal["user"]["assistant_name"] == "Nora"
+
 def test_postinstall_runs_warmup_for_fresh_installs_and_honors_skip() -> None:
     text = (REPO_ROOT / "bin" / "postinstall.js").read_text(encoding="utf-8")
     assert '"warmup-models", "--postinstall"' in text

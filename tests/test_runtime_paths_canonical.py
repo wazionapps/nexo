@@ -176,3 +176,34 @@ def test_tools_menu_uses_core_scripts_dir_for_proactive_dashboard(tmp_path, monk
 
     assert tools_menu._get_dashboard_alerts() == []
     assert captured["cmd"][1] == str(script)
+
+
+def test_paths_core_dir_prefers_populated_core_root_over_current_snapshot(tmp_path, monkeypatch):
+    nexo_home = tmp_path / "nexo-home"
+    core_root = nexo_home / "core"
+    version_root = core_root / "versions" / "5.3.7"
+    version_root.mkdir(parents=True)
+    (core_root / "server.py").write_text("print('root')\n")
+    (version_root / "server.py").write_text("print('snapshot')\n")
+    (core_root / "current").symlink_to(Path("versions") / "5.3.7")
+    monkeypatch.setenv("NEXO_HOME", str(nexo_home))
+
+    import paths
+    importlib.reload(paths)
+
+    assert paths.core_dir() == core_root
+
+
+def test_paths_core_dir_falls_back_to_current_snapshot_when_core_root_is_only_container(tmp_path, monkeypatch):
+    nexo_home = tmp_path / "nexo-home"
+    core_root = nexo_home / "core"
+    version_root = core_root / "versions" / "7.9.6"
+    version_root.mkdir(parents=True)
+    (version_root / "server.py").write_text("print('snapshot')\n")
+    (core_root / "current").symlink_to(Path("versions") / "7.9.6")
+    monkeypatch.setenv("NEXO_HOME", str(nexo_home))
+
+    import paths
+    importlib.reload(paths)
+
+    assert paths.core_dir() == version_root.resolve()
