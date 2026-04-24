@@ -279,6 +279,18 @@ def _payload_lines(payload: Dict[str, Any]) -> List[str]:
         if text:
             lines.append(text)
     if not lines:
+        messages = payload.get("messages")
+        if isinstance(messages, list):
+            for item in messages[-12:]:
+                if isinstance(item, dict):
+                    role = str(item.get("role") or item.get("type") or item.get("sender") or "message").strip()
+                    text = str(item.get("content") or item.get("text") or "").strip()
+                else:
+                    role = "message"
+                    text = str(item or "").strip()
+                if text:
+                    lines.append(f"{role}: {text}")
+    if not lines:
         user = str(payload.get("last_user_message") or payload.get("latest_user_text") or "").strip()
         assistant = str(payload.get("last_assistant_message") or payload.get("latest_assistant_text") or "").strip()
         if user:
@@ -286,6 +298,114 @@ def _payload_lines(payload: Dict[str, Any]) -> List[str]:
         if assistant:
             lines.append(f"assistant: {assistant}")
     return lines[-12:]
+
+
+def _parse_payload_json(raw: Any) -> Dict[str, Any]:
+    try:
+        parsed = json.loads(raw or "{}")
+    except Exception:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _payload_has_context(payload: Dict[str, Any]) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    if _payload_lines(payload):
+        return True
+    for key in ("current_goal", "last_user_message", "latest_user_text", "last_assistant_message", "latest_assistant_text"):
+        if str(payload.get(key) or "").strip():
+            return True
+    return False
+
+
+def _continuity_payloads_for_event(
+    conn,
+    conversation_id: str,
+    session_id: str,
+    limit: int = 24,
+) -> List[Dict[str, Any]]:
+    """Return recent continuity payloads for richer emergency diaries."""
+    conv = str(conversation_id or "").strip()
+    sid = str(session_id or "").strip()
+    if not conv and not sid:
+        return []
+
+    where_parts: List[str] = []
+    params: List[Any] = []
+    if conv:
+        where_parts.append("conversation_id = ?")
+        params.append(conv)
+    if sid:
+        where_parts.append("session_id = ?")
+        params.append(sid)
+    where = " OR ".join(where_parts)
+
+    try:
+        rows = conn.execute(
+            "SELECT event_type, payload_json FROM continuity_snapshots "
+            f"WHERE ({where}) "
+            "ORDER BY id DESC LIMIT ?",
+            (*params, int(limit)),
+        ).fetchall()
+    except Exception:
+        return []
+
+    payloads: List[Dict[str, Any]] = []
+    for row in reversed(rows):
+        event_type = str(row[0] or "").strip()
+        if event_type and event_type not in {"turn_end", "app_exit", "desktop_snapshot", "close", "archive"}:
+            continue
+        payload = _parse_payload_json(row[1] if len(row) > 1 else "")
+        if payload:
+            payloads.append(payload)
+    return payloads
+
+
+def _dedupe_lines(lines: List[str]) -> List[str]:
+    seen = set()
+    result: List[str] = []
+    for raw in lines:
+        line = str(raw or "").strip()
+        if not line or line in seen:
+            continue
+        seen.add(line)
+        result.append(line)
+    return result
+
+
+def _enrich_payload_from_continuity(
+    conn,
+    payload: Dict[str, Any],
+    conversation_id: str,
+    session_id: str,
+) -> Dict[str, Any]:
+    """Fill sparse lifecycle payloads from durable continuity snapshots."""
+    enriched = dict(payload or {})
+    continuity_payloads = _continuity_payloads_for_event(conn, conversation_id, session_id)
+    if not continuity_payloads:
+        return enriched
+
+    latest = continuity_payloads[-1]
+    for key in (
+        "title",
+        "current_goal",
+        "last_user_message",
+        "latest_user_text",
+        "last_assistant_message",
+        "latest_assistant_text",
+    ):
+        if not str(enriched.get(key) or "").strip() and str(latest.get(key) or "").strip():
+            enriched[key] = latest[key]
+
+    continuity_lines: List[str] = []
+    for item in continuity_payloads:
+        continuity_lines.extend(_payload_lines(item))
+    continuity_lines = _dedupe_lines(continuity_lines)
+    current_lines = _payload_lines(enriched)
+    if len(continuity_lines) > len(current_lines) or not _payload_has_context(enriched):
+        enriched["transcript_tail"] = continuity_lines[-12:]
+    return enriched
 
 
 def write_fallback_diary_for_lifecycle_event(
@@ -341,6 +461,7 @@ def write_fallback_diary_for_lifecycle_event(
             payload = {}
     except Exception:
         payload = {}
+    payload = _enrich_payload_from_continuity(conn, payload, conversation_id, session_id)
 
     title = str(payload.get("title") or conversation_id or event_id).strip()
     transcript_lines = _payload_lines(payload)

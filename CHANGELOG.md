@@ -1,5 +1,14 @@
 # Changelog
 
+## [7.9.23] - 2026-04-24
+
+### Fixed
+- Desktop lifecycle fallback diaries now enrich sparse lifecycle payloads from durable `continuity_snapshots`, so app-exit fallback evidence preserves the recent turn transcript even when the lifecycle event itself only carries minimal metadata.
+- Fallback diary extraction now also understands message arrays in addition to `transcript_tail` and latest user/assistant fields.
+
+### Tests
+- Added regression coverage for minimal lifecycle payloads recovering multi-turn context from continuity snapshots.
+
 ## [7.9.22] - 2026-04-24
 
 ### Fixed
