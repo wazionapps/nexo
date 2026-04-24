@@ -127,6 +127,109 @@ def _session_diary_session_ids(conn, session_id: str) -> List[str]:
     return deduped
 
 
+def _registered_session_ids(conn, session_id: str, candidates: Optional[List[str]] = None) -> List[str]:
+    """Return real active-session table ids linked to a lifecycle session id."""
+    raw = str(session_id or "").strip()
+    ids = [str(s or "").strip() for s in list(candidates or []) if str(s or "").strip()]
+    if raw and raw not in ids:
+        ids.append(raw)
+    rows = []
+    try:
+        if ids:
+            placeholders = ",".join("?" for _ in ids)
+            rows = conn.execute(
+                "SELECT sid FROM sessions "
+                f"WHERE sid IN ({placeholders}) OR external_session_id = ? OR claude_session_id = ? "
+                "ORDER BY last_update_epoch DESC",
+                (*ids, raw, raw),
+            ).fetchall()
+        elif raw:
+            rows = conn.execute(
+                "SELECT sid FROM sessions "
+                "WHERE external_session_id = ? OR claude_session_id = ? OR sid = ? "
+                "ORDER BY last_update_epoch DESC",
+                (raw, raw, raw),
+            ).fetchall()
+    except Exception:
+        rows = []
+
+    deduped: List[str] = []
+    seen = set()
+    for row in rows:
+        sid = str(row[0] or "").strip() if row else ""
+        if sid and sid not in seen:
+            seen.add(sid)
+            deduped.append(sid)
+    return deduped
+
+
+def _linked_external_session_ids(conn, session_id: str) -> List[str]:
+    """Return external Claude/Desktop ids linked to a NEXO SID or raw session id."""
+    raw = str(session_id or "").strip()
+    if not raw:
+        return []
+    ids: List[str] = []
+    if not raw.startswith("nexo-"):
+        ids.append(raw)
+    try:
+        rows = conn.execute(
+            "SELECT claude_session_id FROM session_claude_aliases WHERE sid = ? "
+            "ORDER BY last_seen DESC",
+            (raw,),
+        ).fetchall()
+        ids.extend(str(row[0] or "").strip() for row in rows if row and row[0])
+    except Exception:
+        pass
+    try:
+        rows = conn.execute(
+            "SELECT external_session_id, claude_session_id FROM sessions WHERE sid = ?",
+            (raw,),
+        ).fetchall()
+        for row in rows:
+            ids.extend(str(value or "").strip() for value in row if value)
+    except Exception:
+        pass
+
+    deduped: List[str] = []
+    seen = set()
+    for external_id in ids:
+        if external_id and external_id not in seen:
+            seen.add(external_id)
+            deduped.append(external_id)
+    return deduped
+
+
+def _registered_stop_session_ids(conn, session_id: str) -> List[str]:
+    """Resolve a lifecycle stop target to real registered NEXO SIDs."""
+    raw = str(session_id or "").strip()
+    if not raw:
+        return []
+    candidates = _session_diary_session_ids(conn, raw)
+    external_ids = _linked_external_session_ids(conn, raw)
+    for external_id in external_ids:
+        candidates.extend(_session_diary_session_ids(conn, external_id))
+
+    registered: List[str] = []
+    registered.extend(_registered_session_ids(conn, raw, candidates))
+    for external_id in external_ids:
+        registered.extend(_registered_session_ids(conn, external_id, candidates))
+
+    deduped: List[str] = []
+    seen = set()
+    for sid in registered:
+        if sid and sid not in seen:
+            seen.add(sid)
+            deduped.append(sid)
+    if deduped:
+        return deduped
+    return [raw] if raw.startswith("nexo-") else []
+
+
+def registered_stop_session_ids(session_id: str) -> List[str]:
+    """Public wrapper used by plugin handlers before calling nexo_stop."""
+    return _registered_stop_session_ids(get_db(), session_id)
+
+
 def _session_is_linked_to_nexo(conn, session_id: str) -> bool:
     """True when the external Claude/Desktop session is linked to a NEXO SID."""
     raw = str(session_id or "").strip()
@@ -264,6 +367,9 @@ def _preferred_diary_session_id(conn, session_id: str) -> str:
     """Return the best session id to store fallback diary evidence under."""
     raw = str(session_id or "").strip()
     candidates = _session_diary_session_ids(conn, raw)
+    for sid in _registered_session_ids(conn, raw, candidates):
+        if str(sid or "").startswith("nexo-"):
+            return str(sid)
     for sid in candidates:
         if str(sid or "").startswith("nexo-"):
             return str(sid)
