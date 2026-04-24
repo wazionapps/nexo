@@ -3232,6 +3232,14 @@ def main():
     lwait_p.add_argument("--timeout-ms", type=int, default=45_000)
     lwait_p.add_argument("--poll-ms", type=int, default=500)
 
+    lfallback_diary_p = lifecycle_sub.add_parser(
+        "write-fallback-diary",
+        help="v7.9.22: write emergency diary evidence for a lifecycle event",
+    )
+    lfallback_diary_p.add_argument("--event-id", required=True)
+    lfallback_diary_p.add_argument("--reason", default="")
+    lfallback_diary_p.add_argument("--source", default="desktop-lifecycle-fallback")
+
     lwait_stop_p = lifecycle_sub.add_parser(
         "wait-for-stop",
         help="v7.9.10: wait until the linked NEXO session is no longer active",
@@ -3543,6 +3551,23 @@ def main():
             except Exception:
                 status = ""
             if status == "ok":
+                return 0
+            if status == "retryable_error":
+                return 2
+            return 3
+        if args.lifecycle_command == "write-fallback-diary":
+            out = _lifecycle_plugin.handle_nexo_lifecycle_write_fallback_diary(
+                event_id=args.event_id,
+                reason=args.reason or "",
+                source=args.source or "desktop-lifecycle-fallback",
+            )
+            print(out)
+            try:
+                parsed = _json.loads(out)
+                status = str(parsed.get("status", ""))
+            except Exception:
+                status = ""
+            if status in ("ok", "processed", "already_processed"):
                 return 0
             if status == "retryable_error":
                 return 2

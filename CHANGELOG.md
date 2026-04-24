@@ -1,5 +1,15 @@
 # Changelog
 
+## [7.9.22] - 2026-04-24
+
+### Fixed
+- Desktop lifecycle events now have a Brain-side emergency diary path: if the live agent does not answer the close/archive/app-exit diary prompt, Brain can write a `desktop-lifecycle-fallback` `session_diary` from the lifecycle snapshot instead of losing the shutdown context.
+- Added `nexo lifecycle write-fallback-diary` / `nexo_lifecycle_write_fallback_diary` for Desktop recovery and boot reconciliation.
+- Fallback diary evidence preserves title, current goal, session ids and transcript tail from the Desktop payload snapshot.
+
+### Tests
+- Added lifecycle regression coverage for fallback diary writing, diary evidence confirmation and canonical completion after fallback.
+
 ## [7.9.21] - 2026-04-24
 
 ### Fixed

@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.9.21` is the current packaged-runtime line. Patch release over `7.9.20`: LaunchAgent reload/repair now handles macOS already-loaded races by booting out jobs with modern launchctl forms, falling back to legacy load, and treating an already-loaded job as healthy only when it points at the expected plist.
+Version `7.9.22` is the current packaged-runtime line. Patch release over `7.9.21`: Desktop lifecycle shutdowns now have an emergency Brain-side fallback diary path, so close/archive/app-exit can preserve title, goal, session ids, and transcript tail even when the live agent does not answer the injected diary prompt before shutdown.
+
+Previously in `7.9.21`: LaunchAgent reload/repair now handles macOS already-loaded races by booting out jobs with modern launchctl forms, falling back to legacy load, and treating an already-loaded job as healthy only when it points at the expected plist.
 
 Previously in `7.9.20`: packaged update/doctor repair now finds `runtime/crons/sync.py`, LaunchAgent PATH includes the managed Claude runtime installed under `~/.nexo/runtime/bootstrap/npm-global/bin`, root runtime backfill includes `claude_cli.py`, and Immune no longer treats the legacy optional `~/.claude-mem/claude-mem.db` as a required database.
 

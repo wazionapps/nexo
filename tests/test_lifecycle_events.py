@@ -308,6 +308,62 @@ def test_wait_for_diary_uses_session_diary_evidence():
     assert hit["session_diary_id"]
 
 
+def test_write_fallback_diary_preserves_payload_snapshot_when_injection_fails():
+    from db import complete_session, get_db, register_session
+    from plugins.lifecycle_events import (
+        handle_nexo_lifecycle_wait_for_diary,
+        handle_nexo_lifecycle_write_fallback_diary,
+    )
+
+    register_session("nexo-9102-1", "desktop close fallback")
+    payload = {
+        "title": "Cerrar app con trabajo vivo",
+        "current_goal": "No perder contexto al cerrar Desktop",
+        "transcript_tail": [
+            "user: arregla el cierre de diarios",
+            "assistant: detectado inject-response-timeout",
+        ],
+    }
+    res = _call(
+        event_id="evt-fallback-diary",
+        action="app-exit",
+        conversation_id="conv-fallback",
+        session_id="nexo-9102-1",
+        payload_snapshot=json.dumps(payload, ensure_ascii=False),
+    )
+    fallback = json.loads(handle_nexo_lifecycle_write_fallback_diary(
+        "evt-fallback-diary",
+        reason="inject-response-timeout",
+    ))
+    assert fallback["status"] == "ok"
+    assert fallback["fallback_written"] is True
+    assert fallback["diary_session_id"] == "nexo-9102-1"
+
+    hit = json.loads(handle_nexo_lifecycle_wait_for_diary("evt-fallback-diary", timeout_ms=100, poll_ms=1))
+    assert hit["status"] == "ok"
+    assert hit["session_diary_id"] == fallback["session_diary_id"]
+
+    row = get_db().execute(
+        "SELECT summary, pending, context_next, source FROM session_diary WHERE id = ?",
+        (fallback["session_diary_id"],),
+    ).fetchone()
+    assert "Cerrar app con trabajo vivo" in row["summary"]
+    assert "No perder contexto" in row["pending"]
+    assert "inject-response-timeout" in row["context_next"] or "arregla el cierre" in row["context_next"]
+    assert row["source"] == "desktop-lifecycle-fallback"
+
+    complete_session("nexo-9102-1")
+    ack = _complete("evt-fallback-diary", res["canonical_plan_id"], results=[
+        {"action_id": "a1", "type": "resume_session", "status": "ok"},
+        {"action_id": "a2", "type": "inject_prompt", "status": "ok", "fallback_diary": True},
+        {"action_id": "a3", "type": "wait_for_diary_write", "status": "ok", "diary_confirmed": True},
+        {"action_id": "a4", "type": "stop_session", "status": "ok"},
+        {"action_id": "a5", "type": "wait_for_stop", "status": "ok", "stop_confirmed": True},
+    ])
+    assert ack["status"] == "canonical_done"
+    assert ack["diary_confirmed"] is True
+
+
 def test_wait_for_stop_uses_active_session_absence_as_evidence():
     from db import register_session, complete_session
     from plugins.lifecycle_events import handle_nexo_lifecycle_wait_for_stop

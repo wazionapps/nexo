@@ -34,6 +34,7 @@ RESTART_ALLOWLIST = {
     "nexo_lifecycle_status",
     "nexo_lifecycle_complete_canonical",
     "nexo_lifecycle_wait_for_diary",
+    "nexo_lifecycle_write_fallback_diary",
     "nexo_continuity_snapshot_read",
     "nexo_continuity_resume_bundle",
     "nexo_continuity_audit",

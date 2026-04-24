@@ -168,6 +168,27 @@ def handle_nexo_lifecycle_wait_for_diary(
     return json.dumps(ack, ensure_ascii=False)
 
 
+def handle_nexo_lifecycle_write_fallback_diary(
+    event_id: str,
+    reason: str = "",
+    source: str = "desktop-lifecycle-fallback",
+) -> str:
+    """Write emergency diary evidence for a lifecycle event."""
+    try:
+        ack = lifecycle_events.write_fallback_diary_for_lifecycle_event(
+            event_id=str(event_id or ""),
+            reason=str(reason or ""),
+            source=str(source or "desktop-lifecycle-fallback"),
+        )
+    except Exception as exc:
+        return json.dumps({
+            "status": "retryable_error",
+            "reason": f"{type(exc).__name__}: {exc}",
+            "handler_threw": True,
+        }, ensure_ascii=False)
+    return json.dumps(ack, ensure_ascii=False)
+
+
 def handle_nexo_lifecycle_wait_for_stop(
     event_id: str,
     timeout_ms: int = 10_000,
@@ -230,6 +251,11 @@ TOOLS = [
         handle_nexo_lifecycle_wait_for_diary,
         "nexo_lifecycle_wait_for_diary",
         "Wait for concrete session_diary evidence for a canonical lifecycle event before Desktop stops the session.",
+    ),
+    (
+        handle_nexo_lifecycle_write_fallback_diary,
+        "nexo_lifecycle_write_fallback_diary",
+        "Write emergency session_diary evidence when Desktop cannot get a live agent-authored close diary.",
     ),
     (
         handle_nexo_lifecycle_wait_for_stop,
