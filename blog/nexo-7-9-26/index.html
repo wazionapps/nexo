@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.9.26: automation language contract</title>
+<meta name="description" content="NEXO Brain v7.9.26 patch release. Centralizes the operator-language contract for headless automation and Deep Sleep-generated user-facing text.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-9-26/">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.9.26: automation language contract","datePublished":"2026-04-25","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head><body><main><article style="max-width:760px;margin:80px auto;padding:0 24px;line-height:1.75;">
+<h1>NEXO 7.9.26 &mdash; automation language contract</h1>
+<p><em>Published 2026-04-25. Patch release over v7.9.25.</em></p>
+
+<p>v7.9.26 makes the operator-language contract part of the central headless automation runner. Reports, diaries, syntheses, followups, escalations, and other user-facing automation output now inherit the calibrated language even when the underlying product prompt is written in English.</p>
+
+<h2>What changed</h2>
+<p><code>run_automation_prompt</code> now appends the operator-language contract for operator-facing callers before launching Claude Code or Codex automation. Pure machine-only calls such as backend probes, context checks, and learning validation remain unchanged so exact machine contracts keep working.</p>
+
+<h2>Deep Sleep is deterministic</h2>
+<p>Deep Sleep extraction and synthesis prompts no longer ask the model to find <code>calibration.json</code> opportunistically. They now rely on the automation runner to inject the language contract, while JSON keys remain stable in English for parsers.</p>
+
+<h2>Why it matters</h2>
+<p>Overnight memory, morning agendas, daily synthesis, postmortems, and autonomous maintenance reports often start from English templates. The user should still receive natural output in their configured language without each script remembering to pass language context manually.</p>
+
+<h2>Verification</h2>
+<p>Regression tests cover operator-facing language-contract injection, machine-only caller exclusions, Deep Sleep caller coverage, and Claude/Codex prompt construction after the central injection point.</p>
+
+<p><a href="/changelog/#v7926">Full changelog entry &rarr;</a></p>
+</article></main></body></html>
