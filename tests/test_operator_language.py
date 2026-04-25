@@ -24,3 +24,46 @@ def test_append_operator_language_contract_is_idempotent():
 
     assert "Spanish (es)" in once
     assert twice == once
+
+
+def test_agent_runner_language_contract_applies_to_operator_facing_callers(monkeypatch):
+    import agent_runner
+    import operator_language
+
+    operator_language.build_operator_language_contract.cache_clear()
+    monkeypatch.setattr(operator_language, "load_operator_language", lambda: "es")
+
+    prompt = agent_runner._apply_operator_language_contract(
+        "Write the daily report.",
+        caller="sleep/nightly",
+    )
+
+    assert "Write the daily report." in prompt
+    assert "CRITICAL LANGUAGE CONTRACT" in prompt
+    assert "Spanish (es)" in prompt
+
+    operator_language.build_operator_language_contract.cache_clear()
+
+
+def test_agent_runner_language_contract_skips_machine_only_callers():
+    import agent_runner
+
+    assert agent_runner._apply_operator_language_contract(
+        "Reply exactly OK.",
+        caller="automation_probe",
+    ) == "Reply exactly OK."
+    assert agent_runner._apply_operator_language_contract(
+        "{}",
+        caller="check_context",
+    ) == "{}"
+    assert agent_runner._apply_operator_language_contract(
+        "{}",
+        caller="learning_validator",
+    ) == "{}"
+
+
+def test_deep_sleep_callers_are_language_contracted():
+    import agent_runner
+
+    assert agent_runner._should_apply_operator_language_contract("deep-sleep/extract")
+    assert agent_runner._should_apply_operator_language_contract("deep-sleep/synthesize")

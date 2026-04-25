@@ -117,6 +117,7 @@ def test_bare_mode_explicit_true_activates_bare_and_injects_key(monkeypatch):
     )
 
     assert result.returncode == 0
+    assert "CRITICAL LANGUAGE CONTRACT" in captured["cmd"][2]
     assert "--bare" in captured["cmd"]
     assert "--dangerously-skip-permissions" not in captured["cmd"]
     assert captured["env"].get("ANTHROPIC_API_KEY") == "sk-bare-test"
@@ -140,6 +141,7 @@ def test_bare_mode_auto_enabled_for_safe_caller(monkeypatch):
         caller="deep-sleep/synthesize",
         backend="claude_code",
     )
+    assert "CRITICAL LANGUAGE CONTRACT" in captured["cmd"][2]
     assert "--bare" in captured["cmd"]
 
 

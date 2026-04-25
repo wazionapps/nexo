@@ -191,10 +191,13 @@ def test_run_automation_prompt_uses_claude_backend_command(monkeypatch, tmp_path
     )
 
     assert result.returncode == 0
+    prompt = captured["cmd"][2]
+    assert "Do the thing" in prompt
+    assert "CRITICAL LANGUAGE CONTRACT" in prompt
     assert captured["cmd"] == [
         "/tmp/fake-claude",
         "-p",
-        "Do the thing",
+        prompt,
         "--dangerously-skip-permissions",
         "--model",
         "claude-opus-4-7[1m]",
@@ -279,6 +282,7 @@ def test_run_automation_prompt_uses_codex_exec_output_file(monkeypatch, tmp_path
     assert "SYSTEM INSTRUCTIONS" in prompt
     assert "TOOLING SCOPE" in prompt
     assert "Summarize" in prompt
+    assert "CRITICAL LANGUAGE CONTRACT" in prompt
     assert captured["cmd"][-1] == prompt
 
 
