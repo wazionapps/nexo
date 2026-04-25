@@ -89,6 +89,7 @@ Analyze how the session went in terms of efficiency:
 ## Output Format
 
 Return ONLY valid JSON. No markdown code fences. No explanation text before or after.
+Follow the NEXO language contract injected by the automation runner. JSON keys stay in English, but `description`, `title`, and `content` fields must be written in the operator language.
 
 ```json
 {
@@ -276,7 +277,7 @@ Return ONLY valid JSON. No markdown code fences. No explanation text before or a
 - Do NOT use any specific agent name -- refer to "the agent" throughout.
 - If no issues found, return `{"session_id": "...", "findings": [], "protocol_summary": {...}}`.
 - Do NOT invent problems. Empty findings are perfectly fine.
-- Respond in the user's language (check calibration.json if available). The JSON keys stay in English, but `description`, `title`, `content` fields should be in the user's language.
+- Follow the NEXO language contract injected by the automation runner. The JSON keys stay in English, but `description`, `title`, and `content` fields must be written in the operator language.
 
 ## Context
 

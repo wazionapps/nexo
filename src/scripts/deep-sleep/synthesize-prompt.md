@@ -327,7 +327,7 @@ Return ONLY valid JSON. No markdown code fences. No explanation text.
 - Context packets are optional -- only create them for topics likely to continue tomorrow.
 - Do NOT use any specific agent name -- refer to "the agent" throughout.
 - If there are no findings worth acting on, return empty arrays. Do not invent problems.
-- Respond in the user's language (check calibration.json if available). JSON keys stay in English, but descriptions, titles, and content fields should be in the user's language.
+- Follow the NEXO language contract injected by the automation runner. JSON keys stay in English, but descriptions, titles, agenda text, reasoning, summaries, and content fields must be written in the operator language.
 
 ## Extractions File
 

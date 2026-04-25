@@ -1,5 +1,14 @@
 # Changelog
 
+## [7.9.26] - 2026-04-25
+
+### Fixed
+- Headless automation prompts now receive the operator-language contract centrally in `run_automation_prompt`, so reports, diaries, syntheses, followups, escalations, and Deep Sleep-generated memory text follow `calibration.json` even when the underlying template is English.
+- Deep Sleep extract/synthesize prompts now rely on the deterministic automation-runner language contract instead of asking the model to find calibration opportunistically.
+
+### Tests
+- Added regression coverage for operator-facing automation language-contract injection, machine-only caller exclusions, and Deep Sleep coverage.
+
 ## [7.9.25] - 2026-04-24
 
 ### Added

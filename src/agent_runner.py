@@ -888,6 +888,30 @@ BARE_MODE_SAFE_CALLERS: frozenset[str] = frozenset({
     "deep-sleep/synthesize",
 })
 
+MACHINE_ONLY_LANGUAGE_CONTRACT_CALLERS: frozenset[str] = frozenset({
+    "automation_probe",
+    "check_context",
+    "learning_validator",
+})
+
+
+def _should_apply_operator_language_contract(caller: str) -> bool:
+    clean = str(caller or "").strip()
+    if not clean:
+        return False
+    return clean not in MACHINE_ONLY_LANGUAGE_CONTRACT_CALLERS
+
+
+def _apply_operator_language_contract(prompt: str, *, caller: str) -> str:
+    if not _should_apply_operator_language_contract(caller):
+        return prompt
+    try:
+        from operator_language import append_operator_language_contract
+
+        return append_operator_language_contract(prompt)
+    except Exception:
+        return prompt
+
 
 def run_automation_prompt(
     prompt: str,
@@ -971,6 +995,8 @@ def run_automation_prompt(
             append_system_prompt = append_system_prompt + "\n\n" + enforcement_fragment
         else:
             append_system_prompt = enforcement_fragment
+
+    prompt = _apply_operator_language_contract(prompt, caller=caller)
 
     cwd_path = Path(cwd).expanduser().resolve() if cwd else Path.cwd()
     run_env = _headless_env(env)
