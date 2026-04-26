@@ -1,5 +1,17 @@
 # Changelog
 
+## [7.9.31] - 2026-04-26
+
+### Fixed
+- ``call_model_raw`` default ``stop_sequences`` value was ``["\n", ".", " "]``, which the Anthropic Messages API now rejects with HTTP 400 ``each stop sequence must contain non-whitespace``. Every ``enforcer_classifier`` call running on the default was failing in production and the conservative fallback was silently kicking in. v7.9.31 changes the default to ``None`` (no ``stop_sequences`` field on the wire) since ``max_tokens=3`` already serves as the hard cap for yes/no classification, and adds a local guard that raises ``ClassifierUnavailableError`` when a caller passes whitespace-only or non-string entries instead of letting the API 400 the request remotely. Detected during real wire smoke; surfaced by an external auditor.
+
+### Removed
+- Internal design document `docs/specs/2026-04-16-nexo-runtime-v1-commercial-split.md`. The file documented internal product strategy that does not belong in the open-source distribution. No code change, no behaviour change.
+
+### Tests
+- ``tests/test_call_model_raw_overrides_e2e.py`` adds two wire tests: ``test_e2e_default_does_not_send_whitespace_stop_sequences`` asserts the default invocation does NOT carry a ``stop_sequences`` field on the wire, and ``test_e2e_caller_can_pass_valid_stop_sequence`` confirms a non-whitespace caller value is forwarded.
+- ``tests/test_call_model_raw_overrides.py`` adds ``test_default_stop_sequences_omits_field``, ``test_whitespace_only_stop_sequence_rejected_locally`` (six bad inputs), and ``test_valid_stop_sequence_is_passed_through``.
+
 ## [7.9.30] - 2026-04-26
 
 ### Fixed

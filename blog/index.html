@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Blog — NEXO Brain</title>
-    <meta name="description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.9.30 hotfix that lands the 7.9.29 override-path hardening on npm.">
+    <meta name="description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.9.31 stop_sequences default fix.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/blog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/blog/">
     <meta property="og:title" content="Blog — NEXO Brain">
-    <meta property="og:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.9.30 hotfix that lands the 7.9.29 override-path hardening on npm.">
+    <meta property="og:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.9.31 stop_sequences default fix.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Blog — NEXO Brain">
-    <meta name="twitter:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.9.30 hotfix that lands the 7.9.29 override-path hardening on npm.">
+    <meta name="twitter:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.9.31 stop_sequences default fix.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Blog — NEXO Brain",
-        "description": "Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.9.30 hotfix that lands the 7.9.29 override-path hardening on npm.",
+        "description": "Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.9.31 stop_sequences default fix.",
         "url": "https://nexo-brain.com/blog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -134,7 +134,7 @@
                     <span class="page-chip">Shared brain product notes</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="/blog/nexo-7-9-30/" class="btn btn-primary">Read latest release</a>
+                    <a href="/blog/nexo-7-9-31/" class="btn btn-primary">Read latest release</a>
                     <a href="/changelog/" class="btn btn-secondary">Latest release notes</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -145,22 +145,22 @@
                 <div class="blog-featured-meta">
                     <span class="compare-chip">April 26, 2026</span>
                     <span class="compare-chip">Patch</span>
-                    <span class="compare-chip">CI hotfix</span>
+                    <span class="compare-chip">Wire fix</span>
                 </div>
-                <h2>NEXO 7.9.30: Hotfix import sys in agent_runner</h2>
-                <p>Patch over v7.9.29. Hotfix for a missing <code>import sys</code> that ruff F821 caught in CI and blocked the 7.9.29 publish workflow. v7.9.30 is the first npm release that carries the 7.9.29 override-path hardening.</p>
+                <h2>NEXO 7.9.31: stop_sequences default fix</h2>
+                <p>Patch over v7.9.30. Default <code>stop_sequences=["\n", ".", " "]</code> in <code>call_model_raw</code> was rejected by the current Anthropic Messages API with HTTP 400 <code>each stop sequence must contain non-whitespace</code>. The default is now <code>None</code> and whitespace-only caller values are rejected locally.</p>
                 <div class="hero-actions" style="justify-content:flex-start;margin-bottom:18px;">
-                    <a href="/blog/nexo-7-9-30/" class="btn btn-primary">Open article</a>
-                    <a href="/changelog/#v7930" class="btn btn-secondary">Open changelog</a>
+                    <a href="/blog/nexo-7-9-31/" class="btn btn-primary">Open article</a>
+                    <a href="/changelog/#v7931" class="btn btn-secondary">Open changelog</a>
                 </div>
                 <div class="blog-mini-stack">
                     <div class="blog-mini-card">
                         <strong>Companion view</strong>
-                        <span><a href="/changelog/#v7930">See the full v7.9.30 changelog</a></span>
+                        <span><a href="/changelog/#v7931">See the full v7.9.31 changelog</a></span>
                     </div>
                     <div class="blog-mini-card">
                         <strong>Previous release</strong>
-                        <span><a href="/blog/nexo-7-9-29/">NEXO 7.9.29: Override path hardening</a>.</span>
+                        <span><a href="/blog/nexo-7-9-30/">NEXO 7.9.30: Hotfix import sys in agent_runner</a>.</span>
                     </div>
                 </div>
             </div>
@@ -191,6 +191,15 @@
 <section class="section-flush-top">
     <div class="container">
             <div class="blog-grid">
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 26, 2026</div>
+                <h2><a href="/blog/nexo-7-9-31/">NEXO 7.9.31: stop_sequences default fix</a></h2>
+                <p>Patch over v7.9.30. Default <code>stop_sequences=["\n", ".", " "]</code> was rejected by Anthropic 400 <code>each stop sequence must contain non-whitespace</code>. Default is now <code>None</code>; whitespace-only caller values rejected locally with two new e2e wire tests and three unit tests.</p>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/blog/nexo-7-9-31/" class="btn btn-secondary">Read more</a>
+                </div>
+            </div>
 
             <div class="blog-card">
                 <div class="blog-card-date">April 26, 2026</div>
