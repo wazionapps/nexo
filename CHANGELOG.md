@@ -1,5 +1,15 @@
 # Changelog
 
+## [7.9.34] - 2026-04-26
+
+### Fixed
+- ``src/scripts/nexo-email-monitor.py::_parse_email_headers`` was dropping any email whose RFC822 headers came back as ``email.header.Header`` instances rather than plain strings. Senders that Q-encode display names (utf-8 / quoted-printable, e.g. ``=?utf-8?q?Confirmaci=C3=B3n?=``) made ``msg.get("Message-ID")`` and friends return a ``Header`` object; the subsequent ``.strip()`` raised ``TypeError: 'Header' object is not subscriptable``, the exception was swallowed at ``log.debug`` level, and the email was discarded silently. NERO operators only noticed when the inbox stopped getting replies. v7.9.34 routes every ``msg.get(...)`` through ``_decode_header`` (which decodes Q-encoding AND coerces to ``str``), and lifts the failure log from ``DEBUG`` to ``WARNING`` so a future regression cannot drop emails silently.
+- ``src/hooks/pre_tool_use.py`` Guardian gate (Block K, G3 destructive / G3 SSH / G4 guard_check) used to emit a JSON ``permissionDecision: deny`` response on a hard-mode block but exit with code 0. Terminal Claude Code occasionally proceeded with the next tool call anyway because the JSON deny channel was being dropped or out-of-order delivered mid-tool-loop. v7.9.34 keeps the JSON deny as the primary contract but, on a hard block, also writes the structured reason to stderr and exits with code 2 — the documented PreToolUse blocking exit. Belt-and-suspenders enforcement: the model receives the same Guardian reason through both channels and self-corrects instead of blindly retrying.
+
+### Tests
+- ``tests/test_email_monitor_parser.py`` (+5 tests) covers: Q-encoded From/Subject decoding, References-then-In-Reply-To thread-id selection, the regression that every parser output value is a ``str``, Q-encoded ``Message-ID`` / ``In-Reply-To`` / ``References`` round-tripping cleanly, and the visibility regression (parse failure logs at ``WARNING``, not ``DEBUG``).
+- ``tests/test_pre_tool_use_hook.py`` updated: hard-mode rm -rf and hard-mode SSH remote-write tests now assert ``returncode == 2`` and that the structured Guardian reason appears on stderr in addition to the JSON deny payload. Shadow-mode and gate-off tests still assert ``returncode == 0`` (no behaviour change for the soft paths).
+
 ## [7.9.33] - 2026-04-26
 
 ### Fixed

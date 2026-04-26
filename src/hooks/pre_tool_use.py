@@ -143,8 +143,20 @@ def main() -> int:
                     "permissionDecisionReason": "Guardian gate blocked this tool call.",
                 },
             }))
+        # 7.9.34 hardening: terminal Claude Code sometimes ignored the
+        # JSON deny channel mid-tool-loop and ran the next tool anyway.
+        # Belt-and-suspenders — also write the reason to stderr and exit
+        # with code 2, the documented blocking exit for PreToolUse. The
+        # JSON response stays the primary contract, but exit 2 forces
+        # the block at the process-exit layer and surfaces the reason to
+        # the model so it self-corrects instead of retrying blindly.
+        try:
+            sys.stderr.write(reason + "\n")
+            sys.stderr.flush()
+        except Exception:
+            pass
         summary = "blocked"
-        exit_code = 0  # JSON response is the canonical path; non-zero is redundant
+        exit_code = 2
 
     elif isinstance(result, dict) and result.get("skipped"):
         summary = f"skipped:{result.get('reason', '')[:40]}"

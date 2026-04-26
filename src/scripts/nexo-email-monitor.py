@@ -1037,7 +1037,15 @@ def _decode_header(raw):
 def _parse_email_headers(raw_bytes):
     """Parse minimal headers from RFC822 header bytes. Returns dict with
     message_id, from_addr, from_name, subject, received_at, thread_id,
-    in_reply_to. Empty strings on failure."""
+    in_reply_to. Empty strings on failure.
+
+    Q-encoded headers (utf-8 / quoted-printable) come back as
+    `email.header.Header` instances rather than plain strings. Plain
+    `str(Header)` returns the still-encoded `=?utf-8?q?...?=` form, and
+    `Header` itself does not support `.strip()` / `in` — both of which
+    used to drop the email silently in production. Every `msg.get(...)`
+    therefore goes through `_decode_header`, which decodes Q-encoding
+    AND coerces to a real `str`."""
     try:
         import email as _email
         msg = _email.message_from_bytes(raw_bytes)
@@ -1047,17 +1055,21 @@ def _parse_email_headers(raw_bytes):
         if "<" in from_raw and ">" in from_raw:
             name = from_raw.split("<")[0].strip().strip('"')
             addr = from_raw.split("<")[1].split(">")[0].strip()
+        references_raw = _decode_header(msg.get("References", ""))
+        in_reply_to_raw = _decode_header(msg.get("In-Reply-To", ""))
+        thread_seed = (references_raw or in_reply_to_raw).strip()
+        thread_id = thread_seed.split()[-1] if thread_seed else ""
         return {
-            "message_id": (msg.get("Message-ID") or "").strip(),
+            "message_id": _decode_header(msg.get("Message-ID", "")).strip(),
             "from_addr": addr.strip().lower(),
             "from_name": name,
             "subject": _decode_header(msg.get("Subject", "")),
-            "received_at": (msg.get("Date") or "").strip(),
-            "in_reply_to": (msg.get("In-Reply-To") or "").strip(),
-            "thread_id": (msg.get("References") or msg.get("In-Reply-To") or "").strip().split()[-1] if msg.get("References") or msg.get("In-Reply-To") else "",
+            "received_at": _decode_header(msg.get("Date", "")).strip(),
+            "in_reply_to": in_reply_to_raw.strip(),
+            "thread_id": thread_id,
         }
     except Exception as e:
-        log.debug(f"Header parse failed: {e}")
+        log.warning(f"Header parse failed: {e}")
         return {}
 
 
