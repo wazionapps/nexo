@@ -265,6 +265,7 @@ def run(
     *,
     dry_run: bool,
     do_backup: bool,
+    rules_only: bool = False,
 ) -> dict:
     if not db_path.exists():
         raise SystemExit(f"nexo.db not found at {db_path}")
@@ -272,7 +273,9 @@ def run(
     # Load the zero-shot classifier once up front so the migration loop does
     # not pay repeated import/init overhead. Returns None on installs without
     # transformers/model — the regex fallback still produces correct owners.
-    classifier = _load_local_classifier()
+    # `rules_only` skips the load entirely so server-startup callers never
+    # block on the multi-minute mDeBERTa initialization.
+    classifier = None if rules_only else _load_local_classifier()
 
     conn = sqlite3.connect(str(db_path))
     try:
@@ -332,6 +335,14 @@ def main(argv=None):
     ap.add_argument("--calibration", default=str(DEFAULT_CALIBRATION))
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--no-backup", action="store_true")
+    ap.add_argument(
+        "--rules-only",
+        action="store_true",
+        help="Skip the LocalZeroShotClassifier load and rely on the regex "
+        "rules. Used by server startup so MCP init never blocks on a "
+        "multi-minute model load; Deep Sleep / cron can later re-run "
+        "without this flag to refine 'shared' rows.",
+    )
     args = ap.parse_args(argv)
 
     report = run(
@@ -339,6 +350,7 @@ def main(argv=None):
         Path(args.calibration),
         dry_run=args.dry_run,
         do_backup=not args.no_backup,
+        rules_only=args.rules_only,
     )
     print(json.dumps(report, indent=2, sort_keys=True))
     return 0

@@ -18,9 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.9.26` is the current packaged-runtime line. Patch release over `7.9.25`: headless automation prompts now receive the operator-language contract centrally, so reports, diaries, syntheses, followups, escalations, and Deep Sleep-generated memory text follow calibration even when the underlying template is English.
+Version `7.9.27` is the current packaged-runtime line. Patch release over `7.9.26`: server startup no longer hangs the MCP `initialize` handshake when legacy followups/reminders still need owner backfill — the synchronous startup migration now runs `--rules-only` and skips the multi-minute `LocalZeroShotClassifier` load, keeping handshake under a few seconds.
 
-Previously in `7.9.24`: Desktop lifecycle shutdown resolves alias-only diary SIDs back to the registered NEXO session before stopping, so app-exit can preserve the diary and confirm the real session is closed.
+Previously in `7.9.26`: headless automation prompts now receive the operator-language contract centrally, so reports, diaries, syntheses, followups, escalations, and Deep Sleep-generated memory text follow calibration even when the underlying template is English.
 
 Previously in `7.9.23`: Desktop lifecycle fallback diaries now enrich sparse lifecycle events from continuity snapshots, so app-exit fallback evidence preserves recent turn context even when the live agent does not answer the injected diary prompt before shutdown.
 

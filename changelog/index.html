@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.26 centralizes the automation language contract.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.27 fixes a server-startup MCP handshake hang on the legacy task.owner backfill.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.26 centralizes the automation language contract.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.27 fixes a server-startup MCP handshake hang on the legacy task.owner backfill.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.26 centralizes the automation language contract.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.27 fixes a server-startup MCP handshake hang on the legacy task.owner backfill.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.26 centralizes the automation language contract.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.27 fixes a server-startup MCP handshake hang on the legacy task.owner backfill.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -87,19 +87,23 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v7.9.26 live</span>
+                    <span class="page-chip">v7.9.27 live</span>
                     <span class="page-chip">Guardian active</span>
                     <span class="page-chip">F0.6 hardening</span>
                     <span class="page-chip">Adaptive empirical</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v7926" class="btn btn-primary">Start with v7.9.26</a>
-                    <a href="#v7925" class="btn btn-secondary">See v7.9.25</a>
+                    <a href="#v7927" class="btn btn-primary">Start with v7.9.27</a>
+                    <a href="#v7926" class="btn btn-secondary">See v7.9.26</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
             </div>
             <div class="page-visual">
                 <div class="page-stack">
+                    <div class="page-stack-card">
+                        <strong>v7.9.27</strong>
+                        <span>Patch — server startup no longer hangs the MCP <code>initialize</code> handshake on the legacy task.owner backfill (now runs <code>--rules-only</code>).</span>
+                    </div>
                     <div class="page-stack-card">
                         <strong>v7.9.26</strong>
                         <span>Patch — headless automation and Deep Sleep now honor the operator language contract from calibration.</span>
@@ -252,6 +256,16 @@
 <section class="section-compact" style="background:rgba(124,58,237,0.08);">
     <div class="container desktop-disclaimer" style="max-width:860px;font-size:13px;line-height:1.55;">
         <p><strong>Sobre NEXO Desktop.</strong> NEXO Desktop es un cliente acompa&ntilde;ante closed-source distribuido aparte en <a href="https://nexo-desktop.com/">nexo-desktop.com</a>. Cuando una entrada de changelog menciona "NEXO Desktop" se refiere a una versi&oacute;n coordinada de ese cliente que consume el contrato CLI/MCP del Brain. El c&oacute;digo de Desktop no vive en este repo; el Brain (AGPL-3.0) es 100% usable por s&iacute; solo desde terminal, Codex, Claude Code, o cualquier cliente MCP.</p>
+    </div>
+</section>
+
+<section id="v7927" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.9.27 <span style="opacity:.5;font-weight:400;">&mdash; April 26, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">MCP startup unblocked</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            Patch over v7.9.26. Server startup no longer hangs the MCP <code>initialize</code> handshake when legacy <code>followups</code>/<code>reminders</code> still need owner backfill. The synchronous startup migration now invokes <code>scripts/backfill_task_owner.py --rules-only</code>, skipping the multi-minute <code>LocalZeroShotClassifier</code> (mDeBERTa) load that previously timed out the 60s subprocess gate and left every restart looping over the same legacy rows. Subprocess timeout reduced to 30s now that the regex path completes in milliseconds. Worst case ambiguous rows fall back to <code>'shared'</code>; Deep Sleep / cron can later re-run without <code>--rules-only</code> to refine those rows with the classifier.
+        </p>
     </div>
 </section>
 
