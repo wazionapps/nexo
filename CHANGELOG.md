@@ -1,5 +1,10 @@
 # Changelog
 
+## [7.9.33] - 2026-04-26
+
+### Fixed
+- ``src/scripts/nexo-email-monitor.py::_email_checkpoint_path`` introduced in 7.9.32 used ``hashlib.sha1`` to derive a filesystem-safe filename from the email's Message-ID. Bandit's B324 audit flags any SHA-1 call without ``usedforsecurity=False`` as a high-severity finding because SHA-1 is broken for cryptographic use. The hash here is purely a filename disambiguator (Message-IDs contain ``<``, ``>``, ``@`` and other characters that mix badly with macOS filesystems), so the cryptographic strength is irrelevant — but the audit still failed the publish workflow before any npm artifact shipped. v7.9.33 adds ``usedforsecurity=False`` to the call so Bandit accepts the non-security usage. The ``v7.9.32`` git tag is preserved for traceability but no npm release ever shipped for it; ``nexo-brain@7.9.33`` is the first release that carries the 7.9.32 email-recovery checkpoints.
+
 ## [7.9.32] - 2026-04-26
 
 ### Fixed

@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.9.33: Hotfix Bandit B324 in checkpoint hash</title>
+<meta name="description" content="NEXO Brain v7.9.33 patch release. Hotfix for a Bandit B324 finding in 7.9.32: SHA-1 used purely as a filesystem-safe filename disambiguator now declares usedforsecurity=False so the audit accepts the non-security usage. First npm release that carries the 7.9.32 email-recovery checkpoints.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-9-33/">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.9.33: Hotfix Bandit B324 in checkpoint hash","datePublished":"2026-04-26","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head><body><main><article style="max-width:760px;margin:80px auto;padding:0 24px;line-height:1.75;">
+<h1>NEXO 7.9.33 &mdash; Hotfix Bandit B324 in checkpoint hash</h1>
+<p><em>Published 2026-04-26. Patch release over v7.9.32.</em></p>
+
+<p>Brief patch over v7.9.32. Bandit's B324 audit flagged a SHA-1 call introduced in 7.9.32 (<code>_email_checkpoint_path</code> in <code>src/scripts/nexo-email-monitor.py</code>) as a high-severity finding because SHA-1 is broken for cryptographic use. The hash here is purely a filename disambiguator &mdash; Message-IDs contain <code>&lt;</code>, <code>&gt;</code>, <code>@</code> and other characters that mix badly with macOS filesystems, so the helper hashes them down to 16 hex characters before opening the file.</p>
+
+<p>v7.9.33 adds <code>usedforsecurity=False</code> to the call so Bandit accepts the non-security usage and the publish workflow stops failing on it. The <code>v7.9.32</code> git tag is preserved on the repo for traceability but no npm artifact ever shipped for it; <code>nexo-brain@7.9.33</code> is the first npm release that carries the 7.9.32 email-recovery checkpoints (7-day lookback + per-email JSON checkpoints capturing files touched and last assistant narration so a retried email continues from where the previous attempt died).</p>
+
+<h2>Verification</h2>
+<p>Bandit clean (<code>python3 -m bandit -r src/ --severity-level high --confidence-level high</code>). 92 tests green across <code>email_monitor_checkpoints</code>, <code>call_model_raw</code>, <code>call_model_raw_overrides</code>, <code>call_model_raw_overrides_e2e</code>, <code>agent_runner_override_env</code>, <code>fase4_lint_baseline</code>, and <code>security_baseline</code>.</p>
+
+<p><a href="/changelog/#v7933">Full changelog entry &rarr;</a></p>
+</article></main></body></html>

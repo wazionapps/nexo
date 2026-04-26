@@ -152,7 +152,15 @@ def _email_checkpoint_path(message_id: str) -> Path:
     per operator, while keeping filenames short enough to skim in a directory
     listing during a debug session.
     """
-    digest = _hashlib.sha1((message_id or "").encode("utf-8")).hexdigest()[:16]
+    # ``usedforsecurity=False`` declares the hash is purely a filename
+    # disambiguator (Message-IDs contain ``<``, ``>``, ``@`` that the FS
+    # rejects), not a cryptographic primitive. Bandit B324 flags weak
+    # algorithms used for security; this annotation tells it this call
+    # is safe by intent.
+    digest = _hashlib.sha1(  # noqa: S324 - non-security: filename hashing only
+        (message_id or "").encode("utf-8"),
+        usedforsecurity=False,
+    ).hexdigest()[:16]
     return CHECKPOINTS_DIR / f"{digest}.json"
 
 
