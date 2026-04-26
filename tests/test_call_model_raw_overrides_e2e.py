@@ -269,6 +269,50 @@ def test_e2e_override_aborts_when_auth_provider_missing(
     assert capture_cls.captured == {} or capture_cls.captured.get("path") is None
 
 
+def test_e2e_default_does_not_send_whitespace_stop_sequences(
+    fake_config_dir, tmp_path, monkeypatch, stubbed_resonance, local_proxy_server
+):
+    """Regression: 7.9.30 default `stop_sequences=["\\n", ".", " "]` was
+    rejected by the real Anthropic API with HTTP 400 ``each stop sequence
+    must contain non-whitespace`` because "\\n" and " " are pure
+    whitespace. Every enforcer_classifier call with the default failed
+    in production. v7.9.31 changes the default to None and validates
+    caller-supplied values locally.
+
+    Wire assertion: with the default, the request body MUST NOT carry a
+    `stop_sequences` field at all (avoids the 400)."""
+    base_url, capture_cls = local_proxy_server
+    _write_endpoint(fake_config_dir, base_url)
+    _write_auth_provider_helper(fake_config_dir, tmp_path, "sk-tok")
+    stubbed_resonance("claude-opus-4-7[1m]", "max")
+
+    from call_model_raw import call_model_raw
+    call_model_raw("Q?")  # default stop_sequences
+
+    body = capture_cls.captured["body"]
+    assert "stop_sequences" not in body, (
+        "default invocation must NOT send stop_sequences on the wire — "
+        "previous default ['\\n', '.', ' '] caused Anthropic 400"
+    )
+
+
+def test_e2e_caller_can_pass_valid_stop_sequence(
+    fake_config_dir, tmp_path, monkeypatch, stubbed_resonance, local_proxy_server
+):
+    """A caller that supplies a valid (non-whitespace) stop sequence
+    must see it on the wire."""
+    base_url, capture_cls = local_proxy_server
+    _write_endpoint(fake_config_dir, base_url)
+    _write_auth_provider_helper(fake_config_dir, tmp_path, "sk-tok")
+    stubbed_resonance("claude-opus-4-7[1m]", "max")
+
+    from call_model_raw import call_model_raw
+    call_model_raw("Q?", stop_sequences=["."])
+
+    body = capture_cls.captured["body"]
+    assert body.get("stop_sequences") == ["."]
+
+
 def test_e2e_standalone_no_idempotency_key_no_proxy_redirection(
     fake_config_dir, monkeypatch, stubbed_resonance, local_proxy_server
 ):

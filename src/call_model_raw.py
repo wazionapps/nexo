@@ -469,9 +469,16 @@ def _call_anthropic_raw(
         "model": wire_model,
         "max_tokens": max_tokens,
         "temperature": temperature,
-        "stop_sequences": stop_sequences,
         "messages": [{"role": "user", "content": prompt}],
     }
+    if stop_sequences:
+        # Anthropic API rejects whitespace-only stop sequences with
+        # 400 ``each stop sequence must contain non-whitespace``. The
+        # caller-validation in call_model_raw filters these out before
+        # we reach this point; the empty/None case is also covered by
+        # the truthy check above so we omit the field entirely instead
+        # of sending ``stop_sequences: null`` to the wire.
+        kwargs["stop_sequences"] = stop_sequences
     if system:
         kwargs["system"] = system
 
@@ -582,7 +589,20 @@ def call_model_raw(
                           "enforcer_classifier".
         max_tokens      — hard cap on output tokens. Default 3 (yes/no only).
         temperature     — sampling temperature. Default 0.0 (deterministic).
-        stop_sequences  — early-stop strings. Default ["\\n", ".", " "].
+        stop_sequences  — early-stop strings. Default ``None`` (no stop
+                          sequence sent on the wire). Anthropic's API
+                          rejects whitespace-only entries with
+                          ``each stop sequence must contain
+                          non-whitespace`` (HTTP 400), so the previous
+                          default of ``["\\n", ".", " "]`` made every
+                          ``enforcer_classifier`` request fail in
+                          production. ``max_tokens=3`` already serves as
+                          the hard cap for yes/no classification, so a
+                          stop sequence is unnecessary by default.
+                          Callers that want a deterministic stop can
+                          pass e.g. ``["."]``; whitespace-only entries
+                          are rejected locally with
+                          ``ClassifierUnavailableError``.
         timeout         — per-request timeout in seconds. Default 10.0.
         system          — optional system prompt. Default None (provider default).
         idempotency_key — optional opaque token attached as
@@ -612,8 +632,22 @@ def call_model_raw(
     Callers MUST catch this and fall back to a safer default. Fase 2 spec
     0.20 is explicit: silence is not obedience. Never fail-open.
     """
-    if stop_sequences is None:
-        stop_sequences = ["\n", ".", " "]
+    if stop_sequences is not None:
+        # Anthropic API: ``each stop sequence must contain
+        # non-whitespace`` (HTTP 400). Surface the configuration error
+        # locally instead of letting Anthropic 400 the request — and,
+        # in override mode, instead of letting the proxy translate that
+        # 400 into a misleading ``503 all_providers_down``.
+        invalid = [
+            repr(s) for s in stop_sequences
+            if not isinstance(s, str) or not s.strip()
+        ]
+        if invalid:
+            raise ClassifierUnavailableError(
+                "stop_sequences contains whitespace-only or non-string "
+                f"entries: {', '.join(invalid)}; Anthropic API requires "
+                "every stop sequence to contain non-whitespace"
+            )
 
     # Local imports to avoid circulars and keep agent_runner.py decoupled.
     from client_preferences import (  # type: ignore

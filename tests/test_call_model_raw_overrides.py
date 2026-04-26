@@ -437,3 +437,42 @@ def test_standalone_does_not_send_idempotency_key(fake_config_dir, monkeypatch, 
     assert captured["create_kwargs"]["model"] == "claude-opus-4-7[1m]"
     assert "extra_headers" not in captured["create_kwargs"]
     assert "base_url" not in captured["client_kwargs"]
+
+
+# ---------------------------------------------------------------------------
+# stop_sequences whitespace guard (regression for v7.9.31)
+# ---------------------------------------------------------------------------
+def test_default_stop_sequences_omits_field(fake_config_dir, monkeypatch, stubbed_resonance):
+    """Default ``stop_sequences=None`` must NOT add the field to the
+    SDK kwargs at all. Previous default ``['\\n', '.', ' ']`` caused
+    Anthropic 400 ``each stop sequence must contain non-whitespace``."""
+    from call_model_raw import call_model_raw
+    monkeypatch.setattr("call_model_raw._resolve_anthropic_key", lambda: "sk-x")
+    stubbed_resonance("claude-opus-4-7[1m]", "max")
+    captured: dict = {}
+    _install_fake_anthropic(monkeypatch, captured)
+    call_model_raw("Q?")
+    assert "stop_sequences" not in captured["create_kwargs"]
+
+
+def test_whitespace_only_stop_sequence_rejected_locally(fake_config_dir, monkeypatch, stubbed_resonance):
+    """Caller-supplied whitespace-only entries are caught locally so the
+    operator gets a clear error instead of a remote 400."""
+    from call_model_raw import call_model_raw, ClassifierUnavailableError
+    monkeypatch.setattr("call_model_raw._resolve_anthropic_key", lambda: "sk-x")
+    stubbed_resonance("claude-opus-4-7[1m]", "max")
+    _install_fake_anthropic(monkeypatch, {})
+    for bad in (["\n"], [" "], ["\n", "."], [" ", "."], ["\t"], [""]):
+        with pytest.raises(ClassifierUnavailableError, match="non-whitespace"):
+            call_model_raw("Q?", stop_sequences=bad)
+
+
+def test_valid_stop_sequence_is_passed_through(fake_config_dir, monkeypatch, stubbed_resonance):
+    """A valid non-whitespace stop sequence reaches the SDK kwargs."""
+    from call_model_raw import call_model_raw
+    monkeypatch.setattr("call_model_raw._resolve_anthropic_key", lambda: "sk-x")
+    stubbed_resonance("claude-opus-4-7[1m]", "max")
+    captured: dict = {}
+    _install_fake_anthropic(monkeypatch, captured)
+    call_model_raw("Q?", stop_sequences=["."])
+    assert captured["create_kwargs"]["stop_sequences"] == ["."]
