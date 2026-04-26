@@ -87,19 +87,23 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v7.10.0 live</span>
+                    <span class="page-chip">v7.10.1 live</span>
                     <span class="page-chip">Guardian active</span>
                     <span class="page-chip">F0.6 hardening</span>
                     <span class="page-chip">Adaptive empirical</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v7100" class="btn btn-primary">Start with v7.10.0</a>
-                    <a href="#v7934" class="btn btn-secondary">See v7.9.34</a>
+                    <a href="#v7101" class="btn btn-primary">Start with v7.10.1</a>
+                    <a href="#v7100" class="btn btn-secondary">See v7.10.0</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
             </div>
             <div class="page-visual">
                 <div class="page-stack">
+                    <div class="page-stack-card">
+                        <strong>v7.10.1</strong>
+                        <span>Patch — removes a residual <em>Custom LLM endpoint (advanced)</em> section in <code>README.md</code> that still documented the proxy override path as a current feature. The 7.10.0 code revert was complete; the README cleanup landed here.</span>
+                    </div>
                     <div class="page-stack-card">
                         <strong>v7.10.0</strong>
                         <span>Minor — removes the LLM proxy override path introduced in 7.9.28 → 7.9.34 (<code>llm_endpoint.json</code>, <code>auth_provider.json</code>, <code>nexo-max/high/medium/low/mini</code> aliases, <code>Idempotency-Key</code>). Brain now hits <code>api.anthropic.com</code> directly using the user's own Claude Code OAuth.</span>
@@ -288,6 +292,16 @@
 <section class="section-compact" style="background:rgba(124,58,237,0.08);">
     <div class="container desktop-disclaimer" style="max-width:860px;font-size:13px;line-height:1.55;">
         <p><strong>Sobre NEXO Desktop.</strong> NEXO Desktop es un cliente acompa&ntilde;ante closed-source distribuido aparte en <a href="https://nexo-desktop.com/">nexo-desktop.com</a>. Cuando una entrada de changelog menciona "NEXO Desktop" se refiere a una versi&oacute;n coordinada de ese cliente que consume el contrato CLI/MCP del Brain. El c&oacute;digo de Desktop no vive en este repo; el Brain (AGPL-3.0) es 100% usable por s&iacute; solo desde terminal, Codex, Claude Code, o cualquier cliente MCP.</p>
+    </div>
+</section>
+
+<section id="v7101" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.10.1 <span style="opacity:.5;font-weight:400;">&mdash; April 26, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">README cleanup over v7.10.0</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            Removes a residual <em>Custom LLM endpoint (advanced)</em> section (around line 1096 of <code>README.md</code>) that still documented <code>llm_endpoint.json</code> / <code>auth_provider.json</code> as a current feature, including the <code>Idempotency-Key</code> proxy semantics and a pointer to the now-deleted <code>docs/api/override-files.md</code>. The 7.10.0 code revert was complete; the README cleanup landed here. The repo-wide grep that 7.10.0 advertised as 0-hits is now actually 0-hits in the published npm tarball as well, not just in the source tree.
+        </p>
     </div>
 </section>
 

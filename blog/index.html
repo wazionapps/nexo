@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Blog — NEXO Brain</title>
-    <meta name="description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.10.0 release which removes the LLM proxy override path introduced in 7.9.28 → 7.9.34 because NEXO Desktop's model changed: Brain now hits api.anthropic.com directly using the user's own Claude Code OAuth.">
+    <meta name="description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.10.1 patch that removes a residual README section still documenting the LLM proxy override path as a current feature; the 7.10.0 code revert was complete and the README cleanup landed here.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/blog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/blog/">
     <meta property="og:title" content="Blog — NEXO Brain">
-    <meta property="og:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.10.0 release which removes the LLM proxy override path introduced in 7.9.28 → 7.9.34 because NEXO Desktop's model changed: Brain now hits api.anthropic.com directly using the user's own Claude Code OAuth.">
+    <meta property="og:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.10.1 patch that removes a residual README section still documenting the LLM proxy override path as a current feature; the 7.10.0 code revert was complete and the README cleanup landed here.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Blog — NEXO Brain">
-    <meta name="twitter:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.10.0 release which removes the LLM proxy override path introduced in 7.9.28 → 7.9.34 because NEXO Desktop's model changed: Brain now hits api.anthropic.com directly using the user's own Claude Code OAuth.">
+    <meta name="twitter:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.10.1 patch that removes a residual README section still documenting the LLM proxy override path as a current feature; the 7.10.0 code revert was complete and the README cleanup landed here.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Blog — NEXO Brain",
-        "description": "Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.10.0 release which removes the LLM proxy override path introduced in 7.9.28 → 7.9.34 because NEXO Desktop's model changed: Brain now hits api.anthropic.com directly using the user's own Claude Code OAuth.",
+        "description": "Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.10.1 patch that removes a residual README section still documenting the LLM proxy override path as a current feature; the 7.10.0 code revert was complete and the README cleanup landed here.",
         "url": "https://nexo-brain.com/blog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -134,7 +134,7 @@
                     <span class="page-chip">Shared brain product notes</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="/blog/nexo-7-10-0/" class="btn btn-primary">Read latest release</a>
+                    <a href="/blog/nexo-7-10-1/" class="btn btn-primary">Read latest release</a>
                     <a href="/changelog/" class="btn btn-secondary">Latest release notes</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -147,20 +147,20 @@
                     <span class="compare-chip">Patch</span>
                     <span class="compare-chip">CI hotfix</span>
                 </div>
-                <h2>NEXO 7.10.0: Removes the LLM proxy override path</h2>
-                <p>Minor release. Reverts the override path introduced in 7.9.28 → 7.9.34. NEXO Desktop's commercial model changed to a wrapper over the user's own Claude Code subscription (Max / Pro). Brain now hits <code>api.anthropic.com</code> directly with the user's own OAuth or <code>ANTHROPIC_API_KEY</code> — no NEXO bearer, no NEXO proxy, no NEXO credits in this codebase. Every proxy symbol is gone from <code>call_model_raw.py</code> and <code>agent_runner.py</code>; proxy-specific tests and <code>docs/api/override-files.md</code> are removed.</p>
+                <h2>NEXO 7.10.1: README cleanup over v7.10.0</h2>
+                <p>Patch over v7.10.0. v7.10.0 removed every code path of the LLM proxy override but a residual <em>Custom LLM endpoint (advanced)</em> section in <code>README.md</code> still documented the override path as a current feature, so the npm tarball for 7.10.0 still mentioned the proxy. v7.10.1 deletes that section. The repo-wide grep is now actually 0-hits in the published tarball as well, not just in the source tree.</p>
                 <div class="hero-actions" style="justify-content:flex-start;margin-bottom:18px;">
-                    <a href="/blog/nexo-7-10-0/" class="btn btn-primary">Open article</a>
-                    <a href="/changelog/#v7100" class="btn btn-secondary">Open changelog</a>
+                    <a href="/blog/nexo-7-10-1/" class="btn btn-primary">Open article</a>
+                    <a href="/changelog/#v7101" class="btn btn-secondary">Open changelog</a>
                 </div>
                 <div class="blog-mini-stack">
                     <div class="blog-mini-card">
                         <strong>Companion view</strong>
-                        <span><a href="/changelog/#v7100">See the full v7.10.0 changelog</a></span>
+                        <span><a href="/changelog/#v7101">See the full v7.10.1 changelog</a></span>
                     </div>
                     <div class="blog-mini-card">
                         <strong>Previous release</strong>
-                        <span><a href="/blog/nexo-7-9-34/">NEXO 7.9.34: Email parser fix + Guardian hook hardening</a>.</span>
+                        <span><a href="/blog/nexo-7-10-0/">NEXO 7.10.0: Removes the LLM proxy override path</a>.</span>
                     </div>
                 </div>
             </div>
@@ -191,6 +191,15 @@
 <section class="section-flush-top">
     <div class="container">
             <div class="blog-grid">
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 26, 2026</div>
+                <h2><a href="/blog/nexo-7-10-1/">NEXO 7.10.1: README cleanup over v7.10.0</a></h2>
+                <p>Patch over v7.10.0. Removes a residual <em>Custom LLM endpoint (advanced)</em> section in <code>README.md</code> that still documented the proxy override as a current feature. The 7.10.0 code revert was complete; the README cleanup landed here.</p>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/blog/nexo-7-10-1/" class="btn btn-secondary">Read more</a>
+                </div>
+            </div>
 
             <div class="blog-card">
                 <div class="blog-card-date">April 26, 2026</div>

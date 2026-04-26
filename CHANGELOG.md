@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.10.1] - 2026-04-26
+
+### Removed
+- ``README.md`` had a residual "Custom LLM endpoint (advanced)" section (about a dozen lines around line 1096) that still documented the ``llm_endpoint.json`` / ``auth_provider.json`` override path as a current feature, including the ``Idempotency-Key`` proxy semantics and a pointer to the now-deleted ``docs/api/override-files.md``. The 7.10.0 revert removed every code path but missed this README section, so the npm tarball for 7.10.0 still mentioned the proxy as if it existed. v7.10.1 deletes that section. The repo-wide grep that 7.10.0 advertised as 0-hits is now actually 0-hits in the published tarball as well, not just in the source tree.
+
+### Verification
+- Repo-wide grep (``src/``, ``docs/``, ``tests/``, ``scripts/``, ``bin/`` plus the README) for ``nexo-max``, ``nexo-high``, ``nexo-medium``, ``nexo-low``, ``nexo-mini``, ``llm_endpoint.json``, ``auth_provider.json``, ``NEXO_PROXY``, ``nexo-desktop.com/api/proxy``, ``_apply_llm_endpoint_override``, ``is_override_mode``, ``resolve_api_base_url``, ``resolve_auth_token``, ``NEXO_RAW_ANTHROPIC``, ``_override_force_disabled``, ``_CONCRETE_TO_ALIAS`` returns 0 hits outside the historical changelog/blog narration of "what was removed in 7.10.0".
+
 ## [7.10.0] - 2026-04-26
 
 ### Removed
