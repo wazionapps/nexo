@@ -1,5 +1,17 @@
 # Changelog
 
+## [7.9.32] - 2026-04-26
+
+### Fixed
+- ``_recover_unreplied_processed`` (the periodic email-monitor sweep that re-queues emails marked ``processed`` but missing a real reply) now uses a 7-day lookback (``hours=168``) instead of the previous 24-hour window. Background: a single email can fall between several Brain releases in a tight window (4 releases on 2026-04-26 alone), and the 24-hour sweep let those drop into permanent limbo because the next sweep happened after the email had aged out. 7 days absorbs a normal release cadence comfortably without re-triggering very old "stuck" mails indefinitely.
+
+### Added
+- Per-email recovery checkpoints in ``src/scripts/nexo-email-monitor.py``. Whenever a worker run does not finish OK (timeout, non-zero exit, ``AutomationBackendUnavailableError``, unexpected exception) the helper persists a small JSON record to ``~/.nexo/nexo-email/checkpoints/<sha1(message_id)[:16]>.json`` capturing: ``message_id``, ``subject``, ``first_attempt_at``, ``last_attempt_at``, ``attempts``, the list of files in the working directory whose mtime advanced during the failed run (``files_touched``, capped at 50 entries), the last assistant text extracted from Claude Code's JSON output (capped at 4000 chars), and ``last_error``. Subsequent retry attempts read the checkpoint and inject a "Previous attempt context" block into the prompt — the next attempt sees what the previous attempt drafted and which files it left behind, instead of restarting from scratch and duplicating tokens. Successful reply or escalation deletes the checkpoint. Stale files are pruned automatically by ``_email_checkpoint_cleanup(max_age_days=7)`` once per monitor tick.
+- ``build_processing_prompt`` accepts a new ``previous_progress_block`` keyword argument; the email-monitor wires the block through ``launch_nexo`` so that the recovery context is appended to the Claude Code prompt only when a checkpoint exists.
+
+### Tests
+- ``tests/test_email_monitor_checkpoints.py`` (+15 tests) covers: write+read round trip, repeated attempts merging the ``files_touched`` set, the 50-file cap, the human-readable previous-progress block render, empty/None input, idempotent delete, the 7-day cleanup window, JSON ``result`` extraction, plain-text fallback, empty input handling, the 4000-char truncation, filesystem-safe SHA1 path, and missing-checkpoint reads returning ``None``.
+
 ## [7.9.31] - 2026-04-26
 
 ### Fixed

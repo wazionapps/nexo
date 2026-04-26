@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.31 fixes a wire-level bug where the default stop_sequences in call_model_raw made every enforcer_classifier call fail with Anthropic 400; the default is now None and whitespace-only caller values are rejected locally.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.32 hardens the email monitor recovery — 7-day lookback (was 24h) plus per-email checkpoints so a retried email continues from the previous attempt's progress instead of restarting from scratch.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.31 fixes a wire-level bug where the default stop_sequences in call_model_raw made every enforcer_classifier call fail with Anthropic 400; the default is now None and whitespace-only caller values are rejected locally.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.32 hardens the email monitor recovery — 7-day lookback (was 24h) plus per-email checkpoints so a retried email continues from the previous attempt's progress instead of restarting from scratch.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.31 fixes a wire-level bug where the default stop_sequences in call_model_raw made every enforcer_classifier call fail with Anthropic 400; the default is now None and whitespace-only caller values are rejected locally.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.32 hardens the email monitor recovery — 7-day lookback (was 24h) plus per-email checkpoints so a retried email continues from the previous attempt's progress instead of restarting from scratch.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.31 fixes a wire-level bug where the default stop_sequences in call_model_raw made every enforcer_classifier call fail with Anthropic 400; the default is now None and whitespace-only caller values are rejected locally.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.32 hardens the email monitor recovery — 7-day lookback (was 24h) plus per-email checkpoints so a retried email continues from the previous attempt's progress instead of restarting from scratch.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -87,19 +87,23 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v7.9.31 live</span>
+                    <span class="page-chip">v7.9.32 live</span>
                     <span class="page-chip">Guardian active</span>
                     <span class="page-chip">F0.6 hardening</span>
                     <span class="page-chip">Adaptive empirical</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v7931" class="btn btn-primary">Start with v7.9.31</a>
-                    <a href="#v7930" class="btn btn-secondary">See v7.9.30</a>
+                    <a href="#v7932" class="btn btn-primary">Start with v7.9.32</a>
+                    <a href="#v7931" class="btn btn-secondary">See v7.9.31</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
             </div>
             <div class="page-visual">
                 <div class="page-stack">
+                    <div class="page-stack-card">
+                        <strong>v7.9.32</strong>
+                        <span>Patch — email monitor recovery: 7-day lookback (was 24h) plus per-email checkpoints so a retried email continues from the previous attempt's progress instead of restarting from scratch.</span>
+                    </div>
                     <div class="page-stack-card">
                         <strong>v7.9.31</strong>
                         <span>Patch — fixes default <code>stop_sequences</code> in <code>call_model_raw</code> rejected by Anthropic 400; default is now <code>None</code> and whitespace-only caller values are rejected locally.</span>
@@ -272,6 +276,16 @@
 <section class="section-compact" style="background:rgba(124,58,237,0.08);">
     <div class="container desktop-disclaimer" style="max-width:860px;font-size:13px;line-height:1.55;">
         <p><strong>Sobre NEXO Desktop.</strong> NEXO Desktop es un cliente acompa&ntilde;ante closed-source distribuido aparte en <a href="https://nexo-desktop.com/">nexo-desktop.com</a>. Cuando una entrada de changelog menciona "NEXO Desktop" se refiere a una versi&oacute;n coordinada de ese cliente que consume el contrato CLI/MCP del Brain. El c&oacute;digo de Desktop no vive en este repo; el Brain (AGPL-3.0) es 100% usable por s&iacute; solo desde terminal, Codex, Claude Code, o cualquier cliente MCP.</p>
+    </div>
+</section>
+
+<section id="v7932" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.9.32 <span style="opacity:.5;font-weight:400;">&mdash; April 26, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">Email monitor recovery hardening</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            Patch over v7.9.31. Hardens email-monitor recovery against cascades of Brain releases. Background: a single email can fall between several Brain updates in a tight window (4 releases on 2026-04-26 alone), and the previous 24-hour ``_recover_unreplied_processed`` sweep let those drop into a permanent limbo because the next sweep happened after the email had already aged out. v7.9.32 widens the lookback to 7 days (168h) and introduces per-email checkpoints at <code>~/.nexo/nexo-email/checkpoints/</code> that capture files the failed attempt touched, the last assistant narration extracted from Claude Code's JSON output, and the error. Retry attempts inject that context into the next prompt so a long task (drafting a presentation, multi-step analysis, building a report) continues from where the previous attempt died instead of restarting from scratch and duplicating tokens. Stale checkpoints are pruned automatically after 7 days. 15 new unit tests in <code>tests/test_email_monitor_checkpoints.py</code> pin the helpers.
+        </p>
     </div>
 </section>
 
