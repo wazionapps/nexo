@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Blog — NEXO Brain</title>
-    <meta name="description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.9.34 patch that fixes silent email drops on Q-encoded headers and hardens the PreToolUse Guardian hook with stderr + exit 2 enforcement.">
+    <meta name="description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.10.0 release which removes the LLM proxy override path introduced in 7.9.28 → 7.9.34 because NEXO Desktop's model changed: Brain now hits api.anthropic.com directly using the user's own Claude Code OAuth.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/blog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/blog/">
     <meta property="og:title" content="Blog — NEXO Brain">
-    <meta property="og:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.9.34 patch that fixes silent email drops on Q-encoded headers and hardens the PreToolUse Guardian hook with stderr + exit 2 enforcement.">
+    <meta property="og:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.10.0 release which removes the LLM proxy override path introduced in 7.9.28 → 7.9.34 because NEXO Desktop's model changed: Brain now hits api.anthropic.com directly using the user's own Claude Code OAuth.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Blog — NEXO Brain">
-    <meta name="twitter:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.9.34 patch that fixes silent email drops on Q-encoded headers and hardens the PreToolUse Guardian hook with stderr + exit 2 enforcement.">
+    <meta name="twitter:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.10.0 release which removes the LLM proxy override path introduced in 7.9.28 → 7.9.34 because NEXO Desktop's model changed: Brain now hits api.anthropic.com directly using the user's own Claude Code OAuth.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Blog — NEXO Brain",
-        "description": "Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.9.34 patch that fixes silent email drops on Q-encoded headers and hardens the PreToolUse Guardian hook with stderr + exit 2 enforcement.",
+        "description": "Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.10.0 release which removes the LLM proxy override path introduced in 7.9.28 → 7.9.34 because NEXO Desktop's model changed: Brain now hits api.anthropic.com directly using the user's own Claude Code OAuth.",
         "url": "https://nexo-brain.com/blog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -134,7 +134,7 @@
                     <span class="page-chip">Shared brain product notes</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="/blog/nexo-7-9-34/" class="btn btn-primary">Read latest release</a>
+                    <a href="/blog/nexo-7-10-0/" class="btn btn-primary">Read latest release</a>
                     <a href="/changelog/" class="btn btn-secondary">Latest release notes</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -147,20 +147,20 @@
                     <span class="compare-chip">Patch</span>
                     <span class="compare-chip">CI hotfix</span>
                 </div>
-                <h2>NEXO 7.9.34: Email parser fix + Guardian hook hardening</h2>
-                <p>Patch over v7.9.33 with two fixes. <code>_parse_email_headers</code> was silently dropping any email whose RFC822 headers came back as <code>email.header.Header</code> instances (Q-encoded utf-8 / quoted-printable) — operators only noticed because Nero stopped replying. Headers now route through <code>_decode_header</code> end to end and parse failures log at <code>WARNING</code>. PreToolUse Guardian hook hardens hard blocks with stderr + exit 2 so terminal Claude cannot ignore the deny channel mid-tool-loop.</p>
+                <h2>NEXO 7.10.0: Removes the LLM proxy override path</h2>
+                <p>Minor release. Reverts the override path introduced in 7.9.28 → 7.9.34. NEXO Desktop's commercial model changed to a wrapper over the user's own Claude Code subscription (Max / Pro). Brain now hits <code>api.anthropic.com</code> directly with the user's own OAuth or <code>ANTHROPIC_API_KEY</code> — no NEXO bearer, no NEXO proxy, no NEXO credits in this codebase. Every proxy symbol is gone from <code>call_model_raw.py</code> and <code>agent_runner.py</code>; proxy-specific tests and <code>docs/api/override-files.md</code> are removed.</p>
                 <div class="hero-actions" style="justify-content:flex-start;margin-bottom:18px;">
-                    <a href="/blog/nexo-7-9-34/" class="btn btn-primary">Open article</a>
-                    <a href="/changelog/#v7934" class="btn btn-secondary">Open changelog</a>
+                    <a href="/blog/nexo-7-10-0/" class="btn btn-primary">Open article</a>
+                    <a href="/changelog/#v7100" class="btn btn-secondary">Open changelog</a>
                 </div>
                 <div class="blog-mini-stack">
                     <div class="blog-mini-card">
                         <strong>Companion view</strong>
-                        <span><a href="/changelog/#v7934">See the full v7.9.34 changelog</a></span>
+                        <span><a href="/changelog/#v7100">See the full v7.10.0 changelog</a></span>
                     </div>
                     <div class="blog-mini-card">
                         <strong>Previous release</strong>
-                        <span><a href="/blog/nexo-7-9-33/">NEXO 7.9.33: Hotfix Bandit B324 in checkpoint hash</a>.</span>
+                        <span><a href="/blog/nexo-7-9-34/">NEXO 7.9.34: Email parser fix + Guardian hook hardening</a>.</span>
                     </div>
                 </div>
             </div>
@@ -191,6 +191,15 @@
 <section class="section-flush-top">
     <div class="container">
             <div class="blog-grid">
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 26, 2026</div>
+                <h2><a href="/blog/nexo-7-10-0/">NEXO 7.10.0: Removes the LLM proxy override path</a></h2>
+                <p>Minor release. Reverts the override path introduced in 7.9.28 → 7.9.34. NEXO Desktop is now a wrapper over the user's own Claude Code subscription (Max / Pro). Brain hits <code>api.anthropic.com</code> directly. Every proxy symbol gone from <code>call_model_raw.py</code> and <code>agent_runner.py</code>; proxy tests and override docs deleted.</p>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/blog/nexo-7-10-0/" class="btn btn-secondary">Read more</a>
+                </div>
+            </div>
 
             <div class="blog-card">
                 <div class="blog-card-date">April 26, 2026</div>

@@ -33,10 +33,6 @@ def force_claude_code(monkeypatch):
         rm.SYSTEM_OWNED_CALLERS["enforcer_classifier"] = "muy_bajo"
     # Ensure anthropic key present so auth check passes
     monkeypatch.setattr("call_model_raw._resolve_anthropic_key", lambda: "sk-test-key")
-    # Force standalone so these tests are deterministic regardless of
-    # whether the developer has a real ~/.nexo/config/llm_endpoint.json.
-    # The override-specific behaviour lives in test_call_model_raw_overrides.py.
-    monkeypatch.setattr("call_model_raw.is_override_mode", lambda: False)
 
 
 def test_automation_none_raises(monkeypatch):
