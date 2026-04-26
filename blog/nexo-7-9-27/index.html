@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.9.27: MCP startup unblocked</title>
+<meta name="description" content="NEXO Brain v7.9.27 patch release. Server startup no longer hangs the MCP initialize handshake on the legacy task.owner backfill — synchronous migration now runs --rules-only.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-9-27/">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.9.27: MCP startup unblocked","datePublished":"2026-04-26","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head><body><main><article style="max-width:760px;margin:80px auto;padding:0 24px;line-height:1.75;">
+<h1>NEXO 7.9.27 &mdash; MCP startup unblocked</h1>
+<p><em>Published 2026-04-26. Patch release over v7.9.26.</em></p>
+
+<p>v7.9.27 fixes a server-startup hang where the synchronous <code>task.owner</code> backfill was loading the multi-minute <code>LocalZeroShotClassifier</code> (mDeBERTa) and exceeding the 60s subprocess gate. Every restart looped over the same legacy rows and the MCP <code>initialize</code> handshake never returned, leaving the server visible as &ldquo;connected&rdquo; but exposing zero tools.</p>
+
+<h2>What changed</h2>
+<p>The synchronous migration in <code>auto_update.py</code> now invokes <code>scripts/backfill_task_owner.py --rules-only</code>. The new flag skips the classifier load entirely and relies on the existing regex rules, which complete in milliseconds. Subprocess timeout is reduced from 60s to 30s now that the rules path is not gated on a model load.</p>
+
+<h2>Backlog still cleared</h2>
+<p>Worst case, ambiguous rows fall back to <code>'shared'</code>, which is the documented neutral owner. Deep Sleep / cron can later re-run <code>backfill_task_owner.py</code> without <code>--rules-only</code> to refine the <code>'shared'</code> rows with the classifier when the runtime is idle and synchronous startup is no longer at risk.</p>
+
+<h2>Why it matters</h2>
+<p>Any install that carried legacy <code>followups</code>/<code>reminders</code> with <code>owner IS NULL</code> and had the local classifier installed was effectively unable to expose <code>nexo_*</code> tools to MCP clients on first restart. The fix is non-breaking and restores handshake to the few-seconds range expected by Claude Code, Codex, and other MCP clients.</p>
+
+<h2>Verification</h2>
+<p>Targeted MCP handshake test against a populated runtime confirms <code>initialize</code> + <code>tools/list</code> respond with 272 tools (including <code>nexo_startup</code>) in under three seconds. Pre-release pytest suite green.</p>
+
+<p><a href="/changelog/#v7927">Full changelog entry &rarr;</a></p>
+</article></main></body></html>

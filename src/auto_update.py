@@ -2254,12 +2254,17 @@ def _maybe_backfill_task_owner() -> None:
             return
         _log(f"v6.5+: backfilling task.owner on {remaining} legacy row(s)")
         env = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parent)}
+        # --rules-only intentionally: server startup invokes us synchronously
+        # and any blocking >~5s breaks the MCP initialize handshake. The
+        # regex rules already cover every legacy row correctly (worst case
+        # falls back to 'shared'); Deep Sleep / cron can re-run without the
+        # flag later to refine ambiguous 'shared' rows with the classifier.
         r = _sp.run(
-            [sys.executable, str(script)],
+            [sys.executable, str(script), "--rules-only"],
             env=env,
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=30,
         )
         if r.returncode == 0:
             line = (r.stdout.strip().splitlines() or ["ok"])[-1]
@@ -2270,7 +2275,7 @@ def _maybe_backfill_task_owner() -> None:
                 f"{r.stderr.strip()[:200]}"
             )
     except _sp.TimeoutExpired:
-        _log("task.owner backfill timed out after 60s")
+        _log("task.owner backfill timed out after 30s (--rules-only)")
     except Exception as exc:
         _log(f"task.owner backfill skipped: {exc}")
 

@@ -1,5 +1,14 @@
 # Changelog
 
+## [7.9.27] - 2026-04-26
+
+### Fixed
+- Server startup no longer hangs the MCP `initialize` handshake when legacy followups/reminders still need owner backfill. The synchronous startup migration now invokes `scripts/backfill_task_owner.py --rules-only`, skipping the multi-minute `LocalZeroShotClassifier` (mDeBERTa) load that previously timed out the 60s subprocess gate and left every restart looping over the same legacy rows. Subprocess timeout reduced to 30s now that the regex path completes in milliseconds.
+- The legacy backlog is still cleared (worst case all rows fall back to `'shared'`); Deep Sleep / cron can later re-run `backfill_task_owner.py` without `--rules-only` to refine ambiguous `'shared'` rows with the classifier.
+
+### Added
+- `scripts/backfill_task_owner.py` accepts a new `--rules-only` flag that skips the `LocalZeroShotClassifier` initialization. Intended for synchronous callers (server startup) that cannot afford a multi-minute model load.
+
 ## [7.9.26] - 2026-04-25
 
 ### Fixed
