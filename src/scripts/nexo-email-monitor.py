@@ -74,6 +74,7 @@ EMAIL_DB_PATH = BASE_DIR / "nexo-email.db"
 LOCK_FILE = BASE_DIR / ".lock"
 SESSIONS_FILE = BASE_DIR / ".active-sessions.json"
 WORKER_JOBS_DIR = BASE_DIR / "worker-jobs"
+CHECKPOINTS_DIR = BASE_DIR / "checkpoints"
 LOG_FILE = BASE_DIR / "monitor.log"
 ALERT_FILE = BASE_DIR / ".consecutive-failures"
 EMPTY_BACKOFF_STATE_FILE = BASE_DIR / ".empty-inbox-backoff.json"
@@ -112,6 +113,7 @@ CREATE INDEX IF NOT EXISTS idx_ee_ts ON email_events(timestamp);
 
 BASE_DIR.mkdir(parents=True, exist_ok=True)
 WORKER_JOBS_DIR.mkdir(parents=True, exist_ok=True)
+CHECKPOINTS_DIR.mkdir(parents=True, exist_ok=True)
 
 # Rotating log: 5MB max, keep 3 backups
 handler = RotatingFileHandler(str(LOG_FILE), maxBytes=5*1024*1024, backupCount=3)
@@ -119,6 +121,220 @@ handler.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(message)s'
 log = logging.getLogger("nexo-monitor")
 log.setLevel(logging.INFO)
 log.addHandler(handler)
+
+
+# ----------------------------------------------------------------------
+# Email checkpoint system
+# ----------------------------------------------------------------------
+# Each email Nexo processes can take a non-trivial amount of work (drafting
+# code, building a presentation, multi-step analysis). When a worker dies
+# mid-flight (Brain release, OOM, timeout, manual reboot) the next retry
+# previously started from scratch — it had no memory of the partial work the
+# previous attempt had already produced. For long replies that meant tokens
+# wasted on re-discovery and, occasionally, half-written files left behind in
+# the working directory with no narrative context.
+#
+# The checkpoint helpers below persist a small JSON record per email-thread
+# at ``~/.nexo/nexo-email/checkpoints/<sha1(message_id)[:16]>.json`` capturing
+# what the previous attempt did so the retry's prompt can include it. The
+# checkpoint is best-effort: if reading or writing fails the worker keeps
+# running, just without the recovery context.
+
+import hashlib as _hashlib  # alias to keep the public ``hashlib`` import explicit
+
+
+def _email_checkpoint_path(message_id: str) -> Path:
+    """Stable, filesystem-safe path for a given Message-ID.
+
+    Message-IDs contain ``<``, ``>``, ``@`` and other characters that mix
+    badly with filesystems, so we hash them. 16 hex chars (~64 bits) is well
+    above the collision threshold for the few hundred emails Nexo handles
+    per operator, while keeping filenames short enough to skim in a directory
+    listing during a debug session.
+    """
+    digest = _hashlib.sha1((message_id or "").encode("utf-8")).hexdigest()[:16]
+    return CHECKPOINTS_DIR / f"{digest}.json"
+
+
+def _email_checkpoint_read(message_id: str) -> dict | None:
+    """Return the checkpoint dict for ``message_id`` if one exists, else None.
+
+    Returns ``None`` (not raise) on any IO/parse failure so the worker can
+    treat "no recovery context" as a safe default.
+    """
+    if not message_id:
+        return None
+    path = _email_checkpoint_path(message_id)
+    try:
+        if not path.is_file():
+            return None
+        return json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        log.warning(f"Checkpoint read failed for {message_id}: {exc}")
+        return None
+
+
+def _email_checkpoint_write(
+    *,
+    message_id: str,
+    subject: str,
+    files_touched: list[str],
+    last_assistant_text: str,
+    last_error: str,
+    attempts: int,
+) -> None:
+    """Persist a checkpoint atomically (tmp + rename).
+
+    Best-effort: any failure is logged at warning level but never raised so
+    the worker keeps progressing.
+    """
+    if not message_id:
+        return
+    path = _email_checkpoint_path(message_id)
+    existing = _email_checkpoint_read(message_id) or {}
+    now_iso = datetime.now().isoformat(timespec="seconds")
+    payload = {
+        "message_id": message_id,
+        "subject": str(subject or "")[:200],
+        "first_attempt_at": existing.get("first_attempt_at") or now_iso,
+        "last_attempt_at": now_iso,
+        "attempts": int(attempts or existing.get("attempts", 0) + 1),
+        "files_touched": sorted(set(
+            list(existing.get("files_touched") or []) + list(files_touched or [])
+        ))[:50],  # cap so a misbehaving run cannot blow up the checkpoint
+        "last_assistant_text": str(last_assistant_text or "")[:4000],
+        "last_error": str(last_error or "")[:500],
+    }
+    try:
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2))
+        tmp.replace(path)
+    except OSError as exc:
+        log.warning(f"Checkpoint write failed for {message_id}: {exc}")
+
+
+def _email_checkpoint_delete(message_id: str) -> None:
+    """Remove the checkpoint when an email succeeds or is escalated."""
+    if not message_id:
+        return
+    try:
+        _email_checkpoint_path(message_id).unlink(missing_ok=True)
+    except OSError as exc:
+        log.warning(f"Checkpoint delete failed for {message_id}: {exc}")
+
+
+def _email_checkpoint_cleanup(*, max_age_days: int = 7) -> int:
+    """Drop checkpoint files older than ``max_age_days``. Idempotent.
+
+    Returns the number of files removed. Called from ``main()`` once per
+    monitor tick; on a healthy Mac this is sub-millisecond because the
+    directory rarely holds more than a handful of entries.
+    """
+    if not CHECKPOINTS_DIR.is_dir():
+        return 0
+    cutoff = time.time() - (max_age_days * 86400)
+    removed = 0
+    for path in CHECKPOINTS_DIR.glob("*.json"):
+        try:
+            if path.stat().st_mtime < cutoff:
+                path.unlink()
+                removed += 1
+        except OSError:
+            continue
+    if removed:
+        log.info(f"Checkpoint cleanup: removed {removed} stale file(s) older than {max_age_days}d")
+    return removed
+
+
+def _scan_files_modified_since(working_dir: str | os.PathLike, since_epoch: float, *, max_files: int = 50) -> list[str]:
+    """Return absolute paths in ``working_dir`` whose mtime is newer than
+    ``since_epoch``. Used after a worker run to capture the files Nexo
+    edited or created during the attempt, so a retry can decide whether to
+    pick up where it left off.
+
+    Skips hidden directories, NEXO runtime caches, and Git internals to
+    avoid drowning the checkpoint in noise. Caps at ``max_files`` entries
+    in case the caller passes a large repository as ``cwd``.
+    """
+    root = Path(working_dir or "").expanduser()
+    if not root.is_dir():
+        return []
+    skip_dirs = {".git", ".venv", "node_modules", "__pycache__", ".nexo", "Library", "Documents"}
+    out: list[str] = []
+    try:
+        for child in root.rglob("*"):
+            try:
+                if any(part in skip_dirs for part in child.parts):
+                    continue
+                if child.is_file() and child.stat().st_mtime > since_epoch:
+                    out.append(str(child))
+                    if len(out) >= max_files:
+                        break
+            except OSError:
+                continue
+    except OSError:
+        return []
+    return out
+
+
+def _build_previous_progress_block(message_ids: list[str]) -> str:
+    """Build a human-readable section describing progress from prior attempts
+    on the given message_ids. Returns an empty string if no checkpoints
+    exist, so the prompt builder can append it unconditionally."""
+    blocks: list[str] = []
+    for mid in message_ids or []:
+        cp = _email_checkpoint_read(mid)
+        if not cp:
+            continue
+        subject = cp.get("subject") or "(no subject)"
+        attempts = cp.get("attempts") or 1
+        files = cp.get("files_touched") or []
+        last_text = (cp.get("last_assistant_text") or "").strip()
+        last_error = (cp.get("last_error") or "").strip()
+        section = [
+            f"### Previous attempt on email \"{subject}\"",
+            f"- Attempts so far: {attempts}",
+        ]
+        if files:
+            section.append(f"- Files the previous attempt touched (may already contain partial work):")
+            for f in files[:20]:
+                section.append(f"    - {f}")
+        if last_text:
+            section.append("- Last narration captured before the previous attempt died:")
+            section.append("    " + last_text.replace("\n", "\n    ")[:1500])
+        if last_error:
+            section.append(f"- Last error: {last_error}")
+        section.append(
+            "- Decide: continue from where the previous attempt left off (preferred when the partial files are coherent), or start fresh (only if the previous progress is clearly wrong). Either way, do not duplicate work."
+        )
+        blocks.append("\n".join(section))
+    if not blocks:
+        return ""
+    return "\n\n## Previous attempt context (recovery checkpoint)\n\n" + "\n\n".join(blocks) + "\n"
+
+
+def _extract_last_assistant_text_from_run(stdout: str) -> str:
+    """Best-effort: pull the last assistant-visible text from Claude Code's
+    JSON output. Used to give the next attempt's prompt a hint of what the
+    dying attempt was thinking. Returns empty string if nothing parseable.
+    """
+    raw = (stdout or "").strip()
+    if not raw or not raw.startswith("{"):
+        return raw[:1000]
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        return raw[:1000]
+    # Claude Code 1.x: ``{"result": "...text..."}`` is the canonical exit shape.
+    result = payload.get("result")
+    if isinstance(result, str) and result.strip():
+        return result.strip()[:4000]
+    if isinstance(result, dict):
+        # Some configs return structured result; collect strings.
+        flat = " ".join(str(v) for v in result.values() if isinstance(v, str))
+        if flat.strip():
+            return flat.strip()[:4000]
+    return raw[:1000]
 
 
 def operator_routing_context() -> str:
@@ -1627,6 +1843,7 @@ def build_processing_prompt(
     debt_block: str = "",
     routing_rules: str = "",
     recent_hot_context: str = "",
+    previous_progress_block: str = "",
 ) -> str:
     interactive_emails = list(needs_interactive or [])
     target_items = list(target_emails or [])
@@ -1680,7 +1897,12 @@ def build_processing_prompt(
         send_reply_script=send_reply_script,
         trusted_domains_label=trusted_domains_label,
         routing_rules=routing_rules or "No special routing rules.",
-        extra_instructions_block=("\n" + extra_instructions_block.strip() + "\n") if extra_instructions_block.strip() else "",
+        extra_instructions_block=(
+            (
+                ("\n" + extra_instructions_block.strip() + "\n") if extra_instructions_block.strip() else ""
+            )
+            + (previous_progress_block or "")
+        ),
         target_block=target_block,
         interactive_block=interactive_block,
         debt_block=(f"\n{debt_block.strip()}\n" if str(debt_block or "").strip() else ""),
@@ -1715,6 +1937,13 @@ def launch_nexo(config, debt_block="", target_emails=None):
 
     routing_rules = operator_routing_context()
     recent_hot_context = read_recent_hot_context(query="", hours=24, limit=10)
+    target_message_ids = [str(e.get("message_id") or "") for e in (target_emails or []) if e.get("message_id")]
+    previous_progress_block = _build_previous_progress_block(target_message_ids)
+    if previous_progress_block:
+        log.info(
+            f"Resuming from checkpoint(s) for {len(target_message_ids)} email(s); "
+            "previous attempt context attached to prompt."
+        )
     prompt = build_processing_prompt(
         config=config,
         operator_name=operator_name,
@@ -1734,7 +1963,10 @@ def launch_nexo(config, debt_block="", target_emails=None):
         debt_block=debt_block,
         routing_rules=routing_rules,
         recent_hot_context=recent_hot_context,
+        previous_progress_block=previous_progress_block,
     )
+    working_dir = config.get("working_dir", str(Path.home()))
+    run_started_at = time.time()
 
     env = os.environ.copy()
     env["NEXO_HEADLESS"] = "1"  # Skip stop hook post-mortem
@@ -1763,6 +1995,29 @@ def launch_nexo(config, debt_block="", target_emails=None):
     requested_timeout = int(config.get("max_process_time", MAX_AUTOMATION_TIMEOUT_SECONDS) or MAX_AUTOMATION_TIMEOUT_SECONDS)
     effective_timeout = max(60, min(requested_timeout, MAX_AUTOMATION_TIMEOUT_SECONDS))
 
+    def _persist_failure_checkpoints(*, error_msg: str, last_text: str) -> None:
+        """Capture per-email checkpoint when the run did not complete OK so
+        the next attempt's prompt carries the previous attempt's progress.
+        Best-effort: never raises out of here."""
+        if not target_message_ids:
+            return
+        try:
+            files_touched = _scan_files_modified_since(working_dir, run_started_at)
+        except Exception:
+            files_touched = []
+        for em in target_emails or []:
+            mid = str(em.get("message_id") or "")
+            if not mid:
+                continue
+            _email_checkpoint_write(
+                message_id=mid,
+                subject=str(em.get("subject") or ""),
+                files_touched=files_touched,
+                last_assistant_text=last_text,
+                last_error=error_msg,
+                attempts=int((em.get("attempts") or 0) + 1),
+            )
+
     try:
         result = run_automation_prompt(
             prompt,
@@ -1781,17 +2036,33 @@ def launch_nexo(config, debt_block="", target_emails=None):
             log.error(f"NEXO exit code {result.returncode}")
             if result.stderr:
                 log.error(f"stderr: {result.stderr[:500]}")
+            _persist_failure_checkpoints(
+                error_msg=f"exit {result.returncode}: {(result.stderr or '')[:200]}",
+                last_text=_extract_last_assistant_text_from_run(result.stdout or ""),
+            )
             return False
+        # Success: drop checkpoints for the emails the worker just handled,
+        # so the recovery context does not leak into a future, unrelated
+        # attempt on the same Message-ID (rare, but possible after a
+        # status reset by ``_recover_unreplied_processed``).
+        for mid in target_message_ids:
+            _email_checkpoint_delete(mid)
         return True
 
     except AutomationBackendUnavailableError as e:
         log.error(f"Automation backend unavailable: {e}")
+        _persist_failure_checkpoints(error_msg=f"AutomationBackendUnavailable: {e}", last_text="")
         return False
     except subprocess.TimeoutExpired:
         log.error(f"Email automation exceeded {effective_timeout}s and was terminated")
+        _persist_failure_checkpoints(
+            error_msg=f"timeout after {effective_timeout}s",
+            last_text="",
+        )
         return False
     except Exception as e:
         log.error(f"Launch error: {e}")
+        _persist_failure_checkpoints(error_msg=f"unexpected: {e}", last_text="")
         return False
 def track_failure(success):
     """Track consecutive failures. Alert if 3+ in a row."""
@@ -1914,8 +2185,18 @@ def main():
 
         reconcile_orphaned_seen(config, hours=24)
         reconcile_terminal_unseen(config, hours=48)
-        _recover_unreplied_processed(config, hours=24)
+        # Recovery window widened from 24h to 7 days (168h): a single email can
+        # fall between several Brain releases in a short window (4 releases in
+        # one day on 2026-04-26). The 24h sweep let those drop into a permanent
+        # limbo because the next sweep happened after the email was already
+        # outside the lookback. 7 days is large enough to absorb a normal
+        # release cadence while still small enough that very old "stuck"
+        # emails are not retried indefinitely. Companion checkpoint system in
+        # ``_email_checkpoint_*`` lets a retried email continue from the
+        # previous attempt's progress instead of restarting from scratch.
+        _recover_unreplied_processed(config, hours=168)
         preregistered_count = preregister_pending_emails(config)
+        _email_checkpoint_cleanup(max_age_days=7)
 
         # --- Concurrency check ---
         active_count = _active_session_count()
