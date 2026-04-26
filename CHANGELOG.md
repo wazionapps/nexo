@@ -1,5 +1,10 @@
 # Changelog
 
+## [7.9.30] - 2026-04-26
+
+### Fixed
+- ``src/agent_runner.py`` was missing ``import sys`` at the top, but the new ``_apply_llm_endpoint_override`` helper introduced in 7.9.29 wrote to ``sys.stderr`` when override mode lacked an auth provider. Ruff F821 caught the undefined-name reference in CI ``tests/test_fase4_lint_baseline.py::TestRuffPasses::test_ruff_check_src_returns_zero``, which blocked the 7.9.29 publish workflow. The hotfix adds the missing import so the warning emits correctly and CI passes. The 7.9.29 tag is preserved on the repo for traceability but no npm artifact ever shipped for it; ``nexo-brain@7.9.30`` is the first npm release with the override-path hardening.
+
 ## [7.9.29] - 2026-04-26
 
 ### Fixed

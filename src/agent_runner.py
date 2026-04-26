@@ -8,6 +8,7 @@ import paths
 import shlex
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 from functools import lru_cache
