@@ -98,14 +98,32 @@ _OPENAI_KEY_PATHS = (
 def _resolve_brain_config_dir() -> Path:
     """Honour ``NEXO_HOME`` so tests, devcontainers and non-default
     installs (Maria iMac, Codex sandboxes, etc.) hit the right
-    ``config/`` directory. Falls back to ``~/.nexo/config/``."""
+    ``config/`` directory. Resolved at every call so a process that
+    sets ``NEXO_HOME`` after this module is imported still picks up
+    the right path on the next request — relevant for LaunchAgent
+    crons that rely on env exported by their wrapper script. Falls
+    back to ``~/.nexo/config/``."""
     nexo_home = os.environ.get("NEXO_HOME", "").strip()
     if nexo_home:
         return Path(nexo_home).expanduser() / "config"
     return Path.home() / ".nexo" / "config"
 
 
-_BRAIN_CONFIG_DIR = _resolve_brain_config_dir()
+# Tests monkeypatch this attribute to redirect overrides to a tmp dir.
+# Production code MUST NOT read this directly — use ``_brain_config_dir()``.
+# Default ``None`` lets ``_brain_config_dir()`` fall through to the live
+# ``_resolve_brain_config_dir()`` so call-time NEXO_HOME changes are honoured.
+_BRAIN_CONFIG_DIR: Path | None = None
+
+
+def _brain_config_dir() -> Path:
+    """Production-side resolver. Honours the test monkeypatch hook above
+    when set, otherwise resolves from the live environment on every call."""
+    if _BRAIN_CONFIG_DIR is not None:
+        return _BRAIN_CONFIG_DIR
+    return _resolve_brain_config_dir()
+
+
 _SUPPORTED_OVERRIDE_VERSION = 1
 _LLM_ENDPOINT_FILENAME = "llm_endpoint.json"
 _AUTH_PROVIDER_FILENAME = "auth_provider.json"
@@ -132,17 +150,17 @@ _CONCRETE_TO_ALIAS: dict[tuple[str, str], str] = {
 def _read_versioned_config(filename: str) -> dict | None:
     """Load a versioned override file from the Brain config directory.
 
-    The directory is resolved at call time (not module import time) so
-    tests can monkeypatch ``_BRAIN_CONFIG_DIR`` and so a process that
-    sets ``NEXO_HOME`` after importing the module still picks up the
-    right path on the first real call.
+    Calls ``_brain_config_dir()`` on every invocation so a process that
+    sets ``NEXO_HOME`` after importing the module picks up the new path
+    immediately. Tests can monkeypatch ``_BRAIN_CONFIG_DIR`` to redirect
+    to a tmp dir.
 
     Returns the dict iff the file exists, parses as JSON and declares
     ``version: 1``. Any other case (missing, malformed, unsupported version)
     returns None and emits a stderr warning so operators can see why the
     override was ignored. Never raises.
     """
-    path = _BRAIN_CONFIG_DIR / filename
+    path = _brain_config_dir() / filename
     try:
         if not path.is_file():
             return None
@@ -209,61 +227,86 @@ def is_override_mode() -> bool:
     return bool(url)
 
 
+def _resolve_auth_provider_token() -> str:
+    """Resolve the bearer token strictly from ``auth_provider.json``.
+
+    Returns the trimmed stdout of the configured command on success.
+    Returns ``""`` if the file is absent, malformed, or the command
+    times out / fails / exits non-zero / produces empty stdout. Never
+    falls back to environment or filesystem keys; that decision is
+    made by the caller based on whether override mode is active.
+    """
+    cfg = _read_versioned_config(_AUTH_PROVIDER_FILENAME)
+    if not cfg:
+        return ""
+    cmd = str(cfg.get("command", "") or "").strip()
+    if not cmd:
+        return ""
+    args_raw = cfg.get("args", []) or []
+    args = [str(a) for a in args_raw if isinstance(a, (str, int, float))]
+    try:
+        timeout_sec = int(cfg.get("timeout_sec", _DEFAULT_AUTH_PROVIDER_TIMEOUT))
+    except (TypeError, ValueError):
+        timeout_sec = _DEFAULT_AUTH_PROVIDER_TIMEOUT
+    try:
+        result = subprocess.run(
+            [cmd, *args],
+            capture_output=True,
+            text=True,
+            timeout=timeout_sec,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        # Learning #294: subprocess timeouts must be captured explicitly so
+        # the operator sees the helper hung instead of a generic
+        # "auth missing" downstream.
+        sys.stderr.write(
+            f"[brain] auth_provider command timed out after {timeout_sec}s: "
+            f"{exc}\n"
+        )
+        return ""
+    except (FileNotFoundError, PermissionError, OSError) as exc:
+        sys.stderr.write(f"[brain] auth_provider command failed: {exc}\n")
+        return ""
+    if result.returncode != 0:
+        stderr_excerpt = (result.stderr or "").strip()[:200]
+        sys.stderr.write(
+            f"[brain] auth_provider command exit={result.returncode}: "
+            f"{stderr_excerpt}\n"
+        )
+        return ""
+    return (result.stdout or "").strip()
+
+
 def resolve_auth_token() -> str:
     """Return the bearer token to use against the resolved base URL.
 
-    Resolution order:
-        1) ``~/.nexo/config/auth_provider.json`` ``command`` (subprocess
-           stdout, trimmed). Honours ``timeout_sec`` (default 5). Falls
-           through to (2) on any failure.
-        2) ``ANTHROPIC_API_KEY`` env var.
-        3) Legacy filesystem fallbacks (``_ANTHROPIC_KEY_PATHS``).
+    The resolution depends on whether override mode is active:
 
-    Returns an empty string if nothing resolves; the caller raises
-    ``ClassifierUnavailableError`` so the failure surfaces explicitly.
+    * **Override mode** (``llm_endpoint.json`` valid): the token MUST
+      come from ``auth_provider.json``. Falling back to
+      ``ANTHROPIC_API_KEY`` (a real ``sk-ant-...`` key bound to the
+      operator's Anthropic account) and sending it as the bearer to a
+      third-party proxy would leak that credential. If the helper
+      command fails or is not configured, returns ``""`` so the caller
+      raises ``ClassifierUnavailableError``.
+    * **Standalone mode** (no override file): cascade
+      ``auth_provider.json`` → ``ANTHROPIC_API_KEY`` env →
+      ``~/.claude/anthropic-api-key.txt`` → ``~/.nexo/config/anthropic-api-key.txt``.
+      The legacy fallbacks exist so an operator that scripted bearer
+      resolution via the helper can still rely on the env var when
+      Brain is not redirected anywhere.
     """
-    cfg = _read_versioned_config(_AUTH_PROVIDER_FILENAME)
-    if cfg:
-        cmd = str(cfg.get("command", "") or "").strip()
-        if cmd:
-            args_raw = cfg.get("args", []) or []
-            args = [str(a) for a in args_raw if isinstance(a, (str, int, float))]
-            try:
-                timeout_sec = int(cfg.get("timeout_sec", _DEFAULT_AUTH_PROVIDER_TIMEOUT))
-            except (TypeError, ValueError):
-                timeout_sec = _DEFAULT_AUTH_PROVIDER_TIMEOUT
-            try:
-                result = subprocess.run(
-                    [cmd, *args],
-                    capture_output=True,
-                    text=True,
-                    timeout=timeout_sec,
-                    check=False,
-                )
-            except subprocess.TimeoutExpired as exc:
-                # Learning #294: subprocess timeouts must be captured
-                # explicitly so the operator sees the helper hung instead
-                # of a generic "auth missing" downstream.
-                sys.stderr.write(
-                    f"[brain] auth_provider command timed out after {timeout_sec}s: "
-                    f"{exc}; falling back to env\n"
-                )
-            except (FileNotFoundError, PermissionError, OSError) as exc:
-                sys.stderr.write(
-                    f"[brain] auth_provider command failed: {exc}; falling back to env\n"
-                )
-            else:
-                if result.returncode == 0:
-                    token = (result.stdout or "").strip()
-                    if token:
-                        return token
-                else:
-                    stderr_excerpt = (result.stderr or "").strip()[:200]
-                    sys.stderr.write(
-                        f"[brain] auth_provider command exit={result.returncode}: "
-                        f"{stderr_excerpt}; falling back to env\n"
-                    )
+    if is_override_mode():
+        # Strict: the bearer must come from the configured helper. If
+        # the helper is missing or fails, refuse to authenticate rather
+        # than leak a real Anthropic key to a custom proxy.
+        return _resolve_auth_provider_token()
 
+    # Standalone: helper first (if scripted), env/files otherwise.
+    helper_token = _resolve_auth_provider_token()
+    if helper_token:
+        return helper_token
     return _resolve_anthropic_key()
 
 
@@ -365,6 +408,7 @@ def _call_anthropic_raw(
     temperature: float,
     stop_sequences: list[str],
     timeout: float,
+    idempotency_key: str | None = None,
 ) -> str:
     try:
         import anthropic  # type: ignore
@@ -373,21 +417,45 @@ def _call_anthropic_raw(
 
     override = is_override_mode()
     if override:
-        # Proxy mode: resolve bearer via auth_provider + env fallbacks,
-        # redirect base_url, translate concrete model to wire alias, and
-        # attach an Idempotency-Key so the proxy can dedup retries.
+        # Proxy mode. The Anthropic SDK distinguishes:
+        #   api_key=...    -> header "X-Api-Key: <value>"   (Anthropic-style)
+        #   auth_token=... -> header "Authorization: Bearer <value>" (OAuth-style)
+        # NEXO Desktop and any compatible proxy parse the standard
+        # "Authorization: Bearer" header, so we MUST pass the resolved
+        # bearer through ``auth_token`` — passing it as ``api_key`` would
+        # send "X-Api-Key" which the proxy would reject with 401.
         wire_model = _resolve_override_alias(model, effort)
         base_url = resolve_api_base_url()
-        api_key = resolve_auth_token()
-        if not api_key:
+        bearer = resolve_auth_token()
+        if not bearer:
             raise ClassifierUnavailableError(
-                "anthropic override: no bearer resolved (auth_provider and env both empty)"
+                "anthropic override: no bearer resolved from auth_provider.json; "
+                "override mode requires a configured auth helper to avoid leaking "
+                "a real ANTHROPIC_API_KEY to a custom proxy"
             )
-        client = anthropic.Anthropic(
-            api_key=api_key,
-            base_url=base_url,
-            timeout=timeout,
-        )
+        # The SDK ``__init__`` resolves ``api_key`` from
+        # ``ANTHROPIC_API_KEY`` whenever the kwarg is ``None`` (the
+        # parameter default). It then sends BOTH ``X-Api-Key`` (from the
+        # env-resolved api_key) and ``Authorization: Bearer`` (from
+        # auth_token) on every request. A custom proxy would see and
+        # potentially log the operator's real ``sk-ant-...`` key. Passing
+        # ``api_key=""`` does not fix it either: the SDK's auth_headers
+        # check is ``if api_key is None`` (strict ``is``, not falsy), so
+        # the empty string still produces an ``X-Api-Key:`` header.
+        # Solution: pop the env var around the constructor call so the
+        # SDK records ``api_key=None`` and skips the X-Api-Key header
+        # entirely. Then restore the original env so we don't break
+        # other code paths in the same Python process.
+        _saved_anthropic_env = os.environ.pop("ANTHROPIC_API_KEY", None)
+        try:
+            client = anthropic.Anthropic(
+                auth_token=bearer,
+                base_url=base_url,
+                timeout=timeout,
+            )
+        finally:
+            if _saved_anthropic_env is not None:
+                os.environ["ANTHROPIC_API_KEY"] = _saved_anthropic_env
     else:
         # Standalone: behaviour identical to pre-V11. No override, no alias
         # translation, no extra headers — direct hit to api.anthropic.com.
@@ -408,10 +476,19 @@ def _call_anthropic_raw(
         kwargs["system"] = system
 
     if override:
-        # Idempotency-Key: opaque per-request token reused on transparent
-        # retries. Proxy dedups on (token_id + idempotency_key) for 24h, so
-        # network-level retries do not double-bill the user.
-        kwargs["extra_headers"] = {"Idempotency-Key": uuid.uuid4().hex}
+        # Idempotency-Key: opaque per-request token. The proxy dedups on
+        # (token_id + idempotency_key) for 24h, so network-level retries
+        # do not double-bill the user. The caller is encouraged to pass
+        # an explicit ``idempotency_key`` and reuse it across application-
+        # level retries (e.g. enforcement_classifier retrying after a
+        # ClassifierUnavailableError) so the proxy treats the second
+        # attempt as a duplicate of the first instead of a brand-new
+        # billable request. If the caller omits it we generate a fresh
+        # UUID4, which still covers SDK-level transparent retries since
+        # the SDK reuses the same ``kwargs`` across them.
+        if idempotency_key is None:
+            idempotency_key = uuid.uuid4().hex
+        kwargs["extra_headers"] = {"Idempotency-Key": idempotency_key}
 
     try:
         response = client.messages.create(**kwargs)
@@ -492,21 +569,32 @@ def call_model_raw(
     stop_sequences: list[str] | None = None,
     timeout: float = 10.0,
     system: str | None = None,
+    idempotency_key: str | None = None,
 ) -> str:
     """Run a single short LLM completion for enforcement-class classification.
 
     Parameters follow the Fase 2 plan doc 1 spec:
 
-        prompt         — the user-role text (English or the model's default).
-        tier           — resonance tier; default "muy_bajo" → Haiku / gpt-5.4-mini.
-        caller         — resonance caller label. Must be registered in
-                         resonance_map.SYSTEM_OWNED_CALLERS. Default
-                         "enforcer_classifier".
-        max_tokens     — hard cap on output tokens. Default 3 (yes/no only).
-        temperature    — sampling temperature. Default 0.0 (deterministic).
-        stop_sequences — early-stop strings. Default ["\\n", ".", " "].
-        timeout        — per-request timeout in seconds. Default 10.0.
-        system         — optional system prompt. Default None (provider default).
+        prompt          — the user-role text (English or the model's default).
+        tier            — resonance tier; default "muy_bajo" → Haiku / gpt-5.4-mini.
+        caller          — resonance caller label. Must be registered in
+                          resonance_map.SYSTEM_OWNED_CALLERS. Default
+                          "enforcer_classifier".
+        max_tokens      — hard cap on output tokens. Default 3 (yes/no only).
+        temperature     — sampling temperature. Default 0.0 (deterministic).
+        stop_sequences  — early-stop strings. Default ["\\n", ".", " "].
+        timeout         — per-request timeout in seconds. Default 10.0.
+        system          — optional system prompt. Default None (provider default).
+        idempotency_key — optional opaque token attached as
+                          ``Idempotency-Key`` header in override mode. Reuse
+                          the same value across application-level retries
+                          (e.g. when the caller catches
+                          ``ClassifierUnavailableError`` and tries again)
+                          so the proxy treats the retry as a duplicate of
+                          the first request and does not double-bill.
+                          Ignored in standalone mode. If omitted in
+                          override mode, a fresh UUID4 is generated which
+                          still covers transparent SDK-level retries.
 
     Returns the raw text response, trimmed. The CALLER is responsible for
     parsing yes/no — the "triple reinforcement" (prompt strict, max_tokens
@@ -570,6 +658,7 @@ def call_model_raw(
             temperature=temperature,
             stop_sequences=stop_sequences,
             timeout=timeout,
+            idempotency_key=idempotency_key,
         )
     if backend == CLIENT_CODEX:
         return _call_openai_raw(

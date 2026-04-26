@@ -381,6 +381,17 @@ def _apply_llm_endpoint_override(env: dict) -> dict:
     hitting ``api.anthropic.com`` directly with whatever ``ANTHROPIC_API_KEY``
     the operator already had configured.
 
+    Security guarantee: if override mode is active but ``auth_provider.json``
+    is missing, malformed, or the helper command fails to produce a
+    bearer, the helper does NOT inject ``ANTHROPIC_BASE_URL`` either.
+    Otherwise the spawned CLI would inherit the operator's real
+    ``ANTHROPIC_API_KEY`` (a ``sk-ant-...`` key) from the parent process
+    and send it as the bearer to the custom proxy, leaking the real
+    Anthropic credential to a third party. Fail-closed: the override is
+    skipped completely, and the CLI either runs against
+    ``api.anthropic.com`` with the operator's real key (if also present
+    as standalone fallback) or fails locally.
+
     The contract is symmetric with what ``call_model_raw.py`` does for SDK
     direct calls: same files, same precedence, same alias system. The CLI
     child reads ``ANTHROPIC_BASE_URL`` (Anthropic SDK convention) and
@@ -400,12 +411,22 @@ def _apply_llm_endpoint_override(env: dict) -> dict:
     try:
         if not is_override_mode():
             return env
+        bearer = resolve_auth_token()
+        if not bearer:
+            # auth_provider.json missing or failed in override mode.
+            # Do NOT redirect to the proxy with a stale operator key — see
+            # the docstring above. Skip the override entirely and let the
+            # spawn either run standalone or fail explicitly elsewhere.
+            sys.stderr.write(
+                "[brain] llm_endpoint override active but auth_provider "
+                "produced no bearer; skipping CLI env injection to avoid "
+                "leaking a real ANTHROPIC_API_KEY to the proxy.\n"
+            )
+            return env
         base_url = resolve_api_base_url()
         if base_url:
             env["ANTHROPIC_BASE_URL"] = base_url
-        bearer = resolve_auth_token()
-        if bearer:
-            env["ANTHROPIC_API_KEY"] = bearer
+        env["ANTHROPIC_API_KEY"] = bearer
     except Exception:
         # Override is best-effort: a misconfigured override file must not
         # crash an automation run that would otherwise have worked in

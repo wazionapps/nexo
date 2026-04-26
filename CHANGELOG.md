@@ -1,5 +1,22 @@
 # Changelog
 
+## [7.9.29] - 2026-04-26
+
+### Fixed
+- Override mode now passes the bearer to the Anthropic SDK via ``auth_token`` (which the SDK serialises as ``Authorization: Bearer ...``) instead of ``api_key`` (which would land in ``X-Api-Key``). The 7.9.28 cut sent the bearer in the Anthropic-style header, so any compatible proxy expecting the standard OAuth header rejected every request with 401. End-to-end coverage was missing because the unit tests replaced the SDK module wholesale; the new ``tests/test_call_model_raw_overrides_e2e.py`` stands up a real ``http.server`` that captures the wire request and asserts on actual headers/body.
+- The Brain config directory is now resolved on every call to ``_read_versioned_config`` instead of cached at module import time. LaunchAgent crons that export ``NEXO_HOME`` from a wrapper script were silently falling back to ``~/.nexo/config/`` because the module-level constant locked in the pre-launch path. ``_BRAIN_CONFIG_DIR`` remains as a test-only monkeypatch hook (``None`` by default), routing real lookups through ``_resolve_brain_config_dir()``.
+- ``Idempotency-Key`` can now be supplied by the caller via a new ``idempotency_key`` keyword on ``call_model_raw``. Callers that retry at the application layer (e.g. ``enforcement_classifier`` reissuing after ``ClassifierUnavailableError``) reuse the same key across attempts so the proxy treats them as duplicates and does not double-bill. When omitted, a fresh UUID4 is generated, which still covers SDK-internal transparent retries.
+- The Anthropic SDK was leaking the operator's real ``ANTHROPIC_API_KEY`` (a ``sk-ant-...`` value) as ``X-Api-Key`` when override mode passed ``auth_token`` because the SDK ``__init__`` falls back to the env var whenever ``api_key`` is ``None``. The fix pops the env var around the constructor call and restores it afterwards, so a custom proxy never sees the operator's real Anthropic credential alongside the proxy bearer.
+
+### Security
+- Override mode is now strict about its bearer source. If ``llm_endpoint.json`` is active but ``auth_provider.json`` is missing, malformed, or the helper command fails, ``resolve_auth_token`` returns an empty string and the call raises ``ClassifierUnavailableError`` instead of falling back to the operator's raw ``ANTHROPIC_API_KEY``. Without this guard, a third-party proxy could receive (and log) a ``sk-ant-...`` key bound to the operator's Anthropic account.
+- The CLI-spawn helper ``agent_runner._apply_llm_endpoint_override`` mirrors the same fail-closed contract: when override mode is on but no proxy bearer can be resolved, it skips both ``ANTHROPIC_BASE_URL`` and ``ANTHROPIC_API_KEY`` injection so a child cron does not silently combine the proxy URL with a real Anthropic key from the parent env.
+
+### Tests
+- ``tests/test_call_model_raw_overrides_e2e.py`` (+8 wire tests) drives the real SDK against a local ``BaseHTTPRequestHandler`` and asserts on captured headers and body: ``Authorization: Bearer`` present, ``X-Api-Key`` absent, body ``model`` is the wire alias, ``Idempotency-Key`` is the caller-provided value, no ``sk-ant-...`` value anywhere in the request, missing ``auth_provider.json`` aborts before any HTTP traffic, post-import ``NEXO_HOME`` changes are honoured, and the bare-mode CLI spawn is covered.
+- ``tests/test_call_model_raw_overrides.py`` extended for the new contract: ``test_override_no_auth_provider_raises_no_leak``, ``test_override_uses_auth_provider_command`` now asserts on ``auth_token`` instead of ``api_key``, plus two idempotency tests pinning caller-controlled reuse and default-per-call generation.
+- ``tests/test_agent_runner_override_env.py`` extended with ``test_override_without_auth_provider_does_not_leak_real_key`` and updated existing tests to require an ``auth_provider`` helper.
+
 ## [7.9.28] - 2026-04-26
 
 ### Added
