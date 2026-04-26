@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.9.28: Optional LLM endpoint and auth provider overrides</title>
+<meta name="description" content="NEXO Brain v7.9.28 patch release. New optional override files at ~/.nexo/config/ let third-party orchestrators redirect Brain Anthropic SDK calls and CLI children to a proxy, with Idempotency-Key for retry dedup. Brain libre standalone is unaffected.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-9-28/">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.9.28: Optional LLM endpoint and auth provider overrides","datePublished":"2026-04-26","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head><body><main><article style="max-width:760px;margin:80px auto;padding:0 24px;line-height:1.75;">
+<h1>NEXO 7.9.28 &mdash; Optional LLM endpoint and auth provider overrides</h1>
+<p><em>Published 2026-04-26. Patch release over v7.9.27.</em></p>
+
+<p>v7.9.28 introduces an opt-in extension surface that lets third-party orchestrators &mdash; for example an Anthropic-compatible proxy that adds rate limiting, cost accounting, multi-provider failover, or per-team auth &mdash; redirect Brain LLM calls and delegate bearer token resolution to a local command, without modifying the source. The pattern is intentionally analogous to git&rsquo;s <code>core.editor</code> and <code>credential.helper</code>: a generic plug-in surface, not tied to any specific product.</p>
+
+<p><strong>Brain libre standalone is unaffected.</strong> If neither override file exists Brain hits <code>https://api.anthropic.com</code> directly using <code>ANTHROPIC_API_KEY</code> from environment or filesystem, exactly as in v7.9.27.</p>
+
+<h2>What changed</h2>
+<p>Two optional JSON files at <code>~/.nexo/config/</code> drive the behaviour:</p>
+<ul>
+<li><code>llm_endpoint.json</code> &mdash; <code>{"version":1,"anthropic_base_url":"&hellip;"}</code>. Flips override mode on and supplies the base URL.</li>
+<li><code>auth_provider.json</code> &mdash; <code>{"version":1,"command":"/path/to/helper","args":[&hellip;],"timeout_sec":5}</code>. Brain runs the helper, captures stdout, and uses the trimmed output as the bearer token (analogous to git&rsquo;s <code>credential.helper</code>).</li>
+</ul>
+
+<p>Both the SDK direct path (<code>src/call_model_raw.py</code>) and every CLI child Brain spawns (<code>src/agent_runner.py</code>) participate. The SDK path resolves <code>(model, effort)</code> from <code>resonance_tiers.json</code> and translates it into a wire alias the proxy validates (<code>nexo-max | nexo-high | nexo-medium | nexo-low | nexo-mini</code>) just before the request, attaching an opaque <code>Idempotency-Key</code> (UUID4 hex) so the proxy can dedup transparent retries within 24h without double-billing. The CLI spawn path injects <code>ANTHROPIC_BASE_URL</code> and <code>ANTHROPIC_API_KEY</code> into the spawned environment, so headless crons (deep-sleep, evolution, followup-runner, morning-agent, email-monitor) hit the proxy too &mdash; LaunchAgent processes do not inherit env from a UI process, so the redirection has to come from inside Brain.</p>
+
+<h2>Standalone path is preserved</h2>
+<p>Without the override files no <code>Idempotency-Key</code> header is sent, no alias translation runs, no <code>ANTHROPIC_BASE_URL</code> is injected into spawned children. The wire request and the spawn environment are bit-for-bit identical to v7.9.27. Existing operators that clone the repo from GitHub, set <code>ANTHROPIC_API_KEY</code>, and run Brain continue to do exactly that.</p>
+
+<h2>Forward compatibility</h2>
+<p>Each override file declares <code>version: 1</code>. Future schema changes can be opted into per file by bumping its version &mdash; older Brain installs will log a stderr warning and ignore the file rather than fail. Unsupported versions, malformed JSON, missing keys, command timeouts, missing binaries, and non-zero exit codes all degrade gracefully to the legacy fallbacks (<code>ANTHROPIC_API_KEY</code> env then filesystem). Misconfiguration cannot brick a cron.</p>
+
+<h2>Why it matters</h2>
+<p>Many teams want to run Brain on top of an internal Anthropic-compatible gateway &mdash; for cost accounting per team, regional egress control, multi-provider failover, or compliance review of every prompt. Until now they had to fork Brain or wrap the binary. v7.9.28 makes the redirection a two-file configuration, and Brain libre keeps shipping unchanged for everyone else.</p>
+
+<h2>Verification</h2>
+<p>28 dedicated tests across <code>tests/test_call_model_raw_overrides.py</code> (19) and <code>tests/test_agent_runner_override_env.py</code> (9) cover override on/off detection, version gating, malformed-JSON tolerance, env-vs-file precedence, the <code>auth_provider</code> command success path, subprocess timeout fallback, missing-binary fallback, non-zero-exit fallback, empty-stdout fallback, alias translation for every tier, unmapped-pair fail-closed behaviour, missing-bearer error, and standalone parity. Wider regression sweep across resonance, semantic-router, semantic-reasoner, cortex, agent-runner, run-automation-prompt and auto-update-relocate-resonance tests stays green.</p>
+
+<p><a href="/changelog/#v7928">Full changelog entry &rarr;</a></p>
+</article></main></body></html>

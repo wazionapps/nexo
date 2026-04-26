@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.9.27` is the current packaged-runtime line. Patch release over `7.9.26`: server startup no longer hangs the MCP `initialize` handshake when legacy followups/reminders still need owner backfill — the synchronous startup migration now runs `--rules-only` and skips the multi-minute `LocalZeroShotClassifier` load, keeping handshake under a few seconds.
+Version `7.9.28` is the current packaged-runtime line. Patch release over `7.9.27`: optional override files at `~/.nexo/config/llm_endpoint.json` and `~/.nexo/config/auth_provider.json` let third-party orchestrators redirect Brain's Anthropic SDK calls and delegate bearer token resolution to a local command (analogous to git's `credential.helper`). The same redirection is propagated to every CLI child Brain spawns (deep-sleep, evolution, followup-runner, morning-agent, email-monitor, `nexo chat`) by injecting `ANTHROPIC_BASE_URL` and `ANTHROPIC_API_KEY` into the spawned environment, so headless crons reach the proxy too. An `Idempotency-Key` (UUID4 hex) is attached per request for proxy-side dedup of transparent retries within 24h. Brain libre standalone (no override files) hits `api.anthropic.com` directly with `ANTHROPIC_API_KEY` exactly as before.
+
+Previously in `7.9.27`: server startup no longer hangs the MCP `initialize` handshake when legacy followups/reminders still need owner backfill — the synchronous startup migration now runs `--rules-only` and skips the multi-minute `LocalZeroShotClassifier` load, keeping handshake under a few seconds.
 
 Previously in `7.9.26`: headless automation prompts now receive the operator-language contract centrally, so reports, diaries, syntheses, followups, escalations, and Deep Sleep-generated memory text follow calibration even when the underlying template is English.
 
@@ -1076,6 +1078,19 @@ Use a personal plugin only when you need a new MCP tool in the runtime surface. 
 - **No cloud dependencies.** Vector search runs on CPU (fastembed), not an API.
 - **Auto-update is resilient.** NEXO checks for updates on startup. If an update fails, it continues with the current version and notifies you. Local migrations (database schema, configuration) always run. Network updates (git pull) can be disabled by setting `auto_update: false` in `NEXO_HOME/config/schedule.json`.
 - **Secret redaction.** API keys and tokens are stripped before they ever reach memory storage.
+
+## Custom LLM endpoint (advanced)
+
+NEXO Brain reads two optional override files at `~/.nexo/config/`:
+
+- `llm_endpoint.json` — set a custom Anthropic-compatible base URL.
+- `auth_provider.json` — delegate bearer token resolution to a local command (analogous to git's `credential.helper`).
+
+This lets third-party orchestrators — for example an Anthropic-compatible proxy that adds rate limiting, cost accounting, multi-provider failover, or per-team auth — route Brain's LLM calls without modifying its source.
+
+**If neither file exists, Brain operates exactly as before:** direct call to `https://api.anthropic.com` using `ANTHROPIC_API_KEY` from environment or filesystem. The override path is opt-in.
+
+When override mode is active, Brain attaches an opaque `Idempotency-Key` to every request so the proxy can dedup transparent retries (24h window) without double-billing. The same redirection applies to every CLI child Brain spawns (deep-sleep, evolution, followup-runner, morning-agent, email-monitor, `nexo chat`): `agent_runner.py` injects `ANTHROPIC_BASE_URL` and `ANTHROPIC_API_KEY` into the spawned environment when override mode is on, so headless crons hit the proxy too — LaunchAgent crons do not inherit env from a UI process. See `docs/api/override-files.md` for the full schema, fallback rules, and an end-to-end example.
 
 ## The Psychology Behind NEXO Brain
 
