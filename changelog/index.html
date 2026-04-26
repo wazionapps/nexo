@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.34 fixes a silent email drop on Q-encoded headers (Header objects coerced via _decode_header) and hardens the PreToolUse Guardian hook with stderr + exit 2 belt-and-suspenders enforcement.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.10.0 removes the LLM proxy override path (llm_endpoint.json + auth_provider.json + nexo-max/high/medium/low/mini aliases + Idempotency-Key) introduced in 7.9.28 → 7.9.34. NEXO Desktop's model changed: Brain now hits api.anthropic.com directly using the user's own Claude Code OAuth.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.34 fixes a silent email drop on Q-encoded headers (Header objects coerced via _decode_header) and hardens the PreToolUse Guardian hook with stderr + exit 2 belt-and-suspenders enforcement.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.10.0 removes the LLM proxy override path (llm_endpoint.json + auth_provider.json + nexo-max/high/medium/low/mini aliases + Idempotency-Key) introduced in 7.9.28 → 7.9.34. NEXO Desktop's model changed: Brain now hits api.anthropic.com directly using the user's own Claude Code OAuth.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.34 fixes a silent email drop on Q-encoded headers (Header objects coerced via _decode_header) and hardens the PreToolUse Guardian hook with stderr + exit 2 belt-and-suspenders enforcement.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.10.0 removes the LLM proxy override path (llm_endpoint.json + auth_provider.json + nexo-max/high/medium/low/mini aliases + Idempotency-Key) introduced in 7.9.28 → 7.9.34. NEXO Desktop's model changed: Brain now hits api.anthropic.com directly using the user's own Claude Code OAuth.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.34 fixes a silent email drop on Q-encoded headers (Header objects coerced via _decode_header) and hardens the PreToolUse Guardian hook with stderr + exit 2 belt-and-suspenders enforcement.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.10.0 removes the LLM proxy override path (llm_endpoint.json + auth_provider.json + nexo-max/high/medium/low/mini aliases + Idempotency-Key) introduced in 7.9.28 → 7.9.34. NEXO Desktop's model changed: Brain now hits api.anthropic.com directly using the user's own Claude Code OAuth.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -87,19 +87,23 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v7.9.34 live</span>
+                    <span class="page-chip">v7.10.0 live</span>
                     <span class="page-chip">Guardian active</span>
                     <span class="page-chip">F0.6 hardening</span>
                     <span class="page-chip">Adaptive empirical</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v7934" class="btn btn-primary">Start with v7.9.34</a>
-                    <a href="#v7933" class="btn btn-secondary">See v7.9.33</a>
+                    <a href="#v7100" class="btn btn-primary">Start with v7.10.0</a>
+                    <a href="#v7934" class="btn btn-secondary">See v7.9.34</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
             </div>
             <div class="page-visual">
                 <div class="page-stack">
+                    <div class="page-stack-card">
+                        <strong>v7.10.0</strong>
+                        <span>Minor — removes the LLM proxy override path introduced in 7.9.28 → 7.9.34 (<code>llm_endpoint.json</code>, <code>auth_provider.json</code>, <code>nexo-max/high/medium/low/mini</code> aliases, <code>Idempotency-Key</code>). Brain now hits <code>api.anthropic.com</code> directly using the user's own Claude Code OAuth.</span>
+                    </div>
                     <div class="page-stack-card">
                         <strong>v7.9.34</strong>
                         <span>Patch — email parser fix (Q-encoded headers were dropping emails silently; now coerced via <code>_decode_header</code>) plus PreToolUse Guardian hook hardened with stderr + exit 2 belt-and-suspenders so terminal Claude cannot ignore a hard block.</span>
@@ -284,6 +288,16 @@
 <section class="section-compact" style="background:rgba(124,58,237,0.08);">
     <div class="container desktop-disclaimer" style="max-width:860px;font-size:13px;line-height:1.55;">
         <p><strong>Sobre NEXO Desktop.</strong> NEXO Desktop es un cliente acompa&ntilde;ante closed-source distribuido aparte en <a href="https://nexo-desktop.com/">nexo-desktop.com</a>. Cuando una entrada de changelog menciona "NEXO Desktop" se refiere a una versi&oacute;n coordinada de ese cliente que consume el contrato CLI/MCP del Brain. El c&oacute;digo de Desktop no vive en este repo; el Brain (AGPL-3.0) es 100% usable por s&iacute; solo desde terminal, Codex, Claude Code, o cualquier cliente MCP.</p>
+    </div>
+</section>
+
+<section id="v7100" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.10.0 <span style="opacity:.5;font-weight:400;">&mdash; April 26, 2026 &mdash; <strong>MINOR</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">Removes the LLM proxy override path</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            Reverts the override path introduced in 7.9.28 &rarr; 7.9.34. Background: 7.9.28 added two opt-in files at <code>~/.nexo/config/llm_endpoint.json</code> and <code>~/.nexo/config/auth_provider.json</code> that let a third-party orchestrator (NEXO Desktop) redirect every Anthropic SDK call from Brain to a custom proxy and resolve the bearer via a local helper, with concrete model names translated to wire aliases (<code>nexo-max</code>, <code>nexo-high</code>, <code>nexo-medium</code>, <code>nexo-low</code>, <code>nexo-mini</code>) and an <code>Idempotency-Key</code> per request. NEXO Desktop's commercial model has changed: Desktop is now a wrapper over the user's own Claude Code subscription (Max / Pro), with a separate Desktop licence. Brain calls go directly to <code>api.anthropic.com</code> using the user's existing OAuth (the one stored under <code>~/.claude/</code> and consumed by Claude Code spawns) or a plain <code>ANTHROPIC_API_KEY</code>. There is no NEXO bearer, no NEXO proxy, no NEXO credit accounting in this codebase. Removed: every override symbol from <code>src/call_model_raw.py</code>; the entire <code>_apply_llm_endpoint_override</code> helper from <code>src/agent_runner.py</code> and every call site; <code>docs/api/override-files.md</code>; <code>tests/test_call_model_raw_overrides*.py</code> and <code>tests/test_agent_runner_override_env.py</code>. Pre-existing override files on disk (if any operator has them) are simply ignored from this release forward.
+        </p>
     </div>
 </section>
 
