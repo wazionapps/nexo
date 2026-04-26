@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.28 adds optional override files at ~/.nexo/config/ that let third-party orchestrators redirect Brain Anthropic SDK calls and CLI children to a proxy.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.29 hardens the override path from v7.9.28 — Authorization: Bearer instead of X-Api-Key, call-time config dir, caller-controllable Idempotency-Key, strict bearer source to prevent a real ANTHROPIC_API_KEY from leaking to a custom proxy.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.28 adds optional override files at ~/.nexo/config/ that let third-party orchestrators redirect Brain Anthropic SDK calls and CLI children to a proxy.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.29 hardens the override path from v7.9.28 — Authorization: Bearer instead of X-Api-Key, call-time config dir, caller-controllable Idempotency-Key, strict bearer source to prevent a real ANTHROPIC_API_KEY from leaking to a custom proxy.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.28 adds optional override files at ~/.nexo/config/ that let third-party orchestrators redirect Brain Anthropic SDK calls and CLI children to a proxy.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.29 hardens the override path from v7.9.28 — Authorization: Bearer instead of X-Api-Key, call-time config dir, caller-controllable Idempotency-Key, strict bearer source to prevent a real ANTHROPIC_API_KEY from leaking to a custom proxy.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.28 adds optional override files at ~/.nexo/config/ that let third-party orchestrators redirect Brain Anthropic SDK calls and CLI children to a proxy.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.29 hardens the override path from v7.9.28 — Authorization: Bearer instead of X-Api-Key, call-time config dir, caller-controllable Idempotency-Key, strict bearer source to prevent a real ANTHROPIC_API_KEY from leaking to a custom proxy.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -87,19 +87,23 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v7.9.28 live</span>
+                    <span class="page-chip">v7.9.29 live</span>
                     <span class="page-chip">Guardian active</span>
                     <span class="page-chip">F0.6 hardening</span>
                     <span class="page-chip">Adaptive empirical</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v7928" class="btn btn-primary">Start with v7.9.28</a>
-                    <a href="#v7927" class="btn btn-secondary">See v7.9.27</a>
+                    <a href="#v7929" class="btn btn-primary">Start with v7.9.29</a>
+                    <a href="#v7928" class="btn btn-secondary">See v7.9.28</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
             </div>
             <div class="page-visual">
                 <div class="page-stack">
+                    <div class="page-stack-card">
+                        <strong>v7.9.29</strong>
+                        <span>Patch — hardens v7.9.28 override path: <code>Authorization: Bearer</code> instead of <code>X-Api-Key</code>, call-time config dir, caller-controllable <code>Idempotency-Key</code>, strict bearer source so a real <code>ANTHROPIC_API_KEY</code> never leaks to a custom proxy.</span>
+                    </div>
                     <div class="page-stack-card">
                         <strong>v7.9.28</strong>
                         <span>Patch — optional override files at <code>~/.nexo/config/</code> redirect Brain Anthropic SDK calls and CLI children to a proxy, with <code>Idempotency-Key</code> for retry dedup. Brain libre standalone unaffected.</span>
@@ -260,6 +264,16 @@
 <section class="section-compact" style="background:rgba(124,58,237,0.08);">
     <div class="container desktop-disclaimer" style="max-width:860px;font-size:13px;line-height:1.55;">
         <p><strong>Sobre NEXO Desktop.</strong> NEXO Desktop es un cliente acompa&ntilde;ante closed-source distribuido aparte en <a href="https://nexo-desktop.com/">nexo-desktop.com</a>. Cuando una entrada de changelog menciona "NEXO Desktop" se refiere a una versi&oacute;n coordinada de ese cliente que consume el contrato CLI/MCP del Brain. El c&oacute;digo de Desktop no vive en este repo; el Brain (AGPL-3.0) es 100% usable por s&iacute; solo desde terminal, Codex, Claude Code, o cualquier cliente MCP.</p>
+    </div>
+</section>
+
+<section id="v7929" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.9.29 <span style="opacity:.5;font-weight:400;">&mdash; April 26, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">Override path hardening</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            Patch over v7.9.28. Fixes four issues an external audit caught after the 7.9.28 release: (1) the bearer is now passed to the Anthropic SDK via <code>auth_token</code> so it serialises into <code>Authorization: Bearer</code> instead of <code>X-Api-Key</code> &mdash; any compatible proxy that only accepts the standard OAuth header was rejecting every request with 401. (2) The Brain config directory is resolved at every call to <code>_read_versioned_config</code> instead of cached at module import, so LaunchAgent crons that export <code>NEXO_HOME</code> from a wrapper now reach the right <code>~/.nexo/config/</code>. (3) <code>Idempotency-Key</code> accepts a caller-provided value so application-level retries reuse the same dedup key and the proxy treats them as duplicates instead of brand-new billable requests. (4) Override mode is now strict about its bearer source: if <code>auth_provider.json</code> is absent or its helper fails, the call raises <code>ClassifierUnavailableError</code> instead of falling back to the operator's real <code>ANTHROPIC_API_KEY</code> &mdash; combined with neutralising the SDK env-var fallback during construction, this prevents a real <code>sk-ant-</code> value from leaking to a custom proxy. New <code>tests/test_call_model_raw_overrides_e2e.py</code> drives the real SDK against a local <code>http.server</code> and asserts on captured wire headers and body, complementing the SDK-mock unit tests.
+        </p>
     </div>
 </section>
 

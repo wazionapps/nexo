@@ -254,11 +254,25 @@ def stubbed_resonance(monkeypatch):
     return _force
 
 
-def test_override_translates_to_alias(fake_config_dir, monkeypatch, stubbed_resonance):
-    """In override mode the SDK receives the wire alias, not the concrete model."""
+def _stub_auth_provider(fake_config_dir: Path, tmp_path: Path, token: str = "sk-proxy-bearer") -> None:
+    """Write an auth_provider.json + helper that emits ``token`` so override
+    mode has a valid bearer source. Override mode REQUIRES this — the
+    legacy fallback to ANTHROPIC_API_KEY is intentionally disabled to
+    prevent leaking a real Anthropic key to a custom proxy."""
+    helper = tmp_path / f"auth-{abs(hash(token)) & 0xffff:x}.sh"
+    helper.write_text(f"#!/bin/sh\nprintf '{token}'\n")
+    helper.chmod(0o755)
+    _write_auth_provider(fake_config_dir, command=str(helper))
+
+
+def test_override_translates_to_alias(fake_config_dir, tmp_path, monkeypatch, stubbed_resonance):
+    """In override mode the SDK receives the wire alias, not the concrete
+    model. Bearer is passed via ``auth_token`` (Authorization: Bearer)
+    NOT ``api_key`` (X-Api-Key) — the proxy expects standard OAuth-style
+    auth, not Anthropic-style auth."""
     from call_model_raw import call_model_raw
     _write_endpoint(fake_config_dir, "https://proxy.example.com/api")
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-bearer-via-env")
+    _stub_auth_provider(fake_config_dir, tmp_path, "sk-proxy-bearer-xyz")
     stubbed_resonance("claude-haiku-4-5-20251001", "")
     captured: dict = {}
     _install_fake_anthropic(monkeypatch, captured)
@@ -267,16 +281,20 @@ def test_override_translates_to_alias(fake_config_dir, monkeypatch, stubbed_reso
     assert out == "yes"
     assert captured["create_kwargs"]["model"] == "nexo-mini"
     assert captured["client_kwargs"].get("base_url") == "https://proxy.example.com/api"
-    assert captured["client_kwargs"].get("api_key") == "sk-bearer-via-env"
+    # CRITICAL: bearer must arrive via auth_token (Authorization: Bearer),
+    # NOT via api_key (which the SDK would translate to X-Api-Key and the
+    # proxy would reject as 401).
+    assert captured["client_kwargs"].get("auth_token") == "sk-proxy-bearer-xyz"
+    assert captured["client_kwargs"].get("api_key") in (None, "")
     headers = captured["create_kwargs"].get("extra_headers") or {}
     assert "Idempotency-Key" in headers
     assert len(headers["Idempotency-Key"]) >= 16
 
 
-def test_override_alias_for_max_tier(fake_config_dir, monkeypatch, stubbed_resonance):
+def test_override_alias_for_max_tier(fake_config_dir, tmp_path, monkeypatch, stubbed_resonance):
     from call_model_raw import call_model_raw
     _write_endpoint(fake_config_dir, "https://proxy.example.com/api")
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-bearer")
+    _stub_auth_provider(fake_config_dir, tmp_path)
     stubbed_resonance("claude-opus-4-7[1m]", "max")
     captured: dict = {}
     _install_fake_anthropic(monkeypatch, captured)
@@ -284,10 +302,10 @@ def test_override_alias_for_max_tier(fake_config_dir, monkeypatch, stubbed_reson
     assert captured["create_kwargs"]["model"] == "nexo-max"
 
 
-def test_override_alias_for_each_tier(fake_config_dir, monkeypatch, stubbed_resonance):
+def test_override_alias_for_each_tier(fake_config_dir, tmp_path, monkeypatch, stubbed_resonance):
     from call_model_raw import call_model_raw
     _write_endpoint(fake_config_dir, "https://proxy.example.com/api")
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-bearer")
+    _stub_auth_provider(fake_config_dir, tmp_path)
     cases = [
         (("claude-opus-4-7[1m]", "max"),    "nexo-max"),
         (("claude-opus-4-7[1m]", "xhigh"),  "nexo-high"),
@@ -306,46 +324,105 @@ def test_override_alias_for_each_tier(fake_config_dir, monkeypatch, stubbed_reso
         )
 
 
-def test_override_unmapped_pair_raises(fake_config_dir, monkeypatch, stubbed_resonance):
+def test_override_unmapped_pair_raises(fake_config_dir, tmp_path, monkeypatch, stubbed_resonance):
     """Surface unmapped (model, effort) locally as ClassifierUnavailableError
     instead of letting the proxy reject with a 400."""
     from call_model_raw import call_model_raw, ClassifierUnavailableError
     _write_endpoint(fake_config_dir, "https://proxy.example.com/api")
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-bearer")
+    _stub_auth_provider(fake_config_dir, tmp_path)
     stubbed_resonance("claude-mystery-12-99", "ludicrous")
     _install_fake_anthropic(monkeypatch, {})
     with pytest.raises(ClassifierUnavailableError, match="no alias mapped"):
         call_model_raw("Q?")
 
 
-def test_override_no_bearer_raises(fake_config_dir, monkeypatch, stubbed_resonance):
+def test_override_no_auth_provider_raises_no_leak(fake_config_dir, monkeypatch, stubbed_resonance):
+    """Critical security guarantee: when override mode is active but
+    auth_provider.json is absent, Brain MUST NOT fall back to the
+    operator's real ANTHROPIC_API_KEY (sk-ant-...) and send it as a
+    bearer to the custom proxy. Doing so would leak the real Anthropic
+    credential to a third party. The call must raise instead."""
     from call_model_raw import call_model_raw, ClassifierUnavailableError
     _write_endpoint(fake_config_dir, "https://proxy.example.com/api")
-    # No env var, no auth_provider, no fallback files (filesystem patched).
-    monkeypatch.setattr("call_model_raw._resolve_anthropic_key", lambda: "")
+    # Force a real-looking ANTHROPIC_API_KEY in env (the LEAK source).
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-REAL-OPERATOR-KEY-MUST-NOT-LEAK")
     stubbed_resonance("claude-opus-4-7[1m]", "max")
-    _install_fake_anthropic(monkeypatch, {})
-    with pytest.raises(ClassifierUnavailableError, match="no bearer"):
+    captured: dict = {}
+    _install_fake_anthropic(monkeypatch, captured)
+    with pytest.raises(ClassifierUnavailableError, match="auth_provider"):
         call_model_raw("Q?")
+    # Belt-and-braces: even if the SDK was somehow called, the operator key
+    # must NOT have been passed in as auth_token or api_key.
+    client_kwargs = captured.get("client_kwargs") or {}
+    assert "sk-ant-REAL-OPERATOR-KEY-MUST-NOT-LEAK" not in str(client_kwargs.values())
 
 
 def test_override_uses_auth_provider_command(fake_config_dir, tmp_path, monkeypatch, stubbed_resonance):
     """When override mode is on AND auth_provider is configured, the bearer
-    must come from the helper's stdout, not from env."""
+    must come from the helper's stdout, passed to the SDK via auth_token
+    so it lands in the Authorization: Bearer header."""
     from call_model_raw import call_model_raw
     _write_endpoint(fake_config_dir, "https://proxy.example.com/api")
-    helper = tmp_path / "auth.sh"
-    helper.write_text("#!/bin/sh\nprintf 'sk-helper-bearer-007'\n")
-    helper.chmod(0o755)
-    _write_auth_provider(fake_config_dir, command=str(helper))
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-env-must-not-win")
+    _stub_auth_provider(fake_config_dir, tmp_path, "sk-helper-bearer-007")
+    # Even with a stale operator key in env, override mode must ignore it.
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-real-must-not-win")
     stubbed_resonance("claude-opus-4-7[1m]", "xhigh")
     captured: dict = {}
     _install_fake_anthropic(monkeypatch, captured)
 
     call_model_raw("Q?")
-    assert captured["client_kwargs"]["api_key"] == "sk-helper-bearer-007"
+    assert captured["client_kwargs"]["auth_token"] == "sk-helper-bearer-007"
+    assert captured["client_kwargs"].get("api_key") in (None, "")
     assert captured["create_kwargs"]["model"] == "nexo-high"
+
+
+def test_override_idempotency_key_caller_provided_is_preserved(
+    fake_config_dir, tmp_path, monkeypatch, stubbed_resonance
+):
+    """Caller-provided idempotency key must be reused so application-level
+    retries do not double-bill: the proxy treats them as duplicates."""
+    from call_model_raw import call_model_raw
+    _write_endpoint(fake_config_dir, "https://proxy.example.com/api")
+    _stub_auth_provider(fake_config_dir, tmp_path)
+    stubbed_resonance("claude-opus-4-7[1m]", "max")
+
+    fixed_key = "01J0EXAMPLEULIDREUSED"
+    captured1: dict = {}
+    _install_fake_anthropic(monkeypatch, captured1)
+    call_model_raw("Q?", idempotency_key=fixed_key)
+    captured2: dict = {}
+    _install_fake_anthropic(monkeypatch, captured2)
+    call_model_raw("Q?", idempotency_key=fixed_key)
+
+    h1 = (captured1["create_kwargs"].get("extra_headers") or {}).get("Idempotency-Key")
+    h2 = (captured2["create_kwargs"].get("extra_headers") or {}).get("Idempotency-Key")
+    assert h1 == fixed_key
+    assert h2 == fixed_key
+    assert h1 == h2  # explicit: caller controls dedup window
+
+
+def test_override_idempotency_key_default_changes_per_call(
+    fake_config_dir, tmp_path, monkeypatch, stubbed_resonance
+):
+    """When the caller does NOT pass idempotency_key, each call gets a
+    fresh UUID4 (covers SDK transparent retries but NOT caller retries —
+    the docstring is explicit that callers wanting cross-retry dedup
+    must pass an explicit key)."""
+    from call_model_raw import call_model_raw
+    _write_endpoint(fake_config_dir, "https://proxy.example.com/api")
+    _stub_auth_provider(fake_config_dir, tmp_path)
+    stubbed_resonance("claude-opus-4-7[1m]", "max")
+
+    captured1: dict = {}
+    _install_fake_anthropic(monkeypatch, captured1)
+    call_model_raw("Q?")
+    captured2: dict = {}
+    _install_fake_anthropic(monkeypatch, captured2)
+    call_model_raw("Q?")
+
+    h1 = (captured1["create_kwargs"].get("extra_headers") or {}).get("Idempotency-Key")
+    h2 = (captured2["create_kwargs"].get("extra_headers") or {}).get("Idempotency-Key")
+    assert h1 and h2 and h1 != h2
 
 
 def test_standalone_does_not_send_idempotency_key(fake_config_dir, monkeypatch, stubbed_resonance):

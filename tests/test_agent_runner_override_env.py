@@ -81,16 +81,47 @@ def test_override_injects_base_url_and_bearer(fake_config_dir, tmp_path):
     assert out["ANTHROPIC_API_KEY"] == "sk-proxy-bearer-42"
 
 
-def test_override_overrides_existing_anthropic_api_key(fake_config_dir, monkeypatch):
-    """If the parent process happens to have ANTHROPIC_API_KEY set (e.g. the
-    operator's raw key), override mode replaces it with the proxy bearer.
-    Sending the operator's real key to the proxy would be rejected."""
+def test_override_overrides_existing_anthropic_api_key(fake_config_dir, tmp_path, monkeypatch):
+    """If the parent process happens to have a real ANTHROPIC_API_KEY in env
+    (operator's raw sk-ant-... key), override mode replaces it with the
+    proxy bearer resolved from auth_provider.json. Override mode now
+    REQUIRES auth_provider — the legacy env fallback in override mode
+    has been removed to prevent leaking the real key to a custom proxy."""
     from agent_runner import _apply_llm_endpoint_override
     _write_endpoint(fake_config_dir, "https://proxy.example.com/api")
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-bearer-via-env")  # used by resolve_auth_token fallback
-    env = {"ANTHROPIC_API_KEY": "sk-stale-real-anthropic", "OTHER": "kept"}
+    helper = tmp_path / "auth.sh"
+    helper.write_text("#!/bin/sh\nprintf 'sk-proxy-bearer-via-helper'\n")
+    helper.chmod(0o755)
+    _write_auth_provider(fake_config_dir, command=str(helper))
+    env = {"ANTHROPIC_API_KEY": "sk-ant-stale-real-key", "OTHER": "kept"}
     out = _apply_llm_endpoint_override(env)
-    assert out["ANTHROPIC_API_KEY"] == "sk-bearer-via-env"
+    assert out["ANTHROPIC_API_KEY"] == "sk-proxy-bearer-via-helper"
+    assert out["OTHER"] == "kept"
+
+
+def test_override_without_auth_provider_does_not_leak_real_key(fake_config_dir, monkeypatch):
+    """Critical security guarantee for the CLI spawn path: if override
+    mode is active but auth_provider.json is missing, the spawned env
+    must NOT carry a real sk-ant-... operator key as the proxy bearer.
+    The helper leaves the existing env intact (no override applied) so
+    the spawn can decide to fail explicitly elsewhere instead of
+    silently leaking."""
+    from agent_runner import _apply_llm_endpoint_override
+    _write_endpoint(fake_config_dir, "https://proxy.example.com/api")
+    # No auth_provider.json written — override should NOT inject anything
+    # claiming to be a proxy bearer.
+    env = {"ANTHROPIC_API_KEY": "sk-ant-REAL-OPERATOR-KEY", "OTHER": "kept"}
+    out = _apply_llm_endpoint_override(env)
+    # Either the helper leaves the real key untouched (no proxy
+    # redirection) or it sets ANTHROPIC_BASE_URL but blanks the bearer.
+    # In both cases the real sk-ant- key MUST NOT be paired with the
+    # proxy URL silently.
+    if out.get("ANTHROPIC_BASE_URL") == "https://proxy.example.com/api":
+        # Override active: bearer must NOT be the real operator key.
+        assert out.get("ANTHROPIC_API_KEY") != "sk-ant-REAL-OPERATOR-KEY"
+    else:
+        # Override skipped: env intact.
+        assert out["ANTHROPIC_API_KEY"] == "sk-ant-REAL-OPERATOR-KEY"
     assert out["OTHER"] == "kept"
 
 
