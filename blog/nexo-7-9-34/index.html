@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.9.34: Email parser fix + Guardian hook hardening</title>
+<meta name="description" content="NEXO Brain v7.9.34 patch release. Two fixes: Q-encoded RFC822 headers that were silently dropping inbound emails (Header objects coerced via _decode_header end to end), and PreToolUse Guardian hook hardened with stderr + exit 2 so terminal Claude cannot ignore a hard block.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-9-34/">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.9.34: Email parser fix + Guardian hook hardening","datePublished":"2026-04-26","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head><body><main><article style="max-width:760px;margin:80px auto;padding:0 24px;line-height:1.75;">
+<h1>NEXO 7.9.34 &mdash; Email parser fix + Guardian hook hardening</h1>
+<p><em>Published 2026-04-26. Patch release over v7.9.33.</em></p>
+
+<h2>Why the inbox went quiet</h2>
+<p>NERO &mdash; the email-automation agent on top of NEXO Brain &mdash; stopped replying to a subset of emails over the last few days. The pattern was always the same: senders with non-ASCII display names or Q-encoded subjects (utf-8 / quoted-printable, e.g. <code>=?utf-8?q?Confirmaci=C3=B3n?=</code>) landed in the IMAP UNSEEN scan, the worker tried to parse the headers via <code>_parse_email_headers</code>, and the email vanished without trace. The DB had no row, the inbox kept growing, and Nero never spoke up.</p>
+
+<p>Root cause: <code>email.message_from_bytes(...).get("Message-ID")</code> in the Python stdlib returns an <code>email.header.Header</code> instance &mdash; not a plain string &mdash; when the underlying header is Q-encoded. <code>.strip()</code> on a <code>Header</code> raises <code>TypeError: 'Header' object is not subscriptable</code>; the parser caught the exception, logged it at <code>DEBUG</code>, and returned <code>{}</code>. The downstream worker treated an empty dict as "skip this email" and moved on. The DEBUG log meant the operator never saw the failure.</p>
+
+<p>v7.9.34 routes every <code>msg.get(...)</code> through <code>_decode_header</code>, which decodes Q-encoding AND coerces to <code>str</code> &mdash; so <code>Message-ID</code>, <code>In-Reply-To</code>, <code>References</code>, <code>From</code>, <code>Subject</code>, and <code>Date</code> all come out as plain strings even when the wire form is Q-encoded. The exception log is lifted from <code>DEBUG</code> to <code>WARNING</code>, so a future regression cannot drop emails silently again. 5 new unit tests in <code>tests/test_email_monitor_parser.py</code> pin both the Q-encoded round-trip and the visibility regression.</p>
+
+<h2>Why terminal Claude was ignoring the Guardian</h2>
+<p>The PreToolUse Guardian gate (Block K &mdash; G3 destructive, G3 SSH remote write, G4 conditioned-file guard) emits a JSON <code>permissionDecision: deny</code> response when a hard-mode rule fires. That JSON is the documented Claude Code contract for blocking a tool call. In Claude Desktop the deny is honoured cleanly. In terminal Claude Code we observed cases where the model proceeded with the next tool call anyway &mdash; the JSON deny was being dropped or out-of-order delivered mid-tool-loop, and the hook was exiting with code 0.</p>
+
+<p>v7.9.34 keeps the JSON deny as the primary contract but, on a hard block, also writes the structured Guardian reason to <code>stderr</code> and exits with code 2 &mdash; the documented PreToolUse blocking exit. Belt-and-suspenders: the model receives the same Guardian reason through both channels, the process-exit layer enforces the block even if the JSON branch is lost, and the model self-corrects instead of blindly retrying. Shadow mode and gate-off paths still exit 0 (no behaviour change).</p>
+
+<h2>Verification</h2>
+<p>97 tests green across <code>email_monitor_parser</code> (5 new), <code>email_monitor_checkpoints</code>, <code>pre_tool_use_hook</code> (2 hardened assertions), <code>call_model_raw</code>, <code>call_model_raw_overrides</code>, <code>call_model_raw_overrides_e2e</code>, <code>agent_runner_override_env</code>, <code>fase4_lint_baseline</code>, and <code>security_baseline</code>. Bandit clean (<code>python3 -m bandit -r src/ --severity-level high --confidence-level high</code>). Ruff clean.</p>
+
+<p><a href="/changelog/#v7934">Full changelog entry &rarr;</a></p>
+</article></main></body></html>

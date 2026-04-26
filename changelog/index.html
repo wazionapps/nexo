@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.32 hardens the email monitor recovery — 7-day lookback (was 24h) plus per-email checkpoints so a retried email continues from the previous attempt's progress instead of restarting from scratch.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.34 fixes a silent email drop on Q-encoded headers (Header objects coerced via _decode_header) and hardens the PreToolUse Guardian hook with stderr + exit 2 belt-and-suspenders enforcement.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.32 hardens the email monitor recovery — 7-day lookback (was 24h) plus per-email checkpoints so a retried email continues from the previous attempt's progress instead of restarting from scratch.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.34 fixes a silent email drop on Q-encoded headers (Header objects coerced via _decode_header) and hardens the PreToolUse Guardian hook with stderr + exit 2 belt-and-suspenders enforcement.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.32 hardens the email monitor recovery — 7-day lookback (was 24h) plus per-email checkpoints so a retried email continues from the previous attempt's progress instead of restarting from scratch.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.34 fixes a silent email drop on Q-encoded headers (Header objects coerced via _decode_header) and hardens the PreToolUse Guardian hook with stderr + exit 2 belt-and-suspenders enforcement.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.32 hardens the email monitor recovery — 7-day lookback (was 24h) plus per-email checkpoints so a retried email continues from the previous attempt's progress instead of restarting from scratch.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.34 fixes a silent email drop on Q-encoded headers (Header objects coerced via _decode_header) and hardens the PreToolUse Guardian hook with stderr + exit 2 belt-and-suspenders enforcement.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -87,19 +87,27 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v7.9.32 live</span>
+                    <span class="page-chip">v7.9.34 live</span>
                     <span class="page-chip">Guardian active</span>
                     <span class="page-chip">F0.6 hardening</span>
                     <span class="page-chip">Adaptive empirical</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v7932" class="btn btn-primary">Start with v7.9.32</a>
-                    <a href="#v7931" class="btn btn-secondary">See v7.9.31</a>
+                    <a href="#v7934" class="btn btn-primary">Start with v7.9.34</a>
+                    <a href="#v7933" class="btn btn-secondary">See v7.9.33</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
             </div>
             <div class="page-visual">
                 <div class="page-stack">
+                    <div class="page-stack-card">
+                        <strong>v7.9.34</strong>
+                        <span>Patch — email parser fix (Q-encoded headers were dropping emails silently; now coerced via <code>_decode_header</code>) plus PreToolUse Guardian hook hardened with stderr + exit 2 belt-and-suspenders so terminal Claude cannot ignore a hard block.</span>
+                    </div>
+                    <div class="page-stack-card">
+                        <strong>v7.9.33</strong>
+                        <span>Patch — hotfix for Bandit B324 finding in 7.9.32 (SHA-1 needs <code>usedforsecurity=False</code>); first npm release that carries the 7.9.32 email-recovery checkpoints.</span>
+                    </div>
                     <div class="page-stack-card">
                         <strong>v7.9.32</strong>
                         <span>Patch — email monitor recovery: 7-day lookback (was 24h) plus per-email checkpoints so a retried email continues from the previous attempt's progress instead of restarting from scratch.</span>
@@ -276,6 +284,26 @@
 <section class="section-compact" style="background:rgba(124,58,237,0.08);">
     <div class="container desktop-disclaimer" style="max-width:860px;font-size:13px;line-height:1.55;">
         <p><strong>Sobre NEXO Desktop.</strong> NEXO Desktop es un cliente acompa&ntilde;ante closed-source distribuido aparte en <a href="https://nexo-desktop.com/">nexo-desktop.com</a>. Cuando una entrada de changelog menciona "NEXO Desktop" se refiere a una versi&oacute;n coordinada de ese cliente que consume el contrato CLI/MCP del Brain. El c&oacute;digo de Desktop no vive en este repo; el Brain (AGPL-3.0) es 100% usable por s&iacute; solo desde terminal, Codex, Claude Code, o cualquier cliente MCP.</p>
+    </div>
+</section>
+
+<section id="v7934" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.9.34 <span style="opacity:.5;font-weight:400;">&mdash; April 26, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">Email parser fix + Guardian hook hardening</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            Patch over v7.9.33 with two fixes. First, <code>src/scripts/nexo-email-monitor.py::_parse_email_headers</code> was silently dropping any email whose RFC822 headers came back as <code>email.header.Header</code> instances rather than plain strings &mdash; common for Q-encoded utf-8 / quoted-printable headers (display names with accents, subjects with non-ASCII). <code>msg.get("Message-ID").strip()</code> raised <code>TypeError: 'Header' object is not subscriptable</code>, the exception was swallowed at <code>log.debug</code>, and the email was discarded. Operators only noticed because Nero stopped replying. v7.9.34 routes every <code>msg.get(...)</code> through <code>_decode_header</code> (which decodes Q-encoding AND coerces to <code>str</code>), and lifts the failure log from <code>DEBUG</code> to <code>WARNING</code>. Second, <code>src/hooks/pre_tool_use.py</code> Guardian gate (Block K, G3 destructive / G3 SSH / G4 guard_check) emitted <code>permissionDecision: deny</code> JSON on a hard-mode block but exit 0 &mdash; terminal Claude Code occasionally proceeded with the next tool anyway because the JSON deny was being dropped or out-of-order delivered mid-tool-loop. Hard blocks now also write the structured Guardian reason to stderr and exit 2, the documented PreToolUse blocking exit. Belt-and-suspenders: model receives the Guardian reason through both channels and self-corrects instead of blindly retrying. 5 new parser tests + 2 hardened hook tests.
+        </p>
+    </div>
+</section>
+
+<section id="v7933" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.9.33 <span style="opacity:.5;font-weight:400;">&mdash; April 26, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">Hotfix Bandit B324 in checkpoint hash</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            Patch over v7.9.32. Hotfix for Bandit B324 finding in <code>src/scripts/nexo-email-monitor.py::_email_checkpoint_path</code>. The hash is purely a filename disambiguator (Message-IDs contain characters the FS rejects), not a cryptographic primitive. v7.9.33 adds <code>usedforsecurity=False</code> to the SHA-1 call so Bandit accepts the non-security usage. The v7.9.32 git tag is preserved for traceability but no npm artifact ever shipped for it; this is the first npm release that carries the 7.9.32 email-recovery checkpoints.
+        </p>
     </div>
 </section>
 

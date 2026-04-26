@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Blog — NEXO Brain</title>
-    <meta name="description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.9.32 email monitor recovery hardening.">
+    <meta name="description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.9.34 patch that fixes silent email drops on Q-encoded headers and hardens the PreToolUse Guardian hook with stderr + exit 2 enforcement.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/blog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/blog/">
     <meta property="og:title" content="Blog — NEXO Brain">
-    <meta property="og:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.9.32 email monitor recovery hardening.">
+    <meta property="og:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.9.34 patch that fixes silent email drops on Q-encoded headers and hardens the PreToolUse Guardian hook with stderr + exit 2 enforcement.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Blog — NEXO Brain">
-    <meta name="twitter:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.9.32 email monitor recovery hardening.">
+    <meta name="twitter:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.9.34 patch that fixes silent email drops on Q-encoded headers and hardens the PreToolUse Guardian hook with stderr + exit 2 enforcement.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Blog — NEXO Brain",
-        "description": "Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.9.32 email monitor recovery hardening.",
+        "description": "Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.9.34 patch that fixes silent email drops on Q-encoded headers and hardens the PreToolUse Guardian hook with stderr + exit 2 enforcement.",
         "url": "https://nexo-brain.com/blog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -134,7 +134,7 @@
                     <span class="page-chip">Shared brain product notes</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="/blog/nexo-7-9-32/" class="btn btn-primary">Read latest release</a>
+                    <a href="/blog/nexo-7-9-34/" class="btn btn-primary">Read latest release</a>
                     <a href="/changelog/" class="btn btn-secondary">Latest release notes</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -145,22 +145,22 @@
                 <div class="blog-featured-meta">
                     <span class="compare-chip">April 26, 2026</span>
                     <span class="compare-chip">Patch</span>
-                    <span class="compare-chip">Email recovery</span>
+                    <span class="compare-chip">CI hotfix</span>
                 </div>
-                <h2>NEXO 7.9.32: Email monitor recovery hardening</h2>
-                <p>Patch over v7.9.31. Hardens email-monitor recovery against cascades of Brain releases — 7-day lookback (was 24h) plus per-email checkpoints that let a retried email continue from the previous attempt's progress instead of restarting from scratch.</p>
+                <h2>NEXO 7.9.34: Email parser fix + Guardian hook hardening</h2>
+                <p>Patch over v7.9.33 with two fixes. <code>_parse_email_headers</code> was silently dropping any email whose RFC822 headers came back as <code>email.header.Header</code> instances (Q-encoded utf-8 / quoted-printable) — operators only noticed because Nero stopped replying. Headers now route through <code>_decode_header</code> end to end and parse failures log at <code>WARNING</code>. PreToolUse Guardian hook hardens hard blocks with stderr + exit 2 so terminal Claude cannot ignore the deny channel mid-tool-loop.</p>
                 <div class="hero-actions" style="justify-content:flex-start;margin-bottom:18px;">
-                    <a href="/blog/nexo-7-9-32/" class="btn btn-primary">Open article</a>
-                    <a href="/changelog/#v7932" class="btn btn-secondary">Open changelog</a>
+                    <a href="/blog/nexo-7-9-34/" class="btn btn-primary">Open article</a>
+                    <a href="/changelog/#v7934" class="btn btn-secondary">Open changelog</a>
                 </div>
                 <div class="blog-mini-stack">
                     <div class="blog-mini-card">
                         <strong>Companion view</strong>
-                        <span><a href="/changelog/#v7932">See the full v7.9.32 changelog</a></span>
+                        <span><a href="/changelog/#v7934">See the full v7.9.34 changelog</a></span>
                     </div>
                     <div class="blog-mini-card">
                         <strong>Previous release</strong>
-                        <span><a href="/blog/nexo-7-9-31/">NEXO 7.9.31: stop_sequences default fix</a>.</span>
+                        <span><a href="/blog/nexo-7-9-33/">NEXO 7.9.33: Hotfix Bandit B324 in checkpoint hash</a>.</span>
                     </div>
                 </div>
             </div>
@@ -191,6 +191,24 @@
 <section class="section-flush-top">
     <div class="container">
             <div class="blog-grid">
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 26, 2026</div>
+                <h2><a href="/blog/nexo-7-9-34/">NEXO 7.9.34: Email parser fix + Guardian hook hardening</a></h2>
+                <p>Patch over v7.9.33. Q-encoded RFC822 headers were silently killing inbound emails because the stdlib returned <code>Header</code> objects that <code>.strip()</code> did not survive — every <code>msg.get(...)</code> now goes through <code>_decode_header</code>. PreToolUse Guardian hard blocks now exit 2 + stderr in addition to JSON deny so the terminal cannot ignore the gate.</p>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/blog/nexo-7-9-34/" class="btn btn-secondary">Read more</a>
+                </div>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 26, 2026</div>
+                <h2><a href="/blog/nexo-7-9-33/">NEXO 7.9.33: Hotfix Bandit B324 in checkpoint hash</a></h2>
+                <p>Patch over v7.9.32. Adds <code>usedforsecurity=False</code> to the SHA-1 call that derives a checkpoint filename — non-security usage that Bandit B324 was failing the 7.9.32 publish on. First npm release that carries the 7.9.32 email-recovery checkpoints.</p>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/blog/nexo-7-9-33/" class="btn btn-secondary">Read more</a>
+                </div>
+            </div>
 
             <div class="blog-card">
                 <div class="blog-card-date">April 26, 2026</div>
