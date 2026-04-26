@@ -1,5 +1,22 @@
 # Changelog
 
+## [7.10.0] - 2026-04-26
+
+### Removed
+- **NEXO proxy LLM (reverts the override path introduced in 7.9.28 → 7.9.34).** Background: 7.9.28 added two opt-in files at ``~/.nexo/config/llm_endpoint.json`` and ``~/.nexo/config/auth_provider.json`` that let a third-party orchestrator (NEXO Desktop in our case) redirect every Anthropic SDK call from Brain to a custom proxy and resolve the bearer via a local helper, with concrete model names translated to wire aliases (``nexo-max``, ``nexo-high``, ``nexo-medium``, ``nexo-low``, ``nexo-mini``) and an ``Idempotency-Key`` per request. NEXO Desktop's commercial model has changed: Desktop is now a wrapper over the user's own Claude Code subscription (Max / Pro), with a separate Desktop licence. Brain calls go directly to ``api.anthropic.com`` using the user's existing OAuth (the one stored under ``~/.claude/`` and consumed by Claude Code spawns) or a plain ``ANTHROPIC_API_KEY``. There is no NEXO bearer, no NEXO proxy, no NEXO credit accounting in this codebase.
+- ``src/call_model_raw.py``: removed override-mode block, ``_resolve_brain_config_dir`` / ``_brain_config_dir`` / ``_BRAIN_CONFIG_DIR``, ``_read_versioned_config``, ``resolve_api_base_url``, ``_override_force_disabled``, ``is_override_mode``, ``_resolve_auth_provider_token``, ``resolve_auth_token``, ``_resolve_override_alias``, the ``_CONCRETE_TO_ALIAS`` map, the ``idempotency_key`` parameter, the ``Idempotency-Key`` header injection, and the ``NEXO_RAW_ANTHROPIC`` escape hatch. The Anthropic SDK is now instantiated directly with the resolved key against ``api.anthropic.com``.
+- ``src/agent_runner.py``: removed ``_apply_llm_endpoint_override`` and every call site. ``_headless_env`` no longer redirects to a proxy. The bare-mode key resolution no longer reads a proxy bearer from the spawn env; it asks ``_resolve_anthropic_api_key`` directly. CLI children spawn with a clean environment so deep-sleep, evolution, followup-runner, email-monitor and morning-agent run against ``api.anthropic.com`` using the OAuth Claude Code already has under ``~/.claude/``.
+- ``docs/api/override-files.md``: deleted.
+- ``tests/test_call_model_raw_overrides.py``, ``tests/test_call_model_raw_overrides_e2e.py``, ``tests/test_agent_runner_override_env.py``: deleted.
+- ``tests/test_call_model_raw.py``: removed the ``is_override_mode`` monkeypatch line that no longer has a target.
+
+### Operator note
+- The two opt-in files at ``~/.nexo/config/llm_endpoint.json`` and ``~/.nexo/config/auth_provider.json`` are no longer read by Brain. The previous Desktop installer that wrote them is also being removed on the Desktop side. Brain leaves any pre-existing files on disk untouched; they are simply ignored from this version forward.
+
+### Verification
+- 59 tests green across ``call_model_raw``, ``email_monitor_checkpoints``, ``email_monitor_parser``, ``pre_tool_use_hook``, ``fase4_lint_baseline``, ``security_baseline``.
+- Repo-wide grep for ``nexo-max``, ``nexo-high``, ``nexo-medium``, ``nexo-low``, ``nexo-mini``, ``llm_endpoint.json``, ``auth_provider.json``, ``NEXO_PROXY``, ``nexo-desktop.com/api/proxy``, ``_apply_llm_endpoint_override``, ``is_override_mode``, ``resolve_api_base_url``, ``resolve_auth_token``, ``NEXO_RAW_ANTHROPIC`` returns 0 hits across ``src/``, ``docs/``, ``tests/``, ``scripts/``, ``bin/``.
+
 ## [7.9.34] - 2026-04-26
 
 ### Fixed

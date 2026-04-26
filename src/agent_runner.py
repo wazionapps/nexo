@@ -375,68 +375,6 @@ def _codex_config_path() -> Path:
     return Path.home() / ".codex" / "config.toml"
 
 
-def _apply_llm_endpoint_override(env: dict) -> dict:
-    """Redirect the child Anthropic-compatible CLI to the configured proxy
-    when Brain is in override mode (``~/.nexo/config/llm_endpoint.json``
-    present). Standalone runs leave ``env`` untouched, so Brain libre keeps
-    hitting ``api.anthropic.com`` directly with whatever ``ANTHROPIC_API_KEY``
-    the operator already had configured.
-
-    Security guarantee: if override mode is active but ``auth_provider.json``
-    is missing, malformed, or the helper command fails to produce a
-    bearer, the helper does NOT inject ``ANTHROPIC_BASE_URL`` either.
-    Otherwise the spawned CLI would inherit the operator's real
-    ``ANTHROPIC_API_KEY`` (a ``sk-ant-...`` key) from the parent process
-    and send it as the bearer to the custom proxy, leaking the real
-    Anthropic credential to a third party. Fail-closed: the override is
-    skipped completely, and the CLI either runs against
-    ``api.anthropic.com`` with the operator's real key (if also present
-    as standalone fallback) or fails locally.
-
-    The contract is symmetric with what ``call_model_raw.py`` does for SDK
-    direct calls: same files, same precedence, same alias system. The CLI
-    child reads ``ANTHROPIC_BASE_URL`` (Anthropic SDK convention) and
-    ``ANTHROPIC_API_KEY`` from the spawned environment.
-
-    No-op (and silent) when ``call_model_raw`` is unavailable for any
-    reason; the headless surface should never block on this helper.
-    """
-    try:
-        from call_model_raw import (
-            is_override_mode,
-            resolve_api_base_url,
-            resolve_auth_token,
-        )
-    except Exception:
-        return env
-    try:
-        if not is_override_mode():
-            return env
-        bearer = resolve_auth_token()
-        if not bearer:
-            # auth_provider.json missing or failed in override mode.
-            # Do NOT redirect to the proxy with a stale operator key — see
-            # the docstring above. Skip the override entirely and let the
-            # spawn either run standalone or fail explicitly elsewhere.
-            sys.stderr.write(
-                "[brain] llm_endpoint override active but auth_provider "
-                "produced no bearer; skipping CLI env injection to avoid "
-                "leaking a real ANTHROPIC_API_KEY to the proxy.\n"
-            )
-            return env
-        base_url = resolve_api_base_url()
-        if base_url:
-            env["ANTHROPIC_BASE_URL"] = base_url
-        env["ANTHROPIC_API_KEY"] = bearer
-    except Exception:
-        # Override is best-effort: a misconfigured override file must not
-        # crash an automation run that would otherwise have worked in
-        # standalone. The SDK direct path already surfaces config errors
-        # via ClassifierUnavailableError; the CLI path stays defensive.
-        pass
-    return env
-
-
 def _headless_env(env: dict | None = None) -> dict:
     merged = os.environ.copy()
     if env:
@@ -445,7 +383,7 @@ def _headless_env(env: dict | None = None) -> dict:
     merged["NEXO_AUTOMATION"] = "1"
     merged.pop("CLAUDECODE", None)
     merged.pop("CLAUDE_CODE", None)
-    return _apply_llm_endpoint_override(merged)
+    return merged
 
 
 def _load_client_bootstrap_prompt(client: str) -> str:
@@ -666,7 +604,6 @@ def run_automation_interactive(
     launch_env = os.environ.copy()
     if env:
         launch_env.update(env)
-    launch_env = _apply_llm_endpoint_override(launch_env)
     cwd_path = Path(_interactive_target_cwd(target))
 
     # Best-effort resonance lookup — interactive sessions do not swap the
@@ -1107,21 +1044,7 @@ def run_automation_prompt(
 
         bare_api_key = ""
         if resolved_bare:
-            # In override mode the bearer was already injected into
-            # run_env by _apply_llm_endpoint_override (proxy token, not
-            # the operator's raw Anthropic key). Reuse it instead of
-            # asking the keychain helper for a real Anthropic key — the
-            # proxy expects its own bearer and would reject the real one.
-            override_bearer = run_env.get("ANTHROPIC_API_KEY", "").strip() if run_env else ""
-            try:
-                from call_model_raw import is_override_mode as _is_override_mode
-                _override_active = _is_override_mode()
-            except Exception:
-                _override_active = False
-            if _override_active and override_bearer:
-                bare_api_key = override_bearer
-            else:
-                bare_api_key = _resolve_anthropic_api_key()
+            bare_api_key = _resolve_anthropic_api_key()
             if not bare_api_key:
                 # Silent fallback: we would rather take the slower path
                 # than force the caller to fail-closed on an env quirk.
