@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.26 centralizes the automation language contract.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.32 hardens the email monitor recovery — 7-day lookback (was 24h) plus per-email checkpoints so a retried email continues from the previous attempt's progress instead of restarting from scratch.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.26 centralizes the automation language contract.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.32 hardens the email monitor recovery — 7-day lookback (was 24h) plus per-email checkpoints so a retried email continues from the previous attempt's progress instead of restarting from scratch.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.26 centralizes the automation language contract.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.32 hardens the email monitor recovery — 7-day lookback (was 24h) plus per-email checkpoints so a retried email continues from the previous attempt's progress instead of restarting from scratch.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.26 centralizes the automation language contract.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.9.32 hardens the email monitor recovery — 7-day lookback (was 24h) plus per-email checkpoints so a retried email continues from the previous attempt's progress instead of restarting from scratch.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -87,19 +87,43 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v7.9.26 live</span>
+                    <span class="page-chip">v7.9.32 live</span>
                     <span class="page-chip">Guardian active</span>
                     <span class="page-chip">F0.6 hardening</span>
                     <span class="page-chip">Adaptive empirical</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v7926" class="btn btn-primary">Start with v7.9.26</a>
-                    <a href="#v7925" class="btn btn-secondary">See v7.9.25</a>
+                    <a href="#v7932" class="btn btn-primary">Start with v7.9.32</a>
+                    <a href="#v7931" class="btn btn-secondary">See v7.9.31</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
             </div>
             <div class="page-visual">
                 <div class="page-stack">
+                    <div class="page-stack-card">
+                        <strong>v7.9.32</strong>
+                        <span>Patch — email monitor recovery: 7-day lookback (was 24h) plus per-email checkpoints so a retried email continues from the previous attempt's progress instead of restarting from scratch.</span>
+                    </div>
+                    <div class="page-stack-card">
+                        <strong>v7.9.31</strong>
+                        <span>Patch — fixes default <code>stop_sequences</code> in <code>call_model_raw</code> rejected by Anthropic 400; default is now <code>None</code> and whitespace-only caller values are rejected locally.</span>
+                    </div>
+                    <div class="page-stack-card">
+                        <strong>v7.9.30</strong>
+                        <span>Patch — hotfix for a missing <code>import sys</code> in <code>src/agent_runner.py</code> that blocked the 7.9.29 publish in CI; first npm release that carries the 7.9.29 override-path hardening.</span>
+                    </div>
+                    <div class="page-stack-card">
+                        <strong>v7.9.29</strong>
+                        <span>Patch — hardens v7.9.28 override path: <code>Authorization: Bearer</code> instead of <code>X-Api-Key</code>, call-time config dir, caller-controllable <code>Idempotency-Key</code>, strict bearer source so a real <code>ANTHROPIC_API_KEY</code> never leaks to a custom proxy.</span>
+                    </div>
+                    <div class="page-stack-card">
+                        <strong>v7.9.28</strong>
+                        <span>Patch — optional override files at <code>~/.nexo/config/</code> redirect Brain Anthropic SDK calls and CLI children to a proxy, with <code>Idempotency-Key</code> for retry dedup. Brain libre standalone unaffected.</span>
+                    </div>
+                    <div class="page-stack-card">
+                        <strong>v7.9.27</strong>
+                        <span>Patch — server startup no longer hangs the MCP <code>initialize</code> handshake on the legacy task.owner backfill (now runs <code>--rules-only</code>).</span>
+                    </div>
                     <div class="page-stack-card">
                         <strong>v7.9.26</strong>
                         <span>Patch — headless automation and Deep Sleep now honor the operator language contract from calibration.</span>
@@ -252,6 +276,66 @@
 <section class="section-compact" style="background:rgba(124,58,237,0.08);">
     <div class="container desktop-disclaimer" style="max-width:860px;font-size:13px;line-height:1.55;">
         <p><strong>Sobre NEXO Desktop.</strong> NEXO Desktop es un cliente acompa&ntilde;ante closed-source distribuido aparte en <a href="https://nexo-desktop.com/">nexo-desktop.com</a>. Cuando una entrada de changelog menciona "NEXO Desktop" se refiere a una versi&oacute;n coordinada de ese cliente que consume el contrato CLI/MCP del Brain. El c&oacute;digo de Desktop no vive en este repo; el Brain (AGPL-3.0) es 100% usable por s&iacute; solo desde terminal, Codex, Claude Code, o cualquier cliente MCP.</p>
+    </div>
+</section>
+
+<section id="v7932" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.9.32 <span style="opacity:.5;font-weight:400;">&mdash; April 26, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">Email monitor recovery hardening</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            Patch over v7.9.31. Hardens email-monitor recovery against cascades of Brain releases. Background: a single email can fall between several Brain updates in a tight window (4 releases on 2026-04-26 alone), and the previous 24-hour ``_recover_unreplied_processed`` sweep let those drop into a permanent limbo because the next sweep happened after the email had already aged out. v7.9.32 widens the lookback to 7 days (168h) and introduces per-email checkpoints at <code>~/.nexo/nexo-email/checkpoints/</code> that capture files the failed attempt touched, the last assistant narration extracted from Claude Code's JSON output, and the error. Retry attempts inject that context into the next prompt so a long task (drafting a presentation, multi-step analysis, building a report) continues from where the previous attempt died instead of restarting from scratch and duplicating tokens. Stale checkpoints are pruned automatically after 7 days. 15 new unit tests in <code>tests/test_email_monitor_checkpoints.py</code> pin the helpers.
+        </p>
+    </div>
+</section>
+
+<section id="v7931" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.9.31 <span style="opacity:.5;font-weight:400;">&mdash; April 26, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">stop_sequences default fix</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            Patch over v7.9.30. Detected during real wire smoke and surfaced by an external auditor. <code>call_model_raw</code> was sending <code>stop_sequences=["\n", ".", " "]</code> by default, which the current Anthropic Messages API rejects with HTTP 400 <code>each stop sequence must contain non-whitespace</code>. Every <code>enforcer_classifier</code> call running on the default was failing in production and the conservative fallback was silently kicking in. v7.9.31 changes the default to <code>None</code> (no <code>stop_sequences</code> field sent on the wire) since <code>max_tokens=3</code> already serves as the hard cap for yes/no classification, and adds a local guard that raises <code>ClassifierUnavailableError</code> when a caller passes whitespace-only or non-string entries instead of letting the API 400 the request remotely. Two new e2e wire tests and three new unit tests pin the behaviour. This release also removes an internal design document from the open-source distribution.
+        </p>
+    </div>
+</section>
+
+<section id="v7930" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.9.30 <span style="opacity:.5;font-weight:400;">&mdash; April 26, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">Hotfix import sys in agent_runner</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            Patch over v7.9.29. Hotfix for a missing <code>import sys</code> in <code>src/agent_runner.py</code> that ruff F821 caught in CI <code>tests/test_fase4_lint_baseline.py::TestRuffPasses::test_ruff_check_src_returns_zero</code>. The 7.9.29 ``_apply_llm_endpoint_override`` helper introduced a <code>sys.stderr.write(...)</code> call but the module did not import <code>sys</code>, so the publish workflow failed before reaching the npm publish step. v7.9.30 adds the import; this is the first npm release that carries the 7.9.29 override-path hardening (Authorization Bearer, call-time config dir, caller-controllable Idempotency-Key, strict bearer source).
+        </p>
+    </div>
+</section>
+
+<section id="v7929" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.9.29 <span style="opacity:.5;font-weight:400;">&mdash; April 26, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">Override path hardening</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            Patch over v7.9.28. Fixes four issues an external audit caught after the 7.9.28 release: (1) the bearer is now passed to the Anthropic SDK via <code>auth_token</code> so it serialises into <code>Authorization: Bearer</code> instead of <code>X-Api-Key</code> &mdash; any compatible proxy that only accepts the standard OAuth header was rejecting every request with 401. (2) The Brain config directory is resolved at every call to <code>_read_versioned_config</code> instead of cached at module import, so LaunchAgent crons that export <code>NEXO_HOME</code> from a wrapper now reach the right <code>~/.nexo/config/</code>. (3) <code>Idempotency-Key</code> accepts a caller-provided value so application-level retries reuse the same dedup key and the proxy treats them as duplicates instead of brand-new billable requests. (4) Override mode is now strict about its bearer source: if <code>auth_provider.json</code> is absent or its helper fails, the call raises <code>ClassifierUnavailableError</code> instead of falling back to the operator's real <code>ANTHROPIC_API_KEY</code> &mdash; combined with neutralising the SDK env-var fallback during construction, this prevents a real <code>sk-ant-</code> value from leaking to a custom proxy. New <code>tests/test_call_model_raw_overrides_e2e.py</code> drives the real SDK against a local <code>http.server</code> and asserts on captured wire headers and body, complementing the SDK-mock unit tests.
+        </p>
+    </div>
+</section>
+
+<section id="v7928" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.9.28 <span style="opacity:.5;font-weight:400;">&mdash; April 26, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">Optional LLM endpoint and auth provider overrides</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            Patch over v7.9.27. Two optional JSON files at <code>~/.nexo/config/llm_endpoint.json</code> and <code>~/.nexo/config/auth_provider.json</code> let third-party orchestrators (Anthropic-compatible proxies, internal gateways) redirect Brain SDK calls and delegate bearer token resolution to a local command, analogous to git's <code>credential.helper</code>. The redirection covers both the SDK direct path (<code>call_model_raw.py</code>) and every CLI child Brain spawns (<code>agent_runner.py</code>) so headless crons &mdash; deep-sleep, evolution, followup-runner, morning-agent, email-monitor &mdash; hit the proxy too. LaunchAgent processes do not inherit env from a UI process, so the redirection has to come from inside Brain. An <code>Idempotency-Key</code> (UUID4 hex) is attached per request for proxy-side dedup of transparent retries within 24h. Brain libre standalone (no override files) hits <code>api.anthropic.com</code> directly with <code>ANTHROPIC_API_KEY</code> exactly as before.
+        </p>
+    </div>
+</section>
+
+<section id="v7927" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.9.27 <span style="opacity:.5;font-weight:400;">&mdash; April 26, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">MCP startup unblocked</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            Patch over v7.9.26. Server startup no longer hangs the MCP <code>initialize</code> handshake when legacy <code>followups</code>/<code>reminders</code> still need owner backfill. The synchronous startup migration now invokes <code>scripts/backfill_task_owner.py --rules-only</code>, skipping the multi-minute <code>LocalZeroShotClassifier</code> (mDeBERTa) load that previously timed out the 60s subprocess gate and left every restart looping over the same legacy rows. Subprocess timeout reduced to 30s now that the regex path completes in milliseconds. Worst case ambiguous rows fall back to <code>'shared'</code>; Deep Sleep / cron can later re-run without <code>--rules-only</code> to refine those rows with the classifier.
+        </p>
     </div>
 </section>
 

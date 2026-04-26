@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.9.29: Override path hardening</title>
+<meta name="description" content="NEXO Brain v7.9.29 patch release. Hardens the LLM endpoint and auth provider override path from v7.9.28: Authorization: Bearer instead of X-Api-Key, call-time config dir, caller-controllable Idempotency-Key, strict bearer source so a real ANTHROPIC_API_KEY never leaks to a custom proxy.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-9-29/">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.9.29: Override path hardening","datePublished":"2026-04-26","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head><body><main><article style="max-width:760px;margin:80px auto;padding:0 24px;line-height:1.75;">
+<h1>NEXO 7.9.29 &mdash; Override path hardening</h1>
+<p><em>Published 2026-04-26. Patch release over v7.9.28.</em></p>
+
+<p>v7.9.28 introduced the optional LLM endpoint and auth provider override path that lets third-party orchestrators redirect Brain&rsquo;s Anthropic SDK calls and CLI children to a custom proxy. An external code audit caught four issues immediately after release that the SDK-mock unit tests could not detect. v7.9.29 fixes all of them and adds a real end-to-end wire-test suite to keep them fixed.</p>
+
+<h2>1. Bearer now lands in <code>Authorization: Bearer</code></h2>
+<p>The 7.9.28 cut passed the bearer to the Anthropic SDK as the <code>api_key</code> kwarg. The SDK serialises that into the <code>X-Api-Key</code> header (Anthropic-style auth). Any compatible proxy that only accepts the standard OAuth <code>Authorization: Bearer</code> header was rejecting every override-mode request with 401. v7.9.29 passes the bearer through <code>auth_token</code> instead, which the SDK serialises into the standard header.</p>
+
+<h2>2. Config dir resolved on every call</h2>
+<p>In 7.9.28 the Brain config directory was cached in a module-level <code>_BRAIN_CONFIG_DIR</code> evaluated at import time. LaunchAgent crons that exported <code>NEXO_HOME</code> from a wrapper script were already past Brain&rsquo;s import by the time their wrapper kicked in, so they kept reading the pre-launch <code>~/.nexo/config/</code>. v7.9.29 calls <code>_resolve_brain_config_dir()</code> on every <code>_read_versioned_config</code> invocation, so post-import <code>NEXO_HOME</code> changes are honoured immediately.</p>
+
+<h2>3. <code>Idempotency-Key</code> is caller-controllable</h2>
+<p>The proxy dedups on <code>(token_id, idempotency_key)</code> for 24 hours so transparent retries do not double-bill the user. In 7.9.28 the key was generated freshly for every call into <code>_call_anthropic_raw</code>; if the application layer (<code>enforcement_classifier</code> retrying after a <code>ClassifierUnavailableError</code>) reissued the same logical request, it arrived with a brand-new key and the proxy treated it as a separate billable request. v7.9.29 adds an <code>idempotency_key</code> kwarg to <code>call_model_raw</code>: callers that reissue a request reuse their own key and the proxy correctly deduplicates.</p>
+
+<h2>4. Strict bearer source in override mode</h2>
+<p>The most important fix and the only one tagged <em>security</em> in the changelog. In 7.9.28 <code>resolve_auth_token</code> fell back to <code>ANTHROPIC_API_KEY</code> (and the legacy filesystem files) whenever <code>auth_provider.json</code> was missing or its helper failed. If override mode was active, that value was the operator&rsquo;s real <code>sk-ant-...</code> Anthropic key &mdash; and Brain would send it as the bearer to the custom proxy, leaking the real Anthropic credential to whoever ran the proxy.</p>
+<p>v7.9.29 makes override mode strict about its bearer source: if <code>auth_provider.json</code> is missing or fails, <code>resolve_auth_token</code> returns an empty string and <code>call_model_raw</code> raises <code>ClassifierUnavailableError</code> instead of authenticating with the operator&rsquo;s real key. The CLI-spawn helper in <code>agent_runner.py</code> mirrors the same fail-closed contract: when no proxy bearer can be resolved, neither <code>ANTHROPIC_BASE_URL</code> nor <code>ANTHROPIC_API_KEY</code> is injected, so a child cron does not silently combine the proxy URL with a stale operator key inherited from the parent process.</p>
+<p>Belt-and-braces inside the SDK call: the Anthropic SDK <code>__init__</code> resolves <code>api_key</code> from <code>os.environ["ANTHROPIC_API_KEY"]</code> whenever the kwarg is <code>None</code>, and would then send <strong>both</strong> <code>X-Api-Key</code> (from the env-resolved key) and <code>Authorization: Bearer</code> (from <code>auth_token</code>) on every request. v7.9.29 pops <code>ANTHROPIC_API_KEY</code> around the constructor call and restores it afterwards, so override-mode requests never carry the operator&rsquo;s real key alongside the proxy bearer.</p>
+
+<h2>End-to-end wire tests</h2>
+<p>The 7.9.28 unit tests passed because they replaced the entire <code>anthropic</code> module with a fake class &mdash; the wire never left the host, so a wrong header on the wire could not be caught. v7.9.29 adds <code>tests/test_call_model_raw_overrides_e2e.py</code>, a suite that stands up a local <code>BaseHTTPRequestHandler</code> on <code>127.0.0.1:auto</code>, points the override files at it, and lets the real Anthropic SDK send a real HTTP POST. The captured request is asserted against directly: <code>Authorization: Bearer &lt;helper-token&gt;</code> present, <code>X-Api-Key</code> absent, body <code>model</code> is the wire alias, <code>Idempotency-Key</code> matches the caller-supplied value, no <code>sk-ant-</code> value anywhere in the request, missing <code>auth_provider.json</code> aborts before any HTTP traffic, post-import <code>NEXO_HOME</code> changes are honoured, and the bare-mode CLI spawn is covered.</p>
+
+<h2>Verification</h2>
+<p>192-test wider regression sweep across <code>call_model_raw</code>, <code>agent_runner</code>, <code>resonance</code>, <code>semantic-router</code>, <code>semantic-reasoner</code>, <code>cortex</code>, <code>core-prompts</code>, <code>auto-update-relocate-resonance</code>, <code>run-automation-prompt</code>, and bare-mode tests stays green. The eight new wire tests run against the real SDK and pass against a local capture server.</p>
+
+<p><a href="/changelog/#v7929">Full changelog entry &rarr;</a></p>
+</article></main></body></html>
