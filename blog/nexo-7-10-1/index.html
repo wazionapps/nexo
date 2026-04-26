@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.10.1: README cleanup over v7.10.0</title>
+<meta name="description" content="NEXO Brain v7.10.1 removes a residual Custom LLM endpoint (advanced) section in README.md that still documented the llm_endpoint.json / auth_provider.json override path as a current feature. The 7.10.0 code revert was complete; the README cleanup landed in 7.10.1.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-10-1/">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.10.1: README cleanup over v7.10.0","datePublished":"2026-04-26","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head><body><main><article style="max-width:760px;margin:80px auto;padding:0 24px;line-height:1.75;">
+<h1>NEXO 7.10.1 &mdash; README cleanup over v7.10.0</h1>
+<p><em>Published 2026-04-26. Patch release over v7.10.0.</em></p>
+
+<p>v7.10.0 removed every code path of the LLM proxy override (the opt-in <code>llm_endpoint.json</code> + <code>auth_provider.json</code> + wire aliases <code>nexo-max</code>/<code>nexo-high</code>/<code>nexo-medium</code>/<code>nexo-low</code>/<code>nexo-mini</code> + <code>Idempotency-Key</code>) introduced in 7.9.28 → 7.9.34, because NEXO Desktop's commercial model changed to a wrapper over the user's own Claude Code subscription. That revert was complete in <code>src/</code>, <code>tests/</code>, and <code>docs/</code>.</p>
+
+<p>What 7.10.0 did <em>not</em> catch: a residual section in <code>README.md</code> (around line 1096), titled <em>Custom LLM endpoint (advanced)</em>, that still documented the override path as a current feature, including the <code>Idempotency-Key</code> proxy semantics and a pointer to the now-deleted <code>docs/api/override-files.md</code>. The npm tarball for 7.10.0 therefore still mentioned the proxy as if it existed.</p>
+
+<p>v7.10.1 deletes that section. The repo-wide grep that 7.10.0 advertised as 0-hits is now actually 0-hits in the published tarball as well, not just in the source tree.</p>
+
+<h2>Verification</h2>
+<p>Repo-wide grep across <code>src/</code>, <code>docs/</code>, <code>tests/</code>, <code>scripts/</code>, <code>bin/</code> and <code>README.md</code> for <code>nexo-max</code>, <code>nexo-high</code>, <code>nexo-medium</code>, <code>nexo-low</code>, <code>nexo-mini</code>, <code>llm_endpoint.json</code>, <code>auth_provider.json</code>, <code>NEXO_PROXY</code>, <code>nexo-desktop.com/api/proxy</code>, <code>_apply_llm_endpoint_override</code>, <code>is_override_mode</code>, <code>resolve_api_base_url</code>, <code>resolve_auth_token</code>, <code>NEXO_RAW_ANTHROPIC</code>, <code>_override_force_disabled</code>, <code>_CONCRETE_TO_ALIAS</code> returns 0 hits outside the historical changelog/blog narration of "what was removed in 7.10.0".</p>
+
+<p><a href="/changelog/#v7101">Full changelog entry &rarr;</a></p>
+</article></main></body></html>

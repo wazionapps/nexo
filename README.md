@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.10.0` is the current packaged-runtime line. Minor release — **removes the LLM proxy override path that 7.9.28 → 7.9.34 introduced**. Background: 7.9.28 added two opt-in files at `~/.nexo/config/llm_endpoint.json` and `~/.nexo/config/auth_provider.json` that let a third-party orchestrator (NEXO Desktop) redirect every Anthropic SDK call from Brain to a custom proxy and resolve the bearer via a local helper, with concrete model names translated to wire aliases (`nexo-max`, `nexo-high`, `nexo-medium`, `nexo-low`, `nexo-mini`) and an `Idempotency-Key` per request. NEXO Desktop's commercial model has changed: Desktop is now a wrapper over the user's own Claude Code subscription (Max / Pro), with a separate Desktop licence. Brain calls go directly to `api.anthropic.com` using the user's existing OAuth (the one stored under `~/.claude/` and consumed by Claude Code spawns) or a plain `ANTHROPIC_API_KEY`. There is no NEXO bearer, no NEXO proxy, no NEXO credit accounting in this codebase. Every proxy symbol is gone from `call_model_raw.py` and `agent_runner.py`; the proxy-specific tests and `docs/api/override-files.md` are removed; any pre-existing override files on disk are simply ignored from this release forward.
+Version `7.10.1` is the current packaged-runtime line. Patch release — removes a residual "Custom LLM endpoint (advanced)" section in this README that still documented the `llm_endpoint.json` / `auth_provider.json` override path as a current feature, including the `Idempotency-Key` proxy semantics and a pointer to the now-deleted `docs/api/override-files.md`. The 7.10.0 code revert was complete; the README cleanup landed in 7.10.1.
+
+Previously in `7.10.0`: minor release — **removes the LLM proxy override path that 7.9.28 → 7.9.34 introduced**. Background: 7.9.28 added two opt-in files at `~/.nexo/config/llm_endpoint.json` and `~/.nexo/config/auth_provider.json` that let a third-party orchestrator (NEXO Desktop) redirect every Anthropic SDK call from Brain to a custom proxy and resolve the bearer via a local helper, with concrete model names translated to wire aliases (`nexo-max`, `nexo-high`, `nexo-medium`, `nexo-low`, `nexo-mini`) and an `Idempotency-Key` per request. NEXO Desktop's commercial model has changed: Desktop is now a wrapper over the user's own Claude Code subscription (Max / Pro), with a separate Desktop licence. Brain calls go directly to `api.anthropic.com` using the user's existing OAuth (the one stored under `~/.claude/` and consumed by Claude Code spawns) or a plain `ANTHROPIC_API_KEY`. There is no NEXO bearer, no NEXO proxy, no NEXO credit accounting in this codebase. Every proxy symbol is gone from `call_model_raw.py` and `agent_runner.py`; the proxy-specific tests and `docs/api/override-files.md` are removed; any pre-existing override files on disk are simply ignored from this release forward.
 
 Previously in `7.9.34`: two fixes — the email monitor's header parser was dropping any email whose RFC822 headers came back as `email.header.Header` instances (Q-encoded utf-8 / quoted-printable). Every `msg.get(...)` now goes through `_decode_header`, and the failure log is lifted from DEBUG to WARNING. The PreToolUse Guardian gate hardens hard blocks with stderr + exit 2 enforcement so terminal Claude cannot ignore the deny channel mid-tool-loop.
 
@@ -1092,19 +1094,6 @@ Use a personal plugin only when you need a new MCP tool in the runtime surface. 
 - **No cloud dependencies.** Vector search runs on CPU (fastembed), not an API.
 - **Auto-update is resilient.** NEXO checks for updates on startup. If an update fails, it continues with the current version and notifies you. Local migrations (database schema, configuration) always run. Network updates (git pull) can be disabled by setting `auto_update: false` in `NEXO_HOME/config/schedule.json`.
 - **Secret redaction.** API keys and tokens are stripped before they ever reach memory storage.
-
-## Custom LLM endpoint (advanced)
-
-NEXO Brain reads two optional override files at `~/.nexo/config/`:
-
-- `llm_endpoint.json` — set a custom Anthropic-compatible base URL.
-- `auth_provider.json` — delegate bearer token resolution to a local command (analogous to git's `credential.helper`).
-
-This lets third-party orchestrators — for example an Anthropic-compatible proxy that adds rate limiting, cost accounting, multi-provider failover, or per-team auth — route Brain's LLM calls without modifying its source.
-
-**If neither file exists, Brain operates exactly as before:** direct call to `https://api.anthropic.com` using `ANTHROPIC_API_KEY` from environment or filesystem. The override path is opt-in.
-
-When override mode is active, Brain attaches an opaque `Idempotency-Key` to every request so the proxy can dedup transparent retries (24h window) without double-billing. The same redirection applies to every CLI child Brain spawns (deep-sleep, evolution, followup-runner, morning-agent, email-monitor, `nexo chat`): `agent_runner.py` injects `ANTHROPIC_BASE_URL` and `ANTHROPIC_API_KEY` into the spawned environment when override mode is on, so headless crons hit the proxy too — LaunchAgent crons do not inherit env from a UI process. See `docs/api/override-files.md` for the full schema, fallback rules, and an end-to-end example.
 
 ## The Psychology Behind NEXO Brain
 
