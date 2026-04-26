@@ -1,5 +1,24 @@
 # Changelog
 
+## [7.9.28] - 2026-04-26
+
+### Added
+- Optional override files at `~/.nexo/config/llm_endpoint.json` and `~/.nexo/config/auth_provider.json` let third-party orchestrators redirect Brain's Anthropic SDK calls and delegate bearer token resolution to a local command (analogous to git's `credential.helper`). Both files use `version: 1` so future schema changes can be opted into per file. If neither file exists, Brain runs in standalone mode against `https://api.anthropic.com` exactly as before.
+- `src/call_model_raw.py` now exposes `is_override_mode()`, `resolve_api_base_url()`, and `resolve_auth_token()` as part of its public surface for consumers that need to introspect the active mode.
+- `Idempotency-Key` header (UUID4 hex) is attached to every override-mode request so an Anthropic-compatible proxy can dedup transparent retries within a 24h window without double-billing. The header is omitted in standalone mode, keeping the wire request bit-for-bit identical to pre-V11.
+- Internal `_CONCRETE_TO_ALIAS` map translates `(model, effort)` from `resonance_tiers.json` into the wire alias the proxy validates (`nexo-max | nexo-high | nexo-medium | nexo-low | nexo-mini`). Unmapped pairs surface locally as `ClassifierUnavailableError` instead of letting the proxy reject the request remotely.
+- New documentation `docs/api/override-files.md` describes the schemas, fallback rules, and an end-to-end example.
+- `src/agent_runner.py` now propagates override mode to every spawned CLI child via a new `_apply_llm_endpoint_override(env)` helper. When `~/.nexo/config/llm_endpoint.json` is active, the helper injects `ANTHROPIC_BASE_URL` and `ANTHROPIC_API_KEY` into the child's environment so headless crons (deep-sleep, evolution, followup-runner, morning-agent, email-monitor) and interactive launches (`nexo chat`, Desktop new session) hit the proxy with the right bearer instead of sending to `api.anthropic.com` directly. LaunchAgent crons do not inherit Desktop UI environment, so the redirection has to come from inside Brain. Standalone runs (no override file) leave the env untouched.
+
+### Changed
+- `_call_anthropic_raw` now accepts an `effort` argument so it can resolve the wire alias when override mode is active. The standalone code path is unchanged.
+- `src/agent_runner.py` `_headless_env` and `run_automation_interactive` now compose `_apply_llm_endpoint_override` over the spawned env. Override mode also feeds the `--bare` branch: instead of asking the keychain helper for the operator's raw Anthropic key (which the proxy would reject), `--bare` reuses the proxy bearer that the helper already injected.
+
+### Tests
+- `tests/test_call_model_raw_overrides.py` (+19 tests) covers override on/off detection, version gating, malformed JSON tolerance, env vs file precedence, the auth_provider command success path, subprocess timeout fallback (Learning #294), missing-binary fallback, non-zero exit fallback, empty stdout fallback, alias translation for every tier, unmapped-pair fail-closed behaviour, missing-bearer error, auth_provider beating env, and the absence of `Idempotency-Key` in standalone mode.
+- `tests/test_agent_runner_override_env.py` (+9 tests) covers standalone leave-intact, override injection of base_url + bearer, override overriding the parent's stale `ANTHROPIC_API_KEY`, version mismatch fallback, malformed JSON tolerance, defensive behaviour when `call_model_raw` cannot be imported, and `_headless_env` parity with `_apply_llm_endpoint_override` in both modes.
+- Existing `tests/test_call_model_raw.py` fixtures pin `is_override_mode()` to `False` so the suite is deterministic regardless of whether the developer has a real `llm_endpoint.json` on disk.
+
 ## [7.9.27] - 2026-04-26
 
 ### Fixed
