@@ -7,7 +7,10 @@ This file locks the entrypoint contract:
 
 - Non-tool-monitored payload → exit 0, no JSON response on stdout.
 - Hard-mode block via ``process_pre_tool_event`` → emit
-  ``permissionDecision: deny`` JSON with a structured reason.
+  ``permissionDecision: deny`` JSON with a structured reason AND exit 2
+  with the reason on stderr (7.9.34 belt-and-suspenders: terminal
+  Claude Code occasionally ignored the JSON deny channel mid-loop, so
+  exit 2 / stderr is the documented secondary block channel).
 - Shadow-mode block (``severity != error``) → exit 0, no deny JSON
   (the debt is recorded by the gate itself; the tool proceeds).
 - Internal exception path stays fail-open (the tool pipeline must never
@@ -71,7 +74,10 @@ def test_bash_rm_rf_blocked_in_hard_mode_emits_deny_json():
         "tool_input": {"command": "rm -rf /tmp/should-be-blocked-by-g3"},
     }
     proc = _invoke_hook(payload, env_extra={"NEXO_G3_ENFORCE_DESTRUCTIVE": "hard"})
-    assert proc.returncode == 0, proc.stderr
+    # 7.9.34: hard block now exits 2 (documented PreToolUse blocking
+    # exit) in addition to emitting deny JSON. Both channels carry the
+    # same reason so terminal Claude cannot silently ignore the gate.
+    assert proc.returncode == 2, proc.stderr
     response = json.loads(proc.stdout.strip())
     hso = response.get("hookSpecificOutput") or {}
     assert hso.get("hookEventName") == "PreToolUse"
@@ -80,6 +86,11 @@ def test_bash_rm_rf_blocked_in_hard_mode_emits_deny_json():
     assert "rm_rf" in reason
     assert "g3_destructive_blocked" in reason
     assert "severity=error" in reason
+    # Belt-and-suspenders: stderr must carry the same reason the JSON
+    # carries, so the model sees it through the exit-2 channel even if
+    # the JSON branch is dropped on the way to the LLM.
+    assert "rm_rf" in (proc.stderr or "")
+    assert "g3_destructive_blocked" in (proc.stderr or "")
 
 
 def test_bash_rm_rf_in_shadow_mode_does_not_deny_tool():
@@ -112,13 +123,15 @@ def test_ssh_remote_write_blocked_in_hard_mode():
         "tool_input": {"command": 'ssh remote-host "cat > /etc/hosts"'},
     }
     proc = _invoke_hook(payload, env_extra={"NEXO_G3_SSH_ENFORCE_REMOTE_WRITE": "hard"})
-    assert proc.returncode == 0, proc.stderr
+    # 7.9.34 hardening applies here too — exit 2 + stderr reason.
+    assert proc.returncode == 2, proc.stderr
     response = json.loads(proc.stdout.strip())
     hso = response.get("hookSpecificOutput") or {}
     assert hso.get("permissionDecision") == "deny"
     reason = hso.get("permissionDecisionReason") or ""
     assert "g3_ssh_remote_write_blocked" in reason
     assert "ssh_remote_shell_write" in reason
+    assert "g3_ssh_remote_write_blocked" in (proc.stderr or "")
 
 
 def test_malformed_stdin_does_not_crash_pipeline():
