@@ -16,13 +16,14 @@
     },
     {
       "id": "R13-pre-edit-no-guard",
+      "_comment": "Tests R13 in isolation. new_string is intentionally a non-constant function definition so R20_constant_change does NOT classify it as a shared-constant edit. The original 'SECRET = abc' content was triggering R20 in addition to R13, masking R13's behavior in parity tests.",
       "seq": [
         {
           "op": "tool",
           "name": "Edit",
           "input": {
             "file_path": "/repo/x.py",
-            "new_string": "SECRET = 'abc'"
+            "new_string": "def hello(): return 1"
           }
         }
       ],

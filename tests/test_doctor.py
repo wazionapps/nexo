@@ -1981,6 +1981,14 @@ class TestRuntimeChecks:
         monkeypatch.setattr(runtime, "_recent_permission_denial", lambda cron_id: False)
         monkeypatch.setattr(runtime.os, "getuid", lambda: 501)
         monkeypatch.setattr(runtime, "PROTECTED_MACOS_ROOTS", (Path("/Users/tester/Documents"),))
+        # The fix path delegates cron syncing and launchagent reload to two
+        # helpers whose real implementations require a `crons/sync.py` script
+        # and a working `launchctl bootstrap`. Neither is meaningful for this
+        # test — we are exercising `_repair_special_launchagent_plists` (the
+        # env-normalizing helper). Stub the siblings so they don't drag a real
+        # filesystem or launchd dependency into the assertion.
+        monkeypatch.setattr(runtime, "_sync_launchagents_from_manifest", lambda: (True, []))
+        monkeypatch.setattr(runtime, "_repair_launchagents", lambda items: (True, []))
 
         calls = {"print": 0}
 
