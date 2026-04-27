@@ -2520,6 +2520,44 @@ class HeadlessEnforcer:
     # the per-rule tag collision check, and time-dedup at the call site.
     _LEGACY_TAG_PREFIXES = ("after:", "periodic_msgs:", "periodic_time:", "start:")
 
+    @staticmethod
+    def _mcp_restart_marker_path() -> "Path":
+        """Resolve the path to the MCP restart-required marker on disk.
+
+        The marker is written by `plugins/update.py` when a `nexo update`
+        actually changes runtime `.py` bytes (cf. v7.11.0 fingerprint
+        gating). Honors the F0.6 runtime/operations/ canonical layout
+        with a fall-back to the pre-F0.6 operations/ legacy layout so
+        half-migrated installs are still detected correctly.
+        """
+        from pathlib import Path as _Path
+        home = _Path(os.environ.get("NEXO_HOME", str(_Path.home() / ".nexo")))
+        new = home / "runtime" / "operations" / "mcp-restart-required.json"
+        if new.is_file():
+            return new
+        legacy = home / "operations" / "mcp-restart-required.json"
+        return legacy if legacy.is_file() else new
+
+    def _mcp_restart_pending(self) -> bool:
+        """Return True if the MCP server has a restart-required marker on disk.
+
+        Cached per-instance with a 30s TTL: the marker rarely changes mid-
+        session (it's written by `nexo update` and cleared by the next
+        client restart) but a TTL keeps long-lived enforcer instances from
+        getting stuck on a stale negative cache if the operator runs
+        `nexo update` mid-session without restarting.
+        """
+        cached_at = getattr(self, "_mcp_restart_pending_cache_at", 0.0)
+        if (time.time() - cached_at) < 30.0:
+            return getattr(self, "_mcp_restart_pending_cache", False)
+        try:
+            result = self._mcp_restart_marker_path().is_file()
+        except Exception:  # noqa: BLE001 — never block enforcement on path errors
+            result = False
+        self._mcp_restart_pending_cache = result
+        self._mcp_restart_pending_cache_at = time.time()
+        return result
+
     def _enqueue(self, prompt: str, tag: str, rule_id: str = ""):
         """Enqueue an injection. Mirrors Desktop _enqueue for parity.
 
@@ -2534,6 +2572,21 @@ class HeadlessEnforcer:
                 MUST pass the canonical ID.
         """
         if any(q["tag"] == tag for q in self.injection_queue):
+            return
+        # v7.11.2: suppress reminders that ask the agent to call nexo_*
+        # tools while the MCP server has a restart-required marker on
+        # disk. Without this gate every periodic ping ("Execute
+        # nexo_session_diary_write", "Execute nexo_smart_startup",
+        # nexo_guard_check pre-Edit, etc) returns mcp_restart_required
+        # and the agent burns cycles on guaranteed no-ops. Reminders that
+        # don't reference nexo_* (R23 deploy guards, R25 nora/maria
+        # read-only, etc) still fire — they don't depend on the MCP.
+        if "nexo_" in prompt and self._mcp_restart_pending():
+            _logger.info(
+                "SKIP: %s — mcp_restart_required marker present (rule_id=%s)",
+                tag,
+                rule_id or "?",
+            )
             return
         legacy = tag.startswith(self._LEGACY_TAG_PREFIXES)
         if legacy:

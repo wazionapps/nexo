@@ -147,8 +147,8 @@
                     <span class="compare-chip">Patch</span>
                     <span class="compare-chip">Reliability</span>
                 </div>
-                <h2>NEXO 7.11.2: Watchdog stuck-cron reaper closes the in-flight gap</h2>
-                <p>Patch over v7.11.1. The v5.8.1 in-flight detection stopped the watchdog from killing running jobs (deep-sleep loop). The same restraint silently let truly hung wrappers — e.g. headless <code>claude --bare</code> blocked on an MCP that flagged <code>mcp_restart_required</code> — block their own next tick for days. The new <code>run_stuck_reaper()</code> sweep SIGTERMs stuck wrappers past per-cron <code>stuck_after_seconds</code> thresholds; the wrapper's existing trap closes the row at <code>exit 143</code>. Generous defaults (deep-sleep 8h, sleep/evolution 4h) keep the v5.8.1 bug from recurring. Orphan zombi rows cleaned in-band with <code>exit_code=137</code>. <code>cron_id='watchdog'</code> never reaped.</p>
+                <h2>NEXO 7.11.2: Watchdog reaper + Enforcer respects restart_required</h2>
+                <p>Patch over v7.11.1. Two reliability fixes in the same family — components ignoring signals they should respect. (1) New <code>run_stuck_reaper()</code> sweep in <code>nexo-watchdog.sh</code> SIGTERMs stuck wrappers past per-cron <code>stuck_after_seconds</code> thresholds; the wrapper's existing trap closes the row at <code>exit 143</code>. Generous defaults (deep-sleep 8h, sleep/evolution 4h) keep the v5.8.1 deep-sleep regression from recurring. (2) The Guardian/Enforcer now skips reminders asking for <code>nexo_*</code> tools while the MCP server has a restart-required marker on disk — previously every periodic ping triggered a guaranteed <code>mcp_restart_required</code> no-op. The fix sits at the top of <code>HeadlessEnforcer._enqueue()</code>; reminders that don't ask for <code>nexo_*</code> still fire.</p>
                 <div class="hero-actions" style="justify-content:flex-start;margin-bottom:18px;">
                     <a href="/blog/nexo-7-11-2/" class="btn btn-primary">Open article</a>
                     <a href="/changelog/#v7112" class="btn btn-secondary">Open changelog</a>
@@ -194,8 +194,8 @@
 
             <div class="blog-card">
                 <div class="blog-card-date">April 27, 2026</div>
-                <h2><a href="/blog/nexo-7-11-2/">NEXO 7.11.2: Watchdog stuck-cron reaper closes the in-flight gap</a></h2>
-                <p>Patch over v7.11.1. New <code>run_stuck_reaper()</code> sweep in <code>nexo-watchdog.sh</code> reads every <code>cron_runs</code> row with <code>ended_at IS NULL</code> and reaps anything past per-cron <code>stuck_after_seconds</code> thresholds (default 12h global). Live wrapper SIGTERM &rarr; trap closes row at <code>exit 143</code>. Orphan zombi row cleaned in-band with <code>exit_code=137</code>. <code>cron_id='watchdog'</code> hard-coded skip. Closes the gap left by the v5.8.1 in-flight fix without recreating the deep-sleep kill loop.</p>
+                <h2><a href="/blog/nexo-7-11-2/">NEXO 7.11.2: Watchdog reaper + Enforcer respects restart_required</a></h2>
+                <p>Patch over v7.11.1. Two reliability fixes in the same family. (1) New <code>run_stuck_reaper()</code> sweep in <code>nexo-watchdog.sh</code> reaps stuck cron rows past per-cron <code>stuck_after_seconds</code> thresholds (default 12h global). (2) Guardian/Enforcer now skips reminders asking for <code>nexo_*</code> tools while the MCP has a restart-required marker on disk — previously every periodic ping triggered a guaranteed no-op. <code>cron_id='watchdog'</code> hard-coded skip on the reaper; non-<code>nexo_*</code> reminders still fire on the enforcer.</p>
                 <div class="hero-actions" style="justify-content:flex-start;">
                     <a href="/blog/nexo-7-11-2/" class="btn btn-secondary">Read more</a>
                 </div>
