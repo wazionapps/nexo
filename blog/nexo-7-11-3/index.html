@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.11.3: Fingerprint excludes the versions/ snapshot store</title>
+<meta name="description" content="NEXO Brain v7.11.3 ships the root-cause fix for the mcp_restart_required lockup that v7.11.2 only masked at the enforcer layer. _FINGERPRINT_EXCLUDE_DIRS now excludes versions/, so live core/ and core/versions/<active>/ hash to the same digest regardless of how many retained snapshots accumulate on disk.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-11-3/">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.11.3: Fingerprint excludes the versions/ snapshot store","datePublished":"2026-04-27","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head><body><main><article style="max-width:760px;margin:80px auto;padding:0 24px;line-height:1.75;">
+<h1>NEXO 7.11.3 &mdash; Fingerprint excludes the versions/ snapshot store</h1>
+<p><em>Published 2026-04-27. Patch release over v7.11.2 — root-cause fix for the <code>mcp_restart_required</code> lockup that v7.11.2 only masked at the enforcer layer. No API change.</em></p>
+
+<h2>The symptom</h2>
+<p>After any <code>nexo update</code> that actually changed runtime <code>.py</code> bytes, every non-allowlisted MCP tool started returning the same payload &mdash; for hours, then days:</p>
+<pre><code>{
+  "ok": false,
+  "error": "mcp_restart_required",
+  "reason": "fingerprint_mismatch",
+  "installed_version": "7.11.2",
+  "process_version":   "7.11.2"
+}</code></pre>
+<p>Versions matched. The agent kept calling <code>nexo_reminders</code>, <code>nexo_smart_startup</code>, <code>nexo_guard_check</code>, <code>nexo_task_open</code> &hellip; every call bounced. Restarting Claude Code, Codex or Claude Desktop did not help: the new client connected to the same long-lived <code>server.py</code> with the same cached <code>PROCESS_FINGERPRINT</code>. v7.11.2's enforcer gate (<code>HeadlessEnforcer._mcp_restart_pending</code>) silenced the periodic <code>&lt;system-reminder&gt;</code> blocks asking for <code>nexo_*</code> tools, but the marker itself never cleared, so user-driven calls kept failing across sessions.</p>
+
+<h2>The root cause</h2>
+<p>v7.11.0 introduced the runtime fingerprint. The fingerprint is a sha256 over every <code>.py</code> file under <code>src/</code> the live MCP can import, and the comparison runs in two places:</p>
+<ul>
+  <li><code>installed_runtime_fingerprint()</code> &mdash; hot path, runs on every tool call via <code>resolve_restart_required</code>. It iterates a candidate list starting with <code>active_runtime_root()</code>, which on a real install resolves through the <code>core/current</code> symlink to <code>core/versions/&lt;active&gt;/</code>.</li>
+  <li><code>prime_process_fingerprint()</code> &mdash; cold path, runs once at MCP server startup. It iterates a candidate list starting with <code>Path(__file__).resolve().parent</code>, which on a real install is the live <code>core/</code> directory itself.</li>
+</ul>
+
+<p>Both functions delegate to <code>compute_mcp_runtime_fingerprint(src_dir)</code>, which walks the tree and hashes every <code>.py</code> file outside <code>_FINGERPRINT_EXCLUDE_DIRS</code>. v7.11.0 through v7.11.2 shipped this set:</p>
+
+<pre><code>_FINGERPRINT_EXCLUDE_DIRS = frozenset({
+    "scripts", "tests", "migrations", "crons",
+    "__pycache__", "node_modules", ".git",
+})</code></pre>
+
+<p>Notice what's missing: <code>"versions"</code>. The retained-snapshot store at <code>core/versions/</code> &mdash; the per-release archive that <code>activate_versioned_runtime_snapshot()</code> writes during every <code>nexo update</code> &mdash; was being hashed every time the walker started from live <code>core/</code>. The walker that started from <code>core/versions/&lt;active&gt;/</code> did not see the rest of the snapshot store at all.</p>
+
+<p>Concretely on a host with three retained snapshots:</p>
+<pre><code>installed_runtime_fingerprint:  f8e599fa0cead962&hellip;   # hash of core/versions/7.11.2/
+prime_process_fingerprint:      8374add662ec5df4&hellip;   # hash of core/ (which still contains versions/7.10.0, versions/7.11.0, versions/7.11.2)
+</code></pre>
+
+<p>The two never matched after the second-ever <code>nexo update</code> on a host. <code>resolve_restart_required()</code> kept seeing <code>installed_fp != process_fp</code> on every call. <code>_ack_current_client_if_restarted()</code> &mdash; which would normally clear the marker once the live client and live process agreed &mdash; could not clear the marker either, because its own gate checks the same fingerprint comparison and bailed for the same reason. The marker stayed on disk indefinitely.</p>
+
+<h2>The fix</h2>
+<p>One line:</p>
+<pre><code>_FINGERPRINT_EXCLUDE_DIRS = frozenset({
+    "scripts", "tests", "migrations", "crons",
+    "__pycache__", "node_modules", ".git",
+    "versions",   # &larr; v7.11.3
+})</code></pre>
+
+<p>Both fingerprint computations now hash exactly the same set of files regardless of which entry path the caller starts from. <code>installed_fp == process_fp</code> the moment a fresh server has loaded the new bytes; <code>_ack_current_client_if_restarted()</code> can clear the marker; non-allowlisted tools resume answering normally.</p>
+
+<h2>Why v7.11.2 was not enough</h2>
+<p>v7.11.2 added <code>HeadlessEnforcer._mcp_restart_pending()</code>, a gate at the top of <code>HeadlessEnforcer._enqueue()</code> that suppresses periodic <code>&lt;system-reminder&gt;</code> prompts asking for <code>nexo_*</code> tools while the marker file exists on disk. That stopped the enforcer from spending agent cycles on guaranteed no-ops, which was real progress &mdash; but it never cleared the marker. The user-facing tool calls (<code>nexo_reminders</code>, <code>nexo_task_open</code>, every plugin and skill call) still bounced. The expectation was that the operator would restart the client and the new server would have a clean fingerprint, which is exactly what the bug prevented from happening.</p>
+
+<h2>Tests</h2>
+<p>1 new regression test in <code>tests/test_runtime_fingerprint.py</code>:</p>
+<ul>
+  <li><code>test_fingerprint_ignores_versions_subtree</code> &mdash; seeds three snapshot directories under <code>versions/</code> (<code>7.10.0</code>, <code>7.11.0</code>, <code>7.11.2</code>) with their own <code>server.py</code> and <code>plugins/memory.py</code>, then asserts <code>compute_mcp_runtime_fingerprint(src)</code> returns the same digest before and after the snapshots are added.</li>
+</ul>
+<p>The two existing exclude-dir tests (<code>test_fingerprint_ignores_excluded_directories</code> and the <code>_make_runtime_tree</code> helper) now also include <code>"versions"</code> in their parametrized excluded list, so any future regression that drops <code>"versions"</code> from the set fails fast on existing coverage as well. All 21 tests in <code>tests/test_runtime_fingerprint.py</code> stay green.</p>
+
+<h2>Recovery on hosts already in the locked state</h2>
+<p>After updating to v7.11.3, the on-disk marker at <code>~/.nexo/runtime/operations/mcp-restart-required.json</code> may still exist from earlier updates. The MCP server clears it on the next tool call once the fingerprints agree. If a stale <code>fingerprint-cache.json</code> at the same operations path is keeping <code>installed_runtime_fingerprint()</code> on the old digest, deleting that file forces a rehash on the next call. Restart any long-lived <code>server.py</code> processes that started before the update so their cached <code>PROCESS_FINGERPRINT</code> is recomputed; without that the process keeps the pre-update digest in memory regardless of what is on disk.</p>
+
+<p><a href="/changelog/#v7113">Full changelog entry &rarr;</a> &middot; <a href="https://github.com/wazionapps/nexo/blob/main/src/runtime_versioning.py">src/runtime_versioning.py</a> &middot; <a href="https://github.com/wazionapps/nexo/blob/main/tests/test_runtime_fingerprint.py">tests/test_runtime_fingerprint.py</a></p>
+</article></main></body></html>
