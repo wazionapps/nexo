@@ -1,5 +1,33 @@
 # Changelog
 
+## [7.11.2] - 2026-04-27
+
+### Fixed
+- **Enforcer respects `mcp-restart-required` marker.** The Guardian/Enforcer (`HeadlessEnforcer` in `src/enforcement_engine.py`) periodically injects `<system-reminder>` blocks asking the agent to call `nexo_*` tools (`heartbeat`, `session_diary_write`, `smart_startup`, `guard_check`, etc). When the MCP server has the `~/.nexo/runtime/operations/mcp-restart-required.json` marker on disk (written by `plugins/update.py` after a `nexo update` that actually changes runtime `.py` bytes — see v7.11.0 fingerprint gating), every one of those reminders triggered a tool call that immediately failed with `mcp_restart_required`. The agent burned cycles on guaranteed no-ops until the operator restarted the client. v7.11.2 adds a gate at the top of `_enqueue()`: if the prompt mentions `nexo_` and the marker file exists, skip + log `SKIP: ... mcp_restart_required marker present`. Reminders that don't reference `nexo_*` (R23 deploy guards, R25 nora/maria read-only, etc.) still fire — they don't depend on the MCP being live. New helpers: `HeadlessEnforcer._mcp_restart_marker_path()` (resolves canonical F0.6 location with pre-F0.6 fallback) and `HeadlessEnforcer._mcp_restart_pending()` (cached per-instance with 30s TTL so we don't stat the marker on every `_enqueue` call). Conservative: any path/IO error in the resolver returns `False` so the gate never blocks legitimate enforcement.
+- **Watchdog `STUCK CRON REAPER` closes the gap left by the v5.8.1 in-flight detection.** The v5.8.1 fix taught the watchdog to leave running jobs alone when their `cron_runs` row was open (`started_at` present, `ended_at NULL`) — that closed the loop where the watchdog kept `kickstart -k`'ing `deep-sleep` mid-flight (2026-04-14..17). The same restraint became the new failure mode: when a wrapper child genuinely hangs (e.g. headless `claude --bare` blocked on an MCP that flagged `mcp_restart_required` after a brain update), the row stays open forever, the next tick sees `Another instance running. Skipping`, and the watchdog only logged WARN. `morning-agent`, `followup-runner` and `orchestrator-v2` went silent for days (2026-04-24..27) for exactly this reason.
+  - `src/scripts/nexo-watchdog.sh` — new `run_stuck_reaper()` sweep runs before the per-monitor loop. Reads every `cron_runs` row with `ended_at IS NULL` and compares its age against `stuck_after_seconds` (per-cron from `manifest.json`, fallback `STUCK_DEFAULT_SECONDS=43200` = 12h global).
+  - When a stuck row is detected and a wrapper PID is still alive, the reaper sends `SIGTERM` to the wrapper (`pgrep -f "nexo-cron-wrapper\.sh ${cron_id} "`). The wrapper's existing trap (`on_signal SIGTERM 143` → forward to child → `finalize_row`) closes the row with `exit_code=143`. After a 10s grace, the reaper escalates to `SIGKILL` on wrapper + `pkill -KILL -P` on descendants for any survivor.
+  - When the wrapper PID is already gone but the row is still NULL (orphan zombie row), the reaper closes it in-band: `ended_at=now`, `exit_code=137`, `summary='stuck row reaped by watchdog: wrapper PID gone'`. Without this the next tick would still skip with `Another instance running`.
+  - `cron_id='watchdog'` is hard-coded into `STUCK_REAPER_SKIP` so the watchdog can never reap itself mid-tick.
+  - New observable counter `TOTAL_REAPED` exposed in `watchdog-status.json` (`summary.reaped`), the human report header (`REAPED:`), and the final log line (`REAPED=N`).
+
+### Added
+- **`stuck_after_seconds` field on cron entries in `src/crons/manifest.json`.** Optional. When set it overrides the 12h default for that cron. Initial overrides:
+  - `morning-agent`: `1800` (30 min — should normally finish in 1-3 min)
+  - `followup-runner`: `1800` (30 min — normally 5-15 min)
+  - `email-monitor`: `600` (10 min — runs every 60s)
+  - `deep-sleep`: `28800` (8h — protects the legitimate worst-case that triggered the v5.8.1 incident)
+  - `sleep`: `14400` (4h)
+  - `evolution`: `14400` (4h, weekly heavy run)
+
+### Tests
+- `tests/test_watchdog_stuck_reaper.py` — 6 new tests covering: fresh in-flight row left alone (v5.8.1 regression guard), per-cron threshold respected (deep-sleep 8h not reaped at 4h), orphan zombie row cleaned in-band with `exit_code=137`, real wrapper killed via SIGTERM with trap closing row at `exit_code=143`, `cron_id='watchdog'` never reaped, default 12h threshold applied to crons not in manifest.
+- `tests/test_enforcer_restart_required_gate.py` — 6 new tests covering: nexo_* prompt enqueues normally with no marker, nexo_* prompt skipped with marker present, non-nexo_* prompt still enqueues with marker, 30s TTL cache behavior (warm cache does not re-stat, expired cache re-reads), pre-F0.6 legacy `operations/` path detected, missing `NEXO_HOME` returns `False` instead of raising.
+
+### Verification
+- `pytest tests/test_watchdog_stuck_reaper.py tests/test_watchdog_in_flight.py tests/test_watchdog_repair_prompt_contract.py tests/test_enforcer_restart_required_gate.py tests/test_g1_g3_enforcer_active.py tests/test_enforcer_map_paths.py tests/test_fase_c_r13_integration.py` — all green on macOS (61 tests).
+- Live triggering: 3 zombi wrappers (`morning-agent` 5h29m, `followup-runner` 21h, `orchestrator-v2` ~20h) reaped manually with the same `kill -TERM` path the reaper now automates; `cron_runs` rows closed with `exit_code=143` as expected. Enforcer gate validated by inspecting the same session that received ~6 `mcp_restart_required` no-op pings before this release would have suppressed all of them.
+
 ## [7.11.1] - 2026-04-27
 
 ### Performance
