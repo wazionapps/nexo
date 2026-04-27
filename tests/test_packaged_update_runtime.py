@@ -295,7 +295,7 @@ def test_handle_packaged_update_reloads_launchagents_after_successful_bump(monke
     monkeypatch.setattr(
         update,
         "write_restart_required_marker",
-        lambda from_version, to_version: {"path": f"/tmp/mcp-restart-required-{to_version}.json"},
+        lambda from_version, to_version, **_kw: {"path": f"/tmp/mcp-restart-required-{to_version}.json"},
     )
 
     def fake_run(args, **kwargs):
@@ -349,7 +349,7 @@ def test_handle_packaged_update_uses_desktop_managed_npm_runtime(monkeypatch):
     monkeypatch.setattr(
         update,
         "write_restart_required_marker",
-        lambda from_version, to_version: {"path": f"/tmp/mcp-restart-required-{to_version}.json"},
+        lambda from_version, to_version, **_kw: {"path": f"/tmp/mcp-restart-required-{to_version}.json"},
     )
     monkeypatch.setattr(update.Path, "exists", lambda self: str(self) == desktop_node)
 
@@ -408,7 +408,7 @@ def test_handle_packaged_update_finalizes_layout_before_import_verification(monk
     monkeypatch.setattr(
         update,
         "write_restart_required_marker",
-        lambda from_version, to_version: {"path": f"/tmp/mcp-restart-required-{to_version}.json"},
+        lambda from_version, to_version, **_kw: {"path": f"/tmp/mcp-restart-required-{to_version}.json"},
     )
 
     def fake_run(args, **kwargs):
@@ -422,6 +422,145 @@ def test_handle_packaged_update_finalizes_layout_before_import_verification(monk
 
     assert "UPDATE SUCCESSFUL (packaged install)" in result
     assert call_order[:2] == ["finalize", "verify"]
+
+
+def _common_packaged_update_stubs(monkeypatch, update, versions):
+    monkeypatch.setattr(update, "_read_version", lambda: next(versions))
+    monkeypatch.setattr(update, "_backup_databases", lambda: ("backup-dir", None))
+    monkeypatch.setattr(update, "_backup_code_tree", lambda: ("code-backup", None))
+    monkeypatch.setattr(update, "_reinstall_pip_deps", lambda: None)
+    monkeypatch.setattr(update, "_run_migrations", lambda: None)
+    monkeypatch.setattr(update, "_verify_import", lambda: None)
+    monkeypatch.setattr(update, "_finalize_packaged_runtime_layout", lambda: (True, None))
+    monkeypatch.setattr(update, "_sync_packaged_crons", lambda progress_fn=None: (True, None))
+    monkeypatch.setattr(update, "_sync_hooks_to_home", lambda: None)
+    monkeypatch.setattr(update, "_cleanup_retired_runtime_files", lambda: [])
+    monkeypatch.setattr(update, "_update_runtime_dependencies", lambda progress_fn=None: [])
+    monkeypatch.setattr(update, "_sync_packaged_clients", lambda: (True, None))
+    monkeypatch.setattr(
+        update,
+        "_reload_launch_agents_after_bump",
+        lambda: {"scanned": 1, "reloaded": 1, "errors": []},
+    )
+    monkeypatch.setattr(
+        update,
+        "activate_versioned_runtime_snapshot",
+        lambda source_root, version: {"ok": True, "version": version},
+    )
+
+    def fake_run(args, **kwargs):
+        if args == ["npm", "update", "-g", "nexo-brain"]:
+            return mock.Mock(returncode=0, stdout="", stderr="")
+        raise AssertionError(f"unexpected subprocess call: {args}")
+
+    monkeypatch.setattr(update.subprocess, "run", fake_run)
+
+
+def test_packaged_update_skips_restart_marker_when_fingerprint_unchanged(monkeypatch):
+    """Doc-only / README-only release path: no `.py` byte changed → no restart."""
+    from plugins import update
+
+    versions = iter(["7.10.0", "7.10.1"])
+    _common_packaged_update_stubs(monkeypatch, update, versions)
+    # Same fingerprint before and after → release did not change MCP code.
+    same_fp = "f" * 64
+    monkeypatch.setattr(update, "compute_mcp_runtime_fingerprint", lambda root: same_fp)
+    monkeypatch.setattr(update, "installed_force_restart_flag", lambda: False)
+
+    marker_calls: list[dict] = []
+
+    def fake_marker(**kwargs):
+        marker_calls.append(kwargs)
+        return {"path": "/tmp/should-not-be-written.json"}
+
+    monkeypatch.setattr(update, "write_restart_required_marker", fake_marker)
+
+    result = update._handle_packaged_update(include_clis=False)
+
+    assert "UPDATE SUCCESSFUL (packaged install)" in result
+    assert marker_calls == [], "Doc-only release must NOT write the restart marker"
+    assert "MCP source unchanged" in result
+    assert "no restart needed" in result.lower()
+
+
+def test_packaged_update_writes_marker_when_fingerprint_changes(monkeypatch):
+    """Real code change path: marker IS written, with both fingerprints recorded."""
+    from plugins import update
+
+    versions = iter(["7.10.1", "7.11.0"])
+    _common_packaged_update_stubs(monkeypatch, update, versions)
+    fingerprints = iter(["a" * 64, "b" * 64])
+    monkeypatch.setattr(
+        update, "compute_mcp_runtime_fingerprint", lambda root: next(fingerprints)
+    )
+    monkeypatch.setattr(update, "installed_force_restart_flag", lambda: False)
+
+    marker_calls: list[dict] = []
+
+    def fake_marker(**kwargs):
+        marker_calls.append(kwargs)
+        return {"path": "/tmp/mcp-restart-required.json"}
+
+    monkeypatch.setattr(update, "write_restart_required_marker", fake_marker)
+
+    result = update._handle_packaged_update(include_clis=False)
+
+    assert "UPDATE SUCCESSFUL (packaged install)" in result
+    assert len(marker_calls) == 1
+    call = marker_calls[0]
+    assert call["from_fingerprint"] == "a" * 64
+    assert call["to_fingerprint"] == "b" * 64
+    assert call["reason"] == "brain_update"
+    assert "MCP server restart needed to load new code." in result
+
+
+def test_packaged_update_force_restart_flag_writes_marker_even_when_unchanged(monkeypatch):
+    """Opt-in escape hatch: `force_restart: true` in version.json → always restart."""
+    from plugins import update
+
+    versions = iter(["7.10.1", "7.11.0"])
+    _common_packaged_update_stubs(monkeypatch, update, versions)
+    same_fp = "f" * 64
+    monkeypatch.setattr(update, "compute_mcp_runtime_fingerprint", lambda root: same_fp)
+    monkeypatch.setattr(update, "installed_force_restart_flag", lambda: True)
+
+    marker_calls: list[dict] = []
+
+    def fake_marker(**kwargs):
+        marker_calls.append(kwargs)
+        return {"path": "/tmp/forced.json"}
+
+    monkeypatch.setattr(update, "write_restart_required_marker", fake_marker)
+
+    result = update._handle_packaged_update(include_clis=False)
+
+    assert "UPDATE SUCCESSFUL (packaged install)" in result
+    assert len(marker_calls) == 1
+    assert marker_calls[0]["reason"] == "brain_update_force"
+
+
+def test_packaged_update_missing_fingerprint_falls_back_to_restart(monkeypatch):
+    """When fingerprint can't be computed, behave like the legacy path: write marker."""
+    from plugins import update
+
+    versions = iter(["7.10.1", "7.11.0"])
+    _common_packaged_update_stubs(monkeypatch, update, versions)
+    monkeypatch.setattr(update, "compute_mcp_runtime_fingerprint", lambda root: "")
+    monkeypatch.setattr(update, "installed_force_restart_flag", lambda: False)
+
+    marker_calls: list[dict] = []
+
+    def fake_marker(**kwargs):
+        marker_calls.append(kwargs)
+        return {"path": "/tmp/fallback.json"}
+
+    monkeypatch.setattr(update, "write_restart_required_marker", fake_marker)
+
+    result = update._handle_packaged_update(include_clis=False)
+
+    assert "UPDATE SUCCESSFUL (packaged install)" in result
+    # Conservative fallback (#186): missing fingerprint → assume MCP changed.
+    assert len(marker_calls) == 1
 
 
 def test_packaged_installer_discovers_root_python_modules_for_migration():

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -14,8 +15,25 @@ import paths
 
 
 CONTINUITY_API_LEVEL = 1
-MCP_STATUS_SCHEMA_VERSION = 1
+MCP_STATUS_SCHEMA_VERSION = 2
 PROCESS_VERSION = ""
+PROCESS_FINGERPRINT = ""
+
+# Subtrees under the runtime source root that are NOT loaded by the running
+# MCP server process (subprocess scripts, test fixtures, migrations executed
+# out-of-process, cron entry points spawned separately). Any change limited
+# to these directories should NOT force a restart of running MCP clients.
+# Anything else under the runtime root (server.py, cli.py, plugins/*, helpers)
+# is included in the fingerprint by default.
+_FINGERPRINT_EXCLUDE_DIRS = frozenset({
+    "scripts",
+    "tests",
+    "migrations",
+    "crons",
+    "__pycache__",
+    "node_modules",
+    ".git",
+})
 RESTART_CLIENT_ACTIONS = {
     "claude_desktop": "restart_client_required",
     "claude_code": "restart_session_required",
@@ -170,6 +188,132 @@ def installed_runtime_version() -> str:
     return ""
 
 
+def installed_force_restart_flag() -> bool:
+    """Read explicit `force_restart` opt-in from version.json/package.json.
+
+    A release that touches behavior in subtle ways (config schema, runtime
+    contract) but happens not to change any tracked MCP source byte can still
+    force a restart by setting `force_restart: true` in version.json. Default
+    is False — fingerprint is the source of truth.
+    """
+    for candidate in [active_runtime_root(), paths.home()]:
+        for vfile in _candidate_version_files(candidate):
+            try:
+                if vfile.is_file():
+                    payload = json.loads(vfile.read_text(encoding="utf-8"))
+                    if isinstance(payload, dict) and bool(payload.get("force_restart")):
+                        return True
+            except Exception:
+                continue
+    return False
+
+
+def _iter_runtime_source_files(src_dir: Path) -> list[Path]:
+    """Return MCP-loaded `.py` files under `src_dir`, sorted by relative path."""
+    out: list[Path] = []
+    if not src_dir or not src_dir.is_dir():
+        return out
+    for path in src_dir.rglob("*.py"):
+        try:
+            rel = path.relative_to(src_dir)
+        except ValueError:
+            continue
+        if any(seg in _FINGERPRINT_EXCLUDE_DIRS for seg in rel.parts):
+            continue
+        out.append(path)
+    out.sort(key=lambda p: p.relative_to(src_dir).as_posix())
+    return out
+
+
+def compute_mcp_runtime_fingerprint(src_dir: Path | None = None) -> str:
+    """Hash of every Python source file the running MCP can import.
+
+    Returns a sha256 hex digest, or "" when the source tree cannot be located
+    or read (caller treats empty as "fingerprint unavailable" and falls back
+    to the version-string mismatch check).
+
+    Includes:
+      * every `.py` under the runtime root
+    Excludes:
+      * subtrees in `_FINGERPRINT_EXCLUDE_DIRS` (scripts/, tests/, migrations/,
+        crons/, __pycache__/, node_modules/, .git/)
+      * non-`.py` assets (docs, blogs, READMEs, JSON/YAML configs, templates,
+        CHANGELOG, marketing files) — these never affect what the live MCP
+        process executes
+    """
+    if src_dir is None:
+        candidates: list[Path] = []
+        try:
+            here = Path(__file__).resolve().parent
+            candidates.append(here)
+        except Exception:
+            pass
+        try:
+            root = active_runtime_root()
+            if root and root not in candidates:
+                candidates.append(root)
+        except Exception:
+            pass
+        try:
+            home = paths.home()
+            if home and home not in candidates:
+                candidates.append(home)
+        except Exception:
+            pass
+        for cand in candidates:
+            if (cand / "server.py").is_file() or (cand / "cli.py").is_file():
+                src_dir = cand
+                break
+        if src_dir is None:
+            return ""
+
+    files = _iter_runtime_source_files(src_dir)
+    if not files:
+        return ""
+    h = hashlib.sha256()
+    for path in files:
+        try:
+            rel = path.relative_to(src_dir).as_posix()
+        except ValueError:
+            continue
+        h.update(rel.encode("utf-8"))
+        h.update(b"\x00")
+        try:
+            h.update(path.read_bytes())
+        except Exception:
+            return ""
+        h.update(b"\n")
+    return h.hexdigest()
+
+
+def installed_runtime_fingerprint() -> str:
+    """Fingerprint of whatever runtime source tree is on disk right now."""
+    candidates: list[Path] = []
+    try:
+        root = active_runtime_root()
+        if root:
+            candidates.append(root)
+    except Exception:
+        pass
+    try:
+        home = paths.home()
+        if home and home not in candidates:
+            candidates.append(home)
+    except Exception:
+        pass
+    try:
+        here = Path(__file__).resolve().parent
+        if here not in candidates:
+            candidates.append(here)
+    except Exception:
+        pass
+    for cand in candidates:
+        fp = compute_mcp_runtime_fingerprint(cand)
+        if fp:
+            return fp
+    return ""
+
+
 def read_restart_required_marker() -> dict:
     path = restart_required_marker_path()
     if not path.exists():
@@ -198,6 +342,8 @@ def write_restart_required_marker(
     to_version: str,
     reason: str = "brain_update",
     client: str = "",
+    from_fingerprint: str = "",
+    to_fingerprint: str = "",
 ) -> dict:
     path = restart_required_marker_path()
     payload = {
@@ -205,6 +351,8 @@ def write_restart_required_marker(
         "required": True,
         "from_version": str(from_version or "").strip(),
         "to_version": str(to_version or "").strip(),
+        "from_fingerprint": str(from_fingerprint or "").strip(),
+        "to_fingerprint": str(to_fingerprint or "").strip(),
         "reason": str(reason or "brain_update"),
         "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "clients": _restart_clients_for_marker(client=client),
@@ -264,7 +412,14 @@ def activate_versioned_runtime_snapshot(*, source_root: Path | None = None, vers
     }
 
 
-def clear_restart_required_marker(*, client: str = "", installed_version: str = "", process_version: str = "") -> dict:
+def clear_restart_required_marker(
+    *,
+    client: str = "",
+    installed_version: str = "",
+    process_version: str = "",
+    installed_fingerprint: str = "",
+    process_fingerprint: str = "",
+) -> dict:
     client = _normalize_restart_client(client)
     path = restart_required_marker_path()
     marker = read_restart_required_marker()
@@ -285,10 +440,31 @@ def clear_restart_required_marker(*, client: str = "", installed_version: str = 
     pending_clients = {k: v for k, v in clients.items() if v != "ok"}
     effective_installed = str(installed_version or payload.get("to_version") or "").strip()
     effective_process = str(process_version or "").strip()
+    effective_installed_fp = str(
+        installed_fingerprint or payload.get("to_fingerprint") or ""
+    ).strip()
+    effective_process_fp = str(
+        process_fingerprint or PROCESS_FINGERPRINT or ""
+    ).strip()
     if pending_clients:
         _write_json_atomic(path, payload)
         return {"ok": True, "cleared": False, "path": str(path), "pending_clients": pending_clients}
-    if effective_installed and effective_process and effective_installed != effective_process:
+    # Prefer fingerprint match when both sides have it; fall back to version
+    # comparison only when one side is missing or unknown.
+    if (
+        effective_installed_fp
+        and effective_process_fp
+        and effective_process_fp != "unknown"
+    ):
+        if effective_installed_fp != effective_process_fp:
+            _write_json_atomic(path, payload)
+            return {
+                "ok": True,
+                "cleared": False,
+                "path": str(path),
+                "pending_reason": "process_fingerprint_mismatch",
+            }
+    elif effective_installed and effective_process and effective_installed != effective_process:
         _write_json_atomic(path, payload)
         return {
             "ok": True,
@@ -303,15 +479,25 @@ def clear_restart_required_marker(*, client: str = "", installed_version: str = 
     return {"ok": True, "cleared": True, "path": str(path)}
 
 
-def resolve_restart_required(*, client: str = "", installed_version: str = "", process_version: str = "") -> dict:
+def resolve_restart_required(
+    *,
+    client: str = "",
+    installed_version: str = "",
+    process_version: str = "",
+    installed_fingerprint: str = "",
+    process_fingerprint: str = "",
+) -> dict:
     client = _normalize_restart_client(client)
     marker = read_restart_required_marker()
     installed = str(installed_version or installed_runtime_version() or "").strip()
     process = str(process_version or PROCESS_VERSION or installed).strip()
+    installed_fp = str(installed_fingerprint or installed_runtime_fingerprint() or "").strip()
+    process_fp = str(process_fingerprint or PROCESS_FINGERPRINT or "").strip()
     restart_required = False
     reason = ""
     client_action = ""
     marker_clients = dict(marker.get("clients") or {})
+    fingerprint_usable = bool(installed_fp) and bool(process_fp) and process_fp != "unknown"
 
     if marker.get("required"):
         restart_required = True
@@ -320,7 +506,16 @@ def resolve_restart_required(*, client: str = "", installed_version: str = "", p
     if marker.get("corrupt"):
         restart_required = True
         reason = "marker_corrupt"
-    elif installed and process and installed != process:
+    elif fingerprint_usable and installed_fp != process_fp:
+        # Primary signal: the bytes the running process loaded differ from the
+        # bytes currently on disk. Doc-only / blog-only releases produce no
+        # fingerprint change and therefore never reach this branch.
+        restart_required = True
+        reason = reason or "fingerprint_mismatch"
+    elif not fingerprint_usable and installed and process and installed != process:
+        # Fallback: when fingerprint can't be computed (missing source tree,
+        # unreadable files, fresh install), fall back to the legacy version
+        # mismatch check so we never leave a stale process running unnoticed.
         restart_required = True
         reason = reason or "version_mismatch"
     elif client and client_action == "ok":
@@ -334,6 +529,8 @@ def resolve_restart_required(*, client: str = "", installed_version: str = "", p
         "marker": marker,
         "installed_version": installed,
         "process_version": process,
+        "installed_fingerprint": installed_fp,
+        "process_fingerprint": process_fp,
     }
 
 
@@ -341,12 +538,22 @@ def build_mcp_status(*, client: str = "") -> dict:
     client = _normalize_restart_client(client)
     state = resolve_restart_required(client=client)
     marker = state["marker"]
+    installed_fp = state.get("installed_fingerprint", "")
+    process_fp = state.get("process_fingerprint", "")
     return {
         "ok": True,
         "schema_version": MCP_STATUS_SCHEMA_VERSION,
         "client": str(client or "").strip(),
         "installed_version": state["installed_version"],
         "process_version": state["process_version"],
+        "installed_fingerprint": installed_fp,
+        "process_fingerprint": process_fp,
+        "fingerprint_match": (
+            bool(installed_fp)
+            and bool(process_fp)
+            and process_fp != "unknown"
+            and installed_fp == process_fp
+        ),
         "active_runtime_root": str(active_runtime_root()),
         "active_runtime_version": read_version_for_path(active_runtime_root()),
         "restart_required": bool(state["restart_required"]),
@@ -377,6 +584,46 @@ def prime_process_version() -> str:
     return PROCESS_VERSION
 
 
+def prime_process_fingerprint() -> str:
+    """Cache the fingerprint of the source tree this process was loaded from.
+
+    Idempotent. Called once at MCP server startup. After that, the cached
+    value reflects what the live process has actually imported, regardless of
+    what is later written to disk by `nexo update`.
+
+    Returns the cached digest (sha256 hex) or the literal string `"unknown"`
+    when the source tree cannot be located/read at startup time.
+    """
+    global PROCESS_FINGERPRINT
+    if PROCESS_FINGERPRINT:
+        return PROCESS_FINGERPRINT
+    candidates: list[Path] = []
+    try:
+        here = Path(__file__).resolve().parent
+        candidates.append(here)
+    except Exception:
+        pass
+    try:
+        root = active_runtime_root()
+        if root and root not in candidates:
+            candidates.append(root)
+    except Exception:
+        pass
+    try:
+        home = paths.home()
+        if home and home not in candidates:
+            candidates.append(home)
+    except Exception:
+        pass
+    for cand in candidates:
+        fp = compute_mcp_runtime_fingerprint(cand)
+        if fp:
+            PROCESS_FINGERPRINT = fp
+            return PROCESS_FINGERPRINT
+    PROCESS_FINGERPRINT = "unknown"
+    return PROCESS_FINGERPRINT
+
+
 @dataclass
 class RestartRequiredMiddleware(Middleware):
     client: str = ""
@@ -389,18 +636,31 @@ class RestartRequiredMiddleware(Middleware):
             return state
         installed = str(state.get("installed_version") or "").strip()
         process = str(state.get("process_version") or "").strip()
-        if not installed or not process or installed != process:
-            return state
+        installed_fp = str(state.get("installed_fingerprint") or "").strip()
+        process_fp = str(state.get("process_fingerprint") or "").strip()
+        fingerprint_usable = (
+            bool(installed_fp) and bool(process_fp) and process_fp != "unknown"
+        )
+        if fingerprint_usable:
+            if installed_fp != process_fp:
+                return state
+        else:
+            if not installed or not process or installed != process:
+                return state
 
         clear_restart_required_marker(
             client=self.client,
             installed_version=installed,
             process_version=process,
+            installed_fingerprint=installed_fp,
+            process_fingerprint=process_fp,
         )
         return resolve_restart_required(
             client=self.client,
             installed_version=installed,
             process_version=process,
+            installed_fingerprint=installed_fp,
+            process_fingerprint=process_fp,
         )
 
     async def _tool_result_for_restart_required(self, context, payload: dict) -> ToolResult:
