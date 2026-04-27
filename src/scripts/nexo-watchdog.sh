@@ -531,6 +531,183 @@ json_escape() {
 }
 
 # ============================================================================
+# STUCK CRON REAPER (v7.11.2)
+# ============================================================================
+# Mirror image of the v5.8.1 in-flight detection. The v5.8.1 fix taught the
+# watchdog to leave running jobs alone when their cron_runs row was open
+# (started_at present, ended_at NULL) — that closed the loop where the
+# watchdog kept kickstart -k'ing deep-sleep mid-flight (2026-04-14..17).
+#
+# But the same restraint became the new failure mode: when a wrapper child
+# truly hangs (e.g. headless `claude --bare` blocked on an MCP that flagged
+# `mcp_restart_required`), the row stays open forever, no new tick can run
+# (the next wrapper sees "Another instance running. Skipping"), and the
+# watchdog's only response was WARN. Morning brief, followup runner, and
+# orchestrator-v2 went silent for days because of this.
+#
+# The reaper closes that gap without bringing back the v5.8.1 bug:
+#   * Per-cron threshold via `stuck_after_seconds` in manifest.json.
+#   * Generous default (12h) so legitimate long jobs keep running.
+#   * Override deep-sleep to 8h, sleep/evolution to 4h — well above their
+#     real worst-case so the v5.8.1 incident cannot repeat.
+#   * Reaper sends SIGTERM to the wrapper — its trap (line 187) closes the
+#     cron_runs row exit_code=143 and propagates to the child. Only after
+#     a 10s grace does it escalate to SIGKILL on wrapper + descendants.
+#   * If no wrapper PID is alive (orphan row), the reaper just closes the
+#     row in-band with exit_code=137 so the next tick can run.
+# ============================================================================
+
+STUCK_DEFAULT_SECONDS="${STUCK_DEFAULT_SECONDS:-43200}"  # 12h
+STUCK_KILL_GRACE="${STUCK_KILL_GRACE:-10}"
+TOTAL_REAPED=0
+
+# Skip cron_ids that should never be reaped from inside a watchdog tick.
+# 'watchdog' is us — reaping ourselves would be self-immolation.
+STUCK_REAPER_SKIP="watchdog"
+
+_build_stuck_thresholds_from_manifest() {
+  if [ ! -f "$MANIFEST_FILE" ]; then
+    return
+  fi
+  python3 - "$MANIFEST_FILE" <<'PY' 2>/dev/null
+import json, sys
+try:
+    with open(sys.argv[1]) as f:
+        data = json.load(f)
+except Exception:
+    sys.exit(0)
+for c in data.get('crons', []):
+    cid = c.get('id')
+    th = c.get('stuck_after_seconds')
+    if cid and isinstance(th, (int, float)) and th > 0:
+        print(f"{cid}|{int(th)}")
+PY
+}
+
+STUCK_THRESHOLDS_RAW=""
+_load_stuck_thresholds() {
+  STUCK_THRESHOLDS_RAW=$(_build_stuck_thresholds_from_manifest)
+}
+
+lookup_stuck_threshold() {
+  local cron_id="$1"
+  if [ -z "$STUCK_THRESHOLDS_RAW" ]; then
+    echo "$STUCK_DEFAULT_SECONDS"
+    return
+  fi
+  local line
+  line=$(echo "$STUCK_THRESHOLDS_RAW" | grep "^${cron_id}|" | head -1)
+  if [ -n "$line" ]; then
+    echo "$line" | cut -d'|' -f2
+  else
+    echo "$STUCK_DEFAULT_SECONDS"
+  fi
+}
+
+find_wrapper_pids() {
+  local cron_id="$1"
+  # Match the wrapper's exact arg slot: "nexo-cron-wrapper.sh CRON_ID "
+  # The trailing space prevents prefix collisions (e.g. "morning-agent" vs
+  # a hypothetical "morning-agent-v2").
+  pgrep -f "nexo-cron-wrapper\.sh ${cron_id} " 2>/dev/null
+}
+
+reap_stuck_cron_pids() {
+  local cron_id="$1"
+  local pids
+  pids=$(find_wrapper_pids "$cron_id")
+  if [ -z "$pids" ]; then
+    # No wrapper alive — caller should fall through to in-band row cleanup.
+    return 1
+  fi
+  log_repair "STUCK REAPER: SIGTERM to wrapper PIDs ($cron_id): $(echo "$pids" | tr '\n' ' ')"
+  for pid in $pids; do
+    kill -TERM "$pid" 2>/dev/null || true
+  done
+  # Grace period — the wrapper trap (TERM → forward to child → finalize_row)
+  # needs a few seconds to close the cron_runs row cleanly.
+  local waited=0
+  local still
+  while [ $waited -lt "$STUCK_KILL_GRACE" ]; do
+    sleep 1
+    waited=$((waited + 1))
+    still=$(find_wrapper_pids "$cron_id")
+    [ -z "$still" ] && break
+  done
+  # Escalate to SIGKILL for any survivor (wrapper + descendants).
+  local survivors
+  survivors=$(find_wrapper_pids "$cron_id")
+  if [ -n "$survivors" ]; then
+    log_repair "STUCK REAPER: SIGKILL escalation ($cron_id): $(echo "$survivors" | tr '\n' ' ')"
+    for pid in $survivors; do
+      # Kill descendants first so they don't get reparented to PID 1.
+      pkill -KILL -P "$pid" 2>/dev/null || true
+      kill -KILL "$pid" 2>/dev/null || true
+    done
+    sleep 1
+  fi
+  # Last sanity check.
+  if [ -n "$(find_wrapper_pids "$cron_id")" ]; then
+    log "STUCK REAPER: failed to kill wrapper for $cron_id (still alive after SIGKILL)"
+    return 2
+  fi
+  return 0
+}
+
+finalize_stuck_db_row() {
+  local row_id="$1"
+  local cron_id="$2"
+  [ ! -f "$DB_PATH" ] && return 1
+  sqlite3 "$DB_PATH" "
+    UPDATE cron_runs
+       SET ended_at = strftime('%Y-%m-%d %H:%M:%S','now'),
+           exit_code = 137,
+           summary = 'stuck row reaped by watchdog: wrapper PID gone',
+           error = 'Watchdog STUCK REAPER: orphan in-flight row cleaned up',
+           duration_secs = CAST(strftime('%s','now') - strftime('%s', started_at) AS REAL)
+     WHERE id = $row_id;
+  " 2>/dev/null
+  log_repair "STUCK REAPER: cleaned up zombie cron_runs row id=$row_id ($cron_id)"
+}
+
+run_stuck_reaper() {
+  [ ! -f "$DB_PATH" ] && return 0
+  _load_stuck_thresholds
+  local row_id cron_id age_secs threshold
+  while IFS='|' read -r row_id cron_id age_secs; do
+    [ -z "$row_id" ] && continue
+    [ -z "$cron_id" ] && continue
+    # Skip self and any explicitly-protected cron_ids.
+    case " $STUCK_REAPER_SKIP " in
+      *" $cron_id "*) continue ;;
+    esac
+    threshold=$(lookup_stuck_threshold "$cron_id")
+    if [ "$age_secs" -gt "$threshold" ]; then
+      log "STUCK REAPER: cron_id=$cron_id row_id=$row_id age=${age_secs}s threshold=${threshold}s — reaping"
+      if reap_stuck_cron_pids "$cron_id"; then
+        # Wrapper trap closes the row with exit 143; nothing else to do.
+        TOTAL_REAPED=$((TOTAL_REAPED + 1))
+      else
+        # No wrapper alive (orphan zombie row) — close it in-band so the
+        # next tick of this cron isn't blocked by "Another instance running".
+        finalize_stuck_db_row "$row_id" "$cron_id"
+        TOTAL_REAPED=$((TOTAL_REAPED + 1))
+      fi
+    fi
+  done < <(sqlite3 -separator '|' "$DB_PATH" "
+    SELECT id, cron_id, CAST(strftime('%s','now') - strftime('%s', started_at) AS INTEGER)
+      FROM cron_runs
+     WHERE ended_at IS NULL
+     ORDER BY id DESC;
+  " 2>/dev/null)
+  if [ "$TOTAL_REAPED" -gt 0 ]; then
+    log "STUCK REAPER: complete — reaped $TOTAL_REAPED stuck cron(s)"
+  fi
+}
+
+run_stuck_reaper
+
+# ============================================================================
 # RUN CHECKS
 # ============================================================================
 
@@ -1023,6 +1200,7 @@ cat > "$STATUS_JSON" <<JSONEOF
     "warn": $TOTAL_WARN,
     "fail": $TOTAL_FAIL,
     "healed": $TOTAL_HEALED,
+    "reaped": $TOTAL_REAPED,
     "overall": "$OVERALL"
   },
   "launch_agents": [
@@ -1047,7 +1225,7 @@ cat > "$REPORT_TXT" <<REPORTEOF
 ======================================================
   NEXO WATCHDOG REPORT — $TS
 ======================================================
-  PASS: $TOTAL_PASS  |  HEALED: $TOTAL_HEALED  |  WARN: $TOTAL_WARN  |  FAIL: $TOTAL_FAIL  |  TOTAL: $TOTAL
+  PASS: $TOTAL_PASS  |  HEALED: $TOTAL_HEALED  |  WARN: $TOTAL_WARN  |  FAIL: $TOTAL_FAIL  |  REAPED: $TOTAL_REAPED  |  TOTAL: $TOTAL
   OVERALL: $OVERALL
 ======================================================
 
@@ -1261,4 +1439,4 @@ fi
 # ============================================================================
 # LOG SUMMARY
 # ============================================================================
-log "Complete: PASS=$TOTAL_PASS HEALED=$TOTAL_HEALED WARN=$TOTAL_WARN FAIL=$TOTAL_FAIL"
+log "Complete: PASS=$TOTAL_PASS HEALED=$TOTAL_HEALED WARN=$TOTAL_WARN FAIL=$TOTAL_FAIL REAPED=$TOTAL_REAPED"

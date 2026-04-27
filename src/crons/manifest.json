@@ -13,6 +13,7 @@
       "recovery_policy": "catchup",
       "idempotent": true,
       "max_catchup_age": 172800,
+      "stuck_after_seconds": 28800,
       "run_on_boot": true,
       "run_on_wake": true
     },
@@ -38,6 +39,7 @@
       "recovery_policy": "catchup",
       "idempotent": true,
       "max_catchup_age": 172800,
+      "stuck_after_seconds": 14400,
       "run_on_boot": true,
       "run_on_wake": true
     },
@@ -140,6 +142,7 @@
       "recovery_policy": "catchup",
       "idempotent": true,
       "max_catchup_age": 1209600,
+      "stuck_after_seconds": 14400,
       "run_on_boot": true,
       "run_on_wake": true
     },
@@ -295,6 +298,7 @@
       "recovery_policy": "run_once_on_wake",
       "idempotent": true,
       "max_catchup_age": 1200,
+      "stuck_after_seconds": 600,
       "run_on_boot": false,
       "run_on_wake": true
     },
@@ -308,6 +312,7 @@
       "recovery_policy": "run_once_on_wake",
       "idempotent": true,
       "max_catchup_age": 7200,
+      "stuck_after_seconds": 1800,
       "run_on_boot": false,
       "run_on_wake": true
     },
@@ -321,6 +326,7 @@
       "recovery_policy": "catchup",
       "idempotent": true,
       "max_catchup_age": 86400,
+      "stuck_after_seconds": 1800,
       "run_on_boot": false,
       "run_on_wake": true
     }

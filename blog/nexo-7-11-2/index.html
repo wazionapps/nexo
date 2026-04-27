@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.11.2: Watchdog stuck-cron reaper closes the in-flight gap</title>
+<meta name="description" content="NEXO Brain v7.11.2 adds a STUCK CRON REAPER to the watchdog. The v5.8.1 in-flight detection stopped the watchdog from killing running jobs (the deep-sleep loop incident). The same restraint silently let truly hung wrappers block their own next tick for days. The reaper closes the gap with per-cron stuck_after_seconds thresholds — generous defaults so the v5.8.1 bug cannot recur.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-11-2/">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.11.2: Watchdog stuck-cron reaper closes the in-flight gap","datePublished":"2026-04-27","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head><body><main><article style="max-width:760px;margin:80px auto;padding:0 24px;line-height:1.75;">
+<h1>NEXO 7.11.2 &mdash; Watchdog stuck-cron reaper closes the in-flight gap</h1>
+<p><em>Published 2026-04-27. Patch release over v7.11.1 — pure reliability fix, no API change.</em></p>
+
+<h2>Why</h2>
+<p>v5.8.1 taught the watchdog to leave running jobs alone. Every cron now opens a row in <code>cron_runs</code> at start (<code>started_at</code> set, <code>ended_at NULL</code>) and the watchdog reads that row to tell <em>currently running</em> from <em>missed/stuck</em>. That fix closed the loop where the watchdog kept <code>kickstart -k</code>'ing <code>deep-sleep</code> mid-flight (2026-04-14 to 2026-04-17), killing the worker that was actually doing the job.</p>
+
+<p>The same restraint became the next failure mode. When a wrapper child <em>genuinely</em> hangs &mdash; e.g. headless <code>claude --bare</code> blocked on an MCP that flagged <code>mcp_restart_required</code> after a brain update &mdash; the row stays open forever. The next tick reads the same flag and skips with <code>Another instance running. Skipping</code>. The watchdog only logged WARN. <code>morning-agent</code>, <code>followup-runner</code> and <code>orchestrator-v2</code> went silent for days (2026-04-24 to 2026-04-27) for exactly this reason: a single zombi wrapper held the slot indefinitely and nothing was authorized to evict it.</p>
+
+<h2>What changed</h2>
+<p>A new sweep <code>run_stuck_reaper()</code> runs at the top of every watchdog tick, before the per-monitor loop. It reads every <code>cron_runs</code> row with <code>ended_at IS NULL</code> and compares its age to the per-cron threshold from <code>stuck_after_seconds</code> in <code>src/crons/manifest.json</code>. Anything past threshold gets reaped:</p>
+
+<ul>
+  <li><strong>Live wrapper.</strong> The reaper sends <code>SIGTERM</code> to the wrapper PID (<code>pgrep -f "nexo-cron-wrapper.sh CRON_ID "</code>). The wrapper's existing trap catches it, forwards to the child, and runs <code>finalize_row</code> &mdash; the row closes cleanly with <code>exit_code=143</code>. After a 10-second grace, any survivor (wrapper plus descendants) gets <code>SIGKILL</code> via <code>pkill -KILL -P</code>.</li>
+  <li><strong>Orphan zombi row.</strong> Wrapper PID gone, row still NULL. Without intervention the next tick still skips (<code>Another instance running</code>). The reaper closes it in-band: <code>ended_at=now</code>, <code>exit_code=137</code>, <code>summary='stuck row reaped by watchdog: wrapper PID gone'</code>.</li>
+</ul>
+
+<h2>Why the v5.8.1 bug cannot recur</h2>
+<p>Two safeguards keep <code>deep-sleep</code> safe:</p>
+<ol>
+  <li><strong>Generous default.</strong> <code>STUCK_DEFAULT_SECONDS=43200</code> (12h). Any cron not in the manifest gets the global default, well above any legitimate worst case.</li>
+  <li><strong>Explicit per-cron overrides for known long-runners.</strong> <code>deep-sleep: 28800</code> (8h), <code>sleep: 14400</code> (4h), <code>evolution: 14400</code> (4h, weekly heavy run). Short-runners get tighter bounds: <code>morning-agent: 1800</code>, <code>followup-runner: 1800</code>, <code>email-monitor: 600</code>.</li>
+</ol>
+
+<p><code>cron_id='watchdog'</code> is hard-coded into <code>STUCK_REAPER_SKIP</code>: the watchdog can never reap itself mid-tick.</p>
+
+<h2>Observability</h2>
+<p>New counter <code>TOTAL_REAPED</code> exposed in three places: <code>watchdog-status.json</code> (<code>summary.reaped</code>), the human report header (<code>REAPED:</code>), and the final log line (<code>REAPED=N</code>). When the sweep does nothing, none of these show motion &mdash; you only see action when something genuinely needed reaping.</p>
+
+<h2>Tests</h2>
+<p>6 new tests in <code>tests/test_watchdog_stuck_reaper.py</code>: fresh in-flight row left alone (v5.8.1 regression guard), per-cron threshold respected (<code>deep-sleep</code> 8h not reaped at 4h), orphan zombi row cleaned in-band with <code>exit_code=137</code>, real wrapper killed via SIGTERM with the trap closing the row at <code>exit_code=143</code>, <code>cron_id='watchdog'</code> never reaped, default 12h threshold applied to crons not in manifest. The 3 existing watchdog tests stay green: 9 watchdog tests pass total.</p>
+
+<p><a href="/changelog/#v7112">Full changelog entry &rarr;</a> &middot; <a href="https://github.com/wazionapps/nexo/blob/main/src/scripts/nexo-watchdog.sh">src/scripts/nexo-watchdog.sh</a></p>
+</article></main></body></html>
