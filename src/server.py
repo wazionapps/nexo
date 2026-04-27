@@ -94,6 +94,7 @@ from tools_guardian import handle_guardian_rule_override
 from runtime_versioning import (
     RestartRequiredMiddleware,
     build_mcp_status,
+    prime_process_fingerprint,
     prime_process_version,
 )
 
@@ -276,6 +277,7 @@ mcp = FastMCP(
     ),
 )
 prime_process_version()
+prime_process_fingerprint()
 mcp.add_middleware(
     RestartRequiredMiddleware(client=str(os.environ.get("NEXO_MCP_CLIENT", "") or "").strip())
 )

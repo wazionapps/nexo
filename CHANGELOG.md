@@ -1,5 +1,28 @@
 # Changelog
 
+## [7.11.0] - 2026-04-27
+
+### Added
+- **Runtime fingerprint to gate restart-required marker.** Before this release every `nexo update` that bumped `version.json` forced every connected MCP client to restart its session, even when the new release was byte-identical to the running code at the Python level (cf. v7.10.1, a README-only release). The runtime now computes a `sha256` digest over every `.py` file under `src/` that the live server can import (excluding `scripts/`, `tests/`, `migrations/`, `crons/`, `__pycache__/`, `node_modules/`, `.git/`) and only writes `mcp-restart-required.json` when that fingerprint changes between the pre-update and post-update trees. Doc-only / blog-only / changelog-only releases now skip the marker entirely.
+  - New helpers in `src/runtime_versioning.py`: `compute_mcp_runtime_fingerprint(src_dir=None)`, `installed_runtime_fingerprint()`, `prime_process_fingerprint()`, `installed_force_restart_flag()`. Module-level cache `PROCESS_FINGERPRINT` is primed in `server.py` next to `PROCESS_VERSION` so a running MCP always knows what bytes it loaded from.
+  - `resolve_restart_required()` now uses fingerprint match as the primary signal and falls back to version-string mismatch (legacy behavior) only when the fingerprint cannot be computed on either side. The `version_match` field in `build_mcp_status()` output is preserved; new fields `installed_fingerprint`, `process_fingerprint`, `fingerprint_match` are added.
+  - `plugins/update.py` captures the pre-update fingerprint before `git pull` / `npm update` and the post-update fingerprint after the new code is in place. The marker is only written when `version_changed and (mcp_code_changed or force_restart)`. The user-visible result line now reads `MCP source unchanged (no .py byte changed) — no restart needed.` for doc-only releases.
+  - `mcp-restart-required.json` schema bumped to version 2 with new optional fields `from_fingerprint` / `to_fingerprint`. The reader is backwards-compatible with v1 markers in the wild.
+  - Conservative fallback honored (#186): if either fingerprint is missing/unreadable, behave like the legacy path and force a restart.
+  - Explicit opt-in escape hatch: setting `"force_restart": true` in `version.json` for a specific release writes the marker even when the fingerprint matches. Reason field becomes `brain_update_force`.
+
+### Documented
+- `docs/runtime-fingerprint.md` — full mental model, behavior matrix, releaser guidance, inspection tips, fallback semantics.
+
+### Tests
+- `tests/test_runtime_fingerprint.py` — 14 new tests covering determinism, doc-only-no-shift, exclusion of `scripts`/`tests`/`migrations`/`crons`/`__pycache__`, missing-dir empty-string, fingerprint-match no-restart, fingerprint-mismatch restart, fallback to version mismatch, marker-always-wins, `force_restart` flag opt-in.
+- `tests/test_packaged_update_runtime.py` — 4 new tests on `_handle_packaged_update`: no marker on unchanged fingerprint, marker on real change with both fingerprints recorded, force-restart flag still writes marker, missing fingerprint falls back to writing marker.
+- Existing `write_restart_required_marker` stubs widened to accept the new keyword arguments.
+
+### Verification
+- `pytest tests/` full suite green.
+- The repo's release-readiness gate (`scripts/verify_release_readiness.py --ci`) runs as part of the release pipeline.
+
 ## [7.10.1] - 2026-04-26
 
 ### Removed

@@ -12,7 +12,12 @@ import time
 from pathlib import Path
 
 from runtime_home import export_resolved_nexo_home
-from runtime_versioning import activate_versioned_runtime_snapshot, write_restart_required_marker
+from runtime_versioning import (
+    activate_versioned_runtime_snapshot,
+    compute_mcp_runtime_fingerprint,
+    installed_force_restart_flag,
+    write_restart_required_marker,
+)
 
 try:
     from tree_hygiene import is_duplicate_artifact_name
@@ -1066,6 +1071,11 @@ def _reload_launch_agents_after_bump() -> dict:
 def _handle_packaged_update(progress_fn=None, *, include_clis: bool = True) -> str:
     """Update a packaged (npm) install — no git repo available."""
     old_version = _read_version()
+    # Capture pre-update fingerprint of the installed runtime so we can decide
+    # whether the npm payload actually changed any MCP-loaded source byte.
+    # Empty string = "fingerprint unavailable", which the marker logic below
+    # treats as "assume changed" (safe fallback).
+    old_fingerprint = compute_mcp_runtime_fingerprint(_runtime_code_root())
 
     # 0. Pre-flight wipe guard (v5.5.5+)
     _emit_progress(progress_fn, "Checking DB integrity before update...")
@@ -1222,6 +1232,9 @@ def _handle_packaged_update(progress_fn=None, *, include_clis: bool = True) -> s
 
     versioned_runtime_summary = None
     restart_marker_summary = None
+    mcp_code_changed = False
+    force_restart = False
+    new_fingerprint = ""
     if old_version != new_version:
         try:
             _emit_progress(progress_fn, "Activating versioned runtime snapshot...")
@@ -1231,13 +1244,35 @@ def _handle_packaged_update(progress_fn=None, *, include_clis: bool = True) -> s
             )
         except Exception as e:
             errors.append(f"versioned runtime activation: {e}")
+        # Decide whether the new release actually altered any MCP-loaded
+        # source file. Doc-only / blog-only / changelog-only releases keep
+        # the same fingerprint and skip the restart marker entirely.
         try:
-            restart_marker_summary = write_restart_required_marker(
-                from_version=old_version,
-                to_version=new_version,
-            )
-        except Exception as e:
-            errors.append(f"restart marker: {e}")
+            new_fingerprint = compute_mcp_runtime_fingerprint(_runtime_code_root())
+        except Exception:
+            new_fingerprint = ""
+        try:
+            force_restart = installed_force_restart_flag()
+        except Exception:
+            force_restart = False
+        # Conservative default: if either fingerprint is missing, behave as
+        # before and force a restart (#186 — never leave a stale process
+        # silently running new bytes).
+        if not old_fingerprint or not new_fingerprint:
+            mcp_code_changed = True
+        else:
+            mcp_code_changed = old_fingerprint != new_fingerprint
+        if mcp_code_changed or force_restart:
+            try:
+                restart_marker_summary = write_restart_required_marker(
+                    from_version=old_version,
+                    to_version=new_version,
+                    reason="brain_update_force" if (force_restart and not mcp_code_changed) else "brain_update",
+                    from_fingerprint=old_fingerprint,
+                    to_fingerprint=new_fingerprint,
+                )
+            except Exception as e:
+                errors.append(f"restart marker: {e}")
 
     if errors:
         # 5. Full rollback: restore code tree + DBs + pip deps + rollback npm package
@@ -1305,7 +1340,15 @@ def _handle_packaged_update(progress_fn=None, *, include_clis: bool = True) -> s
     if restart_marker_summary:
         lines.append(f"  Restart marker: {restart_marker_summary.get('path')}")
     lines.append("")
-    lines.append("MCP server restart needed to load new code.")
+    if old_version != new_version and not mcp_code_changed and not force_restart:
+        # Doc-only / blog-only / changelog-only release. The bytes the running
+        # MCP imports are byte-identical to what's now on disk, so existing
+        # MCP clients keep working without a forced restart.
+        lines.append(
+            "MCP source unchanged (no `.py` byte changed) — no restart needed."
+        )
+    else:
+        lines.append("MCP server restart needed to load new code.")
     return "\n".join(lines)
 
 
@@ -1361,6 +1404,9 @@ def handle_update(
         # Record current state
         old_version = _read_version()
         old_req_hash = _requirements_hash()
+        # Capture pre-pull fingerprint so we can detect doc-only releases that
+        # bump version.json but never touch a single MCP-loaded `.py` byte.
+        old_fingerprint = compute_mcp_runtime_fingerprint(SRC_DIR)
         rc, old_commit, _ = _git("rev-parse", "HEAD")
         if rc != 0:
             return "ABORTED: Not a git repository or git not available."
@@ -1516,6 +1562,9 @@ def handle_update(
 
         versioned_runtime_summary = None
         restart_marker_summary = None
+        mcp_code_changed = False
+        force_restart = False
+        new_fingerprint = ""
         if version_changed:
             try:
                 _emit_progress(progress_fn, "Activating versioned runtime snapshot...")
@@ -1526,14 +1575,35 @@ def handle_update(
                 steps_done.append("versioned-runtime")
             except Exception as e:
                 raise RuntimeError(f"Versioned runtime activation failed: {e}")
+            # Decide whether the new release actually altered any MCP-loaded
+            # source file. Doc-only / blog-only / changelog-only releases keep
+            # the same fingerprint and skip the restart marker entirely.
             try:
-                restart_marker_summary = write_restart_required_marker(
-                    from_version=old_version,
-                    to_version=new_version,
-                )
-                steps_done.append("restart-marker")
-            except Exception as e:
-                raise RuntimeError(f"Restart marker write failed: {e}")
+                new_fingerprint = compute_mcp_runtime_fingerprint(SRC_DIR)
+            except Exception:
+                new_fingerprint = ""
+            try:
+                force_restart = installed_force_restart_flag()
+            except Exception:
+                force_restart = False
+            # Conservative default: if either fingerprint is missing, treat as
+            # changed and force restart (#186).
+            if not old_fingerprint or not new_fingerprint:
+                mcp_code_changed = True
+            else:
+                mcp_code_changed = old_fingerprint != new_fingerprint
+            if mcp_code_changed or force_restart:
+                try:
+                    restart_marker_summary = write_restart_required_marker(
+                        from_version=old_version,
+                        to_version=new_version,
+                        reason="brain_update_force" if (force_restart and not mcp_code_changed) else "brain_update",
+                        from_fingerprint=old_fingerprint,
+                        to_fingerprint=new_fingerprint,
+                    )
+                    steps_done.append("restart-marker")
+                except Exception as e:
+                    raise RuntimeError(f"Restart marker write failed: {e}")
 
         # Build result
         dep_summary_lines = _format_dep_results(dep_results)
@@ -1570,7 +1640,15 @@ def handle_update(
         if restart_marker_summary:
             lines.append(f"  Restart marker: {restart_marker_summary.get('path')}")
         lines.append("")
-        lines.append("MCP server restart needed to load new code.")
+        if version_changed and not mcp_code_changed and not force_restart:
+            # Doc-only / blog-only / changelog-only release. The bytes the
+            # running MCP imports are byte-identical to what's now on disk, so
+            # existing MCP clients keep working without a forced restart.
+            lines.append(
+                "MCP source unchanged (no `.py` byte changed) — no restart needed."
+            )
+        else:
+            lines.append("MCP server restart needed to load new code.")
         return "\n".join(lines)
 
     except Exception as e:
