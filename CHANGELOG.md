@@ -1,5 +1,21 @@
 # Changelog
 
+## [7.11.1] - 2026-04-27
+
+### Performance
+- **Fingerprint cache by mtime/size signature.** `prime_process_fingerprint()` and `installed_runtime_fingerprint()` now consult `~/.nexo/runtime/operations/fingerprint-cache.json` before re-hashing the runtime tree. The cache key is `(src_dir, file_count, size_total, max_mtime)` over the same set of `.py` files the v7.11.0 fingerprint covers. When the on-disk signature still matches, the cached digest is returned without re-reading any byte. Local benchmark on a 263-file `src/` tree: ~40ms cold → ~3.7ms warm (≈11× speedup). Cumulative win across daily MCP startups (Claude Code, Codex, headless followup-runner, deep-sleep, crons): ~10-20s saved per day.
+  - `compute_mcp_runtime_fingerprint(src_dir, *, use_cache=False)` — new keyword-only parameter. Default stays `False` so `plugins/update.py` always sees ground truth around `git pull` / `npm update`.
+  - Hot callers opt in: `installed_runtime_fingerprint()` (every tool call via `resolve_restart_required`) and `prime_process_fingerprint()` (server startup).
+  - Cache miss is always safe: corrupt JSON, signature drift, missing file → fall through to the full hash and rewrite the cache atomically.
+  - New helpers: `fingerprint_cache_path()`, `_runtime_tree_signature()`, `_read_fingerprint_cache()`, `_write_fingerprint_cache()`.
+
+### Tests
+- `tests/test_runtime_fingerprint.py` — 6 new tests: cache hit skips all `.py` reads (verified by spying on `Path.read_bytes`), cache miss when a `.py` file changes, cache miss when src_dir changes, corrupt cache falls back to full hash and self-repairs, default `use_cache=False` keeps update.py on the ground-truth path, `prime_process_fingerprint` warms the on-disk cache.
+
+### Verification
+- `pytest tests/test_runtime_fingerprint.py tests/test_packaged_update_runtime.py tests/test_runtime_update_contract.py tests/test_continuity_runtime.py` → 53 passed.
+- Local benchmark: cold 39.9ms → warm 3.7ms (10.9× speedup) on the live `src/` tree.
+
 ## [7.11.0] - 2026-04-27
 
 ### Added

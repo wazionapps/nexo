@@ -51,7 +51,7 @@
         "operatingSystem": "macOS, Linux, Windows",
         "url": "https://nexo-brain.com",
         "downloadUrl": "https://www.npmjs.com/package/nexo-brain",
-        "softwareVersion": "7.11.0",
+        "softwareVersion": "7.11.1",
         "license": "https://www.gnu.org/licenses/agpl-3.0",
         "author": {
             "@type": "Organization",
@@ -697,7 +697,7 @@
     <div class="container">
         <div class="hero-badge fade-up">
             <span class="dot"></span>
-            <span id="version-badge">v7.11.0</span> Minor release — runtime fingerprint gates `mcp-restart-required.json`. README-only / blog-only / changelog-only releases no longer force connected MCP clients (Claude Code, Codex, Claude Desktop) to restart. Conservative fallback honored: missing fingerprint = legacy restart. <a href="/changelog/#v7110">Read the v7.11.0 notes</a>.
+            <span id="version-badge">v7.11.1</span> Patch release — fingerprint cache by mtime/size signature. MCP startup and per-tool-call restart check skip the 263-file rehash when disk hasn't changed. ~11× speedup warm path; ~10-20s/day saved across Claude Code / Codex / headless / deep-sleep / cron starts. <a href="/changelog/#v7111">Read the v7.11.1 notes</a>.
         </div>
         <div class="fade-up" style="display:flex;gap:8px;justify-content:center;margin-bottom:12px;">
             <img src="https://img.shields.io/npm/v/nexo-brain?color=7C3AED&label=npm" alt="npm version">

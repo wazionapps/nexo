@@ -160,6 +160,98 @@ def restart_required_marker_path() -> Path:
     return paths.operations_dir() / "mcp-restart-required.json"
 
 
+def fingerprint_cache_path() -> Path:
+    """Where the runtime fingerprint cache lives.
+
+    The cache lets `prime_process_fingerprint()` and `installed_runtime_fingerprint()`
+    skip hashing 200+ source files on every MCP startup / tool call when the
+    runtime tree on disk hasn't changed (same file count, same total size, same
+    max mtime). Invalidates automatically when any source byte changes.
+    """
+    return paths.operations_dir() / "fingerprint-cache.json"
+
+
+def _runtime_tree_signature(src_dir: Path) -> tuple[int, int, float] | None:
+    """Cheap stat-only walk over the fingerprint-tracked tree.
+
+    Returns ``(file_count, size_total, max_mtime)`` or ``None`` when the source
+    tree cannot be traversed. This is the cache key — if it matches, the bytes
+    haven't changed in any way the fingerprint would care about.
+    """
+    try:
+        files = _iter_runtime_source_files(src_dir)
+    except Exception:
+        return None
+    if not files:
+        return None
+    count = 0
+    size_total = 0
+    max_mtime = 0.0
+    for path in files:
+        try:
+            st = path.stat()
+        except Exception:
+            return None
+        count += 1
+        size_total += int(st.st_size)
+        if st.st_mtime > max_mtime:
+            max_mtime = float(st.st_mtime)
+    return (count, size_total, max_mtime)
+
+
+def _read_fingerprint_cache(src_dir: Path) -> str:
+    """Return cached fingerprint when the on-disk signature still matches.
+
+    Empty string means cache miss (corrupt, missing, or signature drifted).
+    Cache miss is always safe — caller falls through to a full hash.
+    """
+    cache_path = fingerprint_cache_path()
+    if not cache_path.is_file():
+        return ""
+    try:
+        payload = json.loads(cache_path.read_text(encoding="utf-8"))
+    except Exception:
+        return ""
+    if not isinstance(payload, dict):
+        return ""
+    if str(payload.get("src_dir") or "") != str(src_dir):
+        return ""
+    sig = _runtime_tree_signature(src_dir)
+    if sig is None:
+        return ""
+    try:
+        cached_count = int(payload.get("file_count"))
+        cached_size = int(payload.get("size_total"))
+        cached_mtime = float(payload.get("max_mtime"))
+    except (TypeError, ValueError):
+        return ""
+    if cached_count != sig[0] or cached_size != sig[1] or cached_mtime != sig[2]:
+        return ""
+    fingerprint = str(payload.get("fingerprint") or "").strip()
+    return fingerprint
+
+
+def _write_fingerprint_cache(src_dir: Path, fingerprint: str) -> None:
+    """Persist the fingerprint+signature pair. Best-effort; failures don't propagate."""
+    if not fingerprint:
+        return
+    sig = _runtime_tree_signature(src_dir)
+    if sig is None:
+        return
+    payload = {
+        "fingerprint": fingerprint,
+        "src_dir": str(src_dir),
+        "file_count": sig[0],
+        "size_total": sig[1],
+        "max_mtime": sig[2],
+        "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }
+    try:
+        _write_json_atomic(fingerprint_cache_path(), payload)
+    except Exception:
+        pass
+
+
 def _candidate_version_files(base: Path) -> list[Path]:
     return [
         base / "version.json",
@@ -225,7 +317,9 @@ def _iter_runtime_source_files(src_dir: Path) -> list[Path]:
     return out
 
 
-def compute_mcp_runtime_fingerprint(src_dir: Path | None = None) -> str:
+def compute_mcp_runtime_fingerprint(
+    src_dir: Path | None = None, *, use_cache: bool = False
+) -> str:
     """Hash of every Python source file the running MCP can import.
 
     Returns a sha256 hex digest, or "" when the source tree cannot be located
@@ -240,6 +334,14 @@ def compute_mcp_runtime_fingerprint(src_dir: Path | None = None) -> str:
       * non-`.py` assets (docs, blogs, READMEs, JSON/YAML configs, templates,
         CHANGELOG, marketing files) — these never affect what the live MCP
         process executes
+
+    When ``use_cache=True`` (hot paths: server startup, every tool call) the
+    function consults ``fingerprint-cache.json``: if the on-disk tree
+    signature (file count + total size + max mtime) still matches the cached
+    one, the cached digest is returned without re-reading any byte. Cache miss
+    falls through to the normal full-hash path and writes a fresh entry. The
+    update flow keeps ``use_cache=False`` (default) so it always sees ground
+    truth around the pull/npm step.
     """
     if src_dir is None:
         candidates: list[Path] = []
@@ -267,6 +369,11 @@ def compute_mcp_runtime_fingerprint(src_dir: Path | None = None) -> str:
         if src_dir is None:
             return ""
 
+    if use_cache:
+        cached = _read_fingerprint_cache(src_dir)
+        if cached:
+            return cached
+
     files = _iter_runtime_source_files(src_dir)
     if not files:
         return ""
@@ -283,11 +390,19 @@ def compute_mcp_runtime_fingerprint(src_dir: Path | None = None) -> str:
         except Exception:
             return ""
         h.update(b"\n")
-    return h.hexdigest()
+    digest = h.hexdigest()
+    if use_cache and digest:
+        _write_fingerprint_cache(src_dir, digest)
+    return digest
 
 
 def installed_runtime_fingerprint() -> str:
-    """Fingerprint of whatever runtime source tree is on disk right now."""
+    """Fingerprint of whatever runtime source tree is on disk right now.
+
+    Hot path — runs on every MCP tool call via ``resolve_restart_required``.
+    Uses the disk-signature cache so a repeated call without any source
+    change is a few stat() syscalls instead of 200+ file reads.
+    """
     candidates: list[Path] = []
     try:
         root = active_runtime_root()
@@ -308,7 +423,7 @@ def installed_runtime_fingerprint() -> str:
     except Exception:
         pass
     for cand in candidates:
-        fp = compute_mcp_runtime_fingerprint(cand)
+        fp = compute_mcp_runtime_fingerprint(cand, use_cache=True)
         if fp:
             return fp
     return ""
@@ -616,7 +731,7 @@ def prime_process_fingerprint() -> str:
     except Exception:
         pass
     for cand in candidates:
-        fp = compute_mcp_runtime_fingerprint(cand)
+        fp = compute_mcp_runtime_fingerprint(cand, use_cache=True)
         if fp:
             PROCESS_FINGERPRINT = fp
             return PROCESS_FINGERPRINT
