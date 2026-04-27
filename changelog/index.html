@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.11.0 introduces a runtime fingerprint that gates mcp-restart-required.json so doc-only / blog-only / changelog-only releases stop forcing connected MCP clients (Claude Code, Codex, Claude Desktop) to restart. Conservative fallback (#186) preserved; explicit force_restart opt-in for releases the fingerprint can't detect.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.11.1 caches the runtime fingerprint by (file_count, size_total, max_mtime) signature so MCP startup and per-tool-call restart checks skip the 263-file rehash when disk has not changed. ~11x speedup warm path; ~10-20s/day saved across daily MCP startups.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.11.0 introduces a runtime fingerprint that gates mcp-restart-required.json so doc-only / blog-only / changelog-only releases stop forcing connected MCP clients (Claude Code, Codex, Claude Desktop) to restart. Conservative fallback (#186) preserved; explicit force_restart opt-in for releases the fingerprint can't detect.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.11.1 caches the runtime fingerprint by (file_count, size_total, max_mtime) signature so MCP startup and per-tool-call restart checks skip the 263-file rehash when disk has not changed. ~11x speedup warm path; ~10-20s/day saved across daily MCP startups.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.11.0 introduces a runtime fingerprint that gates mcp-restart-required.json so doc-only / blog-only / changelog-only releases stop forcing connected MCP clients (Claude Code, Codex, Claude Desktop) to restart. Conservative fallback (#186) preserved; explicit force_restart opt-in for releases the fingerprint can't detect.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.11.1 caches the runtime fingerprint by (file_count, size_total, max_mtime) signature so MCP startup and per-tool-call restart checks skip the 263-file rehash when disk has not changed. ~11x speedup warm path; ~10-20s/day saved across daily MCP startups.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.11.0 introduces a runtime fingerprint that gates mcp-restart-required.json so doc-only / blog-only / changelog-only releases stop forcing connected MCP clients (Claude Code, Codex, Claude Desktop) to restart. Conservative fallback (#186) preserved; explicit force_restart opt-in for releases the fingerprint can't detect.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.11.1 caches the runtime fingerprint by (file_count, size_total, max_mtime) signature so MCP startup and per-tool-call restart checks skip the 263-file rehash when disk has not changed. ~11x speedup warm path; ~10-20s/day saved across daily MCP startups.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -87,19 +87,23 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v7.11.0 live</span>
+                    <span class="page-chip">v7.11.1 live</span>
                     <span class="page-chip">Guardian active</span>
                     <span class="page-chip">F0.6 hardening</span>
                     <span class="page-chip">Adaptive empirical</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v7110" class="btn btn-primary">Start with v7.11.0</a>
-                    <a href="#v7101" class="btn btn-secondary">See v7.10.1</a>
+                    <a href="#v7111" class="btn btn-primary">Start with v7.11.1</a>
+                    <a href="#v7110" class="btn btn-secondary">See v7.11.0</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
             </div>
             <div class="page-visual">
                 <div class="page-stack">
+                    <div class="page-stack-card">
+                        <strong>v7.11.1</strong>
+                        <span>Patch — fingerprint cache by <code>(file_count, size_total, max_mtime)</code> signature. MCP startup and per-tool-call restart checks skip the 263-file rehash when disk hasn't changed. ~11&times; speedup warm path; ~10-20s/day saved across daily MCP startups. Cache miss self-repairs.</span>
+                    </div>
                     <div class="page-stack-card">
                         <strong>v7.11.0</strong>
                         <span>Minor — runtime fingerprint gates <code>mcp-restart-required.json</code> so doc-only / blog-only / changelog-only releases stop forcing connected MCP clients (Claude Code, Codex, Claude Desktop) to restart. Conservative fallback (#186) preserved; explicit <code>force_restart</code> opt-in for cases the fingerprint can't detect.</span>
@@ -296,6 +300,16 @@
 <section class="section-compact" style="background:rgba(124,58,237,0.08);">
     <div class="container desktop-disclaimer" style="max-width:860px;font-size:13px;line-height:1.55;">
         <p><strong>Sobre NEXO Desktop.</strong> NEXO Desktop es un cliente acompa&ntilde;ante closed-source distribuido aparte en <a href="https://nexo-desktop.com/">nexo-desktop.com</a>. Cuando una entrada de changelog menciona "NEXO Desktop" se refiere a una versi&oacute;n coordinada de ese cliente que consume el contrato CLI/MCP del Brain. El c&oacute;digo de Desktop no vive en este repo; el Brain (AGPL-3.0) es 100% usable por s&iacute; solo desde terminal, Codex, Claude Code, o cualquier cliente MCP.</p>
+    </div>
+</section>
+
+<section id="v7111" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.11.1 <span style="opacity:.5;font-weight:400;">&mdash; April 27, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">Fingerprint cache by mtime/size signature</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            v7.11.0 introduced the runtime fingerprint that gates <code>mcp-restart-required.json</code> by hashing every <code>.py</code> file under <code>src/</code> the live MCP can import. The hash is checked at server startup via <code>prime_process_fingerprint()</code> and on every tool call via <code>installed_runtime_fingerprint()</code> through <code>resolve_restart_required()</code>. On a 263-file tree that costs ~40ms cold and is paid by every MCP startup &mdash; Claude Code, Codex, headless followup-runner, deep-sleep, every cron job. Daily cumulative: 10-20s of pure rehashing of bytes that didn't change. v7.11.1 caches the fingerprint at <code>~/.nexo/runtime/operations/fingerprint-cache.json</code> with a cheap signature key &mdash; <code>(src_dir, file_count, size_total, max_mtime)</code> over the same set of <code>.py</code> files the v7.11.0 fingerprint covers. When the on-disk signature still matches the cached one, the cached digest is returned without re-reading any byte. Local benchmark on the live <code>src/</code>: <strong>cold ~39.9ms &rarr; warm ~3.7ms (≈11&times; speedup)</strong>. Cache miss is always safe &mdash; corrupt JSON, signature drift, missing file all fall through to the full hash and rewrite the cache atomically. New keyword-only parameter <code>compute_mcp_runtime_fingerprint(src_dir, *, use_cache=False)</code> &mdash; default stays <code>False</code> so <code>plugins/update.py</code> always sees ground truth around <code>git pull</code> / <code>npm update</code>; the hot callers (<code>installed_runtime_fingerprint</code>, <code>prime_process_fingerprint</code>) opt in. Behavior of the restart gate itself is identical to v7.11.0. 6 new tests in <code>tests/test_runtime_fingerprint.py</code>: cache hit skips all <code>.py</code> reads (verified by spying on <code>Path.read_bytes</code>), cache miss when a <code>.py</code> file changes, cache miss when src_dir changes, corrupt cache falls back and self-repairs, default <code>use_cache=False</code> keeps update.py on the ground-truth path, <code>prime_process_fingerprint</code> warms the on-disk cache.
+        </p>
     </div>
 </section>
 
