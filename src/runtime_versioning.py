@@ -33,6 +33,7 @@ _FINGERPRINT_EXCLUDE_DIRS = frozenset({
     "__pycache__",
     "node_modules",
     ".git",
+    "versions",
 })
 RESTART_CLIENT_ACTIONS = {
     "claude_desktop": "restart_client_required",

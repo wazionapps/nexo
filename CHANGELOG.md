@@ -1,5 +1,12 @@
 # Changelog
 
+## [7.11.3] - 2026-04-27
+
+### Fixed
+- **Runtime fingerprint excludes `versions/` snapshot store.** `_FINGERPRINT_EXCLUDE_DIRS` in `src/runtime_versioning.py` was missing `"versions"`, so `compute_mcp_runtime_fingerprint()` walked into `core/versions/<old>/**.py` whenever it was invoked on the live runtime root. Result: `installed_runtime_fingerprint()` (which resolves through `active_runtime_root()` → the version snapshot directory `core/versions/<active>/`) returned a clean per-snapshot hash, while `prime_process_fingerprint()` (which starts from `Path(__file__).resolve().parent` → live `core/`) accumulated every retained snapshot under `core/versions/`. The two never matched. Every `nexo update` after the first one wrote `mcp-restart-required.json` and the marker could never be cleared by `_ack_current_client_if_restarted()` because the `installed_fp != process_fp` test in line 760 always returned `True`. Every non-allowlisted MCP tool (`nexo_reminders`, `nexo_smart_startup`, `nexo_guard_check`, `nexo_task_open`, …) returned `{"error": "mcp_restart_required", "reason": "fingerprint_mismatch"}` indefinitely, even after the operator restarted the client (the new client connected to the same server with the same cached `PROCESS_FINGERPRINT`). v7.11.2's enforcer gate (`HeadlessEnforcer._mcp_restart_pending`) silenced the symptom by skipping `nexo_*` reminders when the marker was present, but the marker itself never got cleared, so user-driven tool calls kept failing across sessions. Adding `"versions"` to `_FINGERPRINT_EXCLUDE_DIRS` restores parity: both fingerprint computations now hash the same set of files regardless of which entry path the caller starts from.
+  - 1 new regression test in `tests/test_runtime_fingerprint.py`: `test_fingerprint_ignores_versions_subtree` — adds `versions/7.10.0`, `versions/7.11.0`, `versions/7.11.2` snapshot trees under the runtime root and asserts the fingerprint stays stable. The two existing exclude-dir tests now also include `"versions"` in the parametrized list.
+  - All 21 tests in `tests/test_runtime_fingerprint.py` stay green.
+
 ## [7.11.2] - 2026-04-27
 
 ### Fixed

@@ -134,7 +134,7 @@
                     <span class="page-chip">Shared brain product notes</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="/blog/nexo-7-11-2/" class="btn btn-primary">Read latest release</a>
+                    <a href="/blog/nexo-7-11-3/" class="btn btn-primary">Read latest release</a>
                     <a href="/changelog/" class="btn btn-secondary">Latest release notes</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -147,20 +147,20 @@
                     <span class="compare-chip">Patch</span>
                     <span class="compare-chip">Reliability</span>
                 </div>
-                <h2>NEXO 7.11.2: Watchdog reaper + Enforcer respects restart_required</h2>
-                <p>Patch over v7.11.1. Two reliability fixes in the same family — components ignoring signals they should respect. (1) New <code>run_stuck_reaper()</code> sweep in <code>nexo-watchdog.sh</code> SIGTERMs stuck wrappers past per-cron <code>stuck_after_seconds</code> thresholds; the wrapper's existing trap closes the row at <code>exit 143</code>. Generous defaults (deep-sleep 8h, sleep/evolution 4h) keep the v5.8.1 deep-sleep regression from recurring. (2) The Guardian/Enforcer now skips reminders asking for <code>nexo_*</code> tools while the MCP server has a restart-required marker on disk — previously every periodic ping triggered a guaranteed <code>mcp_restart_required</code> no-op. The fix sits at the top of <code>HeadlessEnforcer._enqueue()</code>; reminders that don't ask for <code>nexo_*</code> still fire.</p>
+                <h2>NEXO 7.11.3: Fingerprint excludes the versions/ snapshot store</h2>
+                <p>Patch over v7.11.2. Root-cause fix for the <code>mcp_restart_required</code> lockup that v7.11.2 only masked at the enforcer layer. <code>_FINGERPRINT_EXCLUDE_DIRS</code> in <code>src/runtime_versioning.py</code> was missing <code>"versions"</code>, so <code>compute_mcp_runtime_fingerprint()</code> walked into <code>core/versions/&lt;old&gt;/**.py</code> whenever it was called against the live runtime root. <code>installed_runtime_fingerprint()</code> (which resolves through <code>active_runtime_root()</code> → <code>core/versions/&lt;active&gt;/</code>) and <code>prime_process_fingerprint()</code> (which starts from <code>__file__.parent</code> → live <code>core/</code>) returned different hashes after the second-ever <code>nexo update</code> on a host. The marker could never be cleared by <code>_ack_current_client_if_restarted()</code>; every non-allowlisted MCP tool returned <code>{"error": "mcp_restart_required"}</code> indefinitely, even after the operator restarted the client. v7.11.2 silenced the enforcer-side noise but the marker itself stayed stuck. Adding <code>"versions"</code> to the exclude set restores parity. 1 new regression test (<code>test_fingerprint_ignores_versions_subtree</code>) seeds three snapshot directories under <code>versions/</code> and asserts the fingerprint does not shift; the two existing exclude-dir tests now also cover <code>"versions"</code>. All 21 tests in <code>tests/test_runtime_fingerprint.py</code> stay green.</p>
                 <div class="hero-actions" style="justify-content:flex-start;margin-bottom:18px;">
-                    <a href="/blog/nexo-7-11-2/" class="btn btn-primary">Open article</a>
-                    <a href="/changelog/#v7112" class="btn btn-secondary">Open changelog</a>
+                    <a href="/blog/nexo-7-11-3/" class="btn btn-primary">Open article</a>
+                    <a href="/changelog/#v7113" class="btn btn-secondary">Open changelog</a>
                 </div>
                 <div class="blog-mini-stack">
                     <div class="blog-mini-card">
                         <strong>Companion view</strong>
-                        <span><a href="/changelog/#v7112">See the full v7.11.2 changelog</a></span>
+                        <span><a href="/changelog/#v7113">See the full v7.11.3 changelog</a></span>
                     </div>
                     <div class="blog-mini-card">
                         <strong>Previous release</strong>
-                        <span><a href="/blog/nexo-7-11-1/">NEXO 7.11.1: Fingerprint cache by mtime/size signature</a>.</span>
+                        <span><a href="/blog/nexo-7-11-2/">NEXO 7.11.2: Watchdog reaper + Enforcer respects restart_required</a>.</span>
                     </div>
                 </div>
             </div>
@@ -191,6 +191,15 @@
 <section class="section-flush-top">
     <div class="container">
             <div class="blog-grid">
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 27, 2026</div>
+                <h2><a href="/blog/nexo-7-11-3/">NEXO 7.11.3: Fingerprint excludes the versions/ snapshot store</a></h2>
+                <p>Patch over v7.11.2. Root-cause fix for the <code>mcp_restart_required</code> lockup that v7.11.2 only masked at the enforcer layer. <code>_FINGERPRINT_EXCLUDE_DIRS</code> was missing <code>"versions"</code>, so the live <code>core/</code> fingerprint absorbed every retained snapshot under <code>core/versions/</code> while <code>core/versions/&lt;active&gt;/</code> hashed only the active snapshot — they never matched after the second-ever <code>nexo update</code>. The marker could not clear itself; every non-allowlisted MCP tool returned <code>mcp_restart_required</code> indefinitely. Adding <code>"versions"</code> to the exclude set restores parity. 1 new regression test, 21 total stay green.</p>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/blog/nexo-7-11-3/" class="btn btn-secondary">Read more</a>
+                </div>
+            </div>
 
             <div class="blog-card">
                 <div class="blog-card-date">April 27, 2026</div>

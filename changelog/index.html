@@ -93,7 +93,7 @@
                     <span class="page-chip">Adaptive empirical</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v7112" class="btn btn-primary">Start with v7.11.2</a>
+                    <a href="#v7113" class="btn btn-primary">Start with v7.11.3</a>
                     <a href="#v7111" class="btn btn-secondary">See v7.11.1</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -304,6 +304,16 @@
 <section class="section-compact" style="background:rgba(124,58,237,0.08);">
     <div class="container desktop-disclaimer" style="max-width:860px;font-size:13px;line-height:1.55;">
         <p><strong>Sobre NEXO Desktop.</strong> NEXO Desktop es un cliente acompa&ntilde;ante closed-source distribuido aparte en <a href="https://nexo-desktop.com/">nexo-desktop.com</a>. Cuando una entrada de changelog menciona "NEXO Desktop" se refiere a una versi&oacute;n coordinada de ese cliente que consume el contrato CLI/MCP del Brain. El c&oacute;digo de Desktop no vive en este repo; el Brain (AGPL-3.0) es 100% usable por s&iacute; solo desde terminal, Codex, Claude Code, o cualquier cliente MCP.</p>
+    </div>
+</section>
+
+<section id="v7113" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.11.3 <span style="opacity:.5;font-weight:400;">&mdash; April 27, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">Fingerprint excludes the versions/ snapshot store</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            Root-cause fix for the <code>mcp_restart_required</code> lockup that v7.11.2 only masked at the enforcer layer. <code>_FINGERPRINT_EXCLUDE_DIRS</code> in <code>src/runtime_versioning.py</code> was missing <code>"versions"</code>, so <code>compute_mcp_runtime_fingerprint()</code> walked into <code>core/versions/&lt;old&gt;/**.py</code> whenever it was called against the live runtime root. <code>installed_runtime_fingerprint()</code> (which resolves through <code>active_runtime_root()</code> &rarr; <code>core/versions/&lt;active&gt;/</code>) returned a clean per-snapshot hash, while <code>prime_process_fingerprint()</code> (which starts from <code>Path(__file__).resolve().parent</code> &rarr; live <code>core/</code>) accumulated every retained snapshot under <code>core/versions/</code>. The two never matched after the second-ever <code>nexo update</code> on a host. Every update wrote <code>mcp-restart-required.json</code> and the marker could never be cleared by <code>_ack_current_client_if_restarted()</code> because the <code>installed_fp != process_fp</code> test always returned <code>True</code>. Every non-allowlisted MCP tool (<code>nexo_reminders</code>, <code>nexo_smart_startup</code>, <code>nexo_guard_check</code>, <code>nexo_task_open</code>, &hellip;) returned <code>{"error": "mcp_restart_required", "reason": "fingerprint_mismatch"}</code> indefinitely, even after the operator restarted the client (the new client connected to the same server with the same cached <code>PROCESS_FINGERPRINT</code>). v7.11.2 silenced the enforcer-side noise but the marker itself stayed stuck, so user-driven calls kept failing across sessions. Adding <code>"versions"</code> to <code>_FINGERPRINT_EXCLUDE_DIRS</code> restores parity: both fingerprint computations now hash the same set of files regardless of which entry path the caller starts from. 1 new regression test in <code>tests/test_runtime_fingerprint.py</code> (<code>test_fingerprint_ignores_versions_subtree</code>) seeds three snapshot directories under <code>versions/</code> and asserts the fingerprint does not shift. The two existing exclude-dir tests now also cover <code>"versions"</code>. All 21 tests in <code>tests/test_runtime_fingerprint.py</code> stay green.
+        </p>
     </div>
 </section>
 

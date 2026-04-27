@@ -40,7 +40,7 @@ def _make_runtime_tree(root: Path, *, version: str = "1.0.0") -> Path:
     (plugins / "__init__.py").write_text("", encoding="utf-8")
     (plugins / "memory.py").write_text("def hello(): return 'v1'\n", encoding="utf-8")
     # Subdirs that MUST be excluded from the fingerprint
-    for excluded in ("scripts", "tests", "migrations", "crons", "__pycache__"):
+    for excluded in ("scripts", "tests", "migrations", "crons", "__pycache__", "versions"):
         (src / excluded).mkdir(exist_ok=True)
         (src / excluded / "noise.py").write_text(
             "# this file should NOT affect fingerprint\n", encoding="utf-8"
@@ -89,12 +89,39 @@ def test_fingerprint_ignores_excluded_directories(tmp_path, fingerprint_runtime)
     src = _make_runtime_tree(tmp_path)
     before = fingerprint_runtime.compute_mcp_runtime_fingerprint(src)
     # Mutate every excluded directory; fingerprint must NOT shift.
-    for excluded in ("scripts", "tests", "migrations", "crons", "__pycache__"):
+    for excluded in ("scripts", "tests", "migrations", "crons", "__pycache__", "versions"):
         (src / excluded / "noise.py").write_text(
             "# noise after change\n", encoding="utf-8"
         )
     after = fingerprint_runtime.compute_mcp_runtime_fingerprint(src)
     assert before == after
+
+
+def test_fingerprint_ignores_versions_subtree(tmp_path, fingerprint_runtime):
+    """Regression: live `core/` retains snapshots under `core/versions/X/`.
+
+    Without excluding `versions/`, the hash of the live runtime root drifts
+    every time a new release adds a snapshot — even when the active code
+    didn't change. That makes the fingerprint of `core/` and the fingerprint
+    of `core/versions/<active>/` permanently disagree, leaving the restart
+    marker stuck and every non-allowlisted MCP tool blocked.
+    """
+    src = _make_runtime_tree(tmp_path)
+    before = fingerprint_runtime.compute_mcp_runtime_fingerprint(src)
+    versions = src / "versions"
+    versions.mkdir(exist_ok=True)
+    for snapshot in ("7.10.0", "7.11.0", "7.11.2"):
+        snap = versions / snapshot
+        snap.mkdir()
+        (snap / "server.py").write_text(f"# snapshot {snapshot}\n", encoding="utf-8")
+        (snap / "plugins").mkdir()
+        (snap / "plugins" / "memory.py").write_text(
+            f"def hello(): return 'snap-{snapshot}'\n", encoding="utf-8"
+        )
+    after = fingerprint_runtime.compute_mcp_runtime_fingerprint(src)
+    assert before == after, (
+        "fingerprint must not change when version snapshots are added under versions/"
+    )
 
 
 def test_fingerprint_returns_empty_when_dir_missing(tmp_path, fingerprint_runtime):
