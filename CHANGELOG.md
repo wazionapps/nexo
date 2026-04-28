@@ -1,5 +1,15 @@
 # Changelog
 
+## [7.11.7] - 2026-04-28
+
+### Fixed
+- **Runtime doctor now distinguishes live runtime failures from historical or intentional state.** `src/doctor/providers/runtime.py` now skips `evolution` freshness when the product contract disables it, treats historical conditioned-file drift as healthy once there is no open conditioned protocol debt, excludes cancelled tasks from `change_log` coverage, ignores successful headless zero-usage zero-cost runs in automation telemetry coverage, and treats recent in-flight cron runs as fresh instead of stale. This closes the remaining false-positive path where `nexo doctor --tier runtime` stayed yellow or red even after the live runtime had already been cleaned up.
+- **`runner-health-check` now matches supervisor reality and works against the live DB shape.** `src/scripts/runner-health-check.py` now treats `SIGTERM 143` supervisor interruptions as benign instead of counting them as failures, and it handles both `sqlite3.Row` and tuple-shaped query results. This removes the false `morning-agent` / `followup-runner` warning path that kept runtime doctor degraded even when the runners were behaving correctly.
+
+### Tests
+- `pytest -q tests/test_doctor.py tests/test_runner_health_check.py` → `104 passed`
+- `python3 -c "import sys; sys.path.insert(0, 'src'); from plugins.doctor import handle_doctor; print(handle_doctor(tier='runtime', output='json'))"` → `overall_status: healthy`
+
 ## [7.11.6] - 2026-04-28
 
 ### Fixed

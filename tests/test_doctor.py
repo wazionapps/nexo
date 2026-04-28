@@ -41,7 +41,8 @@ def nexo_home(tmp_path, monkeypatch):
     )
     conn.execute(
         "CREATE TABLE IF NOT EXISTS cron_runs ("
-        "id INTEGER PRIMARY KEY AUTOINCREMENT, cron_id TEXT NOT NULL, started_at TEXT NOT NULL"
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, cron_id TEXT NOT NULL, started_at TEXT NOT NULL, "
+        "ended_at TEXT, exit_code INTEGER"
         ")"
     )
     conn.execute("PRAGMA user_version = 42")
@@ -92,7 +93,8 @@ def _create_protocol_tables(db_path: Path):
             learning_id INTEGER,
             task_type TEXT DEFAULT 'answer',
             cortex_mode TEXT DEFAULT '',
-            opened_at TEXT DEFAULT (datetime('now'))
+            opened_at TEXT DEFAULT (datetime('now')),
+            closed_at TEXT
         )"""
     )
     conn.execute(
@@ -317,8 +319,13 @@ class TestRuntimeChecks:
     def test_cron_freshness_respects_daily_schedule(self, nexo_home):
         conn = sqlite3.connect(str(nexo_home / "data" / "nexo.db"))
         conn.execute(
-            "INSERT INTO cron_runs (cron_id, started_at) VALUES (?, ?)",
-            ("self-audit", time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(time.time() - 12 * 3600))),
+            "INSERT INTO cron_runs (cron_id, started_at, ended_at, exit_code) VALUES (?, ?, ?, ?)",
+            (
+                "self-audit",
+                time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(time.time() - 12 * 3600)),
+                time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(time.time() - 12 * 3600 + 60)),
+                0,
+            ),
         )
         conn.commit()
         conn.close()
@@ -330,8 +337,13 @@ class TestRuntimeChecks:
     def test_cron_freshness_flags_stale_interval_cron(self, nexo_home):
         conn = sqlite3.connect(str(nexo_home / "data" / "nexo.db"))
         conn.execute(
-            "INSERT INTO cron_runs (cron_id, started_at) VALUES (?, ?)",
-            ("watchdog", time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(time.time() - 3 * 3600))),
+            "INSERT INTO cron_runs (cron_id, started_at, ended_at, exit_code) VALUES (?, ?, ?, ?)",
+            (
+                "watchdog",
+                time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(time.time() - 3 * 3600)),
+                time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(time.time() - 3 * 3600 + 60)),
+                0,
+            ),
         )
         conn.commit()
         conn.close()
@@ -349,8 +361,13 @@ class TestRuntimeChecks:
 
         conn = sqlite3.connect(str(nexo_home / "data" / "nexo.db"))
         conn.execute(
-            "INSERT INTO cron_runs (cron_id, started_at) VALUES (?, ?)",
-            ("catchup", time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(time.time() - 3 * 3600))),
+            "INSERT INTO cron_runs (cron_id, started_at, ended_at, exit_code) VALUES (?, ?, ?, ?)",
+            (
+                "catchup",
+                time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(time.time() - 3 * 3600)),
+                time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(time.time() - 3 * 3600 + 60)),
+                0,
+            ),
         )
         conn.commit()
         conn.close()
@@ -368,8 +385,13 @@ class TestRuntimeChecks:
 
         conn = sqlite3.connect(str(nexo_home / "data" / "nexo.db"))
         conn.execute(
-            "INSERT INTO cron_runs (cron_id, started_at) VALUES (?, ?)",
-            ("catchup", time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(time.time() - 3 * 3600))),
+            "INSERT INTO cron_runs (cron_id, started_at, ended_at, exit_code) VALUES (?, ?, ?, ?)",
+            (
+                "catchup",
+                time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(time.time() - 3 * 3600)),
+                time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(time.time() - 3 * 3600 + 60)),
+                0,
+            ),
         )
         conn.commit()
         conn.close()
@@ -377,6 +399,54 @@ class TestRuntimeChecks:
         from doctor.providers.runtime import check_cron_freshness
         check = check_cron_freshness()
         assert check.status == "degraded"
+
+    def test_cron_freshness_allows_recent_in_flight_interval_cron(self, nexo_home):
+        (nexo_home / "crons" / "manifest.json").write_text(json.dumps({
+            "crons": [
+                {"id": "catchup", "interval_seconds": 900, "run_at_load": True},
+            ]
+        }))
+
+        conn = sqlite3.connect(str(nexo_home / "data" / "nexo.db"))
+        conn.execute(
+            "INSERT INTO cron_runs (cron_id, started_at, ended_at, exit_code) VALUES (?, ?, NULL, NULL)",
+            ("catchup", time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(time.time() - 50 * 60))),
+        )
+        conn.commit()
+        conn.close()
+
+        from doctor.providers.runtime import check_cron_freshness
+        check = check_cron_freshness()
+        assert check.status == "healthy"
+
+    def test_cron_freshness_ignores_disabled_evolution(self, nexo_home):
+        (nexo_home / "crons" / "manifest.json").write_text(json.dumps({
+            "crons": [
+                {"id": "evolution", "schedule": {"hour": 5, "minute": 0, "weekday": 0}},
+            ]
+        }))
+        (nexo_home / "brain").mkdir(parents=True, exist_ok=True)
+        (nexo_home / "brain" / "evolution-objective.json").write_text(json.dumps({
+            "evolution_enabled": False,
+            "disabled_by": "desktop_product",
+        }))
+
+        conn = sqlite3.connect(str(nexo_home / "data" / "nexo.db"))
+        conn.execute(
+            "INSERT INTO cron_runs (cron_id, started_at, ended_at, exit_code) VALUES (?, ?, ?, ?)",
+            (
+                "evolution",
+                time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(time.time() - 11 * 86400)),
+                time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(time.time() - 11 * 86400 + 60)),
+                0,
+            ),
+        )
+        conn.commit()
+        conn.close()
+
+        from doctor.providers.runtime import check_cron_freshness
+        check = check_cron_freshness()
+        assert check.status == "healthy"
 
     def test_launchagent_integrity_detects_tmp_drift(self, nexo_home, monkeypatch):
         from doctor.providers import runtime
@@ -1593,8 +1663,80 @@ class TestRuntimeChecks:
 
         check = runtime.check_codex_conditioned_file_discipline()
         assert check.status == "healthy"
-        assert "Tracked Codex conditioned-file mutation drift has no open protocol debt" in check.summary
+        assert "Historical Codex conditioned-file drift has no open protocol debt" in check.summary
         assert any("write touches without protocol task: 1" in item for item in check.evidence)
+
+    def test_codex_conditioned_file_discipline_heals_old_guard_ack_drift_without_open_debt(self, nexo_home, monkeypatch):
+        from doctor.providers import runtime
+
+        schedule_file = nexo_home / "config" / "schedule.json"
+        schedule_file.parent.mkdir(parents=True, exist_ok=True)
+        schedule_file.write_text(json.dumps({
+            "interactive_clients": {
+                "claude_code": False,
+                "codex": True,
+                "claude_desktop": False,
+            },
+            "default_terminal_client": "codex",
+            "automation_enabled": False,
+            "automation_backend": "none",
+        }))
+        db_path = nexo_home / "data" / "nexo.db"
+        _create_learnings_table(db_path)
+        _create_protocol_tables(db_path)
+        conn = sqlite3.connect(str(db_path))
+        conn.execute(
+            """INSERT INTO learnings (category, title, content, status, applies_to)
+               VALUES (?, ?, ?, 'active', ?)""",
+            (
+                "nexo-ops",
+                "Guarded runtime.py edits",
+                "Open protocol and guard before patching runtime.py.",
+                "/repo/src/doctor/providers/runtime.py",
+            ),
+        )
+        conn.commit()
+        conn.close()
+
+        codex_file = nexo_home / ".codex" / "sessions" / "2026" / "04" / "06" / "discipline-old-guard-gap.jsonl"
+        codex_file.parent.mkdir(parents=True, exist_ok=True)
+        codex_file.write_text(
+            json.dumps({"type": "session_meta", "payload": {"originator": "codex_cli_rs", "cwd": "/repo"}}) + "\n"
+            + json.dumps({
+                "type": "response_item",
+                "payload": {
+                    "type": "function_call",
+                    "name": "nexo_task_open",
+                    "arguments": json.dumps({"files": "/repo/src/doctor/providers/runtime.py"}),
+                },
+            }) + "\n"
+            + json.dumps({
+                "type": "response_item",
+                "payload": {
+                    "type": "function_call",
+                    "name": "nexo_guard_check",
+                    "arguments": json.dumps({"files": "/repo/src/doctor/providers/runtime.py"}),
+                },
+            }) + "\n"
+            + json.dumps({
+                "type": "response_item",
+                "payload": {
+                    "type": "function_call",
+                    "name": "apply_patch",
+                    "arguments": "*** Begin Patch\n*** Update File: src/doctor/providers/runtime.py\n@@\n-old\n+new\n*** End Patch\n",
+                },
+            }) + "\n"
+        )
+        old_time = time.time() - 10800
+        os.utime(codex_file, (old_time, old_time))
+
+        monkeypatch.setattr(runtime, "SCHEDULE_FILE", schedule_file)
+        monkeypatch.setattr(runtime.Path, "home", lambda: nexo_home)
+
+        check = runtime.check_codex_conditioned_file_discipline()
+        assert check.status == "healthy"
+        assert "Historical Codex conditioned-file drift has no open protocol debt" in check.summary
+        assert any("write touches without guard acknowledgement: 1" in item for item in check.evidence)
 
     def test_codex_conditioned_file_discipline_accepts_protocol_open_and_guard_ack(self, nexo_home, monkeypatch):
         from doctor.providers import runtime
@@ -2189,6 +2331,35 @@ class TestRuntimeChecks:
         assert check.status == "healthy"
         assert any("in-progress task protocol debt pending: 1" in item for item in check.evidence)
 
+    def test_protocol_compliance_ignores_cancelled_tasks_for_change_log_coverage(self, nexo_home):
+        db_path = nexo_home / "data" / "nexo.db"
+        _create_protocol_tables(db_path)
+        conn = sqlite3.connect(str(db_path))
+        conn.execute(
+            """INSERT INTO protocol_tasks (
+                task_id, status, must_verify, close_evidence, must_change_log,
+                change_log_id, correction_happened, learning_id, task_type,
+                cortex_mode, opened_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))""",
+            ("PT-DONE", "done", 1, "pytest passed", 1, 42, 0, None, "edit", "act"),
+        )
+        conn.execute(
+            """INSERT INTO protocol_tasks (
+                task_id, status, must_verify, close_evidence, must_change_log,
+                change_log_id, correction_happened, learning_id, task_type,
+                cortex_mode, opened_at, closed_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))""",
+            ("PT-CANCELLED", "cancelled", 0, "", 1, None, 0, None, "edit", "act"),
+        )
+        conn.commit()
+        conn.close()
+
+        from doctor.providers.runtime import check_protocol_compliance
+
+        check = check_protocol_compliance()
+        assert check.status == "healthy"
+        assert any("change_log coverage: 1/1" in item for item in check.evidence)
+
     def test_automation_telemetry_goes_critical_when_cost_coverage_is_missing(self, nexo_home):
         db_path = nexo_home / "data" / "nexo.db"
         conn = sqlite3.connect(str(db_path))
@@ -2351,6 +2522,45 @@ class TestRuntimeChecks:
         assert check.status == "healthy"
         assert any("scored_successful_runs=1" in item for item in check.evidence)
         assert any("interactive_unmetered_runs_excluded=2" in item for item in check.evidence)
+
+    def test_automation_telemetry_excludes_headless_zero_usage_backend_noops(self, nexo_home):
+        db_path = nexo_home / "data" / "nexo.db"
+        conn = sqlite3.connect(str(db_path))
+        conn.execute(
+            """CREATE TABLE automation_runs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                backend TEXT DEFAULT '',
+                input_tokens INTEGER DEFAULT 0,
+                cached_input_tokens INTEGER DEFAULT 0,
+                output_tokens INTEGER DEFAULT 0,
+                total_cost_usd REAL,
+                telemetry_source TEXT DEFAULT '',
+                cost_source TEXT DEFAULT '',
+                status TEXT DEFAULT 'ok',
+                session_type TEXT DEFAULT 'headless',
+                created_at TEXT DEFAULT (datetime('now'))
+            )"""
+        )
+        conn.executemany(
+            """INSERT INTO automation_runs (
+                backend, input_tokens, cached_input_tokens, output_tokens,
+                total_cost_usd, telemetry_source, cost_source, status, session_type, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))""",
+            [
+                ("claude_code", 120, 0, 20, 0.12, "claude_json", "backend", "ok", "headless"),
+                ("claude_code", 0, 0, 0, 0.0, "claude_json", "backend", "ok", "headless"),
+                ("claude_code", 0, 0, 0, None, "missing", "missing", "ok", "headless"),
+            ],
+        )
+        conn.commit()
+        conn.close()
+
+        from doctor.providers.runtime import check_automation_telemetry
+
+        check = check_automation_telemetry()
+        assert check.status == "healthy"
+        assert any("scored_successful_runs=1" in item for item in check.evidence)
+        assert any("headless_unmetered_runs_excluded=2" in item for item in check.evidence)
 
 
 class TestDeepChecks:

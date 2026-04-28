@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.11.6 filters more Guardian G4 false-positive path fragments, softens missing-task debt when a fresh heartbeat proves the session is alive, and validates the real Deep Sleep extraction contract before success.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.11.7 clears the remaining runtime doctor false positives, restores trustworthy runner health, and leaves the live runtime tier healthy again.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.11.6 filters more Guardian G4 false-positive path fragments, softens missing-task debt when a fresh heartbeat proves the session is alive, and validates the real Deep Sleep extraction contract before success.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.11.7 clears the remaining runtime doctor false positives, restores trustworthy runner health, and leaves the live runtime tier healthy again.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.11.6 filters more Guardian G4 false-positive path fragments, softens missing-task debt when a fresh heartbeat proves the session is alive, and validates the real Deep Sleep extraction contract before success.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.11.7 clears the remaining runtime doctor false positives, restores trustworthy runner health, and leaves the live runtime tier healthy again.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.11.6 filters more Guardian G4 false-positive path fragments, softens missing-task debt when a fresh heartbeat proves the session is alive, and validates the real Deep Sleep extraction contract before success.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.11.7 clears the remaining runtime doctor false positives, restores trustworthy runner health, and leaves the live runtime tier healthy again.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -87,22 +87,22 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v7.11.6 live</span>
+                    <span class="page-chip">v7.11.7 live</span>
                     <span class="page-chip">Guardian active</span>
                     <span class="page-chip">F0.6 hardening</span>
                     <span class="page-chip">Adaptive empirical</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v7116" class="btn btn-primary">Start with v7.11.6</a>
-                    <a href="#v7115" class="btn btn-secondary">See v7.11.5</a>
+                    <a href="#v7117" class="btn btn-primary">Start with v7.11.7</a>
+                    <a href="#v7116" class="btn btn-secondary">See v7.11.6</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
             </div>
             <div class="page-visual">
                 <div class="page-stack">
                     <div class="page-stack-card">
-                        <strong>v7.11.6</strong>
-                        <span>Patch — Guardian G4 filters more false-positive slash fragments, strict missing-task debt softens when a fresh heartbeat proves the session is alive, and Deep Sleep extraction validates the real prompt contract before success.</span>
+                        <strong>v7.11.7</strong>
+                        <span>Patch — runtime doctor stops flagging historical or intentional state as live failure, runner health treats supervisor <code>SIGTERM 143</code> reloads as benign, and the live runtime tier returns to healthy.</span>
                     </div>
                     <div class="page-stack-card">
                         <strong>v7.11.1</strong>
@@ -304,6 +304,16 @@
 <section class="section-compact" style="background:rgba(124,58,237,0.08);">
     <div class="container desktop-disclaimer" style="max-width:860px;font-size:13px;line-height:1.55;">
         <p><strong>About NEXO Desktop.</strong> NEXO Desktop is a separate closed-source companion client distributed at <a href="https://nexo-desktop.com/">nexo-desktop.com</a>. When a changelog entry mentions NEXO Desktop it refers to a coordinated client release that consumes the Brain CLI/MCP contract. Desktop source does not live in this repo; the Brain (AGPL-3.0) remains fully usable on its own from terminal, Codex, Claude Code, or any MCP client.</p>
+    </div>
+</section>
+
+<section id="v7117" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.11.7 <span style="opacity:.5;font-weight:400;">&mdash; April 28, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">Runtime doctor goes green again</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            After the 7.11.6 tester-bug pass, the remaining debt was no longer broken runtime behavior but diagnosis drift. <code>src/doctor/providers/runtime.py</code> now skips <code>evolution</code> freshness when the product contract disables it, treats historical conditioned-file drift as healthy once open conditioned debt is zero, excludes cancelled tasks from <code>change_log</code> coverage, ignores successful headless zero-usage zero-cost runs when computing automation telemetry coverage, and keeps recent in-flight cron rows healthy instead of showing them as stale. In parallel, <code>src/scripts/runner-health-check.py</code> now treats supervisor <code>SIGTERM 143</code> interruptions as benign reloads instead of failures, and it supports both <code>sqlite3.Row</code> and tuple-shaped query results so the live script no longer breaks on the runtime DB path. The net result is simple: the runtime tier of <code>nexo doctor</code> returns to healthy on the live install after the backlog cleanup, instead of staying yellow or red on false positives. Validation: <code>104</code> targeted tests across doctor and runner health, plus source-runtime doctor smoke returning <code>overall_status: healthy</code>.
+        </p>
     </div>
 </section>
 
