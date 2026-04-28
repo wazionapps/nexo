@@ -57,6 +57,28 @@ PACKAGE_JSON = NEXO_CODE / "package.json"
 CHANGELOG_FILE = NEXO_CODE / "CHANGELOG.md"
 
 
+def _evolution_objective_payload() -> dict:
+    candidates = [
+        NEXO_HOME / "brain" / "evolution-objective.json",
+        NEXO_HOME / "cortex" / "evolution-objective.json",
+    ]
+    for path in candidates:
+        if not path.is_file():
+            continue
+        try:
+            payload = json.loads(path.read_text())
+        except Exception:
+            continue
+        if isinstance(payload, dict):
+            return payload
+    return {}
+
+
+def _is_evolution_disabled() -> bool:
+    payload = _evolution_objective_payload()
+    return payload.get("evolution_enabled") is False
+
+
 def _expected_runtime_code_dir() -> Path:
     packaged = NEXO_HOME / "core"
     if packaged.exists() or not (NEXO_HOME / "server.py").is_file():
@@ -887,6 +909,8 @@ def _cron_expectations() -> dict[str, dict]:
         cron_id = cron.get("id")
         if not cron_id or cron.get("keep_alive"):
             continue
+        if cron_id == "evolution" and _is_evolution_disabled():
+            continue
         if cron.get("run_at_load") and not cron.get("interval_seconds") and not cron.get("schedule"):
             continue
 
@@ -1485,7 +1509,17 @@ def check_cron_freshness() -> DoctorCheck:
                 )
             # Latest run per cron
             rows = conn.execute(
-                "SELECT cron_id, MAX(started_at) as last_run FROM cron_runs GROUP BY cron_id"
+                """
+                SELECT cr.cron_id, cr.started_at, cr.ended_at, cr.exit_code
+                FROM cron_runs cr
+                INNER JOIN (
+                    SELECT cron_id, MAX(started_at) AS last_run
+                    FROM cron_runs
+                    GROUP BY cron_id
+                ) latest
+                  ON latest.cron_id = cr.cron_id
+                 AND latest.last_run = cr.started_at
+                """
             ).fetchall()
         finally:
             conn.close()
@@ -1510,8 +1544,16 @@ def check_cron_freshness() -> DoctorCheck:
 
             age = now - parsed.timestamp()
             expected = expectations.get(cron_id, {"threshold": DEFAULT_CRON_THRESHOLD, "label": "runtime default"})
+            in_flight = row[2] is None and row[3] is None
+            if in_flight and age <= max(expected["threshold"] * 4, 3600):
+                continue
             if age > expected["threshold"]:
-                stale.append(f"{cron_id}: {int(age / 3600)}h ago (expected {expected['label']})")
+                if in_flight:
+                    stale.append(
+                        f"{cron_id}: in-flight for {int(age / 60)}m (expected {expected['label']})"
+                    )
+                else:
+                    stale.append(f"{cron_id}: {int(age / 3600)}h ago (expected {expected['label']})")
 
         if stale:
             return DoctorCheck(
@@ -2318,6 +2360,11 @@ def check_codex_conditioned_file_discipline() -> DoctorCheck:
         repair_plan.append("Keep using managed Codex bootstrap so conditioned-file discipline remains visible in transcripts")
 
     no_open_conditioned_debt = debt_summary["available"] and debt_summary["open_total"] == 0
+    historical_no_open_debt_drift = (
+        no_open_conditioned_debt
+        and audit.get("latest_violation_age_seconds") is not None
+        and float(audit["latest_violation_age_seconds"]) >= LIVE_PROTOCOL_SESSION_FRESHNESS
+    )
     historical_read_only = (
         no_open_conditioned_debt
         and audit["read_without_protocol"] > 0
@@ -2334,13 +2381,16 @@ def check_codex_conditioned_file_discipline() -> DoctorCheck:
     )
 
     if audit["write_without_protocol"] or audit["write_without_guard_ack"]:
-        if tracked_mutation_without_open_debt:
+        if historical_no_open_debt_drift:
+            status = "healthy"
+            severity = "info"
+        elif tracked_mutation_without_open_debt:
             status = "healthy"
             severity = "info"
         else:
             status = "critical"
             severity = "error"
-    elif historical_read_only:
+    elif historical_no_open_debt_drift or historical_read_only:
         status = "healthy"
         severity = "info"
     elif audit["read_without_protocol"]:
@@ -2357,7 +2407,7 @@ def check_codex_conditioned_file_discipline() -> DoctorCheck:
         severity=severity,
         summary=(
             "Historical Codex conditioned-file drift has no open protocol debt"
-            if historical_read_only
+            if historical_no_open_debt_drift or historical_read_only
             else "Tracked Codex conditioned-file mutation drift has no open protocol debt"
             if tracked_mutation_without_open_debt
             else "Recent Codex sessions respect conditioned-file discipline"
@@ -2685,7 +2735,10 @@ def check_protocol_compliance() -> DoctorCheck:
                     closed_tasks = [row for row in tasks if row["status"] != "open"]
                     verify_required = [row for row in closed_tasks if row["must_verify"] and row["status"] == "done"]
                     verify_ok = [row for row in verify_required if (row["close_evidence"] or "").strip()]
-                    change_required = [row for row in closed_tasks if row["must_change_log"]]
+                    change_required = [
+                        row for row in closed_tasks
+                        if row["must_change_log"] and row["status"] in {"done", "partial", "failed"}
+                    ]
                     change_ok = [row for row in change_required if row["change_log_id"]]
                     learning_required = [row for row in closed_tasks if row["correction_happened"]]
                     learning_ok = [row for row in learning_required if row["learning_id"]]
@@ -3216,16 +3269,23 @@ def check_automation_telemetry(days: int = 7) -> DoctorCheck:
                 interactive_expr = "0"
                 if "session_type" in columns:
                     interactive_expr = "COALESCE(session_type, '') LIKE 'interactive%'"
+                headless_unmetered_expr = (
+                    f"status = 'ok' AND NOT ({interactive_expr}) "
+                    "AND (input_tokens + cached_input_tokens + output_tokens) = 0 "
+                    "AND COALESCE(total_cost_usd, 0) <= 0 "
+                    "AND COALESCE(cost_source, '') IN ('', 'backend', 'missing')"
+                )
                 row = conn.execute(
                     f"""
                     SELECT
                         COUNT(*) AS runs,
                         SUM(CASE WHEN status = 'ok' THEN 1 ELSE 0 END) AS successful_runs,
                         SUM(CASE WHEN status != 'ok' THEN 1 ELSE 0 END) AS failed_runs,
-                        SUM(CASE WHEN status = 'ok' AND NOT ({interactive_expr}) THEN 1 ELSE 0 END) AS scored_successful_runs,
+                        SUM(CASE WHEN status = 'ok' AND NOT ({interactive_expr}) AND NOT ({headless_unmetered_expr}) THEN 1 ELSE 0 END) AS scored_successful_runs,
                         SUM(CASE WHEN status = 'ok' AND NOT ({interactive_expr}) AND (input_tokens + cached_input_tokens + output_tokens) > 0 THEN 1 ELSE 0 END) AS usage_runs,
                         SUM(CASE WHEN status = 'ok' AND NOT ({interactive_expr}) AND total_cost_usd IS NOT NULL THEN 1 ELSE 0 END) AS cost_runs,
                         SUM(CASE WHEN status = 'ok' AND NOT ({interactive_expr}) AND cost_source = 'pricing_unavailable' THEN 1 ELSE 0 END) AS pricing_gaps,
+                        SUM(CASE WHEN {headless_unmetered_expr} THEN 1 ELSE 0 END) AS headless_unmetered_runs,
                         SUM(CASE WHEN status = 'ok' AND ({interactive_expr}) AND ((input_tokens + cached_input_tokens + output_tokens) = 0 OR total_cost_usd IS NULL) THEN 1 ELSE 0 END) AS interactive_unmetered_runs,
                         GROUP_CONCAT(DISTINCT backend) AS backends
                     FROM automation_runs
@@ -3284,9 +3344,10 @@ def check_automation_telemetry(days: int = 7) -> DoctorCheck:
     usage_runs = int((row["usage_runs"] if row else 0) or 0)
     cost_runs = int((row["cost_runs"] if row else 0) or 0)
     pricing_gaps = int((row["pricing_gaps"] if row else 0) or 0)
+    headless_unmetered_runs = int((row["headless_unmetered_runs"] if row and "headless_unmetered_runs" in row.keys() else 0) or 0)
     interactive_unmetered_runs = int((row["interactive_unmetered_runs"] if row and "interactive_unmetered_runs" in row.keys() else 0) or 0)
-    usage_denominator = scored_successful_runs or (successful_runs if not interactive_unmetered_runs else 0)
-    cost_denominator = scored_successful_runs or (successful_runs if not interactive_unmetered_runs else 0)
+    usage_denominator = scored_successful_runs or (successful_runs if not interactive_unmetered_runs and not headless_unmetered_runs else 0)
+    cost_denominator = scored_successful_runs or (successful_runs if not interactive_unmetered_runs and not headless_unmetered_runs else 0)
     missing_usage_runs = max(0, usage_denominator - usage_runs) if usage_denominator else 0
     usage_coverage = round((usage_runs / usage_denominator) * 100, 1) if usage_denominator else 100.0
     cost_coverage = round((cost_runs / cost_denominator) * 100, 1) if cost_denominator else 100.0
@@ -3302,6 +3363,8 @@ def check_automation_telemetry(days: int = 7) -> DoctorCheck:
     ]
     if missing_usage_runs:
         evidence.append(f"missing_usage_runs={missing_usage_runs}")
+    if headless_unmetered_runs:
+        evidence.append(f"headless_unmetered_runs_excluded={headless_unmetered_runs}")
     if interactive_unmetered_runs:
         evidence.append(f"interactive_unmetered_runs_excluded={interactive_unmetered_runs}")
     backends = str((row["backends"] if row else "") or "").strip()

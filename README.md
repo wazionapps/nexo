@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.11.6` is the current packaged-runtime line. Patch release — Guardian G4 now filters more false-positive slash fragments before they become debt, `strict_protocol_write_without_task` downgrades to `warn` when the session has a fresh heartbeat, and Deep Sleep extraction validates the real prompt contract instead of accepting any syntactically valid JSON. Validation so far: `50` targeted tests across hook guardrails and Deep Sleep extraction.
+Version `7.11.7` is the current packaged-runtime line. Patch release — runtime doctor now stops treating resolved protocol drift, disabled evolution, successful zero-usage headless runs, and recent in-flight crons as live runtime failures, while `runner-health-check` treats supervisor `SIGTERM 143` reloads as benign and supports both tuple and row-shaped SQLite reads. Result: the runtime doctor/runtime tier goes back to green on the live install. Validation so far: `104` targeted tests across doctor and runner-health.
+
+Previously in `7.11.6`: patch release — Guardian G4 now filters more false-positive slash fragments before they become debt, `strict_protocol_write_without_task` downgrades to `warn` when the session has a fresh heartbeat, and Deep Sleep extraction validates the real prompt contract instead of accepting any syntactically valid JSON. Validation so far: `50` targeted tests across hook guardrails and Deep Sleep extraction.
 
 Previously in `7.11.5`: patch release — Desktop-managed installs now block the standalone dashboard at the same product-mode layer as evolution, so `installation_live`, cron sync, and watchdog no longer disagree about whether `com.nexo.dashboard` should exist. Validation: `125` targeted tests across product-mode, cron sync, and doctor, plus a full pre-release wrapper (`2321 passed, 2 skipped, 1 xfailed, 4 xpassed`).
 

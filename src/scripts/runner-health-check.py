@@ -71,6 +71,25 @@ RUNNERS = [
 ]
 
 
+def _row_value(row: sqlite3.Row | tuple, key: str):
+    if isinstance(row, sqlite3.Row):
+        return row[key]
+    column_index = {
+        "exit_code": 0,
+        "error": 1,
+        "started_at": 2,
+    }
+    return row[column_index[key]]
+
+
+def _is_benign_supervisor_interrupt(row: sqlite3.Row | tuple) -> bool:
+    exit_code = _row_value(row, "exit_code")
+    error = _row_value(row, "error")
+    if int(exit_code or 0) != 143:
+        return False
+    return "Killed by SIGTERM" in str(error or "")
+
+
 def _recent_summary_evidence(conn: sqlite3.Connection, cron_id: str, cutoff: str) -> Optional[dict]:
     row = conn.execute(
         "SELECT summary, started_at FROM cron_runs WHERE cron_id=? AND started_at > ? AND summary != '' ORDER BY started_at DESC LIMIT 1",
@@ -113,27 +132,33 @@ def _recent_log_evidence(now: datetime, max_age_hours: int, *sources: tuple[str,
 
 
 def _last_error_state(conn: sqlite3.Connection, cron_id: str) -> Optional[dict]:
-    row = conn.execute(
-        "SELECT error, started_at FROM cron_runs WHERE cron_id=? AND error != '' AND error IS NOT NULL ORDER BY started_at DESC LIMIT 1",
+    rows = conn.execute(
+        "SELECT exit_code, error, started_at FROM cron_runs WHERE cron_id=? AND error != '' AND error IS NOT NULL ORDER BY started_at DESC",
         (cron_id,),
-    ).fetchone()
-    if not row:
+    ).fetchall()
+    row = next((candidate for candidate in rows if not _is_benign_supervisor_interrupt(candidate)), None)
+    if row is None:
         return None
 
     successful_since = conn.execute(
-        "SELECT COUNT(*) FROM cron_runs WHERE cron_id=? AND started_at > ? AND (exit_code=0 OR exit_code IS NULL)",
-        (cron_id, row[1]),
-    ).fetchone()
+        "SELECT exit_code, error, started_at FROM cron_runs WHERE cron_id=? AND started_at > ?",
+        (cron_id, _row_value(row, "started_at")),
+    ).fetchall()
+    successful_count = sum(
+        1
+        for candidate in successful_since
+        if int(_row_value(candidate, "exit_code") or 0) == 0 or _is_benign_supervisor_interrupt(candidate)
+    )
     age_row = conn.execute(
         "SELECT ROUND((julianday('now') - julianday(?)) * 24, 1)",
-        (row[1],),
+        (_row_value(row, "started_at"),),
     ).fetchone()
 
     return {
-        "last_error": row[0][:200],
-        "last_error_at": row[1],
+        "last_error": str(_row_value(row, "error") or "")[:200],
+        "last_error_at": _row_value(row, "started_at"),
         "last_error_age_hours": age_row[0] if age_row else None,
-        "successful_runs_since_last_error": successful_since[0] if successful_since else 0,
+        "successful_runs_since_last_error": successful_count,
     }
 
 
@@ -167,11 +192,15 @@ def check_runner(conn: sqlite3.Connection, runner: dict) -> dict:
         result["issues"].append(f"No runs in the last {MAX_HOURS_NO_RUN}h (last: {last_run})")
 
     # Check 2: Successful runs in the last week
-    row = conn.execute(
-        "SELECT COUNT(*) FROM cron_runs WHERE cron_id=? AND started_at > ? AND (exit_code=0 OR exit_code IS NULL)",
+    run_rows_7d = conn.execute(
+        "SELECT exit_code, error, started_at FROM cron_runs WHERE cron_id=? AND started_at > ?",
         (cron_id, cutoff_7d),
-    ).fetchone()
-    success_7d = row[0] or 0
+    ).fetchall()
+    success_7d = sum(
+        1
+        for row in run_rows_7d
+        if int(_row_value(row, "exit_code") or 0) == 0 or _is_benign_supervisor_interrupt(row)
+    )
     result["successful_runs_last_7d"] = success_7d
 
     if success_7d < runner["min_weekly"]:
@@ -183,11 +212,11 @@ def check_runner(conn: sqlite3.Connection, runner: dict) -> dict:
         )
 
     # Check 3: Error rate in last week
-    row = conn.execute(
-        "SELECT COUNT(*) FROM cron_runs WHERE cron_id=? AND started_at > ? AND exit_code IS NOT NULL AND exit_code != 0",
-        (cron_id, cutoff_7d),
-    ).fetchone()
-    errors_7d = row[0] or 0
+    errors_7d = sum(
+        1
+        for row in run_rows_7d
+        if int(_row_value(row, "exit_code") or 0) != 0 and not _is_benign_supervisor_interrupt(row)
+    )
     total_7d = success_7d + errors_7d
     result["errors_last_7d"] = errors_7d
     result["total_runs_last_7d"] = total_7d
@@ -266,6 +295,7 @@ def main() -> int:
         return 1
 
     conn = sqlite3.connect(str(DB_PATH), timeout=10)
+    conn.row_factory = sqlite3.Row
     now = datetime.now(timezone.utc)
 
     report = {
