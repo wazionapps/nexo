@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.11.5 makes Desktop-managed installs block the standalone dashboard at the same product-mode layer as evolution, so installation_live, cron sync, and watchdog agree on the dashboard contract.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.11.6 filters more Guardian G4 false-positive path fragments, softens missing-task debt when a fresh heartbeat proves the session is alive, and validates the real Deep Sleep extraction contract before success.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.11.5 makes Desktop-managed installs block the standalone dashboard at the same product-mode layer as evolution, so installation_live, cron sync, and watchdog agree on the dashboard contract.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.11.6 filters more Guardian G4 false-positive path fragments, softens missing-task debt when a fresh heartbeat proves the session is alive, and validates the real Deep Sleep extraction contract before success.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.11.5 makes Desktop-managed installs block the standalone dashboard at the same product-mode layer as evolution, so installation_live, cron sync, and watchdog agree on the dashboard contract.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.11.6 filters more Guardian G4 false-positive path fragments, softens missing-task debt when a fresh heartbeat proves the session is alive, and validates the real Deep Sleep extraction contract before success.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.11.5 makes Desktop-managed installs block the standalone dashboard at the same product-mode layer as evolution, so installation_live, cron sync, and watchdog agree on the dashboard contract.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.11.6 filters more Guardian G4 false-positive path fragments, softens missing-task debt when a fresh heartbeat proves the session is alive, and validates the real Deep Sleep extraction contract before success.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -87,22 +87,22 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v7.11.5 live</span>
+                    <span class="page-chip">v7.11.6 live</span>
                     <span class="page-chip">Guardian active</span>
                     <span class="page-chip">F0.6 hardening</span>
                     <span class="page-chip">Adaptive empirical</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v7115" class="btn btn-primary">Start with v7.11.5</a>
-                    <a href="#v7114" class="btn btn-secondary">See v7.11.4</a>
+                    <a href="#v7116" class="btn btn-primary">Start with v7.11.6</a>
+                    <a href="#v7115" class="btn btn-secondary">See v7.11.5</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
             </div>
             <div class="page-visual">
                 <div class="page-stack">
                     <div class="page-stack-card">
-                        <strong>v7.11.5</strong>
-                        <span>Patch — Desktop-managed installs now block the standalone dashboard at the same product-mode layer as evolution, so installation_live, cron sync, and watchdog stop disagreeing about whether <code>com.nexo.dashboard</code> should exist.</span>
+                        <strong>v7.11.6</strong>
+                        <span>Patch — Guardian G4 filters more false-positive slash fragments, strict missing-task debt softens when a fresh heartbeat proves the session is alive, and Deep Sleep extraction validates the real prompt contract before success.</span>
                     </div>
                     <div class="page-stack-card">
                         <strong>v7.11.1</strong>
@@ -304,6 +304,16 @@
 <section class="section-compact" style="background:rgba(124,58,237,0.08);">
     <div class="container desktop-disclaimer" style="max-width:860px;font-size:13px;line-height:1.55;">
         <p><strong>About NEXO Desktop.</strong> NEXO Desktop is a separate closed-source companion client distributed at <a href="https://nexo-desktop.com/">nexo-desktop.com</a>. When a changelog entry mentions NEXO Desktop it refers to a coordinated client release that consumes the Brain CLI/MCP contract. Desktop source does not live in this repo; the Brain (AGPL-3.0) remains fully usable on its own from terminal, Codex, Claude Code, or any MCP client.</p>
+    </div>
+</section>
+
+<section id="v7116" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.11.6 <span style="opacity:.5;font-weight:400;">&mdash; April 28, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">Guardian noise drops and Deep Sleep stops accepting partial JSON as success</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            This patch ships the subset of a tester report that was still reproducible on the current 7.11.5 code and runtime. First, <code>src/hook_guardrails.py</code> now rejects more slash fragments before they turn into protocol debt: regex and shell artifacts containing <code>|</code>, <code>=</code>, or <code>;</code>; date-like tokens such as <code>/04/2026</code>; and non-extension multi-segment slash tokens that do not exist on disk. That closes the still-live G4 noise path where quoted fragments and date substrings were reaching <code>g4_guard_check_required</code> and <code>strict_protocol_write_without_task</code> as if they were real targets. Second, strict missing-task writes still block, but when the same session has a heartbeat in the last 5 minutes the stored debt severity is now <code>warn</code> instead of <code>error</code>, so dashboards can distinguish active-session protocol drift from fully untracked edits. Third, <code>src/scripts/deep-sleep/extract.py</code> now validates the live extraction contract itself &mdash; <code>session_id</code>, <code>findings</code>, and structured <code>protocol_summary</code> &mdash; before declaring success. Structurally degraded JSON is marked as deterministic <code>json_schema</code> failure and persisted to <code>debug-extract-*-json_schema.txt</code> instead of silently feeding partial payloads into synthesis. Validation: <code>50</code> targeted tests across hook guardrails and Deep Sleep extraction.
+        </p>
     </div>
 </section>
 

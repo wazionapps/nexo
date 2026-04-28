@@ -134,7 +134,7 @@
                     <span class="page-chip">Shared brain product notes</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="/blog/nexo-7-11-5/" class="btn btn-primary">Read latest release</a>
+                    <a href="/blog/nexo-7-11-6/" class="btn btn-primary">Read latest release</a>
                     <a href="/changelog/" class="btn btn-secondary">Latest release notes</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -147,20 +147,20 @@
                     <span class="compare-chip">Patch</span>
                     <span class="compare-chip">Reliability</span>
                 </div>
-                <h2>NEXO 7.11.5: Desktop-managed installs now block the standalone dashboard cleanly</h2>
-                <p>Patch over v7.11.4. Live runtime validation after the 7.11.4 parity repair exposed one more contract bug: <code>installation_live</code> correctly treated a standalone <code>com.nexo.dashboard</code> LaunchAgent as drift when Desktop managed the product surface, but cron sync/watchdog still expected <code>dashboard</code> as a core keepalive service because product-mode only blocked <code>evolution</code>. v7.11.5 closes that contradiction by blocking <code>dashboard</code> at the same product-mode layer, so installation_live, cron sync, and watchdog now agree on the dashboard contract. Validation: 125 targeted tests plus the full pre-release wrapper stay green.</p>
+                <h2>NEXO 7.11.6: Guardian false positives drop and Deep Sleep validates extraction shape</h2>
+                <p>Patch over v7.11.5. Guardian G4 now filters more false-positive slash fragments before they become protocol debt, strict missing-task writes soften to <code>warn</code> when a fresh heartbeat proves the session is alive, and Deep Sleep extraction validates the real JSON contract instead of accepting any syntactically valid payload as success. Validation: 50 targeted tests.</p>
                 <div class="hero-actions" style="justify-content:flex-start;margin-bottom:18px;">
-                    <a href="/blog/nexo-7-11-5/" class="btn btn-primary">Open article</a>
-                    <a href="/changelog/#v7115" class="btn btn-secondary">Open changelog</a>
+                    <a href="/blog/nexo-7-11-6/" class="btn btn-primary">Open article</a>
+                    <a href="/changelog/#v7116" class="btn btn-secondary">Open changelog</a>
                 </div>
                 <div class="blog-mini-stack">
                     <div class="blog-mini-card">
                         <strong>Companion view</strong>
-                        <span><a href="/changelog/#v7115">See the full v7.11.5 changelog</a></span>
+                        <span><a href="/changelog/#v7116">See the full v7.11.6 changelog</a></span>
                     </div>
                     <div class="blog-mini-card">
                         <strong>Previous release</strong>
-                        <span><a href="/blog/nexo-7-11-4/">NEXO 7.11.4: Packaged runtime contracts, cron sync, and recovery close the last install gaps</a>.</span>
+                        <span><a href="/blog/nexo-7-11-5/">NEXO 7.11.5: Desktop-managed installs now block the standalone dashboard cleanly</a>.</span>
                     </div>
                 </div>
             </div>
@@ -191,6 +191,15 @@
 <section class="section-flush-top">
     <div class="container">
             <div class="blog-grid">
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 28, 2026</div>
+                <h2><a href="/blog/nexo-7-11-6/">NEXO 7.11.6: Guardian false positives drop and Deep Sleep validates extraction shape</a></h2>
+                <p>Patch over v7.11.5. Guardian G4 now filters slash fragments like <code>/04/2026</code> and regex-style tokens before they become debt, active sessions with a fresh heartbeat no longer get missing-task debt stored as hard errors, and Deep Sleep extraction rejects schema-invalid JSON instead of silently accepting partial output.</p>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/blog/nexo-7-11-6/" class="btn btn-secondary">Read more</a>
+                </div>
+            </div>
 
             <div class="blog-card">
                 <div class="blog-card-date">April 28, 2026</div>

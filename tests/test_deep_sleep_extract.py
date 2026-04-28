@@ -69,6 +69,66 @@ def test_classify_rate_limit(extract_module):
     assert kind == "rate_limit_error"
 
 
+def test_valid_extraction_accepts_prompt_contract_minimum(extract_module):
+    assert extract_module._is_valid_extraction(
+        {
+            "session_id": "claude_code:test.jsonl",
+            "findings": [],
+            "protocol_summary": {
+                "guard_check": {},
+                "heartbeat": {},
+                "change_log": {},
+            },
+        },
+        expected_session_id="claude_code:test.jsonl",
+    )
+
+
+def test_valid_extraction_rejects_missing_protocol_summary(extract_module):
+    assert not extract_module._is_valid_extraction(
+        {
+            "session_id": "claude_code:test.jsonl",
+            "findings": [],
+        },
+        expected_session_id="claude_code:test.jsonl",
+    )
+
+
+def test_analyze_session_rejects_schema_invalid_json(extract_module, tmp_path, monkeypatch):
+    date_dir = tmp_path / "sessions"
+    date_dir.mkdir(parents=True)
+    session_id = "claude_code:test-schema.jsonl"
+    session_file = date_dir / "session-01-test.txt"
+    session_file.write_text("dummy transcript")
+
+    monkeypatch.setattr(extract_module, "render_core_prompt", lambda *args, **kwargs: "")
+    monkeypatch.setattr(
+        extract_module,
+        "run_automation_prompt",
+        lambda *args, **kwargs: _make_result(
+            0,
+            stdout=json.dumps(
+                {
+                    "session_id": session_id,
+                    "findings": [],
+                }
+            ),
+        ),
+    )
+
+    parsed, error_kind = extract_module.analyze_session(
+        session_id,
+        date_dir,
+        shared_context_file=None,
+        session_txt_map={session_id: session_file.name},
+    )
+
+    assert parsed is None
+    assert error_kind == "json_schema"
+    debug_file = extract_module._deep_sleep_dir() / f"debug-extract-{session_id[:20]}-json_schema.txt"
+    assert debug_file.exists()
+
+
 def test_load_checkpoint_returns_none_on_missing(extract_module, tmp_path):
     assert extract_module._load_checkpoint(tmp_path / "nope.json") is None
 
@@ -230,3 +290,31 @@ def test_extract_main_deterministic_increments_counter(extract_module, tmp_path,
     third = json.loads(ckpt_path.read_text())
     assert third["error_count"] == extract_module.MAX_POISON_ATTEMPTS
     assert third["error"] == "poisoned"
+
+
+def test_extract_main_schema_error_counts_as_deterministic(extract_module, tmp_path, monkeypatch):
+    target_date = "2026-04-17"
+    nexo_home = Path(extract_module.NEXO_HOME)
+    date_dir = nexo_home / "operations" / "deep-sleep" / target_date
+    (date_dir / "checkpoints").mkdir(parents=True)
+    session_id = "claude_code:schema-1.jsonl"
+    (date_dir / "session-01-schema.txt").write_text("dummy")
+
+    meta = {
+        "session_files": [session_id],
+        "session_txt_map": {session_id: "session-01-schema.txt"},
+    }
+    (nexo_home / "operations" / "deep-sleep" / f"{target_date}-meta.json").write_text(
+        json.dumps(meta)
+    )
+    (nexo_home / "operations" / "deep-sleep" / f"{target_date}-context.txt").write_text("ctx")
+
+    monkeypatch.setattr(extract_module, "analyze_session", lambda *args, **kwargs: (None, "json_schema"))
+    monkeypatch.setattr(sys, "argv", ["extract.py", target_date])
+
+    extract_module.main()
+    ckpt_path = date_dir / "checkpoints" / "claude_code-schema-1.json"
+    first = json.loads(ckpt_path.read_text())
+    assert first["error_count"] == 1
+    assert first["last_error_kind"] == "json_schema"
+    assert first["error"] == "failed"

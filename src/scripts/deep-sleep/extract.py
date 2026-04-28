@@ -68,6 +68,7 @@ TRANSIENT_ERROR_KINDS = {
     "timeout",
     "signal",
 }
+REQUIRED_PROTOCOL_SUMMARY_KEYS = ("guard_check", "heartbeat", "change_log")
 
 
 def _classify_cli_result(result) -> tuple[str, str]:
@@ -131,6 +132,53 @@ def extract_json_from_response(text: str) -> dict | None:
                 except json.JSONDecodeError:
                     break
     return None
+
+
+def _is_valid_extraction(
+    parsed: dict,
+    *,
+    expected_session_id: str | None = None,
+) -> bool:
+    """Validate the minimum Deep Sleep extraction contract.
+
+    The extractor prompt's real top-level shape is
+    ``session_id/findings/protocol_summary`` plus optional richer sections.
+    We intentionally validate the live prompt contract rather than an older
+    proposal so a syntactically valid but structurally degraded JSON payload
+    does not silently count as success.
+    """
+
+    if not isinstance(parsed, dict):
+        return False
+    session_id = parsed.get("session_id")
+    if not isinstance(session_id, str) or not session_id.strip():
+        return False
+    if expected_session_id and session_id != expected_session_id:
+        return False
+    findings = parsed.get("findings")
+    if not isinstance(findings, list):
+        return False
+    if any(not isinstance(item, dict) for item in findings):
+        return False
+    protocol_summary = parsed.get("protocol_summary")
+    if not isinstance(protocol_summary, dict):
+        return False
+    for key in REQUIRED_PROTOCOL_SUMMARY_KEYS:
+        if not isinstance(protocol_summary.get(key), dict):
+            return False
+    for key in ("emotional_timeline", "abandoned_projects", "skill_candidates"):
+        if key in parsed and not isinstance(parsed.get(key), list):
+            return False
+    if "productivity_score" in parsed and not isinstance(parsed.get("productivity_score"), dict):
+        return False
+    return True
+
+
+def _write_debug_extract(session_id: str, kind: str, raw_output: str) -> Path:
+    debug_file = _deep_sleep_dir() / f"debug-extract-{session_id[:20]}-{kind}.txt"
+    debug_file.parent.mkdir(parents=True, exist_ok=True)
+    debug_file.write_text((raw_output or "")[:5000])
+    return debug_file
 
 
 def _safe_session_slug(session_id: str) -> str:
@@ -215,6 +263,8 @@ def analyze_session(
             if not line.strip().startswith("Post-mortem") and line.strip()
         )
         parsed = extract_json_from_response(output)
+        debug_output = output
+        parse_failure_kind = "json_parse"
 
         # Fallback: if Claude returned text instead of JSON, ask a short conversion call
         if not parsed and len(output.strip()) > 50:
@@ -231,17 +281,23 @@ def analyze_session(
                 append_system_prompt=json_system_prompt,
             )
             if convert_result.returncode == 0:
+                debug_output = convert_result.stdout
                 parsed = extract_json_from_response(convert_result.stdout)
                 if parsed:
                     print(f"    Conversion succeeded")
 
+        if parsed and not _is_valid_extraction(parsed, expected_session_id=session_id):
+            parse_failure_kind = "json_schema"
+            debug_output = json.dumps(parsed, indent=2, ensure_ascii=False)
+            parsed = None
+
         if not parsed:
-            # Save raw output for debugging
-            debug_file = _deep_sleep_dir() / f"debug-extract-{session_id[:20]}.txt"
-            debug_file.parent.mkdir(parents=True, exist_ok=True)
-            debug_file.write_text(result.stdout[:5000])
-            print(f"    Failed to parse JSON. Raw output saved to {debug_file}", file=sys.stderr)
-            return None, "json_parse"
+            debug_file = _write_debug_extract(session_id, parse_failure_kind, debug_output)
+            print(
+                f"    Failed to validate extraction ({parse_failure_kind}). Raw output saved to {debug_file}",
+                file=sys.stderr,
+            )
+            return None, parse_failure_kind
 
         return parsed, None
 
