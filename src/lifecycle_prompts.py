@@ -21,7 +21,7 @@ from typing import Any, Dict, List, Optional
 from core_prompts import render_core_prompt
 from operator_language import build_operator_language_contract
 
-PLAN_VERSION = 5
+PLAN_VERSION = 6
 
 
 # Actions that trigger a canonical diary+stop plan. `switch` and
