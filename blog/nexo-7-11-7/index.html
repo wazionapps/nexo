@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.11.7: Runtime doctor goes green again</title>
+<meta name="description" content="NEXO Brain v7.11.7 clears the remaining runtime doctor false positives, restores trustworthy runner health, and leaves the live runtime tier healthy again.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-11-7/">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.11.7: Runtime doctor goes green again","datePublished":"2026-04-28","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head><body><main><article style="max-width:760px;margin:80px auto;padding:0 24px;line-height:1.75;">
+<h1>NEXO 7.11.7 &mdash; Runtime doctor goes green again</h1>
+<p><em>Published 2026-04-28. Patch release over v7.11.6 &mdash; the remaining debt was no longer a broken runtime, but runtime diagnostics that were still reporting old or intentional state as if it were live failure.</em></p>
+
+<h2>What was still wrong after the last release</h2>
+<p>After the 7.11.6 tester-bug pass, the live install still showed yellow or red in <code>nexo doctor --tier runtime</code> for reasons that no longer matched real runtime breakage. The remaining problems were diagnostic drift:</p>
+<ul>
+  <li><code>evolution</code> freshness could still warn even when the product contract disabled evolution.</li>
+  <li>Historical conditioned-file drift could stay visible long after open conditioned protocol debt had already been drained.</li>
+  <li>Cancelled tasks still reduced <code>change_log</code> coverage.</li>
+  <li>Successful headless zero-usage zero-cost runs still degraded automation telemetry coverage.</li>
+  <li>Recent in-flight cron rows could look stale even while watchdog considered them healthy.</li>
+</ul>
+
+<h2>Runtime doctor now reflects live state instead of old residue</h2>
+<p><code>src/doctor/providers/runtime.py</code> now distinguishes live failure from historical or intentional state:</p>
+<ul>
+  <li>disabled <code>evolution</code> no longer trips cron freshness,</li>
+  <li>historical conditioned-file drift heals once open conditioned debt is zero,</li>
+  <li>cancelled tasks no longer lower <code>change_log</code> coverage,</li>
+  <li>successful headless zero-usage zero-cost runs are excluded from automation telemetry denominators, and</li>
+  <li>recent in-flight cron runs stay healthy instead of showing stale.</li>
+</ul>
+
+<p>The point of this patch is not to hide runtime failure. It is the opposite: keep <code>nexo doctor</code> trustworthy by only warning when the live runtime is actually in trouble.</p>
+
+<h2>Runner health now trusts supervisor behavior</h2>
+<p><code>src/scripts/runner-health-check.py</code> also had one real bug and one scoring problem:</p>
+<ul>
+  <li>supervisor <code>SIGTERM 143</code> reloads were being counted as failures, which produced false <code>morning-agent</code> and <code>followup-runner</code> warnings, and</li>
+  <li>the live script could crash because some runtime DB calls returned tuple-shaped rows while the patch path assumed <code>sqlite3.Row</code>.</li>
+</ul>
+
+<p>v7.11.7 treats those <code>143</code> supervisor interrupts as benign and supports both row shapes, so the script now matches the real runtime path instead of only the test harness.</p>
+
+<h2>Result</h2>
+<p>The live source-runtime smoke for <code>handle_doctor(tier='runtime', output='json')</code> returns <code>overall_status: healthy</code>. In other words: the runtime tier is green again after the backlog cleanup, and it stays green for the right reasons.</p>
+
+<h2>Validation</h2>
+<pre><code>pytest -q tests/test_doctor.py tests/test_runner_health_check.py
+
+104 passed
+</code></pre>
+
+<p><a href="/changelog/#v7117">Full changelog entry &rarr;</a> &middot; <a href="https://github.com/wazionapps/nexo/blob/main/src/doctor/providers/runtime.py">src/doctor/providers/runtime.py</a> &middot; <a href="https://github.com/wazionapps/nexo/blob/main/src/scripts/runner-health-check.py">src/scripts/runner-health-check.py</a></p>
+</article></main></body></html>
