@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.11.6: Guardian false positives drop and Deep Sleep validates extraction shape</title>
+<meta name="description" content="NEXO Brain v7.11.6 filters more Guardian G4 false-positive slash fragments, softens missing-task debt when a fresh heartbeat proves the session is alive, and makes Deep Sleep extraction validate the real JSON contract before success.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-11-6/">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.11.6: Guardian false positives drop and Deep Sleep validates extraction shape","datePublished":"2026-04-28","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head><body><main><article style="max-width:760px;margin:80px auto;padding:0 24px;line-height:1.75;">
+<h1>NEXO 7.11.6 &mdash; Guardian false positives drop and Deep Sleep validates extraction shape</h1>
+<p><em>Published 2026-04-28. Patch release over v7.11.5 &mdash; three bugs from a tester report were re-checked against the current code/runtime, and only the still-live ones shipped here.</em></p>
+
+<h2>What was still broken on current code</h2>
+<p>The report came from a tester on an older install, so the first step was to re-check everything against the current repo and runtime. Three issues were still reproducible on 7.11.5:</p>
+<ul>
+  <li>Guardian G4 still accepted some slash fragments as if they were real file paths.</li>
+  <li><code>strict_protocol_write_without_task</code> always stored <code>severity=error</code>, even when a fresh heartbeat proved the session was alive and simply missed <code>task_open</code>.</li>
+  <li>Deep Sleep extraction still treated any syntactically valid JSON as success, even when the payload did not match the extraction contract.</li>
+</ul>
+
+<h2>Guardian G4: fewer fake paths reach protocol debt</h2>
+<p><code>src/hook_guardrails.py</code> now filters more artifact shapes before they become debt:</p>
+<ul>
+  <li><code>|</code>, <code>=</code>, and <code>;</code> are treated as path-artifact markers.</li>
+  <li>Date-like slash fragments such as <code>/04/2026</code> are rejected.</li>
+  <li>Non-extension multi-segment slash tokens must exist on disk before they count as real paths.</li>
+</ul>
+
+<p>That means quoted fragments, regex-style tokens, and date substrings stop reaching <code>g4_guard_check_required</code> or <code>strict_protocol_write_without_task</code> as if they were real edit targets.</p>
+
+<h2>Strict missing-task debt now distinguishes drift from total loss of protocol</h2>
+<p>Strict writes still block when there is no open protocol task. That part remains fail-closed. What changes is the stored debt severity: if the same session has a heartbeat in the last 5 minutes, the debt is now <code>warn</code> instead of <code>error</code>.</p>
+
+<p>This does not relax enforcement. It simply stops dashboards and debt queues from mixing “session is clearly alive but skipped task_open” with “write came from a dead or untracked session”.</p>
+
+<h2>Deep Sleep now validates the real extraction contract</h2>
+<p><code>src/scripts/deep-sleep/extract.py</code> already handled transport errors and raw JSON parse failures. The remaining gap was structural: a payload could parse as JSON and still be too degraded to trust.</p>
+
+<p>v7.11.6 validates the live extraction contract itself before accepting success. The minimum shape now requires:</p>
+<ul>
+  <li><code>session_id</code></li>
+  <li><code>findings</code></li>
+  <li><code>protocol_summary</code> with the expected subkeys</li>
+</ul>
+
+<p>If the payload parses but fails that contract, the run is now marked as deterministic <code>json_schema</code> failure and the raw output is persisted to <code>debug-extract-*-json_schema.txt</code>. That keeps partial payloads out of synthesis instead of silently smearing weak data into the next layer.</p>
+
+<h2>Validation</h2>
+<pre><code>pytest -q tests/test_hook_guardrails.py tests/test_deep_sleep_extract.py
+
+50 passed
+</code></pre>
+
+<p><a href="/changelog/#v7116">Full changelog entry &rarr;</a> &middot; <a href="https://github.com/wazionapps/nexo/blob/main/src/hook_guardrails.py">src/hook_guardrails.py</a> &middot; <a href="https://github.com/wazionapps/nexo/blob/main/src/scripts/deep-sleep/extract.py">src/scripts/deep-sleep/extract.py</a></p>
+</article></main></body></html>
