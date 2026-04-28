@@ -42,7 +42,7 @@ def test_enforce_desktop_product_contract_persists_marker_and_disables_evolution
     assert objective["disabled_by"] == "desktop_product"
 
 
-def test_filter_blocked_crons_hides_evolution_for_desktop_product(tmp_path, monkeypatch):
+def test_filter_blocked_crons_hides_desktop_managed_crons(tmp_path, monkeypatch):
     home = tmp_path / "nexo-home"
     (home / "config").mkdir(parents=True, exist_ok=True)
     (home / "config" / "product-mode.json").write_text(json.dumps({
@@ -53,6 +53,7 @@ def test_filter_blocked_crons_hides_evolution_for_desktop_product(tmp_path, monk
 
     crons = [
         {"id": "evolution"},
+        {"id": "dashboard"},
         {"id": "deep-sleep"},
     ]
     filtered = product_mode.filter_blocked_crons(crons)

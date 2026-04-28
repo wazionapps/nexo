@@ -1033,3 +1033,63 @@ def test_g4_off_does_not_record_debt(guardrail_env, monkeypatch):
         "SELECT COUNT(*) FROM protocol_debt WHERE debt_type = 'g4_guard_check_required'"
     ).fetchone()[0]
     assert debt_count == 0
+
+
+def test_looks_like_real_path_filters_known_artifacts():
+    _, hook_guardrails = _reload_guardrail_stack()
+
+    # Real, plausible paths must pass.
+    assert hook_guardrails._looks_like_real_path("/tmp/foo.py") is True
+    assert hook_guardrails._looks_like_real_path("/Users/x/code/main.py") is True
+    assert hook_guardrails._looks_like_real_path("/etc/hosts") is True
+
+    # Unresolved shell substitutions, backticks, globs.
+    assert hook_guardrails._looks_like_real_path("/private/tmp/nexo-window-$(date") is False
+    assert hook_guardrails._looks_like_real_path("/private/tmp/nexo.py`") is False
+    assert hook_guardrails._looks_like_real_path("/private/tmp/nexo-window-*.png") is False
+    assert hook_guardrails._looks_like_real_path("/tmp/foo[1].txt") is False
+
+    # Truncated paths split by whitespace inside quoted strings.
+    assert hook_guardrails._looks_like_real_path("/Users/mariariera/Library/Application Support") is False
+
+    # Pure numeric segments (status codes, line numbers).
+    assert hook_guardrails._looks_like_real_path("/166") is False
+    assert hook_guardrails._looks_like_real_path("/487") is False
+    assert hook_guardrails._looks_like_real_path("/1000") is False
+
+    # Dictionary block-list (false positives observed in production debt log).
+    assert hook_guardrails._looks_like_real_path("/diary") is False
+    assert hook_guardrails._looks_like_real_path("/stdout") is False
+    assert hook_guardrails._looks_like_real_path("/window") is False
+    assert hook_guardrails._looks_like_real_path("/restaurar") is False
+    assert hook_guardrails._looks_like_real_path("/DTEND") is False
+
+    # Empty / non-absolute / not-a-path.
+    assert hook_guardrails._looks_like_real_path("") is False
+    assert hook_guardrails._looks_like_real_path(None) is False  # type: ignore[arg-type]
+    assert hook_guardrails._looks_like_real_path("relative/path.txt") is False
+
+
+def test_extract_touched_files_drops_dictionary_artifacts():
+    _, hook_guardrails = _reload_guardrail_stack()
+
+    files = hook_guardrails._extract_touched_files(
+        {
+            "file_path": "/tmp/real-target.py",
+            "paths": ["/diary", "/166", "/private/tmp/nexo-window-$(date"],
+        }
+    )
+    assert files == ["/tmp/real-target.py"]
+
+
+def test_extract_bash_touched_files_drops_glob_and_substitution_artifacts():
+    _, hook_guardrails = _reload_guardrail_stack()
+
+    files = hook_guardrails._extract_bash_touched_files(
+        {
+            "command": "cat /private/tmp/nexo-window-*.png > /private/tmp/nexo-out-$(date).png",
+            "cwd": "/tmp",
+        }
+    )
+    # Both arguments are bash artifacts; nothing should reach the guard.
+    assert files == []

@@ -847,11 +847,12 @@ function getCoreRuntimeFlatFiles(srcDir = path.join(__dirname, "..", "src")) {
         if (isDuplicateArtifactName(name, srcDir)) return false;
         const stat = fs.statSync(path.join(srcDir, name));
         if (!stat.isFile()) return false;
-        // Include Python modules and any flat JSON config the Python runtime
-        // reads at import time (e.g. model_defaults.json). The "_defaults.json"
-        // suffix convention lets us add future config JSONs without touching
-        // this list.
-        return name.endsWith(".py") || name.endsWith("_defaults.json");
+        // Include Python modules and flat JSON contracts that the runtime
+        // reads directly from the installed core tree.
+        return (
+          name.endsWith(".py")
+          || /(?:_defaults|_manifest|_tiers)\.json$/.test(name)
+        );
       })
     : [];
   return [...new Set([...staticFiles, ...discoveredRootModules])];
@@ -2351,6 +2352,42 @@ WantedBy=timers.target
   }
 }
 
+function syncCoreProcessesFromManifest(pythonPath, nexoHome, sourceRoot = "") {
+  const candidateSyncPaths = [
+    path.join(resolveRuntimeCronsDir(nexoHome), "sync.py"),
+    sourceRoot ? path.join(sourceRoot, "sync.py") : "",
+  ].filter(Boolean);
+  const runtimeCode = runtimeCodeDir(nexoHome);
+  let lastError = "";
+
+  for (const syncPath of candidateSyncPaths) {
+    if (!fs.existsSync(syncPath)) continue;
+    const syncResult = spawnSync(
+      pythonPath || "python3",
+      [syncPath],
+      {
+        env: {
+          ...process.env,
+          HOME: require("os").homedir(),
+          NEXO_HOME: nexoHome,
+          NEXO_CODE: runtimeCode,
+        },
+        stdio: "pipe",
+        encoding: "utf8",
+      },
+    );
+    if (syncResult.status === 0) {
+      return { ok: true, syncPath };
+    }
+    lastError = (syncResult.stderr || syncResult.stdout || "").trim() || `exit ${syncResult.status}`;
+  }
+
+  return {
+    ok: false,
+    error: lastError || "cron sync script not found",
+  };
+}
+
 async function runSetup() {
   // Non-interactive mode: --defaults, --yes, --skip, or -y all skip prompts
   // and apply the recommended defaults end-to-end (v6.0.0 adds --skip).
@@ -2587,8 +2624,14 @@ async function runSetup() {
           const optFile = path.join(resolveRuntimeConfigDir(NEXO_HOME), "optionals.json");
           if (fs.existsSync(optFile)) migOptionals = JSON.parse(fs.readFileSync(optFile, "utf8"));
         } catch {}
-        installAllProcesses(platform, migPython, NEXO_HOME, migSchedule, LAUNCH_AGENTS, migOptionals);
-        log("  All automated processes updated.");
+        const migCronSync = syncCoreProcessesFromManifest(migPython, NEXO_HOME, cronsMigSrc);
+        if (migCronSync.ok) {
+          log("  Core crons reconciled with manifest.");
+        } else {
+          log(`  Cron sync warning: ${migCronSync.error}. Falling back to legacy installer.`);
+          installAllProcesses(platform, migPython, NEXO_HOME, migSchedule, LAUNCH_AGENTS, migOptionals);
+          log("  Automated processes updated via legacy installer fallback.");
+        }
 
         // Update version file
         fs.writeFileSync(versionFile, JSON.stringify({
@@ -2701,19 +2744,11 @@ async function runSetup() {
         copyDirRec2(cronsSrc, cronsDest);
         log("Refreshed crons/ directory.");
 
-        const cronSyncPath = path.join(cronsSrc, "sync.py");
-        if (fs.existsSync(cronSyncPath)) {
-          const syncResult = spawnSync(syncPython, [cronSyncPath], {
-            env: { ...process.env, NEXO_HOME, NEXO_CODE: path.join(__dirname, "..", "src") },
-            stdio: "pipe",
-            encoding: "utf8",
-          });
-          if (syncResult.status === 0) {
-            log("Core crons reconciled with manifest.");
-          } else {
-            const syncErr = (syncResult.stderr || syncResult.stdout || "").trim();
-            log(`Cron sync warning: ${syncErr || `exit ${syncResult.status}`}`);
-          }
+        const syncStatus = syncCoreProcessesFromManifest(syncPython, NEXO_HOME, cronsSrc);
+        if (syncStatus.ok) {
+          log("Core crons reconciled with manifest.");
+        } else {
+          log(`Cron sync warning: ${syncStatus.error}`);
         }
       }
 
@@ -4227,15 +4262,9 @@ ${doScan ? `- Stack: ${Object.keys(profileData.code.languages || {}).slice(0, 5)
   schedule = await maybeConfigurePublicContribution(schedule, useDefaults);
   schedule = await maybeConfigureFullDiskAccess(schedule, useDefaults, python);
   const enabledOptionals = { dashboard: doDashboard, automation: schedule.automation_enabled !== false };
-  if (smokeTestMode) {
-    log("Smoke test mode detected — skipping LaunchAgents installation.");
-  } else if (isEphemeralInstall(NEXO_HOME)) {
-    log("Ephemeral HOME/NEXO_HOME detected — skipping LaunchAgents installation.");
-  } else {
-    installAllProcesses(platform, python, NEXO_HOME, schedule, LAUNCH_AGENTS, enabledOptionals);
-  }
 
-  // Persist optional process preferences for auto-update
+  // Persist optional process preferences before cron sync so the manifest
+  // installer reads the same automation/dashboard state we just computed.
   try {
     const configDir = resolveRuntimeConfigDir(NEXO_HOME);
     fs.mkdirSync(configDir, { recursive: true });
@@ -4243,8 +4272,23 @@ ${doScan ? `- Stack: ${Object.keys(profileData.code.languages || {}).slice(0, 5)
     fs.writeFileSync(optFile, JSON.stringify(enabledOptionals, null, 2));
   } catch {}
 
-  // Note: prevent-sleep and tcc-approve are now part of ALL_PROCESSES
-  // and installed by installAllProcesses() above. No separate caffeinate block needed.
+  if (smokeTestMode) {
+    log("Smoke test mode detected — skipping LaunchAgents installation.");
+  } else if (isEphemeralInstall(NEXO_HOME)) {
+    log("Ephemeral HOME/NEXO_HOME detected — skipping LaunchAgents installation.");
+  } else {
+    const cronSync = syncCoreProcessesFromManifest(python, NEXO_HOME, path.join(__dirname, "..", "src", "crons"));
+    if (cronSync.ok) {
+      log("Core crons reconciled with manifest.");
+    } else {
+      log(`Cron sync warning: ${cronSync.error}. Falling back to legacy installer.`);
+      installAllProcesses(platform, python, NEXO_HOME, schedule, LAUNCH_AGENTS, enabledOptionals);
+      log("Automated processes configured via legacy installer fallback.");
+    }
+  }
+
+  // Manifest-driven cron sync now owns the steady-state install path.
+  // The legacy installer remains only as a bootstrap fallback.
 
   // Step 7b: macOS Keychain setup for headless automation
   await setupKeychainPassFile(NEXO_HOME);

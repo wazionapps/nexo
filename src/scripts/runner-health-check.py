@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # nexo: name=runner-health-check
-# nexo: description=Watchdog check: verifica que runners (followup-runner, morning-agent) producen trabajo real. Alerta si 48h sin ejecución o sin output útil.
+# nexo: description=Watchdog check: verify that automation runners produce real work. Alert if they go 48h without runs or useful output.
 # nexo: category=watchdog
 # nexo: runtime=python
 # nexo: timeout=60
@@ -14,15 +14,15 @@
 # nexo: doctor_allow_db=true
 
 """
-Runner Health Check — verifica que los runners NEXO producen trabajo real.
+Runner Health Check — verify that NEXO runners produce real work.
 
 Checks:
-1. followup-runner: ¿ha ejecutado en las últimas 48h? ¿Ha cambiado estado de algún followup?
-2. morning-agent: ¿ha ejecutado exitosamente en las últimas 48h?
-3. Log de resultados: ¿los logs no están vacíos?
-4. Minimum execution count: ¿al menos N ejecuciones en la última semana?
+1. followup-runner: has it run in the last 48h? has any followup changed state?
+2. morning-agent: has it run successfully in the last 48h?
+3. Output evidence: are the logs non-empty and recent?
+4. Minimum execution count: at least N successful runs in the last week?
 
-Output: JSON report + alerta en .watchdog-alert si hay problemas.
+Output: JSON report + .watchdog-alert entry if there are failures.
 """
 
 import json
@@ -142,6 +142,7 @@ def check_runner(conn: sqlite3.Connection, runner: dict) -> dict:
     now = datetime.now(timezone.utc)
     cutoff_48h = (now - timedelta(hours=MAX_HOURS_NO_RUN)).strftime("%Y-%m-%d %H:%M:%S")
     cutoff_7d = (now - timedelta(days=7)).strftime("%Y-%m-%d %H:%M:%S")
+    cutoff_7d_ts = (now - timedelta(days=7)).timestamp()
 
     result = {
         "cron_id": cron_id,
@@ -237,18 +238,24 @@ def check_runner(conn: sqlite3.Connection, runner: dict) -> dict:
             detail = "; ".join(log_issues[:2]) if log_issues else "no recent log evidence"
             result["issues"].append(f"no recent log evidence ({detail})")
 
-    # Check 6: For followup-runner specifically — check if followups change state
+    # Check 6: For followup-runner specifically — look for actual followup activity
     if cron_id == "followup-runner":
-        row = conn.execute(
+        transitioned = conn.execute(
             "SELECT COUNT(*) FROM followups WHERE status != 'PENDING' AND updated_at > ?",
-            (cutoff_7d,),
+            (cutoff_7d_ts,),
         ).fetchone()
-        # updated_at is epoch float
         recent_updated = conn.execute(
             "SELECT COUNT(*) FROM followups WHERE updated_at > ?",
-            ((now - timedelta(days=7)).timestamp(),),
+            (cutoff_7d_ts,),
         ).fetchone()
-        result["followups_updated_last_7d"] = recent_updated[0] if recent_updated else 0
+        transitioned_count = transitioned[0] if transitioned else 0
+        updated_count = recent_updated[0] if recent_updated else 0
+        result["followups_non_pending_last_7d"] = transitioned_count
+        result["followups_updated_last_7d"] = updated_count
+        if success_7d > 0 and transitioned_count == 0 and updated_count == 0:
+            if result["status"] == "PASS":
+                result["status"] = "WARN"
+            result["issues"].append("No followup updates or state transitions in last 7d")
 
     return result
 

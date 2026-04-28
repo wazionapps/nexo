@@ -252,6 +252,78 @@ def _normalize_file_path(path: str) -> str:
     return _normalize_path_token(str(Path(path)))
 
 
+# Tokens that look like absolute paths but never refer to real files. They
+# typically come from shell heredocs, JSON keys (``/DTEND``), regex/glob
+# fragments, or numeric/dictionary substrings the bash extractor lifted out
+# of a quoted argument. Without this filter the hook keeps emitting
+# unack-eable g4_guard_check_required entries (self-audit 2026-04-24 C2).
+_PATH_ARTIFACT_RE = re.compile(
+    r"""
+    [\$\`]                # unresolved shell substitution / backtick boundary
+    | [\*\?]              # glob metacharacter
+    | [\[\]\{\}]          # bracket/range/heredoc markers
+    | \s                  # embedded whitespace (most likely truncation)
+    """,
+    re.VERBOSE,
+)
+
+# Single-segment ``/word`` candidates that match a small dictionary block-list
+# of confirmed false positives observed in the live debt log.
+_PATH_DICTIONARY_BLOCKLIST = frozenset(
+    {
+        "/diary",
+        "/stdout",
+        "/stderr",
+        "/estancada",
+        "/confirmacion",
+        "/confirmación",
+        "/window",
+        "/restaurar",
+        "/dtend",
+        "/dtstart",
+        "/summary",
+    }
+)
+
+
+def _looks_like_real_path(path: str) -> bool:
+    """Return True only when ``path`` plausibly refers to a real file.
+
+    The protocol-pretool guardrail uses this filter to suppress noise
+    coming from shell heredocs, glob fragments, and dictionary words that
+    the bash extractor sometimes mistakes for absolute paths. Without it
+    every false positive becomes a permanent ``g4_guard_check_required``
+    debt row that nobody can ack.
+    """
+
+    raw = str(path or "").strip()
+    if not raw:
+        return False
+    if not raw.startswith("/"):
+        return False
+    if _PATH_ARTIFACT_RE.search(raw):
+        return False
+    # Pure numeric segments (``/166``, ``/487``, ``/1000``) are almost
+    # always status codes or counters lifted out of a log line.
+    stripped = raw.lstrip("/")
+    if stripped and re.fullmatch(r"\d+", stripped):
+        return False
+    if raw.lower() in _PATH_DICTIONARY_BLOCKLIST:
+        return False
+    # Reject single-segment ``/word`` candidates that do not exist on the
+    # filesystem and have no extension. Real edits target nested paths or
+    # well-known top-level files (``/etc/hosts`` etc.) that already pass
+    # the dictionary check above. Globs hitting ``/etc`` etc. are rare
+    # and acceptable to over-filter compared with the noise we suppress.
+    if "/" not in stripped and "." not in stripped:
+        try:
+            if not Path(raw).exists():
+                return False
+        except OSError:
+            return False
+    return True
+
+
 def _resolve_runtime_path(path: str) -> Path:
     candidate = Path(str(path or "")).expanduser()
     if not candidate.is_absolute():
@@ -328,6 +400,8 @@ def _extract_touched_files(tool_input) -> list[str]:
     unique: list[str] = []
     seen = set()
     for item in files:
+        if not _looks_like_real_path(item):
+            continue
         normalized = _normalize_file_path(item)
         if normalized and normalized not in seen:
             seen.add(normalized)
@@ -414,6 +488,8 @@ def _extract_bash_touched_files(tool_input) -> list[str]:
 
     def add(candidate: str) -> None:
         resolved = _resolve_shell_candidate_path(candidate, cwd)
+        if not resolved or not _looks_like_real_path(resolved):
+            return
         normalized = _normalize_file_path(resolved) if resolved else ""
         if resolved and normalized and normalized not in seen:
             seen.add(normalized)

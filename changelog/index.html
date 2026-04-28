@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.11.2 ships two reliability fixes in the same family. The watchdog now reaps cron rows that stay in-flight past per-cron stuck_after_seconds thresholds (closes the v5.8.1 gap; generous defaults so the deep-sleep regression cannot recur). The Guardian/Enforcer now skips reminders asking for nexo_* tools while the MCP server has a restart-required marker on disk, instead of burning cycles on guaranteed no-ops.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.11.5 makes Desktop-managed installs block the standalone dashboard at the same product-mode layer as evolution, so installation_live, cron sync, and watchdog agree on the dashboard contract.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.11.2 ships two reliability fixes in the same family. The watchdog now reaps cron rows that stay in-flight past per-cron stuck_after_seconds thresholds (closes the v5.8.1 gap; generous defaults so the deep-sleep regression cannot recur). The Guardian/Enforcer now skips reminders asking for nexo_* tools while the MCP server has a restart-required marker on disk, instead of burning cycles on guaranteed no-ops.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.11.5 makes Desktop-managed installs block the standalone dashboard at the same product-mode layer as evolution, so installation_live, cron sync, and watchdog agree on the dashboard contract.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.11.2 ships two reliability fixes in the same family. The watchdog now reaps cron rows that stay in-flight past per-cron stuck_after_seconds thresholds (closes the v5.8.1 gap; generous defaults so the deep-sleep regression cannot recur). The Guardian/Enforcer now skips reminders asking for nexo_* tools while the MCP server has a restart-required marker on disk, instead of burning cycles on guaranteed no-ops.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.11.5 makes Desktop-managed installs block the standalone dashboard at the same product-mode layer as evolution, so installation_live, cron sync, and watchdog agree on the dashboard contract.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.11.2 ships two reliability fixes in the same family. The watchdog now reaps cron rows that stay in-flight past per-cron stuck_after_seconds thresholds (closes the v5.8.1 gap; generous defaults so the deep-sleep regression cannot recur). The Guardian/Enforcer now skips reminders asking for nexo_* tools while the MCP server has a restart-required marker on disk, instead of burning cycles on guaranteed no-ops.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.11.5 makes Desktop-managed installs block the standalone dashboard at the same product-mode layer as evolution, so installation_live, cron sync, and watchdog agree on the dashboard contract.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -87,22 +87,22 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v7.11.2 live</span>
+                    <span class="page-chip">v7.11.5 live</span>
                     <span class="page-chip">Guardian active</span>
                     <span class="page-chip">F0.6 hardening</span>
                     <span class="page-chip">Adaptive empirical</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v7113" class="btn btn-primary">Start with v7.11.3</a>
-                    <a href="#v7111" class="btn btn-secondary">See v7.11.1</a>
+                    <a href="#v7115" class="btn btn-primary">Start with v7.11.5</a>
+                    <a href="#v7114" class="btn btn-secondary">See v7.11.4</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
             </div>
             <div class="page-visual">
                 <div class="page-stack">
                     <div class="page-stack-card">
-                        <strong>v7.11.2</strong>
-                        <span>Patch — two reliability fixes in the same family. (1) Watchdog stuck-cron reaper closes the v5.8.1 in-flight gap: hung wrappers past per-cron <code>stuck_after_seconds</code> get SIGTERM'd, wrapper trap closes the row at <code>exit 143</code>. (2) Guardian/Enforcer respects <code>mcp-restart-required</code> marker: skips reminders asking for <code>nexo_*</code> tools while the MCP is in restart_required mode instead of burning cycles on guaranteed no-ops.</span>
+                        <strong>v7.11.5</strong>
+                        <span>Patch — Desktop-managed installs now block the standalone dashboard at the same product-mode layer as evolution, so installation_live, cron sync, and watchdog stop disagreeing about whether <code>com.nexo.dashboard</code> should exist.</span>
                     </div>
                     <div class="page-stack-card">
                         <strong>v7.11.1</strong>
@@ -303,7 +303,27 @@
 
 <section class="section-compact" style="background:rgba(124,58,237,0.08);">
     <div class="container desktop-disclaimer" style="max-width:860px;font-size:13px;line-height:1.55;">
-        <p><strong>Sobre NEXO Desktop.</strong> NEXO Desktop es un cliente acompa&ntilde;ante closed-source distribuido aparte en <a href="https://nexo-desktop.com/">nexo-desktop.com</a>. Cuando una entrada de changelog menciona "NEXO Desktop" se refiere a una versi&oacute;n coordinada de ese cliente que consume el contrato CLI/MCP del Brain. El c&oacute;digo de Desktop no vive en este repo; el Brain (AGPL-3.0) es 100% usable por s&iacute; solo desde terminal, Codex, Claude Code, o cualquier cliente MCP.</p>
+        <p><strong>About NEXO Desktop.</strong> NEXO Desktop is a separate closed-source companion client distributed at <a href="https://nexo-desktop.com/">nexo-desktop.com</a>. When a changelog entry mentions NEXO Desktop it refers to a coordinated client release that consumes the Brain CLI/MCP contract. Desktop source does not live in this repo; the Brain (AGPL-3.0) remains fully usable on its own from terminal, Codex, Claude Code, or any MCP client.</p>
+    </div>
+</section>
+
+<section id="v7115" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.11.5 <span style="opacity:.5;font-weight:400;">&mdash; April 28, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">Desktop-managed installs now block the standalone dashboard cleanly</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            Live runtime validation after the 7.11.4 packaged-runtime parity repair exposed one more contract bug. <code>nexo doctor --plane installation_live</code> correctly treated a standalone <code>com.nexo.dashboard.plist</code> LaunchAgent as drift when Desktop managed the product surface, but cron sync and the watchdog still expected <code>dashboard</code> as a core keepalive service because <code>src/product_mode.py</code> only blocked <code>evolution</code>. Repairing the drift made the watchdog fail; refreshing the runtime reinstalled the dashboard to satisfy the watchdog and reintroduced the drift. v7.11.5 closes that contradiction at the source: <code>DESKTOP_DISABLED_FEATURES</code> now includes <code>dashboard</code>, and <code>is_cron_blocked()</code> checks membership in that set instead of a one-off evolution branch. On Desktop-managed installs the standalone dashboard is now blocked, not installed, and not monitored, so installation_live, cron sync, and watchdog agree on the same product contract. Validation: <code>125</code> targeted tests across product-mode, cron sync, and doctor, plus the full pre-release wrapper stayed green (<code>2321 passed, 2 skipped, 1 xfailed, 4 xpassed</code>).
+        </p>
+    </div>
+</section>
+
+<section id="v7114" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.11.4 <span style="opacity:.5;font-weight:400;">&mdash; April 28, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">Packaged runtime contracts, cron sync, and recovery close the last install gaps</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            Source checkouts and packaged installs had drifted into two different contracts. Root JSON runtime files such as <code>local_model_manifest.json</code> could exist in the repo but never arrive in <code>~/.nexo/core</code>, install/update paths still depended on a stale JS allowlist instead of <code>src/crons/manifest.json</code>, <code>runner-health-check</code> wrote a report that no product surface consumed, and the watchdog only healed some failures after a stale-age window even when the cron had already exited non-zero. v7.11.4 closes the whole loop. Packaged runtimes now sync root <code>*_manifest.json</code>, <code>*_defaults.json</code>, and <code>*_tiers.json</code> contracts through both <code>bin/nexo-brain.js</code> and <code>src/auto_update.py</code>; fresh install, same-version refresh, and versioned migration/update now call manifest-driven cron sync first via <code>syncCoreProcessesFromManifest(...)</code>; <code>runner-health-check</code> is registered in the cron manifest, its dead followup-activity query is fixed, doctor/runtime health reads the report, and dashboard exposes both <code>runner-health-report.json</code> and <code>morning-briefing-latest.md</code>; <code>nexo-watchdog.sh</code> now treats <code>run_once_on_wake</code> as a catchup-style recovery policy and retries failed crons immediately instead of waiting for stale windows, while also scoping stuck-wrapper PID matches to the current runtime wrapper path so one install cannot mistake another install's wrapper that happens to share the same <code>cron_id</code>. Validation: <code>117</code> targeted tests across cron recovery, packaged runtime/update, dashboard, local models, and runtime update contracts stayed green.
+        </p>
     </div>
 </section>
 
