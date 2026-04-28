@@ -15,7 +15,7 @@ DESKTOP_PRODUCT_ENV = "NEXO_DESKTOP_MANAGED"
 ALLOW_CORE_WRITES_ENV = "NEXO_ALLOW_CORE_WRITES"
 PRODUCT_MODE_FILENAME = "product-mode.json"
 DESKTOP_PRODUCT_MODE = "desktop_closed_product"
-DESKTOP_DISABLED_FEATURES = ("evolution",)
+DESKTOP_DISABLED_FEATURES = ("evolution", "dashboard")
 DESKTOP_EVOLUTION_DISABLED_REASON = "Disabled by NEXO Desktop product contract"
 
 
@@ -199,7 +199,7 @@ def enforce_desktop_product_contract(*, source: str = "desktop") -> dict[str, An
 
 def is_cron_blocked(cron_id: str | None) -> bool:
     clean = str(cron_id or "").strip().lower()
-    return clean == "evolution" and desktop_product_requested()
+    return clean in DESKTOP_DISABLED_FEATURES and desktop_product_requested()
 
 
 def filter_blocked_crons(crons: list[dict[str, Any]]) -> list[dict[str, Any]]:

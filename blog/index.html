@@ -134,7 +134,7 @@
                     <span class="page-chip">Shared brain product notes</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="/blog/nexo-7-11-3/" class="btn btn-primary">Read latest release</a>
+                    <a href="/blog/nexo-7-11-5/" class="btn btn-primary">Read latest release</a>
                     <a href="/changelog/" class="btn btn-secondary">Latest release notes</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -143,24 +143,24 @@
             <div class="blog-featured-card">
                 <div class="section-label">Latest release</div>
                 <div class="blog-featured-meta">
-                    <span class="compare-chip">April 27, 2026</span>
+                    <span class="compare-chip">April 28, 2026</span>
                     <span class="compare-chip">Patch</span>
                     <span class="compare-chip">Reliability</span>
                 </div>
-                <h2>NEXO 7.11.3: Fingerprint excludes the versions/ snapshot store</h2>
-                <p>Patch over v7.11.2. Root-cause fix for the <code>mcp_restart_required</code> lockup that v7.11.2 only masked at the enforcer layer. <code>_FINGERPRINT_EXCLUDE_DIRS</code> in <code>src/runtime_versioning.py</code> was missing <code>"versions"</code>, so <code>compute_mcp_runtime_fingerprint()</code> walked into <code>core/versions/&lt;old&gt;/**.py</code> whenever it was called against the live runtime root. <code>installed_runtime_fingerprint()</code> (which resolves through <code>active_runtime_root()</code> → <code>core/versions/&lt;active&gt;/</code>) and <code>prime_process_fingerprint()</code> (which starts from <code>__file__.parent</code> → live <code>core/</code>) returned different hashes after the second-ever <code>nexo update</code> on a host. The marker could never be cleared by <code>_ack_current_client_if_restarted()</code>; every non-allowlisted MCP tool returned <code>{"error": "mcp_restart_required"}</code> indefinitely, even after the operator restarted the client. v7.11.2 silenced the enforcer-side noise but the marker itself stayed stuck. Adding <code>"versions"</code> to the exclude set restores parity. 1 new regression test (<code>test_fingerprint_ignores_versions_subtree</code>) seeds three snapshot directories under <code>versions/</code> and asserts the fingerprint does not shift; the two existing exclude-dir tests now also cover <code>"versions"</code>. All 21 tests in <code>tests/test_runtime_fingerprint.py</code> stay green.</p>
+                <h2>NEXO 7.11.5: Desktop-managed installs now block the standalone dashboard cleanly</h2>
+                <p>Patch over v7.11.4. Live runtime validation after the 7.11.4 parity repair exposed one more contract bug: <code>installation_live</code> correctly treated a standalone <code>com.nexo.dashboard</code> LaunchAgent as drift when Desktop managed the product surface, but cron sync/watchdog still expected <code>dashboard</code> as a core keepalive service because product-mode only blocked <code>evolution</code>. v7.11.5 closes that contradiction by blocking <code>dashboard</code> at the same product-mode layer, so installation_live, cron sync, and watchdog now agree on the dashboard contract. Validation: 125 targeted tests plus the full pre-release wrapper stay green.</p>
                 <div class="hero-actions" style="justify-content:flex-start;margin-bottom:18px;">
-                    <a href="/blog/nexo-7-11-3/" class="btn btn-primary">Open article</a>
-                    <a href="/changelog/#v7113" class="btn btn-secondary">Open changelog</a>
+                    <a href="/blog/nexo-7-11-5/" class="btn btn-primary">Open article</a>
+                    <a href="/changelog/#v7115" class="btn btn-secondary">Open changelog</a>
                 </div>
                 <div class="blog-mini-stack">
                     <div class="blog-mini-card">
                         <strong>Companion view</strong>
-                        <span><a href="/changelog/#v7113">See the full v7.11.3 changelog</a></span>
+                        <span><a href="/changelog/#v7115">See the full v7.11.5 changelog</a></span>
                     </div>
                     <div class="blog-mini-card">
                         <strong>Previous release</strong>
-                        <span><a href="/blog/nexo-7-11-2/">NEXO 7.11.2: Watchdog reaper + Enforcer respects restart_required</a>.</span>
+                        <span><a href="/blog/nexo-7-11-4/">NEXO 7.11.4: Packaged runtime contracts, cron sync, and recovery close the last install gaps</a>.</span>
                     </div>
                 </div>
             </div>
@@ -191,6 +191,24 @@
 <section class="section-flush-top">
     <div class="container">
             <div class="blog-grid">
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 28, 2026</div>
+                <h2><a href="/blog/nexo-7-11-5/">NEXO 7.11.5: Desktop-managed installs now block the standalone dashboard cleanly</a></h2>
+                <p>Patch over v7.11.4. Product-mode now blocks <code>dashboard</code> alongside <code>evolution</code>, so Desktop-managed installs stop oscillating between an <code>installation_live</code> warning and a watchdog FAIL over whether <code>com.nexo.dashboard</code> should exist.</p>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/blog/nexo-7-11-5/" class="btn btn-secondary">Read more</a>
+                </div>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 28, 2026</div>
+                <h2><a href="/blog/nexo-7-11-4/">NEXO 7.11.4: Packaged runtime contracts, cron sync, and recovery close the last install gaps</a></h2>
+                <p>Patch over v7.11.3. Packaged runtimes now receive root JSON contracts such as <code>local_model_manifest.json</code>, install/update paths sync core crons from <code>src/crons/manifest.json</code> again, <code>runner-health-check</code> is wired into cron + doctor + dashboard, and the watchdog retries failed crons immediately instead of waiting for stale windows. Validation: 117 targeted tests.</p>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/blog/nexo-7-11-4/" class="btn btn-secondary">Read more</a>
+                </div>
+            </div>
 
             <div class="blog-card">
                 <div class="blog-card-date">April 27, 2026</div>

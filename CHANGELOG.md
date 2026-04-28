@@ -1,5 +1,25 @@
 # Changelog
 
+## [7.11.5] - 2026-04-28
+
+### Fixed
+- **Desktop-managed installs now block the standalone dashboard at the same product-mode layer as evolution.** `src/product_mode.py` expands `DESKTOP_DISABLED_FEATURES` to include `dashboard`, and `is_cron_blocked()` now checks membership in that set instead of a hard-coded evolution-only branch. Before this, `nexo doctor --plane installation_live` correctly marked a standalone `com.nexo.dashboard.plist` as drift when Desktop managed the product surface, but cron sync/watchdog still expected `dashboard` as a core keepalive service because product-mode only blocked `evolution`. Repairing the drift made the watchdog fail; refreshing the runtime reinstalled the dashboard to satisfy the watchdog and reintroduced the drift. v7.11.5 makes installation_live, cron sync, and watchdog agree: on Desktop-managed installs the standalone dashboard is blocked, not installed, and not monitored.
+
+### Tests
+- `pytest -q tests/test_product_mode.py tests/test_cron_sync.py tests/test_doctor.py` → `125 passed`
+- `scripts/pre-release-verify.sh --release v7.11.5` → `2321 passed, 2 skipped, 1 xfailed, 4 xpassed`
+
+## [7.11.4] - 2026-04-28
+
+### Fixed
+- **Packaged runtimes now receive the same root JSON contracts as source checkouts.** `bin/nexo-brain.js::getCoreRuntimeFlatFiles()` and `src/auto_update.py::_runtime_flat_files()` no longer copy only `.py` files plus a few special cases. They now include root `*_manifest.json`, `*_defaults.json`, and `*_tiers.json` contracts, which closes the installed-runtime gap where `local_model_manifest.json` was present in the repo but absent from `~/.nexo/core`. Result: local embeddings/reranker resolution and warmup can use the same manifest-backed contract in both source and packaged installs.
+- **Cron installation/update is manifest-driven again.** `bin/nexo-brain.js` now routes fresh install, same-version refresh, and versioned update/migration through a shared `syncCoreProcessesFromManifest(...)` helper before falling back to the legacy `installAllProcesses(...)` path. This removes the steady-state dependency on a stale `ALL_PROCESSES` list and ensures core crons declared in `src/crons/manifest.json` are the ones that actually get installed/reloaded in packaged runtimes.
+- **Runner health is now a real product surface instead of a write-only artifact.** `src/crons/manifest.json` now registers `runner-health-check` as a core automation cron, `src/scripts/runner-health-check.py` fixes the dead followup-activity query/unused result path and reports meaningful 7-day followup activity, `src/doctor/providers/runtime.py` exposes the report in doctor/runtime health, and `src/dashboard/app.py` serves both `runner-health-report.json` and `morning-briefing-latest.md` through read APIs/chat shortcuts.
+- **Watchdog recovery now retries failed crons promptly instead of waiting for stale-age healing.** `src/scripts/nexo-watchdog.sh` treats `run_once_on_wake` as a catchup-style policy, requests catchup or immediate re-execute right after a failed ended run, and only falls back to stale-window recovery when that immediate heal did not happen. The stuck-wrapper PID match is also scoped to the current runtime's `nexo-cron-wrapper.sh`, so the reaper cannot confuse another install's wrapper that happens to share the same `cron_id`.
+
+### Tests
+- `pytest -q tests/test_cron_recovery.py tests/test_watchdog_stuck_reaper.py tests/test_cron_wrapper_contract.py tests/test_local_models.py tests/test_resonance_map.py tests/test_packaged_update_runtime.py tests/test_cron_sync.py tests/test_dashboard_app.py tests/test_runtime_update_contract.py tests/test_v6_fresh_install_skip.py` → `117 passed`
+
 ## [7.11.3] - 2026-04-27
 
 ### Fixed

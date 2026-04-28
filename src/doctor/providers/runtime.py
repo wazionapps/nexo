@@ -47,6 +47,7 @@ PROTECTED_MACOS_ROOTS = (
 # Freshness thresholds in seconds
 IMMUNE_FRESHNESS = 3600  # 1 hour (runs every 30 min)
 WATCHDOG_FRESHNESS = 3600  # 1 hour (runs every 30 min)
+RUNNER_HEALTH_FRESHNESS = 43200  # 12 hours (runner-health-check runs every 6h)
 DEFAULT_CRON_THRESHOLD = 7200  # Fallback when manifest data is unavailable
 LIVE_PROTOCOL_SESSION_FRESHNESS = 1800  # 30 minutes
 SPECIAL_ENV_NORMALIZE_IDS = {"prevent-sleep", "tcc-approve"}
@@ -1310,6 +1311,96 @@ def check_watchdog_status() -> DoctorCheck:
             status="degraded",
             severity="warn",
             summary=f"Watchdog status unreadable ({age_min:.0f} min ago)",
+            evidence=[str(e)],
+        )
+
+
+def check_runner_health_status() -> DoctorCheck:
+    """Check runner-health-report.json freshness and overall status."""
+    schedule = {}
+    try:
+        if SCHEDULE_FILE.is_file():
+            schedule = _load_json(SCHEDULE_FILE)
+    except Exception:
+        schedule = {}
+
+    prefs = normalize_client_preferences(schedule)
+    if not prefs.get("automation_enabled", True):
+        return DoctorCheck(
+            id="runtime.runner_health",
+            tier="runtime",
+            status="healthy",
+            severity="info",
+            summary="Automation disabled; runner health check not expected",
+        )
+
+    report_file = paths.operations_dir() / "runner-health-report.json"
+    age = _file_age_seconds(report_file)
+    if age is None:
+        return DoctorCheck(
+            id="runtime.runner_health",
+            tier="runtime",
+            status="degraded",
+            severity="warn",
+            summary="Runner health report not found",
+            evidence=[f"Expected: {report_file}"],
+            repair_plan=[
+                "Check that runner-health-check exists in crons/manifest.json and was synced into LaunchAgents/systemd",
+                "Verify followup-runner and morning-agent are enabled under automation",
+            ],
+            escalation_prompt="Automation runners are enabled but runner-health-report.json was never produced.",
+        )
+
+    age_hours = age / 3600
+    if age > RUNNER_HEALTH_FRESHNESS:
+        return DoctorCheck(
+            id="runtime.runner_health",
+            tier="runtime",
+            status="degraded",
+            severity="warn",
+            summary=f"Runner health report stale ({age_hours:.1f}h old)",
+            evidence=[
+                f"{report_file} last modified {age_hours:.1f} hours ago",
+                f"Expected freshness threshold: {RUNNER_HEALTH_FRESHNESS / 3600:.0f} hours",
+            ],
+            repair_plan=[
+                "Inspect runner-health-check cron installation and recent stderr",
+                "Verify automation crons are installed from the manifest, not a stale legacy process list",
+            ],
+        )
+
+    try:
+        data = _load_json(report_file)
+        runners = data.get("runners") or []
+        overall = str(data.get("overall", "UNKNOWN")).upper()
+        fail_count = sum(1 for runner in runners if str(runner.get("status", "")).upper() == "FAIL")
+        warn_count = sum(1 for runner in runners if str(runner.get("status", "")).upper() == "WARN")
+        if overall == "FAIL" or fail_count > 0:
+            status = "critical"
+            severity = "error"
+        elif overall == "WARN" or warn_count > 0:
+            status = "degraded"
+            severity = "warn"
+        else:
+            status = "healthy"
+            severity = "info"
+        return DoctorCheck(
+            id="runtime.runner_health",
+            tier="runtime",
+            status=status,
+            severity=severity,
+            summary=(
+                f"Runner health: {overall} ({len(runners)} runner(s), {warn_count} warn, {fail_count} fail, "
+                f"{age_hours:.1f}h ago)"
+            ),
+        )
+    except Exception as e:
+        return DoctorCheck(
+            id="runtime.runner_health",
+            tier="runtime",
+            status="degraded",
+            severity="warn",
+            summary=f"Runner health report unreadable ({age_hours:.1f}h ago)",
             evidence=[str(e)],
         )
 
@@ -3252,6 +3343,7 @@ def run_runtime_checks(fix: bool = False) -> list[DoctorCheck]:
     return [
         safe_check(check_immune_status),
         safe_check(check_watchdog_status),
+        safe_check(check_runner_health_status),
         safe_check(check_stale_sessions),
         safe_check(check_cron_freshness),
         safe_check(check_client_backend_preferences, fix=fix),

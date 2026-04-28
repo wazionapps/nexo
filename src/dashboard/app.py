@@ -1257,6 +1257,38 @@ async def api_watchdog():
         return JSONResponse({"error": f"Invalid JSON: {e}"}, status_code=500)
 
 
+@app.get("/api/runner-health")
+async def api_runner_health():
+    """Read runner health status from file."""
+    report_path = paths.operations_dir() / "runner-health-report.json"
+    if not report_path.exists():
+        return JSONResponse(
+            {"error": "runner-health-report.json not found", "path": str(report_path)},
+            status_code=404,
+        )
+    try:
+        data = json.loads(report_path.read_text(encoding="utf-8"))
+        return data
+    except json.JSONDecodeError as e:
+        return JSONResponse({"error": f"Invalid JSON: {e}"}, status_code=500)
+
+
+@app.get("/api/morning-briefing")
+async def api_morning_briefing():
+    """Read the latest generated morning briefing artifact."""
+    briefing_path = paths.operations_dir() / "morning-briefing-latest.md"
+    if not briefing_path.exists():
+        return JSONResponse(
+            {"error": "morning-briefing-latest.md not found", "path": str(briefing_path)},
+            status_code=404,
+        )
+    return {
+        "path": str(briefing_path),
+        "updated_at": datetime.datetime.fromtimestamp(briefing_path.stat().st_mtime).isoformat(),
+        "content": briefing_path.read_text(encoding="utf-8"),
+    }
+
+
 # ===========================================================================
 # NEW API ENDPOINTS — Dashboard v3.0 modules
 # ===========================================================================
@@ -1376,6 +1408,18 @@ async def api_chat(body: ChatMessage):
         if wp.exists():
             return {"answer": "Watchdog status:", "data": json.loads(wp.read_text()), "query_type": "watchdog"}
         return {"answer": "Watchdog not available.", "data": [], "query_type": "watchdog"}
+
+    elif any(w in msg for w in ["runner health", "morning agent", "followup runner"]):
+        rp = paths.operations_dir() / "runner-health-report.json"
+        if rp.exists():
+            return {"answer": "Runner health:", "data": json.loads(rp.read_text()), "query_type": "runner_health"}
+        return {"answer": "Runner health report not available.", "data": [], "query_type": "runner_health"}
+
+    elif any(w in msg for w in ["morning briefing", "briefing", "resumen matinal"]):
+        bp = paths.operations_dir() / "morning-briefing-latest.md"
+        if bp.exists():
+            return {"answer": "Latest morning briefing:", "data": {"content": bp.read_text(encoding="utf-8")}, "query_type": "morning_briefing"}
+        return {"answer": "Morning briefing not available.", "data": [], "query_type": "morning_briefing"}
 
     elif any(w in msg for w in ["skill", "habilidad"]):
         rows = conn.execute(

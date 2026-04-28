@@ -93,6 +93,20 @@
       "run_on_wake": true
     },
     {
+      "id": "runner-health-check",
+      "script": "scripts/runner-health-check.py",
+      "interval_seconds": 21600,
+      "description": "Watchdog check — verifies that automation runners produce recent useful output",
+      "core": true,
+      "optional": "automation",
+      "recovery_policy": "catchup",
+      "idempotent": true,
+      "max_catchup_age": 43200,
+      "stuck_after_seconds": 600,
+      "run_on_boot": true,
+      "run_on_wake": true
+    },
+    {
       "id": "backup",
       "script": "scripts/nexo-backup.sh",
       "type": "shell",

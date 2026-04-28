@@ -4135,7 +4135,14 @@ def _discover_runtime_root_python_modules(base_dir: Path) -> list[str]:
 def _runtime_flat_files(base_dir: Path) -> list[str]:
     ordered: list[str] = []
     seen: set[str] = set()
-    for name in _discover_runtime_root_python_modules(base_dir) + ["requirements.txt", "package.json", "version.json"]:
+    json_contracts = [
+        item.name
+        for item in sorted(base_dir.iterdir(), key=lambda p: p.name)
+        if item.is_file()
+        and re.search(r"(?:_defaults|_manifest|_tiers)\.json$", item.name)
+        and not is_duplicate_artifact_name(item.name)
+    ]
+    for name in _discover_runtime_root_python_modules(base_dir) + json_contracts + ["requirements.txt", "package.json", "version.json"]:
         if name in seen:
             continue
         seen.add(name)

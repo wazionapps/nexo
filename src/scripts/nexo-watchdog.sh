@@ -350,6 +350,17 @@ try_request_catchup() {
   return 1
 }
 
+recovery_uses_catchup() {
+  case "$1" in
+    catchup|run_once_on_wake)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 try_verify_repair() {
   # After Level 2 repair, wait and verify the service is healthy
   local plist_id="$1"
@@ -604,12 +615,19 @@ lookup_stuck_threshold() {
   fi
 }
 
+escape_extended_regex() {
+  printf '%s\n' "$1" | sed 's/[][(){}.^$*+?|\\]/\\&/g'
+}
+
 find_wrapper_pids() {
   local cron_id="$1"
-  # Match the wrapper's exact arg slot: "nexo-cron-wrapper.sh CRON_ID "
-  # The trailing space prevents prefix collisions (e.g. "morning-agent" vs
-  # a hypothetical "morning-agent-v2").
-  pgrep -f "nexo-cron-wrapper\.sh ${cron_id} " 2>/dev/null
+  local wrapper_script="${NEXO_CODE}/scripts/nexo-cron-wrapper.sh"
+  local wrapper_pattern cron_pattern
+  wrapper_pattern=$(escape_extended_regex "$wrapper_script")
+  cron_pattern=$(escape_extended_regex "$cron_id")
+  # Match the wrapper path for this runtime only. This avoids reaping
+  # another install's wrapper that happens to share the same cron_id.
+  pgrep -f "${wrapper_pattern} ${cron_pattern} " 2>/dev/null
 }
 
 reap_stuck_cron_pids() {
@@ -735,6 +753,7 @@ for monitor in "${MONITORS[@]}"; do
   cron_id=$(cron_id_from_service "$plist_id")
   latest_run_has_record=false
   latest_run_failed=false
+  recovered_failed_run=false
 
   # Check 1: Service loaded? (launchd on macOS, systemd on Linux)
   if is_loaded "$plist_id"; then
@@ -808,7 +827,7 @@ for monitor in "${MONITORS[@]}"; do
         if [ "$age" -gt $(( max_stale * 3 )) ] && [ -n "$proc_grep" ] && ! process_running "$proc_grep"; then
           status="FAIL"
           details="${details}In-flight for ${stale_age} but process '$proc_grep' dead — stale row. "
-          if [ "$recovery_policy" = "catchup" ]; then
+          if recovery_uses_catchup "$recovery_policy"; then
             if try_request_catchup; then
               status="HEALED"
               details="${details}Self-healed: requested catchup for crashed in-flight run. "
@@ -836,10 +855,31 @@ for monitor in "${MONITORS[@]}"; do
             status="FAIL"
             details="${details}Last run exited ${last_exit}. "
             [ -n "$last_error" ] && details="${details}Error: ${last_error}. "
+            if recovery_uses_catchup "$recovery_policy"; then
+              if try_request_catchup; then
+                status="HEALED"
+                recovered_failed_run=true
+                details="${details}Self-healed: requested catchup after failed run. "
+                TOTAL_HEALED=$((TOTAL_HEALED + 1))
+              else
+                details="${details}Catchup request after failed run failed. "
+              fi
+            else
+              if try_reexecute_missed_cron "$plist_id"; then
+                status="HEALED"
+                recovered_failed_run=true
+                details="${details}Self-healed: re-executed failed run immediately. "
+                TOTAL_HEALED=$((TOTAL_HEALED + 1))
+              else
+                details="${details}Immediate re-execute after failed run failed. "
+              fi
+            fi
           fi
         fi
-        if [ "$age" -gt $(( max_stale * 3 )) ]; then
-          if [ "$recovery_policy" = "catchup" ]; then
+        if $recovered_failed_run; then
+          :
+        elif [ "$age" -gt $(( max_stale * 3 )) ]; then
+          if recovery_uses_catchup "$recovery_policy"; then
             if try_request_catchup; then
               status="HEALED"
               details="${details}Self-healed: requested catchup for missed window (last run: $stale_age). "
@@ -867,7 +907,7 @@ for monitor in "${MONITORS[@]}"; do
       fi
     else
       stale_age="no cron_runs entry"
-      if [ "$recovery_policy" = "catchup" ]; then
+      if recovery_uses_catchup "$recovery_policy"; then
         if try_request_catchup; then
           status="HEALED"
           details="${details}Self-healed: requested catchup for missing cron_runs entry. "
