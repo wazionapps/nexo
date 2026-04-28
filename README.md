@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.11.5` is the current packaged-runtime line. Patch release — Desktop-managed installs now block the standalone dashboard at the same product-mode layer as evolution, so `installation_live`, cron sync, and watchdog no longer disagree about whether `com.nexo.dashboard` should exist. Validation: `125` targeted tests across product-mode, cron sync, and doctor, plus a full pre-release wrapper (`2321 passed, 2 skipped, 1 xfailed, 4 xpassed`).
+Version `7.11.6` is the current packaged-runtime line. Patch release — Guardian G4 now filters more false-positive slash fragments before they become debt, `strict_protocol_write_without_task` downgrades to `warn` when the session has a fresh heartbeat, and Deep Sleep extraction validates the real prompt contract instead of accepting any syntactically valid JSON. Validation so far: `50` targeted tests across hook guardrails and Deep Sleep extraction.
+
+Previously in `7.11.5`: patch release — Desktop-managed installs now block the standalone dashboard at the same product-mode layer as evolution, so `installation_live`, cron sync, and watchdog no longer disagree about whether `com.nexo.dashboard` should exist. Validation: `125` targeted tests across product-mode, cron sync, and doctor, plus a full pre-release wrapper (`2321 passed, 2 skipped, 1 xfailed, 4 xpassed`).
 
 Previously in `7.11.4`: patch release — packaged runtimes now receive root JSON contracts such as `local_model_manifest.json`, install/update paths sync core crons from `src/crons/manifest.json` instead of depending on a stale JS list, `runner-health-check` is wired into cron/doctor/dashboard instead of writing an unread file, and the watchdog retries failed crons immediately while treating `run_once_on_wake` as catchup-style recovery. Validation: `117` targeted tests across packaged update, cron sync/recovery, dashboard, local models, and runtime update contracts.
 

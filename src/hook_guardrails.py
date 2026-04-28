@@ -8,11 +8,12 @@ import os
 import re
 import shlex
 import sys
+import time
 from pathlib import Path
 import paths
 
 from core_prompts import render_core_prompt
-from db import create_protocol_debt, get_db
+from db import create_protocol_debt, get_db, get_last_heartbeat_ts
 from operator_language import append_operator_language_contract
 from plugins.guard import _load_conditioned_learnings, _normalize_path_token
 from protocol_settings import get_protocol_strictness
@@ -262,10 +263,13 @@ _PATH_ARTIFACT_RE = re.compile(
     [\$\`]                # unresolved shell substitution / backtick boundary
     | [\*\?]              # glob metacharacter
     | [\[\]\{\}]          # bracket/range/heredoc markers
+    | [\|\=\;]            # regex fragments / shell assignment / command separators
     | \s                  # embedded whitespace (most likely truncation)
     """,
     re.VERBOSE,
 )
+_DATE_LIKE_PATH_RE = re.compile(r"^/\d{1,4}/\d{1,4}(?:/\d{1,4})?$")
+_STRICT_WRITE_HEARTBEAT_WINDOW_SECONDS = 300
 
 # Single-segment ``/word`` candidates that match a small dictionary block-list
 # of confirmed false positives observed in the live debt log.
@@ -303,6 +307,8 @@ def _looks_like_real_path(path: str) -> bool:
         return False
     if _PATH_ARTIFACT_RE.search(raw):
         return False
+    if _DATE_LIKE_PATH_RE.fullmatch(raw):
+        return False
     # Pure numeric segments (``/166``, ``/487``, ``/1000``) are almost
     # always status codes or counters lifted out of a log line.
     stripped = raw.lstrip("/")
@@ -321,7 +327,36 @@ def _looks_like_real_path(path: str) -> bool:
                 return False
         except OSError:
             return False
+    parts = [segment for segment in stripped.split("/") if segment]
+    if len(parts) > 1 and "." not in parts[-1]:
+        try:
+            if not Path(raw).exists():
+                return False
+        except OSError:
+            return False
     return True
+
+
+def _strict_write_without_task_severity(session_id: str) -> str:
+    """Downgrade missing-task debt when the session is clearly alive.
+
+    A recent heartbeat shows the session is connected to a real ongoing
+    conversation even if the operator skipped `nexo_task_open`. We still
+    block strict writes, but store the debt as warn so dashboards separate
+    protocol drift from completely untracked edits.
+    """
+
+    if not session_id:
+        return "error"
+    try:
+        last_hb = get_last_heartbeat_ts(session_id)
+    except Exception:
+        return "error"
+    if last_hb is None:
+        return "error"
+    if time.time() - float(last_hb) <= _STRICT_WRITE_HEARTBEAT_WINDOW_SECONDS:
+        return "warn"
+    return "error"
 
 
 def _resolve_runtime_path(path: str) -> Path:
@@ -1394,12 +1429,13 @@ def process_pre_tool_event(payload: dict) -> dict:
     if not files:
         task = _find_any_open_task(conn, sid)
         if not task:
+            severity = _strict_write_without_task_severity(sid)
             debt = _ensure_protocol_debt(
                 conn,
                 session_id=sid,
                 task_id="",
                 debt_type="strict_protocol_write_without_task",
-                severity="error",
+                severity=severity,
                 evidence=f"{tool_name} attempted without a detectable file path and without an open protocol task.",
                 file_token="unknown-target",
             )
@@ -1425,12 +1461,13 @@ def process_pre_tool_event(payload: dict) -> dict:
     for filepath in files:
         task = _find_open_task_for_file(conn, sid, filepath)
         if not task:
+            severity = _strict_write_without_task_severity(sid)
             debt = _ensure_protocol_debt(
                 conn,
                 session_id=sid,
                 task_id="",
                 debt_type="strict_protocol_write_without_task",
-                severity="error",
+                severity=severity,
                 evidence=f"{tool_name} attempted on {filepath} without an open protocol task for that file.",
                 file_token=filepath,
             )

@@ -6,6 +6,7 @@ import importlib
 import json
 import os
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -252,8 +253,40 @@ def test_process_pre_tool_event_blocks_write_without_open_task_in_strict_mode(gu
     assert result["status"] == "blocked"
     assert result["strictness"] == "strict"
     assert result["blocks"][0]["debt_type"] == "strict_protocol_write_without_task"
+    debt = db.get_db().execute(
+        "SELECT severity FROM protocol_debt WHERE debt_type = 'strict_protocol_write_without_task'"
+    ).fetchone()
+    assert debt["severity"] == "error"
     message = hook_guardrails.format_pretool_block_message(result)
     assert "open `nexo_task_open" in message
+
+
+def test_process_pre_tool_event_downgrades_missing_task_to_warn_with_recent_heartbeat(guardrail_env, monkeypatch):
+    db, hook_guardrails = _reload_guardrail_stack()
+    db.init_db()
+    monkeypatch.setattr(hook_guardrails, "get_protocol_strictness", lambda: "strict")
+    sid = "nexo-2004-3004b"
+    db.register_session(
+        sid,
+        "strict edit with heartbeat",
+        external_session_id="claude-strict-1b",
+        session_client="claude_code",
+    )
+    db.update_last_heartbeat_ts(sid, time.time() - 30)
+
+    result = hook_guardrails.process_pre_tool_event(
+        {
+            "session_id": "claude-strict-1b",
+            "tool_name": "Edit",
+            "tool_input": {"file_path": "/repo/src/plugins/protocol.py"},
+        }
+    )
+
+    assert result["status"] == "blocked"
+    debt = db.get_db().execute(
+        "SELECT severity FROM protocol_debt WHERE debt_type = 'strict_protocol_write_without_task'"
+    ).fetchone()
+    assert debt["severity"] == "warn"
 
 
 def test_process_pre_tool_event_resolves_sid_from_coordination_file_when_payload_lacks_session_id(guardrail_env, monkeypatch):
@@ -1048,6 +1081,8 @@ def test_looks_like_real_path_filters_known_artifacts():
     assert hook_guardrails._looks_like_real_path("/private/tmp/nexo.py`") is False
     assert hook_guardrails._looks_like_real_path("/private/tmp/nexo-window-*.png") is False
     assert hook_guardrails._looks_like_real_path("/tmp/foo[1].txt") is False
+    assert hook_guardrails._looks_like_real_path("/seleccion|select/i.test(v") is False
+    assert hook_guardrails._looks_like_real_path("/private/tmp/nexo-dist.log;") is False
 
     # Truncated paths split by whitespace inside quoted strings.
     assert hook_guardrails._looks_like_real_path("/Users/mariariera/Library/Application Support") is False
@@ -1056,6 +1091,7 @@ def test_looks_like_real_path_filters_known_artifacts():
     assert hook_guardrails._looks_like_real_path("/166") is False
     assert hook_guardrails._looks_like_real_path("/487") is False
     assert hook_guardrails._looks_like_real_path("/1000") is False
+    assert hook_guardrails._looks_like_real_path("/04/2026") is False
 
     # Dictionary block-list (false positives observed in production debt log).
     assert hook_guardrails._looks_like_real_path("/diary") is False
@@ -1063,6 +1099,9 @@ def test_looks_like_real_path_filters_known_artifacts():
     assert hook_guardrails._looks_like_real_path("/window") is False
     assert hook_guardrails._looks_like_real_path("/restaurar") is False
     assert hook_guardrails._looks_like_real_path("/DTEND") is False
+
+    # Existing real nested paths must keep passing.
+    assert hook_guardrails._looks_like_real_path("/private/tmp/nexo-thread-501.txt") is True
 
     # Empty / non-absolute / not-a-path.
     assert hook_guardrails._looks_like_real_path("") is False

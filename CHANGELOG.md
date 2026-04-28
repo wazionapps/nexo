@@ -1,5 +1,15 @@
 # Changelog
 
+## [7.11.6] - 2026-04-28
+
+### Fixed
+- **Guardian G4 drops more false-positive path fragments before they become debt.** `src/hook_guardrails.py` now treats `|`, `=`, and `;` as path-artifact markers, rejects date-like slash fragments such as `/04/2026`, and requires non-extension multi-segment slash tokens to exist on disk before accepting them as real paths. This closes the still-reproducible G4 noise path where regex fragments, shell separators, and date substrings were reaching `g4_guard_check_required` / `strict_protocol_write_without_task` debt despite not being real file targets.
+- **`strict_protocol_write_without_task` now separates active-session drift from fully untracked writes.** The strict pre-tool gate still blocks writes with no open task, but when the same session has heartbeated in the last 5 minutes the stored debt severity is downgraded from `error` to `warn`. That keeps enforcement fail-closed while making dashboards and protocol debt queues stop mixing “session is alive but missed task_open” with “write came from a dead/untracked session”.
+- **Deep Sleep extraction validates the live prompt contract, not just JSON syntax.** `src/scripts/deep-sleep/extract.py` now validates the actual extraction shape (`session_id`, `findings`, and structured `protocol_summary` with the expected subkeys) before counting a run as success. Structurally degraded JSON is now marked as deterministic `json_schema` failure, debug output is persisted to `debug-extract-*-json_schema.txt`, and the poison-counter path treats it like a real extraction failure instead of silently feeding partial payloads into synthesis.
+
+### Tests
+- `pytest -q tests/test_hook_guardrails.py tests/test_deep_sleep_extract.py` → `50 passed`
+
 ## [7.11.5] - 2026-04-28
 
 ### Fixed
