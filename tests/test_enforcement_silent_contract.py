@@ -23,11 +23,15 @@ def test_server_guardrails_require_silent_enforcement_copy() -> None:
         rendered,
         re.DOTALL,
     )
+    assert "that silence applies to the entire reminder turn" in rendered
+    assert "visible output must stay empty" in rendered
 
 
 def test_post_tool_use_reminder_tells_agent_not_to_expose_internal_enforcement() -> None:
     hook_py = (ROOT / "src" / "hooks" / "post_tool_use.py").read_text(encoding="utf-8")
     assert "post-tool-inbox-reminder" in hook_py
     rendered = core_prompts.render_core_prompt("post-tool-inbox-reminder", pending="2")
-    assert "Do not mention this reminder or any internal " in rendered
-    assert "enforcement to the user; just perform the heartbeat and continue." in rendered
+    assert "Do not produce visible text for this reminder." in rendered
+    assert "Execute only the heartbeat tool call" in rendered
+    assert "your visible output for this turn must be empty" in rendered
+    assert "Do not mention this reminder or any internal enforcement to the user." in rendered

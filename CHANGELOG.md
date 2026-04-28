@@ -1,5 +1,14 @@
 # Changelog
 
+## [7.11.8] - 2026-04-28
+
+### Fixed
+- **Silent Guardian reminders now stay silent for the whole turn.** `templates/core-prompts/server-mcp-instructions.md`, `templates/CLAUDE.md.template`, and `templates/core-prompts/post-tool-inbox-reminder.md` now make the contract explicit: when a reminder says not to produce visible text, that silence covers the entire reminder turn, with no prose before or after the tool call and empty visible output when there is no fresh operator message. This closes the reproducible path where consecutive reminder turns could still surface visible assistant text such as "En pausa esperando tu siguiente paso..." in NEXO Desktop.
+- **Canonical lifecycle close/app-exit prompts now publish the stricter silent-turn contract.** `templates/core-prompts/lifecycle-diary-stop.md` now tells the agent to emit only `nexo_session_diary_write` / `nexo_stop`, keep visible output empty if there is no fresh operator message, and let the caller handle fallback if a tool is unavailable. `src/lifecycle_prompts.py` bumps `PLAN_VERSION` to `6` so Desktop receives the new canonical prompt contract under a new deterministic plan version.
+
+### Tests
+- `pytest -q tests/test_enforcement_silent_contract.py tests/test_core_prompts.py` → `13 passed`
+
 ## [7.11.7] - 2026-04-28
 
 ### Fixed

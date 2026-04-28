@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.11.8: Silent Guardian reminders now stay silent</title>
+<meta name="description" content="NEXO Brain v7.11.8 hardens silent Guardian reminders so lifecycle close/app-exit and inbox reminders keep the whole turn invisible unless there is a fresh operator message.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-11-8/">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.11.8: Silent Guardian reminders now stay silent","datePublished":"2026-04-28","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head><body><main><article style="max-width:760px;margin:80px auto;padding:0 24px;line-height:1.75;">
+<h1>NEXO 7.11.8 &mdash; Silent Guardian reminders now stay silent</h1>
+<p><em>Published 2026-04-28. Patch release over v7.11.7 &mdash; the remaining leak was not Desktop UI logic anymore, but a Brain-side reminder contract that still allowed visible assistant prose after silent tool calls.</em></p>
+
+<h2>What was still leaking</h2>
+<p>In long-running Desktop conversations, Brain can inject silent reminders for lifecycle close/app-exit and for post-tool inbox heartbeat delivery. The reminders already said things like <em>Do not produce visible text</em>, but the contract was not explicit enough about the rest of the turn. In practice, a model could execute the silent tool call correctly and still append visible prose such as <code>En pausa esperando tu siguiente paso...</code> when there was no fresh user input.</p>
+
+<h2>The fix is shared at the contract level</h2>
+<p>v7.11.8 tightens the silence rule in every surface that matters:</p>
+<ul>
+  <li><code>templates/core-prompts/server-mcp-instructions.md</code> now says the silence applies to the entire reminder turn.</li>
+  <li><code>templates/CLAUDE.md.template</code> mirrors that same full-turn rule in the agent bootstrap.</li>
+  <li><code>templates/core-prompts/post-tool-inbox-reminder.md</code> now requests heartbeat-only output with no prose before or after it.</li>
+  <li><code>templates/core-prompts/lifecycle-diary-stop.md</code> now requires the same full-turn silence for close/app-exit diary + stop flows, including empty visible output when there is no fresh operator message.</li>
+</ul>
+
+<h2>Canonical lifecycle plans now publish the stricter contract</h2>
+<p><code>src/lifecycle_prompts.py</code> bumps <code>PLAN_VERSION</code> from <code>5</code> to <code>6</code>. That means Desktop receives the stricter close/app-exit diary-stop wording under a new deterministic canonical plan version, instead of silently reusing the older prompt contract.</p>
+
+<h2>Result</h2>
+<p>Consecutive silent reminders stop leaking visible prose into Desktop conversations, and canonical close/app-exit flows keep the same intent but with a stricter no-visible-output contract. The UI-side cleanup in Desktop handles stray historical content better, but Brain now stops generating the problematic visible turn in the first place.</p>
+
+<h2>Validation</h2>
+<pre><code>pytest -q tests/test_enforcement_silent_contract.py tests/test_core_prompts.py tests/test_lifecycle_events.py
+
+48 passed
+</code></pre>
+
+<p><a href="/changelog/#v7118">Full changelog entry &rarr;</a> &middot; <a href="https://github.com/wazionapps/nexo/blob/main/templates/core-prompts/server-mcp-instructions.md">server-mcp-instructions.md</a> &middot; <a href="https://github.com/wazionapps/nexo/blob/main/src/lifecycle_prompts.py">src/lifecycle_prompts.py</a></p>
+</article></main></body></html>
