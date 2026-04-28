@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.11.5: Desktop-managed installs now block the standalone dashboard cleanly</title>
+<meta name="description" content="NEXO Brain v7.11.5 makes Desktop-managed installs block the standalone dashboard at the same product-mode layer as evolution, so installation_live, cron sync, and watchdog agree on the dashboard contract.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-11-5/">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.11.5: Desktop-managed installs now block the standalone dashboard cleanly","datePublished":"2026-04-28","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head><body><main><article style="max-width:760px;margin:80px auto;padding:0 24px;line-height:1.75;">
+<h1>NEXO 7.11.5 &mdash; Desktop-managed installs now block the standalone dashboard cleanly</h1>
+<p><em>Published 2026-04-28. Patch release over v7.11.4 &mdash; same feature set, but one live-runtime contract contradiction removed.</em></p>
+
+<h2>What broke after v7.11.4</h2>
+<p>v7.11.4 repaired the packaged-runtime parity gaps and then the live runtime exposed one more bug during final validation. The product had two incompatible opinions about the standalone dashboard LaunchAgent on Desktop-managed installs:</p>
+<ul>
+  <li><code>nexo doctor --plane installation_live</code> correctly treated a standalone <code>com.nexo.dashboard.plist</code> as drift when Desktop already managed the product surface.</li>
+  <li>Cron sync and the watchdog still expected <code>dashboard</code> as a core keepalive service because product-mode only blocked <code>evolution</code>.</li>
+</ul>
+
+<p>The result was a loop with no stable state. If you repaired the install drift by removing the standalone dashboard LaunchAgent, the watchdog failed because it still expected <code>dashboard</code>. If you refreshed the runtime to satisfy the watchdog, the standalone dashboard came back and <code>installation_live</code> degraded again.</p>
+
+<h2>The fix</h2>
+<p>The contract now closes at the product-mode layer itself:</p>
+<pre><code>DESKTOP_DISABLED_FEATURES = ("evolution", "dashboard")
+
+def is_cron_blocked(cron_id):
+    return clean in DESKTOP_DISABLED_FEATURES and desktop_product_requested()
+</code></pre>
+
+<p>Before this patch, <code>is_cron_blocked()</code> was effectively a one-off <code>cron_id == "evolution"</code> check. That meant every caller that trusted product-mode &mdash; cron sync, watchdog monitor generation, and any manifest filtering path &mdash; still saw <code>dashboard</code> as active even though the install doctor said the opposite. v7.11.5 adds <code>dashboard</code> to the same disabled-features contract that already governed <code>evolution</code>, so Desktop-managed installs now have one consistent answer:</p>
+<ul>
+  <li>standalone dashboard blocked</li>
+  <li>not installed</li>
+  <li>not monitored</li>
+</ul>
+
+<h2>Why this is a product fix, not a local workaround</h2>
+<p>The tempting workaround was to edit the installed runtime by hand or just leave whichever warning looked less bad. That would have been the wrong layer. The contradiction lived in product code, so the fix belongs in the repo, then in a validated release, then in a supported runtime refresh. v7.11.5 is exactly that follow-up patch.</p>
+
+<h2>Validation</h2>
+<p>Targeted regression coverage for the contract change:</p>
+<pre><code>pytest -q tests/test_product_mode.py tests/test_cron_sync.py tests/test_doctor.py
+
+125 passed
+</code></pre>
+
+<p>The full release wrapper also stayed green after the follow-up patch:</p>
+<pre><code>scripts/pre-release-verify.sh --release v7.11.5
+
+2321 passed, 2 skipped, 1 xfailed, 4 xpassed
+</code></pre>
+
+<h2>Operational result</h2>
+<p>On a Desktop-managed host, a runtime refreshed to v7.11.5 no longer oscillates between an <code>installation_live</code> warning and a watchdog FAIL over <code>com.nexo.dashboard</code>. The dashboard contract is stable again.</p>
+
+<p><a href="/changelog/#v7115">Full changelog entry &rarr;</a> &middot; <a href="https://github.com/wazionapps/nexo/blob/main/src/product_mode.py">src/product_mode.py</a> &middot; <a href="https://github.com/wazionapps/nexo/blob/main/tests/test_product_mode.py">tests/test_product_mode.py</a></p>
+</article></main></body></html>

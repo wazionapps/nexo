@@ -46,12 +46,12 @@
         "@context": "https://schema.org",
         "@type": "SoftwareApplication",
         "name": "NEXO Brain",
-        "description": "Libre/open-source local cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Version 7.9.33 hotfixes a Bandit B324 finding from 7.9.32 (non-security SHA-1 needs usedforsecurity=False); first npm release that carries the 7.9.32 email-recovery checkpoints.",
+        "description": "Libre/open-source local cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Version 7.11.5 makes Desktop-managed installs block the standalone dashboard at the same product-mode layer as evolution, so installation_live, cron sync, and watchdog agree on the dashboard contract.",
         "applicationCategory": "DeveloperApplication",
         "operatingSystem": "macOS, Linux, Windows",
         "url": "https://nexo-brain.com",
         "downloadUrl": "https://www.npmjs.com/package/nexo-brain",
-        "softwareVersion": "7.11.1",
+        "softwareVersion": "7.11.5",
         "license": "https://www.gnu.org/licenses/agpl-3.0",
         "author": {
             "@type": "Organization",
@@ -697,7 +697,7 @@
     <div class="container">
         <div class="hero-badge fade-up">
             <span class="dot"></span>
-            <span id="version-badge">v7.11.1</span> Patch release — fingerprint cache by mtime/size signature. MCP startup and per-tool-call restart check skip the 263-file rehash when disk hasn't changed. ~11× speedup warm path; ~10-20s/day saved across Claude Code / Codex / headless / deep-sleep / cron starts. <a href="/changelog/#v7111">Read the v7.11.1 notes</a>.
+            <span id="version-badge">v7.11.5</span> Patch release — Desktop-managed installs now block the standalone dashboard at the same product-mode layer as evolution, so `installation_live`, cron sync, and watchdog no longer disagree about whether `com.nexo.dashboard` should exist. <a href="/changelog/#v7115">Read the v7.11.5 notes</a>.
         </div>
         <div class="fade-up" style="display:flex;gap:8px;justify-content:center;margin-bottom:12px;">
             <img src="https://img.shields.io/npm/v/nexo-brain?color=7C3AED&label=npm" alt="npm version">

@@ -14,9 +14,15 @@
   </url>
   <url>
     <loc>https://nexo-brain.com/blog/</loc>
-    <lastmod>2026-04-24</lastmod>
+    <lastmod>2026-04-28</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://nexo-brain.com/blog/nexo-7-11-5/</loc>
+    <lastmod>2026-04-28</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
   </url>
   <url>
     <loc>https://nexo-brain.com/blog/mcp-memory-tools-compared-2026/</loc>
@@ -613,6 +619,24 @@
     <priority>1.0</priority>
   </url>
   <url>
+    <loc>https://nexo-brain.com/blog/nexo-7-11-4/</loc>
+    <lastmod>2026-04-28</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://nexo-brain.com/blog/nexo-7-11-3/</loc>
+    <lastmod>2026-04-27</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://nexo-brain.com/blog/nexo-7-11-2/</loc>
+    <lastmod>2026-04-27</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
     <loc>https://nexo-brain.com/blog/nexo-7-11-1/</loc>
     <lastmod>2026-04-27</lastmod>
     <changefreq>weekly</changefreq>
@@ -728,7 +752,7 @@
   </url>
   <url>
     <loc>https://nexo-brain.com/changelog/</loc>
-    <lastmod>2026-04-24</lastmod>
+    <lastmod>2026-04-28</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
@@ -920,7 +944,7 @@
   </url>
   <url>
     <loc>https://nexo-brain.com/</loc>
-    <lastmod>2026-04-23</lastmod>
+    <lastmod>2026-04-28</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
