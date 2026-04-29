@@ -50,6 +50,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--timeout", type=int, default=AUTOMATION_SUBPROCESS_TIMEOUT, help="Timeout in seconds")
     parser.add_argument("--output-format", default="text", help="Requested output format")
     parser.add_argument("--allowed-tools", default="", help="Claude-style allowed tools contract")
+    parser.add_argument(
+        "--bare-mode",
+        choices=("auto", "on", "off"),
+        default="auto",
+        help="Bare mode for one-shot runs: auto|on|off.",
+    )
     parser.add_argument("--append-system-prompt", default="", help="Extra system prompt text")
     parser.add_argument("--append-system-prompt-file", default="", help="Read extra system prompt from a file")
     args = parser.parse_args(argv)
@@ -62,6 +68,11 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     append_system_prompt = args.append_system_prompt or _read_text(args.append_system_prompt_file)
+    bare_mode = None
+    if args.bare_mode == "on":
+        bare_mode = True
+    elif args.bare_mode == "off":
+        bare_mode = False
 
     try:
         result = run_automation_prompt(
@@ -76,6 +87,7 @@ def main(argv: list[str] | None = None) -> int:
             output_format=args.output_format,
             append_system_prompt=append_system_prompt,
             allowed_tools=args.allowed_tools,
+            bare_mode=bare_mode,
         )
     except AutomationBackendUnavailableError as exc:
         print(str(exc), file=sys.stderr)

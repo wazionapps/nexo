@@ -226,6 +226,7 @@ def run_automation_text(
     include_bootstrap: bool = True,
     caller: str = "",
     tier: str = "",
+    bare_mode: bool | None = None,
 ) -> str:
     """Run the configured NEXO automation backend and return text output.
 
@@ -264,6 +265,10 @@ def run_automation_text(
         cmd.extend(["--append-system-prompt", "\n\n".join(merged_system_prompt)])
     if allowed_tools:
         cmd.extend(["--allowed-tools", allowed_tools])
+    if bare_mode is True:
+        cmd.extend(["--bare-mode", "on"])
+    elif bare_mode is False:
+        cmd.extend(["--bare-mode", "off"])
 
     env = os.environ.copy()
     env.setdefault("NEXO_HOME", str(NEXO_HOME))
@@ -292,6 +297,7 @@ def run_automation_json(
     include_bootstrap: bool = True,
     caller: str = "",
     tier: str = "",
+    bare_mode: bool | None = None,
 ) -> dict:
     """Run the configured backend and return a parsed JSON object.
 
@@ -326,6 +332,10 @@ def run_automation_json(
         cmd.extend(["--append-system-prompt", "\n\n".join(merged_system_prompt)])
     if allowed_tools:
         cmd.extend(["--allowed-tools", allowed_tools])
+    if bare_mode is True:
+        cmd.extend(["--bare-mode", "on"])
+    elif bare_mode is False:
+        cmd.extend(["--bare-mode", "off"])
 
     env = os.environ.copy()
     env.setdefault("NEXO_HOME", str(NEXO_HOME))

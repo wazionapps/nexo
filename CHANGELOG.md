@@ -1,5 +1,15 @@
 # Changelog
 
+## [7.12.1] - 2026-04-29
+
+### Fixed
+- **Guardian G3 now catches SSH remote-write intent beyond quoted inline commands.** `src/hook_guardrails.py` now classifies remote shell writes when the command arrives through `stdin`, heredoc, or pipe-to-SSH shapes (`ssh host < script.sh`, `ssh -T host <<EOF`, `printf ... | ssh host bash`) in addition to the older `ssh host "cmd"` / `scp` / `rsync` / `sftp -b` cases.
+- **Recent same-task Cortex decisions now unlock the next matching G3 retry instead of dead-ending the operator.** The same pre-tool guard that asks for `nexo_cortex_decide` now actually honors a recent positive evaluation inside the same session and open task for a short TTL, so the next destructive or SSH remote-write retry can proceed without falling back to process-wide shadow overrides.
+- **`run_personal_automation_text()` stops spawning full agent sessions for short cron copy tasks.** `src/scripts/nexo_personal_automation.py`, `templates/nexo_helper.py`, and `src/scripts/nexo-agent-run.py` now run these calls as bare one-shots with no bootstrap, no default tool exposure, a 180s timeout, inferred `personal/<script>` caller ids, and per-caller overlap locks. This closes the reproducible path where text-only cron jobs could hang for hours or stack overlapping subprocesses.
+
+### Tests
+- `pytest -q tests/test_g1_g3_enforcer_active.py tests/test_hook_guardrails.py tests/test_nexo_agent_run_tier_flag.py tests/test_nexo_personal_automation.py tests/test_agent_runner_bare_mode.py tests/test_personal_caller_prefix.py tests/test_run_automation_prompt_tier_kwarg.py` → `110 passed`
+
 ## [7.12.0] - 2026-04-29
 
 ### Added

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.12.0 adds support-snapshot diagnostics and hardens the live Protocol Enforcer reminder path so silent background turns stay silent end-to-end.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.12.1 fixes Guardian G3 retry dead-ends and turns short personal automations into bare one-shots with overlap locks.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.12.0 adds support-snapshot diagnostics and hardens the live Protocol Enforcer reminder path so silent background turns stay silent end-to-end.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.12.1 fixes Guardian G3 retry dead-ends and turns short personal automations into bare one-shots with overlap locks.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.12.0 adds support-snapshot diagnostics and hardens the live Protocol Enforcer reminder path so silent background turns stay silent end-to-end.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.12.1 fixes Guardian G3 retry dead-ends and turns short personal automations into bare one-shots with overlap locks.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.12.0 adds support-snapshot diagnostics and hardens the live Protocol Enforcer reminder path so silent background turns stay silent end-to-end.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.12.1 fixes Guardian G3 retry dead-ends and turns short personal automations into bare one-shots with overlap locks.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -87,22 +87,22 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v7.12.0 live</span>
+                    <span class="page-chip">v7.12.1 live</span>
                     <span class="page-chip">Guardian active</span>
                     <span class="page-chip">F0.6 hardening</span>
                     <span class="page-chip">Adaptive empirical</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v7120" class="btn btn-primary">Start with v7.12.0</a>
-                    <a href="#v7118" class="btn btn-secondary">See v7.11.8</a>
+                    <a href="#v7121" class="btn btn-primary">Start with v7.12.1</a>
+                    <a href="#v7120" class="btn btn-secondary">See v7.12.0</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
             </div>
             <div class="page-visual">
                 <div class="page-stack">
                     <div class="page-stack-card">
-                        <strong>v7.12.0</strong>
-                        <span>Minor — adds `nexo support-snapshot` for generic local runtime diagnostics and hardens the live Protocol Enforcer reminder path so background silent turns stop leaking orphan assistant text into Desktop.</span>
+                        <strong>v7.12.1</strong>
+                        <span>Patch — Guardian G3 now sees SSH remote writes delivered by pipe/heredoc/stdin, recent same-task Cortex decisions unlock the next retry path, and short personal text automations switch to bare one-shots with short timeouts and overlap locks.</span>
                     </div>
                     <div class="page-stack-card">
                         <strong>v7.11.1</strong>
@@ -304,6 +304,16 @@
 <section class="section-compact" style="background:rgba(124,58,237,0.08);">
     <div class="container desktop-disclaimer" style="max-width:860px;font-size:13px;line-height:1.55;">
         <p><strong>About NEXO Desktop.</strong> NEXO Desktop is a separate closed-source companion client distributed at <a href="https://nexo-desktop.com/">nexo-desktop.com</a>. When a changelog entry mentions NEXO Desktop it refers to a coordinated client release that consumes the Brain CLI/MCP contract. Desktop source does not live in this repo; the Brain (AGPL-3.0) remains fully usable on its own from terminal, Codex, Claude Code, or any MCP client.</p>
+    </div>
+</section>
+
+<section id="v7121" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.12.1 <span style="opacity:.5;font-weight:400;">&mdash; April 29, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">Guardian retries round-trip and personal one-shots stop hanging</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            This patch closes two reliability gaps that were still creating operator friction after 7.12.0. First, <code>src/hook_guardrails.py</code> no longer treats SSH remote-write detection as only the quoted-inline form. The same G3 gate now catches <code>stdin</code>, heredoc, and pipe-to-SSH variants such as <code>ssh host &lt; script.sh</code>, <code>ssh -T host &lt;&lt;EOF</code>, and <code>printf ... | ssh host bash</code>, while recent positive Cortex evaluations in the same session and open task authorize the next matching retry for a short TTL instead of forcing process-wide shadow overrides. Second, <code>src/scripts/nexo_personal_automation.py</code> now routes short text-only cron work through bare one-shot runs: no bootstrap, no default tool exposure, 180-second timeout, inferred <code>personal/&lt;script&gt;</code> caller ids, and per-caller overlap locks. Result: remote deploy/recovery flows stop dead-ending right after <code>nexo_cortex_decide</code>, and text-only cron jobs stop sitting around for hours or stacking overlapping subprocesses.
+        </p>
     </div>
 </section>
 
