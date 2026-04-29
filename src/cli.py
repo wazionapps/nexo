@@ -29,6 +29,7 @@ Entry points:
   nexo clients sync [--json]
   nexo contributor status|on|off [--json]
   nexo doctor [--tier boot|runtime|deep|all] [--plane runtime_personal|installation_live|database_real] [--json] [--fix]
+  nexo support-snapshot [--json] [--include-doctor] [--log-lines N]
   nexo uninstall [--dry-run] [--delete-data] [--json]
 """
 from __future__ import annotations
@@ -2315,6 +2316,18 @@ def _doctor(args):
     return 0
 
 
+def _support_snapshot(args):
+    """Collect a generic runtime snapshot for support and diagnostics."""
+    from support_snapshot import collect_snapshot
+
+    payload = collect_snapshot(
+        log_lines=getattr(args, "log_lines", 80),
+        include_doctor=bool(getattr(args, "include_doctor", False)),
+    )
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    return 0
+
+
 def _skills_list(args):
     from db import init_db, list_skills, sync_skill_directories
 
@@ -2725,6 +2738,7 @@ Commands:
   nexo import-inspect PATH                           Inspect a portable user-data bundle
   nexo import PATH                                   Import a portable user-data bundle
   nexo doctor [--tier boot|runtime|deep|all] [--fix]   System diagnostics
+  nexo support-snapshot [--include-doctor] [--log-lines N]
   nexo scripts list|create|classify|sync|reconcile|ensure-schedules|schedules|schedule|run|doctor|call|unschedule|remove
                                                       Personal scripts
   nexo skills list|apply|sync|approve                  Executable skills
@@ -3063,6 +3077,11 @@ def main():
                                help="Force calibration.json flat → nested migration")
     doctor_parser.add_argument("--calibration-dry-run", action="store_true",
                                help="Preview the calibration migration without writing")
+
+    support_snapshot_parser = sub.add_parser("support-snapshot", help="Generic runtime snapshot for support and diagnostics")
+    support_snapshot_parser.add_argument("--json", action="store_true", help="JSON output (default)")
+    support_snapshot_parser.add_argument("--include-doctor", action="store_true", help="Include runtime doctor report")
+    support_snapshot_parser.add_argument("--log-lines", type=int, default=80, help="How many recent log lines to include")
 
     # -- contributor --
     contributor_parser = sub.add_parser("contributor", help="Public Draft PR contribution mode")
@@ -3432,6 +3451,8 @@ def main():
         return _preferences(args)
     elif args.command == "doctor":
         return _doctor(args)
+    elif args.command == "support-snapshot":
+        return _support_snapshot(args)
     elif args.command == "contributor":
         if args.action == "status":
             return _contributor_status(args)
