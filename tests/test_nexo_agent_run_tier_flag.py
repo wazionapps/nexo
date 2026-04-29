@@ -72,3 +72,32 @@ def test_tier_flag_defaults_to_empty(monkeypatch):
     module.main(["--prompt", "noop"])
     assert captured.get("tier") == ""
     assert captured.get("caller") == "agent_run/generic"
+    assert captured.get("bare_mode") is None
+
+
+def test_bare_mode_flag_reaches_run_automation_prompt(monkeypatch):
+    module = _load_cli_module()
+    captured: dict = {}
+
+    def _fake_run(prompt, **kwargs):
+        captured.update(kwargs)
+        return types.SimpleNamespace(stdout="", stderr="", returncode=0)
+
+    monkeypatch.setattr(module, "run_automation_prompt", _fake_run)
+
+    module.main(["--prompt", "noop", "--bare-mode", "on"])
+    assert captured.get("bare_mode") is True
+
+
+def test_bare_mode_off_reaches_run_automation_prompt(monkeypatch):
+    module = _load_cli_module()
+    captured: dict = {}
+
+    def _fake_run(prompt, **kwargs):
+        captured.update(kwargs)
+        return types.SimpleNamespace(stdout="", stderr="", returncode=0)
+
+    monkeypatch.setattr(module, "run_automation_prompt", _fake_run)
+
+    module.main(["--prompt", "noop", "--bare-mode", "off"])
+    assert captured.get("bare_mode") is False

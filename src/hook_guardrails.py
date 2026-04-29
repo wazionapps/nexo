@@ -191,6 +191,14 @@ _SFTP_BATCH_RE = re.compile(
     r"\bsftp\b(?:[^|&;]*\s)?-b\s+\S+",
     re.IGNORECASE,
 )
+_SSH_REMOTE_PIPE_RE = re.compile(
+    r"\|\s*ssh\b",
+    re.IGNORECASE,
+)
+_SSH_REMOTE_STDIN_RE = re.compile(
+    r"\bssh\b[^\n|&;]*(?:<\s*\S+|<<-?\s*(?:['\"]?[A-Za-z0-9_]+['\"]?))",
+    re.IGNORECASE,
+)
 
 
 def _classify_ssh_remote_write(command: str) -> str | None:
@@ -231,6 +239,10 @@ def _classify_ssh_remote_write(command: str) -> str | None:
         for pattern in _SSH_REMOTE_WRITE_VERBS:
             if pattern.search(trimmed):
                 return "ssh_remote_shell_write"
+    if _SSH_REMOTE_PIPE_RE.search(cmd):
+        return "ssh_remote_shell_write"
+    if _SSH_REMOTE_STDIN_RE.search(cmd):
+        return "ssh_remote_shell_write"
     return None
 
 
@@ -270,6 +282,64 @@ _PATH_ARTIFACT_RE = re.compile(
 )
 _DATE_LIKE_PATH_RE = re.compile(r"^/\d{1,4}/\d{1,4}(?:/\d{1,4})?$")
 _STRICT_WRITE_HEARTBEAT_WINDOW_SECONDS = 300
+_G3_CORTEX_AUTH_WINDOW_SECONDS = max(
+    60,
+    int(os.environ.get("NEXO_G3_CORTEX_AUTH_WINDOW_SECONDS", "900")),
+)
+_CORTEX_NEGATIVE_TOKENS = (
+    "abort",
+    "avoid",
+    "block",
+    "cancel",
+    "decline",
+    "defer",
+    "deny",
+    "do_not",
+    "dont",
+    "no_",
+    "not_now",
+    "reject",
+    "skip",
+    "wait",
+)
+_G3_CORTEX_GENERIC_APPROVAL_TOKENS = (
+    "allow",
+    "apply",
+    "approve",
+    "continue",
+    "deploy",
+    "execute",
+    "go_ahead",
+    "proceed",
+    "publish",
+    "retry",
+    "run",
+)
+_G3_CORTEX_FAMILY_TOKENS = {
+    "destructive": (
+        "chmod",
+        "cleanup",
+        "delete",
+        "drop",
+        "force",
+        "git_push",
+        "purge",
+        "remove",
+        "rm",
+        "truncate",
+        "wipe",
+    ),
+    "ssh": (
+        "deploy",
+        "remote",
+        "rsync",
+        "scp",
+        "sftp",
+        "ssh",
+        "sync",
+        "upload",
+    ),
+}
 
 # Single-segment ``/word`` candidates that match a small dictionary block-list
 # of confirmed false positives observed in the live debt log.
@@ -655,6 +725,7 @@ def _find_open_task_for_file(conn, sid: str, filepath: str) -> dict | None:
     target = _normalize_file_path(filepath)
     rows = conn.execute(
         """SELECT task_id, files, guard_has_blocking, guard_acknowledged, task_type, plan, unknowns,
+                  opened_at,
                   verification_step, opened_with_guard, must_change_log, must_verify
            FROM protocol_tasks
            WHERE session_id = ? AND status = 'open'
@@ -675,6 +746,7 @@ def _find_open_task_for_file(conn, sid: str, filepath: str) -> dict | None:
 def _find_any_open_task(conn, sid: str) -> dict | None:
     row = conn.execute(
         """SELECT task_id, files, guard_has_blocking, guard_acknowledged, task_type, plan, unknowns,
+                  opened_at,
                   verification_step, opened_with_guard, must_change_log, must_verify
            FROM protocol_tasks
            WHERE session_id = ? AND status = 'open'
@@ -683,6 +755,86 @@ def _find_any_open_task(conn, sid: str) -> dict | None:
         (sid,),
     ).fetchone()
     return dict(row) if row else None
+
+
+def _normalize_cortex_tokens(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", str(value or "").lower()).strip("_")
+
+
+def _text_has_any_token(value: str, tokens: tuple[str, ...]) -> bool:
+    normalized = _normalize_cortex_tokens(value)
+    if not normalized:
+        return False
+    return any(token in normalized for token in tokens)
+
+
+def _cortex_choice_is_negative(value: str) -> bool:
+    return _text_has_any_token(value, _CORTEX_NEGATIVE_TOKENS)
+
+
+def _find_recent_cortex_authorization(
+    conn,
+    *,
+    sid: str,
+    task: dict | None,
+    gate_family: str,
+    pattern_name: str = "",
+) -> dict | None:
+    if not sid or not task:
+        return None
+    task_id = str(task.get("task_id") or "").strip()
+    if not task_id:
+        return None
+    params: list[object] = [
+        sid,
+        task_id,
+        f"-{_G3_CORTEX_AUTH_WINDOW_SECONDS} seconds",
+    ]
+    sql = (
+        """SELECT id, task_id, recommended_choice, selected_choice,
+                  recommended_reasoning, selection_reason, context_hint, created_at
+           FROM cortex_evaluations
+           WHERE session_id = ?
+             AND task_id = ?
+             AND created_at >= datetime('now', ?)"""
+    )
+    opened_at = str(task.get("opened_at") or "").strip()
+    if opened_at:
+        sql += " AND created_at >= ?"
+        params.append(opened_at)
+    sql += " ORDER BY created_at DESC, id DESC LIMIT 5"
+    try:
+        rows = conn.execute(sql, params).fetchall()
+    except sqlite3.OperationalError:
+        return None
+    family_tokens = _G3_CORTEX_FAMILY_TOKENS.get(gate_family, ())
+    pattern_tokens = tuple(
+        token for token in _normalize_cortex_tokens(pattern_name).split("_") if token
+    )
+    fallback_candidates: list[dict] = []
+    for row in rows:
+        item = dict(row)
+        choice = str(item.get("selected_choice") or item.get("recommended_choice") or "").strip()
+        if not choice or _cortex_choice_is_negative(choice):
+            continue
+        combined = " ".join(
+            [
+                choice,
+                str(item.get("selection_reason") or ""),
+                str(item.get("recommended_reasoning") or ""),
+                str(item.get("context_hint") or ""),
+            ]
+        )
+        if (
+            _text_has_any_token(choice, _G3_CORTEX_GENERIC_APPROVAL_TOKENS)
+            or _text_has_any_token(combined, family_tokens)
+            or _text_has_any_token(combined, pattern_tokens)
+        ):
+            return item
+        fallback_candidates.append(item)
+    if len(fallback_candidates) == 1:
+        return fallback_candidates[0]
+    return None
 
 
 def _find_any_open_workflow(conn, sid: str) -> dict | None:
@@ -1164,6 +1316,7 @@ def process_pre_tool_event(payload: dict) -> dict:
     if not claude_sid:
         claude_sid = _read_claude_session_id_from_coordination()
     sid = _resolve_nexo_sid(conn, claude_sid)
+    open_task = _find_any_open_task(conn, sid) if sid else None
     automation_blocks = _collect_automation_live_repo_blocks(
         conn,
         sid=sid,
@@ -1229,11 +1382,21 @@ def process_pre_tool_event(payload: dict) -> dict:
         shell_command = _extract_bash_command(tool_input)
         destructive_pattern = _classify_destructive_intent(shell_command)
         if destructive_pattern:
+            if _find_recent_cortex_authorization(
+                conn,
+                sid=sid,
+                task=open_task,
+                gate_family="destructive",
+                pattern_name=destructive_pattern,
+            ):
+                destructive_pattern = None
+        if destructive_pattern:
             severity = "error" if g3_mode == "hard" else "warn"
+            task_id = str((open_task or {}).get("task_id") or "").strip()
             debt = _ensure_protocol_debt(
                 conn,
                 session_id=sid,
-                task_id="",
+                task_id=task_id,
                 debt_type="g3_destructive_command_requires_cortex",
                 severity=severity,
                 evidence=(
@@ -1253,7 +1416,7 @@ def process_pre_tool_event(payload: dict) -> dict:
                     "blocks": [
                         {
                             "file": "",
-                            "task_id": "",
+                            "task_id": task_id,
                             "debt_id": debt.get("id"),
                             "debt_type": "g3_destructive_command_requires_cortex",
                             "reason_code": "g3_destructive_blocked",
@@ -1284,11 +1447,21 @@ def process_pre_tool_event(payload: dict) -> dict:
         shell_command = _extract_bash_command(tool_input)
         ssh_pattern = _classify_ssh_remote_write(shell_command)
         if ssh_pattern:
+            if _find_recent_cortex_authorization(
+                conn,
+                sid=sid,
+                task=open_task,
+                gate_family="ssh",
+                pattern_name=ssh_pattern,
+            ):
+                ssh_pattern = None
+        if ssh_pattern:
             severity = "error" if g3_ssh_mode == "hard" else "warn"
+            task_id = str((open_task or {}).get("task_id") or "").strip()
             debt = _ensure_protocol_debt(
                 conn,
                 session_id=sid,
-                task_id="",
+                task_id=task_id,
                 debt_type="g3_ssh_remote_write_requires_cortex",
                 severity=severity,
                 evidence=(
@@ -1309,7 +1482,7 @@ def process_pre_tool_event(payload: dict) -> dict:
                     "blocks": [
                         {
                             "file": "",
-                            "task_id": "",
+                            "task_id": task_id,
                             "debt_id": debt.get("id"),
                             "debt_type": "g3_ssh_remote_write_requires_cortex",
                             "reason_code": "g3_ssh_remote_write_blocked",

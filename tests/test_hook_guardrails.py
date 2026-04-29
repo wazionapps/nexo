@@ -975,6 +975,147 @@ def test_g3_off_records_nothing(guardrail_env, monkeypatch):
     assert count == 0
 
 
+def test_g3_hard_mode_allows_destructive_bash_after_recent_cortex_decision_same_task(guardrail_env, monkeypatch):
+    monkeypatch.setenv("NEXO_HOME", str(guardrail_env))
+    monkeypatch.setenv("NEXO_G3_ENFORCE_DESTRUCTIVE", "hard")
+    db, hook_guardrails = _reload_guardrail_stack()
+    db.init_db()
+    monkeypatch.setattr(hook_guardrails, "get_protocol_strictness", lambda: "lenient")
+    monkeypatch.setattr(hook_guardrails, "core_writes_allowed", lambda: False)
+    sid = "nexo-2053-3053"
+    db.register_session(
+        sid,
+        "g3 destructive authorized",
+        external_session_id="claude-g3-allow-destructive",
+        session_client="claude_code",
+    )
+    task = db.create_protocol_task(
+        sid,
+        "Run controlled cleanup",
+        task_type="execute",
+        plan=["review cleanup", "run cleanup"],
+    )
+    db.create_cortex_evaluation(
+        session_id=sid,
+        task_id=task["task_id"],
+        goal="Controlled cleanup",
+        task_type="execute",
+        alternatives=["skip_cleanup", "proceed_with_cleanup"],
+        scores={"skip_cleanup": 0.4, "proceed_with_cleanup": 0.8},
+        recommended_choice="proceed_with_cleanup",
+        recommended_reasoning="Cleanup is expected and scoped to the same task.",
+    )
+
+    result = hook_guardrails.process_pre_tool_event(
+        {
+            "session_id": "claude-g3-allow-destructive",
+            "tool_name": "Bash",
+            "tool_input": {"command": "rm -rf /tmp/demo"},
+        }
+    )
+
+    assert result.get("status") != "blocked"
+    count = db.get_db().execute(
+        "SELECT COUNT(*) FROM protocol_debt WHERE debt_type = 'g3_destructive_command_requires_cortex'"
+    ).fetchone()[0]
+    assert count == 0
+
+
+def test_g3_hard_mode_allows_ssh_remote_write_after_recent_cortex_decision_same_task(guardrail_env, monkeypatch):
+    monkeypatch.setenv("NEXO_HOME", str(guardrail_env))
+    monkeypatch.setenv("NEXO_G3_SSH_ENFORCE_REMOTE_WRITE", "hard")
+    db, hook_guardrails = _reload_guardrail_stack()
+    db.init_db()
+    monkeypatch.setattr(hook_guardrails, "get_protocol_strictness", lambda: "lenient")
+    monkeypatch.setattr(hook_guardrails, "core_writes_allowed", lambda: False)
+    sid = "nexo-2054-3054"
+    db.register_session(
+        sid,
+        "g3 ssh authorized",
+        external_session_id="claude-g3-allow-ssh",
+        session_client="claude_code",
+    )
+    task = db.create_protocol_task(
+        sid,
+        "Deploy via ssh",
+        task_type="execute",
+        plan=["review deploy", "run deploy"],
+    )
+    db.create_cortex_evaluation(
+        session_id=sid,
+        task_id=task["task_id"],
+        goal="Deploy via ssh",
+        task_type="execute",
+        alternatives=["hold", "deploy_via_ssh"],
+        scores={"hold": 0.3, "deploy_via_ssh": 0.9},
+        recommended_choice="deploy_via_ssh",
+        recommended_reasoning="The deploy path is the intended remote action for this task.",
+    )
+
+    result = hook_guardrails.process_pre_tool_event(
+        {
+            "session_id": "claude-g3-allow-ssh",
+            "tool_name": "Bash",
+            "tool_input": {"command": "ssh host < deploy.sh"},
+        }
+    )
+
+    assert result.get("status") != "blocked"
+    count = db.get_db().execute(
+        "SELECT COUNT(*) FROM protocol_debt WHERE debt_type = 'g3_ssh_remote_write_requires_cortex'"
+    ).fetchone()[0]
+    assert count == 0
+
+
+def test_g3_hard_mode_blocks_again_when_cortex_decision_is_outside_ttl(guardrail_env, monkeypatch):
+    monkeypatch.setenv("NEXO_HOME", str(guardrail_env))
+    monkeypatch.setenv("NEXO_G3_ENFORCE_DESTRUCTIVE", "hard")
+    monkeypatch.setenv("NEXO_G3_CORTEX_AUTH_WINDOW_SECONDS", "60")
+    db, hook_guardrails = _reload_guardrail_stack()
+    db.init_db()
+    monkeypatch.setattr(hook_guardrails, "get_protocol_strictness", lambda: "lenient")
+    monkeypatch.setattr(hook_guardrails, "core_writes_allowed", lambda: False)
+    sid = "nexo-2055-3055"
+    db.register_session(
+        sid,
+        "g3 destructive expired auth",
+        external_session_id="claude-g3-expired",
+        session_client="claude_code",
+    )
+    task = db.create_protocol_task(
+        sid,
+        "Cleanup after ttl",
+        task_type="execute",
+        plan=["evaluate", "cleanup"],
+    )
+    evaluation = db.create_cortex_evaluation(
+        session_id=sid,
+        task_id=task["task_id"],
+        goal="Cleanup after ttl",
+        task_type="execute",
+        alternatives=["skip_cleanup", "proceed_with_cleanup"],
+        scores={"skip_cleanup": 0.4, "proceed_with_cleanup": 0.8},
+        recommended_choice="proceed_with_cleanup",
+        recommended_reasoning="Scoped cleanup is acceptable.",
+    )
+    db.get_db().execute(
+        "UPDATE cortex_evaluations SET created_at = datetime('now', '-2 hours') WHERE id = ?",
+        (evaluation["id"],),
+    )
+    db.get_db().commit()
+
+    result = hook_guardrails.process_pre_tool_event(
+        {
+            "session_id": "claude-g3-expired",
+            "tool_name": "Bash",
+            "tool_input": {"command": "rm -rf /tmp/demo"},
+        }
+    )
+
+    assert result["status"] == "blocked"
+    assert result["blocks"][0]["debt_type"] == "g3_destructive_command_requires_cortex"
+
+
 # --- Block K G4: guard_check required before Edit/Write --------------------
 # G4 ships in shadow mode by default (warn-only) so existing sessions do
 # not break. Setting NEXO_G4_ENFORCE_GUARD_CHECK=hard promotes the
