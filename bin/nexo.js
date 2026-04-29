@@ -11,6 +11,16 @@ const { spawnSync } = require("child_process");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
+const { runViaWsl } = require("./windows-wsl-bridge");
+
+if (process.platform === "win32") {
+  const bridged = runViaWsl({
+    scriptPath: __filename,
+    args: process.argv.slice(2),
+    label: "NEXO CLI",
+  });
+  process.exit(bridged?.status ?? 1);
+}
 
 function resolveNexoHome(rawValue) {
   const homeDir = os.homedir();

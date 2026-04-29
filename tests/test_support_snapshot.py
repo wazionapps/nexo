@@ -22,6 +22,8 @@ def test_collect_snapshot_returns_generic_runtime_payload(tmp_path, monkeypatch)
     assert payload["platform"]["is_wsl"] is False
     assert payload["windows_runtime"]["supported_brain_mode"] == "wsl"
     assert payload["windows_runtime"]["inside_wsl"] is False
+    assert payload["windows_runtime"]["windows_host_bridge"] is False
+    assert payload["windows_runtime"]["bridge_mode"] == ""
     assert payload["windows_runtime"]["warnings"] == []
     assert "health" in payload
     assert "logs" in payload
@@ -34,6 +36,8 @@ def test_collect_snapshot_reports_wsl_runtime_hints(monkeypatch):
     monkeypatch.setenv("HOME", "/home/tester")
     monkeypatch.setenv("WSL_DISTRO_NAME", "Ubuntu-24.04")
     monkeypatch.setenv("WSL_INTEROP", "/run/WSL/123_interop")
+    monkeypatch.setenv("NEXO_WINDOWS_HOST", "1")
+    monkeypatch.setenv("NEXO_WINDOWS_BRIDGE", "1")
     monkeypatch.setattr("support_snapshot.platform.system", lambda: "Linux")
     monkeypatch.setattr("support_snapshot.platform.release", lambda: "6.6.87.2-microsoft-standard-WSL2")
     monkeypatch.setattr("support_snapshot.platform.machine", lambda: "x86_64")
@@ -43,6 +47,8 @@ def test_collect_snapshot_reports_wsl_runtime_hints(monkeypatch):
 
     assert payload["platform"]["is_wsl"] is True
     assert payload["windows_runtime"]["inside_wsl"] is True
+    assert payload["windows_runtime"]["windows_host_bridge"] is True
+    assert payload["windows_runtime"]["bridge_mode"] == "wsl-exec"
     assert payload["windows_runtime"]["wsl_distro"] == "Ubuntu-24.04"
     assert payload["windows_runtime"]["wsl_interop"] is True
     assert payload["windows_runtime"]["warnings"] == []
@@ -53,6 +59,8 @@ def test_collect_snapshot_warns_when_nexo_home_lives_on_windows_mount(monkeypatc
     monkeypatch.setenv("HOME", "/home/francisco")
     monkeypatch.setenv("WSL_DISTRO_NAME", "Ubuntu")
     monkeypatch.delenv("WSL_INTEROP", raising=False)
+    monkeypatch.delenv("NEXO_WINDOWS_HOST", raising=False)
+    monkeypatch.delenv("NEXO_WINDOWS_BRIDGE", raising=False)
     monkeypatch.setattr("support_snapshot.platform.system", lambda: "Linux")
     monkeypatch.setattr("support_snapshot.platform.release", lambda: "6.6.87.2-microsoft-standard-WSL2")
     monkeypatch.setattr("support_snapshot.platform.machine", lambda: "x86_64")

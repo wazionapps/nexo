@@ -19,6 +19,16 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const readline = require("readline");
+const { runViaWsl } = require("./windows-wsl-bridge");
+
+if (process.platform === "win32") {
+  const bridged = runViaWsl({
+    scriptPath: __filename,
+    args: process.argv.slice(2),
+    label: "NEXO Brain",
+  });
+  process.exit(bridged?.status ?? 1);
+}
 
 let NEXO_HOME = process.env.NEXO_HOME || path.join(require("os").homedir(), ".nexo");
 const DEFAULT_ASSISTANT_NAME = "Nova";
@@ -2425,9 +2435,9 @@ async function runSetup() {
   // Check prerequisites
   const platform = process.platform;
   if (platform === "win32") {
-    log("Windows detected. NEXO Brain requires WSL (Windows Subsystem for Linux).");
+    log("Windows detected, but the automatic WSL bridge was not available.");
     log("Install WSL: https://learn.microsoft.com/en-us/windows/wsl/install");
-    log("Then run this command inside WSL (Ubuntu terminal), not PowerShell/CMD.");
+    log("Then run this command again, or launch it directly inside WSL (Ubuntu terminal).");
     process.exit(1);
   }
   if (platform !== "darwin" && platform !== "linux") {

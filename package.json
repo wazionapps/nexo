@@ -73,6 +73,7 @@
   "files": [
     "bin/nexo-brain.js",
     "bin/nexo.js",
+    "bin/windows-wsl-bridge.js",
     "bin/postinstall.js",
     "scripts/sync_release_artifacts.py",
     "src/",

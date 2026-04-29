@@ -21,6 +21,16 @@ def running_inside_wsl(*, system: str | None = None, release: str | None = None)
     return False
 
 
+def running_from_windows_host() -> bool:
+    value = str(os.environ.get("NEXO_WINDOWS_HOST", "")).strip().lower()
+    return value not in ("", "0", "false", "no", "off")
+
+
+def bridge_mode() -> str:
+    value = str(os.environ.get("NEXO_WINDOWS_BRIDGE", "")).strip()
+    return "wsl-exec" if value else ""
+
+
 def is_windows_mount_path(candidate: Path) -> bool:
     normalized = str(candidate or "").replace("\\", "/").lower()
     return normalized.startswith("/mnt/")
@@ -51,6 +61,8 @@ def windows_runtime_status(nexo_home: Path, *, system: str | None = None, releas
     return {
         "supported_brain_mode": "wsl",
         "inside_wsl": inside_wsl,
+        "windows_host_bridge": running_from_windows_host(),
+        "bridge_mode": bridge_mode(),
         "wsl_distro": str(os.environ.get("WSL_DISTRO_NAME", "")).strip(),
         "wsl_interop": bool(str(os.environ.get("WSL_INTEROP", "")).strip()),
         "nexo_home_on_windows_mount": on_windows_mount,
