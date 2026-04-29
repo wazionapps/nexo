@@ -17,12 +17,15 @@ from __future__ import annotations
 
 import json
 import os
+import platform
 import re
 import sqlite3
 import subprocess
 import time
 from pathlib import Path
 from typing import Any
+
+from windows_runtime import running_inside_wsl, windows_runtime_status
 
 
 def _nexo_home() -> Path:
@@ -31,8 +34,16 @@ def _nexo_home() -> Path:
 
 def _check_runtime() -> dict:
     home = _nexo_home()
+    system = platform.system()
+    release = platform.release()
+    windows_status = windows_runtime_status(home, system=system, release=release)
     ver_file = home / "version.json"
-    out: dict[str, Any] = {"nexo_home": str(home), "exists": home.is_dir()}
+    out: dict[str, Any] = {
+        "nexo_home": str(home),
+        "exists": home.is_dir(),
+        "is_wsl": running_inside_wsl(system=system, release=release),
+        "windows_runtime": windows_status,
+    }
     if ver_file.is_file():
         try:
             payload = json.loads(ver_file.read_text())
@@ -43,6 +54,8 @@ def _check_runtime() -> dict:
     else:
         out["version"] = "missing"
     out["status"] = "ok" if out["exists"] and out.get("version") not in ("missing", "unreadable") else "degraded"
+    if windows_status["warnings"]:
+        out["status"] = "degraded"
     return out
 
 
