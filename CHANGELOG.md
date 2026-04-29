@@ -1,5 +1,17 @@
 # Changelog
 
+## [7.12.0] - 2026-04-29
+
+### Added
+- **`nexo support-snapshot` adds a generic runtime diagnostics bundle for support work.** `src/support_snapshot.py` collects version/platform metadata, runtime path presence, health-check output, and recent event/operation log tails into a single local JSON payload, with optional runtime-doctor output when `--include-doctor` is requested. `src/cli.py` now exposes that collector as `nexo support-snapshot [--include-doctor] [--log-lines N]`, and `tests/test_support_snapshot.py` pins the generic payload shape against a temporary runtime home.
+
+### Fixed
+- **Map-driven Protocol Enforcer reminders now enforce turn-wide silence too.** `tool-enforcement-map.json` no longer leaves startup / smart-startup / heartbeat / reminders / diary / stop / task-close / compaction prompts at the ambiguous one-line `Do not produce visible text.` contract. These prompts now state explicitly that silence covers the entire reminder turn, forbid orphan waiting/acknowledgement phrases, allow continuation only of a real operator request already active in the same turn, and require empty visible output otherwise.
+- **Headless enforcement upgrades legacy silent prompts defensively at enqueue time.** `src/enforcement_engine.py` now normalizes any old silent reminder copy that still says only `Do not produce visible text` before it reaches the model. That closes the drift path where one prompt source had already been hardened (`templates/core-prompts/*`) but the live reminder source still carried the old wording, which is what let `nexo_smart_startup` reminders leak visible assistant prose into Desktop without a fresh user message.
+
+### Tests
+- `pytest -q tests/test_support_snapshot.py tests/test_enforcement_silent_contract.py tests/test_tool_enforcement_map_silent_contract.py tests/test_enforcer_restart_required_gate.py` → `12 passed`
+
 ## [7.11.8] - 2026-04-28
 
 ### Fixed

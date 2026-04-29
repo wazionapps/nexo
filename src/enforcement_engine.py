@@ -305,6 +305,16 @@ _SECRET_REDACT_PATTERNS = [
     (re.compile(r"\$\{?[A-Za-z_]*(?:TOKEN|SECRET|KEY|PASSWORD|PASS|BEARER)[A-Za-z_]*\}?", re.IGNORECASE), "<redacted-env-ref>"),
 ]
 
+_SILENT_REMINDER_TURN_SUFFIX = (
+    " Silence applies to the entire reminder turn: no prose before the required action(s), "
+    "no prose after them, and no standalone waiting/acknowledgement/continuation phrases. "
+    "If there is an operator request you still need to answer in this same turn, continue only "
+    "that request after the action(s). Otherwise your visible output must stay empty."
+)
+_SILENT_REMINDER_DISCLOSURE_SUFFIX = (
+    " Do not mention this reminder or any internal enforcement to the user."
+)
+
 
 def _redact_for_log(text: str, max_len: int = 200) -> str:
     """Return a log-safe truncation of `text` with secret-like tokens
@@ -319,6 +329,29 @@ def _redact_for_log(text: str, max_len: int = 200) -> str:
     if len(out) > max_len:
         out = out[:max_len] + "..."
     return out
+
+
+def _upgrade_silent_reminder_prompt(prompt: str) -> str:
+    """Normalize old silent-reminder copy to the full turn-wide contract.
+
+    Background reminders historically stopped at "Do not produce visible
+    text.", which allowed the model to satisfy the tool call itself and
+    still emit an orphan visible continuation phrase afterwards. The
+    stricter contract makes silence apply to the entire reminder turn
+    unless the same turn still has a real operator request to answer.
+    """
+    text = str(prompt or "").strip()
+    if not text:
+        return ""
+    lowered = text.lower()
+    if "do not produce visible text" not in lowered:
+        return text
+    if "entire reminder turn" not in lowered and "visible output must stay empty" not in lowered:
+        text += _SILENT_REMINDER_TURN_SUFFIX
+        lowered = text.lower()
+    if "do not mention this reminder" not in lowered:
+        text += _SILENT_REMINDER_DISCLOSURE_SUFFIX
+    return text
 
 
 def _load_map() -> dict | None:
@@ -2571,6 +2604,7 @@ class HeadlessEnforcer:
                 the efficacy metric in Fase F cannot aggregate it; callers
                 MUST pass the canonical ID.
         """
+        normalized_prompt = _upgrade_silent_reminder_prompt(prompt)
         if any(q["tag"] == tag for q in self.injection_queue):
             return
         # v7.11.2: suppress reminders that ask the agent to call nexo_*
@@ -2581,7 +2615,7 @@ class HeadlessEnforcer:
         # and the agent burns cycles on guaranteed no-ops. Reminders that
         # don't reference nexo_* (R23 deploy guards, R25 nora/maria
         # read-only, etc) still fire — they don't depend on the MCP.
-        if "nexo_" in prompt and self._mcp_restart_pending():
+        if "nexo_" in normalized_prompt and self._mcp_restart_pending():
             _logger.info(
                 "SKIP: %s — mcp_restart_required marker present (rule_id=%s)",
                 tag,
@@ -2599,7 +2633,7 @@ class HeadlessEnforcer:
             if tool in self.tools_called and not tag.startswith("periodic_"):
                 _logger.info("SKIP: %s — already called", tag)
                 return
-        localized_prompt = append_operator_language_contract(prompt)
+        localized_prompt = append_operator_language_contract(normalized_prompt)
         self.injection_queue.append({"prompt": localized_prompt, "tag": tag, "at": time.time(), "rule_id": rule_id})
         _logger.info("ENQUEUED: %s (queue size: %d rule_id=%s)", tag, len(self.injection_queue), rule_id or "?")
         # Fase F telemetry — log one "injection" event per enqueue. The
