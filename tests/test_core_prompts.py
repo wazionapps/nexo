@@ -404,7 +404,11 @@ def test_render_core_prompt_supports_enforcer_and_startup_templates():
     assert "conditioned learnings or blocking guard rules" in codex_contract
     assert "Nero — cognitive co-operator." in server_instructions
     assert "R26b silent enforcement" in server_instructions
+    assert "entire reminder turn" in server_instructions
+    assert "visible output must stay empty" in server_instructions
     assert "3 unread inbox message(s)" in inbox_reminder
+    assert "Do not produce visible text for this reminder." in inbox_reminder
+    assert "Execute only the heartbeat tool call" in inbox_reminder
     assert "14 heartbeats, 37min active" in heartbeat_diary
     assert "nexo_session_diary_write" in heartbeat_diary
     assert "nexo_guard_check" in heartbeat_guard

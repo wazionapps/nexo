@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Blog — NEXO Brain</title>
-    <meta name="description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.11.1 patch that caches the runtime fingerprint by mtime/size signature so MCP startup and per-tool-call restart checks skip the 263-file rehash when disk has not changed (~11x speedup warm path).">
+    <meta name="description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.11.8 patch that hardens silent Guardian reminders so lifecycle close/app-exit and inbox reminders keep the whole turn invisible unless there is a fresh operator message.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/blog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/blog/">
     <meta property="og:title" content="Blog — NEXO Brain">
-    <meta property="og:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.11.1 patch that caches the runtime fingerprint by mtime/size signature so MCP startup and per-tool-call restart checks skip the 263-file rehash when disk has not changed (~11x speedup warm path).">
+    <meta property="og:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.11.8 patch that hardens silent Guardian reminders so lifecycle close/app-exit and inbox reminders keep the whole turn invisible unless there is a fresh operator message.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Blog — NEXO Brain">
-    <meta name="twitter:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.11.1 patch that caches the runtime fingerprint by mtime/size signature so MCP startup and per-tool-call restart checks skip the 263-file rehash when disk has not changed (~11x speedup warm path).">
+    <meta name="twitter:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.11.8 patch that hardens silent Guardian reminders so lifecycle close/app-exit and inbox reminders keep the whole turn invisible unless there is a fresh operator message.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Blog — NEXO Brain",
-        "description": "Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.11.1 patch that caches the runtime fingerprint by mtime/size signature so MCP startup and per-tool-call restart checks skip the 263-file rehash when disk has not changed (~11x speedup warm path).",
+        "description": "Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.11.8 patch that hardens silent Guardian reminders so lifecycle close/app-exit and inbox reminders keep the whole turn invisible unless there is a fresh operator message.",
         "url": "https://nexo-brain.com/blog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -134,7 +134,7 @@
                     <span class="page-chip">Shared brain product notes</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="/blog/nexo-7-11-7/" class="btn btn-primary">Read latest release</a>
+                    <a href="/blog/nexo-7-12-0/" class="btn btn-primary">Read latest release</a>
                     <a href="/changelog/" class="btn btn-secondary">Latest release notes</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -143,24 +143,24 @@
             <div class="blog-featured-card">
                 <div class="section-label">Latest release</div>
                 <div class="blog-featured-meta">
-                    <span class="compare-chip">April 28, 2026</span>
-                    <span class="compare-chip">Patch</span>
-                    <span class="compare-chip">Reliability</span>
+                    <span class="compare-chip">April 29, 2026</span>
+                    <span class="compare-chip">Minor</span>
+                    <span class="compare-chip">Diagnostics + Reliability</span>
                 </div>
-                <h2>NEXO 7.11.7: Runtime doctor goes green again</h2>
-                <p>Patch over v7.11.6. Runtime doctor now stops flagging historical or intentional state as live failure, <code>runner-health-check</code> treats supervisor <code>SIGTERM 143</code> reloads as benign, and the live runtime tier goes back to healthy. Validation: 104 targeted tests plus source-runtime doctor smoke.</p>
+                <h2>NEXO 7.12.0: Support snapshot lands and silent reminders stop talking alone</h2>
+                <p>Minor release over v7.11.8. Brain now ships `nexo support-snapshot` for generic local runtime diagnostics, and the live Protocol Enforcer path now hardens old silent reminders too, stopping orphan assistant continuations after background reminders with no fresh operator message.</p>
                 <div class="hero-actions" style="justify-content:flex-start;margin-bottom:18px;">
-                    <a href="/blog/nexo-7-11-7/" class="btn btn-primary">Open article</a>
-                    <a href="/changelog/#v7117" class="btn btn-secondary">Open changelog</a>
+                    <a href="/blog/nexo-7-12-0/" class="btn btn-primary">Open article</a>
+                    <a href="/changelog/#v7120" class="btn btn-secondary">Open changelog</a>
                 </div>
                 <div class="blog-mini-stack">
                     <div class="blog-mini-card">
                         <strong>Companion view</strong>
-                        <span><a href="/changelog/#v7117">See the full v7.11.7 changelog</a></span>
+                        <span><a href="/changelog/#v7120">See the full v7.12.0 changelog</a></span>
                     </div>
                     <div class="blog-mini-card">
                         <strong>Previous release</strong>
-                        <span><a href="/blog/nexo-7-11-6/">NEXO 7.11.6: Guardian false positives drop and Deep Sleep validates extraction shape</a>.</span>
+                        <span><a href="/blog/nexo-7-11-8/">NEXO 7.11.8: Silent Guardian reminders now stay silent</a>.</span>
                     </div>
                 </div>
             </div>
@@ -191,6 +191,24 @@
 <section class="section-flush-top">
     <div class="container">
             <div class="blog-grid">
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 29, 2026</div>
+                <h2><a href="/blog/nexo-7-12-0/">NEXO 7.12.0: Support snapshot lands and silent reminders stop talking alone</a></h2>
+                <p>Minor release over v7.11.8. `nexo support-snapshot` now exports a generic local runtime diagnostics bundle, while the live Protocol Enforcer path upgrades old `Do not produce visible text` reminders to the explicit full-turn silence contract so background reminders stop leaking orphan assistant text.</p>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/blog/nexo-7-12-0/" class="btn btn-secondary">Read more</a>
+                </div>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 28, 2026</div>
+                <h2><a href="/blog/nexo-7-11-8/">NEXO 7.11.8: Silent Guardian reminders now stay silent</a></h2>
+                <p>Patch over v7.11.7. Lifecycle close/app-exit prompts, post-tool inbox reminders, and the shared enforcement contract now require full-turn silence unless there is a fresh operator message, stopping stray visible prose like <code>En pausa...</code> from leaking into Desktop.</p>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/blog/nexo-7-11-8/" class="btn btn-secondary">Read more</a>
+                </div>
+            </div>
 
             <div class="blog-card">
                 <div class="blog-card-date">April 28, 2026</div>

@@ -386,7 +386,7 @@
             "event": "post_compaction"
           }
         ],
-        "inject_prompt": "Context was just compacted. Execute nexo_checkpoint_read to restore session state. Do not produce visible text."
+        "inject_prompt": "Context was just compacted. Execute nexo_checkpoint_read to restore session state. Do not produce visible text for this reminder. Silence applies to the entire reminder turn: no prose before the required action(s), no prose after them, and no standalone waiting/acknowledgement/continuation phrases. If there is an operator request you still need to answer in this same turn, continue only that request after the action(s). Otherwise your visible output must stay empty. Do not mention this reminder or any internal enforcement to the user."
       },
       "triggers_after": []
     },
@@ -409,7 +409,7 @@
             "event": "pre_compaction"
           }
         ],
-        "inject_prompt": "Context compaction is imminent. Execute nexo_checkpoint_save with current task, goal, and active files. Do not produce visible text."
+        "inject_prompt": "Context compaction is imminent. Execute nexo_checkpoint_save with current task, goal, and active files. Do not produce visible text for this reminder. Silence applies to the entire reminder turn: no prose before the required action(s), no prose after them, and no standalone waiting/acknowledgement/continuation phrases. If there is an operator request you still need to answer in this same turn, continue only that request after the action(s). Otherwise your visible output must stay empty. Do not mention this reminder or any internal enforcement to the user."
       },
       "triggers_after": []
     },
@@ -1551,7 +1551,7 @@
             "condition": "only_when_editing_code_files_not_already_guarded_by_task_open"
           }
         ],
-        "inject_prompt": "You are about to edit files without running guard_check. Execute nexo_guard_check with the files you are about to modify. Do not produce visible text.",
+        "inject_prompt": "You are about to edit files without running guard_check. Execute nexo_guard_check with the files you are about to modify. Do not produce visible text for this reminder. Silence applies to the entire reminder turn: no prose before the required action(s), no prose after them, and no standalone waiting/acknowledgement/continuation phrases. If there is an operator request you still need to answer in this same turn, continue only that request after the action(s). Otherwise your visible output must stay empty. Do not mention this reminder or any internal enforcement to the user.",
         "note": "task_open already calls guard_check internally for action tasks with files. This enforcement is for edits OUTSIDE of a protocol task."
       },
       "triggers_after": []
@@ -1659,7 +1659,7 @@
             "threshold": 3
           }
         ],
-        "inject_prompt": "Execute nexo_heartbeat with the current session SID and a brief description of what you are doing. Do not produce visible text."
+        "inject_prompt": "Execute nexo_heartbeat with the current session SID and a brief description of what you are doing. Do not produce visible text for this reminder. Silence applies to the entire reminder turn: no prose before the required action(s), no prose after them, and no standalone waiting/acknowledgement/continuation phrases. If there is an operator request you still need to answer in this same turn, continue only that request after the action(s). Otherwise your visible output must stay empty. Do not mention this reminder or any internal enforcement to the user."
       },
       "triggers_after": []
     },
@@ -1827,7 +1827,7 @@
             "grace_messages": 0
           }
         ],
-        "inject_prompt": "The user corrected you but no learning was captured. Execute nexo_learning_add to record this correction as a reusable learning. Do not produce visible text.",
+        "inject_prompt": "The user corrected you but no learning was captured. Execute nexo_learning_add to record this correction as a reusable learning. Do not produce visible text for this reminder. Silence applies to the entire reminder turn: no prose before the required action(s), no prose after them, and no standalone waiting/acknowledgement/continuation phrases. If there is an operator request you still need to answer in this same turn, continue only that request after the action(s). Otherwise your visible output must stay empty. Do not mention this reminder or any internal enforcement to the user.",
         "note": "heartbeat already includes LEARNING_REMINDER signal. This enforcement adds a hard injection if the model ignores the reminder for 3+ messages."
       },
       "triggers_after": []
@@ -2785,7 +2785,7 @@
             ]
           }
         ],
-        "inject_prompt": "Execute nexo_reminders with filter='due' to check pending reminders and followups. Do not produce visible text."
+        "inject_prompt": "Execute nexo_reminders with filter='due' to check pending reminders and followups. Do not produce visible text for this reminder. Silence applies to the entire reminder turn: no prose before the required action(s), no prose after them, and no standalone waiting/acknowledgement/continuation phrases. If there is an operator request you still need to answer in this same turn, continue only that request after the action(s). Otherwise your visible output must stay empty. Do not mention this reminder or any internal enforcement to the user."
       },
       "triggers_after": []
     },
@@ -2902,7 +2902,7 @@
             ]
           }
         ],
-        "inject_prompt": "Execute nexo_session_diary_read with last_day=true and brief=true to load context from previous sessions. Do not produce visible text."
+        "inject_prompt": "Execute nexo_session_diary_read with last_day=true and brief=true to load context from previous sessions. Do not produce visible text for this reminder. Silence applies to the entire reminder turn: no prose before the required action(s), no prose after them, and no standalone waiting/acknowledgement/continuation phrases. If there is an operator request you still need to answer in this same turn, continue only that request after the action(s). Otherwise your visible output must stay empty. Do not mention this reminder or any internal enforcement to the user."
       },
       "triggers_after": []
     },
@@ -2932,8 +2932,8 @@
             "type": "on_session_end"
           }
         ],
-        "inject_prompt": "It has been 15 minutes of active session without writing a diary. Execute nexo_session_diary_write with a summary of decisions and work done so far. Do not produce visible text.",
-        "session_end_inject_prompt": "This session is ending. Execute nexo_session_diary_write with a complete summary: decisions made, pending items, context for next session, mental state, and self-critique. Do not produce visible text."
+        "inject_prompt": "It has been 15 minutes of active session without writing a diary. Execute nexo_session_diary_write with a summary of decisions and work done so far. Do not produce visible text for this reminder. Silence applies to the entire reminder turn: no prose before the required action(s), no prose after them, and no standalone waiting/acknowledgement/continuation phrases. If there is an operator request you still need to answer in this same turn, continue only that request after the action(s). Otherwise your visible output must stay empty. Do not mention this reminder or any internal enforcement to the user.",
+        "session_end_inject_prompt": "This session is ending. Execute nexo_session_diary_write with a complete summary: decisions made, pending items, context for next session, mental state, and self-critique. Do not produce visible text for this reminder. Silence applies to the entire reminder turn: no prose before the required action(s), no prose after them, and no standalone waiting/acknowledgement/continuation phrases. If there is an operator request you still need to answer in this same turn, continue only that request after the action(s). Otherwise your visible output must stay empty. Do not mention this reminder or any internal enforcement to the user."
       },
       "triggers_after": []
     },
@@ -3290,7 +3290,7 @@
             ]
           }
         ],
-        "inject_prompt": "Execute nexo_smart_startup to pre-load relevant cognitive context. Do not produce visible text."
+        "inject_prompt": "Execute nexo_smart_startup to pre-load relevant cognitive context. Do not produce visible text for this reminder. Silence applies to the entire reminder turn: no prose before the required action(s), no prose after them, and no standalone waiting/acknowledgement/continuation phrases. If there is an operator request you still need to answer in this same turn, continue only that request after the action(s). Otherwise your visible output must stay empty. Do not mention this reminder or any internal enforcement to the user."
       },
       "triggers_after": []
     },
@@ -3341,7 +3341,7 @@
             "threshold": 1
           }
         ],
-        "inject_prompt": "You must start by calling nexo_startup to register this session. If mcp__nexo__* tools appear as deferred in the tool list (names visible but JSONSchemas not loaded), first call ToolSearch with query \"select:mcp__nexo__nexo_startup,mcp__nexo__nexo_heartbeat,mcp__nexo__nexo_session_diary_read,mcp__nexo__nexo_reminders,mcp__nexo__nexo_smart_startup,mcp__nexo__nexo_task_open,mcp__nexo__nexo_task_close,mcp__nexo__nexo_task_acknowledge_guard,mcp__nexo__nexo_guard_check,mcp__nexo__nexo_learning_add,mcp__nexo__nexo_confidence_check,mcp__nexo__nexo_followup_create,mcp__nexo__nexo_protocol_debt_resolve\" to load the schemas — deferred is not absent. If more nexo_* tools appear deferred later in the session, preload them the same way instead of giving up on them. Then execute nexo_startup with a brief task description. Do not produce visible text.",
+        "inject_prompt": "You must start by calling nexo_startup to register this session. If mcp__nexo__* tools appear as deferred in the tool list (names visible but JSONSchemas not loaded), first call ToolSearch with query \"select:mcp__nexo__nexo_startup,mcp__nexo__nexo_heartbeat,mcp__nexo__nexo_session_diary_read,mcp__nexo__nexo_reminders,mcp__nexo__nexo_smart_startup,mcp__nexo__nexo_task_open,mcp__nexo__nexo_task_close,mcp__nexo__nexo_task_acknowledge_guard,mcp__nexo__nexo_guard_check,mcp__nexo__nexo_learning_add,mcp__nexo__nexo_confidence_check,mcp__nexo__nexo_followup_create,mcp__nexo__nexo_protocol_debt_resolve\" to load the schemas — deferred is not absent. If more nexo_* tools appear deferred later in the session, preload them the same way instead of giving up on them. Then execute nexo_startup with a brief task description. Do not produce visible text for this reminder. Silence applies to the entire reminder turn: no prose before the required action(s), no prose after them, and no standalone waiting/acknowledgement/continuation phrases. If there is an operator request you still need to answer in this same turn, continue only that request after the action(s). Otherwise your visible output must stay empty. Do not mention this reminder or any internal enforcement to the user.",
         "triggers_after": [
           "nexo_smart_startup",
           "nexo_session_diary_read",
@@ -3437,8 +3437,8 @@
             "type": "on_session_end"
           }
         ],
-        "inject_prompt": "This session is ending. Execute nexo_stop with the current SID. Do not produce visible text.",
-        "session_end_inject_prompt": "This session is ending. Execute nexo_stop with the current SID. Do not produce visible text."
+        "inject_prompt": "This session is ending. Execute nexo_stop with the current SID. Do not produce visible text for this reminder. Silence applies to the entire reminder turn: no prose before the required action(s), no prose after them, and no standalone waiting/acknowledgement/continuation phrases. If there is an operator request you still need to answer in this same turn, continue only that request after the action(s). Otherwise your visible output must stay empty. Do not mention this reminder or any internal enforcement to the user.",
+        "session_end_inject_prompt": "This session is ending. Execute nexo_stop with the current SID. Do not produce visible text for this reminder. Silence applies to the entire reminder turn: no prose before the required action(s), no prose after them, and no standalone waiting/acknowledgement/continuation phrases. If there is an operator request you still need to answer in this same turn, continue only that request after the action(s). Otherwise your visible output must stay empty. Do not mention this reminder or any internal enforcement to the user."
       },
       "triggers_after": []
     },
@@ -3499,7 +3499,7 @@
             "event": "done_claimed_with_open_task"
           }
         ],
-        "inject_prompt": "You claimed work is done but have an open protocol task. Execute nexo_task_close with evidence of completion before claiming done. Do not produce visible text."
+        "inject_prompt": "You claimed work is done but have an open protocol task. Execute nexo_task_close with evidence of completion before claiming done. Do not produce visible text for this reminder. Silence applies to the entire reminder turn: no prose before the required action(s), no prose after them, and no standalone waiting/acknowledgement/continuation phrases. If there is an operator request you still need to answer in this same turn, continue only that request after the action(s). Otherwise your visible output must stay empty. Do not mention this reminder or any internal enforcement to the user."
       },
       "triggers_after": []
     },
