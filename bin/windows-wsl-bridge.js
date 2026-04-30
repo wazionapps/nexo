@@ -1,4 +1,5 @@
 const { spawnSync } = require("child_process");
+const path = require("path");
 
 function isWindowsHost(platform = process.platform) {
   return platform === "win32";
@@ -73,6 +74,26 @@ function resolveLinuxEnv(env = process.env) {
   return linuxEnv;
 }
 
+function inferLinuxUserHomeFromRuntimeHome(runtimeHome = "") {
+  const value = String(runtimeHome || "").trim();
+  if (!value.startsWith("/")) return "";
+  if (path.posix.basename(value) === ".nexo") {
+    return path.posix.dirname(value) || "";
+  }
+  return "";
+}
+
+function resolveLinuxUserHome({ env = process.env, linuxEnv = {}, defaultValue = "" } = {}) {
+  const explicitHome = resolveExplicitLinuxPath(env.NEXO_WSL_USER_HOME);
+  if (explicitHome) return explicitHome;
+
+  const runtimeHome = inferLinuxUserHomeFromRuntimeHome(linuxEnv.NEXO_HOME || "");
+  if (runtimeHome) return runtimeHome;
+
+  const defaultHome = resolveExplicitLinuxPath(defaultValue);
+  return defaultHome || "";
+}
+
 function resolveWslNodeBinary(env = process.env) {
   const explicitNode = resolveExplicitLinuxPath(env.NEXO_WSL_NODE);
   return explicitNode || "node";
@@ -85,7 +106,35 @@ function resolveWslDistro(scriptPath, env = process.env) {
   return unc ? unc.distro : "";
 }
 
-function buildWslExecSpec({ scriptPath, args = [], env = process.env, platform = process.platform }) {
+function probeWslUserHome({ distro = "", env = process.env } = {}) {
+  const probeArgs = [];
+  if (distro) {
+    probeArgs.push("-d", distro);
+  }
+  probeArgs.push("--cd", "~", "--exec", "pwd");
+
+  const result = spawnSync("wsl.exe", probeArgs, {
+    env,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  if (result.error || result.status !== 0) return "";
+
+  const lines = String(result.stdout || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const candidate = lines.length ? lines[lines.length - 1] : "";
+  return candidate.startsWith("/") ? candidate : "";
+}
+
+function buildWslExecSpec({
+  scriptPath,
+  args = [],
+  env = process.env,
+  platform = process.platform,
+  linuxHome = "",
+}) {
   if (!isWindowsHost(platform)) return null;
   const translatedScriptPath = toWslPath(scriptPath);
   if (!translatedScriptPath) {
@@ -100,10 +149,15 @@ function buildWslExecSpec({ scriptPath, args = [], env = process.env, platform =
   if (distro) {
     wslArgs.push("-d", distro);
   }
+  const resolvedLinuxHome = resolveLinuxUserHome({ env, linuxEnv, defaultValue: linuxHome });
+
+  wslArgs.push("--cd", resolvedLinuxHome || "~");
 
   wslArgs.push(
     "--exec",
     "env",
+    "-u",
+    "HOME",
     "-u",
     "NEXO_HOME",
     "-u",
@@ -111,9 +165,18 @@ function buildWslExecSpec({ scriptPath, args = [], env = process.env, platform =
     "-u",
     "NEXO_WSL_HOME",
     "-u",
-    "NEXO_WSL_CODE"
+    "NEXO_WSL_CODE",
+    "-u",
+    "USERPROFILE",
+    "-u",
+    "HOMEDRIVE",
+    "-u",
+    "HOMEPATH"
   );
 
+  if (resolvedLinuxHome) {
+    wslArgs.push(`HOME=${resolvedLinuxHome}`);
+  }
   for (const [key, value] of Object.entries(linuxEnv)) {
     wslArgs.push(`${key}=${value}`);
   }
@@ -136,7 +199,9 @@ function logWslBridgeFailure(label, message) {
 }
 
 function runViaWsl({ scriptPath, args = [], env = process.env, platform = process.platform, stdio = "inherit", label = "NEXO" }) {
-  const spec = buildWslExecSpec({ scriptPath, args, env, platform });
+  const distro = resolveWslDistro(scriptPath, env);
+  const linuxHome = probeWslUserHome({ distro, env });
+  const spec = buildWslExecSpec({ scriptPath, args, env, platform, linuxHome });
   if (!spec) return null;
   if (spec.error) {
     logWslBridgeFailure(label, spec.error);
@@ -153,10 +218,13 @@ function runViaWsl({ scriptPath, args = [], env = process.env, platform = proces
 
 module.exports = {
   buildWslExecSpec,
+  inferLinuxUserHomeFromRuntimeHome,
   isWindowsHost,
   isWindowsStylePath,
   parseWslUncPath,
+  probeWslUserHome,
   resolveLinuxEnv,
+  resolveLinuxUserHome,
   runViaWsl,
   toWslPath,
 };
