@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Blog — NEXO Brain</title>
-    <meta name="description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.12.1 patch that fixes Guardian G3 retry dead-ends and short personal automation hangs.">
+    <meta name="description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.12.2 patch that centralizes legacy automation routing under the resonance engine.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/blog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/blog/">
     <meta property="og:title" content="Blog — NEXO Brain">
-    <meta property="og:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.12.1 patch that fixes Guardian G3 retry dead-ends and short personal automation hangs.">
+    <meta property="og:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.12.2 patch that centralizes legacy automation routing under the resonance engine.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Blog — NEXO Brain">
-    <meta name="twitter:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.12.1 patch that fixes Guardian G3 retry dead-ends and short personal automation hangs.">
+    <meta name="twitter:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.12.2 patch that centralizes legacy automation routing under the resonance engine.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Blog — NEXO Brain",
-        "description": "Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.12.1 patch that fixes Guardian G3 retry dead-ends and short personal automation hangs.",
+        "description": "Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.12.2 patch that centralizes legacy automation routing under the resonance engine.",
         "url": "https://nexo-brain.com/blog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -134,7 +134,7 @@
                     <span class="page-chip">Shared brain product notes</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="/blog/nexo-7-12-1/" class="btn btn-primary">Read latest release</a>
+                    <a href="/blog/nexo-7-12-2/" class="btn btn-primary">Read latest release</a>
                     <a href="/changelog/" class="btn btn-secondary">Latest release notes</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -143,24 +143,24 @@
             <div class="blog-featured-card">
                 <div class="section-label">Latest release</div>
                 <div class="blog-featured-meta">
-                    <span class="compare-chip">April 29, 2026</span>
+                    <span class="compare-chip">April 30, 2026</span>
                     <span class="compare-chip">Patch</span>
-                    <span class="compare-chip">Guardrails + Automation</span>
+                    <span class="compare-chip">Routing + Automation</span>
                 </div>
-                <h2>NEXO 7.12.1: Guardian retries round-trip and personal one-shots stop hanging</h2>
-                <p>Patch over v7.12.0. Guardian G3 now classifies SSH remote writes delivered by pipe/heredoc/stdin and honors recent same-task Cortex authorizations for the next retry, while personal text-only cron helpers switch to bare one-shots with short timeouts and overlap locks.</p>
+                <h2>NEXO 7.12.2: automation routing now stays on the motor</h2>
+                <p>Patch over v7.12.1. Legacy task profiles stop overriding model choice, email-monitor now follows caller-driven resonance routing, personal helpers stop injecting stale default models, and runtime updates scrub the retired email routing key automatically.</p>
                 <div class="hero-actions" style="justify-content:flex-start;margin-bottom:18px;">
-                    <a href="/blog/nexo-7-12-1/" class="btn btn-primary">Open article</a>
-                    <a href="/changelog/#v7121" class="btn btn-secondary">Open changelog</a>
+                    <a href="/blog/nexo-7-12-2/" class="btn btn-primary">Open article</a>
+                    <a href="/changelog/#v7122" class="btn btn-secondary">Open changelog</a>
                 </div>
                 <div class="blog-mini-stack">
                     <div class="blog-mini-card">
                         <strong>Companion view</strong>
-                        <span><a href="/changelog/#v7121">See the full v7.12.1 changelog</a></span>
+                        <span><a href="/changelog/#v7122">See the full v7.12.2 changelog</a></span>
                     </div>
                     <div class="blog-mini-card">
                         <strong>Previous release</strong>
-                        <span><a href="/blog/nexo-7-12-0/">NEXO 7.12.0: Support snapshot lands and silent reminders stop talking alone</a>.</span>
+                        <span><a href="/blog/nexo-7-12-1/">NEXO 7.12.1: Guardian retries round-trip and personal one-shots stop hanging</a>.</span>
                     </div>
                 </div>
             </div>
@@ -191,6 +191,15 @@
 <section class="section-flush-top">
     <div class="container">
             <div class="blog-grid">
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 30, 2026</div>
+                <h2><a href="/blog/nexo-7-12-2/">NEXO 7.12.2: automation routing now stays on the motor</a></h2>
+                <p>Patch over v7.12.1. Legacy task profiles stop overriding model choice, email-monitor now follows caller-driven resonance routing, personal helpers stop injecting stale default models, and runtime updates scrub the retired email routing key automatically.</p>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/blog/nexo-7-12-2/" class="btn btn-secondary">Read more</a>
+                </div>
+            </div>
 
             <div class="blog-card">
                 <div class="blog-card-date">April 29, 2026</div>
