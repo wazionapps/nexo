@@ -324,14 +324,12 @@ def test_run_automation_prompt_marks_public_contribution_env(monkeypatch, tmp_pa
     assert captured["env"]["NEXO_PUBLIC_CONTRIBUTION"] == "1"
 
 
-def test_run_automation_prompt_uses_fast_task_profile_for_backend_and_reasoning(monkeypatch, tmp_path):
+def test_run_automation_prompt_ignores_legacy_task_profile_routing_overrides(monkeypatch, tmp_path):
     import agent_runner
 
+    captured = {}
     monkeypatch.setattr(agent_runner, "_resolve_claude_cli", lambda: "/tmp/fake-claude")
     monkeypatch.setattr(agent_runner, "_build_enforcement_system_prompt", lambda: "")
-    monkeypatch.setattr(agent_runner, "_resolve_codex_cli", lambda: "/tmp/fake-codex")
-    monkeypatch.setattr(agent_runner, "_load_client_bootstrap_prompt", lambda client: "You are NEXO.")
-    monkeypatch.setattr(agent_runner, "_codex_managed_initial_messages_enabled", lambda: False)
     monkeypatch.setattr(agent_runner, "_record_automation_run", lambda **kwargs: (True, ""))
     monkeypatch.setattr(agent_runner, "load_client_preferences", lambda: {
         "interactive_clients": {"claude_code": True, "codex": True, "claude_desktop": False},
@@ -350,16 +348,20 @@ def test_run_automation_prompt_uses_fast_task_profile_for_backend_and_reasoning(
         },
     })
 
-    captured = {}
-
     def fake_run(cmd, **kwargs):
         captured["cmd"] = cmd
-        out_idx = cmd.index("-o") + 1
-        with open(cmd[out_idx], "w", encoding="utf-8") as fh:
-            fh.write("FAST OK")
-        return subprocess.CompletedProcess(cmd, 0, _codex_json_usage(input_tokens=20, cached_input_tokens=5, output_tokens=10), "")
+        return subprocess.CompletedProcess(cmd, 0, _claude_json_result("FAST OK"), "")
 
     monkeypatch.setattr(agent_runner.subprocess, "run", fake_run)
+    try:
+        import enforcement_engine
+        monkeypatch.setattr(
+            enforcement_engine,
+            "run_with_enforcement",
+            lambda cmd, prompt="", cwd="", env=None, timeout=300: fake_run(cmd, cwd=cwd, env=env),
+        )
+    except ImportError:
+        pass
 
     result = agent_runner.run_automation_prompt(
         "Fast path",
@@ -370,10 +372,10 @@ def test_run_automation_prompt_uses_fast_task_profile_for_backend_and_reasoning(
     )
 
     assert result.stdout == "FAST OK"
-    assert captured["cmd"][:2] == ["/tmp/fake-codex", "exec"]
-    assert captured["cmd"][captured["cmd"].index("-m") + 1] == "gpt-5.4-mini"
-    config_values = [captured["cmd"][idx + 1] for idx, part in enumerate(captured["cmd"]) if part == "-c"]
-    assert 'model_reasoning_effort="medium"' in config_values
+    assert captured["cmd"][0] == "/tmp/fake-claude"
+    assert "--model" in captured["cmd"]
+    assert captured["cmd"][captured["cmd"].index("--model") + 1] == "claude-opus-4-7[1m]"
+    assert captured["cmd"][captured["cmd"].index("--effort") + 1] == "max"
 
 
 def test_run_automation_prompt_falls_back_when_configured_backend_is_unavailable(monkeypatch, tmp_path):

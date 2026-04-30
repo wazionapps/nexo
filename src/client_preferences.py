@@ -59,8 +59,12 @@ DEFAULT_CLAUDE_CODE_MODEL = _CLAUDE_DEFAULTS["model"]
 DEFAULT_CLAUDE_CODE_REASONING_EFFORT = _CLAUDE_DEFAULTS["reasoning_effort"]
 DEFAULT_CODEX_MODEL = _CODEX_DEFAULTS["model"]
 DEFAULT_CODEX_REASONING_EFFORT = _CODEX_DEFAULTS["reasoning_effort"]
-DEFAULT_FAST_MODEL = DEFAULT_CLAUDE_CODE_MODEL
-DEFAULT_FAST_REASONING_EFFORT = ""
+AUTOMATION_TASK_PROFILE_TIERS = {
+    "default": "",
+    "fast": "bajo",
+    "balanced": "medio",
+    "deep": "maximo",
+}
 
 
 def _user_home() -> Path:
@@ -385,9 +389,9 @@ def default_automation_task_profiles() -> dict[str, dict[str, str]]:
             "reasoning_effort": "",
         },
         "deep": {
-            "backend": CLIENT_CLAUDE_CODE,
-            "model": DEFAULT_CLAUDE_CODE_MODEL,
-            "reasoning_effort": DEFAULT_CLAUDE_CODE_REASONING_EFFORT,
+            "backend": "",
+            "model": "",
+            "reasoning_effort": "",
         },
     }
 
@@ -443,16 +447,10 @@ def normalize_automation_task_profiles(value) -> dict[str, dict[str, str]]:
             continue
         if not isinstance(raw_value, dict):
             continue
-        backend = normalize_backend_key(raw_value.get("backend"))
-        if backend == BACKEND_NONE:
-            backend = ""
-        normalized[profile_key] = {
-            "backend": backend or defaults[profile_key]["backend"],
-            "model": str(raw_value.get("model") or defaults[profile_key]["model"]).strip(),
-            "reasoning_effort": str(
-                raw_value.get("reasoning_effort") or defaults[profile_key]["reasoning_effort"]
-            ).strip().lower(),
-        }
+        # These profiles are no longer allowed to route backend/model/effort.
+        # Older installs may still persist those keys; normalize drops them
+        # so schedule.json cannot bypass resonance resolution silently.
+        normalized[profile_key] = dict(defaults[profile_key])
     return normalized
 
 
@@ -769,18 +767,13 @@ def resolve_automation_task_profile(
     *,
     preferences: dict | None = None,
 ) -> dict[str, str]:
-    normalized = preferences or load_client_preferences()
-    defaults = default_automation_task_profiles()
     profile_key = str(profile or "").strip().lower() or "default"
     if profile_key not in AUTOMATION_TASK_PROFILE_KEYS:
         profile_key = "default"
-    configured = normalize_automation_task_profiles(normalized.get("automation_task_profiles"))
-    selected = dict(configured.get(profile_key) or defaults[profile_key])
-    backend = selected.get("backend") or resolve_automation_backend(normalized)
-    runtime_profile = resolve_client_runtime_profile(backend, preferences=normalized)
     return {
         "name": profile_key,
-        "backend": backend,
-        "model": selected.get("model") or runtime_profile["model"],
-        "reasoning_effort": selected.get("reasoning_effort") or runtime_profile["reasoning_effort"],
+        "backend": "",
+        "model": "",
+        "reasoning_effort": "",
+        "tier": AUTOMATION_TASK_PROFILE_TIERS.get(profile_key, ""),
     }

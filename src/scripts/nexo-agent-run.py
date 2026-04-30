@@ -30,7 +30,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--prompt", default="", help="Prompt text")
     parser.add_argument("--prompt-file", default="", help="Read prompt text from a file")
     parser.add_argument("--cwd", default="", help="Working directory for the backend")
-    parser.add_argument("--task-profile", default="", help="Automation task profile: default|fast|balanced|deep")
+    parser.add_argument(
+        "--task-profile",
+        default="",
+        help="Legacy semantic label kept for compatibility. Routing now comes from caller/tier.",
+    )
     parser.add_argument("--model", default="", help="Backend model hint")
     parser.add_argument("--reasoning-effort", default="", help="Backend reasoning effort/profile")
     parser.add_argument(

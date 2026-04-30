@@ -50,12 +50,6 @@ for _candidate in (_repo_root / "templates", NEXO_HOME / "templates"):
     if _candidate.exists() and _cand not in sys.path:
         sys.path.insert(0, _cand)
 
-try:
-    from client_preferences import resolve_user_model
-    _USER_MODEL = resolve_user_model()
-except Exception:
-    _USER_MODEL = ""
-
 from nexo_helper import run_automation_text as _run_automation_text
 
 
@@ -182,19 +176,18 @@ def run_personal_automation_text(
 ) -> str:
     """Run ``prompt`` through the configured NEXO automation backend.
 
-    ``model`` empty → use whichever model the operator's calibration has
-    selected (``resolve_user_model``); providers that ignore the field
-    (Claude Code bundled) stay happy with an empty string.
+    ``model`` stays empty unless the caller provides an explicit override.
+    Backend/model/effort resolution belongs to the resonance engine via
+    ``caller`` and ``tier``.
     ``cwd`` empty → inherit the current working directory.
     Every other kwarg passes through verbatim.
     """
-    effective_model = model or _USER_MODEL or "opus"
     effective_caller = caller or _infer_personal_caller()
     lock_token = _acquire_personal_caller_lock(effective_caller)
     try:
         return _run_automation_text(
             prompt,
-            model=effective_model,
+            model=model,
             cwd=cwd or "",
             timeout=timeout,
             allowed_tools=allowed_tools,

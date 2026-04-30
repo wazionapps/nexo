@@ -19,7 +19,6 @@ import nexo_personal_automation as automation
 
 def test_run_personal_automation_text_uses_safe_defaults_and_infers_caller(monkeypatch, tmp_path):
     monkeypatch.setattr(automation, "NEXO_HOME", tmp_path / "nexo")
-    monkeypatch.setattr(automation, "_USER_MODEL", "opus")
     monkeypatch.setattr(sys, "argv", [str(tmp_path / "personal" / "scripts" / "reviews-watch.py")])
     captured: dict = {}
 
@@ -33,7 +32,7 @@ def test_run_personal_automation_text_uses_safe_defaults_and_infers_caller(monke
     result = automation.run_personal_automation_text("hola")
 
     assert result == "ok"
-    assert captured["model"] == "opus"
+    assert captured["model"] == ""
     assert captured["timeout"] == automation.DEFAULT_SHORT_TEXT_TIMEOUT
     assert captured["allowed_tools"] == ""
     assert captured["include_bootstrap"] is False

@@ -57,8 +57,6 @@ if str(NEXO_CODE) not in sys.path:
 from agent_runner import AutomationBackendUnavailableError, run_automation_prompt
 from client_preferences import (
     resolve_automation_backend,
-    resolve_automation_task_profile,
-    resolve_client_runtime_profile,
 )
 from core_prompts import render_core_prompt
 
@@ -85,7 +83,6 @@ ZOMBIE_TIMEOUT_HOURS = 2
 MAX_AUTOMATION_TIMEOUT_SECONDS = 1800
 STALE_EMAIL_SESSION_MINUTES = 45
 WORKER_STALE_MAX_MINUTES = 120
-DEFAULT_AUTOMATION_TASK_PROFILE = "fast"
 CONCURRENT_THRESHOLD_MINUTES = 15
 MAX_CONCURRENT_SESSIONS = 2
 MAX_EMAIL_ATTEMPTS = 3
@@ -386,7 +383,10 @@ def load_config():
     except Exception:
         pass
     with open(CONFIG_PATH) as f:
-        return json.load(f)
+        payload = json.load(f)
+    if isinstance(payload, dict):
+        payload.pop("automation_task_profile", None)
+    return payload
 
 
 def _safe_int(value, default=0):
@@ -1636,7 +1636,7 @@ def _reset_batch_to_pending(batch, reason):
         log.warning(f"Failed to reset claimed batch to pending: {exc}")
 
 
-def _write_worker_job(*, batch, debt_block, max_retries, retry_backoff, task_profile):
+def _write_worker_job(*, batch, debt_block, max_retries, retry_backoff):
     job_id = f"{datetime.now().strftime('%Y%m%d-%H%M%S')}-{os.getpid()}-{uuid.uuid4().hex[:8]}"
     job_path = WORKER_JOBS_DIR / f"job-{job_id}.json"
     payload = {
@@ -1645,7 +1645,6 @@ def _write_worker_job(*, batch, debt_block, max_retries, retry_backoff, task_pro
         "debt_block": debt_block or "",
         "max_retries": int(max_retries),
         "retry_backoff_seconds": int(retry_backoff),
-        "task_profile": str(task_profile or DEFAULT_AUTOMATION_TASK_PROFILE),
         "created_at": datetime.now().isoformat(timespec="seconds"),
     }
     job_path.write_text(json.dumps(payload, indent=2, ensure_ascii=True))
@@ -1689,16 +1688,12 @@ def _run_worker_job(job_path):
         debt_block = payload.get("debt_block") or ""
         max_retries = max(1, int(payload.get("max_retries") or 1))
         retry_backoff = max(1, int(payload.get("retry_backoff_seconds") or 60))
-        task_profile = str(payload.get("task_profile") or DEFAULT_AUTOMATION_TASK_PROFILE).strip().lower()
     except Exception as exc:
         log.error(f"Failed to load worker job {job_file}: {exc}")
         job_file.unlink(missing_ok=True)
         return 1
 
     config = load_config()
-    if task_profile:
-        config = dict(config)
-        config["automation_task_profile"] = task_profile
 
     log.info(
         f"Worker job started: {job_file.name} "
@@ -1998,20 +1993,17 @@ def launch_nexo(config, debt_block="", target_emails=None):
     env["HOME"] = str(Path.home())
 
     backend = resolve_automation_backend()
-    task_profile = str(config.get("automation_task_profile") or DEFAULT_AUTOMATION_TASK_PROFILE).strip().lower()
-    selected_profile = (
-        resolve_automation_task_profile(task_profile)
-        if task_profile
-        else {"name": "default", "backend": backend, "model": "", "reasoning_effort": ""}
-    )
-    launch_backend = selected_profile.get("backend") or backend
-    profile_label = selected_profile.get("model") or "default"
-    if selected_profile.get("reasoning_effort"):
-        profile_label = f"{profile_label}/{selected_profile['reasoning_effort']}"
-    log.info(
-        f"Launching NEXO via {launch_backend}"
-        f"{f' [{task_profile}]' if task_profile else ''} ({profile_label})..."
-    )
+    profile_label = "default"
+    try:
+        from resonance_map import resolve_model_and_effort
+
+        mapped_model, mapped_effort = resolve_model_and_effort("email_monitor", backend)
+        profile_label = mapped_model or "default"
+        if mapped_effort:
+            profile_label = f"{profile_label}/{mapped_effort}"
+    except Exception:
+        pass
+    log.info(f"Launching NEXO via {backend} ({profile_label})...")
     requested_timeout = int(config.get("max_process_time", MAX_AUTOMATION_TIMEOUT_SECONDS) or MAX_AUTOMATION_TIMEOUT_SECONDS)
     effective_timeout = max(60, min(requested_timeout, MAX_AUTOMATION_TIMEOUT_SECONDS))
 
@@ -2042,7 +2034,6 @@ def launch_nexo(config, debt_block="", target_emails=None):
         result = run_automation_prompt(
             prompt,
             caller="email_monitor",
-            task_profile=task_profile,
             cwd=config.get("working_dir", str(Path.home())),
             env=env,
             timeout=effective_timeout,
@@ -2343,13 +2334,11 @@ def main():
 
         max_retries = config.get("max_retries", 3)
         retry_backoff = config.get("retry_backoff_seconds", 60)
-        task_profile = str(config.get("automation_task_profile") or DEFAULT_AUTOMATION_TASK_PROFILE).strip().lower()
         job_path = _write_worker_job(
             batch=batch,
             debt_block=debt_block,
             max_retries=max_retries,
             retry_backoff=retry_backoff,
-            task_profile=task_profile,
         )
         try:
             worker_pid = _spawn_worker(job_path, config)
