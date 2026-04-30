@@ -2518,6 +2518,7 @@ def _skills_compose(args):
 def _uninstall(args):
     """Stop all crons, remove MCP config and hooks, preserve user data."""
     from pathlib import Path
+    from windows_runtime import cleanup_windows_host_artifacts, running_inside_wsl, running_from_windows_host
 
     nexo_home = Path(os.environ.get("NEXO_HOME", Path.home() / ".nexo"))
     dry_run = args.dry_run
@@ -2565,6 +2566,20 @@ def _uninstall(args):
                 log_action("remove-systemd", unit.name, str(unit))
             if not dry_run:
                 subprocess.run(["systemctl", "--user", "daemon-reload"], capture_output=True)
+
+        if running_inside_wsl() or running_from_windows_host():
+            host_cleanup = cleanup_windows_host_artifacts(
+                delete_data=delete_data,
+                dry_run=dry_run,
+            )
+            for action in host_cleanup.get("actions", []):
+                log_action(
+                    action.get("category", "remove-win-host-artifact"),
+                    action.get("detail", ""),
+                    action.get("path", ""),
+                )
+            for error in host_cleanup.get("errors", []):
+                errors.append(f"Windows host cleanup: {error}")
 
     # ── 2. Remove MCP server and hooks from Claude Code settings ──
     claude_settings = Path.home() / ".claude" / "settings.json"

@@ -25,7 +25,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from windows_runtime import running_inside_wsl, windows_runtime_status
+from windows_runtime import query_windows_host_tasks, running_inside_wsl, windows_runtime_status
 
 
 def _nexo_home() -> Path:
@@ -83,17 +83,53 @@ def _check_database() -> dict:
 
 def _check_crons() -> dict:
     out: dict[str, Any] = {}
-    # macOS LaunchAgents
-    agents_dir = Path.home() / "Library" / "LaunchAgents"
-    if agents_dir.is_dir():
+    system = platform.system()
+    release = platform.release()
+
+    if system == "Darwin":
+        agents_dir = Path.home() / "Library" / "LaunchAgents"
+        out["platform"] = "macos"
+        if agents_dir.is_dir():
+            try:
+                plists = [p for p in agents_dir.glob("com.nexo.*.plist")]
+                out["launch_agents"] = len(plists)
+            except Exception as exc:
+                out["error"] = str(exc)
+                out["status"] = "degraded"
+                return out
+        out["status"] = "ok"
+        return out
+
+    if system == "Linux":
+        unit_dir = Path.home() / ".config" / "systemd" / "user"
+        inside_wsl = running_inside_wsl(system=system, release=release)
+        out["platform"] = "wsl" if inside_wsl else "linux"
+        out["inside_wsl"] = inside_wsl
         try:
-            plists = [p for p in agents_dir.glob("com.nexo.*.plist")]
-            out["launch_agents"] = len(plists)
-            out["platform"] = "macos"
+            services = sorted(unit_dir.glob("nexo-*.service")) if unit_dir.is_dir() else []
+            timers = sorted(unit_dir.glob("nexo-*.timer")) if unit_dir.is_dir() else []
+            out["systemd_services"] = len(services)
+            out["systemd_timers"] = len(timers)
         except Exception as exc:
             out["error"] = str(exc)
-    else:
-        out["platform"] = "unknown"
+            out["status"] = "degraded"
+            return out
+        if inside_wsl:
+            out["windows_host_tasks"] = query_windows_host_tasks()
+        out["status"] = "ok" if (out.get("systemd_services", 0) or out.get("systemd_timers", 0)) else "degraded"
+        if out["status"] == "degraded":
+            out["reason"] = "no_nexo_systemd_units_detected"
+        return out
+
+    if system == "Windows":
+        out["platform"] = "windows"
+        out["windows_host_tasks"] = query_windows_host_tasks()
+        out["status"] = "ok" if out["windows_host_tasks"].get("available") else "degraded"
+        if out["status"] == "degraded":
+            out["reason"] = "windows_task_scheduler_unavailable"
+        return out
+
+    out["platform"] = "unknown"
     out["status"] = "ok"
     return out
 
