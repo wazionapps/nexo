@@ -24,6 +24,7 @@ def test_collect_snapshot_returns_generic_runtime_payload(tmp_path, monkeypatch)
     assert payload["windows_runtime"]["inside_wsl"] is False
     assert payload["windows_runtime"]["windows_host_bridge"] is False
     assert payload["windows_runtime"]["bridge_mode"] == ""
+    assert payload["windows_host"]["tasks"]["available"] is False
     assert payload["windows_runtime"]["warnings"] == []
     assert "health" in payload
     assert "logs" in payload
@@ -51,6 +52,7 @@ def test_collect_snapshot_reports_wsl_runtime_hints(monkeypatch):
     assert payload["windows_runtime"]["bridge_mode"] == "wsl-exec"
     assert payload["windows_runtime"]["wsl_distro"] == "Ubuntu-24.04"
     assert payload["windows_runtime"]["wsl_interop"] is True
+    assert "windows_host" in payload
     assert payload["windows_runtime"]["warnings"] == []
 
 
