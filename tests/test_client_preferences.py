@@ -20,6 +20,8 @@ def test_normalize_client_preferences_preserves_old_defaults(tmp_path):
     assert prefs["client_runtime_profiles"]["codex"]["reasoning_effort"] == "xhigh"
     assert prefs["automation_task_profiles"]["fast"]["backend"] == ""
     assert prefs["automation_task_profiles"]["fast"]["model"] == ""
+    assert prefs["automation_task_profiles"]["deep"]["backend"] == ""
+    assert prefs["automation_task_profiles"]["deep"]["model"] == ""
     # New: acknowledged_model_recommendations is part of the normalized
     # preferences schema so cron updates can record ack state silently.
     assert prefs["acknowledged_model_recommendations"] == {"claude_code": 0, "codex": 0}
@@ -74,7 +76,7 @@ def test_client_runtime_profiles_normalize_and_default():
     assert prefs["client_runtime_profiles"]["codex"]["reasoning_effort"] == "high"
 
 
-def test_resolve_automation_task_profile_uses_profile_override_and_runtime_defaults():
+def test_resolve_automation_task_profile_returns_semantic_tier_only():
     import client_preferences
 
     prefs = client_preferences.normalize_client_preferences(
@@ -94,17 +96,29 @@ def test_resolve_automation_task_profile_uses_profile_override_and_runtime_defau
     deep = client_preferences.resolve_automation_task_profile("deep", preferences=prefs)
     fast = client_preferences.resolve_automation_task_profile("fast", preferences=prefs)
 
+    assert prefs["automation_task_profiles"]["deep"] == {
+        "backend": "",
+        "model": "",
+        "reasoning_effort": "",
+    }
+    assert prefs["automation_task_profiles"]["fast"] == {
+        "backend": "",
+        "model": "",
+        "reasoning_effort": "",
+    }
     assert deep == {
         "name": "deep",
-        "backend": "claude_code",
-        "model": "claude-opus-4-7[1m]",
-        "reasoning_effort": "max",
+        "backend": "",
+        "model": "",
+        "reasoning_effort": "",
+        "tier": "maximo",
     }
     assert fast == {
         "name": "fast",
-        "backend": "codex",
-        "model": "gpt-5.4-mini",
-        "reasoning_effort": "medium",
+        "backend": "",
+        "model": "",
+        "reasoning_effort": "",
+        "tier": "bajo",
     }
 
 

@@ -27,7 +27,6 @@ from client_preferences import (
     load_client_preferences,
     normalize_client_key,
     resolve_automation_backend,
-    resolve_automation_task_profile,
     resolve_client_runtime_profile,
     resolve_terminal_client,
 )
@@ -936,14 +935,6 @@ def run_automation_prompt(
     selected_backend = backend or resolve_automation_backend(preferences=prefs)
     if selected_backend == BACKEND_NONE:
         raise AutomationBackendUnavailableError("Automation backend is disabled in config.")
-
-    if task_profile:
-        profile = resolve_automation_task_profile(task_profile, preferences=prefs)
-        selected_backend = profile["backend"] or selected_backend
-        if not model:
-            model = profile["model"]
-        if not reasoning_effort:
-            reasoning_effort = profile["reasoning_effort"]
     selected_backend = _resolve_available_backend(selected_backend, preferences=prefs)
 
     # Resonance map decides (model, effort) for every call. ``caller`` is

@@ -1,5 +1,15 @@
 # Changelog
 
+## [7.12.2] - 2026-04-30
+
+### Fixed
+- **Legacy automation profiles no longer bypass resonance routing.** `src/agent_runner.py` stops letting `task_profile` prefill backend/model/reasoning_effort ahead of the resolver, and `src/client_preferences.py` now normalizes persisted `automation_task_profiles` back to empty routing fields so `schedule.json` cannot keep acting as a silent second source of truth for automation model selection.
+- **Email monitor and personal helper runs now follow the same caller-driven motor path as Deep Sleep and morning-agent.** `src/scripts/nexo-email-monitor.py` stops passing/persisting `automation_task_profile`, `src/scripts/nexo_personal_automation.py` stops injecting `resolve_user_model()` into short text calls, and `src/email_config.py` plus `src/scripts/nexo-email-migrate-config.py` stop round-tripping the retired email routing override.
+- **Runtime updates now scrub the last stale email routing override automatically.** `src/auto_update.py` removes `automation_task_profile` from legacy email runtime config during update so existing installs converge on the caller/tier -> backend -> `(model, effort)` flow without manual cleanup.
+
+### Tests
+- `pytest -q tests/test_client_preferences.py tests/test_nexo_personal_automation.py tests/test_agent_runner.py tests/test_auto_update_cleanup.py tests/test_email_accounts.py tests/test_email_monitor_checkpoints.py tests/test_email_monitor_parser.py tests/test_nexo_agent_run_tier_flag.py` → `70 passed`
+
 ## [7.12.1] - 2026-04-29
 
 ### Fixed

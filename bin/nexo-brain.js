@@ -17,8 +17,11 @@
 const { execSync, spawnSync } = require("child_process");
 const crypto = require("crypto");
 const fs = require("fs");
+const { createRequire } = require("module");
 const path = require("path");
 const readline = require("readline");
+// Force relative launcher helpers to resolve from bin/ even under test harnesses.
+require = createRequire(path.join(__dirname, "nexo-brain.js"));
 const { runViaWsl } = require("./windows-wsl-bridge");
 
 if (process.platform === "win32") {

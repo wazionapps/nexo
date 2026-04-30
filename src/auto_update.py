@@ -1630,6 +1630,47 @@ def _migrate_effort_to_resonance(dest: Path = NEXO_HOME) -> list[str]:
     return actions
 
 
+def _cleanup_legacy_email_routing_config(dest: Path = NEXO_HOME) -> list[str]:
+    """Remove retired email routing overrides from persisted runtime config.
+
+    Older runtimes stored ``automation_task_profile`` inside
+    ``runtime/nexo-email/config.json`` (and earlier under ``nexo-email/``).
+    The email monitor now resolves model/effort exclusively from its caller in
+    ``resonance_map.py``, so keeping that key around only preserves a stale,
+    misleading second source of truth.
+    """
+    import json as _json
+
+    actions: list[str] = []
+    candidates = [
+        dest / "runtime" / "nexo-email" / "config.json",
+        dest / "nexo-email" / "config.json",
+    ]
+    for path in candidates:
+        if not path.is_file():
+            continue
+        try:
+            payload = _json.loads(path.read_text())
+        except Exception as exc:
+            actions.append(
+                f"email-routing-cleanup-warning:{path.name}:{exc.__class__.__name__}"
+            )
+            continue
+        if not isinstance(payload, dict):
+            continue
+        if "automation_task_profile" not in payload:
+            continue
+        payload.pop("automation_task_profile", None)
+        try:
+            path.write_text(_json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
+            actions.append(f"email-routing-cleanup:{path}")
+        except Exception as exc:
+            actions.append(
+                f"email-routing-cleanup-warning:{path.name}:{exc.__class__.__name__}"
+            )
+    return actions
+
+
 def _relocate_resonance_tiers_contract(dest: Path = NEXO_HOME) -> list[str]:
     """Ensure ``resonance_tiers.json`` lives at the public contract path
     ``NEXO_HOME/personal/brain/resonance_tiers.json`` and purge the legacy
@@ -4687,6 +4728,14 @@ def _run_runtime_post_sync(dest: Path = NEXO_HOME, progress_fn=None) -> tuple[bo
             actions.append("v6-purge:noop")
     except Exception as exc:
         actions.append(f"v6-purge-warning:{exc.__class__.__name__}")
+
+    try:
+        _emit_progress(progress_fn, "Cleaning legacy email routing overrides...")
+        email_actions = _cleanup_legacy_email_routing_config(dest)
+        for action in email_actions:
+            actions.append(action)
+    except Exception as exc:
+        actions.append(f"email-routing-cleanup-warning:{exc.__class__.__name__}")
 
     try:
         _emit_progress(progress_fn, "Ensuring local classifier baseline...")

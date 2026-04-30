@@ -106,7 +106,6 @@ def main(argv: list[str]) -> int:
         "retry_backoff_seconds": legacy.get("retry_backoff_seconds", 60),
         "claude_binary": legacy.get("claude_binary", ""),
         "working_dir": legacy.get("working_dir", str(Path.home())),
-        "automation_task_profile": legacy.get("automation_task_profile", "deep"),
         "max_process_time": legacy.get("max_process_time"),
         "sent_folder": legacy.get("sent_folder", "INBOX.Sent"),
         "operator_aliases": legacy_operator_aliases,

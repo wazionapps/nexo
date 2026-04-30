@@ -95,7 +95,6 @@ def _account_to_runtime_account(account: dict) -> dict:
         "retry_backoff_seconds": metadata.get("retry_backoff_seconds", 60),
         "claude_binary": metadata.get("claude_binary", ""),
         "working_dir": metadata.get("working_dir", str(Path.home())),
-        "automation_task_profile": metadata.get("automation_task_profile", "deep"),
         "max_process_time": metadata.get("max_process_time"),
         "metadata": metadata,
     }
@@ -139,7 +138,6 @@ def _account_to_legacy_shape(
         "retry_backoff_seconds": runtime_account["retry_backoff_seconds"],
         "claude_binary": runtime_account["claude_binary"],
         "working_dir": runtime_account["working_dir"],
-        "automation_task_profile": runtime_account["automation_task_profile"],
         "max_process_time": runtime_account["max_process_time"],
         "label": runtime_account["label"],
         "role": runtime_account["role"],
