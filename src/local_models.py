@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import re
 import shutil
@@ -29,6 +30,7 @@ import paths
 
 MANIFEST_PATH = Path(__file__).resolve().with_name("local_model_manifest.json")
 MODEL_LOCK_FILENAME = ".nexo-model-lock.json"
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -79,6 +81,9 @@ def _lock_payload(spec: LocalModelSpec) -> dict[str, Any]:
 
 @lru_cache(maxsize=1)
 def _load_manifest() -> dict[str, LocalModelSpec]:
+    if not MANIFEST_PATH.exists():
+        logger.warning("local_model_manifest.json missing — running with empty manifest")
+        return {}
     payload = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
     specs: dict[str, LocalModelSpec] = {}
     for raw in payload.get("models", []) or []:

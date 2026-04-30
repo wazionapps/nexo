@@ -20,6 +20,7 @@ import paths
 from doctor.formatters import format_report
 from doctor.orchestrator import run_doctor
 from health_check import collect as collect_health
+from windows_runtime import running_inside_wsl, windows_runtime_status
 
 
 def _nexo_home() -> Path:
@@ -111,15 +112,19 @@ def _recent_logs(lines: int = 80) -> dict[str, Any]:
 
 
 def collect_snapshot(*, log_lines: int = 80, include_doctor: bool = False) -> dict[str, Any]:
+    system = platform.system()
+    release = platform.release()
     payload: dict[str, Any] = {
         "generated_at": time.time(),
         "version": _read_version(),
         "platform": {
-            "system": platform.system(),
-            "release": platform.release(),
+            "system": system,
+            "release": release,
             "machine": platform.machine(),
             "python": platform.python_version(),
+            "is_wsl": running_inside_wsl(system=system, release=release),
         },
+        "windows_runtime": windows_runtime_status(_nexo_home(), system=system, release=release),
         "paths": _path_status(),
         "health": collect_health(),
         "logs": _recent_logs(log_lines),

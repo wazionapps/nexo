@@ -27,6 +27,17 @@ def test_manifest_declares_revision_for_all_pinned_fastembed_models():
         assert spec.required_files
 
 
+def test_list_local_model_specs_degrades_to_empty_when_manifest_is_missing(tmp_path, monkeypatch):
+    local_models._load_manifest.cache_clear()
+    missing_manifest = tmp_path / "local_model_manifest.json"
+    monkeypatch.setattr(local_models, "MANIFEST_PATH", missing_manifest)
+
+    try:
+        assert local_models.list_local_model_specs() == []
+    finally:
+        local_models._load_manifest.cache_clear()
+
+
 def test_verify_local_model_dir_detects_checksum_drift(tmp_path):
     good_size, good_sha = _make_file(tmp_path, "model.onnx", b"good-model")
     spec = local_models.LocalModelSpec(
