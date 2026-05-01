@@ -115,10 +115,12 @@ console.log(JSON.stringify(payload));
 def test_public_launchers_use_shared_wsl_bridge_helper() -> None:
     cli_text = (REPO_ROOT / "bin" / "nexo.js").read_text(encoding="utf-8")
     installer_text = (REPO_ROOT / "bin" / "nexo-brain.js").read_text(encoding="utf-8")
+    bridge_text = (REPO_ROOT / "bin" / "windows-wsl-bridge.js").read_text(encoding="utf-8")
     package = json.loads((REPO_ROOT / "package.json").read_text(encoding="utf-8"))
 
     assert 'const { runViaWsl } = require("./windows-wsl-bridge");' in cli_text
     assert 'const { runViaWsl } = require("./windows-wsl-bridge");' in installer_text
     assert 'label: "NEXO CLI"' in cli_text
     assert 'label: "NEXO Brain"' in installer_text
+    assert "windowsHide: platform === \"win32\"" in bridge_text
     assert "bin/windows-wsl-bridge.js" in package["files"]

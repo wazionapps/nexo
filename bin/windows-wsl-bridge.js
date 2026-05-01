@@ -208,7 +208,11 @@ function runViaWsl({ scriptPath, args = [], env = process.env, platform = proces
     return { status: 1 };
   }
 
-  const result = spawnSync(spec.command, spec.args, { stdio, env });
+  const result = spawnSync(spec.command, spec.args, {
+    stdio,
+    env,
+    windowsHide: platform === "win32",
+  });
   if (result.error && result.error.code === "ENOENT") {
     logWslBridgeFailure(label, "The Windows host does not have `wsl.exe` available.");
     return { status: 1 };
