@@ -12,8 +12,11 @@ tomli; python_version < "3.11"
 anthropic>=0.80.0
 openai>=2.20.0
 
-# Embedding model (optional but recommended for cognitive features)
-fastembed
+# Embedding model (optional but recommended for cognitive features).
+# Pin >=0.8.0: older releases require Python <3.12 and pip iterates each
+# obsolete version for ~10 min on Ubuntu 24.04 (Python 3.12) before finding
+# a compatible one. Verified empirically during Win11 clean install bootstrap.
+fastembed>=0.8.0
 
 # Dashboard (optional, only needed for `python -m dashboard.app`)
 fastapi
