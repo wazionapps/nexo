@@ -111,6 +111,10 @@ const DEFAULT_CLAUDE_CODE_REASONING_EFFORT = _MODEL_DEFAULTS.claude_code.reasoni
 const DEFAULT_CODEX_MODEL = _MODEL_DEFAULTS.codex.model;
 const DEFAULT_CODEX_REASONING_EFFORT = _MODEL_DEFAULTS.codex.reasoning_effort || "";
 
+function isDesktopManagedInstall() {
+  return String(process.env.NEXO_DESKTOP_MANAGED || "").trim() === "1";
+}
+
 // v6.0.0 — Hook manifest is the single source of truth for which hook
 // handlers get registered. Both plugin mode (hooks/hooks.json) and npm
 // mode (this installer's registerAllCoreHooks) read from the same file.
@@ -498,6 +502,15 @@ function runMandatoryModelWarmup(pythonPath, nexoHome = NEXO_HOME, { reason = "i
   installWarmupPythonDependencies(pythonPath, { quiet: false, installRuntimeDeps });
   runModelWarmup(pythonPath, { nexoHome, strict: true });
   log("Local model warmup complete.");
+}
+
+function runDesktopAwareModelWarmup(pythonPath, nexoHome = NEXO_HOME, options = {}) {
+  const reason = String((options && options.reason) || "install");
+  if (isDesktopManagedInstall()) {
+    log(`Desktop-managed runtime detected — local model warmup deferred during ${reason}.`);
+    return;
+  }
+  runMandatoryModelWarmup(pythonPath, nexoHome, options);
 }
 
 async function runWarmupModelsCommand(args) {
@@ -1451,7 +1464,7 @@ function getDefaultSchedule(timezone) {
 }
 
 function writeDesktopProductMode(nexoHome) {
-  if (String(process.env.NEXO_DESKTOP_MANAGED || "").trim() !== "1") return;
+  if (!isDesktopManagedInstall()) return;
   const configDir = resolveRuntimeConfigDir(nexoHome);
   fs.mkdirSync(configDir, { recursive: true });
   const target = path.join(configDir, "product-mode.json");
@@ -1478,7 +1491,7 @@ function ensureEvolutionObjectiveForCurrentProductMode(nexoHome) {
   const brainDir = resolveRuntimeBrainDir(nexoHome);
   fs.mkdirSync(brainDir, { recursive: true });
   const evoObjectivePath = path.join(brainDir, "evolution-objective.json");
-  const desktopManaged = String(process.env.NEXO_DESKTOP_MANAGED || "").trim() === "1";
+  const desktopManaged = isDesktopManagedInstall();
   let payload = null;
   if (fs.existsSync(evoObjectivePath)) {
     try {
@@ -1801,6 +1814,7 @@ function installClaudeCodeCli(platform) {
   const desktopNode = String(process.env.NEXO_DESKTOP_NODE || "").trim();
   const bundledNpmCli = String(process.env.NEXO_DESKTOP_NPM_CLI || "").trim();
   const managedPrefix = managedClaudePrefix();
+  const desktopManaged = isDesktopManagedInstall();
 
   if (desktopNode && bundledNpmCli) {
     spawnSync(
@@ -1816,6 +1830,23 @@ function installClaudeCodeCli(platform) {
       persistClaudeCliPath(claudeInstalled);
       return { installed: true, path: claudeInstalled };
     }
+  }
+
+  if (desktopManaged) {
+    spawnSync(
+      "npm",
+      ["install", "-g", "--prefix", managedPrefix, "@anthropic-ai/claude-code"],
+      {
+        stdio: "inherit",
+        env: installEnv,
+      },
+    );
+    claudeInstalled = detectInstalledClients().claude_code.path || "";
+    if (claudeInstalled) {
+      persistClaudeCliPath(claudeInstalled);
+      return { installed: true, path: claudeInstalled };
+    }
+    return { installed: false, path: "" };
   }
 
   spawnSync("npx", ["-y", "@anthropic-ai/claude-code", "--version"], {
@@ -1847,6 +1878,7 @@ function installCodexCli() {
 async function configureClientSetup({ lang, useDefaults, autoInstall, detected }) {
   const strings = clientSetupStrings(lang);
   const setup = defaultClientSetup(detected);
+  const desktopManaged = String(process.env.NEXO_DESKTOP_MANAGED || "").trim() === "1";
   setup.client_install_preferences = {
     claude_code: autoInstall === "auto" ? "auto" : "ask",
     codex: autoInstall === "auto" ? "auto" : "ask",
@@ -1898,6 +1930,10 @@ async function configureClientSetup({ lang, useDefaults, autoInstall, detected }
   const required = requiredCliClients(setup);
   for (const client of required) {
     if (detected[client] && detected[client].installed) continue;
+    if (desktopManaged && client === "claude_code") {
+      log("Claude Code install deferred to Desktop final sync.");
+      continue;
+    }
     let shouldInstall = useDefaults || autoInstall === "auto";
     if (!shouldInstall && process.stdin.isTTY && process.stdout.isTTY) {
       const question = client === "claude_code" ? strings.installClaudeQ : strings.installCodexQ;
@@ -1926,6 +1962,10 @@ async function configureClientSetup({ lang, useDefaults, autoInstall, detected }
   }
 
   if (setup.automation_enabled && setup.automation_backend !== "none" && !detected[setup.automation_backend]?.installed) {
+    if (desktopManaged && setup.automation_backend === "claude_code") {
+      log("Claude Code will be provisioned by Desktop after the core runtime is ready.");
+      return { setup, detected };
+    }
     const label = setup.automation_backend === "claude_code" ? "Claude Code" : "Codex";
     log(strings.automationDisabled(label));
     setup.automation_enabled = false;
@@ -2552,7 +2592,7 @@ async function runSetup() {
         }
 
         const migPythonForWarmup = findVenvPython(NEXO_HOME) || "python3";
-        runMandatoryModelWarmup(migPythonForWarmup, NEXO_HOME, { reason: "update", installRuntimeDeps: false });
+        runDesktopAwareModelWarmup(migPythonForWarmup, NEXO_HOME, { reason: "update", installRuntimeDeps: false });
 
         // Update plugins (all .py files in plugins/)
         const pluginsSrc = path.join(srcDir, "plugins");
@@ -2821,7 +2861,7 @@ async function runSetup() {
         throw new Error(`F0.6 layout finalization failed: ${syncLayoutFinalize.error}`);
       }
 
-      runMandatoryModelWarmup(syncPython, NEXO_HOME, { reason: "repair" });
+      runDesktopAwareModelWarmup(syncPython, NEXO_HOME, { reason: "repair" });
       logMacPermissionsNotice(NEXO_HOME, syncPython);
 
       log(`Already at v${currentVersion}. No migration needed.`);
@@ -3332,7 +3372,7 @@ async function runSetup() {
     python = venvPython;
   }
   log("Dependencies installed.");
-  runMandatoryModelWarmup(python, NEXO_HOME, { reason: "install", installRuntimeDeps: false });
+  runDesktopAwareModelWarmup(python, NEXO_HOME, { reason: "install", installRuntimeDeps: false });
 
   // Step 4: Create ~/.nexo/
   log("Setting up NEXO home...");
