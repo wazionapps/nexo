@@ -49,7 +49,7 @@ console.log(JSON.stringify(payload));
         "NEXO_WINDOWS_HOST": "1",
         "NEXO_HOME": "/home/franciscoc/.nexo",
     }
-    assert payload["args"][:12] == [
+    assert payload["args"][:14] == [
         "-d",
         "Ubuntu-24.04",
         "--cd",
@@ -59,11 +59,13 @@ console.log(JSON.stringify(payload));
         "-u",
         "HOME",
         "-u",
+        "PATH",
+        "-u",
         "NEXO_HOME",
         "-u",
         "NEXO_CODE",
     ]
-    assert payload["args"][12:24] == [
+    assert payload["args"][14:24] == [
         "-u",
         "NEXO_WSL_HOME",
         "-u",
@@ -74,10 +76,11 @@ console.log(JSON.stringify(payload));
         "HOMEDRIVE",
         "-u",
         "HOMEPATH",
-        "HOME=/home/franciscoc",
-        "NEXO_WINDOWS_BRIDGE=1",
     ]
-    assert payload["args"][24:] == [
+    assert payload["args"][24] == "HOME=/home/franciscoc"
+    assert payload["args"][25].startswith("PATH=/home/franciscoc/.nexo/bin:/home/franciscoc/.nexo/runtime/bootstrap/npm-global/bin:")
+    assert payload["args"][26:] == [
+        "NEXO_WINDOWS_BRIDGE=1",
         "NEXO_WINDOWS_HOST=1",
         "NEXO_HOME=/home/franciscoc/.nexo",
         "node",

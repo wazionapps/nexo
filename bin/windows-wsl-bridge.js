@@ -1,5 +1,13 @@
 const { spawnSync } = require("child_process");
 const path = require("path");
+const DEFAULT_LINUX_PATH_ENTRIES = [
+  "/usr/local/sbin",
+  "/usr/local/bin",
+  "/usr/sbin",
+  "/usr/bin",
+  "/sbin",
+  "/bin",
+];
 
 function isWindowsHost(platform = process.platform) {
   return platform === "win32";
@@ -72,6 +80,25 @@ function resolveLinuxEnv(env = process.env) {
   }
 
   return linuxEnv;
+}
+
+function uniqueValues(values = []) {
+  const seen = new Set();
+  return values.filter((value) => {
+    const text = String(value || "").trim();
+    if (!text || seen.has(text)) return false;
+    seen.add(text);
+    return true;
+  });
+}
+
+function buildManagedLinuxPath({ runtimeHome = "", linuxHome = "" } = {}) {
+  return uniqueValues([
+    runtimeHome ? `${runtimeHome}/bin` : "",
+    runtimeHome ? `${runtimeHome}/runtime/bootstrap/npm-global/bin` : "",
+    linuxHome ? path.posix.join(linuxHome, ".local", "bin") : "",
+    ...DEFAULT_LINUX_PATH_ENTRIES,
+  ]).join(":");
 }
 
 function inferLinuxUserHomeFromRuntimeHome(runtimeHome = "") {
@@ -150,6 +177,10 @@ function buildWslExecSpec({
     wslArgs.push("-d", distro);
   }
   const resolvedLinuxHome = resolveLinuxUserHome({ env, linuxEnv, defaultValue: linuxHome });
+  const managedLinuxPath = buildManagedLinuxPath({
+    runtimeHome: linuxEnv.NEXO_HOME || "",
+    linuxHome: resolvedLinuxHome,
+  });
 
   wslArgs.push("--cd", resolvedLinuxHome || "~");
 
@@ -158,6 +189,8 @@ function buildWslExecSpec({
     "env",
     "-u",
     "HOME",
+    "-u",
+    "PATH",
     "-u",
     "NEXO_HOME",
     "-u",
@@ -177,6 +210,9 @@ function buildWslExecSpec({
   if (resolvedLinuxHome) {
     wslArgs.push(`HOME=${resolvedLinuxHome}`);
   }
+  if (managedLinuxPath) {
+    wslArgs.push(`PATH=${managedLinuxPath}`);
+  }
   for (const [key, value] of Object.entries(linuxEnv)) {
     wslArgs.push(`${key}=${value}`);
   }
@@ -187,6 +223,7 @@ function buildWslExecSpec({
     command: "wsl.exe",
     args: wslArgs,
     linuxEnv,
+    managedLinuxPath,
     translatedScriptPath,
   };
 }
