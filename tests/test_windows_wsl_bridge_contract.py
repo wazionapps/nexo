@@ -49,12 +49,9 @@ console.log(JSON.stringify(payload));
         "NEXO_WINDOWS_HOST": "1",
         "NEXO_HOME": "/home/franciscoc/.nexo",
     }
-    assert payload["args"][:14] == [
+    assert payload["args"][:11] == [
         "-d",
         "Ubuntu-24.04",
-        "--cd",
-        "/home/franciscoc",
-        "--exec",
         "env",
         "-u",
         "HOME",
@@ -65,7 +62,7 @@ console.log(JSON.stringify(payload));
         "-u",
         "NEXO_CODE",
     ]
-    assert payload["args"][14:24] == [
+    assert payload["args"][11:21] == [
         "-u",
         "NEXO_WSL_HOME",
         "-u",
@@ -77,12 +74,16 @@ console.log(JSON.stringify(payload));
         "-u",
         "HOMEPATH",
     ]
-    assert payload["args"][24] == "HOME=/home/franciscoc"
-    assert payload["args"][25].startswith("PATH=/home/franciscoc/.nexo/bin:/home/franciscoc/.nexo/runtime/bootstrap/npm-global/bin:")
-    assert payload["args"][26:] == [
+    assert payload["args"][21] == "HOME=/home/franciscoc"
+    assert payload["args"][22].startswith("PATH=/home/franciscoc/.nexo/bin:/home/franciscoc/.nexo/runtime/bootstrap/npm-global/bin:")
+    assert payload["args"][23:] == [
         "NEXO_WINDOWS_BRIDGE=1",
         "NEXO_WINDOWS_HOST=1",
         "NEXO_HOME=/home/franciscoc/.nexo",
+        "sh",
+        "-lc",
+        'cd "$HOME" && exec "$@"',
+        "sh",
         "node",
         "/mnt/c/Users/franciscoc/AppData/Roaming/npm/node_modules/nexo-brain/bin/nexo.js",
         "doctor",
@@ -112,7 +113,7 @@ console.log(JSON.stringify(payload));
 
     payload = json.loads(result.stdout.strip())
     assert payload["translatedScriptPath"] == "/home/franciscoc/repo/bin/nexo-brain.js"
-    assert payload["args"][:4] == ["-d", "Ubuntu-24.04", "--cd", "~"]
+    assert payload["args"][:3] == ["-d", "Ubuntu-24.04", "env"]
 
 
 def test_public_launchers_use_shared_wsl_bridge_helper() -> None:

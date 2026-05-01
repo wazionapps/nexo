@@ -138,7 +138,7 @@ function probeWslUserHome({ distro = "", env = process.env } = {}) {
   if (distro) {
     probeArgs.push("-d", distro);
   }
-  probeArgs.push("--cd", "~", "--exec", "pwd");
+  probeArgs.push("sh", "-lc", 'printf %s "$HOME"');
 
   const result = spawnSync("wsl.exe", probeArgs, {
     env,
@@ -182,10 +182,7 @@ function buildWslExecSpec({
     linuxHome: resolvedLinuxHome,
   });
 
-  wslArgs.push("--cd", resolvedLinuxHome || "~");
-
   wslArgs.push(
-    "--exec",
     "env",
     "-u",
     "HOME",
@@ -216,8 +213,15 @@ function buildWslExecSpec({
   for (const [key, value] of Object.entries(linuxEnv)) {
     wslArgs.push(`${key}=${value}`);
   }
-
-  wslArgs.push(resolveWslNodeBinary(env), translatedScriptPath, ...args);
+  wslArgs.push(
+    "sh",
+    "-lc",
+    resolvedLinuxHome ? 'cd "$HOME" && exec "$@"' : 'exec "$@"',
+    "sh",
+    resolveWslNodeBinary(env),
+    translatedScriptPath,
+    ...args,
+  );
 
   return {
     command: "wsl.exe",
