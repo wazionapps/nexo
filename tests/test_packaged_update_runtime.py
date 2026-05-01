@@ -578,7 +578,17 @@ def test_packaged_installer_syncs_runtime_package_metadata():
 
     assert 'function syncRuntimePackageMetadata(repoRoot = path.join(__dirname, ".."), runtimeHome = NEXO_HOME)' in text
     assert 'fs.copyFileSync(pkgSrc, path.join(runtimeHome, "package.json"));' in text
-    assert text.count('syncRuntimePackageMetadata(path.join(__dirname, ".."), NEXO_HOME);') >= 3
+    # The installer calls syncRuntimePackageMetadata at three points: the
+    # auto-migration flow, the Brain core install, and the legacy migration
+    # branch. After the bundle-aware refactor, the first arg may be either
+    # `path.join(__dirname, "..")` (no bundle) or `bundleRoot` (when a staged
+    # bundle has been resolved). Count both call shapes — the total must be ≥3.
+    legacy_calls = text.count('syncRuntimePackageMetadata(path.join(__dirname, ".."), NEXO_HOME);')
+    bundle_calls = text.count('syncRuntimePackageMetadata(bundleRoot, NEXO_HOME);')
+    assert legacy_calls + bundle_calls >= 3, (
+        f"expected >=3 syncRuntimePackageMetadata call sites, got "
+        f"{legacy_calls} legacy + {bundle_calls} bundleRoot"
+    )
 
 
 def test_packaged_installer_repairs_same_version_runtime_when_core_current_lags():

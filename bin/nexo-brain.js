@@ -111,6 +111,10 @@ const DEFAULT_CLAUDE_CODE_REASONING_EFFORT = _MODEL_DEFAULTS.claude_code.reasoni
 const DEFAULT_CODEX_MODEL = _MODEL_DEFAULTS.codex.model;
 const DEFAULT_CODEX_REASONING_EFFORT = _MODEL_DEFAULTS.codex.reasoning_effort || "";
 
+function isDesktopManagedInstall() {
+  return String(process.env.NEXO_DESKTOP_MANAGED || "").trim() === "1";
+}
+
 // v6.0.0 — Hook manifest is the single source of truth for which hook
 // handlers get registered. Both plugin mode (hooks/hooks.json) and npm
 // mode (this installer's registerAllCoreHooks) read from the same file.
@@ -223,6 +227,62 @@ function run(cmd, opts = {}) {
 
 function log(msg) {
   console.log(`  ${msg}`);
+  try {
+    const logPath = path.join(
+      NEXO_HOME,
+      "runtime",
+      "bootstrap",
+      "logs",
+      "brain-install.log"
+    );
+    fs.mkdirSync(path.dirname(logPath), { recursive: true });
+    fs.appendFileSync(logPath, `[${new Date().toISOString()}] ${msg}\n`);
+  } catch {}
+}
+
+let _stagedRuntimeBundleRoot = null;
+let _stagedRuntimeCleanup = null;
+
+function getRuntimeBundleRoot() {
+  if (_stagedRuntimeBundleRoot) {
+    return _stagedRuntimeBundleRoot;
+  }
+  const bundleRoot = path.resolve(__dirname, "..");
+  if (process.platform !== "linux") {
+    return bundleRoot;
+  }
+  const normalizedRoot = bundleRoot.replace(/\\/g, "/");
+  if (!normalizedRoot.startsWith("/mnt/")) {
+    return bundleRoot;
+  }
+
+  const tmpRoot = fs.mkdtempSync(path.join(require("os").tmpdir(), "nexo-brain-stage-"));
+  const stagedRoot = path.join(tmpRoot, path.basename(bundleRoot));
+  fs.mkdirSync(stagedRoot, { recursive: true });
+
+  log("Staging bundled runtime into local Linux storage...");
+  const tarCmd =
+    `tar --exclude=__pycache__ --exclude=node_modules --exclude='*.pyc' ` +
+    `--exclude='*.db' --exclude=.git ` +
+    `-C ${JSON.stringify(bundleRoot)} -cf - . | ` +
+    `tar -C ${JSON.stringify(stagedRoot)} -xf -`;
+  const stageResult = spawnSync("/bin/sh", ["-c", tarCmd], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+    timeout: 10 * 60 * 1000,
+  });
+  if (stageResult.status !== 0) {
+    const detail = (stageResult.stderr || stageResult.stdout || "").trim() || `exit ${stageResult.status}`;
+    throw new Error(`Failed to stage bundled runtime from Windows storage: ${detail}`);
+  }
+  log(`  Runtime bundle staged at ${stagedRoot}`);
+  _stagedRuntimeBundleRoot = stagedRoot;
+  _stagedRuntimeCleanup = () => {
+    try {
+      fs.rmSync(tmpRoot, { recursive: true, force: true });
+    } catch {}
+  };
+  return _stagedRuntimeBundleRoot;
 }
 
 function readPackageJson() {
@@ -500,6 +560,15 @@ function runMandatoryModelWarmup(pythonPath, nexoHome = NEXO_HOME, { reason = "i
   log("Local model warmup complete.");
 }
 
+function runDesktopAwareModelWarmup(pythonPath, nexoHome = NEXO_HOME, options = {}) {
+  const reason = String((options && options.reason) || "install");
+  if (isDesktopManagedInstall()) {
+    log(`Desktop-managed runtime detected — local model warmup deferred during ${reason}.`);
+    return;
+  }
+  runMandatoryModelWarmup(pythonPath, nexoHome, options);
+}
+
 async function runWarmupModelsCommand(args) {
   const dryRun = args.includes("--dry-run");
   const json = args.includes("--json");
@@ -729,6 +798,10 @@ function resolveRuntimeSchedulePath(nexoHome) {
 
 function finalizeF06Layout(python, nexoHome = NEXO_HOME) {
   try {
+    // auto_update lives in NEXO_CODE (e.g. ~/.nexo/core or ~/.nexo/core/current),
+    // not directly in NEXO_HOME, so PYTHONPATH must point at the runtime code
+    // directory or `import auto_update` fails with ModuleNotFoundError.
+    const codeDir = runtimeCodeDir(nexoHome);
     const result = spawnSync(
       python,
       [
@@ -744,8 +817,8 @@ function finalizeF06Layout(python, nexoHome = NEXO_HOME) {
         env: {
           ...process.env,
           NEXO_HOME: nexoHome,
-          NEXO_CODE: runtimeCodeDir(nexoHome),
-          PYTHONPATH: nexoHome,
+          NEXO_CODE: codeDir,
+          PYTHONPATH: codeDir,
         },
         encoding: "utf8",
       },
@@ -1451,7 +1524,7 @@ function getDefaultSchedule(timezone) {
 }
 
 function writeDesktopProductMode(nexoHome) {
-  if (String(process.env.NEXO_DESKTOP_MANAGED || "").trim() !== "1") return;
+  if (!isDesktopManagedInstall()) return;
   const configDir = resolveRuntimeConfigDir(nexoHome);
   fs.mkdirSync(configDir, { recursive: true });
   const target = path.join(configDir, "product-mode.json");
@@ -1478,7 +1551,7 @@ function ensureEvolutionObjectiveForCurrentProductMode(nexoHome) {
   const brainDir = resolveRuntimeBrainDir(nexoHome);
   fs.mkdirSync(brainDir, { recursive: true });
   const evoObjectivePath = path.join(brainDir, "evolution-objective.json");
-  const desktopManaged = String(process.env.NEXO_DESKTOP_MANAGED || "").trim() === "1";
+  const desktopManaged = isDesktopManagedInstall();
   let payload = null;
   if (fs.existsSync(evoObjectivePath)) {
     try {
@@ -1801,6 +1874,29 @@ function installClaudeCodeCli(platform) {
   const desktopNode = String(process.env.NEXO_DESKTOP_NODE || "").trim();
   const bundledNpmCli = String(process.env.NEXO_DESKTOP_NPM_CLI || "").trim();
   const managedPrefix = managedClaudePrefix();
+  const desktopManaged = isDesktopManagedInstall();
+
+  // OFFLINE-FIRST: detect bundled claude-code .tgz and install from it.
+  // Path: resources/brain-bundle/claude-code/claude-code-X.Y.Z.tgz (relative
+  // to bin/, so __dirname/../claude-code/). Falls back to PyPI/npm if absent.
+  const bundledClaudeDir = path.join(__dirname, "..", "claude-code");
+  if (fs.existsSync(bundledClaudeDir)) {
+    const tgzFiles = fs.readdirSync(bundledClaudeDir).filter((f) => f.endsWith(".tgz"));
+    if (tgzFiles.length > 0) {
+      const tgzPath = path.join(bundledClaudeDir, tgzFiles[0]);
+      log("  Installing claude-code from bundled tarball (offline)...");
+      spawnSync(
+        "npm",
+        ["install", "-g", "--prefix", managedPrefix, tgzPath],
+        { stdio: "inherit", env: installEnv },
+      );
+      claudeInstalled = detectInstalledClients().claude_code.path || "";
+      if (claudeInstalled) {
+        persistClaudeCliPath(claudeInstalled);
+        return { installed: true, path: claudeInstalled };
+      }
+    }
+  }
 
   if (desktopNode && bundledNpmCli) {
     spawnSync(
@@ -1816,6 +1912,23 @@ function installClaudeCodeCli(platform) {
       persistClaudeCliPath(claudeInstalled);
       return { installed: true, path: claudeInstalled };
     }
+  }
+
+  if (desktopManaged) {
+    spawnSync(
+      "npm",
+      ["install", "-g", "--prefix", managedPrefix, "@anthropic-ai/claude-code"],
+      {
+        stdio: "inherit",
+        env: installEnv,
+      },
+    );
+    claudeInstalled = detectInstalledClients().claude_code.path || "";
+    if (claudeInstalled) {
+      persistClaudeCliPath(claudeInstalled);
+      return { installed: true, path: claudeInstalled };
+    }
+    return { installed: false, path: "" };
   }
 
   spawnSync("npx", ["-y", "@anthropic-ai/claude-code", "--version"], {
@@ -1847,6 +1960,7 @@ function installCodexCli() {
 async function configureClientSetup({ lang, useDefaults, autoInstall, detected }) {
   const strings = clientSetupStrings(lang);
   const setup = defaultClientSetup(detected);
+  const desktopManaged = String(process.env.NEXO_DESKTOP_MANAGED || "").trim() === "1";
   setup.client_install_preferences = {
     claude_code: autoInstall === "auto" ? "auto" : "ask",
     codex: autoInstall === "auto" ? "auto" : "ask",
@@ -1898,6 +2012,10 @@ async function configureClientSetup({ lang, useDefaults, autoInstall, detected }
   const required = requiredCliClients(setup);
   for (const client of required) {
     if (detected[client] && detected[client].installed) continue;
+    if (desktopManaged && client === "claude_code") {
+      log("Claude Code install deferred to Desktop final sync.");
+      continue;
+    }
     let shouldInstall = useDefaults || autoInstall === "auto";
     if (!shouldInstall && process.stdin.isTTY && process.stdout.isTTY) {
       const question = client === "claude_code" ? strings.installClaudeQ : strings.installCodexQ;
@@ -1926,6 +2044,10 @@ async function configureClientSetup({ lang, useDefaults, autoInstall, detected }
   }
 
   if (setup.automation_enabled && setup.automation_backend !== "none" && !detected[setup.automation_backend]?.installed) {
+    if (desktopManaged && setup.automation_backend === "claude_code") {
+      log("Claude Code will be provisioned by Desktop after the core runtime is ready.");
+      return { setup, detected };
+    }
     const label = setup.automation_backend === "claude_code" ? "Claude Code" : "Codex";
     log(strings.automationDisabled(label));
     setup.automation_enabled = false;
@@ -2448,6 +2570,15 @@ async function runSetup() {
     process.exit(1);
   }
 
+  const bundleRoot = getRuntimeBundleRoot();
+  const bundleSrcDir = path.join(bundleRoot, "src");
+  const bundleTemplatesDir = path.join(bundleRoot, "templates");
+  process.on("exit", () => {
+    if (_stagedRuntimeCleanup) {
+      _stagedRuntimeCleanup();
+    }
+  });
+
   const onboardingMigration = ensureOnboardingCompletionMarker(NEXO_HOME);
   if (onboardingMigration.changed) {
     log("Migrated legacy calibration completion marker.");
@@ -2479,7 +2610,7 @@ async function runSetup() {
         }
 
         // Recursive copy helper (skips __pycache__, .pyc, .db files)
-        const srcDir = path.join(__dirname, "..", "src");
+        const srcDir = bundleSrcDir;
         const copyDirRec = (src, dest) => {
           fs.mkdirSync(dest, { recursive: true });
           fs.readdirSync(src).forEach(item => {
@@ -2552,7 +2683,7 @@ async function runSetup() {
         }
 
         const migPythonForWarmup = findVenvPython(NEXO_HOME) || "python3";
-        runMandatoryModelWarmup(migPythonForWarmup, NEXO_HOME, { reason: "update", installRuntimeDeps: false });
+        runDesktopAwareModelWarmup(migPythonForWarmup, NEXO_HOME, { reason: "update", installRuntimeDeps: false });
 
         // Update plugins (all .py files in plugins/)
         const pluginsSrc = path.join(srcDir, "plugins");
@@ -2607,7 +2738,7 @@ async function runSetup() {
         // hand-edited template under ~/.nexo/templates/ is replaced on
         // upgrade. Keep local forks under personal/ or outside the runtime
         // home to avoid silent loss.
-        const migTemplatesSrc = path.join(__dirname, "..", "templates");
+        const migTemplatesSrc = bundleTemplatesDir;
         const migTemplatesDest = path.join(NEXO_HOME, "templates");
         if (fs.existsSync(migTemplatesSrc)) {
           copyDirRec(migTemplatesSrc, migTemplatesDest);
@@ -2656,7 +2787,7 @@ async function runSetup() {
             ? { runtime_repaired_from: activeRuntimeVersion }
             : {}),
         }, null, 2));
-        syncRuntimePackageMetadata(path.join(__dirname, ".."), NEXO_HOME);
+        syncRuntimePackageMetadata(bundleRoot, NEXO_HOME);
         log("Finalizing F0.6 runtime layout...");
         const migLayoutFinalize = finalizeF06Layout(migPython, NEXO_HOME);
         if (!migLayoutFinalize.ok) {
@@ -2670,7 +2801,7 @@ async function runSetup() {
 
         // Keep the rendered template in-memory for version tracking, but do
         // not drop a loose reference file in NEXO_HOME root.
-        const templateSrc = path.join(__dirname, "..", "templates", "CLAUDE.md.template");
+        const templateSrc = path.join(bundleTemplatesDir, "CLAUDE.md.template");
         if (fs.existsSync(templateSrc)) {
           const operatorName = installed.operator_name || DEFAULT_ASSISTANT_NAME;
           let claudeMd = fs.readFileSync(templateSrc, "utf8")
@@ -2742,7 +2873,7 @@ async function runSetup() {
       // Same version — backfill crons/ if missing (for installs before crons was shipped)
       const syncPython = findVenvPython(NEXO_HOME) || run("which python3") || "python3";
       const cronsDest = resolveRuntimeCronsDir(NEXO_HOME);
-      const cronsSrc = path.join(__dirname, "..", "src", "crons");
+      const cronsSrc = path.join(bundleSrcDir, "crons");
       if (fs.existsSync(cronsSrc)) {
         const copyDirRec2 = (src, dest) => {
           fs.mkdirSync(dest, { recursive: true });
@@ -2767,7 +2898,7 @@ async function runSetup() {
 
       // Same version — refresh packaged core skills/templates/runtime helpers too.
       const skillsCoreDest = path.join(NEXO_HOME, "core", "skills");
-      const skillsCoreSrc = path.join(__dirname, "..", "src", "skills");
+      const skillsCoreSrc = path.join(bundleSrcDir, "skills");
       if (fs.existsSync(skillsCoreSrc)) {
         const copyDirRec3 = (src, dest) => {
           fs.mkdirSync(dest, { recursive: true });
@@ -2784,16 +2915,16 @@ async function runSetup() {
       }
 
       ["skills_runtime.py"].forEach((fname) => {
-        const srcFile = path.join(__dirname, "..", "src", fname);
+        const srcFile = path.join(bundleSrcDir, fname);
         const destFile = path.join(NEXO_HOME, "core", fname);
         if (fs.existsSync(srcFile)) {
           fs.mkdirSync(path.dirname(destFile), { recursive: true });
           fs.copyFileSync(srcFile, destFile);
         }
       });
-      syncRuntimePackageMetadata(path.join(__dirname, ".."), NEXO_HOME);
+      syncRuntimePackageMetadata(bundleRoot, NEXO_HOME);
 
-      const templatesSrc = path.join(__dirname, "..", "templates");
+      const templatesSrc = bundleTemplatesDir;
       const templatesDest = path.join(NEXO_HOME, "templates");
       if (fs.existsSync(templatesSrc)) {
         fs.mkdirSync(templatesDest, { recursive: true });
@@ -2821,7 +2952,7 @@ async function runSetup() {
         throw new Error(`F0.6 layout finalization failed: ${syncLayoutFinalize.error}`);
       }
 
-      runMandatoryModelWarmup(syncPython, NEXO_HOME, { reason: "repair" });
+      runDesktopAwareModelWarmup(syncPython, NEXO_HOME, { reason: "repair" });
       logMacPermissionsNotice(NEXO_HOME, syncPython);
 
       log(`Already at v${currentVersion}. No migration needed.`);
@@ -3316,11 +3447,22 @@ async function runSetup() {
   // Use venv python if available, otherwise fall back to system python with --break-system-packages
   const pipPython = fs.existsSync(venvPython) ? venvPython : python;
   const requirementsFile = path.join(__dirname, "..", "src", "requirements.txt");
-  const pipArgs = ["-m", "pip", "install", "--quiet", "-r", requirementsFile];
+  // Detect bundled wheels in resources/python-wheels (offline-first). If
+  // present, pip uses --no-index --find-links to install without internet.
+  // Falls back to PyPI if bundle not found.
+  const bundledWheelsDir = path.join(__dirname, "..", "python-wheels");
+  const useBundle = fs.existsSync(bundledWheelsDir);
+  const pipArgs = useBundle
+    ? ["-m", "pip", "install", "--no-index", "--find-links", bundledWheelsDir, "--progress-bar", "off", "-r", requirementsFile]
+    : ["-m", "pip", "install", "-v", "--progress-bar", "off", "--default-timeout=60", "-r", requirementsFile];
   if (!fs.existsSync(venvPython)) {
-    pipArgs.push("--break-system-packages");  // Fallback for systems without venv
+    pipArgs.push("--break-system-packages");
   }
-
+  if (useBundle) {
+    log("  Installing Python deps from bundled wheels (offline)...");
+  } else {
+    log("  Installing Python deps from PyPI (online)...");
+  }
   const pipInstall = spawnSync(pipPython, pipArgs, { stdio: "inherit" });
   if (pipInstall.status !== 0) {
     log("Failed to install Python dependencies.");
@@ -3332,7 +3474,54 @@ async function runSetup() {
     python = venvPython;
   }
   log("Dependencies installed.");
-  runMandatoryModelWarmup(python, NEXO_HOME, { reason: "install", installRuntimeDeps: false });
+
+  // OFFLINE-FIRST: copy bundled LLM models to runtime/models BEFORE warmup,
+  // so fastembed finds them locally and skips the ~217MB HuggingFace download.
+  // Bundle layout: resources/brain-bundle/models/<source-repo-name>/<all files>.
+  // Target layout: <NEXO_HOME>/runtime/models/<spec.name slugified>/<revision>/<files>.
+  // We map by source_repo basename to match local_model_manifest.json.
+  const bundledModelsDir = path.join(__dirname, "..", "models");
+  if (fs.existsSync(bundledModelsDir)) {
+    try {
+      const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "src", "local_model_manifest.json"), "utf8"));
+      const runtimeModelsDir = path.join(NEXO_HOME, "runtime", "models");
+      let modelsCopied = 0;
+      for (const spec of manifest.models || []) {
+        // Bundle layout supports either model_id basename (e.g.
+        // "bge-base-en-v1.5" from "BAAI/bge-base-en-v1.5") or source_repo
+        // basename (e.g. "bge-base-en-v1.5-onnx-q" from "qdrant/...").
+        const modelIdName = (spec.model_id || "").split("/").pop();
+        const sourceRepoName = (spec.source_repo || "").split("/").pop();
+        let sourceDir = path.join(bundledModelsDir, modelIdName);
+        if (!fs.existsSync(sourceDir)) {
+          sourceDir = path.join(bundledModelsDir, sourceRepoName);
+        }
+        if (!fs.existsSync(sourceDir)) continue;
+        const slug = (spec.name || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+        const targetDir = path.join(runtimeModelsDir, slug, spec.revision);
+        fs.mkdirSync(targetDir, { recursive: true });
+        for (const f of (spec.required_files || [])) {
+          const src = path.join(sourceDir, f.path);
+          const dst = path.join(targetDir, f.path);
+          if (fs.existsSync(src) && !fs.existsSync(dst)) {
+            fs.copyFileSync(src, dst);
+          }
+        }
+        // Write the lock file to match revision (avoids re-download).
+        fs.writeFileSync(path.join(targetDir, ".nexo-model-lock.json"), JSON.stringify({
+          name: spec.name, kind: spec.kind, model_id: spec.model_id,
+          source_repo: spec.source_repo, revision: spec.revision, model_file: spec.model_file,
+          required_files: spec.required_files,
+        }, null, 2));
+        modelsCopied++;
+      }
+      if (modelsCopied > 0) log(`  Copied ${modelsCopied} pre-bundled LLM model(s) (offline).`);
+    } catch (err) {
+      log(`  WARN: bundled models copy failed: ${err.message}`);
+    }
+  }
+
+  runDesktopAwareModelWarmup(python, NEXO_HOME, { reason: "install", installRuntimeDeps: false });
 
   // Step 4: Create ~/.nexo/
   log("Setting up NEXO home...");
@@ -3381,15 +3570,15 @@ async function runSetup() {
       files_updated: 0,
     }, null, 2)
   );
-  syncRuntimePackageMetadata(path.join(__dirname, ".."), NEXO_HOME);
+  syncRuntimePackageMetadata(bundleRoot, NEXO_HOME);
 
   // Copy source files
   log("Copying core runtime files...");
-  const srcDir = path.join(__dirname, "..", "src");
+  const srcDir = bundleSrcDir;
   const pluginsSrcDir = path.join(srcDir, "plugins");
   const scriptsSrcDir = path.join(srcDir, "scripts");
   const skillsSrcDir = path.join(srcDir, "skills");
-  const templateDir = path.join(__dirname, "..", "templates");
+  const templateDir = bundleTemplatesDir;
 
   // Recursive copy helper (skips __pycache__, .pyc, .db files)
   const copyDirRecursive = (src, dest) => {
@@ -3407,7 +3596,7 @@ async function runSetup() {
   };
 
   // Core flat files (single .py files in src/)
-  const coreFiles = getCoreRuntimeFlatFiles();
+  const coreFiles = getCoreRuntimeFlatFiles(srcDir);
   coreFiles.forEach((f) => {
     const src = path.join(srcDir, f);
     if (fs.existsSync(src)) {
@@ -4429,6 +4618,10 @@ See ~/.nexo/ for configuration.
   console.log(`  \u255A${"═".repeat(bw - 2)}\u255D`);
   console.log("");
 
+  if (_stagedRuntimeCleanup) {
+    _stagedRuntimeCleanup();
+    _stagedRuntimeCleanup = null;
+  }
   closeReadline();
 }
 
