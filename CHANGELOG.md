@@ -1,5 +1,17 @@
 # Changelog
 
+## [7.12.3] - 2026-05-02
+
+### Fixed
+- **Windows 11 clean install no longer hangs at the Brain bootstrap stage.** The WSL bridge (`bin/windows-wsl-bridge.js`) now stages multi-KB shell scripts to a file and invokes `dash <file>` instead of `dash -c "<inline>"`, inserts a `--` separator before `env -i` so `wsl.exe` does not consume `-u VAR` flags, and exports a defensive `PATH` fallback so subshells never see an empty PATH.
+- **Bundle-aware bootstrap detects `claude-code .tgz`, Python wheels, and pre-staged models in `<package>/{claude-code,python-wheels,models}` and runs offline-first.** `bin/nexo-brain.js` installs `claude-code` from the local tarball with `npm install -g`, runs `pip install --no-index --find-links` against the bundled wheels, and copies the prebuilt embedding/reranker models into the runtime so a fresh first-install does not need any network access.
+- **`fastembed` is pinned to `>=0.8.0` in `src/requirements.txt`** so pip stops iterating over older incompatible releases on Python 3.12.
+- **`finalizeF06Layout` now points `PYTHONPATH` at `runtimeCodeDir(nexoHome)` instead of `nexoHome`,** unblocking `import auto_update` during the final stage of a fresh install.
+
+### Tests
+- `pytest tests/test_windows_wsl_bridge_contract.py tests/test_packaged_update_runtime.py` → green
+- `python3 scripts/verify_client_parity.py` → 194 passed
+
 ## [7.12.2] - 2026-04-30
 
 ### Fixed
