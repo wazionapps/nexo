@@ -1,5 +1,14 @@
 # Changelog
 
+## [7.12.4] - 2026-05-02
+
+### Fixed
+- **Bundled Claude Code `.tgz` is now installed even when `desktopManaged` is true.** `bin/nexo-brain.js` previously skipped `installClaudeCodeCli` for desktop-managed installs and deferred to a Desktop "final sync" step that never actually installed the binary. The skip now only applies when no bundled tarball is present; if `<bin>/../claude-code/*.tgz` exists, the installer goes ahead and runs `npm install -g <tgz>` offline. Fixes the `claude-runtime-missing exit 127` error reported by Desktop after a clean install.
+- **Bundled Claude Code `.tgz` is now also installed when migration is skipped.** When `version.json` already matches the bundled version, `nexo-brain.js` returns early after `Already at v<X>. No migration needed.` Now, before that early return, the installer detects if Claude is missing and bundle is available, and runs `installClaudeCodeCli` to provision it. Without this, repeated reopen flows in Desktop (where Brain is already current but Claude was never installed) never reached the install path.
+
+### Tests
+- `python3 scripts/verify_client_parity.py` → 194 passed.
+
 ## [7.12.3] - 2026-05-02
 
 ### Fixed

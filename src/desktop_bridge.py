@@ -403,10 +403,10 @@ def _onboard_steps() -> list[dict]:
             "id": "timezone",
             "prompt": {"es": "¿En qué zona horaria estás?", "en": "Which timezone are you in?"},
             "hint": {
-                "es": "Por ejemplo, Europe/Madrid. Lo uso para clima, horarios y agenda.",
-                "en": "For example, Europe/Madrid. I use it for weather, schedules, and calendar.",
+                "es": "Empieza a escribir tu ciudad o región (Europe/Madrid, America/New_York…). Lo detectamos del sistema, pero lo puedes cambiar.",
+                "en": "Start typing your city or region (Europe/Madrid, America/New_York…). We detect it from the system, but you can change it.",
             },
-            "type": "text",
+            "type": "timezone",
             "writes": "user.timezone",
             "file": "calibration.json",
             "optional": True,

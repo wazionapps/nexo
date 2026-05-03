@@ -101,22 +101,27 @@ def emit(
     path.parent.mkdir(parents=True, exist_ok=True)
     _rotate_if_needed(path)
 
-    event = {
-        "id": _next_id(path),
-        "ts": time.time(),
-        "type": event_type,
-        "priority": priority,
-        "text": text,
-        "reason": reason,
-        "source": source,
-        "extra": extra or {},
-    }
-
-    line = json.dumps(event, ensure_ascii=False) + "\n"
-    # fcntl flock for cross-process safety on macOS/Linux
+    # v0.32.5 — antes `_next_id(path)` se calculaba ANTES de adquirir el
+    # flock → dos emitters concurrentes leían el mismo tail, computaban
+    # el mismo id, y escribían dos eventos con el mismo id. El renderer
+    # dedup descartaba el segundo silently → eventos perdidos. Ahora
+    # `_next_id` se llama DENTRO del lock, garantizando monotonía.
+    line = None
+    event = None
     with path.open("a", encoding="utf-8") as fh:
         try:
             fcntl.flock(fh, fcntl.LOCK_EX)
+            event = {
+                "id": _next_id(path),
+                "ts": time.time(),
+                "type": event_type,
+                "priority": priority,
+                "text": text,
+                "reason": reason,
+                "source": source,
+                "extra": extra or {},
+            }
+            line = json.dumps(event, ensure_ascii=False) + "\n"
             fh.write(line)
             fh.flush()
         finally:

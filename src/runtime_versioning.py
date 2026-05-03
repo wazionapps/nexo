@@ -57,6 +57,17 @@ RESTART_ALLOWLIST = {
     "nexo_continuity_snapshot_read",
     "nexo_continuity_resume_bundle",
     "nexo_continuity_audit",
+    # v0.32.5 — añadidas las read-only tools que el protocolo CORE llama
+    # justo después de `nexo_startup` (memory recall, reminders, followups,
+    # context, doctor). Antes quedaban bloqueadas por mcp_restart_required
+    # tras `nexo update` con sesión activa → Nero parecía amnésico hasta
+    # que el cliente se cerraba/reabría.
+    "nexo_smart_startup",
+    "nexo_session_diary_read",
+    "nexo_reminders",
+    "nexo_followups",
+    "nexo_recent_context",
+    "nexo_doctor",
 }
 
 
