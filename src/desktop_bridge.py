@@ -405,14 +405,20 @@ def _onboard_steps() -> list[dict]:
             "id": "residence",
             "prompt": {"es": "¿Dónde vives o trabajas habitualmente?", "en": "Where do you live or work most days?"},
             "hint": {
-                "es": "Una ciudad o zona; me ayuda con horarios, clima, ofertas locales y mil cosas más.",
-                "en": "A city or area; helps me with schedules, weather, local options, and a thousand small things.",
+                "es": "Empieza a escribir y elige tu ciudad. Guardo coordenadas para clima, horarios, etc.",
+                "en": "Start typing and pick your city. We save coordinates for weather, schedules, and so on.",
             },
-            "type": "text",
+            # v7.12.13 — `city` triggers the geocoding autocomplete in the
+            # renderer (CityStep talks to Nominatim and writes a JSON
+            # payload with display, name, lat, lon, country). The weather
+            # widget and any future location-aware feature can then read
+            # real coordinates from profile.current_residence instead of
+            # a free-text label.
+            "type": "city",
             "writes": "profile.current_residence",
             "file": "profile.json",
             "optional": True,
-            "validate": r"^.{0,120}$",
+            "validate": r"^.{0,2000}$",
         },
         {
             "id": "role",

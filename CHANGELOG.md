@@ -1,5 +1,11 @@
 # Changelog
 
+## [7.12.13] - 2026-05-03
+
+### Changed — paso "residence" del onboarding usa autocomplete + coordenadas
+
+- **El step `residence` ahora se marca con `type: "city"`** (`src/desktop_bridge.py`). El renderer de Desktop (`CityStep` en `OnboardingWizardSteps.jsx`) consulta Nominatim (OpenStreetMap) y persiste un payload JSON `{display, name, lat, lon, country}` en `profile.current_residence`, con fallback a texto plano si el geocoder está fuera de alcance. El widget del tiempo y cualquier feature location-aware lee coordenadas reales en lugar de un string suelto. Necesita Desktop 0.32.16+.
+
 ## [7.12.12] - 2026-05-03
 
 ### Fixed — paridad Mac↔Linux/WSL
