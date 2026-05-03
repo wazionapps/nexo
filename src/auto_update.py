@@ -1247,8 +1247,55 @@ def _reload_launch_agents_after_bump() -> dict:
         "platform": sys.platform,
     }
 
+    if sys.platform == "linux":
+        # v7.12.12 — Linux/WSL path: reload systemd user units so any
+        # nexo-* timers / services updated by auto-update pick up the new
+        # ExecStart paths. macOS path below handles launchd via launchctl.
+        # Best-effort: a missing systemd (Docker/CI) just returns no-op.
+        try:
+            unit_dir = Path.home() / ".config" / "systemd" / "user"
+            scanned_units = []
+            if unit_dir.is_dir():
+                scanned_units = sorted(
+                    [p for p in unit_dir.iterdir() if p.suffix in {".service", ".timer"} and p.name.startswith("nexo")]
+                )
+            result["scanned"] = len(scanned_units)
+            if scanned_units:
+                reload_proc = subprocess.run(
+                    ["systemctl", "--user", "daemon-reload"],
+                    capture_output=True,
+                    text=True,
+                    timeout=15,
+                )
+                if reload_proc.returncode != 0:
+                    result["errors"].append({
+                        "unit": "daemon-reload",
+                        "stderr": (reload_proc.stderr or reload_proc.stdout or "").strip(),
+                    })
+                else:
+                    for unit in scanned_units:
+                        restart = subprocess.run(
+                            ["systemctl", "--user", "restart", unit.name],
+                            capture_output=True,
+                            text=True,
+                            timeout=15,
+                        )
+                        if restart.returncode == 0:
+                            result["reloaded"] += 1
+                        else:
+                            result["errors"].append({
+                                "unit": unit.name,
+                                "stderr": (restart.stderr or restart.stdout or "").strip(),
+                            })
+        except FileNotFoundError:
+            result["skipped_reason"] = "systemctl-not-available"
+        except Exception as e:
+            result["errors"].append({"unit": "*", "stderr": f"systemd reload failed: {e}"})
+        return result
+
     if sys.platform != "darwin":
-        # macOS-only for now. systemd path tracked separately.
+        # Other platforms (win32 native — never reached because Brain runs
+        # inside WSL Linux on Windows): nothing to reload.
         return result
     if _is_ephemeral_runtime_install():
         result["skipped_reason"] = "ephemeral-runtime"

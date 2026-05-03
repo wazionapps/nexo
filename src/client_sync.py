@@ -396,15 +396,20 @@ def ensure_claude_code_installed(*, user_home: str | os.PathLike[str] | None = N
             "attempts": attempts,
         }
 
-    install_cmd = (
-        ["sudo", "npm", "install", "-g", CLAUDE_CODE_NPM_PACKAGE]
-        if sys.platform == "linux"
-        else ["npm", "install", "-g", CLAUDE_CODE_NPM_PACKAGE]
-    )
+    # v7.12.12 — try npm without sudo first on Linux. Hardcoding `sudo`
+    # used to make sense on stock Ubuntu where /usr/lib/node_modules is
+    # root-owned, but inside the WSL distro NEXO Desktop ships, the
+    # default global prefix is already `/home/<user>/.nexo/runtime/
+    # bootstrap/npm-global` (writable). A blind `sudo` there triggers a
+    # password prompt on a TTY the user cannot see, so the bootstrap
+    # appears stuck. Try unprivileged first; if it fails with EACCES
+    # (insufficient permissions), retry with sudo.
     install_error = ""
+    install = None
+    base_cmd = ["npm", "install", "-g", CLAUDE_CODE_NPM_PACKAGE]
     try:
         install = subprocess.run(
-            install_cmd,
+            base_cmd,
             capture_output=True,
             text=True,
             timeout=180,
@@ -413,6 +418,29 @@ def ensure_claude_code_installed(*, user_home: str | os.PathLike[str] | None = N
         if install.returncode != 0:
             install_error = (install.stderr or install.stdout or "npm install failed").strip()
             attempts.append(install_error)
+            permission_failure = (
+                "EACCES" in install_error
+                or "permission denied" in install_error.lower()
+                or "operation not permitted" in install_error.lower()
+            )
+            if permission_failure and sys.platform == "linux":
+                attempts.append("retrying with sudo (Linux EACCES fallback)")
+                try:
+                    install = subprocess.run(
+                        ["sudo", "-n", "npm", "install", "-g", CLAUDE_CODE_NPM_PACKAGE],
+                        capture_output=True,
+                        text=True,
+                        timeout=180,
+                        env=env,
+                    )
+                    if install.returncode != 0:
+                        install_error = (install.stderr or install.stdout or "sudo npm install failed").strip()
+                        attempts.append(install_error)
+                    else:
+                        install_error = ""
+                except Exception as exc:
+                    install_error = f"sudo npm install failed: {exc}"
+                    attempts.append(install_error)
     except Exception as exc:
         install_error = f"npm install failed: {exc}"
         attempts.append(install_error)

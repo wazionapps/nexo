@@ -1966,8 +1966,42 @@ def _service_control(service_name: str, action: str) -> int:
 
     label = f"com.nexo.{service_name}"
 
+    # v7.12.12 — Linux/WSL path uses systemd user units (`<service>.service`
+    # in ~/.config/systemd/user/). Until 7.12.11 this stub printed
+    # "supported only on macOS" and returned 1, leaving Linux operators
+    # with no CLI to start/stop the brain — they had to learn systemctl
+    # syntax themselves. Symmetric semantics: on=start, off=stop,
+    # status=is-active. Names match the macOS labels with "nexo-" prefix.
+    if plat.system() == "Linux":
+        unit = f"nexo-{service_name}.service"
+        if action == "status":
+            result = subprocess.run(
+                ["systemctl", "--user", "is-active", unit],
+                capture_output=True,
+                text=True,
+            )
+            state = (result.stdout or "").strip() or "unknown"
+            print(f"{service_name}: {'running' if state == 'active' else state}")
+            return 0
+        if action in ("on", "off"):
+            verb = "start" if action == "on" else "stop"
+            result = subprocess.run(
+                ["systemctl", "--user", verb, unit],
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode == 0:
+                print(f"{service_name}: {'started' if action == 'on' else 'stopped'}")
+                return 0
+            err = (result.stderr or result.stdout or "").strip()
+            print(f"Failed to {verb} {service_name}: {err}", file=sys.stderr)
+            print(f"Hint: install the unit at ~/.config/systemd/user/{unit}", file=sys.stderr)
+            return 1
+        print(f"Unknown action: {action}. Use on, off, or status.", file=sys.stderr)
+        return 1
+
     if plat.system() != "Darwin":
-        print(f"Service control only supported on macOS for now.", file=sys.stderr)
+        print(f"Service control not supported on this platform: {plat.system()}", file=sys.stderr)
         return 1
 
     plist_path = Path.home() / "Library" / "LaunchAgents" / f"{label}.plist"

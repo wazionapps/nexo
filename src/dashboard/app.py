@@ -1959,8 +1959,21 @@ def main():
             webbrowser.open(f"http://localhost:{args.port}")
         threading.Thread(target=_open, daemon=True).start()
 
+    # v7.12.12 — bind 0.0.0.0 when running inside WSL so the Windows host
+    # can reach the dashboard. WSL2 does auto port forwarding for 127.0.0.1
+    # in most setups, but corporate networks and certain WSL versions break
+    # the loopback bridge; binding all interfaces inside the guest closes
+    # that gap with no security cost (the WSL guest is private to the
+    # logged-in Windows user). On Mac/Linux native, keep 127.0.0.1.
+    bind_host = "127.0.0.1"
+    try:
+        from src.windows_runtime import running_inside_wsl  # type: ignore
+        if running_inside_wsl():
+            bind_host = "0.0.0.0"
+    except Exception:
+        pass
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="info")
+    uvicorn.run(app, host=bind_host, port=args.port, log_level="info")
 
 
 if __name__ == "__main__":

@@ -1,5 +1,14 @@
 # Changelog
 
+## [7.12.12] - 2026-05-03
+
+### Fixed — paridad Mac↔Linux/WSL
+
+- **Dashboard accesible desde Windows host cuando Brain corre en WSL.** `src/dashboard/app.py:1963` vinculaba uvicorn siempre a `127.0.0.1`. WSL2 normalmente hace port-forwarding automático del loopback, pero en WSL configurado con redes corporate o builds no recientes ese puente se rompe y el dashboard queda inalcanzable desde Win. Ahora detectamos `running_inside_wsl()` y bind `0.0.0.0` (la guest VM es privada del usuario logueado, sin coste de seguridad).
+- **`nexo service start/stop/status` funciona en Linux/WSL.** Antes la rama Linux imprimía "Service control only supported on macOS for now." y devolvía 1. Ahora controla unidades systemd user (`nexo-<service>.service`): `on→start`, `off→stop`, `status→is-active`. Mismo nombre del binario, paridad CLI con macOS.
+- **Auto-update Brain ahora hace `daemon-reload` en Linux.** `_reload_launch_agents()` saltaba todo si `sys.platform != "darwin"`, así que un usuario en WSL al actualizar Brain veía sus crons mantenerse en la versión vieja hasta reinstalar manualmente. Ahora la rama Linux escanea `~/.config/systemd/user/nexo-*.{service,timer}`, hace `systemctl --user daemon-reload` y `restart` por unit. Best-effort: en máquinas sin systemd (Docker, CI) reporta `skipped_reason: systemctl-not-available` y sigue. (`src/auto_update.py`)
+- **`npm install` ya no pide contraseña sin razón en WSL.** El path B (fallback cuando el bundle local de claude-code no se encuentra) hardcodeaba `sudo npm install -g` en Linux, lo que disparaba un prompt de contraseña en una TTY que el operador no ve y dejaba el bootstrap colgado. Probamos primero sin sudo (la prefix global por defecto en la distro de NEXO ya es writable: `~/.nexo/runtime/bootstrap/npm-global`); sólo si pip retorna `EACCES` o `permission denied` reintenta con `sudo -n`. (`src/client_sync.py`)
+
 ## [7.12.11] - 2026-05-03
 
 ### Fixed — el wizard de onboarding no aparecía en la primera instalación Desktop
