@@ -1876,15 +1876,55 @@ function installClaudeCodeCli(platform) {
   const managedPrefix = managedClaudePrefix();
   const desktopManaged = isDesktopManagedInstall();
 
-  // OFFLINE-FIRST: detect bundled claude-code .tgz and install from it.
-  // Path: resources/brain-bundle/claude-code/claude-code-X.Y.Z.tgz (relative
-  // to bin/, so __dirname/../claude-code/). Falls back to PyPI/npm if absent.
+  // OFFLINE-FIRST v0.32.4: install claude-code wrapper + ALL its native packs
+  // from bundled tarballs. Path: resources/brain-bundle/claude-code/*.tgz.
+  //
+  // Bug que arregla este fix (encontrado 2026-05-02):
+  // claude-code 2.1.x ships como wrapper + 4 native packs por arquitectura
+  // (@anthropic-ai/claude-code-linux-x64, -darwin-arm64, -darwin-x64,
+  // -linux-arm64). Antes solo bundeaba el wrapper (.tgz 13 KB) y pasaba SOLO
+  // ese al npm install. npm intentaba resolver los `optionalDependencies` del
+  // registry online → fallo offline → wrapper instala SIN binario claude →
+  // `command -v claude` exit 127 → bootstrap "claude-runtime-missing-soft".
+  // Ahora bundeamos los 5 .tgz (wrapper + 4 native) y se los pasamos TODOS
+  // a npm en un solo install. npm los ve como dependencias pre-resueltas
+  // y skip el registry lookup. claude binary ejecutable resultante.
   const bundledClaudeDir = path.join(__dirname, "..", "claude-code");
   if (fs.existsSync(bundledClaudeDir)) {
-    const tgzFiles = fs.readdirSync(bundledClaudeDir).filter((f) => f.endsWith(".tgz"));
-    if (tgzFiles.length > 0) {
-      const tgzPath = path.join(bundledClaudeDir, tgzFiles[0]);
-      log("  Installing claude-code from bundled tarball (offline)...");
+    const allTgz = fs.readdirSync(bundledClaudeDir).filter((f) => f.endsWith(".tgz"));
+    // Ordenar: el wrapper primero (sin sufijo de plataforma), después los packs.
+    const wrapper = allTgz.find((f) => /^anthropic-ai-claude-code-\d/.test(f));
+    // v7.12.6 — Filter native packs to ONLY the current platform/arch.
+    // Bug: passing all 4 native packs to `npm install` triggers EBADPLATFORM
+    // when npm refuses to install e.g. `claude-code-darwin-arm64` on linux/x64
+    // (`{"os":"darwin","cpu":"arm64"}` vs current `{"os":"linux","cpu":"x64"}`).
+    // The whole install aborts → `command -v claude` fails → bootstrap stalls
+    // at "Preparando NEXO..." and never reaches Brain config. First seen
+    // 2026-05-03 on Inma's Win11 PC running the Linux x64 WSL distro.
+    const platformSlug = `${process.platform}-${process.arch}`;
+    const nativePacks = allTgz.filter((f) => {
+      if (f === wrapper) return false;
+      // Native pack filenames look like `anthropic-ai-claude-code-<os>-<cpu>-<version>.tgz`.
+      // Match the `-<os>-<cpu>-` segment against the runtime platform slug.
+      return f.includes(`-${platformSlug}-`);
+    });
+    if (wrapper && nativePacks.length > 0) {
+      const tgzPaths = [path.join(bundledClaudeDir, wrapper), ...nativePacks.map((p) => path.join(bundledClaudeDir, p))];
+      log("  Installing claude-code from bundled tarballs (offline, " + (1 + nativePacks.length) + " packs)...");
+      spawnSync(
+        "npm",
+        ["install", "-g", "--prefix", managedPrefix, "--offline", "--no-audit", "--no-fund", ...tgzPaths],
+        { stdio: "inherit", env: installEnv },
+      );
+      claudeInstalled = detectInstalledClients().claude_code.path || "";
+      if (claudeInstalled) {
+        persistClaudeCliPath(claudeInstalled);
+        return { installed: true, path: claudeInstalled };
+      }
+    } else if (wrapper) {
+      // Fallback: solo wrapper (legacy bundle 0.32.3 y anteriores).
+      const tgzPath = path.join(bundledClaudeDir, wrapper);
+      log("  Installing claude-code from bundled wrapper only (legacy bundle, may need network for native pack)...");
       spawnSync(
         "npm",
         ["install", "-g", "--prefix", managedPrefix, tgzPath],
@@ -2013,8 +2053,18 @@ async function configureClientSetup({ lang, useDefaults, autoInstall, detected }
   for (const client of required) {
     if (detected[client] && detected[client].installed) continue;
     if (desktopManaged && client === "claude_code") {
-      log("Claude Code install deferred to Desktop final sync.");
-      continue;
+      const bundledClaudeDir = path.join(__dirname, "..", "claude-code");
+      let hasBundle = false;
+      try {
+        if (fs.existsSync(bundledClaudeDir)) {
+          hasBundle = fs.readdirSync(bundledClaudeDir).some((f) => f.endsWith(".tgz"));
+        }
+      } catch (_) {}
+      if (!hasBundle) {
+        log("Claude Code install deferred to Desktop final sync.");
+        continue;
+      }
+      log("Bundled Claude Code tarball detected — installing offline now.");
     }
     let shouldInstall = useDefaults || autoInstall === "auto";
     if (!shouldInstall && process.stdin.isTTY && process.stdout.isTTY) {
@@ -2956,6 +3006,22 @@ async function runSetup() {
       logMacPermissionsNotice(NEXO_HOME, syncPython);
 
       log(`Already at v${currentVersion}. No migration needed.`);
+
+      // Ensure bundled Claude Code is installed even when migration is skipped.
+      try {
+        const _claudeCheck = detectInstalledClients().claude_code;
+        if (!_claudeCheck.installed) {
+          const _bundledClaudeDir = path.join(__dirname, "..", "claude-code");
+          if (fs.existsSync(_bundledClaudeDir)) {
+            const _tgzFiles = fs.readdirSync(_bundledClaudeDir).filter((f) => f.endsWith(".tgz"));
+            if (_tgzFiles.length > 0) {
+              log("Bundled Claude Code tarball detected after migration-skip — installing offline.");
+              installClaudeCodeCli(process.platform);
+            }
+          }
+        }
+      } catch (_e) {}
+
       closeReadline();
       return;
     } catch (e) {
@@ -2967,8 +3033,29 @@ async function runSetup() {
   let python = run("which python3");
   if (!python) {
     if (platform === "darwin") {
-      // macOS: use Homebrew
+      // v0.32.5 — Mac vanilla NO trae python3. La auto-instalación de
+      // Homebrew vía `curl install.sh` requiere TTY interactivo + sudo +
+      // user accept license. Cuando este script se invoca desde Electron
+      // sandbox, NO hay TTY → curl pipe cuelga sin progreso → bootstrap
+      // se queda silencioso. Mejor: detectar la ausencia de Python y
+      // surface un error CLARO al user con instrucciones manuales que
+      // funcionan siempre. Si hay TTY (corriendo desde terminal), seguimos
+      // con el path automático.
+      const isTty = !!(process.stdin && process.stdin.isTTY);
       let hasBrew = run("which brew");
+      if (!hasBrew && !isTty) {
+        log("ERROR: Python 3.12 is not installed and the auto-installer requires an interactive terminal.");
+        log("");
+        log("Please install Python 3.12 manually:");
+        log("  1. Open Terminal.app");
+        log("  2. Run: xcode-select --install");
+        log("  3. Run: /bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"");
+        log("  4. Run: brew install python@3.12");
+        log("  5. Reopen NEXO Desktop");
+        log("");
+        log("More help: https://nexo-desktop.com/help/python-install");
+        process.exit(1);
+      }
       if (!hasBrew) {
         log("Homebrew not found. Installing...");
         spawnSync("/bin/bash", ["-c", '$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)'], {
@@ -2977,9 +3064,14 @@ async function runSetup() {
         hasBrew = run("which brew") || run("eval $(/opt/homebrew/bin/brew shellenv) && which brew");
       }
       if (hasBrew) {
-        log("Python 3 not found. Installing via Homebrew...");
-        spawnSync("brew", ["install", "python3"], { stdio: "inherit" });
-        python = run("which python3");
+        // v0.32.5 — explicit @3.12 pin: el Brain `requirements.txt` y los
+        // wheels manylinux están compilados contra cp312. `brew install
+        // python3` instala el `python3` formula que actualmente apunta a
+        // 3.13 → wheels rechazados → numpy/cffi/cryptography/onnxruntime
+        // fallan al import. Pinning a `python@3.12` evita el drift.
+        log("Python 3.12 not found. Installing via Homebrew...");
+        spawnSync("brew", ["install", "python@3.12"], { stdio: "inherit" });
+        python = run("which python3.12") || run("which python3");
       }
     } else if (platform === "linux") {
       // Linux: try apt or yum
@@ -3451,7 +3543,12 @@ async function runSetup() {
   // present, pip uses --no-index --find-links to install without internet.
   // Falls back to PyPI if bundle not found.
   const bundledWheelsDir = path.join(__dirname, "..", "python-wheels");
-  const useBundle = fs.existsSync(bundledWheelsDir);
+  // v0.32.5 — el bundle empaca wheels manylinux (cp312 x86_64) porque
+  // en Win Brain corre dentro de WSL Ubuntu noble. En Mac, Brain corre
+  // nativo macOS y NO acepta esos wheels (ABI distinto). Si gateamos
+  // useBundle a !linux, pip cae al PyPI online — bien. macOS y Win
+  // (host nativo) deben tener red la primera vez.
+  const useBundle = process.platform === "linux" && fs.existsSync(bundledWheelsDir);
   const pipArgs = useBundle
     ? ["-m", "pip", "install", "--no-index", "--find-links", bundledWheelsDir, "--progress-bar", "off", "-r", requirementsFile]
     : ["-m", "pip", "install", "-v", "--progress-bar", "off", "--default-timeout=60", "-r", requirementsFile];
