@@ -346,8 +346,29 @@ def _onboard_steps() -> list[dict]:
             "validate": r"^.{0,120}$",
         },
         {
+            "id": "ui_language",
+            "prompt": {"es": "¿En qué idioma quieres ver Desktop?", "en": "Which language do you want for Desktop?"},
+            "hint": {
+                "es": "Idioma de los menús, botones y ajustes de la app. Solo español o inglés.",
+                "en": "Language for the app's menus, buttons, and settings. Only Spanish or English.",
+            },
+            "type": "select",
+            "writes": "app.ui_language",
+            "file": "calibration.json",
+            "optional": False,
+            "default": "es",
+            "options": [
+                {"value": "es", "label": {"es": "Español", "en": "Spanish"}},
+                {"value": "en", "label": {"es": "Inglés", "en": "English"}},
+            ],
+        },
+        {
             "id": "language",
-            "prompt": {"es": "¿En qué idioma quieres operar?", "en": "Which language should we use?"},
+            "prompt": {"es": "¿En qué idioma quieres que te conteste el asistente?", "en": "Which language should the assistant reply in?"},
+            "hint": {
+                "es": "Idioma principal de tus conversaciones con el asistente. Puede ser distinto del idioma de Desktop. Si no está aquí, lo cambias luego en Preferencias.",
+                "en": "Primary language for your conversations with the assistant. Can differ from Desktop's language. If yours isn't listed, change it later in Preferences.",
+            },
             "type": "select",
             "writes": "user.language",
             "file": "calibration.json",
@@ -356,6 +377,13 @@ def _onboard_steps() -> list[dict]:
             "options": [
                 {"value": "es", "label": {"es": "Español", "en": "Spanish"}},
                 {"value": "en", "label": {"es": "Inglés", "en": "English"}},
+                {"value": "ca", "label": {"es": "Catalán", "en": "Catalan"}},
+                {"value": "gl", "label": {"es": "Gallego", "en": "Galician"}},
+                {"value": "eu", "label": {"es": "Euskera", "en": "Basque"}},
+                {"value": "fr", "label": {"es": "Francés", "en": "French"}},
+                {"value": "it", "label": {"es": "Italiano", "en": "Italian"}},
+                {"value": "pt", "label": {"es": "Portugués", "en": "Portuguese"}},
+                {"value": "de", "label": {"es": "Alemán", "en": "German"}},
             ],
         },
         {

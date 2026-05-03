@@ -1,5 +1,10 @@
 # Changelog
 
+## [7.12.10] - 2026-05-03
+
+### Changed
+- **Wizard now asks for two languages, not one.** New `ui_language` step (es/en select, writes `app.ui_language`) controls Desktop's menus and buttons; the renamed `language` step keeps capturing the assistant's reply language but expanded the option list to es/en/ca/gl/eu/fr/it/pt/de so multilingual users in Spain don't have to pick "es" when they actually want Catalan/Galician/Basque. Order now: `name → full_name → ui_language → language → assistant_name → residence → role → timezone → technical_level → welcome` (10 steps).
+
 ## [7.12.9] - 2026-05-03
 
 ### Changed
