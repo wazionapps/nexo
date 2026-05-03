@@ -311,15 +311,39 @@ def cmd_identity(args) -> int:
 # ---------------------------------------------------------------- onboard
 
 def _onboard_steps() -> list[dict]:
+    # v7.12.7 — expanded the wizard to capture the most basic user
+    # context so the agent can be useful from day one (decided with
+    # Francisco 2026-05-03). No email here, no sensitive data; just
+    # how to address the user, where they live/work, what they do,
+    # and a couple of free-form interests. All non-mandatory fields
+    # stay optional so a user can power through with just name +
+    # language + assistant_name.
     return [
         {
             "id": "name",
-            "prompt": {"es": "¿Cómo te llamas?", "en": "What's your name?"},
+            "prompt": {"es": "¿Cómo te llamamos?", "en": "What should we call you?"},
+            "hint": {
+                "es": "Tu nombre corto, el que usarás en el día a día.",
+                "en": "Your short name, the one we'll use day to day.",
+            },
             "type": "text",
             "writes": "user.name",
             "file": "calibration.json",
             "optional": False,
             "validate": r"^\S.{0,60}$",
+        },
+        {
+            "id": "full_name",
+            "prompt": {"es": "¿Cuál es tu nombre completo?", "en": "What's your full name?"},
+            "hint": {
+                "es": "Por si necesito redactar emails, documentos o presentarte formalmente.",
+                "en": "In case I need to draft emails, documents, or introduce you formally.",
+            },
+            "type": "text",
+            "writes": "user.full_name",
+            "file": "calibration.json",
+            "optional": True,
+            "validate": r"^.{0,120}$",
         },
         {
             "id": "language",
@@ -350,12 +374,43 @@ def _onboard_steps() -> list[dict]:
             "reserved_values": list(RESERVED_ASSISTANT_NAME_VALUES),
         },
         {
+            "id": "city",
+            "prompt": {"es": "¿Dónde vives o trabajas habitualmente?", "en": "Where do you live or work most days?"},
+            "hint": {
+                "es": "Una ciudad o zona; me ayuda con horarios, clima, ofertas locales y mil cosas más.",
+                "en": "A city or area; helps me with schedules, weather, local options, and a thousand small things.",
+            },
+            "type": "text",
+            "writes": "user.city",
+            "file": "calibration.json",
+            "optional": True,
+            "validate": r"^.{0,120}$",
+        },
+        {
             "id": "role",
             "prompt": {"es": "¿A qué te dedicas?", "en": "What do you do?"},
+            "hint": {
+                "es": "Una frase corta vale: «médica de familia», «autónomo de hostelería», «estudiante de derecho».",
+                "en": "One short sentence works: \"family doctor\", \"freelance restaurateur\", \"law student\".",
+            },
             "type": "text",
             "writes": "meta.role",
             "file": "calibration.json",
             "optional": True,
+            "validate": r"^.{0,200}$",
+        },
+        {
+            "id": "interests",
+            "prompt": {"es": "¿En qué temas quieres que te ayude más?", "en": "Which topics should I help you with most?"},
+            "hint": {
+                "es": "Trabajo, finanzas, salud, familia, idiomas, estudios… separa con comas si son varios.",
+                "en": "Work, finances, health, family, languages, studies… separate with commas if more than one.",
+            },
+            "type": "text",
+            "writes": "meta.interests",
+            "file": "calibration.json",
+            "optional": True,
+            "validate": r"^.{0,300}$",
         },
         {
             "id": "technical_level",
