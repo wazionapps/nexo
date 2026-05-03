@@ -1101,26 +1101,80 @@ async def api_ops_execute(fid: str):
     if not row:
         return JSONResponse({"error": f"Followup {fid} not found"}, status_code=404)
     item = dict(row)
-    if platform.system() != "Darwin":
-        return JSONResponse(
-            {"error": "This operation requires macOS (uses osascript to open Terminal)"},
-            status_code=501,
-        )
     # Security: avoid interpolating user-controlled data into shell commands.
-    # Write the followup ID to a temp file and pass a safe, fixed command to osascript.
+    # Write the followup ID to a temp file and pass a safe, fixed command.
     import tempfile
     tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", prefix="nexo-followup-", delete=False)
     tmp.write(fid)
     tmp.close()
-    # The selected terminal client reads the followup ID from the temp file — no shell interpolation of description
     try:
         _, shell_cmd = build_followup_terminal_shell_command(tmp.name)
     except AgentRunnerError as exc:
         return JSONResponse({"error": str(exc)}, status_code=503)
-    escaped = shell_cmd.replace("\\", "\\\\").replace('"', '\\"')
-    script = f'tell application "Terminal" to do script "{escaped}"'
-    subprocess.Popen(["osascript", "-e", script])
-    return {"success": True, "followup_id": fid}
+
+    system = platform.system()
+    if system == "Darwin":
+        # macOS: open Terminal.app via osascript (legacy path).
+        escaped = shell_cmd.replace("\\", "\\\\").replace('"', '\\"')
+        script = f'tell application "Terminal" to do script "{escaped}"'
+        subprocess.Popen(["osascript", "-e", script])
+        return {"success": True, "followup_id": fid, "platform": "darwin"}
+
+    # 7.12.14 — Windows / WSL parity. Until now this endpoint returned 501
+    # on any non-Darwin host, leaving Win11 users without a way to launch
+    # followups from the dashboard. We detect WSL via WSL_DISTRO_NAME /
+    # /proc/sys/fs/binfmt_misc/WSLInterop and shell out through Win
+    # interop (cmd.exe /c start ... wt.exe) so the user gets a real
+    # Windows Terminal tab running `wsl.exe -d <distro> -- bash -lc "<cmd>"`
+    # — matching the Mac UX of "click → terminal opens with claude waiting".
+    is_wsl = bool(os.environ.get("WSL_DISTRO_NAME")) or os.path.exists(
+        "/proc/sys/fs/binfmt_misc/WSLInterop"
+    )
+    if is_wsl:
+        distro = os.environ.get("WSL_DISTRO_NAME") or "Ubuntu-24.04"
+        # Quote the bash command for cmd.exe; cmd's start unwraps one level
+        # so we double-escape inner double quotes.
+        bash_cmd = shell_cmd.replace('"', '\\"')
+        wsl_invoke = f'wsl.exe -d {distro} -- bash -lc "{bash_cmd}"'
+        try:
+            subprocess.Popen(
+                ["cmd.exe", "/c", "start", "", "wt.exe", "new-tab", "--", "cmd.exe", "/k", wsl_invoke],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except FileNotFoundError:
+            return JSONResponse(
+                {
+                    "error": "Could not launch Windows Terminal automatically.",
+                    "manual_command": wsl_invoke,
+                    "followup_id": fid,
+                },
+                status_code=503,
+            )
+        return {"success": True, "followup_id": fid, "platform": "wsl", "distro": distro}
+
+    # Pure Linux (no WSL): try common terminal emulators in order, then
+    # fall back to returning the manual command. Best-effort because the
+    # dashboard is primarily Mac + WSL.
+    from shutil import which
+    for emulator in ("x-terminal-emulator", "gnome-terminal", "konsole", "xterm"):
+        if which(emulator):
+            try:
+                if emulator == "gnome-terminal":
+                    subprocess.Popen([emulator, "--", "bash", "-lc", shell_cmd])
+                else:
+                    subprocess.Popen([emulator, "-e", shell_cmd])
+                return {"success": True, "followup_id": fid, "platform": "linux", "emulator": emulator}
+            except OSError:
+                continue
+    return JSONResponse(
+        {
+            "error": "No terminal emulator available to launch the followup automatically.",
+            "manual_command": shell_cmd,
+            "followup_id": fid,
+        },
+        status_code=503,
+    )
 
 
 # ---------------------------------------------------------------------------

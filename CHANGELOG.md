@@ -1,5 +1,15 @@
 # Changelog
 
+## [7.12.14] - 2026-05-04
+
+### Fixed — paridad followup runner Mac/WSL/Linux
+
+- **Dashboard `POST /api/followups/{id}/run`: paridad multi-plataforma.** Hasta 7.12.13 este endpoint devolvía 501 ("This operation requires macOS") en cualquier host no-Darwin, dejando a usuarios Win11+WSL sin forma de lanzar followups desde el panel del dashboard. La detección de plataforma ahora abre el terminal nativo del host:
+  - **macOS**: igual que antes, `osascript -e 'tell application "Terminal"'` (legacy).
+  - **WSL** (detectado vía `WSL_DISTRO_NAME` o `/proc/sys/fs/binfmt_misc/WSLInterop`): shell out vía `cmd.exe /c start "" wt.exe new-tab -- cmd.exe /k wsl.exe -d <distro> -- bash -lc "<shell_cmd>"` para abrir Windows Terminal con el followup en ejecución dentro de la distro.
+  - **Linux puro**: intenta `x-terminal-emulator`, `gnome-terminal`, `konsole`, `xterm` en orden.
+  - Si todos los emuladores fallan, devuelve 503 con el `manual_command` para copy-paste, en vez del 501 ciego.
+
 ## [7.12.13] - 2026-05-03
 
 ### Changed — paso "residence" del onboarding usa autocomplete + coordenadas
