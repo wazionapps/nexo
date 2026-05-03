@@ -1,5 +1,42 @@
 # Changelog
 
+## [7.12.10] - 2026-05-03
+
+### Changed
+- **Wizard now asks for two languages, not one.** New `ui_language` step (es/en select, writes `app.ui_language`) controls Desktop's menus and buttons; the renamed `language` step keeps capturing the assistant's reply language but expanded the option list to es/en/ca/gl/eu/fr/it/pt/de so multilingual users in Spain don't have to pick "es" when they actually want Catalan/Galician/Basque. Order now: `name → full_name → ui_language → language → assistant_name → residence → role → timezone → technical_level → welcome` (10 steps).
+
+## [7.12.9] - 2026-05-03
+
+### Changed
+- **Onboarding wizard `timezone` step is now a searchable picker.** `desktop_bridge.py` `_onboard_steps()` returns `type: "timezone"` so the Desktop renderer drops a `<datalist>` of all IANA zones (`Intl.supportedValuesOf("timeZone")`), pre-fills the system-detected zone, and lets the user type to filter instead of memorising the exact `Europe/Madrid` form. Hint copy updated.
+
+### Tests
+- `python3 scripts/verify_client_parity.py` → 194 passed.
+
+## [7.12.8] - 2026-05-03
+
+### Fixed
+- **Wizard fields aligned with Desktop Settings schema.** 7.12.7 added `interests` and `city` keys, but Settings has neither (`interests` was a fabrication; residence is read from `profile.current_residence`, not `user.city`). Dropped `interests`, renamed `city` → `residence` writing to `profile.current_residence` (file: `profile.json`), and added `timezone` (already existed in Settings under `calibration.user.timezone`). Final wizard step list (9): `name`, `full_name`, `language`, `assistant_name`, `residence`, `role`, `timezone`, `technical_level`, `welcome`.
+
+## [7.12.7] - 2026-05-03
+
+### Changed
+- **Onboarding wizard expanded** with `full_name`, `city`, `interests` to give the agent meaningful first-day context. Email and other sensitive fields stay out of the wizard. (Note: `interests` and `city` corrected in 7.12.8.)
+
+## [7.12.6] - 2026-05-03
+
+### Fixed
+- **`bin/nexo-brain.js` `installClaudeCodeCli` filters native packs by current platform/arch** before passing them to `npm install`. Previously all 4 native packs (linux-x64, linux-arm64, darwin-x64, darwin-arm64) were passed, and npm aborts the whole batch with `EBADPLATFORM` when one doesn't match the runtime. The wrapper installed but the native binary never landed → `command -v claude` exit 127 → bootstrap stalled at "Preparando NEXO…" with no user-visible progress. First seen 2026-05-03 on Inma's Win11 clean install (Linux x64 WSL distro).
+
+## [7.12.4] - 2026-05-02
+
+### Fixed
+- **Bundled Claude Code `.tgz` is now installed even when `desktopManaged` is true.** `bin/nexo-brain.js` previously skipped `installClaudeCodeCli` for desktop-managed installs and deferred to a Desktop "final sync" step that never actually installed the binary. The skip now only applies when no bundled tarball is present; if `<bin>/../claude-code/*.tgz` exists, the installer goes ahead and runs `npm install -g <tgz>` offline. Fixes the `claude-runtime-missing exit 127` error reported by Desktop after a clean install.
+- **Bundled Claude Code `.tgz` is now also installed when migration is skipped.** When `version.json` already matches the bundled version, `nexo-brain.js` returns early after `Already at v<X>. No migration needed.` Now, before that early return, the installer detects if Claude is missing and bundle is available, and runs `installClaudeCodeCli` to provision it. Without this, repeated reopen flows in Desktop (where Brain is already current but Claude was never installed) never reached the install path.
+
+### Tests
+- `python3 scripts/verify_client_parity.py` → 194 passed.
+
 ## [7.12.3] - 2026-05-02
 
 ### Fixed

@@ -382,8 +382,19 @@ def load_config():
             return cfg
     except Exception:
         pass
-    with open(CONFIG_PATH) as f:
-        payload = json.load(f)
+    # v0.32.5 — graceful return None when no email setup yet. Antes esto
+    # lanzaba FileNotFoundError y el cron de cada minuto generaba 1440
+    # filas de error/día por cliente sin email configurado. 50 clientes
+    # pagados sin email setup → 72k filas de error/día → watchdog L2
+    # alertas falsas → ruido en logs y posible token burn. Ahora el
+    # cron retorna sin error cuando no hay config.
+    try:
+        with open(CONFIG_PATH) as f:
+            payload = json.load(f)
+    except FileNotFoundError:
+        return None
+    except (OSError, json.JSONDecodeError):
+        return None
     if isinstance(payload, dict):
         payload.pop("automation_task_profile", None)
     return payload
@@ -1694,6 +1705,13 @@ def _run_worker_job(job_path):
         return 1
 
     config = load_config()
+    if config is None:
+        # v0.32.5 — worker invoked but email setup gone (config deleted
+        # between scheduling and execution). Drop the job silently
+        # rather than spamming exception logs.
+        log.warning(f"Worker job {job_file.name}: no email config, dropping.")
+        job_file.unlink(missing_ok=True)
+        return 0
 
     log.info(
         f"Worker job started: {job_file.name} "
@@ -2190,6 +2208,12 @@ def main():
             return
 
         config = load_config()
+        # v0.32.5 — exit cleanly cuando no hay email setup.
+        # Antes el FileNotFoundError propagaba a 1440 errores/día por
+        # cliente Win sin email. Ahora salimos en silencio.
+        if config is None:
+            log.info("No email config — skipping monitor check.")
+            return
         base_interval_seconds = max(60, _safe_int(config.get("check_interval_seconds"), 300))
         backoff_state = load_empty_inbox_backoff_state()
         debt_block = scan_debt()

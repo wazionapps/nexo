@@ -311,10 +311,21 @@ def cmd_identity(args) -> int:
 # ---------------------------------------------------------------- onboard
 
 def _onboard_steps() -> list[dict]:
+    # v7.12.7 — expanded the wizard to capture the most basic user
+    # context so the agent can be useful from day one (decided with
+    # Francisco 2026-05-03). No email here, no sensitive data; just
+    # how to address the user, where they live/work, what they do,
+    # and a couple of free-form interests. All non-mandatory fields
+    # stay optional so a user can power through with just name +
+    # language + assistant_name.
     return [
         {
             "id": "name",
-            "prompt": {"es": "¿Cómo te llamas?", "en": "What's your name?"},
+            "prompt": {"es": "¿Cómo te llamamos?", "en": "What should we call you?"},
+            "hint": {
+                "es": "Tu nombre corto, el que usarás en el día a día.",
+                "en": "Your short name, the one we'll use day to day.",
+            },
             "type": "text",
             "writes": "user.name",
             "file": "calibration.json",
@@ -322,8 +333,42 @@ def _onboard_steps() -> list[dict]:
             "validate": r"^\S.{0,60}$",
         },
         {
+            "id": "full_name",
+            "prompt": {"es": "¿Cuál es tu nombre completo?", "en": "What's your full name?"},
+            "hint": {
+                "es": "Por si necesito redactar emails, documentos o presentarte formalmente.",
+                "en": "In case I need to draft emails, documents, or introduce you formally.",
+            },
+            "type": "text",
+            "writes": "user.full_name",
+            "file": "calibration.json",
+            "optional": True,
+            "validate": r"^.{0,120}$",
+        },
+        {
+            "id": "ui_language",
+            "prompt": {"es": "¿En qué idioma quieres ver Desktop?", "en": "Which language do you want for Desktop?"},
+            "hint": {
+                "es": "Idioma de los menús, botones y ajustes de la app. Solo español o inglés.",
+                "en": "Language for the app's menus, buttons, and settings. Only Spanish or English.",
+            },
+            "type": "select",
+            "writes": "app.ui_language",
+            "file": "calibration.json",
+            "optional": False,
+            "default": "es",
+            "options": [
+                {"value": "es", "label": {"es": "Español", "en": "Spanish"}},
+                {"value": "en", "label": {"es": "Inglés", "en": "English"}},
+            ],
+        },
+        {
             "id": "language",
-            "prompt": {"es": "¿En qué idioma quieres operar?", "en": "Which language should we use?"},
+            "prompt": {"es": "¿En qué idioma quieres que te conteste el asistente?", "en": "Which language should the assistant reply in?"},
+            "hint": {
+                "es": "Idioma principal de tus conversaciones con el asistente. Puede ser distinto del idioma de Desktop. Si no está aquí, lo cambias luego en Preferencias.",
+                "en": "Primary language for your conversations with the assistant. Can differ from Desktop's language. If yours isn't listed, change it later in Preferences.",
+            },
             "type": "select",
             "writes": "user.language",
             "file": "calibration.json",
@@ -332,6 +377,13 @@ def _onboard_steps() -> list[dict]:
             "options": [
                 {"value": "es", "label": {"es": "Español", "en": "Spanish"}},
                 {"value": "en", "label": {"es": "Inglés", "en": "English"}},
+                {"value": "ca", "label": {"es": "Catalán", "en": "Catalan"}},
+                {"value": "gl", "label": {"es": "Gallego", "en": "Galician"}},
+                {"value": "eu", "label": {"es": "Euskera", "en": "Basque"}},
+                {"value": "fr", "label": {"es": "Francés", "en": "French"}},
+                {"value": "it", "label": {"es": "Italiano", "en": "Italian"}},
+                {"value": "pt", "label": {"es": "Portugués", "en": "Portuguese"}},
+                {"value": "de", "label": {"es": "Alemán", "en": "German"}},
             ],
         },
         {
@@ -350,12 +402,43 @@ def _onboard_steps() -> list[dict]:
             "reserved_values": list(RESERVED_ASSISTANT_NAME_VALUES),
         },
         {
+            "id": "residence",
+            "prompt": {"es": "¿Dónde vives o trabajas habitualmente?", "en": "Where do you live or work most days?"},
+            "hint": {
+                "es": "Una ciudad o zona; me ayuda con horarios, clima, ofertas locales y mil cosas más.",
+                "en": "A city or area; helps me with schedules, weather, local options, and a thousand small things.",
+            },
+            "type": "text",
+            "writes": "profile.current_residence",
+            "file": "profile.json",
+            "optional": True,
+            "validate": r"^.{0,120}$",
+        },
+        {
             "id": "role",
             "prompt": {"es": "¿A qué te dedicas?", "en": "What do you do?"},
+            "hint": {
+                "es": "Una frase corta vale: «médica de familia», «autónomo de hostelería», «estudiante de derecho».",
+                "en": "One short sentence works: \"family doctor\", \"freelance restaurateur\", \"law student\".",
+            },
             "type": "text",
             "writes": "meta.role",
             "file": "calibration.json",
             "optional": True,
+            "validate": r"^.{0,200}$",
+        },
+        {
+            "id": "timezone",
+            "prompt": {"es": "¿En qué zona horaria estás?", "en": "Which timezone are you in?"},
+            "hint": {
+                "es": "Empieza a escribir tu ciudad o región (Europe/Madrid, America/New_York…). Lo detectamos del sistema, pero lo puedes cambiar.",
+                "en": "Start typing your city or region (Europe/Madrid, America/New_York…). We detect it from the system, but you can change it.",
+            },
+            "type": "timezone",
+            "writes": "user.timezone",
+            "file": "calibration.json",
+            "optional": True,
+            "validate": r"^[A-Za-z_+\-/0-9 ]{0,80}$",
         },
         {
             "id": "technical_level",

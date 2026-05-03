@@ -323,6 +323,22 @@ def check_tokens():
 
 def check_launch_agents():
     """Check that expected LaunchAgents are loaded. Auto-repair if not."""
+    # v0.32.5 — antes esto siempre invocaba `launchctl list` (Mac-only).
+    # Cuando el cron immune corría dentro de WSL Ubuntu (clientes Win),
+    # `launchctl` no existe → rc != 0 → loaded_labels vacío → cada agente
+    # marcado missing → cada immune tick disparaba watchdog L2 con LLM
+    # repair loop → quemaba tokens. Ahora detectamos plataforma y skip
+    # graceful en Linux/Win-WSL: no hay LaunchAgents en esas plataformas;
+    # los crons se materializan con cron / systemd y los chequea otra
+    # función separada.
+    import platform as _platform
+    if _platform.system() != "Darwin":
+        return [{
+            "name": "launchd",
+            "status": "OK",
+            "detail": "skipped: launchd is macOS-only",
+            "repaired": False,
+        }]
     results = []
 
     # Get list of loaded agents
