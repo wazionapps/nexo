@@ -1,5 +1,14 @@
 # Changelog
 
+## [7.12.11] - 2026-05-03
+
+### Fixed — el wizard de onboarding no aparecía en la primera instalación Desktop
+
+- **El calibration creado por bootstrap ya no finge que el onboarding terminó.** Cuando NEXO Desktop arranca por primera vez ejecuta `nexo-brain --yes` para no preguntarle nada al usuario en terminal (las preguntas viven en el wizard React de la app). Hasta 7.12.10 ese arranque escribía `meta.onboarding_completed: true` junto a los valores placeholder (`name: "Usuario"`, `language: "en"`, `assistant_name: "Nova"`). Cuando el renderer le preguntaba a Brain "¿está configurado el operador?", la respuesta era SÍ y el wizard React no se montaba. Resultado: usuario nuevo abre NEXO y se encuentra un chat vacío con identidad por defecto, sin haber visto ninguna pregunta. Ahora los runs `--yes` dejan `onboarding_completed: false` (y `onboarding_completed_at: null`); sólo un `nexo-brain init` interactivo marca el flag en true. (`bin/nexo-brain.js`)
+- **`isOnboardingComplete()` también descarta el marker placeholder.** Cinturón extra para calibrations antiguas con la combinación mala: aunque `meta.onboarding_completed === true`, si el nombre de usuario es placeholder ("Usuario" / vacío), la función devuelve false. Es la misma protección que ya tenía el fallback legacy. Usuarios reales con setup interactivo conservan su estado.
+
+Detectado durante el smoke install en el Win11 de Inma (2026-05-03): el bootstrap llegaba al 100% pero la app no mostraba el wizard de las 10 preguntas de onboarding y el usuario aterrizaba en un chat vacío.
+
 ## [7.12.10] - 2026-05-03
 
 ### Changed

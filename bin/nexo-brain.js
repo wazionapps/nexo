@@ -360,7 +360,14 @@ function isOnboardingComplete(calibration) {
   const meta = calibration.meta && typeof calibration.meta === "object" ? calibration.meta : {};
 
   if (meta.onboarding_completed === true) {
-    return nonEmptyString(name) && nonEmptyString(language);
+    // v7.12.11 — bug surfaced on Inma's smoke install 2026-05-03: Desktop
+    // bootstrap runs nexo-brain in --yes/--skip mode, which used to write
+    // `onboarding_completed: true` alongside the placeholder "Usuario"/"en"
+    // defaults. The Desktop wizard then never fired because this returned
+    // true on the very first launch. Treat a placeholder name as "marker is
+    // a lie, real onboarding never happened" so the renderer can still
+    // surface the wizard. Same guard applied to the legacy fallback below.
+    return nonEmptyString(name) && !isPlaceholderUserName(name) && nonEmptyString(language);
   }
 
   // Legacy fallback: v7.8/v7.9-era calibration files may not carry the
@@ -3440,8 +3447,16 @@ async function runSetup() {
       execution_first: true,
     },
     meta: {
-      onboarding_completed: true,
-      onboarding_completed_at: new Date().toISOString(),
+      // v7.12.11 — only mark onboarding_completed when the user actually
+      // answered the prompts (interactive run, !useDefaults). The
+      // Desktop bootstrap calls nexo-brain with `--yes/--skip` to set up
+      // the runtime non-interactively; in that path the values are
+      // placeholders ("Usuario" / "en" / "Nova") and the real wizard
+      // lives in the renderer. Marking it complete here used to short-
+      // circuit that wizard and leave new users staring at an empty chat
+      // (Inma 2026-05-03 smoke install).
+      onboarding_completed: !useDefaults,
+      onboarding_completed_at: !useDefaults ? new Date().toISOString() : null,
     },
     auto_install: "ask", // updated later if user answers P11
     calibrated_at: new Date().toISOString(),
