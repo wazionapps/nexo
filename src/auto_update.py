@@ -1233,11 +1233,9 @@ def _reload_launch_agents_after_bump() -> dict:
           "errors": [{plist, stderr}],
         }
 
-    Linux equivalent: systemctl --user daemon-reload + restart of timer
-    units. Implemented as a no-op stub on Linux for now (the macOS
-    LaunchAgent path is the production target — Linux users running
-    `nexo update` get the cron sync but not the per-timer restart yet).
-    Captured as a TODO for the next round.
+    Linux/WSL remains a no-op by default. Systemd user-unit reload can be
+    enabled explicitly for development/runtime experiments, but public update
+    paths must not restart host services unexpectedly.
     """
     result: dict = {
         "scanned": 0,
@@ -1248,10 +1246,13 @@ def _reload_launch_agents_after_bump() -> dict:
     }
 
     if sys.platform == "linux":
-        # v7.12.12 — Linux/WSL path: reload systemd user units so any
-        # nexo-* timers / services updated by auto-update pick up the new
-        # ExecStart paths. macOS path below handles launchd via launchctl.
-        # Best-effort: a missing systemd (Docker/CI) just returns no-op.
+        if os.environ.get("NEXO_ENABLE_SYSTEMD_RELOAD_AFTER_BUMP") != "1":
+            result["skipped_reason"] = "systemd-reload-disabled"
+            return result
+
+        # Experimental Linux path: reload systemd user units so nexo-* timers
+        # updated by auto-update pick up new ExecStart paths. Best-effort: a
+        # missing systemd (Docker/CI/most WSL installs) just returns no-op.
         try:
             unit_dir = Path.home() / ".config" / "systemd" / "user"
             scanned_units = []
