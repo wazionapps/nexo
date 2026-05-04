@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.12.14: dashboard followups use the selected terminal client</title>
+<meta name="description" content="NEXO Brain v7.12.14 keeps dashboard followup execution aligned with the selected terminal client across macOS, Windows via WSL, and Linux.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-12-14/">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.12.14: dashboard followups use the selected terminal client","datePublished":"2026-05-04","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head><body><main><article style="max-width:760px;margin:80px auto;padding:0 24px;line-height:1.75;">
+<h1>NEXO 7.12.14 &mdash; dashboard followups use the selected terminal client</h1>
+<p><em>Published 2026-05-04. Patch release over v7.12.13 &mdash; closes the dashboard followup launcher gap across macOS, Windows via WSL, and Linux.</em></p>
+
+<h2>Dashboard followups are no longer macOS-only</h2>
+<p><code>POST /api/followups/{id}/run</code> now delegates command construction to <code>build_followup_terminal_shell_command()</code>, so the dashboard uses the selected terminal client from NEXO preferences instead of hardcoding a launcher path. Claude Code and Codex stay Brain-side client choices; NEXO Desktop remains a separate closed-source companion product.</p>
+
+<h2>Windows via WSL gets a native launch path</h2>
+<p>When Brain runs inside WSL, the dashboard detects the environment and opens Windows Terminal through <code>cmd.exe /c start</code>, invoking <code>wsl.exe -d &lt;distro&gt; -- bash -lc</code> with the followup command. That gives Win11 users the same click-to-run followup flow as macOS users.</p>
+
+<h2>Linux gets best-effort terminal support</h2>
+<p>On non-WSL Linux hosts, Brain tries common terminal emulators in order: <code>x-terminal-emulator</code>, <code>gnome-terminal</code>, <code>konsole</code>, and <code>xterm</code>. If none are present, the endpoint returns a clear manual command instead of a blind 501.</p>
+
+<h2>Validation</h2>
+<pre><code>python3 scripts/verify_client_parity.py
+
+194 passed
+</code></pre>
+
+<p><a href="/changelog/#v71214">Full changelog entry &rarr;</a> &middot; <a href="https://github.com/wazionapps/nexo/blob/main/src/dashboard/app.py">src/dashboard/app.py</a> &middot; <a href="https://github.com/wazionapps/nexo/blob/main/src/agent_runner.py">src/agent_runner.py</a></p>
+</article></main></body></html>
