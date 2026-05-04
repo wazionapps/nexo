@@ -18,7 +18,7 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.12.10` is the current packaged-runtime line. Patch release — legacy headless automation paths now stay on the resonance engine: `task_profile` no longer pre-fills model/effort, `email-monitor` stops carrying a private routing override, personal automation helpers stop injecting a default model, and runtime updates scrub the last stale email-profile field automatically. Result: email daemon, personal scripts, and updated installs all converge on the same `caller`/`tier` → backend → `(model, effort)` resolution path already used by Deep Sleep and morning-agent.
+Version `7.12.14` is the current packaged-runtime line. Patch release — dashboard followup execution now respects the selected terminal client across macOS, Windows via WSL, and Linux instead of returning a macOS-only dead end. Result: operators can launch followups from the dashboard on every supported Brain host without hardcoding Claude-only or Mac-only assumptions.
 
 Previously in `7.12.0`: minor release — adds `nexo support-snapshot` for generic local runtime diagnostics and completes the silent-reminder hardening on the live Protocol Enforcer path. The support collector emits one JSON bundle with version/platform metadata, runtime path presence, health-check output, and recent event/operation tails, while map-driven reminders (`nexo_startup`, `nexo_smart_startup`, `nexo_heartbeat`, `nexo_reminders`, `nexo_session_diary_*`, `nexo_stop`, `nexo_task_close`, compaction checkpoint prompts) now say explicitly that silence owns the entire reminder turn.
 

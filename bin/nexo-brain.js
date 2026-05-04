@@ -225,6 +225,50 @@ function run(cmd, opts = {}) {
   }
 }
 
+function findBundledWheel(wheelsDir, prefix) {
+  try {
+    const normalizedPrefix = String(prefix || "").toLowerCase() + "-";
+    const matches = fs.readdirSync(wheelsDir)
+      .filter((name) => name.toLowerCase().startsWith(normalizedPrefix) && name.endsWith(".whl"))
+      .sort();
+    if (!matches.length) return "";
+    return path.join(wheelsDir, matches[matches.length - 1]);
+  } catch {
+    return "";
+  }
+}
+
+function pythonHasPip(pythonBin) {
+  try {
+    const result = spawnSync(pythonBin, ["-m", "pip", "--version"], {
+      stdio: "ignore",
+      timeout: 15000,
+    });
+    return result.status === 0;
+  } catch {
+    return false;
+  }
+}
+
+function seedPipFromBundledWheels(venvPython, bundledWheelsDir) {
+  if (!fs.existsSync(venvPython) || !fs.existsSync(bundledWheelsDir)) return false;
+  if (pythonHasPip(venvPython)) return true;
+  const pipWheel = findBundledWheel(bundledWheelsDir, "pip");
+  if (!pipWheel) return false;
+  log("  Seeding pip into venv from bundled wheels...");
+  const result = spawnSync(venvPython, [
+    path.join(pipWheel, "pip"),
+    "install",
+    "--no-index",
+    "--find-links",
+    bundledWheelsDir,
+    "pip",
+    "setuptools",
+    "wheel",
+  ], { stdio: "inherit", timeout: 120000 });
+  return result.status === 0 && pythonHasPip(venvPython);
+}
+
 function log(msg) {
   console.log(`  ${msg}`);
   try {
@@ -3541,14 +3585,27 @@ async function runSetup() {
   const venvPython = platform === "win32"
     ? path.join(venvPath, "Scripts", "python.exe")
     : path.join(venvPath, "bin", "python3");
+  const bundledWheelsDir = path.join(__dirname, "..", "python-wheels");
 
   // Create venv if it doesn't exist
   if (!fs.existsSync(venvPython)) {
     log("  Creating Python virtual environment...");
     const venvResult = spawnSync(python, ["-m", "venv", venvPath], { stdio: "inherit" });
     if (venvResult.status !== 0) {
-      log("Failed to create venv. Trying pip install directly...");
+      if (platform === "linux" && fs.existsSync(bundledWheelsDir)) {
+        log("  Python venv could not seed pip; retrying offline without pip...");
+        try { fs.rmSync(venvPath, { recursive: true, force: true }); } catch {}
+        const bareVenv = spawnSync(python, ["-m", "venv", "--without-pip", venvPath], { stdio: "inherit" });
+        if (bareVenv.status !== 0) {
+          log("Failed to create venv. Trying pip install directly...");
+        }
+      } else {
+        log("Failed to create venv. Trying pip install directly...");
+      }
     }
+  }
+  if (fs.existsSync(venvPython) && !pythonHasPip(venvPython)) {
+    seedPipFromBundledWheels(venvPython, bundledWheelsDir);
   }
 
   // Use venv python if available, otherwise fall back to system python with --break-system-packages
@@ -3557,7 +3614,6 @@ async function runSetup() {
   // Detect bundled wheels in resources/python-wheels (offline-first). If
   // present, pip uses --no-index --find-links to install without internet.
   // Falls back to PyPI if bundle not found.
-  const bundledWheelsDir = path.join(__dirname, "..", "python-wheels");
   // v0.32.5 — el bundle empaca wheels manylinux (cp312 x86_64) porque
   // en Win Brain corre dentro de WSL Ubuntu noble. En Mac, Brain corre
   // nativo macOS y NO acepta esos wheels (ABI distinto). Si gateamos

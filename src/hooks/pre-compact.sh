@@ -230,24 +230,55 @@ conn.execute('''
 ''', (sid, decisions, pending, context_next, summary))
 conn.commit()
 
-# Layer 3: structured auto-flush for continuity and inspectability
+conn.close()
+" 2>/dev/null || true
+
+    # Layer 3: structured auto-flush is useful but non-critical. Keep it
+    # best-effort in the background so pre-compaction never blocks on heavy
+    # imports, vector backends, or ingestion latency after the emergency diary
+    # has already been committed.
+    (
+        NEXO_PRECOMPACT_SID="$TARGET_SID" \
+        NEXO_PRECOMPACT_LOG_FILE="$LOG_FILE" \
+        HOOK_DIR="$HOOK_DIR" \
+        python3 - <<'PY'
+import os
+import sqlite3
+import sys
+
+sid = os.environ.get("NEXO_PRECOMPACT_SID", "")
+log_file = os.environ.get("NEXO_PRECOMPACT_LOG_FILE", "")
+hook_dir = os.environ.get("HOOK_DIR", "")
+if not sid or not hook_dir:
+    sys.exit(0)
+
+sys.path.insert(0, os.path.abspath(os.path.join(hook_dir, "..")))
 try:
-    import os
-    sys.path.insert(0, os.path.abspath(os.path.join('$HOOK_DIR', '..')))
+    import paths
+
+    task = ""
+    try:
+        conn = sqlite3.connect(str(paths.db_path()), timeout=3)
+        row = conn.execute("SELECT task FROM sessions WHERE sid = ? LIMIT 1", (sid,)).fetchone()
+        task = (row[0] if row else "") or ""
+        conn.close()
+    except Exception:
+        task = ""
+
     import compaction_memory
+
     compaction_memory.record_auto_flush(
         session_id=sid,
         task=task,
-        current_goal='',
+        current_goal="",
         log_file=log_file,
-        last_diary_ts=last_diary_ts,
-        source='pre-compact-hook',
+        last_diary_ts="",
+        source="pre-compact-hook",
     )
 except Exception:
     pass
-
-conn.close()
-" 2>/dev/null || true
+PY
+    ) >/dev/null 2>&1 &
 fi
 
 cat << HOOKEOF

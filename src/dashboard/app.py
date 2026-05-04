@@ -1108,6 +1108,8 @@ async def api_ops_execute(fid: str):
     tmp.write(fid)
     tmp.close()
     try:
+        # Use the selected terminal client from NEXO preferences (Claude Code or
+        # Codex) instead of hardcoding a launcher in the dashboard.
         _, shell_cmd = build_followup_terminal_shell_command(tmp.name)
     except AgentRunnerError as exc:
         return JSONResponse({"error": str(exc)}, status_code=503)
