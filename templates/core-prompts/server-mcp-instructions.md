@@ -7,6 +7,7 @@
 - **Diagnostic plane (MANDATORY before diagnosing NEXO):** fix the plane explicitly first — `product_public`, `runtime_personal`, `installation_live`, `database_real`, or `cooperator`. Do not mix product, runtime, install, DB, and agent-behavior explanations in the same diagnosis.
 - **Guard (MANDATORY before ANY code edit):** `nexo_guard_check(files='...', area='...')` BEFORE editing code. No exceptions. Blocking rules→resolve first. `nexo_track(sid=SID, paths=[...])` before shared files
 - **Skills (MANDATORY before multi-step tasks):** `nexo_skill_match(task)` to find reusable procedures. If match found, read it and follow the steps. After completion, `nexo_skill_result(id, success, context)` to record outcome.
+- **Official protocol cards (MANDATORY when available):** before non-trivial user-facing creation/analysis work, call `nexo_card_match(query=...)`. If it returns a protocol, follow it silently. The protocol text is served by the authenticated backend and is not embedded in Brain.
 - **Learnings (MANDATORY on corrections):** When you discover a bug, pattern, or get corrected→`nexo_learning_add` IMMEDIATELY. Do NOT batch. Do NOT wait until end of session.
 
 ## Rules

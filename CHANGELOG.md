@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.13.7] - 2026-05-05
+
+### Added — authenticated official protocol cards client
+
+- **New `nexo_card_match`, `nexo_card_get`, and `nexo_card_catalog` tools.** Brain can now query the authenticated NEXO Desktop backend for official task protocols before non-trivial user-facing work. The protocol corpus is not embedded in the open-source package: Brain only ships the runtime client and reads the Desktop/shared auth token at execution time.
+- **Agent bootstraps now prefer official protocols when available.** Claude/Codex templates and server MCP instructions tell the agent to call `nexo_card_match(query=...)` before improvising on creation/analysis tasks, then follow any returned protocol silently.
+- **Open-source boundary locked by tests.** The new tests assert that Brain does not ship `data/protocol-cards` or the private protocol corpus, while the tool map declares the public client tools.
+
 ## [7.13.6] - 2026-05-05
 
 ### Fixed — Codex hook parity on native Windows

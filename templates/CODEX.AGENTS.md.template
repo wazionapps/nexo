@@ -25,13 +25,14 @@ Codex (and Claude Code) may list `mcp__nexo__*` tools as **deferred** at session
 - If discovery still cannot resolve a `nexo_*` tool, then (and only then) treat it as a real runtime gap and surface it as a blocker.
 - Diagnostic plane: `nexo_doctor plane='installation_live'` inspects client/install surfaces — consult it when tools appear missing on a fresh install.
 
-## Protocol (6 rules)
+## Protocol (7 rules)
 1. `nexo_startup` once per session, then keep the returned `SID`.
 2. `nexo_heartbeat` on every user message.
 3. `nexo_task_open` for any non-trivial work. For `edit` / `execute` / `delegate`, this is the default path. If the work is long multi-step or likely to cross messages/sessions, also open `nexo_workflow_open` and keep it updated. If task_open surfaces blocking conditioned-file learnings, review them and acknowledge guard before any write / delete step.
-4. Do not say `done`, `fixed`, or `sent` without evidence captured in `nexo_task_close`.
-5. If a correction revealed a reusable pattern, capture or supersede the learning immediately so contradictory rules do not remain active.
-6. On clear end-of-session intent, write the diary before replying.
+4. If `nexo_card_match` is available, call it before non-trivial user-facing creation/analysis work. If it returns an official protocol, follow it silently; if unavailable or no match, continue normally.
+5. Do not say `done`, `fixed`, or `sent` without evidence captured in `nexo_task_close`.
+6. If a correction revealed a reusable pattern, capture or supersede the learning immediately so contradictory rules do not remain active.
+7. On clear end-of-session intent, write the diary before replying.
 
 ## Response Pacing
 - After the first relevant tool or artifact result, answer immediately instead of silently chaining more investigation.

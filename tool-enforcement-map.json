@@ -315,6 +315,55 @@
       },
       "triggers_after": []
     },
+    "nexo_card_catalog": {
+      "description": "List visible official protocol cards from backend",
+      "category": "protocol_cards",
+      "source": "plugin:cards",
+      "requires": [],
+      "provides": [
+        "official_protocol_card_catalog"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_card_get": {
+      "description": "Fetch one official protocol card from backend",
+      "category": "protocol_cards",
+      "source": "plugin:cards",
+      "requires": [
+        "desktop_auth_token"
+      ],
+      "provides": [
+        "official_protocol_card"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_card_match": {
+      "description": "Match user request to an official protocol card from backend",
+      "category": "protocol_cards",
+      "source": "plugin:cards",
+      "requires": [
+        "desktop_auth_token"
+      ],
+      "provides": [
+        "official_protocol_card_match"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
     "nexo_change_commit": {
       "description": "Link change log entry to git commit",
       "category": "change_log",

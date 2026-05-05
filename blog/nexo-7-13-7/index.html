@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.13.7: authenticated official protocol cards</title>
+<meta name="description" content="NEXO Brain v7.13.7 adds authenticated protocol-card tools that fetch official task protocols from the NEXO Desktop backend at runtime without embedding the private corpus in the open-source package.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-13-7/">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.13.7: authenticated official protocol cards","datePublished":"2026-05-05","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head><body><main><article style="max-width:760px;margin:80px auto;padding:0 24px;line-height:1.75;">
+<h1>NEXO 7.13.7 &mdash; authenticated official protocol cards</h1>
+<p><em>Published 2026-05-05. Patch release over v7.13.6 &mdash; adds the Brain-side authenticated client for official protocol cards while keeping the protocol corpus private on the backend.</em></p>
+
+<h2>Agents can now ask for the right protocol at runtime</h2>
+<p>Brain exposes three new authenticated tools: <code>nexo_card_catalog</code>, <code>nexo_card_get</code>, and <code>nexo_card_match</code>. Agent templates now instruct supported clients to call the matcher before non-trivial user-facing work when the tool is available.</p>
+
+<h2>The catalog is not shipped in Brain</h2>
+<p>The open-source package contains only the remote client, tool registration, and guidance. Official protocol content stays on the NEXO Desktop backend and is fetched only with a valid authenticated session. That keeps the runtime useful for Desktop coordination without publishing the private protocol corpus in npm or GitHub.</p>
+
+<h2>Validation</h2>
+<pre><code>python3 -m py_compile src/plugins/cards.py
+python3 -m json.tool tool-enforcement-map.json
+pytest -q tests/test_cards_plugin.py tests/test_r11_plugin_inventory.py
+
+10 passed
+</code></pre>
+
+<p><a href="/changelog/#v7137">Full changelog entry &rarr;</a> &middot; <a href="https://github.com/wazionapps/nexo/blob/main/src/plugins/cards.py">src/plugins/cards.py</a> &middot; <a href="https://github.com/wazionapps/nexo/blob/main/tests/test_cards_plugin.py">tests/test_cards_plugin.py</a></p>
+</article></main></body></html>
