@@ -1,13 +1,13 @@
 <!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NEXO 7.13.3: unified doctor, protocol, headless, Guardian, and Codex parity release</title>
-<meta name="description" content="NEXO Brain v7.13.3 ships the unified release for doctor repair, protocol compliance, bounded headless automation, Guardian false-positive fixes, and Codex CLI parity.">
+<title>NEXO 7.13.3: unified doctor, protocol, headless, Guardian, and Codex CLI config gates</title>
+<meta name="description" content="NEXO Brain v7.13.3 ships the unified release for doctor repair, protocol compliance, bounded headless automation, Guardian false-positive fixes, and Codex CLI config/default gates.">
 <meta name="robots" content="index, follow">
 <link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-13-3/">
 <link rel="stylesheet" href="/assets/style.css">
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.13.3: unified doctor, protocol, headless, Guardian, and Codex parity release","datePublished":"2026-05-05","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.13.3: unified doctor, protocol, headless, Guardian, and Codex CLI config gates","datePublished":"2026-05-05","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
 </head><body><main><article style="max-width:760px;margin:80px auto;padding:0 24px;line-height:1.75;">
-<h1>NEXO 7.13.3 &mdash; unified doctor, protocol, headless, Guardian, and Codex parity release</h1>
+<h1>NEXO 7.13.3 &mdash; unified doctor, protocol, headless, Guardian, and Codex CLI config gates</h1>
 <p><em>Published 2026-05-05. Unified release over v7.12.15 &mdash; collapses the planned 7.13.0, 7.13.1, 7.13.2, and 7.13.3 work into one shipped Brain line for the coordinated Desktop bundle.</em></p>
 
 <h2>Doctor repairs instead of only warning</h2>
@@ -17,12 +17,12 @@
 <p>After activating a versioned runtime snapshot, <code>nexo update</code> prunes snapshots older than the active version plus the newest two. This keeps packaged Desktop refreshes from accumulating stale runtime trees while preserving rollback depth.</p>
 
 <h2>Protocol compliance self-heals common gaps</h2>
-<p>Stale sessions now close still-open protocol tasks as partial, PreToolUse auto-opens a task when a write/delete lacks one, and PostToolUse records best-effort change-log visibility for write tools. R14 correction learning and task-close auto-learning remain active so reusable corrections do not disappear after a fixed bug.</p>
+<p>Stale sessions now close still-open protocol tasks as partial, PreToolUse auto-opens a task when a write/delete lacks one, and PostToolUse records best-effort change-log visibility for write tools. R14 correction detection remains active, and task-close can capture reusable learnings when a correction is explicitly declared.</p>
 
 <h2>Headless and Codex stop stalling silently</h2>
 <p>Deep Sleep extract/synthesize, followup-runner, and related automation use the shared three-hour timeout instead of the older six-hour hang path, while email-monitor declares a bounded 30-minute runtime timeout. Managed Codex config defaults to non-interactive approval/sandbox settings only when the user has not explicitly configured them.</p>
 
-<h2>Guardian and Codex parity are release-gated</h2>
+<h2>Guardian and Codex CLI config/default checks are release-gated</h2>
 <p>Guardian filters more G4 false path tokens, downgrades active-session strict write debt when a fresh heartbeat exists, keeps the SSH/Cortex retry path scoped, and avoids false LaunchAgent repair confidence. Codex bootstrap/config, interactive launch flags, headless telemetry, and doctor/self-audit discipline checks are covered by tests and release readiness.</p>
 
 <h2>Validation</h2>
