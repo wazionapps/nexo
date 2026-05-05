@@ -917,23 +917,43 @@ def _resolve_hook_source_dir(runtime_root: Path) -> Path:
     return direct
 
 
-def _render_hook_command(spec: dict, *, nexo_home: Path, runtime_root: Path, hooks_dir: Path) -> str:
+def _cmd_env_assignment(name: str, value: str | os.PathLike[str]) -> str:
+    # `set "VAR=value"` is the safe cmd.exe form; it preserves spaces and
+    # avoids trailing quote pollution.
+    safe_value = str(value).replace('"', r'\"')
+    return f'set "{name}={safe_value}"'
+
+
+def _cmd_args(*args: str | os.PathLike[str]) -> str:
+    return subprocess.list2cmdline([str(arg) for arg in args])
+
+
+def _render_hook_command(
+    spec: dict,
+    *,
+    nexo_home: Path,
+    runtime_root: Path,
+    hooks_dir: Path,
+    windows_shell: bool | None = None,
+) -> str:
     command_template = spec.get("command_template")
     if callable(command_template):
         return command_template(nexo_home, runtime_root, hooks_dir)
     handler_name = (spec.get("handler") or spec.get("script") or "").strip()
     script_path = hooks_dir / handler_name
-    if spec.get("interpreter") == "python" or handler_name.endswith(".py"):
-        return (
-            f"NEXO_HOME={shlex.quote(str(nexo_home))} "
-            f"NEXO_CODE={shlex.quote(str(runtime_root))} "
-            f"{shlex.quote(_resolve_python(nexo_home))} {shlex.quote(str(script_path))}"
-        )
-    return (
-        f"NEXO_HOME={shlex.quote(str(nexo_home))} "
-        f"NEXO_CODE={shlex.quote(str(runtime_root))} "
-        f"bash {shlex.quote(str(script_path))}"
+    use_windows_shell = (os.name == "nt") if windows_shell is None else bool(windows_shell)
+    env_prefix = (
+        f"{_cmd_env_assignment('NEXO_HOME', nexo_home)} && {_cmd_env_assignment('NEXO_CODE', runtime_root)} && "
+        if use_windows_shell
+        else f"NEXO_HOME={shlex.quote(str(nexo_home))} NEXO_CODE={shlex.quote(str(runtime_root))} "
     )
+    if spec.get("interpreter") == "python" or handler_name.endswith(".py"):
+        if use_windows_shell:
+            return f"{env_prefix}{_cmd_args(_resolve_python(nexo_home), script_path)}"
+        return env_prefix + f"{shlex.quote(_resolve_python(nexo_home))} {shlex.quote(str(script_path))}"
+    if use_windows_shell:
+        return f"{env_prefix}{_cmd_args('bash', script_path)}"
+    return env_prefix + f"bash {shlex.quote(str(script_path))}"
 
 
 def _hook_identity(command: str) -> str:

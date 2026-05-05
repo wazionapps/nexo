@@ -18,7 +18,7 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.13.5` is the current packaged-runtime line. Corrective release — D.5 correction-learning enforcement is durable, doctor `--fix` explicitly repairs orphan personal schedule metadata, G5 now warns on protected `com.nexo.*.plist` unload/remove flows with the three-layer recovery path, and Codex now gets a managed `PreToolUse` guard for shell/exec_command calls plus `installation_live.codex_protocol_compliance` drift checks. Result: coordinated Desktop bundles can ship the fixed Brain without changing the Mac/Windows installation contract.
+Version `7.13.6` is the current packaged-runtime line. Patch release over v7.13.5 — Codex hook sync now renders the managed `PreToolUse` shell/exec_command guard with native Windows `cmd.exe` syntax while preserving the existing POSIX command on macOS/Linux. Result: coordinated Desktop bundles can ship the fixed Brain without changing the Mac/Windows installation contract.
 
 Previously in `7.13.3`: unified release — doctor now repairs orphan personal script metadata and ignores historical `versions/**` snapshots, `nexo update` prunes runtime snapshots older than two back, protocol compliance self-heals missing task-open/change-log/stale-session gaps, headless automation uses bounded timeouts, Guardian false positives are tightened, and Codex CLI config/default checks are release-gated. Result: coordinated Desktop bundles can ship the new Brain without changing the Mac/Windows installation contract.
 

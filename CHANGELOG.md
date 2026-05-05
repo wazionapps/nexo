@@ -1,5 +1,11 @@
 # Changelog
 
+## [7.13.6] - 2026-05-05
+
+### Fixed — Codex hook parity on native Windows
+
+- **Codex PreToolUse hooks now render with native `cmd.exe` syntax on Windows.** Client sync keeps the existing POSIX command on macOS/Linux, but Windows hook commands now use `set "NEXO_HOME=..." && set "NEXO_CODE=..." && "<python>" "<pre_tool_use.py>"`, so Codex CLI hook execution works when the client uses `cmd.exe /C` instead of bash. This closes the last implementation gap in the live Codex shell/exec_command enforcement path without changing Desktop installation.
+
 ## [7.13.5] - 2026-05-05
 
 ### Fixed — correction-learning enforcement, LaunchAgent G5, and Codex live compliance

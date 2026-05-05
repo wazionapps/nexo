@@ -489,6 +489,28 @@ def test_sync_codex_uses_codex_cli_when_available(tmp_path, monkeypatch):
     assert result["hooks"]["managed_hook_count"] == 1
 
 
+def test_codex_hook_command_supports_native_windows_cmd(tmp_path):
+    import client_sync
+
+    runtime = _make_runtime(tmp_path)
+    command = client_sync._render_hook_command(
+        {
+            "event": "PreToolUse",
+            "handler": "pre_tool_use.py",
+            "interpreter": "python",
+        },
+        nexo_home=runtime,
+        runtime_root=runtime,
+        hooks_dir=runtime / "hooks",
+        windows_shell=True,
+    )
+
+    assert command.startswith(f'set "NEXO_HOME={runtime}" && set "NEXO_CODE={runtime}" && ')
+    assert " NEXO_HOME=" not in command
+    assert "pre_tool_use.py" in command
+    assert str(runtime / ".venv" / "bin" / "python3") in command
+
+
 def test_sync_codex_preserves_explicit_approval_and_sandbox(tmp_path):
     import client_sync
 
