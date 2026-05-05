@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.13.6: native Windows Codex hook parity</title>
+<meta name="description" content="NEXO Brain v7.13.6 renders managed Codex PreToolUse shell hooks with native Windows cmd.exe syntax while preserving the macOS/Linux POSIX path.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-13-6/">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.13.6: native Windows Codex hook parity","datePublished":"2026-05-05","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head><body><main><article style="max-width:760px;margin:80px auto;padding:0 24px;line-height:1.75;">
+<h1>NEXO 7.13.6 &mdash; native Windows Codex hook parity</h1>
+<p><em>Published 2026-05-05. Patch release over v7.13.5 &mdash; closes the native Windows hook command gap without changing the Desktop installation contract.</em></p>
+
+<h2>Codex hooks now use the right shell syntax per platform</h2>
+<p>Client sync still installs the same managed <code>PreToolUse</code> guard for <code>Bash</code>, <code>shell_command</code>, and <code>exec_command</code>. On Windows, the generated command now uses native <code>cmd.exe</code> environment assignment syntax such as <code>set "NEXO_HOME=..." &amp;&amp; set "NEXO_CODE=..." &amp;&amp; "python" "pre_tool_use.py"</code> instead of the POSIX-only <code>NEXO_HOME=... python ...</code> prefix.</p>
+
+<h2>macOS and Linux keep the existing path</h2>
+<p>The POSIX command renderer remains unchanged for macOS and Linux, so existing Claude Code, Codex, and terminal installs keep the same hook behavior. The patch only changes how Codex hook commands are rendered for native Windows shells.</p>
+
+<h2>Validation</h2>
+<pre><code>python3 -m compileall -q src tests
+python3 -m pytest -q tests/test_client_sync.py tests/test_hook_guardrails.py
+
+73 passed
+</code></pre>
+
+<p><a href="/changelog/#v7136">Full changelog entry &rarr;</a> &middot; <a href="https://github.com/wazionapps/nexo/blob/main/src/client_sync.py">src/client_sync.py</a> &middot; <a href="https://github.com/wazionapps/nexo/blob/main/tests/test_client_sync.py">tests/test_client_sync.py</a></p>
+</article></main></body></html>
