@@ -18,7 +18,7 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.13.3` is the current packaged-runtime line. Unified release — doctor now repairs orphan personal script metadata and ignores historical `versions/**` snapshots, `nexo update` prunes runtime snapshots older than two back, protocol compliance self-heals missing task-open/change-log/stale-session gaps, headless automation uses bounded timeouts, Guardian false positives are tightened, and Codex CLI parity is release-gated. Result: coordinated Desktop bundles can ship the new Brain without changing the Mac/Windows installation contract.
+Version `7.13.3` is the current packaged-runtime line. Unified release — doctor now repairs orphan personal script metadata and ignores historical `versions/**` snapshots, `nexo update` prunes runtime snapshots older than two back, protocol compliance self-heals missing task-open/change-log/stale-session gaps, headless automation uses bounded timeouts, Guardian false positives are tightened, and Codex CLI config/default checks are release-gated. Result: coordinated Desktop bundles can ship the new Brain without changing the Mac/Windows installation contract.
 
 Previously in `7.12.15`: patch release — same-version packaged updates now still run the safe maintenance path, Deep Sleep clears process locks on shutdown, sent replies are recorded in durable continuity, and personal script schedule-marker drift is surfaced during reconcile. Result: coordinated Desktop bundles can refresh Brain safely without breaking install/update parity on macOS, Windows via WSL, or Linux.
 
