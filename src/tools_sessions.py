@@ -1073,6 +1073,13 @@ def handle_smart_startup_query() -> str:
     from db import get_db
     conn = get_db()
     query_parts = []
+    sent_email_block = ""
+    try:
+        from email_sent_events import format_recent_sent_email_block
+
+        sent_email_block = format_recent_sent_email_block(hours=24, limit=8)
+    except Exception:
+        sent_email_block = ""
 
     # 1. Pending followups (what NEXO needs to do)
     followups = conn.execute(
@@ -1099,6 +1106,8 @@ def handle_smart_startup_query() -> str:
         pass
 
     if not query_parts:
+        if sent_email_block:
+            return sent_email_block
         return "No pending context to pre-load."
 
     # Search per-part to avoid diffuse centroid that matches everything
@@ -1123,6 +1132,8 @@ def handle_smart_startup_query() -> str:
         results = sorted(all_results, key=lambda x: x["score"], reverse=True)[:10]
         composite_query = " | ".join(query_parts[:6])
         if not results:
+            if sent_email_block:
+                return "Smart startup query: no relevant memories found.\n\n" + sent_email_block
             return "Smart startup query: no relevant memories found."
 
         lines = [f"SMART STARTUP — {len(results)} memories pre-loaded from composite query:"]
@@ -1137,6 +1148,10 @@ def handle_smart_startup_query() -> str:
                 lines.append(format_pre_action_context_bundle(hot_bundle, compact=True))
         except Exception:
             pass
+
+        if sent_email_block:
+            lines.append("")
+            lines.append(sent_email_block)
 
         # Session tone from Deep Sleep (emotional intelligence layer)
         tone = _load_session_tone()

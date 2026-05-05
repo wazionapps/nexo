@@ -171,7 +171,7 @@ def migrate_claude_md(path, dry_run=False):
         return True
 
     # Backup
-    backup = path + f".backup-{datetime.now().strftime(\"%Y%m%d-%H%M%S\")}"
+    backup = path + f".backup-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
     shutil.copy2(path, backup)
     print(f"  Backup: {backup}")
 

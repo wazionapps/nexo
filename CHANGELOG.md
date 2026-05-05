@@ -1,5 +1,14 @@
 # Changelog
 
+## [7.12.15] - 2026-05-05
+
+### Fixed — release maintenance, Deep Sleep cleanup, and sent-mail continuity
+
+- **Packaged `nexo update` no longer skips same-version maintenance.** When Desktop ships a refreshed Brain bundle with the same semver, the update path now still runs idempotent migrations, layout/import verification, cron sync, hook cleanup, runtime dependency checks, and client sync. It deliberately skips only the unsafe/noisy parts that require a true version change: pip dependency reinstall, LaunchAgent reload, snapshot activation, and restart marker writes. Source installs also run maintenance when `git pull` is already up to date.
+- **Deep Sleep process locks are cleaned on exit and interruption.** `nexo-sleep.py` now registers cleanup through normal exit, `SIGINT`, `SIGTERM`, and `atexit`, so `sleep-process.lock` is not left stale after an interrupted overnight run.
+- **Sent email continuity is durable.** Successful `nexo-send-reply.py` sends now record a `sent_email_events` row with message id, recipients, subject, source, and metadata; duplicate checks, smart startup, and morning briefing can see "we already sent this" even when the legacy maildir copy is incomplete.
+- **Personal script schedule drift is visible.** Script sync/reconcile now reports managed-marker warnings when a declared schedule is missing the expected LaunchAgent managed marker or an existing managed marker does not match the declaration.
+
 ## [7.12.14] - 2026-05-04
 
 ### Fixed — paridad followup runner Mac/WSL/Linux

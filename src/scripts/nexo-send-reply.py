@@ -46,6 +46,7 @@ if str(_repo_src) not in sys.path:
 
 from paths import nexo_email_dir
 from runtime_home import export_resolved_nexo_home
+from email_sent_events import record_sent_email
 
 NEXO_HOME = export_resolved_nexo_home()
 EMAIL_BASE_DIR = nexo_email_dir()
@@ -501,11 +502,12 @@ def main(argv=None):
             args.in_reply_to, args.references,
             attachments=args.attach
         )
+        sent_copy_saved = False
         try:
-            save_to_sent(config, raw_message)
+            sent_copy_saved = bool(save_to_sent(config, raw_message))
         except Exception as sent_exc:
             print(f"WARN: sent copy not saved to IMAP Sent: {sent_exc}", file=sys.stderr)
-        record_reply_lifecycle(
+        lifecycle_event = record_reply_lifecycle(
             args.in_reply_to,
             args.references,
             reply_body,
@@ -514,6 +516,24 @@ def main(argv=None):
             cc=args.cc,
             message_id=msg_id,
         )
+        try:
+            record_sent_email(
+                message_id=msg_id,
+                sender=str(config.get("email") or ""),
+                to_addrs=args.to,
+                cc_addrs=args.cc,
+                subject=args.subject,
+                in_reply_to=args.in_reply_to,
+                references_header=args.references,
+                source="nexo-send-reply",
+                meta={
+                    "sent_copy_saved": sent_copy_saved,
+                    "lifecycle_event": lifecycle_event,
+                    "account_label": (args.account_label or "").strip(),
+                },
+            )
+        except Exception as sent_event_exc:
+            print(f"WARN: sent email continuity tracking failed: {sent_event_exc}", file=sys.stderr)
         print(f"OK:{msg_id}")
     except Exception as e:
         print(f"FAIL:{e}", file=sys.stderr)

@@ -55,6 +55,7 @@ from automation_controls import (
 )
 from client_preferences import resolve_automation_backend, resolve_client_runtime_profile
 from core_prompts import render_core_prompt
+from email_sent_events import format_recent_sent_email_block, recent_sent_emails
 import db as nexo_db
 from paths import data_dir, logs_dir, operations_dir
 from runtime_home import export_resolved_nexo_home
@@ -188,6 +189,23 @@ def _serialize_diaries(*, limit: int) -> list[dict]:
     return result
 
 
+def _serialize_recent_sent_emails(*, limit: int = 8) -> list[dict]:
+    result: list[dict] = []
+    try:
+        rows = recent_sent_emails(hours=24, limit=limit)
+    except Exception:
+        return result
+    for row in rows:
+        result.append({
+            "sent_at": str(row.get("sent_at") or ""),
+            "to": _clean_text(row.get("to_addrs"), limit=180),
+            "subject": _clean_text(row.get("subject"), limit=220),
+            "source": str(row.get("source") or ""),
+            "message_id": str(row.get("message_id") or ""),
+        })
+    return result
+
+
 def collect_context(profile: dict) -> dict:
     nexo_db.init_db()
     due_followups = _serialize_followups("due", limit=MAX_DUE_ITEMS)
@@ -204,6 +222,7 @@ def collect_context(profile: dict) -> dict:
         for row in _serialize_reminders("active", limit=MAX_ACTIVE_ITEMS + MAX_DUE_ITEMS)
         if row["id"] not in due_reminder_ids
     ][:MAX_ACTIVE_ITEMS]
+    recent_sent = _serialize_recent_sent_emails()
     return {
         "generated_at": datetime.now().astimezone().isoformat(),
         "today": date.today().isoformat(),
@@ -220,13 +239,25 @@ def collect_context(profile: dict) -> dict:
         "due_followups": due_followups,
         "active_followups": active_followups,
         "recent_diaries": _serialize_diaries(limit=MAX_DIARY_ITEMS),
+        "recent_sent_emails_24h": recent_sent,
         "counts": {
             "due_reminders": len(due_reminders),
             "active_reminders": len(active_reminders),
             "due_followups": len(due_followups),
             "active_followups": len(active_followups),
+            "recent_sent_emails_24h": len(recent_sent),
         },
     }
+
+
+def append_recent_sent_email_block(body: str) -> str:
+    try:
+        block = format_recent_sent_email_block(hours=24, limit=8)
+    except Exception:
+        block = ""
+    if not block or "EMAILS ENVIADOS ULTIMAS 24H" in body:
+        return body
+    return body.rstrip() + "\n\n" + block + "\n"
 
 
 def build_prompt(context: dict, *, extra_instructions_block: str = "") -> str:
@@ -390,6 +421,7 @@ def main(argv: list[str] | None = None) -> int:
             extra_instructions_block=format_operator_extra_instructions_block("morning-agent"),
         )
         subject, body = generate_briefing(prompt)
+        body = append_recent_sent_email_block(body)
         write_latest_briefing(recipient=recipient or "[dry-run]", subject=subject, body=body)
 
         if args.dry_run:

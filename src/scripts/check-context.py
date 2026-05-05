@@ -21,6 +21,7 @@ if str(NEXO_CODE) not in sys.path:
     sys.path.insert(0, str(NEXO_CODE))
 
 import paths
+from email_sent_events import find_sent_email
 from agent_runner import AutomationBackendUnavailableError, run_automation_prompt
 from core_prompts import render_core_prompt
 try:
@@ -38,6 +39,9 @@ class ContextChecker:
 
     def check_email_sent(self, to_addr, subject, since_hours=72):
         """Check if email was already sent to address with subject."""
+        if find_sent_email(to_addr=to_addr, subject=subject, since_hours=since_hours):
+            return True
+
         sent_path = Path.home() / "mail" / ".nexo-sent" / ".Sent"
         if not sent_path.exists():
             return False

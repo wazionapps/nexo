@@ -18,7 +18,7 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.12.14` is the current packaged-runtime line. Patch release — dashboard followup execution now respects the selected terminal client across macOS, Windows via WSL, and Linux instead of returning a macOS-only dead end. Result: operators can launch followups from the dashboard on every supported Brain host without hardcoding Claude-only or Mac-only assumptions.
+Version `7.12.15` is the current packaged-runtime line. Patch release — same-version packaged updates now still run the safe maintenance path, Deep Sleep clears process locks on shutdown, sent replies are recorded in durable continuity, and personal script schedule-marker drift is surfaced during reconcile. Result: coordinated Desktop bundles can refresh Brain safely without breaking install/update parity on macOS, Windows via WSL, or Linux.
 
 Previously in `7.12.0`: minor release — adds `nexo support-snapshot` for generic local runtime diagnostics and completes the silent-reminder hardening on the live Protocol Enforcer path. The support collector emits one JSON bundle with version/platform metadata, runtime path presence, health-check output, and recent event/operation tails, while map-driven reminders (`nexo_startup`, `nexo_smart_startup`, `nexo_heartbeat`, `nexo_reminders`, `nexo_session_diary_*`, `nexo_stop`, `nexo_task_close`, compaction checkpoint prompts) now say explicitly that silence owns the entire reminder turn.
 

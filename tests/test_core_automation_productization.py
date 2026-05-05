@@ -118,6 +118,42 @@ def test_send_reply_regex_priority_still_wins_over_semantic_fallback(tmp_path, m
     assert module.classify_reply_event("Hecho, ya está.") == "resolution"
 
 
+def test_send_reply_records_sent_email_continuity_event(tmp_path, monkeypatch, capsys):
+    home = tmp_path / "nexo-home"
+    (home / "nexo-email").mkdir(parents=True)
+    monkeypatch.setenv("NEXO_HOME", str(home))
+    module = _load_script_module("nexo_send_reply_sent_event_test", "nexo-send-reply.py")
+
+    body_file = tmp_path / "body.txt"
+    body_file.write_text("Reply body", encoding="utf-8")
+    captured = {}
+
+    monkeypatch.setattr(module, "load_config", lambda label=None: {
+        "email": "agent@example.test",
+        "smtp_host": "smtp.example.test",
+        "smtp_port": 465,
+        "password": "secret",
+    })
+    monkeypatch.setattr(module, "send_email", lambda *args, **kwargs: ("<msg-1@example.test>", b"raw"))
+    monkeypatch.setattr(module, "save_to_sent", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(module, "record_reply_lifecycle", lambda *args, **kwargs: "replied")
+    monkeypatch.setattr(module, "record_sent_email", lambda **kwargs: captured.update(kwargs))
+
+    module.main([
+        "--to", "Client <client@example.test>",
+        "--subject", "Re: Test",
+        "--body-file", str(body_file),
+        "--in-reply-to", "<parent@example.test>",
+        "--references", "<root@example.test> <parent@example.test>",
+    ])
+
+    assert captured["message_id"] == "<msg-1@example.test>"
+    assert captured["to_addrs"] == "Client <client@example.test>"
+    assert captured["subject"] == "Re: Test"
+    assert captured["meta"]["sent_copy_saved"] is True
+    assert "OK:<msg-1@example.test>" in capsys.readouterr().out
+
+
 def test_email_monitor_trusted_domains_and_runtime_path_are_generic(tmp_path, monkeypatch):
     home = tmp_path / "nexo-home"
     (home / "nexo-email").mkdir(parents=True)

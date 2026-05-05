@@ -29,6 +29,7 @@ from script_registry import (
     load_core_script_names,
     create_script,
     ensure_personal_schedules,
+    reconcile_personal_scripts,
     rename_legacy_personal_script_filenames,
     sync_personal_scripts,
     unschedule_personal_script,
@@ -1332,3 +1333,43 @@ class TestRegistrySync:
         assert record["runtime_state"] == "stale"
         assert "not loaded" in record["runtime_summary"]
         assert audit["summary"]["runtime_stale"] == 1
+
+    def test_reconcile_personal_scripts_warns_about_inconsistent_schedule_markers(self, scripts_dir, monkeypatch):
+        import script_registry
+
+        script = scripts_dir / "monitor.py"
+        script.write_text(
+            "#!/usr/bin/env python3\n"
+            "# nexo: name=mail-poller\n"
+            "# nexo: runtime=python\n"
+            "# nexo: cron_id=mail-poller\n"
+            "# nexo: interval_seconds=300\n"
+            "# nexo: schedule_required=true\n"
+            "print('ok')\n"
+        )
+
+        monkeypatch.setattr(script_registry.platform, "system", lambda: "Darwin")
+        monkeypatch.setattr(
+            script_registry,
+            "_discover_personal_schedule_records",
+            lambda: [{
+                "cron_id": "mail-poller",
+                "script_path": str(script),
+                "schedule_type": "interval",
+                "schedule_value": "300",
+                "schedule_label": "every 300s",
+                "launchd_label": "com.nexo.mail-poller",
+                "plist_path": "/tmp/com.nexo.mail-poller.plist",
+                "enabled": True,
+                "description": "",
+                "managed_marker": False,
+                "script_exists": True,
+                "script_within_scripts_dir": True,
+                "run_at_load": False,
+            }],
+        )
+
+        result = reconcile_personal_scripts(dry_run=True)
+
+        assert result["marker_warnings"][0]["cron_id"] == "mail-poller"
+        assert "without managed marker" in result["marker_warnings"][0]["reason"]

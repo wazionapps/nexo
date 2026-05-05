@@ -1424,7 +1424,36 @@ def sync_personal_scripts(prune_missing: bool = True) -> dict:
         })
     result["schedule_audit"] = schedule_audit
     result["missing_declared_schedules"] = missing_declared
+    result["marker_warnings"] = _schedule_marker_warnings(schedule_audit)
     return result
+
+
+def _schedule_marker_warnings(schedule_audit: dict) -> list[dict]:
+    """Report LaunchAgent marker drift without silently blessing it.
+
+    Managed personal schedules must be both declared in inline metadata and
+    carry the managed marker written by the official schedule flow.
+    """
+    warnings: list[dict] = []
+    for record in (schedule_audit or {}).get("schedules", []) or []:
+        marker = bool(record.get("managed_marker"))
+        declared = bool(record.get("schedule_declared"))
+        matches = bool(record.get("schedule_matches_declared"))
+        if marker and not declared:
+            reason = "managed marker present but no valid declared schedule"
+        elif marker and declared and not matches:
+            reason = "managed marker present but schedule drifts from declaration"
+        elif not marker and declared:
+            reason = "declared schedule discovered without managed marker"
+        else:
+            continue
+        warnings.append({
+            "cron_id": str(record.get("cron_id") or ""),
+            "script_path": str(record.get("script_path") or ""),
+            "plist_path": str(record.get("plist_path") or ""),
+            "reason": reason,
+        })
+    return warnings
 
 
 def _schedule_matches(existing: dict, declared: dict) -> bool:
@@ -1583,6 +1612,7 @@ def reconcile_personal_scripts(*, dry_run: bool = False) -> dict:
         "dry_run": dry_run,
         "renamed_legacy_filenames": renamed_result,
         "sync": sync_result,
+        "marker_warnings": sync_result.get("marker_warnings", []),
         "ensure_schedules": ensure_result,
         "classification": ensure_result.get("classification", sync_result.get("classification", {})),
     }

@@ -19,10 +19,12 @@ Stage B — Dreaming (automation backend):
 """
 
 import fcntl
+import atexit
 import json
 import os
 import re
 import shutil
+import signal
 import sqlite3
 import subprocess
 import sys
@@ -73,6 +75,8 @@ PROCESS_LOCK = COORD_DIR / "sleep-process.lock"
 TODAY = date.today()
 NOW = datetime.now()
 TIMESTAMP = NOW.strftime("%Y-%m-%d %H:%M")
+_PROCESS_LOCK_FD = None
+_PROCESS_LOCK_CLEANED = False
 
 
 # ─── Run-once & resume logic (unchanged from v1) ──────────────────────────────
@@ -126,6 +130,42 @@ def set_lock(phase: str):
 def mark_complete():
     LAST_RUN_FILE.write_text(str(TODAY))
     LOCK_FILE.unlink(missing_ok=True)
+
+
+def _cleanup_process_lock():
+    global _PROCESS_LOCK_FD, _PROCESS_LOCK_CLEANED
+
+    if _PROCESS_LOCK_CLEANED:
+        return
+    _PROCESS_LOCK_CLEANED = True
+    try:
+        if _PROCESS_LOCK_FD is not None:
+            fcntl.flock(_PROCESS_LOCK_FD, fcntl.LOCK_UN)
+            _PROCESS_LOCK_FD.close()
+    except Exception:
+        pass
+    finally:
+        _PROCESS_LOCK_FD = None
+        try:
+            PROCESS_LOCK.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+
+def _handle_shutdown_signal(signum, _frame):
+    log(f"Received shutdown signal {signum}; cleaning sleep process lock.")
+    _cleanup_process_lock()
+    raise SystemExit(128 + signum)
+
+
+def _register_process_lock_cleanup(lock_fd):
+    global _PROCESS_LOCK_FD, _PROCESS_LOCK_CLEANED
+
+    _PROCESS_LOCK_FD = lock_fd
+    _PROCESS_LOCK_CLEANED = False
+    atexit.register(_cleanup_process_lock)
+    signal.signal(signal.SIGINT, _handle_shutdown_signal)
+    signal.signal(signal.SIGTERM, _handle_shutdown_signal)
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -518,6 +558,7 @@ def main():
         fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         lock_fd.write(str(os.getpid()))
         lock_fd.flush()
+        _register_process_lock_cleanup(lock_fd)
     except (IOError, OSError):
         log("Another sleep instance running. Exiting.")
         sys.exit(0)
@@ -587,12 +628,7 @@ def main():
                 pass
 
     finally:
-        try:
-            fcntl.flock(lock_fd, fcntl.LOCK_UN)
-            lock_fd.close()
-            PROCESS_LOCK.unlink(missing_ok=True)
-        except Exception:
-            pass
+        _cleanup_process_lock()
 
 
 if __name__ == "__main__":

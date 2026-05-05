@@ -20,6 +20,14 @@ def test_deep_sleep_script_uses_runtime_logs_dir() -> None:
     assert 'LOG_DIR="$NEXO_HOME/runtime/logs"' in text
 
 
+def test_sleep_process_lock_is_cleaned_on_exit_and_shutdown_signals() -> None:
+    text = _read("src/scripts/nexo-sleep.py")
+    assert "atexit.register(_cleanup_process_lock)" in text
+    assert "signal.signal(signal.SIGINT, _handle_shutdown_signal)" in text
+    assert "signal.signal(signal.SIGTERM, _handle_shutdown_signal)" in text
+    assert "PROCESS_LOCK.unlink(missing_ok=True)" in text
+
+
 def test_cron_wrapper_prefers_personal_config_for_keychain_pass() -> None:
     text = _read("src/scripts/nexo-cron-wrapper.sh")
     assert 'KEYCHAIN_PASS_FILE="$NEXO_HOME/personal/config/.keychain-pass"' in text

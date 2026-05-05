@@ -424,6 +424,45 @@ def test_handle_packaged_update_finalizes_layout_before_import_verification(monk
     assert call_order[:2] == ["finalize", "verify"]
 
 
+def test_handle_packaged_update_runs_maintenance_when_version_unchanged(monkeypatch):
+    from plugins import update
+
+    versions = iter(["7.12.14", "7.12.14"])
+    calls = []
+
+    monkeypatch.setattr(update, "_read_version", lambda: next(versions))
+    monkeypatch.setattr(update, "_backup_databases", lambda: ("backup-dir", None))
+    monkeypatch.setattr(update, "_backup_code_tree", lambda: ("code-backup", None))
+    monkeypatch.setattr(update, "_reinstall_pip_deps", lambda: calls.append("pip"))
+    monkeypatch.setattr(update, "_run_migrations", lambda: calls.append("migrations") or None)
+    monkeypatch.setattr(update, "_verify_import", lambda: calls.append("verify") or None)
+    monkeypatch.setattr(update, "_finalize_packaged_runtime_layout", lambda: calls.append("layout") or (True, None))
+    monkeypatch.setattr(update, "_sync_packaged_crons", lambda progress_fn=None: calls.append("crons") or (True, None))
+    monkeypatch.setattr(update, "_sync_hooks_to_home", lambda: calls.append("hooks"))
+    monkeypatch.setattr(update, "_cleanup_retired_runtime_files", lambda: [])
+    monkeypatch.setattr(update, "_update_runtime_dependencies", lambda progress_fn=None: [])
+    monkeypatch.setattr(update, "_sync_packaged_clients", lambda: calls.append("clients") or (True, None))
+    monkeypatch.setattr(update, "activate_versioned_runtime_snapshot", lambda source_root, version: (_ for _ in ()).throw(AssertionError("no versioned runtime for unchanged version")))
+    monkeypatch.setattr(update, "write_restart_required_marker", lambda **_kw: (_ for _ in ()).throw(AssertionError("no restart marker for unchanged version")))
+
+    def fake_run(args, **kwargs):
+        if args == ["npm", "update", "-g", "nexo-brain"]:
+            return mock.Mock(returncode=0, stdout="", stderr="")
+        raise AssertionError(f"unexpected subprocess call: {args}")
+
+    monkeypatch.setattr(update.subprocess, "run", fake_run)
+
+    result = update._handle_packaged_update(include_clis=False)
+
+    assert "UPDATE SUCCESSFUL (packaged install)" in result
+    assert "Version: 7.12.14 (unchanged; idempotent maintenance)" in result
+    assert "maintenance completed without an MCP restart" in result
+    assert "migrations" in calls
+    assert "layout" in calls
+    assert "verify" in calls
+    assert "pip" not in calls
+
+
 def _common_packaged_update_stubs(monkeypatch, update, versions):
     monkeypatch.setattr(update, "_read_version", lambda: next(versions))
     monkeypatch.setattr(update, "_backup_databases", lambda: ("backup-dir", None))

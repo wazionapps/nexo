@@ -1137,19 +1137,23 @@ def _handle_packaged_update(progress_fn=None, *, include_clis: bool = True) -> s
         return msg
 
     new_version = _read_version()
-    if old_version == new_version:
-        return f"Already up to date (v{old_version}). No changes."
+    version_changed = old_version != new_version
+    if not version_changed:
+        _emit_progress(progress_fn, "Package version unchanged; running idempotent maintenance...")
 
     # 4. Post-npm verification steps
     errors = []
 
     # Reinstall pip deps for new version
-    _emit_progress(progress_fn, "Reconciling Python dependencies...")
-    pip_err = _reinstall_pip_deps()
-    if pip_err:
-        errors.append(f"pip deps: {pip_err}")
+    if version_changed:
+        _emit_progress(progress_fn, "Reconciling Python dependencies...")
+        pip_err = _reinstall_pip_deps()
+        if pip_err:
+            errors.append(f"pip deps: {pip_err}")
 
-    # Run migrations
+    # Run migrations even when npm reports the same package version. Several
+    # cleanup hooks are idempotent and may need to repair an install after a
+    # previous interrupted update without waiting for the next version bump.
     _emit_progress(progress_fn, "Running runtime migrations...")
     mig_err = _run_migrations()
     if mig_err:
@@ -1217,7 +1221,7 @@ def _handle_packaged_update(progress_fn=None, *, include_clis: bool = True) -> s
     if not clients_ok:
         client_sync_warning = client_sync_error or "unknown client sync error"
 
-    if old_version != new_version:
+    if version_changed:
         _emit_progress(progress_fn, "Reloading LaunchAgents after version bump...")
         try:
             launchagent_reload_summary = _reload_launch_agents_after_bump()
@@ -1235,7 +1239,7 @@ def _handle_packaged_update(progress_fn=None, *, include_clis: bool = True) -> s
     mcp_code_changed = False
     force_restart = False
     new_fingerprint = ""
-    if old_version != new_version:
+    if version_changed:
         try:
             _emit_progress(progress_fn, "Activating versioned runtime snapshot...")
             versioned_runtime_summary = activate_versioned_runtime_snapshot(
@@ -1308,8 +1312,13 @@ def _handle_packaged_update(progress_fn=None, *, include_clis: bool = True) -> s
         return "\n".join(lines)
 
     lines = ["UPDATE SUCCESSFUL (packaged install)"]
-    lines.append(f"  Version: {old_version} -> {new_version}")
+    if version_changed:
+        lines.append(f"  Version: {old_version} -> {new_version}")
+    else:
+        lines.append(f"  Version: {old_version} (unchanged; idempotent maintenance)")
     lines.append(f"  Backup: {backup_dir}")
+    if not version_changed:
+        lines.append("  Python deps: unchanged")
     if not cron_sync_warning:
         lines.append("  Crons: synced with manifest")
     else:
@@ -1340,7 +1349,11 @@ def _handle_packaged_update(progress_fn=None, *, include_clis: bool = True) -> s
     if restart_marker_summary:
         lines.append(f"  Restart marker: {restart_marker_summary.get('path')}")
     lines.append("")
-    if old_version != new_version and not mcp_code_changed and not force_restart:
+    if not version_changed:
+        lines.append(
+            "Package version unchanged; maintenance completed without an MCP restart."
+        )
+    elif not mcp_code_changed and not force_restart:
         # Doc-only / blog-only / changelog-only release. The bytes the running
         # MCP imports are byte-identical to what's now on disk, so existing
         # MCP clients keep working without a forced restart.
@@ -1432,16 +1445,20 @@ def handle_update(
         new_req_hash = _requirements_hash()
         deps_changed = old_req_hash != new_req_hash
 
+        no_changes_pulled = pull_out == "Already up to date."
+
         # Step 5: Reinstall pip dependencies if requirements.txt changed
-        if deps_changed or version_changed:
+        if deps_changed:
             _emit_progress(progress_fn, "Reconciling Python dependencies...")
             pip_err = _reinstall_pip_deps()
             if pip_err:
                 raise RuntimeError(f"Pip install failed: {pip_err}")
             steps_done.append("pip-deps")
 
-        # Step 6: Run migrations if version changed
-        if version_changed:
+        # Step 6: Run idempotent migrations/cleanup even on same-version
+        # updates. This repairs interrupted installs and pending cleanup
+        # without waiting for a future version bump.
+        if version_changed or no_changes_pulled:
             _emit_progress(progress_fn, "Running runtime migrations...")
             mig_err = _run_migrations()
             if mig_err:
@@ -1607,9 +1624,17 @@ def handle_update(
 
         # Build result
         dep_summary_lines = _format_dep_results(dep_results)
-        if pull_out == "Already up to date.":
-            msg = f"Already up to date (v{old_version}). No changes pulled."
+        if no_changes_pulled:
+            msg = f"Already up to date (v{old_version}). Idempotent maintenance completed."
             trailing = [*dep_summary_lines, *external_cli_lines]
+            if "migrations" in steps_done:
+                trailing.insert(0, "  Migrations: checked/applied")
+            if "hook-sync" in steps_done:
+                trailing.insert(1 if trailing else 0, "  Hooks: synced to NEXO_HOME")
+            if "cron-sync" in steps_done:
+                trailing.insert(2 if len(trailing) >= 2 else len(trailing), "  Crons: synced with manifest")
+            if "client-sync" in steps_done:
+                trailing.append("  Clients: configured client targets synced")
             if trailing:
                 msg += "\n" + "\n".join(trailing)
             return msg
@@ -1623,7 +1648,7 @@ def handle_update(
         lines.append(f"  Backup: {backup_dir}")
         if "pip-deps" in steps_done:
             lines.append("  Python deps: reinstalled")
-        if version_changed:
+        if "migrations" in steps_done:
             lines.append("  Migrations: applied")
         if "cron-sync" in steps_done:
             lines.append("  Crons: synced with manifest")
