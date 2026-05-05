@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.13.4: durable correction learning, LaunchAgent G5, and Codex compliance</title>
+<meta name="description" content="NEXO Brain v7.13.4 ships durable correction-learning enforcement, explicit doctor repair for orphan personal schedules, LaunchAgent G5 warnings, and live Codex protocol compliance checks.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-13-4/">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.13.4: durable correction learning, LaunchAgent G5, and Codex compliance","datePublished":"2026-05-05","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head><body><main><article style="max-width:760px;margin:80px auto;padding:0 24px;line-height:1.75;">
+<h1>NEXO 7.13.4 &mdash; durable correction learning, LaunchAgent G5, and Codex compliance</h1>
+<p><em>Published 2026-05-05. Corrective release over v7.13.3 &mdash; closes the remaining D.5, doctor, LaunchAgent, and Codex compliance debt without changing the Desktop installation contract.</em></p>
+
+<h2>D.5 correction learning is now durable</h2>
+<p>Correction detection on user messages now records an open requirement, opens protocol debt, and blocks <code>nexo_task_close</code> and session stop until a real <code>nexo_learning_add</code> resolves the correction. The daily self-audit path also creates followups for correction sessions that still lack a persisted learning.</p>
+
+<h2>Doctor repair is explicit</h2>
+<p><code>nexo doctor --fix</code> now calls the orphan personal schedule metadata repair path directly before registry sync. Scripts with managed LaunchAgent schedules can regain their inline <code># nexo:</code> metadata, while existing runtime and weekday schedule aliases continue to normalize before validation.</p>
+
+<h2>LaunchAgent G5 protects the intended boundary</h2>
+<p>Direct plist edits remain hard-blocked. Operational commands such as <code>launchctl unload</code>, <code>launchctl bootout</code>, <code>rm</code>, and <code>mv</code> over <code>~/Library/LaunchAgents/com.nexo.*.plist</code> now create a warn-severity debt with the safe three-layer removal flow: unload the job, remove schedule markers from the source script, then verify with dry-run.</p>
+
+<h2>Codex compliance is auditable live</h2>
+<p><code>installation_live.codex_protocol_compliance</code> now combines recent startup/bootstrap/heartbeat evidence with conditioned-file transcript violations. If more than five percent of recent Codex sessions drift, doctor reports a critical failure instead of leaving the gap as documentation-only policy.</p>
+
+<h2>Validation</h2>
+<pre><code>python3 -m pytest tests/test_correction_requirements.py tests/test_hook_guardrails.py tests/test_self_audit.py tests/test_doctor.py::TestRuntimeChecks tests/test_script_registry.py -q
+
+198 passed, 3 xpassed
+</code></pre>
+
+<p><a href="/changelog/#v7134">Full changelog entry &rarr;</a> &middot; <a href="https://github.com/wazionapps/nexo/blob/main/src/tools_sessions.py">src/tools_sessions.py</a> &middot; <a href="https://github.com/wazionapps/nexo/blob/main/src/hook_guardrails.py">src/hook_guardrails.py</a> &middot; <a href="https://github.com/wazionapps/nexo/blob/main/src/doctor/providers/runtime.py">src/doctor/providers/runtime.py</a></p>
+</article></main></body></html>
