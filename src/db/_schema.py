@@ -923,6 +923,28 @@ def _m55_cortex_critique_trace(conn):
     _migrate_add_column(conn, "cortex_evaluations", "decision_mode", "TEXT DEFAULT 'heuristic'")
 
 
+def _m56_session_correction_requirements(conn):
+    """Track user corrections that must be turned into durable learnings."""
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS session_correction_requirements (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT NOT NULL,
+            context_hash TEXT NOT NULL,
+            correction_text TEXT DEFAULT '',
+            source TEXT DEFAULT 'heartbeat',
+            status TEXT NOT NULL DEFAULT 'open',
+            detected_at TEXT DEFAULT (datetime('now')),
+            resolved_at TEXT DEFAULT NULL,
+            resolved_learning_id INTEGER DEFAULT NULL,
+            followup_id TEXT DEFAULT '',
+            UNIQUE(session_id, context_hash)
+        )"""
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_session_correction_requirements_session ON session_correction_requirements(session_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_session_correction_requirements_status ON session_correction_requirements(status)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_session_correction_requirements_detected ON session_correction_requirements(detected_at)")
+
+
 def _m39_hook_runs(conn):
     """Persist hook lifecycle observability — closes Fase 3 item 7.
 
@@ -1494,6 +1516,7 @@ MIGRATIONS = [
     (53, "session_conversation_identity", _m53_session_conversation_identity),
     (54, "continuity_snapshots", _m54_continuity_snapshots),
     (55, "cortex_critique_trace", _m55_cortex_critique_trace),
+    (56, "session_correction_requirements", _m56_session_correction_requirements),
 ]
 
 

@@ -180,6 +180,53 @@ def test_check_codex_conditioned_file_discipline_records_delete_debt(self_audit_
     assert row == ("codex_conditioned_delete_without_protocol", "error")
 
 
+def test_check_correction_learning_requirements_creates_followup(self_audit_env):
+    module = _load_self_audit_module()
+    module.findings.clear()
+    conn = sqlite3.connect(str(self_audit_env / "data" / "nexo.db"))
+    conn.execute(
+        """CREATE TABLE session_correction_requirements (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT,
+            correction_text TEXT,
+            status TEXT,
+            detected_at TEXT DEFAULT (datetime('now')),
+            followup_id TEXT DEFAULT ''
+        )"""
+    )
+    conn.execute(
+        """CREATE TABLE followups (
+            id TEXT PRIMARY KEY,
+            description TEXT,
+            date TEXT,
+            status TEXT,
+            verification TEXT,
+            reasoning TEXT,
+            priority TEXT,
+            created_at REAL,
+            updated_at REAL
+        )"""
+    )
+    conn.execute(
+        """INSERT INTO session_correction_requirements
+           (session_id, correction_text, status)
+           VALUES ('nexo-1-2', 'No repitas este error', 'open')"""
+    )
+    conn.commit()
+    conn.close()
+
+    module.check_correction_learning_requirements()
+
+    assert module.findings[-1]["area"] == "correction-learning"
+    conn = sqlite3.connect(str(self_audit_env / "data" / "nexo.db"))
+    row = conn.execute("SELECT description, priority FROM followups").fetchone()
+    linked = conn.execute("SELECT followup_id FROM session_correction_requirements").fetchone()[0]
+    conn.close()
+    assert "Persist learning for detected user correction" in row[0]
+    assert row[1] == "high"
+    assert linked.startswith("NF-D5-CORRECTION-")
+
+
 def test_check_codex_startup_discipline_creates_protocol_debt(self_audit_env, monkeypatch):
     from doctor.providers import runtime
 

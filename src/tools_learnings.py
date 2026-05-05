@@ -4,7 +4,8 @@ import re
 from datetime import datetime
 
 from db import (create_learning, update_learning, delete_learning, search_learnings,
-                list_learnings, find_similar_learnings, get_db, now_epoch, supersede_learning, extract_keywords)
+                list_learnings, find_similar_learnings, get_db, now_epoch, supersede_learning, extract_keywords,
+                resolve_session_correction_requirements)
 
 NEGATION_PATTERNS = (
     "do not", "don't", "never", "avoid", "skip", "without", "forbid", "forbidden",
@@ -135,6 +136,14 @@ def find_conflicting_active_learning(*, category: str, title: str, content: str,
         applies_to=applies_to,
         exclude_id=exclude_id,
     )
+
+
+def _resolve_pending_correction_learning(learning_id: int) -> int:
+    """Best-effort D.5 bridge: a real learning_add resolves one open correction window."""
+    try:
+        return resolve_session_correction_requirements(learning_id=int(learning_id))
+    except Exception:
+        return 0
 
 
 def _priority_score(priority: str) -> float:
@@ -286,6 +295,7 @@ def handle_learning_add(category: str, title: str, content: str, reasoning: str 
         (title.strip(), category)
     ).fetchone()
     if existing:
+        _resolve_pending_correction_learning(int(existing["id"]))
         return f"Learning #{existing['id']} already exists with same title in {category}: {existing['title']}. Use nexo_learning_update to modify it."
 
     # ── R05 (Fase 2 Protocol Enforcer): auto-merge on high Jaccard similarity ──
@@ -322,6 +332,7 @@ def handle_learning_add(category: str, title: str, content: str, reasoning: str 
                     (new_weight, now_epoch(), existing_id),
                 )
                 conn.commit()
+                _resolve_pending_correction_learning(int(existing_id))
                 return (
                     f"Learning #{existing_id} matched new content at Jaccard {similarity:.2f} "
                     f">= R05 merge threshold ({R05_MERGE_THRESHOLD:.2f}). No duplicate created. "
@@ -465,6 +476,7 @@ def handle_learning_add(category: str, title: str, content: str, reasoning: str 
             pass  # Best-effort surfacing only
 
     meta = []
+    resolved_corrections = _resolve_pending_correction_learning(int(result["id"]))
     if prevention:
         meta.append("with prevention")
     if applies_to:
@@ -472,7 +484,11 @@ def handle_learning_add(category: str, title: str, content: str, reasoning: str 
     if supersedes_id:
         meta.append(f"supersedes={int(supersedes_id)}")
     meta_str = f" ({', '.join(meta)})" if meta else ""
-    return f"Learning #{result['id']} added in {category}: {title}{meta_str} ✓verified{repetition_msg}{retro_meta_msg}"
+    correction_msg = (
+        f"\nD.5: resolved {resolved_corrections} pending correction learning requirement(s)."
+        if resolved_corrections else ""
+    )
+    return f"Learning #{result['id']} added in {category}: {title}{meta_str} ✓verified{repetition_msg}{retro_meta_msg}{correction_msg}"
 
 
 def handle_learning_search(query: str, category: str = '') -> str:

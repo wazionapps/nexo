@@ -25,6 +25,7 @@ from db import (
     get_db,
     get_followups,
     get_protocol_task,
+    list_session_correction_requirements,
     set_protocol_task_guard_acknowledged,
     list_workflow_goals,
     list_workflow_runs,
@@ -1369,6 +1370,38 @@ def handle_task_close(
         task_type=task.get("task_type", ""),
         high_stakes=bool(task.get("response_high_stakes")),
     )
+
+    pending_corrections = list_session_correction_requirements(
+        session_id=task["session_id"],
+        status="open",
+        limit=3,
+    )
+    if pending_corrections:
+        debt = _ensure_open_debt(
+            task["session_id"],
+            task_id,
+            "missing_learning_after_correction",
+            severity="error",
+            evidence=(
+                "User correction was detected for this session and has not "
+                "been resolved by nexo_learning_add. task_close is blocked "
+                "until a durable learning is persisted."
+            ),
+            debts=debts_created,
+        )
+        return json.dumps(
+            {
+                "ok": False,
+                "error": "Cannot close task while a detected user correction has no durable nexo_learning_add.",
+                "hint": "Call nexo_learning_add with the reusable rule learned from the correction, then retry nexo_task_close.",
+                "task_id": task_id,
+                "blocked_by": "d5_correction_learning_required",
+                "debt_id": debt.get("id"),
+                "pending_corrections": len(pending_corrections),
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
 
     # ── Evidence enforcement: reject 'done' without proof ──
     # G1 hardening: "done" is no longer allowed to degrade into a debt-only

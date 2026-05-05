@@ -1177,6 +1177,15 @@ def _collect_runtime_core_write_blocks(
 _LAUNCHAGENT_PLIST_RE = re.compile(
     r"library/launchagents/com\.nexo\.[^/]+\.plist$"
 )
+_LAUNCHAGENT_PLIST_TOKEN_RE = re.compile(
+    r"library/launchagents/com\.nexo\.[^/\s]+\.plist(?:\*|$)"
+)
+_LAUNCHAGENT_SERVICE_RE = re.compile(r"\bcom\.nexo\.[A-Za-z0-9_.-]+\b")
+_LAUNCHAGENT_3_LAYER_FLOW = (
+    "Use the 3-layer schedule removal flow: launchctl unload/bootout the service, "
+    "remove `# nexo: schedule_required=true` and `# nexo: cron_id=...` markers from "
+    "the source script, then verify with `nexo scripts reconcile --dry-run`."
+)
 
 
 def _is_protected_launchagent_path(filepath: str) -> bool:
@@ -1192,6 +1201,112 @@ def _is_protected_launchagent_path(filepath: str) -> bool:
     if "library/launchagents/com.nexo." not in normalized:
         return False
     return _LAUNCHAGENT_PLIST_RE.search(normalized) is not None
+
+
+def _is_protected_launchagent_token(value: str) -> bool:
+    normalized = _normalize_file_path(value)
+    return bool(_LAUNCHAGENT_PLIST_TOKEN_RE.search(normalized))
+
+
+def _launchagent_operation_kind(command: str) -> str:
+    tokens = _shell_tokens(command)
+    if not tokens:
+        return ""
+    base = Path(tokens[0]).name.lower()
+    command_text = str(command or "")
+    if base == "launchctl":
+        if any(token in {"unload", "bootout"} for token in tokens[1:]):
+            if any(_is_protected_launchagent_token(token) for token in tokens[1:]):
+                return "launchctl_plist"
+            if _LAUNCHAGENT_SERVICE_RE.search(command_text):
+                return "launchctl_service"
+    if base in {"rm", "unlink", "mv"}:
+        if any(_is_protected_launchagent_token(token) for token in tokens[1:]):
+            return base
+    return ""
+
+
+def _collect_launchagent_operation_warnings(
+    conn,
+    *,
+    sid: str,
+    tool_name: str,
+    command: str,
+) -> list[dict]:
+    if core_writes_allowed():
+        return []
+    kind = _launchagent_operation_kind(command)
+    if not kind:
+        return []
+    debt = _ensure_protocol_debt(
+        conn,
+        session_id=sid,
+        task_id="",
+        debt_type="launchagent_plist_protected_operation",
+        severity="warn",
+        evidence=(
+            f"{tool_name} requested {kind} on a NEXO-managed LaunchAgent. "
+            f"{_LAUNCHAGENT_3_LAYER_FLOW} Command head: {str(command or '')[:180]}"
+        ),
+        file_token="launchagent_plist_protected",
+    )
+    return [
+        {
+            "file": "com.nexo.*.plist",
+            "task_id": "",
+            "debt_id": debt.get("id"),
+            "debt_type": "launchagent_plist_protected_operation",
+            "reason_code": "launchagent_plist_protected",
+            "severity": "warn",
+            "message": _LAUNCHAGENT_3_LAYER_FLOW,
+            "operation_kind": kind,
+        }
+    ]
+
+
+def _is_scheduled_personal_script(filepath: str) -> bool:
+    normalized = _normalize_file_path(filepath)
+    if "/.nexo/personal/scripts/" not in normalized or not normalized.endswith(".py"):
+        return False
+    try:
+        path = Path(filepath).expanduser()
+        if not path.exists() or not path.is_file():
+            return False
+        head = "".join(path.read_text(errors="ignore").splitlines(keepends=True)[:40])
+    except Exception:
+        return False
+    return "# nexo: schedule_required=true" in head
+
+
+def _collect_scheduled_personal_script_warnings(conn, *, sid: str, tool_name: str, files: list[str]) -> list[dict]:
+    warnings: list[dict] = []
+    for filepath in files:
+        if not _is_scheduled_personal_script(filepath):
+            continue
+        debt = _ensure_protocol_debt(
+            conn,
+            session_id=sid,
+            task_id="",
+            debt_type="scheduled_personal_script_conditioned",
+            severity="warn",
+            evidence=(
+                f"{tool_name} touched scheduled personal script {filepath}. "
+                "Run nexo_guard_check and keep LaunchAgent metadata in sync before editing schedule markers."
+            ),
+            file_token=filepath,
+        )
+        warnings.append(
+            {
+                "file": filepath,
+                "task_id": "",
+                "debt_id": debt.get("id"),
+                "debt_type": "scheduled_personal_script_conditioned",
+                "reason_code": "scheduled_personal_script_conditioned",
+                "severity": "warn",
+                "message": "Scheduled personal script: run nexo_guard_check and keep schedule metadata/plist in sync.",
+            }
+        )
+    return warnings
 
 
 def _collect_launchagent_write_blocks(
@@ -1321,6 +1436,10 @@ def process_pre_tool_event(payload: dict) -> dict:
             _shell_cmd_ssh = _extract_bash_command(tool_input)
             if _classify_ssh_remote_write(_shell_cmd_ssh):
                 op = "write"  # force the main gate to keep evaluating
+    if tool_name == "Bash" and op not in {"write", "delete"}:
+        _shell_cmd_launchagent = _extract_bash_command(tool_input)
+        if _launchagent_operation_kind(_shell_cmd_launchagent):
+            op = "delete"
     if op not in {"write", "delete"}:
         return {"ok": True, "skipped": True, "reason": "operation not blocked", "strictness": get_protocol_strictness()}
 
@@ -1353,6 +1472,32 @@ def process_pre_tool_event(payload: dict) -> dict:
         claude_sid = _read_claude_session_id_from_coordination()
     sid = _resolve_nexo_sid(conn, claude_sid)
     open_task = _find_any_open_task(conn, sid) if sid else None
+    warnings: list[dict] = []
+    if tool_name == "Bash":
+        launchagent_operation_warnings = _collect_launchagent_operation_warnings(
+            conn,
+            sid=sid,
+            tool_name=tool_name,
+            command=_extract_bash_command(tool_input),
+        )
+        if launchagent_operation_warnings:
+            return {
+                "ok": True,
+                "session_id": sid,
+                "tool_name": tool_name,
+                "operation": op,
+                "strictness": strictness,
+                "warnings": launchagent_operation_warnings,
+                "status": "warn",
+            }
+    warnings.extend(
+        _collect_scheduled_personal_script_warnings(
+            conn,
+            sid=sid,
+            tool_name=tool_name,
+            files=files,
+        )
+    )
     automation_blocks = _collect_automation_live_repo_blocks(
         conn,
         sid=sid,
@@ -1367,6 +1512,7 @@ def process_pre_tool_event(payload: dict) -> dict:
             "operation": op,
             "strictness": strictness,
             "blocks": automation_blocks,
+            "warnings": warnings,
             "status": "blocked",
         }
 
@@ -1384,6 +1530,7 @@ def process_pre_tool_event(payload: dict) -> dict:
             "operation": op,
             "strictness": strictness,
             "blocks": core_blocks,
+            "warnings": warnings,
             "status": "blocked",
         }
 
@@ -1401,6 +1548,7 @@ def process_pre_tool_event(payload: dict) -> dict:
             "operation": op,
             "strictness": strictness,
             "blocks": launchagent_blocks,
+            "warnings": warnings,
             "status": "blocked",
         }
 
@@ -1602,7 +1750,7 @@ def process_pre_tool_event(payload: dict) -> dict:
             _shadow_cache[sid] = g4_warnings
 
     if strictness == "lenient":
-        return {"ok": True, "skipped": True, "reason": "lenient mode", "strictness": strictness}
+        return {"ok": True, "skipped": True, "reason": "lenient mode", "strictness": strictness, "warnings": warnings, "status": "warn" if warnings else "clean"}
 
     blocks: list[dict] = []
 
@@ -1632,6 +1780,7 @@ def process_pre_tool_event(payload: dict) -> dict:
             "operation": op,
             "strictness": strictness,
             "blocks": blocks,
+            "warnings": warnings,
             "status": "blocked",
         }
 
@@ -1683,7 +1832,8 @@ def process_pre_tool_event(payload: dict) -> dict:
             "strictness": strictness,
             "blocks": blocks,
             "auto_opened_task": auto_opened_task,
-            "status": "blocked" if blocks else "clean",
+            "warnings": warnings,
+            "status": "blocked" if blocks else ("warn" if warnings else "clean"),
         }
 
     for filepath in files:
@@ -1767,7 +1917,8 @@ def process_pre_tool_event(payload: dict) -> dict:
         "strictness": strictness,
         "blocks": blocks,
         "auto_opened_task": auto_opened_task,
-        "status": "blocked" if blocks else "clean",
+        "warnings": warnings,
+        "status": "blocked" if blocks else ("warn" if warnings else "clean"),
     }
 
 
@@ -1918,11 +2069,14 @@ def format_hook_message(result: dict) -> str:
 
 def format_pretool_block_message(result: dict) -> str:
     blocks = result.get("blocks") or []
-    if not blocks:
+    warnings = result.get("warnings") or []
+    if not blocks and not warnings:
         return ""
     strictness = str(result.get("strictness") or "strict")
     if any(item.get("reason_code") == "automation_live_repo" for item in blocks):
         header = "NEXO AUTOMATION SAFETY BLOCKED THIS EDIT:"
+    elif warnings and not blocks:
+        header = "NEXO SAFETY WARNING:"
     else:
         header = (
             "NEXO LEARNING MODE BLOCKED THIS EDIT:"
@@ -1930,6 +2084,11 @@ def format_pretool_block_message(result: dict) -> str:
             else "NEXO STRICT MODE BLOCKED THIS EDIT:"
         )
     lines = [header]
+    for item in warnings:
+        message = item.get("message") or "Review this operation before continuing."
+        debt_id = item.get("debt_id")
+        suffix = f" (debt_id={debt_id})" if debt_id else ""
+        lines.append(f"- WARN {item.get('reason_code') or item.get('debt_type')}: {message}{suffix}")
     for item in blocks:
         file_note = item["file"] or "(unknown target)"
         if item.get("reason_code") == "missing_startup":

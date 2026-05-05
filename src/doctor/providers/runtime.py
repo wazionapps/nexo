@@ -1860,9 +1860,11 @@ def check_personal_script_registry(fix: bool = False) -> DoctorCheck:
     """Check the DB-backed personal script registry against filesystem/plists."""
     try:
         from db import init_db, get_personal_script_health_report
-        from script_registry import sync_personal_scripts
+        from script_registry import repair_orphan_personal_schedule_metadata, sync_personal_scripts
 
         init_db()
+        if fix:
+            repair_orphan_personal_schedule_metadata(dry_run=False)
         sync_personal_scripts(prune_missing=True)
         report = get_personal_script_health_report(fix=fix)
     except Exception as e:
@@ -2421,6 +2423,91 @@ def check_codex_conditioned_file_discipline() -> DoctorCheck:
         escalation_prompt=(
             "Codex sessions are touching conditioned files without the expected protocol/guard sequence. "
             "Until this is clean, parity with Claude hooks is still incomplete."
+        ) if status != "healthy" else "",
+    )
+
+
+def check_codex_protocol_compliance() -> DoctorCheck:
+    try:
+        schedule = _load_json(SCHEDULE_FILE) if SCHEDULE_FILE.is_file() else {}
+    except Exception:
+        schedule = {}
+    prefs = normalize_client_preferences(schedule)
+    wants_codex = bool(
+        prefs.get("interactive_clients", {}).get("codex")
+        or prefs.get("default_terminal_client") == "codex"
+        or (prefs.get("automation_enabled", True) and prefs.get("automation_backend") == "codex")
+    )
+    if not wants_codex:
+        return DoctorCheck(
+            id="installation_live.codex_protocol_compliance",
+            tier="runtime",
+            status="healthy",
+            severity="info",
+            summary="Codex protocol compliance skipped (Codex not selected)",
+        )
+
+    startup = _recent_codex_session_parity_status(days=1)
+    conditioned = _recent_codex_conditioned_file_discipline_status(days=1)
+    sessions = int(startup.get("files") or conditioned.get("files") or 0)
+    if sessions <= 0:
+        return DoctorCheck(
+            id="installation_live.codex_protocol_compliance",
+            tier="runtime",
+            status="degraded",
+            severity="warn",
+            summary="No Codex sessions in the last 24h to verify protocol compliance",
+            repair_plan=[
+                "Run Codex through the managed NEXO bootstrap so doctor can verify live protocol compliance",
+            ],
+        )
+
+    startup_violation_sessions = 0
+    for sample in startup.get("samples", []):
+        if not sample.get("bootstrap") or not sample.get("startup") or not sample.get("heartbeat"):
+            startup_violation_sessions += 1
+    conditioned_violations = (
+        int(conditioned.get("read_without_protocol") or 0)
+        + int(conditioned.get("write_without_protocol") or 0)
+        + int(conditioned.get("write_without_guard_ack") or 0)
+        + int(conditioned.get("delete_without_protocol") or 0)
+        + int(conditioned.get("delete_without_guard_ack") or 0)
+    )
+    violation_units = startup_violation_sessions + conditioned_violations
+    violation_rate = round((violation_units / max(1, sessions)) * 100, 1)
+    status = "critical" if violation_rate > 5.0 else "healthy"
+    severity = "error" if status == "critical" else "info"
+    evidence = [
+        f"codex sessions inspected 24h: {sessions}",
+        f"startup/protocol violating sessions: {startup_violation_sessions}",
+        f"conditioned-file violations: {conditioned_violations}",
+        f"violation rate: {violation_rate}%",
+        "threshold: 5.0%",
+    ]
+    for sample in (startup.get("samples") or [])[:3]:
+        if not sample.get("bootstrap") or not sample.get("startup") or not sample.get("heartbeat"):
+            evidence.append(f"startup drift: {sample.get('file')}")
+    for sample in (conditioned.get("samples") or [])[:3]:
+        evidence.append(f"conditioned drift: {sample.get('kind')} {sample.get('file')}")
+
+    return DoctorCheck(
+        id="installation_live.codex_protocol_compliance",
+        tier="runtime",
+        status=status,
+        severity=severity,
+        summary=(
+            "Codex protocol compliance is within the 5% live threshold"
+            if status == "healthy"
+            else "Codex protocol compliance exceeds the 5% live violation threshold"
+        ),
+        evidence=evidence,
+        repair_plan=[
+            "Start Codex via `nexo chat` so SessionStart bootstrap is injected",
+            "Keep nexo_startup and nexo_heartbeat visible in every Codex session",
+            "Run nexo_guard_check before conditioned-file reads/writes and acknowledge blocking rules before mutation",
+        ] if status != "healthy" else [],
+        escalation_prompt=(
+            "Codex CLI parity is not clean: recent sessions miss startup/heartbeat or bypass conditioned-file guard discipline."
         ) if status != "healthy" else "",
     )
 
@@ -3415,6 +3502,7 @@ def run_runtime_checks(fix: bool = False) -> list[DoctorCheck]:
         safe_check(check_client_bootstrap_parity, fix=fix),
         safe_check(check_codex_session_parity),
         safe_check(check_codex_conditioned_file_discipline),
+        safe_check(check_codex_protocol_compliance),
         safe_check(check_claude_desktop_shared_brain),
         safe_check(check_transcript_source_parity),
         safe_check(check_client_assumption_regressions),

@@ -1392,6 +1392,53 @@ class TestRuntimeChecks:
         assert any("bootstrap markers seen in 1/2" in item for item in check.evidence)
         assert any("session drift: 1 missing bootstrap, 1 missing startup, 1 missing heartbeat" in item for item in check.evidence)
 
+    def test_codex_protocol_compliance_fails_when_violation_rate_exceeds_five_percent(self, nexo_home, monkeypatch):
+        from doctor.providers import runtime
+
+        schedule_file = nexo_home / "config" / "schedule.json"
+        schedule_file.parent.mkdir(parents=True, exist_ok=True)
+        schedule_file.write_text(json.dumps({
+            "interactive_clients": {
+                "claude_code": False,
+                "codex": True,
+                "claude_desktop": False,
+            },
+            "default_terminal_client": "codex",
+            "automation_enabled": False,
+            "automation_backend": "none",
+        }))
+        monkeypatch.setattr(runtime, "SCHEDULE_FILE", schedule_file)
+        monkeypatch.setattr(
+            runtime,
+            "_recent_codex_session_parity_status",
+            lambda **_kwargs: {
+                "files": 20,
+                "samples": [
+                    {"file": "/tmp/bad.jsonl", "bootstrap": False, "startup": False, "heartbeat": False}
+                ],
+            },
+        )
+        monkeypatch.setattr(
+            runtime,
+            "_recent_codex_conditioned_file_discipline_status",
+            lambda **_kwargs: {
+                "files": 20,
+                "read_without_protocol": 0,
+                "write_without_protocol": 1,
+                "write_without_guard_ack": 0,
+                "delete_without_protocol": 0,
+                "delete_without_guard_ack": 0,
+                "samples": [{"kind": "write_without_protocol", "file": "/repo/x.py"}],
+            },
+        )
+
+        check = runtime.check_codex_protocol_compliance()
+
+        assert check.id == "installation_live.codex_protocol_compliance"
+        assert check.status == "critical"
+        assert check.severity == "error"
+        assert any("violation rate: 10.0%" in item for item in check.evidence)
+
     def test_codex_conditioned_file_discipline_warns_on_read_without_protocol(self, nexo_home, monkeypatch):
         from doctor.providers import runtime
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 """NEXO DB — Protocol discipline runtime."""
 
 import json
+import hashlib
 import secrets
 import time
 
@@ -32,6 +33,12 @@ def _as_bool(value) -> int:
 
 def _row_to_dict(row):
     return dict(row) if row else None
+
+
+def _correction_context_hash(session_id: str, text: str) -> str:
+    clean = " ".join(str(text or "").strip().split())[:1200]
+    digest = hashlib.sha1(f"{session_id.strip()}\0{clean}".encode("utf-8"), usedforsecurity=False)
+    return digest.hexdigest()[:20]
 
 
 def validate_task_type(task_type: str) -> str:
@@ -527,6 +534,155 @@ def list_protocol_debts(
         params + [max(1, int(limit))],
     ).fetchall()
     return [dict(row) for row in rows]
+
+
+def record_session_correction_requirement(
+    session_id: str,
+    correction_text: str,
+    *,
+    source: str = "heartbeat",
+) -> dict:
+    """Persist that a detected user correction requires a learning_add."""
+    conn = get_db()
+    clean_sid = str(session_id or "").strip()
+    if not clean_sid:
+        return {"ok": False, "error": "session_id is required"}
+    clean_text = " ".join(str(correction_text or "").strip().split())
+    context_hash = _correction_context_hash(clean_sid, clean_text)
+    conn.execute(
+        """INSERT OR IGNORE INTO session_correction_requirements
+           (session_id, context_hash, correction_text, source)
+           VALUES (?, ?, ?, ?)""",
+        (clean_sid, context_hash, clean_text[:4000], str(source or "heartbeat").strip()[:80]),
+    )
+    conn.commit()
+    row = conn.execute(
+        """SELECT *
+           FROM session_correction_requirements
+           WHERE session_id = ? AND context_hash = ?
+           LIMIT 1""",
+        (clean_sid, context_hash),
+    ).fetchone()
+    out = _row_to_dict(row) or {}
+    out["ok"] = True
+    return out
+
+
+def list_session_correction_requirements(
+    *,
+    session_id: str = "",
+    status: str = "open",
+    limit: int = 50,
+) -> list[dict]:
+    conn = get_db()
+    clauses: list[str] = []
+    params: list[object] = []
+    if session_id:
+        clauses.append("session_id = ?")
+        params.append(str(session_id).strip())
+    if status:
+        clauses.append("status = ?")
+        params.append(str(status).strip())
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    rows = conn.execute(
+        f"""SELECT *
+            FROM session_correction_requirements
+            {where}
+            ORDER BY detected_at DESC, id DESC
+            LIMIT ?""",
+        params + [max(1, int(limit or 50))],
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def session_has_open_correction_requirement(session_id: str) -> bool:
+    if not str(session_id or "").strip():
+        return False
+    conn = get_db()
+    row = conn.execute(
+        """SELECT 1
+           FROM session_correction_requirements
+           WHERE session_id = ? AND status = 'open'
+           LIMIT 1""",
+        (str(session_id).strip(),),
+    ).fetchone()
+    return bool(row)
+
+
+def resolve_session_correction_requirements(
+    *,
+    session_id: str = "",
+    learning_id: int | None = None,
+) -> int:
+    """Resolve open correction requirements after a real learning_add."""
+    conn = get_db()
+    clean_sid = str(session_id or "").strip()
+    if not clean_sid:
+        rows = conn.execute(
+            """SELECT session_id, COUNT(*) AS total
+               FROM session_correction_requirements
+               WHERE status = 'open'
+               GROUP BY session_id
+               ORDER BY MAX(detected_at) DESC"""
+        ).fetchall()
+        if len(rows) == 1:
+            clean_sid = str(rows[0]["session_id"] or "").strip()
+        else:
+            try:
+                row = conn.execute(
+                    """SELECT r.session_id
+                       FROM session_correction_requirements r
+                       LEFT JOIN sessions s ON s.sid = r.session_id
+                       WHERE r.status = 'open'
+                       ORDER BY COALESCE(s.last_heartbeat_ts, s.last_update_epoch, s.started_epoch, 0) DESC,
+                                r.detected_at DESC
+                       LIMIT 1"""
+                ).fetchone()
+            except Exception:
+                row = None
+            clean_sid = str(row["session_id"] or "").strip() if row else ""
+        if not clean_sid:
+            return 0
+    cursor = conn.execute(
+        """UPDATE session_correction_requirements
+           SET status = 'resolved',
+               resolved_at = datetime('now'),
+               resolved_learning_id = ?
+           WHERE session_id = ? AND status = 'open'""",
+        (int(learning_id) if learning_id else None, clean_sid),
+    )
+    conn.commit()
+    if cursor.rowcount:
+        resolve_protocol_debts(
+            session_id=clean_sid,
+            debt_types=["missing_learning_after_correction"],
+            resolution=f"Learning #{learning_id} persisted after user correction.",
+        )
+    return int(cursor.rowcount or 0)
+
+
+def correction_requirement_summary(session_id: str = "") -> dict:
+    conn = get_db()
+    clauses: list[str] = []
+    params: list[object] = []
+    if session_id:
+        clauses.append("session_id = ?")
+        params.append(str(session_id).strip())
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    rows = conn.execute(
+        f"""SELECT status, COUNT(*) AS total
+            FROM session_correction_requirements
+            {where}
+            GROUP BY status"""
+    ).fetchall()
+    counts = {str(row["status"]): int(row["total"] or 0) for row in rows}
+    return {
+        "session_id": str(session_id or "").strip(),
+        "corrections_detected": sum(counts.values()),
+        "learnings_persisted": counts.get("resolved", 0),
+        "open_requirements": counts.get("open", 0),
+        "by_status": counts,
+    }
 
 
 def protocol_compliance_summary(days: int = 7) -> dict:

@@ -829,9 +829,40 @@ def _handle_heartbeat_inner(sid: str, task: str, context_hint: str = '') -> str:
 
     if context_hint and _hint_suggests_correction(context_hint):
         try:
+            from db import (
+                create_protocol_debt,
+                list_protocol_debts,
+                record_session_correction_requirement,
+            )
+
+            record_session_correction_requirement(
+                sid,
+                context_hint,
+                source="heartbeat",
+            )
             if not _recent_learning_capture_exists(conn, sid, window_seconds=300):
+                existing_debt = list_protocol_debts(
+                    status="open",
+                    session_id=sid,
+                    debt_type="missing_learning_after_correction",
+                    limit=1,
+                )
+                if not existing_debt:
+                    create_protocol_debt(
+                        sid,
+                        "missing_learning_after_correction",
+                        severity="error",
+                        evidence=(
+                            "Detected user correction in heartbeat context. "
+                            "A durable nexo_learning_add is required before "
+                            "nexo_task_close or nexo_stop may close this session."
+                        ),
+                    )
                 parts.append("")
                 parts.append(render_core_prompt("heartbeat-learning-reminder"))
+                parts.append(
+                    "LEARNING REQUIRED: call nexo_learning_add for this correction before nexo_task_close or nexo_stop."
+                )
         except Exception:
             pass  # Best-effort reminder only
 
@@ -1288,6 +1319,18 @@ def _toolbox_summary(conn) -> str:
 
 def handle_stop(sid: str) -> str:
     """Cleanly close a session, removing it from active sessions immediately."""
+    try:
+        from db import list_session_correction_requirements
+
+        pending = list_session_correction_requirements(session_id=sid, status="open", limit=3)
+        if pending:
+            return (
+                "ERROR: session has user correction(s) without durable learning_add. "
+                "Call nexo_learning_add for the correction before nexo_stop. "
+                f"pending={len(pending)}"
+            )
+    except Exception:
+        pass
     _stop_keepalive(sid)
     complete_session(sid)
     return f"Session {sid} closed."

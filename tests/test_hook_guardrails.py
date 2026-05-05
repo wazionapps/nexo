@@ -799,6 +799,80 @@ def test_process_pre_tool_event_blocks_bash_write_to_launchagent_plist(guardrail
     assert result["blocks"][0]["debt_type"] == "launchagent_plist_write_blocked"
 
 
+@pytest.mark.parametrize(
+    "command",
+    [
+        f"launchctl unload {_FAKE_LAUNCHAGENT}",
+        "launchctl bootout gui/501/com.nexo.runner-health-check",
+        f"rm {_FAKE_LAUNCHAGENT}*",
+        f"mv {_FAKE_LAUNCHAGENT} /tmp/com.nexo.runner-health-check.plist.bak",
+    ],
+)
+def test_process_pre_tool_event_warns_on_launchagent_protected_operations(guardrail_env, monkeypatch, command):
+    monkeypatch.setenv("NEXO_HOME", str(guardrail_env))
+    db, hook_guardrails = _reload_guardrail_stack()
+    db.init_db()
+    monkeypatch.setattr(hook_guardrails, "get_protocol_strictness", lambda: "strict")
+    monkeypatch.setattr(hook_guardrails, "core_writes_allowed", lambda: False)
+    db.register_session(
+        "nexo-2034-3034",
+        "launchagent protected op",
+        external_session_id="claude-launchagent-op",
+        session_client="claude_code",
+    )
+
+    result = hook_guardrails.process_pre_tool_event(
+        {
+            "session_id": "claude-launchagent-op",
+            "tool_name": "Bash",
+            "tool_input": {"command": command},
+        }
+    )
+
+    assert result["status"] == "warn"
+    assert result["warnings"][0]["debt_type"] == "launchagent_plist_protected_operation"
+    assert result["warnings"][0]["severity"] == "warn"
+    assert "3-layer schedule removal flow" in result["warnings"][0]["message"]
+    debt = db.get_db().execute(
+        "SELECT severity FROM protocol_debt WHERE debt_type = 'launchagent_plist_protected_operation'"
+    ).fetchone()
+    assert debt["severity"] == "warn"
+
+
+def test_process_pre_tool_event_warns_on_scheduled_personal_script_marker(guardrail_env, monkeypatch):
+    monkeypatch.setenv("NEXO_HOME", str(guardrail_env))
+    db, hook_guardrails = _reload_guardrail_stack()
+    db.init_db()
+    monkeypatch.setattr(hook_guardrails, "get_protocol_strictness", lambda: "lenient")
+    scripts_dir = guardrail_env / ".nexo" / "personal" / "scripts"
+    scripts_dir.mkdir(parents=True)
+    script = scripts_dir / "morning.py"
+    script.write_text(
+        "#!/usr/bin/env python3\n"
+        "# nexo: schedule_required=true\n"
+        "# nexo: cron_id=morning\n"
+        "print('hi')\n",
+        encoding="utf-8",
+    )
+    db.register_session(
+        "nexo-2035-3035",
+        "scheduled script edit",
+        external_session_id="claude-scheduled-script",
+        session_client="claude_code",
+    )
+
+    result = hook_guardrails.process_pre_tool_event(
+        {
+            "session_id": "claude-scheduled-script",
+            "tool_name": "Edit",
+            "tool_input": {"file_path": str(script)},
+        }
+    )
+
+    assert result["status"] == "warn"
+    assert result["warnings"][0]["debt_type"] == "scheduled_personal_script_conditioned"
+
+
 def test_process_pre_tool_event_allows_launchagent_write_under_core_writes_allowed(guardrail_env, monkeypatch):
     monkeypatch.setenv("NEXO_HOME", str(guardrail_env))
     db, hook_guardrails = _reload_guardrail_stack()

@@ -1807,6 +1807,59 @@ def check_codex_conditioned_file_discipline():
     finding(severity, "codex-discipline", message)
 
 
+def check_correction_learning_requirements():
+    if not NEXO_DB.exists():
+        return
+    conn = sqlite3.connect(str(NEXO_DB))
+    conn.row_factory = sqlite3.Row
+    try:
+        if not _table_exists(conn, "session_correction_requirements"):
+            return
+        rows = conn.execute(
+            """SELECT id, session_id, correction_text, detected_at, followup_id
+               FROM session_correction_requirements
+               WHERE status = 'open'
+               ORDER BY detected_at ASC
+               LIMIT 25"""
+        ).fetchall()
+        if not rows:
+            return
+        refreshed = 0
+        for row in rows:
+            snippet = " ".join(str(row["correction_text"] or "").split())[:240]
+            description = (
+                "Persist learning for detected user correction "
+                f"in session {row['session_id']}: {snippet or '(no snippet)'}"
+            )
+            followup_id = _ensure_followup(
+                conn,
+                prefix="D5-CORRECTION",
+                description=description,
+                verification="Run nexo_learning_add, then confirm session_correction_requirements.status='resolved'.",
+                reasoning=(
+                    "Deep Sleep/self-audit found a correction detection with no durable learning_add. "
+                    "D.5 requires a reusable learning before session closure."
+                ),
+                priority="high",
+            )
+            if followup_id:
+                conn.execute(
+                    """UPDATE session_correction_requirements
+                       SET followup_id = ?
+                       WHERE id = ? AND COALESCE(followup_id, '') = ''""",
+                    (followup_id, int(row["id"])),
+                )
+                refreshed += 1
+        conn.commit()
+        finding(
+            "ERROR",
+            "correction-learning",
+            f"{len(rows)} correction(s) detected without learning_add; opened/refreshed {refreshed} followup(s)",
+        )
+    finally:
+        conn.close()
+
+
 def check_codex_startup_discipline():
     try:
         from doctor.providers.runtime import _recent_codex_session_parity_status
@@ -2155,6 +2208,7 @@ def main():
     check_automation_opportunities()
     check_state_watchers()
     check_memory_quality_scores()
+    check_correction_learning_requirements()
     check_codex_startup_discipline()
     check_codex_conditioned_file_discipline()
     check_watchdog_registry()
