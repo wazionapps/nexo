@@ -31,6 +31,7 @@ from script_registry import (
     ensure_personal_schedules,
     reconcile_personal_scripts,
     rename_legacy_personal_script_filenames,
+    repair_orphan_personal_schedule_metadata,
     sync_personal_scripts,
     unschedule_personal_script,
     retire_superseded_personal_scripts,
@@ -211,6 +212,26 @@ class TestMetadataParsing:
         assert declared["schedule_label"] == "keep alive"
         assert declared["run_on_boot"] is True
         assert declared["recovery_policy"] == "restart_daemon"
+
+    def test_metadata_aliases_normalize_runtime_and_weekday_schedule(self, tmp_path):
+        script = tmp_path / "weekly-shopify-health.sh"
+        script.write_text(
+            "#!/bin/bash\n"
+            "# nexo: name=weekly-shopify-health\n"
+            "# nexo: runtime=bash\n"
+            "# nexo: cron_id=weekly-shopify-health\n"
+            "# nexo: schedule=09:00 weekday=1\n"
+            "# nexo: schedule_required=true\n"
+            "echo ok\n"
+        )
+
+        meta = parse_inline_metadata(script)
+        declared = get_declared_schedule(meta, "weekly-shopify-health")
+
+        assert meta["runtime"] == "shell"
+        assert meta["schedule"] == "09:00:1"
+        assert declared["valid"] is True
+        assert declared["schedule_label"] == "09:00 weekday=1"
 
 
 class TestRuntimeDetection:
@@ -938,6 +959,46 @@ class TestRegistrySync:
         result = ensure_personal_schedules(dry_run=True)
         assert result["created"][0]["cron_id"] == "mail-poller"
         assert result["sync"]["missing_declared_schedules"][0]["name"] == "mail-poller"
+
+    def test_repair_orphan_schedule_metadata_infers_launchagent_contract(self, scripts_dir, monkeypatch):
+        import script_registry
+
+        script = scripts_dir / "weekly-shopify-health.sh"
+        script.write_text(
+            "#!/bin/bash\n"
+            "echo ok\n"
+        )
+        monkeypatch.setattr(
+            script_registry,
+            "_discover_personal_schedule_records",
+            lambda: [{
+                "cron_id": "weekly-shopify-health",
+                "script_path": str(script),
+                "schedule_type": "calendar",
+                "schedule_value": '{"Hour": 9, "Minute": 0, "Weekday": 1}',
+                "schedule_label": "09:00 weekday=1",
+                "launchd_label": "com.nexo.weekly-shopify-health",
+                "plist_path": "/tmp/com.nexo.weekly-shopify-health.plist",
+                "enabled": True,
+                "description": "",
+                "managed_marker": False,
+                "script_exists": True,
+                "script_within_scripts_dir": True,
+                "run_at_load": False,
+            }],
+        )
+
+        result = repair_orphan_personal_schedule_metadata()
+        meta = parse_inline_metadata(script)
+        declared = get_declared_schedule(meta, "weekly-shopify-health")
+
+        assert result["ok"] is True
+        assert result["repaired"][0]["cron_id"] == "weekly-shopify-health"
+        assert meta["runtime"] == "shell"
+        assert meta["schedule"] == "09:00:1"
+        assert declared["valid"] is True
+        assert declared["schedule_type"] == "calendar"
+        assert "# nexo: cron_id=weekly-shopify-health" in script.read_text()
 
     def test_ensure_personal_keep_alive_schedule_repairs_manual_daemon(self, scripts_dir, monkeypatch):
         import script_registry

@@ -152,6 +152,36 @@ def promote_draft_to_diary(sid: str, draft: dict, task: str = ""):
     delete_diary_draft(sid)
 
 
+def auto_close_open_protocol_tasks(conn, sid: str, task: str = "") -> list[str]:
+    """Close stale open protocol tasks as partial when their session is reaped."""
+    rows = conn.execute(
+        """SELECT task_id, goal
+           FROM protocol_tasks
+           WHERE session_id = ? AND status = 'open'
+           ORDER BY opened_at ASC""",
+        (sid,),
+    ).fetchall()
+    closed: list[str] = []
+    for row in rows:
+        task_id = row["task_id"]
+        goal = str(row["goal"] or "")
+        evidence = (
+            f"Auto-closed as partial because session {sid} became stale before an explicit nexo_task_close. "
+            f"Session task: {task or 'unknown'}. Open goal: {goal[:240]}"
+        )
+        conn.execute(
+            """UPDATE protocol_tasks
+               SET status = 'partial',
+                   close_evidence = ?,
+                   outcome_notes = 'auto-close: stale session ended without explicit task_close',
+                   closed_at = datetime('now')
+               WHERE task_id = ? AND status = 'open'""",
+            (evidence[:4000], task_id),
+        )
+        closed.append(task_id)
+    return closed
+
+
 def main():
     init_db()
     conn = get_db()
@@ -161,9 +191,12 @@ def main():
         print(f"[{datetime.datetime.now().isoformat(timespec='seconds')}] No stale sessions")
         return
 
+    closed_task_ids: list[str] = []
     for session in orphans:
         sid = session["sid"]
         draft = get_diary_draft(sid)
+        closed_tasks = auto_close_open_protocol_tasks(conn, sid, task=session.get("task", ""))
+        closed_task_ids.extend(closed_tasks)
 
         if draft:
             promote_draft_to_diary(sid, draft, task=session.get("task", ""))
@@ -196,7 +229,10 @@ def main():
     os.makedirs(os.path.dirname(AUTO_CLOSE_LOG), exist_ok=True)
     with open(AUTO_CLOSE_LOG, "a") as f:
         ts = datetime.datetime.now().isoformat(timespec="seconds")
-        f.write(f"{ts} — auto-closed {len(orphans)} session(s): {[s['sid'] for s in orphans]}\n")
+        f.write(
+            f"{ts} — auto-closed {len(orphans)} session(s): {[s['sid'] for s in orphans]} "
+            f"and {len(closed_task_ids)} protocol task(s): {closed_task_ids}\n"
+        )
 
 
 if __name__ == "__main__":

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import os
+import re
 import shutil
 import time
 from dataclasses import dataclass
@@ -537,6 +539,67 @@ def activate_versioned_runtime_snapshot(*, source_root: Path | None = None, vers
         "current_link": str(current),
         "copied": copied,
     }
+
+
+def _runtime_version_sort_key(path: Path) -> tuple:
+    parts = re.split(r"([0-9]+)", path.name)
+    key = []
+    for part in parts:
+        if not part:
+            continue
+        if part.isdigit():
+            key.append((0, int(part)))
+        else:
+            key.append((1, part.lower()))
+    return tuple(key)
+
+
+def _active_version_name() -> str:
+    current = core_current_link()
+    if current.exists() or current.is_symlink():
+        with contextlib.suppress(Exception):
+            resolved = current.resolve(strict=False)
+            if resolved.parent.name == "versions":
+                return resolved.name
+    return installed_runtime_version()
+
+
+def prune_old_versioned_runtime_snapshots(*, keep: int = 2, active_version: str = "") -> dict:
+    """Remove runtime snapshots older than the active + newest ``keep`` versions."""
+    keep = max(int(keep or 0), 1)
+    versions_dir = core_versions_dir()
+    report = {
+        "ok": True,
+        "versions_dir": str(versions_dir),
+        "keep": keep,
+        "active_version": str(active_version or "").strip(),
+        "kept": [],
+        "pruned": [],
+        "errors": [],
+    }
+    if not versions_dir.is_dir():
+        return report
+
+    snapshots = [item for item in versions_dir.iterdir() if item.is_dir() and not item.is_symlink()]
+    snapshots.sort(key=_runtime_version_sort_key)
+    active = str(active_version or _active_version_name() or "").strip()
+    report["active_version"] = active
+
+    keep_names = {item.name for item in snapshots[-keep:]}
+    if active:
+        keep_names.add(active)
+
+    for snapshot in snapshots:
+        if snapshot.name in keep_names:
+            report["kept"].append(snapshot.name)
+            continue
+        try:
+            shutil.rmtree(snapshot)
+            report["pruned"].append(snapshot.name)
+        except Exception as exc:
+            report["ok"] = False
+            report["errors"].append({"version": snapshot.name, "error": str(exc)})
+    return report
 
 
 def clear_restart_required_marker(

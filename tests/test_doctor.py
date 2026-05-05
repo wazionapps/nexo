@@ -2026,6 +2026,27 @@ class TestRuntimeChecks:
 
         assert check.status == "healthy"
 
+    def test_client_assumption_regressions_ignore_version_snapshots(self, nexo_home, monkeypatch, tmp_path):
+        from doctor.providers import runtime
+
+        runtime_home = tmp_path / "runtime"
+        active_src = runtime_home / "src"
+        snapshot_src = active_src / "versions" / "7.9.10"
+        (active_src / "scripts" / "deep-sleep").mkdir(parents=True, exist_ok=True)
+        snapshot_src.mkdir(parents=True, exist_ok=True)
+        (active_src / "scripts" / "deep-sleep" / "collect.py").write_text(
+            "CLAUDE='~/.claude/projects'\nCODEX='~/.codex/sessions'\nfind_codex_session_files=True\n"
+        )
+        (snapshot_src / "old.py").write_text("ROOT='~/.claude/projects'\n")
+
+        monkeypatch.setenv("NEXO_HOME", str(runtime_home))
+        monkeypatch.setattr(runtime, "NEXO_HOME", runtime_home)
+        monkeypatch.setattr(runtime, "NEXO_CODE", runtime_home)
+
+        check = runtime.check_client_assumption_regressions()
+
+        assert check.status == "healthy"
+
     def test_client_assumption_regressions_allows_runtime_detector_copy(self, nexo_home, monkeypatch, tmp_path):
         from doctor.providers import runtime
 

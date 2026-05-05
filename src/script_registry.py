@@ -95,6 +95,24 @@ SUPPORTED_RUNTIMES = {"python", "shell", "node", "php", "unknown"}
 PERSONAL_SCHEDULE_MANAGED_ENV = "NEXO_MANAGED_PERSONAL_CRON"
 SUPPORTED_RECOVERY_POLICIES = {"none", "run_once_on_wake", "catchup", "restart", "restart_daemon"}
 PERSONAL_SCRIPT_FILENAME_PREFIX = "ps-"
+_RUNTIME_METADATA_ALIASES = {
+    "bash": "shell",
+    "sh": "shell",
+    "zsh": "shell",
+    "shellscript": "shell",
+    "python3": "python",
+    "py": "python",
+    "nodejs": "node",
+    "javascript": "node",
+}
+_SCHEDULE_WEEKDAY_SUFFIX_RE = re.compile(
+    r"^(?P<hour>\d{1,2}):(?P<minute>\d{2})\s+weekday\s*=\s*(?P<weekday>\d)$",
+    re.IGNORECASE,
+)
+_SCHEDULE_WEEKDAY_PREFIX_RE = re.compile(
+    r"^weekday\s*=\s*(?P<weekday>\d)\s+(?P<hour>\d{1,2}):(?P<minute>\d{2})$",
+    re.IGNORECASE,
+)
 _LEGACY_CORE_SCRIPT_ALIASES = {
     "nexo-postcompact.sh": "post-compact.sh",
     "nexo-memory-precompact.sh": "pre-compact.sh",
@@ -341,8 +359,38 @@ def parse_inline_metadata(path: Path) -> dict:
         key, value = payload.split("=", 1)
         k = key.strip()
         if k in METADATA_KEYS:
-            meta[k] = value.strip()
+            meta[k] = _normalize_metadata_value(k, value.strip())
     return meta
+
+
+def _normalize_metadata_value(key: str, value: str) -> str:
+    if key == "runtime":
+        return _normalize_runtime_metadata(value)
+    if key == "schedule":
+        return _normalize_schedule_metadata(value)
+    return value
+
+
+def _normalize_runtime_metadata(value: str) -> str:
+    candidate = str(value or "").strip().lower()
+    return _RUNTIME_METADATA_ALIASES.get(candidate, candidate)
+
+
+def _normalize_schedule_metadata(value: str) -> str:
+    candidate = re.sub(r"\s+", " ", str(value or "").strip())
+    for pattern in (_SCHEDULE_WEEKDAY_SUFFIX_RE, _SCHEDULE_WEEKDAY_PREFIX_RE):
+        match = pattern.match(candidate)
+        if not match:
+            continue
+        try:
+            hour = int(match.group("hour"))
+            minute = int(match.group("minute"))
+            weekday = int(match.group("weekday"))
+        except ValueError:
+            return candidate
+        if 0 <= hour <= 23 and 0 <= minute <= 59 and 0 <= weekday <= 6:
+            return f"{hour:02d}:{minute:02d}:{weekday}"
+    return candidate
 
 
 def _detect_shebang(path: Path) -> str | None:
@@ -1068,6 +1116,169 @@ def _canonical_schedule_value(schedule_type: str, schedule_value: str | dict | l
     return str(schedule_value or "")
 
 
+def _metadata_comment_prefix(path: Path) -> str:
+    return "//" if path.suffix.lower() == ".js" else "#"
+
+
+def _compact_schedule_from_record(record: dict) -> str:
+    raw = str(record.get("schedule_value") or "").strip()
+    if not raw:
+        return ""
+    payload = None
+    if raw.lstrip().startswith("{") or raw.lstrip().startswith("["):
+        with contextlib.suppress(Exception):
+            payload = json.loads(raw)
+    if isinstance(payload, list):
+        payload = payload[0] if len(payload) == 1 and isinstance(payload[0], dict) else None
+    if isinstance(payload, dict):
+        hour = payload.get("Hour")
+        minute = payload.get("Minute")
+        weekday = payload.get("Weekday")
+        try:
+            hour_i = int(hour)
+            minute_i = int(minute)
+            weekday_i = int(weekday) if weekday is not None else None
+        except (TypeError, ValueError):
+            return ""
+        if not (0 <= hour_i <= 23 and 0 <= minute_i <= 59):
+            return ""
+        if weekday_i is not None:
+            if not (0 <= weekday_i <= 6):
+                return ""
+            return f"{hour_i:02d}:{minute_i:02d}:{weekday_i}"
+        return f"{hour_i:02d}:{minute_i:02d}"
+
+    normalized = _normalize_schedule_metadata(raw)
+    if _calendar_payload_from_declared(normalized) is not None:
+        return normalized
+
+    label = str(record.get("schedule_label") or "").strip()
+    match = re.search(r"(?P<hour>\d{1,2}):(?P<minute>\d{2})(?:\s+weekday=(?P<weekday>\d))?", label)
+    if not match:
+        return ""
+    weekday_part = f":{match.group('weekday')}" if match.group("weekday") is not None else ""
+    return f"{int(match.group('hour')):02d}:{int(match.group('minute')):02d}{weekday_part}"
+
+
+def _inferred_schedule_metadata_lines(path: Path, metadata: dict, record: dict) -> list[str] | None:
+    schedule_type = str(record.get("schedule_type") or "")
+    if schedule_type not in {"interval", "calendar", "keep_alive"}:
+        return None
+
+    name = _logical_personal_script_name(str(metadata.get("name") or path.stem))
+    description = str(metadata.get("description") or "Personal automation managed by NEXO").strip()
+    runtime = classify_runtime(path, metadata)
+    if runtime == "unknown":
+        runtime = "shell" if path.suffix.lower() == ".sh" else "python"
+    cron_id = _safe_slug(str(record.get("cron_id") or metadata.get("cron_id") or name))
+    prefix = _metadata_comment_prefix(path)
+
+    lines = [
+        f"{prefix} nexo: name={name}",
+        f"{prefix} nexo: description={description}",
+        f"{prefix} nexo: runtime={runtime}",
+        f"{prefix} nexo: cron_id={cron_id}",
+        f"{prefix} nexo: schedule_required=true",
+    ]
+    if schedule_type == "interval":
+        try:
+            interval = int(str(record.get("schedule_value") or "").strip())
+        except ValueError:
+            return None
+        if interval <= 0:
+            return None
+        lines.append(f"{prefix} nexo: interval_seconds={interval}")
+        lines.append(f"{prefix} nexo: recovery_policy=run_once_on_wake")
+    elif schedule_type == "calendar":
+        compact_schedule = _compact_schedule_from_record(record)
+        if not compact_schedule:
+            return None
+        lines.append(f"{prefix} nexo: schedule={compact_schedule}")
+        lines.append(f"{prefix} nexo: recovery_policy=catchup")
+    elif schedule_type == "keep_alive":
+        lines.append(f"{prefix} nexo: recovery_policy=restart_daemon")
+
+    if record.get("run_at_load"):
+        lines.append(f"{prefix} nexo: run_on_boot=true")
+    return lines
+
+
+def _write_metadata_block(path: Path, metadata_lines: list[str]) -> None:
+    raw = path.read_text(errors="ignore")
+    lines = raw.splitlines(keepends=True)
+    insert_at = 1 if lines and lines[0].startswith("#!") else 0
+    filtered: list[str] = []
+    for index, line in enumerate(lines):
+        stripped = line.lstrip()
+        if index >= insert_at and index < 25 and (
+            stripped.startswith("# nexo:") or stripped.startswith("// nexo:")
+        ):
+            continue
+        filtered.append(line)
+    block = [line.rstrip("\n") + "\n" for line in metadata_lines]
+    filtered[insert_at:insert_at] = block
+    path.write_text("".join(filtered))
+
+
+def repair_orphan_personal_schedule_metadata(*, dry_run: bool = False) -> dict:
+    """Infer inline metadata for personal LaunchAgents that predate the registry.
+
+    This powers ``nexo doctor --fix`` and ``nexo scripts reconcile`` for the
+    legacy case where a user-owned LaunchAgent exists but the script has no
+    declared schedule metadata. It never touches scripts outside the personal
+    scripts directory.
+    """
+    classification = classify_scripts_dir()
+    personal_scripts = [entry for entry in classification["entries"] if entry["classification"] == "personal"]
+    scripts_by_path = {
+        str(Path(entry["path"]).expanduser().resolve(strict=False)): entry
+        for entry in personal_scripts
+    }
+    report = {
+        "ok": True,
+        "dry_run": dry_run,
+        "repaired": [],
+        "skipped": [],
+        "errors": [],
+    }
+    for record in _discover_personal_schedule_records():
+        script_path = str(record.get("script_path") or "")
+        if not script_path:
+            report["skipped"].append({"cron_id": record.get("cron_id", ""), "reason": "missing script path"})
+            continue
+        resolved_path = str(Path(script_path).expanduser().resolve(strict=False))
+        script = scripts_by_path.get(resolved_path)
+        if not script:
+            report["skipped"].append({"cron_id": record.get("cron_id", ""), "path": script_path, "reason": "not a registered personal script"})
+            continue
+        declared = script.get("declared_schedule", {})
+        if declared.get("required") and declared.get("valid"):
+            report["skipped"].append({"cron_id": record.get("cron_id", ""), "path": script_path, "reason": "already has valid schedule metadata"})
+            continue
+        path = Path(script["path"])
+        metadata_lines = _inferred_schedule_metadata_lines(path, script.get("metadata", {}), record)
+        if not metadata_lines:
+            report["skipped"].append({"cron_id": record.get("cron_id", ""), "path": script_path, "reason": "unsupported schedule metadata inference"})
+            continue
+        entry = {
+            "cron_id": str(record.get("cron_id") or ""),
+            "path": str(path),
+            "schedule_type": str(record.get("schedule_type") or ""),
+        }
+        if dry_run:
+            entry["dry_run"] = True
+            report["repaired"].append(entry)
+            continue
+        try:
+            _write_metadata_block(path, metadata_lines)
+            report["repaired"].append(entry)
+        except Exception as exc:
+            report["errors"].append({"path": str(path), "error": str(exc)})
+    if report["errors"]:
+        report["ok"] = False
+    return report
+
+
 def _extract_launchctl_value(output: str, prefixes: str | tuple[str, ...]) -> str | None:
     if isinstance(prefixes, str):
         prefixes = (prefixes,)
@@ -1605,12 +1816,14 @@ def ensure_personal_schedules(*, dry_run: bool = False) -> dict:
 def reconcile_personal_scripts(*, dry_run: bool = False) -> dict:
     """Full lifecycle reconciliation: classify, sync registry, ensure declared schedules."""
     renamed_result = rename_legacy_personal_script_filenames(dry_run=dry_run)
+    orphan_metadata_result = repair_orphan_personal_schedule_metadata(dry_run=dry_run)
     sync_result = sync_personal_scripts()
     ensure_result = ensure_personal_schedules(dry_run=dry_run)
     return {
         "ok": True,
         "dry_run": dry_run,
         "renamed_legacy_filenames": renamed_result,
+        "repaired_orphan_schedule_metadata": orphan_metadata_result,
         "sync": sync_result,
         "marker_warnings": sync_result.get("marker_warnings", []),
         "ensure_schedules": ensure_result,

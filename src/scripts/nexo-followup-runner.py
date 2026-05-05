@@ -3,7 +3,7 @@
 # nexo: description=Continuous NEXO pending-work runner. Executes due followups, avoids overlap, and escalates operator attention through reminders/orchestrator.
 # nexo: category=automation
 # nexo: runtime=python
-# nexo: timeout=21600
+# nexo: timeout=10800
 # nexo: cron_id=followup-runner
 # nexo: interval_seconds=3600
 # nexo: schedule_required=true
@@ -20,7 +20,7 @@ NEXO Followup Runner v8 — continuous pending-work runner.
 Role:
 1. Pick up due or recurring followups that should already be running.
 2. Process them through the real NEXO runtime and its MCP surface.
-3. Avoid overlap via lock + long timeout (6h).
+3. Avoid overlap via lock + bounded timeout.
 4. Escalate operator attention through standard NEXO reminders when needed.
 
 From the operator's point of view, these are all "pending items". Internally,
@@ -58,6 +58,7 @@ from automation_controls import (
     get_send_reply_script_path,
 )
 from client_preferences import resolve_automation_backend, resolve_client_runtime_profile
+from constants import AUTOMATION_SUBPROCESS_TIMEOUT
 from core_prompts import render_core_prompt
 from operator_language import build_operator_language_contract, normalize_operator_language
 import db as nexo_db
@@ -69,7 +70,7 @@ LOG_FILE = LOG_DIR / "followup-runner.log"
 STATE_FILE = data_dir() / "followup-state.json"
 RESULTS_FILE = data_dir() / "followup-runner-results.json"
 
-CLI_TIMEOUT = 21600  # 6h safety net
+CLI_TIMEOUT = AUTOMATION_SUBPROCESS_TIMEOUT
 LOCK_FILE = LOG_DIR / "followup-runner.lock"
 MAX_FOLLOWUPS_PER_RUN = 5  # Focus: Opus can actually execute 5, not 30
 COOLDOWN_DAYS = 3  # Don't retry needs_decision/blocked for 3 days

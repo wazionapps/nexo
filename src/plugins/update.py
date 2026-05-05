@@ -16,6 +16,7 @@ from runtime_versioning import (
     activate_versioned_runtime_snapshot,
     compute_mcp_runtime_fingerprint,
     installed_force_restart_flag,
+    prune_old_versioned_runtime_snapshots,
     write_restart_required_marker,
 )
 
@@ -1236,6 +1237,7 @@ def _handle_packaged_update(progress_fn=None, *, include_clis: bool = True) -> s
 
     versioned_runtime_summary = None
     restart_marker_summary = None
+    version_prune_summary = None
     mcp_code_changed = False
     force_restart = False
     new_fingerprint = ""
@@ -1245,6 +1247,10 @@ def _handle_packaged_update(progress_fn=None, *, include_clis: bool = True) -> s
             versioned_runtime_summary = activate_versioned_runtime_snapshot(
                 source_root=_runtime_code_root(),
                 version=new_version,
+            )
+            version_prune_summary = prune_old_versioned_runtime_snapshots(
+                keep=2,
+                active_version=new_version,
             )
         except Exception as e:
             errors.append(f"versioned runtime activation: {e}")
@@ -1346,6 +1352,10 @@ def _handle_packaged_update(progress_fn=None, *, include_clis: bool = True) -> s
             lines.append(f"  WARNING: launchagent reload: {launchagent_reload_warning}")
     if versioned_runtime_summary and versioned_runtime_summary.get("ok"):
         lines.append(f"  Runtime activation: core/current -> versions/{new_version}")
+    if version_prune_summary and version_prune_summary.get("pruned"):
+        lines.append(
+            f"  Cleanup: pruned {len(version_prune_summary['pruned'])} old runtime version snapshot(s)"
+        )
     if restart_marker_summary:
         lines.append(f"  Restart marker: {restart_marker_summary.get('path')}")
     lines.append("")
@@ -1579,6 +1589,7 @@ def handle_update(
 
         versioned_runtime_summary = None
         restart_marker_summary = None
+        version_prune_summary = None
         mcp_code_changed = False
         force_restart = False
         new_fingerprint = ""
@@ -1588,6 +1599,10 @@ def handle_update(
                 versioned_runtime_summary = activate_versioned_runtime_snapshot(
                     source_root=SRC_DIR,
                     version=new_version,
+                )
+                version_prune_summary = prune_old_versioned_runtime_snapshots(
+                    keep=2,
+                    active_version=new_version,
                 )
                 steps_done.append("versioned-runtime")
             except Exception as e:
@@ -1662,6 +1677,10 @@ def handle_update(
             lines.append("  Clients: configured client targets synced")
         if versioned_runtime_summary and versioned_runtime_summary.get("ok"):
             lines.append(f"  Runtime activation: core/current -> versions/{new_version}")
+        if version_prune_summary and version_prune_summary.get("pruned"):
+            lines.append(
+                f"  Cleanup: pruned {len(version_prune_summary['pruned'])} old runtime version snapshot(s)"
+            )
         if restart_marker_summary:
             lines.append(f"  Restart marker: {restart_marker_summary.get('path')}")
         lines.append("")

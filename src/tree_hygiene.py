@@ -3,6 +3,7 @@ from __future__ import annotations
 """Shared tree hygiene helpers for runtime/install/release flows."""
 
 import re
+import os
 from pathlib import Path
 
 
@@ -46,11 +47,11 @@ def find_duplicate_artifact_paths(root: str | Path) -> list[Path]:
     """Find duplicate copy artifacts under a tree, skipping generated/vendor directories."""
     root_path = Path(root).resolve()
     duplicates: list[Path] = []
-    for path in sorted(root_path.rglob("*")):
-        if any(part in _IGNORED_DIRS for part in path.parts):
-            continue
-        if not path.is_file():
-            continue
-        if is_duplicate_artifact_name(path):
-            duplicates.append(path)
+    for dirpath, dirnames, filenames in os.walk(root_path):
+        dirnames[:] = sorted(name for name in dirnames if name not in _IGNORED_DIRS)
+        current = Path(dirpath)
+        for filename in sorted(filenames):
+            path = current / filename
+            if is_duplicate_artifact_name(path):
+                duplicates.append(path)
     return duplicates

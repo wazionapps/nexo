@@ -13,7 +13,7 @@ from pathlib import Path
 import paths
 
 from core_prompts import render_core_prompt
-from db import create_protocol_debt, get_db, get_last_heartbeat_ts
+from db import create_protocol_debt, create_protocol_task, get_db, get_last_heartbeat_ts
 from operator_language import append_operator_language_contract
 from plugins.guard import _load_conditioned_learnings, _normalize_path_token
 from protocol_settings import get_protocol_strictness
@@ -427,6 +427,42 @@ def _strict_write_without_task_severity(session_id: str) -> str:
     if time.time() - float(last_hb) <= _STRICT_WRITE_HEARTBEAT_WINDOW_SECONDS:
         return "warn"
     return "error"
+
+
+def _auto_task_open_enabled() -> bool:
+    return os.environ.get("NEXO_AUTO_TASK_OPEN", "1").strip().lower() not in {"0", "false", "no", "off"}
+
+
+def _auto_open_protocol_task_for_write(*, sid: str, tool_name: str, operation: str, files: list[str]) -> dict | None:
+    if not sid or not _auto_task_open_enabled():
+        return None
+    task_type = "edit" if operation == "write" else "execute"
+    clean_files = [item for item in files if str(item or "").strip()]
+    target = ", ".join(clean_files[:3]) if clean_files else "unknown target"
+    if len(clean_files) > 3:
+        target += f", +{len(clean_files) - 3} more"
+    try:
+        return create_protocol_task(
+            sid,
+            f"Auto-opened {task_type} task for {tool_name} on {target}",
+            task_type=task_type,
+            area="auto",
+            context_hint="PreToolUse auto-task_open: write/delete attempted without a matching open task.",
+            files=clean_files,
+            plan=[
+                "Auto-opened because the agent attempted a write/delete before explicit task_open.",
+                "Verify the edit and close with evidence.",
+            ],
+            constraints=[
+                "Do not treat this auto-open as success evidence.",
+                "Close as done only after verification; otherwise close partial/failed.",
+            ],
+            verification_step="Run the relevant test or inspection and close with evidence.",
+            must_verify=True,
+            must_change_log=True,
+        )
+    except Exception:
+        return None
 
 
 def _resolve_runtime_path(path: str) -> Path:
@@ -1599,6 +1635,24 @@ def process_pre_tool_event(payload: dict) -> dict:
             "status": "blocked",
         }
 
+    auto_opened_task = None
+    if files:
+        missing_task_files = [filepath for filepath in files if not _find_open_task_for_file(conn, sid, filepath)]
+        if missing_task_files:
+            auto_opened_task = _auto_open_protocol_task_for_write(
+                sid=sid,
+                tool_name=tool_name,
+                operation=op,
+                files=missing_task_files,
+            )
+    elif not _find_any_open_task(conn, sid):
+        auto_opened_task = _auto_open_protocol_task_for_write(
+            sid=sid,
+            tool_name=tool_name,
+            operation=op,
+            files=[],
+        )
+
     if not files:
         task = _find_any_open_task(conn, sid)
         if not task:
@@ -1628,6 +1682,7 @@ def process_pre_tool_event(payload: dict) -> dict:
             "operation": op,
             "strictness": strictness,
             "blocks": blocks,
+            "auto_opened_task": auto_opened_task,
             "status": "blocked" if blocks else "clean",
         }
 
@@ -1711,6 +1766,7 @@ def process_pre_tool_event(payload: dict) -> dict:
         "operation": op,
         "strictness": strictness,
         "blocks": blocks,
+        "auto_opened_task": auto_opened_task,
         "status": "blocked" if blocks else "clean",
     }
 

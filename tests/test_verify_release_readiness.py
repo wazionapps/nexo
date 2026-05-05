@@ -368,6 +368,20 @@ def test_check_duplicate_artifacts_rejects_duplicate_copy(tmp_path):
         module._check_duplicate_artifacts(tmp_path)
 
 
+def test_check_duplicate_artifacts_ignores_generated_dirs(tmp_path):
+    module = _load_module()
+    ignored = tmp_path / ".git" / "logs"
+    ignored.mkdir(parents=True)
+    (ignored / "alpha.py").write_text("print('ok')\n", encoding="utf-8")
+    (ignored / "alpha 2.py").write_text("print('old')\n", encoding="utf-8")
+    node_modules = tmp_path / "node_modules" / "pkg"
+    node_modules.mkdir(parents=True)
+    (node_modules / "beta.py").write_text("print('ok')\n", encoding="utf-8")
+    (node_modules / "beta 2.py").write_text("print('old')\n", encoding="utf-8")
+
+    module._check_duplicate_artifacts(tmp_path)
+
+
 def test_check_repo_public_surfaces_accepts_aligned_files(tmp_path):
     module = _load_module()
     _seed_public_surfaces(tmp_path, "5.3.29")

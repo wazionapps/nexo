@@ -704,10 +704,6 @@ def _client_assumption_regressions() -> list[str]:
     }
     offenders: list[str] = []
     for path in src_root.rglob("*.py"):
-        try:
-            text = path.read_text()
-        except Exception:
-            continue
         resolved = path.resolve()
         try:
             if resolved.is_relative_to(backup_root):
@@ -723,6 +719,12 @@ def _client_assumption_regressions() -> list[str]:
             relative_path = resolved.relative_to(src_root)
         except Exception:
             relative_path = path.relative_to(src_root)
+        if "versions" in relative_path.parts:
+            continue
+        try:
+            text = path.read_text()
+        except Exception:
+            continue
         if ".claude/projects" in text and relative_path not in allowed_relative_paths:
             offenders.append(f"{relative_path} hardcodes ~/.claude/projects")
     collect_path = src_root / "scripts" / "deep-sleep" / "collect.py"

@@ -237,6 +237,28 @@ def test_runtime_versioning_respects_explicit_source_root_over_stale_current(con
     assert (home / "core" / "versions" / "9.9.9" / "server.py").read_text(encoding="utf-8") == "print('fresh')\n"
 
 
+def test_runtime_versioning_prunes_snapshots_older_than_two_back(continuity_runtime):
+    runtime_versioning = continuity_runtime["runtime_versioning"]
+    home = continuity_runtime["home"]
+    versions = home / "core" / "versions"
+    for version in ("7.12.12", "7.12.13", "7.12.14", "7.12.15"):
+        root = versions / version
+        root.mkdir(parents=True, exist_ok=True)
+        (root / "server.py").write_text(f"print({version!r})\n", encoding="utf-8")
+    (home / "core" / "current").symlink_to(Path("versions") / "7.12.15")
+
+    result = runtime_versioning.prune_old_versioned_runtime_snapshots(
+        keep=2,
+        active_version="7.12.15",
+    )
+
+    assert result["ok"] is True
+    assert result["pruned"] == ["7.12.12", "7.12.13"]
+    assert (versions / "7.12.14").is_dir()
+    assert (versions / "7.12.15").is_dir()
+    assert not (versions / "7.12.12").exists()
+
+
 def test_restart_required_middleware_wraps_string_tool_schema(continuity_runtime, monkeypatch):
     runtime_versioning = continuity_runtime["runtime_versioning"]
     middleware = runtime_versioning.RestartRequiredMiddleware(client="claude_code")

@@ -21,6 +21,14 @@ def _load_module():
     return module
 
 
+def test_synthesize_uses_shared_headless_timeout():
+    module = _load_module()
+    from constants import AUTOMATION_SUBPROCESS_TIMEOUT
+
+    assert module.CLAUDE_TIMEOUT == AUTOMATION_SUBPROCESS_TIMEOUT
+    assert module.CLAUDE_TIMEOUT == 10800
+
+
 def test_synthesize_accepts_nested_direct_write(monkeypatch, tmp_path):
     module = _load_module()
 

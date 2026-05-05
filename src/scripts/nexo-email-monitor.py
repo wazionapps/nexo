@@ -6,7 +6,7 @@
 # nexo: cron_id=email-monitor
 # nexo: interval_seconds=60
 # nexo: schedule_required=true
-# nexo: timeout=21600
+# nexo: timeout=1800
 # nexo: recovery_policy=run_once_on_wake
 # nexo: run_on_boot=false
 # nexo: run_on_wake=true

@@ -208,6 +208,21 @@ def _run_auto_capture(payload: dict) -> int:
         return 1
 
 
+def _run_post_edit_change_log(payload: dict) -> int:
+    """Record write-tool visibility without calling MCP from the hook."""
+    try:
+        proc = subprocess.run(
+            ["python3", str(_DIR / "post_edit_change_log.py")],
+            input=json.dumps(payload),
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        return proc.returncode
+    except Exception:
+        return 1
+
+
 def main() -> int:
     started = time.time()
     payload = _read_stdin_json()
@@ -231,6 +246,7 @@ def main() -> int:
             protocol_message = stdout
 
     exits.append(_run_auto_capture(payload))
+    exits.append(_run_post_edit_change_log(payload))
 
     # v6.0.1 — inbox autodetect runs LAST so it sees the latest DB state
     # (including any writes the previous steps may have done). Emits a

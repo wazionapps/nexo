@@ -252,13 +252,14 @@ def test_process_pre_tool_event_blocks_write_without_open_task_in_strict_mode(gu
 
     assert result["status"] == "blocked"
     assert result["strictness"] == "strict"
-    assert result["blocks"][0]["debt_type"] == "strict_protocol_write_without_task"
+    assert result["auto_opened_task"]["task_id"].startswith("PT-")
+    assert result["blocks"][0]["debt_type"] == "write_without_file_guard_check"
     debt = db.get_db().execute(
-        "SELECT severity FROM protocol_debt WHERE debt_type = 'strict_protocol_write_without_task'"
+        "SELECT severity FROM protocol_debt WHERE debt_type = 'write_without_file_guard_check'"
     ).fetchone()
-    assert debt["severity"] == "error"
+    assert debt["severity"] == "warn"
     message = hook_guardrails.format_pretool_block_message(result)
-    assert "open `nexo_task_open" in message
+    assert "nexo_guard_check" in message
 
 
 def test_process_pre_tool_event_downgrades_missing_task_to_warn_with_recent_heartbeat(guardrail_env, monkeypatch):
@@ -283,8 +284,9 @@ def test_process_pre_tool_event_downgrades_missing_task_to_warn_with_recent_hear
     )
 
     assert result["status"] == "blocked"
+    assert result["auto_opened_task"]["task_id"].startswith("PT-")
     debt = db.get_db().execute(
-        "SELECT severity FROM protocol_debt WHERE debt_type = 'strict_protocol_write_without_task'"
+        "SELECT severity FROM protocol_debt WHERE debt_type = 'write_without_file_guard_check'"
     ).fetchone()
     assert debt["severity"] == "warn"
 

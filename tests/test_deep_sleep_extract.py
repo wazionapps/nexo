@@ -69,6 +69,13 @@ def test_classify_rate_limit(extract_module):
     assert kind == "rate_limit_error"
 
 
+def test_extract_uses_shared_headless_timeout(extract_module):
+    from constants import AUTOMATION_SUBPROCESS_TIMEOUT
+
+    assert extract_module.CLAUDE_TIMEOUT == AUTOMATION_SUBPROCESS_TIMEOUT
+    assert extract_module.CLAUDE_TIMEOUT == 10800
+
+
 def test_valid_extraction_accepts_prompt_contract_minimum(extract_module):
     assert extract_module._is_valid_extraction(
         {
