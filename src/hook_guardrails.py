@@ -261,6 +261,14 @@ def _short_tool_name(tool_name: str) -> str:
     return clean.rsplit("__", 1)[-1] if "__" in clean else clean
 
 
+def _canonical_hook_tool_name(tool_name: str) -> str:
+    clean = _short_tool_name(tool_name)
+    lowered = clean.strip().lower()
+    if lowered in {"bash", "shell", "shell_command", "exec_command", "local_shell"}:
+        return "Bash"
+    return clean
+
+
 def _normalize_file_path(path: str) -> str:
     return _normalize_path_token(str(Path(path)))
 
@@ -1392,7 +1400,7 @@ def _read_claude_session_id_from_coordination() -> str:
 
 
 def process_pre_tool_event(payload: dict) -> dict:
-    tool_name = str(payload.get("tool_name", "")).strip()
+    tool_name = _canonical_hook_tool_name(str(payload.get("tool_name", "")).strip())
     tool_input = payload.get("tool_input")
     op = _operation_kind(tool_name)
     shell_files: list[str] = []

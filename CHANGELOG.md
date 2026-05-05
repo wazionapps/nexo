@@ -1,13 +1,13 @@
 # Changelog
 
-## [7.13.4] - 2026-05-05
+## [7.13.5] - 2026-05-05
 
 ### Fixed — correction-learning enforcement, LaunchAgent G5, and Codex live compliance
 
 - **D.5 is now durable instead of passive.** Heartbeat correction detection records an open `session_correction_requirements` row, opens protocol debt, blocks `nexo_task_close` and `nexo_stop` until a real `nexo_learning_add` resolves the correction, and self-audit/Deep Sleep creates followups for unresolved correction sessions.
 - **Doctor `--fix` explicitly repairs orphan personal schedule metadata.** Runtime doctor now calls the orphan LaunchAgent metadata repair path directly before registry sync; existing aliases `runtime=bash` and `schedule=HH:MM weekday=N` remain accepted and normalized.
 - **G5 protects NEXO LaunchAgents with the intended flow.** Direct plist edits remain hard-blocked, while `launchctl unload/bootout`, `rm`, and `mv` over `com.nexo.*.plist` now create a warn-severity debt with the three-layer removal flow: launchctl, source metadata markers, then dry-run verification.
-- **Codex CLI compliance is a live DoctorCheck.** `installation_live.codex_protocol_compliance` combines 24h startup/bootstrap/heartbeat evidence with conditioned-file transcript drift and fails when the violation rate exceeds 5%.
+- **Codex CLI gets live shell enforcement plus audit.** Client sync now manages `~/.codex/hooks.json` with a `PreToolUse` guard for `Bash` / `shell_command` / `exec_command`, and `~/.codex/config.toml` enables `codex_hooks`. The same `pre_tool_use.py` Guardian path now canonicalizes Codex shell aliases before checking destructive commands, conditioned paths, protected runtime surfaces, and G5 LaunchAgent operations. `installation_live.codex_protocol_compliance` fails if the live hook is missing or if 24h startup/bootstrap/heartbeat + conditioned-file transcript drift exceeds 5%.
 
 ## [7.13.3] - 2026-05-05
 

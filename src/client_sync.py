@@ -527,6 +527,11 @@ def _codex_config_path(home: Path | None = None) -> Path:
     return base / ".codex" / "config.toml"
 
 
+def _codex_hooks_path(home: Path | None = None) -> Path:
+    base = home or _user_home()
+    return base / ".codex" / "hooks.json"
+
+
 def _toml_key(key: str) -> str:
     if key.replace("_", "").replace("-", "").isalnum():
         return key
@@ -632,6 +637,12 @@ def _sync_codex_managed_config(
     if "reasoning_effort" in runtime_profile:
         payload["model_reasoning_effort"] = runtime_profile.get("reasoning_effort") or ""
 
+    features = payload.setdefault("features", {})
+    if isinstance(features, dict):
+        features["codex_hooks"] = True
+    else:
+        payload["features"] = {"codex_hooks": True}
+
     payload["initial_messages"] = [
         {
             "role": "system",
@@ -643,6 +654,7 @@ def _sync_codex_managed_config(
     codex_table = nexo_table.setdefault("codex", {})
     codex_table["bootstrap_managed"] = True
     codex_table["mcp_managed"] = True
+    codex_table["hooks_managed"] = True
     codex_table["bootstrap_bytes"] = len(bootstrap_prompt.encode("utf-8")) if bootstrap_prompt else 0
     if runtime_profile.get("model"):
         # Record the healed/actual model in use, not the raw (possibly Claude) profile.
@@ -670,8 +682,124 @@ def _sync_codex_managed_config(
         "path": str(path),
         "bootstrap_managed": True,
         "mcp_managed": True,
+        "hooks_enabled": True,
         "model": runtime_profile.get("model", ""),
         "reasoning_effort": runtime_profile.get("reasoning_effort", "") or "",
+    }
+
+
+CODEX_SUPPORTED_HOOK_EVENTS = {"PreToolUse"}
+CODEX_PRETOOL_MATCHER = r"^(Bash|shell_command|exec_command)$"
+
+
+def _codex_core_hook_specs(runtime_root: Path) -> list[dict]:
+    specs: list[dict] = []
+    for spec in _core_hook_specs(runtime_root):
+        if spec.get("event") not in CODEX_SUPPORTED_HOOK_EVENTS:
+            continue
+        item = dict(spec)
+        if item.get("event") == "PreToolUse":
+            item["matcher"] = CODEX_PRETOOL_MATCHER
+            item["statusMessage"] = "NEXO guard"
+        specs.append(item)
+    return specs
+
+
+def _merge_codex_hooks(existing_hooks, *, runtime_root: Path, nexo_home: Path) -> tuple[dict, int]:
+    hooks_payload = dict(existing_hooks) if isinstance(existing_hooks, dict) else {}
+    hooks_dir = _resolve_hook_source_dir(runtime_root)
+    managed_count = 0
+    core_hook_specs = _codex_core_hook_specs(runtime_root)
+    current_identities_by_event = _current_core_hook_identities_by_event(core_hook_specs)
+    managed_identities_by_event = _managed_core_hook_identities_by_event(current_identities_by_event)
+
+    for event, managed_identities in managed_identities_by_event.items():
+        sections = _normalize_hook_sections(hooks_payload.get(event))
+        desired_identities = current_identities_by_event.get(event, set())
+        cleaned_sections: list[dict] = []
+        for section in sections:
+            cleaned_hooks = []
+            for hook in section["hooks"]:
+                identity = _hook_identity(hook.get("command", ""))
+                if identity in managed_identities and identity not in desired_identities:
+                    continue
+                cleaned_hooks.append(hook)
+            if cleaned_hooks:
+                cleaned_sections.append(
+                    {
+                        "matcher": section.get("matcher", "*") or "*",
+                        "hooks": cleaned_hooks,
+                    }
+                )
+        if cleaned_sections:
+            hooks_payload[event] = cleaned_sections
+        elif event in hooks_payload and event in current_identities_by_event:
+            hooks_payload.pop(event, None)
+
+    for spec in core_hook_specs:
+        event = spec["event"]
+        sections = _normalize_hook_sections(hooks_payload.get(event))
+        hooks_payload[event] = sections
+        command = _render_hook_command(spec, nexo_home=nexo_home, runtime_root=runtime_root, hooks_dir=hooks_dir)
+        identity = spec["identity"]
+        matcher = spec.get("matcher") or "*"
+
+        found = False
+        for section in sections:
+            for hook in section["hooks"]:
+                if _hook_identity(hook.get("command", "")) != identity:
+                    continue
+                section["matcher"] = matcher
+                hook["type"] = "command"
+                hook["command"] = command
+                if spec.get("timeout"):
+                    hook["timeout"] = spec["timeout"]
+                if spec.get("statusMessage"):
+                    hook["statusMessage"] = spec["statusMessage"]
+                found = True
+                managed_count += 1
+                break
+            if found:
+                break
+
+        if found:
+            continue
+
+        target = None
+        for section in sections:
+            if section.get("matcher", "*") == matcher:
+                target = section
+                break
+        if target is None:
+            target = {"matcher": matcher, "hooks": []}
+            sections.append(target)
+
+        new_hook = {"type": "command", "command": command}
+        if spec.get("timeout"):
+            new_hook["timeout"] = spec["timeout"]
+        if spec.get("statusMessage"):
+            new_hook["statusMessage"] = spec["statusMessage"]
+        target["hooks"].append(new_hook)
+        managed_count += 1
+
+    return hooks_payload, managed_count
+
+
+def _sync_codex_hooks(path: Path, *, runtime_root: Path, nexo_home: Path) -> dict:
+    payload = _load_json_object(path)
+    action = "updated" if payload else "created"
+    payload["hooks"], managed_count = _merge_codex_hooks(
+        payload.get("hooks", {}),
+        runtime_root=runtime_root,
+        nexo_home=nexo_home,
+    )
+    _write_json_object(path, payload)
+    return {
+        "ok": True,
+        "action": action,
+        "path": str(path),
+        "managed_hook_count": managed_count,
+        "pretool_matcher": CODEX_PRETOOL_MATCHER,
     }
 
 
@@ -1187,6 +1315,7 @@ def sync_codex(
     )
     codex_bin = shutil.which("codex")
     config_path = _codex_config_path(home_path)
+    hooks_path = _codex_hooks_path(home_path)
     if not codex_bin:
         result = {
             "ok": True,
@@ -1209,6 +1338,11 @@ def sync_codex(
                 bootstrap_prompt=prompt_text,
                 runtime_profile=runtime_profile,
                 server_config=server_config,
+            )
+            result["hooks"] = _sync_codex_hooks(
+                hooks_path,
+                runtime_root=Path(runtime_root).expanduser() if runtime_root else _resolve_runtime_root(nexo_home_path),
+                nexo_home=nexo_home_path,
             )
         return result
 
@@ -1247,6 +1381,11 @@ def sync_codex(
         bootstrap_prompt=bootstrap_result.get("content") or "",
         runtime_profile=runtime_profile,
         server_config=server_config,
+    )
+    sync_result["hooks"] = _sync_codex_hooks(
+        hooks_path,
+        runtime_root=Path(runtime_root).expanduser() if runtime_root else _resolve_runtime_root(nexo_home_path),
+        nexo_home=nexo_home_path,
     )
     if result.returncode != 0:
         sync_result["warning"] = (result.stderr or result.stdout or "codex mcp add failed").strip()

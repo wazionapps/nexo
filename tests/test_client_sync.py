@@ -38,6 +38,7 @@ def _make_runtime(root: Path, *, operator_name: str = "Atlas") -> Path:
         "hooks": [
             {"event": "SessionStart", "handler": "src/hooks/session_start.py", "critical": True},
             {"event": "UserPromptSubmit", "handler": "src/hooks/auto_capture.py", "critical": False},
+            {"event": "PreToolUse", "handler": "src/hooks/pre_tool_use.py", "critical": True},
             {"event": "PostToolUse", "handler": "src/hooks/post_tool_use.py", "critical": False},
             {"event": "PreCompact", "handler": "src/hooks/pre_compact.py", "critical": True},
             {"event": "Stop", "handler": "src/hooks/stop.py", "critical": True},
@@ -49,6 +50,7 @@ def _make_runtime(root: Path, *, operator_name: str = "Atlas") -> Path:
     for handler in (
         "session_start.py",
         "auto_capture.py",
+        "pre_tool_use.py",
         "post_tool_use.py",
         "pre_compact.py",
         "stop.py",
@@ -122,6 +124,7 @@ def test_sync_claude_code_preserves_existing_settings(tmp_path):
     ]
     assert any("session_start.py" in command for command in all_hook_commands)
     assert any("auto_capture.py" in command for command in all_hook_commands)
+    assert any("pre_tool_use.py" in command for command in all_hook_commands)
     assert any("post_tool_use.py" in command for command in all_hook_commands)
     assert any("pre_compact.py" in command for command in all_hook_commands)
     assert any("stop.py" in command for command in all_hook_commands)
@@ -469,8 +472,21 @@ def test_sync_codex_uses_codex_cli_when_available(tmp_path, monkeypatch):
     assert "mcp_managed = true" in config_text
     assert 'approval_policy = "never"' in config_text
     assert 'sandbox_mode = "danger-full-access"' in config_text
+    assert "[features]" in config_text
+    assert "codex_hooks = true" in config_text
     assert "[mcp_servers.nexo]" in config_text
     assert 'NEXO_MCP_CLIENT = "codex"' in config_text
+    hooks_path = home / ".codex" / "hooks.json"
+    hooks_payload = json.loads(hooks_path.read_text())
+    pretool = hooks_payload["hooks"]["PreToolUse"]
+    assert pretool[0]["matcher"] == client_sync.CODEX_PRETOOL_MATCHER
+    pretool_commands = [
+        hook["command"]
+        for section in pretool
+        for hook in section.get("hooks", [])
+    ]
+    assert any("pre_tool_use.py" in command for command in pretool_commands)
+    assert result["hooks"]["managed_hook_count"] == 1
 
 
 def test_sync_codex_preserves_explicit_approval_and_sandbox(tmp_path):
@@ -495,6 +511,7 @@ def test_sync_codex_preserves_explicit_approval_and_sandbox(tmp_path):
     assert 'approval_policy = "on-request"' in config_text
     assert 'sandbox_mode = "workspace-write"' in config_text
     assert 'model = "gpt-5.4-mini"' in config_text
+    assert "codex_hooks = true" in config_text
 
 
 def test_sync_all_clients_treats_missing_codex_as_non_fatal(tmp_path, monkeypatch):
@@ -517,6 +534,7 @@ def test_sync_all_clients_treats_missing_codex_as_non_fatal(tmp_path, monkeypatc
     assert "codex binary not found" in result["clients"]["codex"]["reason"]
     assert (home / ".codex" / "AGENTS.md").is_file()
     assert "[mcp_servers.nexo]" in (home / ".codex" / "config.toml").read_text()
+    assert "pre_tool_use.py" in (home / ".codex" / "hooks.json").read_text()
 
 
 def test_sync_all_clients_auto_installs_selected_claude_code_when_missing(tmp_path, monkeypatch):

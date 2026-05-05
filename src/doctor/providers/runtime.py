@@ -185,6 +185,52 @@ def _codex_bootstrap_config_status() -> dict:
     }
 
 
+def _codex_hooks_config_status() -> dict:
+    path = Path.home() / ".codex" / "hooks.json"
+    if not path.is_file():
+        return {
+            "exists": False,
+            "path": str(path),
+            "pretool_managed": False,
+            "pretool_command": "",
+        }
+    try:
+        payload = json.loads(path.read_text())
+    except Exception as exc:
+        return {
+            "exists": True,
+            "path": str(path),
+            "pretool_managed": False,
+            "pretool_command": "",
+            "error": str(exc),
+        }
+    hooks = payload.get("hooks") if isinstance(payload, dict) else {}
+    pretool = hooks.get("PreToolUse") if isinstance(hooks, dict) else []
+    for section in pretool or []:
+        if not isinstance(section, dict):
+            continue
+        matcher = str(section.get("matcher") or "")
+        for hook in section.get("hooks") or []:
+            if not isinstance(hook, dict):
+                continue
+            command = str(hook.get("command") or "")
+            if "pre_tool_use.py" not in command:
+                continue
+            return {
+                "exists": True,
+                "path": str(path),
+                "pretool_managed": True,
+                "pretool_command": command,
+                "pretool_matcher": matcher,
+            }
+    return {
+        "exists": True,
+        "path": str(path),
+        "pretool_managed": False,
+        "pretool_command": "",
+    }
+
+
 def _claude_desktop_shared_brain_status() -> dict:
     path = Path.home() / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json"
     if not path.is_file():
@@ -2130,6 +2176,7 @@ def check_client_bootstrap_parity(fix: bool = False) -> DoctorCheck:
             repair_plan.append("Refresh bootstrap files from the current NEXO templates")
         if client_key == "codex":
             codex_config = _codex_bootstrap_config_status()
+            codex_hooks = _codex_hooks_config_status()
             if codex_config.get("error"):
                 status = "degraded"
                 severity = "warn"
@@ -2151,6 +2198,20 @@ def check_client_bootstrap_parity(fix: bool = False) -> DoctorCheck:
                     + (
                         f" ({codex_config.get('model') or 'default'}, {codex_config.get('reasoning_effort') or 'default'})"
                     )
+                )
+            if codex_hooks.get("error"):
+                status = "degraded"
+                severity = "warn"
+                evidence.append(f"codex hooks JSON invalid at {codex_hooks.get('path')}: {codex_hooks.get('error')}")
+                repair_plan.append("Repair ~/.codex/hooks.json so NEXO can manage Codex PreToolUse enforcement")
+            elif not codex_hooks.get("pretool_managed"):
+                status = "degraded"
+                severity = "warn"
+                evidence.append(f"codex PreToolUse hook missing at {codex_hooks.get('path')}")
+                repair_plan.append("Run `nexo clients sync --client codex` to install the managed PreToolUse guard")
+            else:
+                evidence.append(
+                    f"codex PreToolUse hook managed ({codex_hooks.get('pretool_matcher') or '*'})"
                 )
 
     if fix and status != "healthy":
@@ -2447,6 +2508,34 @@ def check_codex_protocol_compliance() -> DoctorCheck:
             summary="Codex protocol compliance skipped (Codex not selected)",
         )
 
+    hooks = _codex_hooks_config_status()
+    if hooks.get("error"):
+        return DoctorCheck(
+            id="installation_live.codex_protocol_compliance",
+            tier="runtime",
+            status="critical",
+            severity="error",
+            summary="Codex live protocol enforcement is not readable",
+            evidence=[f"codex hooks JSON invalid at {hooks.get('path')}: {hooks.get('error')}"],
+            repair_plan=["Repair ~/.codex/hooks.json or run `nexo clients sync --client codex`"],
+            escalation_prompt=(
+                "Codex cannot be treated as protocol-compliant while its live PreToolUse hook config is unreadable."
+            ),
+        )
+    if not hooks.get("pretool_managed"):
+        return DoctorCheck(
+            id="installation_live.codex_protocol_compliance",
+            tier="runtime",
+            status="critical",
+            severity="error",
+            summary="Codex live PreToolUse enforcement is not installed",
+            evidence=[f"missing managed PreToolUse hook at {hooks.get('path')}"],
+            repair_plan=["Run `nexo clients sync --client codex` so shell/exec_command calls are checked before execution"],
+            escalation_prompt=(
+                "Codex can still execute shell commands without the live NEXO guard; this is not functional parity."
+            ),
+        )
+
     startup = _recent_codex_session_parity_status(days=1)
     conditioned = _recent_codex_conditioned_file_discipline_status(days=1)
     sessions = int(startup.get("files") or conditioned.get("files") or 0)
@@ -2478,6 +2567,7 @@ def check_codex_protocol_compliance() -> DoctorCheck:
     status = "critical" if violation_rate > 5.0 else "healthy"
     severity = "error" if status == "critical" else "info"
     evidence = [
+        f"codex PreToolUse hook: managed ({hooks.get('pretool_matcher') or '*'})",
         f"codex sessions inspected 24h: {sessions}",
         f"startup/protocol violating sessions: {startup_violation_sessions}",
         f"conditioned-file violations: {conditioned_violations}",

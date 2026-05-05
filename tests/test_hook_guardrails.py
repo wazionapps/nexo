@@ -116,6 +116,29 @@ def test_process_tool_event_records_debt_when_writing_conditioned_file_without_p
     assert debt["severity"] == "error"
 
 
+def test_codex_exec_command_alias_hits_bash_pretool_gate(guardrail_env, monkeypatch):
+    db, hook_guardrails = _reload_guardrail_stack()
+    db.init_db()
+    monkeypatch.setenv("NEXO_G3_ENFORCE_DESTRUCTIVE", "hard")
+    db.register_session(
+        "nexo-2002-3100",
+        "codex exec command",
+        external_session_id="codex-session-1",
+        session_client="codex",
+    )
+
+    result = hook_guardrails.process_pre_tool_event(
+        {
+            "session_id": "codex-session-1",
+            "tool_name": "exec_command",
+            "tool_input": {"command": "rm -rf /tmp/nexo-dangerous-path"},
+        }
+    )
+
+    assert result["status"] == "blocked"
+    assert result["blocks"][0]["reason_code"] == "g3_destructive_blocked"
+
+
 def test_process_tool_event_records_debt_when_writing_before_guard_ack(guardrail_env):
     db, hook_guardrails = _reload_guardrail_stack()
     db.init_db()

@@ -1407,7 +1407,26 @@ class TestRuntimeChecks:
             "automation_enabled": False,
             "automation_backend": "none",
         }))
+        codex_home = nexo_home / ".codex"
+        codex_home.mkdir(parents=True, exist_ok=True)
+        (codex_home / "hooks.json").write_text(json.dumps({
+            "hooks": {
+                "PreToolUse": [
+                    {
+                        "matcher": "^(Bash|shell_command|exec_command)$",
+                        "hooks": [
+                            {
+                                "type": "command",
+                                "command": f"NEXO_HOME={nexo_home} python3 {nexo_home}/hooks/pre_tool_use.py",
+                                "timeout": 8,
+                            }
+                        ],
+                    }
+                ]
+            }
+        }))
         monkeypatch.setattr(runtime, "SCHEDULE_FILE", schedule_file)
+        monkeypatch.setattr(runtime.Path, "home", lambda: nexo_home)
         monkeypatch.setattr(
             runtime,
             "_recent_codex_session_parity_status",
@@ -1438,6 +1457,30 @@ class TestRuntimeChecks:
         assert check.status == "critical"
         assert check.severity == "error"
         assert any("violation rate: 10.0%" in item for item in check.evidence)
+
+    def test_codex_protocol_compliance_fails_when_live_hook_missing(self, nexo_home, monkeypatch):
+        from doctor.providers import runtime
+
+        schedule_file = nexo_home / "config" / "schedule.json"
+        schedule_file.parent.mkdir(parents=True, exist_ok=True)
+        schedule_file.write_text(json.dumps({
+            "interactive_clients": {
+                "claude_code": False,
+                "codex": True,
+                "claude_desktop": False,
+            },
+            "default_terminal_client": "codex",
+            "automation_enabled": False,
+            "automation_backend": "none",
+        }))
+        monkeypatch.setattr(runtime, "SCHEDULE_FILE", schedule_file)
+        monkeypatch.setattr(runtime.Path, "home", lambda: nexo_home)
+
+        check = runtime.check_codex_protocol_compliance()
+
+        assert check.status == "critical"
+        assert "PreToolUse enforcement is not installed" in check.summary
+        assert any("missing managed PreToolUse hook" in item for item in check.evidence)
 
     def test_codex_conditioned_file_discipline_warns_on_read_without_protocol(self, nexo_home, monkeypatch):
         from doctor.providers import runtime
