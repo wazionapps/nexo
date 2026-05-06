@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.13.7 adds authenticated official protocol-card tools without embedding the private catalog.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.13.8 hardens Desktop-managed fresh installs by rejecting unsupported Python before dependency setup.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.13.7 adds authenticated official protocol-card tools without embedding the private catalog.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.13.8 hardens Desktop-managed fresh installs by rejecting unsupported Python before dependency setup.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.13.7 adds authenticated official protocol-card tools without embedding the private catalog.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.13.8 hardens Desktop-managed fresh installs by rejecting unsupported Python before dependency setup.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.13.7 adds authenticated official protocol-card tools without embedding the private catalog.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.13.8 hardens Desktop-managed fresh installs by rejecting unsupported Python before dependency setup.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -87,13 +87,13 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v7.13.7 live</span>
+                    <span class="page-chip">v7.13.8 live</span>
                     <span class="page-chip">Guardian active</span>
                     <span class="page-chip">F0.6 hardening</span>
                     <span class="page-chip">Adaptive empirical</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v7137" class="btn btn-primary">Start with v7.13.7</a>
+                    <a href="#v7138" class="btn btn-primary">Start with v7.13.8</a>
                     <a href="#v7122" class="btn btn-secondary">See v7.12.2</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -101,8 +101,8 @@
             <div class="page-visual">
                 <div class="page-stack">
                     <div class="page-stack-card">
-                        <strong>v7.13.7</strong>
-                        <span>Patch release — authenticated official protocol-card tools fetch server-side task protocols at runtime while keeping the private catalog out of the open-source Brain package.</span>
+                        <strong>v7.13.8</strong>
+                        <span>Patch release — Desktop-managed fresh installs reject unsupported Python before dependency setup and use the interpreter prepared by Desktop.</span>
                     </div>
                     <div class="page-stack-card">
                         <strong>v7.11.1</strong>
@@ -304,6 +304,14 @@
 <section class="section-compact" style="background:rgba(124,58,237,0.08);">
     <div class="container desktop-disclaimer" style="max-width:860px;font-size:13px;line-height:1.55;">
         <p><strong>About NEXO Desktop.</strong> NEXO Desktop is a separate closed-source companion client distributed at <a href="https://nexo-desktop.com/">nexo-desktop.com</a>. When a changelog entry mentions NEXO Desktop it refers to a coordinated client release that consumes the Brain CLI/MCP contract. Desktop source does not live in this repo; the Brain (AGPL-3.0) remains fully usable on its own from terminal, Codex, Claude Code, or any MCP client.</p>
+    </div>
+</section>
+
+<section id="v7138" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.13.8 <span style="opacity:.5;font-weight:400;">&mdash; May 6, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">Desktop-managed fresh install hardening</h2>
+        <p class="section-subtitle">Brain now rejects Python &lt;3.10 before dependency installation, honors the Python interpreter prepared by Desktop through <code>NEXO_BOOTSTRAP_PYTHON</code> / <code>NEXO_PYTHON</code>, and fails clearly instead of surfacing <code>fastmcp</code> resolution noise from Apple Python 3.9 during fresh Mac installs.</p>
     </div>
 </section>
 
