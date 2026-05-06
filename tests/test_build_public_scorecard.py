@@ -4,6 +4,7 @@ import importlib.util
 import json
 import sqlite3
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
@@ -26,12 +27,13 @@ def test_collect_longitudinal_metrics_reads_protocol_windows(tmp_path):
     db_path = tmp_path / "nexo.db"
     tool_log_dir = tmp_path / "tool-logs"
     tool_log_dir.mkdir()
-    (tool_log_dir / "2026-04-06.jsonl").write_text(
+    base = (datetime.now(timezone.utc) - timedelta(days=1)).replace(microsecond=0)
+    (tool_log_dir / f"{base:%Y-%m-%d}.jsonl").write_text(
         "\n".join(
             [
                 json.dumps(
                     {
-                        "timestamp": "2026-04-06T10:00:00Z",
+                        "timestamp": base.isoformat().replace("+00:00", "Z"),
                         "session_id": "ext-1",
                         "tool_name": "mcp__nexo__nexo_heartbeat",
                         "tool_input": {"sid": "nexo-1"},
@@ -40,7 +42,7 @@ def test_collect_longitudinal_metrics_reads_protocol_windows(tmp_path):
                 ),
                 json.dumps(
                     {
-                        "timestamp": "2026-04-06T10:01:00Z",
+                        "timestamp": (base + timedelta(minutes=1)).isoformat().replace("+00:00", "Z"),
                         "session_id": "ext-1",
                         "tool_name": "Bash",
                         "tool_input": {"command": "pytest tests/test_a.py"},
@@ -49,7 +51,7 @@ def test_collect_longitudinal_metrics_reads_protocol_windows(tmp_path):
                 ),
                 json.dumps(
                     {
-                        "timestamp": "2026-04-06T10:02:00Z",
+                        "timestamp": (base + timedelta(minutes=2)).isoformat().replace("+00:00", "Z"),
                         "session_id": "ext-1",
                         "tool_name": "Bash",
                         "tool_input": {"command": "pytest tests/test_a.py"},
@@ -58,7 +60,7 @@ def test_collect_longitudinal_metrics_reads_protocol_windows(tmp_path):
                 ),
                 json.dumps(
                     {
-                        "timestamp": "2026-04-06T10:03:00Z",
+                        "timestamp": (base + timedelta(minutes=3)).isoformat().replace("+00:00", "Z"),
                         "session_id": "ext-1",
                         "tool_name": "Bash",
                         "tool_input": {"command": "pytest tests/test_b.py"},
@@ -67,7 +69,7 @@ def test_collect_longitudinal_metrics_reads_protocol_windows(tmp_path):
                 ),
                 json.dumps(
                     {
-                        "timestamp": "2026-04-06T10:12:00Z",
+                        "timestamp": (base + timedelta(minutes=12)).isoformat().replace("+00:00", "Z"),
                         "session_id": "ext-1",
                         "tool_name": "Bash",
                         "tool_input": {"command": "pytest tests/test_a.py"},
