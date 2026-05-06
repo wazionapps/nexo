@@ -127,6 +127,18 @@ def test_desktop_managed_installer_uses_valid_bootstrap_python():
     assert "NEXO Brain requires Python >=" in text
 
 
+def test_desktop_managed_installer_recreates_incompatible_existing_venv():
+    text = INSTALLER.read_text()
+
+    assert "function ensureManagedVenvCompatible(venvPath, venvPython)" in text
+    assert "const version = pythonVersion(venvPython);" in text
+    assert "pythonVersionMeetsMinimum(version)" in text
+    assert 'uniqueBackupPath(venvPath, "unsupported-python")' in text
+    assert "fs.renameSync(venvPath, backupPath)" in text
+    assert "ensureManagedVenvCompatible(venvPath, venvPython);" in text
+    assert "Python virtual environment is unsupported after creation" in text
+
+
 def test_desktop_managed_npm_has_node_for_lifecycle_scripts():
     text = INSTALLER.read_text()
 

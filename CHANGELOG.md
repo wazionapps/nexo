@@ -1,5 +1,12 @@
 # Changelog
 
+## [7.13.9] - 2026-05-06
+
+### Fixed — stale Desktop installer venv recovery
+
+- **Desktop-managed installs now recover from an existing incompatible `.venv`.** If a previous failed attempt left `~/.nexo/.venv` on Python <3.10, Brain moves that environment aside with an `unsupported-python` backup suffix and recreates it with the supported Python selected by Desktop, instead of reusing Python 3.9 and failing later on `fastmcp`.
+- **Model warmup uses the same supported managed venv path.** Warmup no longer creates or reuses a stale/incompatible managed environment before the main dependency installer runs.
+
 ## [7.13.8] - 2026-05-06
 
 ### Fixed — fresh Desktop installer Python floor

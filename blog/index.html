@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Blog — NEXO Brain</title>
-    <meta name="description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.13.8 Desktop-managed fresh install hardening release.">
+    <meta name="description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.13.9 Desktop-managed stale venv recovery release.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/blog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/blog/">
     <meta property="og:title" content="Blog — NEXO Brain">
-    <meta property="og:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.13.8 Desktop-managed fresh install hardening release.">
+    <meta property="og:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.13.9 Desktop-managed stale venv recovery release.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Blog — NEXO Brain">
-    <meta name="twitter:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.13.8 Desktop-managed fresh install hardening release.">
+    <meta name="twitter:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.13.9 Desktop-managed stale venv recovery release.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Blog — NEXO Brain",
-        "description": "Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.13.8 Desktop-managed fresh install hardening release.",
+        "description": "Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.13.9 Desktop-managed stale venv recovery release.",
         "url": "https://nexo-brain.com/blog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -134,7 +134,7 @@
                     <span class="page-chip">Shared brain product notes</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="/blog/nexo-7-13-8/" class="btn btn-primary">Read latest release</a>
+                    <a href="/blog/nexo-7-13-9/" class="btn btn-primary">Read latest release</a>
                     <a href="/changelog/" class="btn btn-secondary">Latest release notes</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -144,23 +144,23 @@
                 <div class="section-label">Latest release</div>
                 <div class="blog-featured-meta">
                     <span class="compare-chip">May 6, 2026</span>
-                    <span class="compare-chip">Installer hardening</span>
-                    <span class="compare-chip">Python >=3.10 gate</span>
+                    <span class="compare-chip">Installer recovery</span>
+                    <span class="compare-chip">Stale venv guard</span>
                 </div>
-                <h2>NEXO 7.13.8: Desktop-managed fresh install hardening</h2>
-                <p>Patch release over v7.13.7. Brain now rejects Python &lt;3.10 before dependency installation, honors the Python interpreter prepared by Desktop, and fails clearly instead of surfacing fastmcp resolution noise from Apple Python 3.9.</p>
+                <h2>NEXO 7.13.9: stale Desktop venv recovery</h2>
+                <p>Patch release over v7.13.8. Brain now moves aside an existing managed <code>.venv</code> when it was created with unsupported Python &lt;3.10, then recreates it with the interpreter prepared by Desktop.</p>
                 <div class="hero-actions" style="justify-content:flex-start;margin-bottom:18px;">
-                    <a href="/blog/nexo-7-13-8/" class="btn btn-primary">Open article</a>
-                    <a href="/changelog/#v7138" class="btn btn-secondary">Open changelog</a>
+                    <a href="/blog/nexo-7-13-9/" class="btn btn-primary">Open article</a>
+                    <a href="/changelog/#v7139" class="btn btn-secondary">Open changelog</a>
                 </div>
                 <div class="blog-mini-stack">
                     <div class="blog-mini-card">
                         <strong>Companion view</strong>
-                        <span><a href="/changelog/#v7138">See the full v7.13.8 changelog</a></span>
+                        <span><a href="/changelog/#v7139">See the full v7.13.9 changelog</a></span>
                     </div>
                     <div class="blog-mini-card">
                         <strong>Previous release</strong>
-                        <span><a href="/blog/nexo-7-13-7/">NEXO 7.13.7: authenticated official protocol cards</a>.</span>
+                        <span><a href="/blog/nexo-7-13-8/">NEXO 7.13.8: Desktop-managed fresh install hardening</a>.</span>
                     </div>
                 </div>
             </div>
@@ -191,6 +191,15 @@
 <section class="section-flush-top">
     <div class="container">
             <div class="blog-grid">
+
+            <div class="blog-card">
+                <div class="blog-card-date">May 6, 2026</div>
+                <h2><a href="/blog/nexo-7-13-9/">NEXO 7.13.9: stale Desktop venv recovery</a></h2>
+                <p>Brain moves aside a managed <code>.venv</code> created with unsupported Python &lt;3.10 and recreates it with the supported interpreter prepared by Desktop.</p>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/blog/nexo-7-13-9/" class="btn btn-secondary">Read more</a>
+                </div>
+            </div>
 
             <div class="blog-card">
                 <div class="blog-card-date">May 6, 2026</div>

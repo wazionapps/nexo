@@ -303,6 +303,46 @@ function pythonHasPip(pythonBin) {
   }
 }
 
+function managedVenvPythonPath(nexoHome = NEXO_HOME) {
+  const venvPath = path.join(nexoHome, ".venv");
+  return process.platform === "win32"
+    ? path.join(venvPath, "Scripts", "python.exe")
+    : path.join(venvPath, "bin", "python3");
+}
+
+function safeTimestampForPath() {
+  return new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
+}
+
+function uniqueBackupPath(targetPath, suffix) {
+  const dir = path.dirname(targetPath);
+  const base = path.basename(targetPath);
+  const stamp = safeTimestampForPath();
+  let candidate = path.join(dir, `${base}.${suffix}-${stamp}`);
+  if (!fs.existsSync(candidate)) return candidate;
+  for (let i = 2; i < 100; i += 1) {
+    candidate = path.join(dir, `${base}.${suffix}-${stamp}-${i}`);
+    if (!fs.existsSync(candidate)) return candidate;
+  }
+  return path.join(dir, `${base}.${suffix}-${stamp}-${process.pid}`);
+}
+
+function ensureManagedVenvCompatible(venvPath, venvPython) {
+  if (!fs.existsSync(venvPython)) return;
+  const version = pythonVersion(venvPython);
+  if (version && pythonVersionMeetsMinimum(version)) return;
+
+  const reason = version ? `Python ${version}` : "an unreadable Python executable";
+  const backupPath = uniqueBackupPath(venvPath, "unsupported-python");
+  log(`  Existing Python virtual environment uses ${reason}; moving it aside to recreate.`);
+  try {
+    fs.renameSync(venvPath, backupPath);
+  } catch (err) {
+    throw new Error(`Existing NEXO Python virtual environment is incompatible and could not be moved aside: ${err.message || err}`);
+  }
+  log(`  Previous Python virtual environment moved to ${backupPath}`);
+}
+
 function seedPipFromBundledWheels(venvPython, bundledWheelsDir) {
   if (!fs.existsSync(venvPython) || !fs.existsSync(bundledWheelsDir)) return false;
   if (pythonHasPip(venvPython)) return true;
@@ -576,15 +616,13 @@ function resolveSystemPython() {
 }
 
 function ensureWarmupPython(nexoHome = NEXO_HOME) {
-  const existing = findVenvPython(nexoHome);
-  if (existing) return existing;
-
-  const basePython = resolveSystemPython();
   const venvPath = path.join(nexoHome, ".venv");
-  const venvPython = process.platform === "win32"
-    ? path.join(venvPath, "Scripts", "python.exe")
-    : path.join(venvPath, "bin", "python3");
+  const venvPython = managedVenvPythonPath(nexoHome);
   fs.mkdirSync(nexoHome, { recursive: true });
+  ensureManagedVenvCompatible(venvPath, venvPython);
+  if (fs.existsSync(venvPython)) return venvPython;
+
+  const basePython = resolveInstallerPython() || resolveSystemPython();
   if (!fs.existsSync(venvPython)) {
     log("  Creating Python virtual environment for model warmup...");
     const result = spawnSync(basePython, ["-m", "venv", venvPath], { stdio: "inherit", timeout: 120000 });
@@ -2398,7 +2436,7 @@ async function maybeConfigurePublicContribution(schedule, useDefaults) {
  * Resolve the venv python path for an existing NEXO_HOME installation.
  */
 function findVenvPython(nexoHome) {
-  const venvPy = path.join(nexoHome, ".venv", "bin", "python3");
+  const venvPy = managedVenvPythonPath(nexoHome);
   if (fs.existsSync(venvPy)) return venvPy;
   return null;
 }
@@ -3702,10 +3740,10 @@ async function runSetup() {
   log("Installing cognitive engine dependencies...");
   fs.mkdirSync(NEXO_HOME, { recursive: true });
   const venvPath = path.join(NEXO_HOME, ".venv");
-  const venvPython = platform === "win32"
-    ? path.join(venvPath, "Scripts", "python.exe")
-    : path.join(venvPath, "bin", "python3");
+  const venvPython = managedVenvPythonPath(NEXO_HOME);
   const bundledWheelsDir = path.join(__dirname, "..", "python-wheels");
+
+  ensureManagedVenvCompatible(venvPath, venvPython);
 
   // Create venv if it doesn't exist
   if (!fs.existsSync(venvPython)) {
@@ -3722,6 +3760,13 @@ async function runSetup() {
       } else {
         log("Failed to create venv. Trying pip install directly...");
       }
+    }
+  }
+  if (fs.existsSync(venvPython)) {
+    const venvVersion = pythonVersion(venvPython);
+    if (!venvVersion || !pythonVersionMeetsMinimum(venvVersion)) {
+      log(`Python virtual environment is unsupported after creation (${venvVersion || "unknown version"}).`);
+      process.exit(1);
     }
   }
   if (fs.existsSync(venvPython) && !pythonHasPip(venvPython)) {

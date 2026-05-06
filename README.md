@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.13.8` is the current packaged-runtime line. Patch release over v7.13.7 — Brain now rejects Python <3.10 during Desktop-managed fresh installs, honors the Python interpreter prepared by Desktop, and fails clearly before dependency resolution if an unsupported Apple Python 3.9 reaches the installer.
+Version `7.13.9` is the current packaged-runtime line. Patch release over v7.13.8 — Brain now moves aside an existing managed `.venv` when it was created with unsupported Python <3.10, then recreates it with the supported interpreter prepared by Desktop.
+
+Previously in `7.13.8`: patch release — Brain rejects Python <3.10 during Desktop-managed fresh installs, honors the Python interpreter prepared by Desktop, and fails clearly before dependency resolution if an unsupported Apple Python 3.9 reaches the installer.
 
 Previously in `7.13.7`: patch release — Brain adds an authenticated official protocol-card client (`nexo_card_catalog`, `nexo_card_get`, `nexo_card_match`) so agents can ask the NEXO Desktop backend for the right task protocol at runtime. The protocol corpus stays private on the server; this open-source package ships only the client, tool map, and agent guidance.
 
