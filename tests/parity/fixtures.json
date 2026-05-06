@@ -207,6 +207,7 @@
         }
       ],
       "expect_rule_ids": [
+        "R23n_post_action_verification",
         "R23m_message_duplicate"
       ]
     },
@@ -223,7 +224,9 @@
           }
         }
       ],
-      "expect_rule_ids": [],
+      "expect_rule_ids": [
+        "R23n_post_action_verification"
+      ],
       "strict": true
     }
   ]
