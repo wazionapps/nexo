@@ -115,6 +115,29 @@ def test_public_installer_keeps_claude_install_path_without_desktop_bundle():
     assert 'const managedPrefix = managedClaudePrefix();' in text
 
 
+def test_desktop_managed_installer_uses_valid_bootstrap_python():
+    text = INSTALLER.read_text()
+
+    assert "function resolveInstallerPython()" in text
+    assert "process.env.NEXO_BOOTSTRAP_PYTHON" in text
+    assert "function pythonVersionMeetsMinimum(versionText)" in text
+    assert "MIN_INSTALLER_PYTHON_MINOR = 10" in text
+    assert "if (version && pythonVersionMeetsMinimum(version)) return clean;" in text
+    assert "let python = resolveInstallerPython();" in text
+    assert "NEXO Brain requires Python >=" in text
+
+
+def test_desktop_managed_npm_has_node_for_lifecycle_scripts():
+    text = INSTALLER.read_text()
+
+    assert "function ensureDesktopNodeShim(desktopNode)" in text
+    assert '"runtime", "bootstrap", "node-shim"' in text
+    assert "export ELECTRON_RUN_AS_NODE=1" in text
+    assert "const npmViaDesktop = desktopNode && bundledNpmCli;" in text
+    assert 'npmViaDesktop ? desktopNode : "npm"' in text
+    assert "...(npmViaDesktop ? [bundledNpmCli] : [])" in text
+
+
 def test_installer_finalizes_f06_layout_before_reporting_ready():
     text = INSTALLER.read_text()
 

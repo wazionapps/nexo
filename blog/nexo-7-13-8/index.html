@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.13.8: Desktop-managed fresh install hardening</title>
+<meta name="description" content="NEXO Brain v7.13.8 rejects unsupported Python before Desktop-managed dependency installation and honors the interpreter prepared by NEXO Desktop.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-13-8/">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.13.8: Desktop-managed fresh install hardening","datePublished":"2026-05-06","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head><body><main><article style="max-width:760px;margin:80px auto;padding:0 24px;line-height:1.75;">
+<h1>NEXO 7.13.8 &mdash; Desktop-managed fresh install hardening</h1>
+<p><em>Published 2026-05-06. Patch release over v7.13.7 &mdash; closes the fresh Mac install path where Apple Python 3.9 could reach dependency resolution.</em></p>
+
+<h2>Unsupported Python is rejected before pip runs</h2>
+<p>Brain now requires Python 3.10 or newer during installer interpreter resolution. If an unsupported interpreter reaches the installer directly, the failure says that Python 3.10+ is required instead of surfacing a misleading <code>fastmcp</code> dependency-resolution error.</p>
+
+<h2>Desktop can pass the prepared interpreter explicitly</h2>
+<p>Desktop-managed installs can pass <code>NEXO_BOOTSTRAP_PYTHON</code> and <code>NEXO_PYTHON</code> into Brain. Brain validates that interpreter before creating or reusing the managed virtual environment.</p>
+
+<h2>Validation</h2>
+<pre><code>node --check bin/nexo-brain.js
+pytest -q tests/test_v6_fresh_install_skip.py
+python3 scripts/sync_release_artifacts.py --check
+python3 scripts/verify_claude_plugin.py
+python3 scripts/verify_clawhub_skill.py
+
+12 passed
+</code></pre>
+
+<p><a href="/changelog/#v7138">Full changelog entry &rarr;</a> &middot; <a href="https://github.com/wazionapps/nexo/blob/main/bin/nexo-brain.js">bin/nexo-brain.js</a> &middot; <a href="https://github.com/wazionapps/nexo/blob/main/tests/test_v6_fresh_install_skip.py">tests/test_v6_fresh_install_skip.py</a></p>
+</article></main></body></html>

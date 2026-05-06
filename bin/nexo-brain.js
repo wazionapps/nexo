@@ -36,6 +36,8 @@ if (process.platform === "win32") {
 let NEXO_HOME = process.env.NEXO_HOME || path.join(require("os").homedir(), ".nexo");
 const DEFAULT_ASSISTANT_NAME = "Nova";
 const RESERVED_ASSISTANT_NAME_KEYS = new Set(["nexo", "nexobrain", "nexodesktop"]);
+const MIN_INSTALLER_PYTHON_MAJOR = 3;
+const MIN_INSTALLER_PYTHON_MINOR = 10;
 
 function normalizeAssistantNameCandidate(value) {
   return String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
@@ -223,6 +225,57 @@ function run(cmd, opts = {}) {
   } catch {
     return null;
   }
+}
+
+function shSingleQuote(value) {
+  return "'" + String(value || "").replace(/'/g, "'\\''") + "'";
+}
+
+function runPythonProbe(pythonBin, args, timeout = 15000) {
+  if (!pythonBin) return null;
+  try {
+    const result = spawnSync(pythonBin, args, {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout,
+    });
+    if (result.status !== 0) return null;
+    return String(result.stdout || result.stderr || "").trim();
+  } catch {
+    return null;
+  }
+}
+
+function pythonVersion(pythonBin) {
+  return runPythonProbe(pythonBin, ["-c", "import sys; print(sys.version.split()[0])"]);
+}
+
+function pythonVersionMeetsMinimum(versionText) {
+  const match = String(versionText || "").trim().match(/^(\d+)\.(\d+)(?:\.|$)/);
+  if (!match) return false;
+  const major = Number(match[1]);
+  const minor = Number(match[2]);
+  return major > MIN_INSTALLER_PYTHON_MAJOR
+    || (major === MIN_INSTALLER_PYTHON_MAJOR && minor >= MIN_INSTALLER_PYTHON_MINOR);
+}
+
+function resolveInstallerPython() {
+  const candidates = [
+    process.env.NEXO_BOOTSTRAP_PYTHON,
+    process.env.NEXO_RUNTIME_PYTHON,
+    process.env.NEXO_PYTHON,
+    run("which python3"),
+    run("which python"),
+  ].filter(Boolean);
+  const seen = new Set();
+  for (const candidate of candidates) {
+    const clean = String(candidate || "").trim();
+    if (!clean || seen.has(clean)) continue;
+    seen.add(clean);
+    const version = pythonVersion(clean);
+    if (version && pythonVersionMeetsMinimum(version)) return clean;
+  }
+  return "";
 }
 
 function findBundledWheel(wheelsDir, prefix) {
@@ -1710,6 +1763,48 @@ function buildManagedCliEnv(extraEnv = {}) {
   };
 }
 
+function ensureDesktopNodeShim(desktopNode) {
+  const clean = String(desktopNode || "").trim();
+  if (!clean) return "";
+  const shimDir = path.join(NEXO_HOME, "runtime", "bootstrap", "node-shim");
+  fs.mkdirSync(shimDir, { recursive: true });
+  if (process.platform === "win32") {
+    const shimPath = path.join(shimDir, "node.cmd");
+    fs.writeFileSync(
+      shimPath,
+      `@echo off\r\nset ELECTRON_RUN_AS_NODE=1\r\n"${clean}" %*\r\n`,
+    );
+    return shimDir;
+  }
+  const shimPath = path.join(shimDir, "node");
+  fs.writeFileSync(
+    shimPath,
+    [
+      "#!/bin/sh",
+      "export ELECTRON_RUN_AS_NODE=1",
+      `exec ${shSingleQuote(clean)} "$@"`,
+      "",
+    ].join("\n"),
+  );
+  fs.chmodSync(shimPath, 0o755);
+  return shimDir;
+}
+
+function withDesktopNodeShim(env, desktopNode) {
+  try {
+    const shimDir = ensureDesktopNodeShim(desktopNode);
+    if (!shimDir) return env;
+    return {
+      ...env,
+      ELECTRON_RUN_AS_NODE: "1",
+      PATH: [shimDir, env.PATH || ""].filter(Boolean).join(path.delimiter),
+    };
+  } catch (err) {
+    log(`Desktop Node shim could not be created: ${String(err && err.message || err)}`);
+    return env;
+  }
+}
+
 function resolveManagedClaudeBinary() {
   const prefix = managedClaudePrefix();
   const candidates = process.platform === "win32"
@@ -1921,11 +2016,13 @@ function installClaudeCodeCli(platform) {
     return { installed: true, path: claudeInstalled };
   }
 
-  const installEnv = buildManagedCliEnv();
   const desktopNode = String(process.env.NEXO_DESKTOP_NODE || "").trim();
   const bundledNpmCli = String(process.env.NEXO_DESKTOP_NPM_CLI || "").trim();
   const managedPrefix = managedClaudePrefix();
   const desktopManaged = isDesktopManagedInstall();
+  const npmViaDesktop = desktopNode && bundledNpmCli;
+  let installEnv = buildManagedCliEnv();
+  if (desktopNode) installEnv = withDesktopNodeShim(installEnv, desktopNode);
 
   // OFFLINE-FIRST v0.32.4: install claude-code wrapper + ALL its native packs
   // from bundled tarballs. Path: resources/brain-bundle/claude-code/*.tgz.
@@ -1963,8 +2060,18 @@ function installClaudeCodeCli(platform) {
       const tgzPaths = [path.join(bundledClaudeDir, wrapper), ...nativePacks.map((p) => path.join(bundledClaudeDir, p))];
       log("  Installing claude-code from bundled tarballs (offline, " + (1 + nativePacks.length) + " packs)...");
       spawnSync(
-        "npm",
-        ["install", "-g", "--prefix", managedPrefix, "--offline", "--no-audit", "--no-fund", ...tgzPaths],
+        npmViaDesktop ? desktopNode : "npm",
+        [
+          ...(npmViaDesktop ? [bundledNpmCli] : []),
+          "install",
+          "-g",
+          "--prefix",
+          managedPrefix,
+          "--offline",
+          "--no-audit",
+          "--no-fund",
+          ...tgzPaths,
+        ],
         { stdio: "inherit", env: installEnv },
       );
       claudeInstalled = detectInstalledClients().claude_code.path || "";
@@ -1977,8 +2084,15 @@ function installClaudeCodeCli(platform) {
       const tgzPath = path.join(bundledClaudeDir, wrapper);
       log("  Installing claude-code from bundled wrapper only (legacy bundle, may need network for native pack)...");
       spawnSync(
-        "npm",
-        ["install", "-g", "--prefix", managedPrefix, tgzPath],
+        npmViaDesktop ? desktopNode : "npm",
+        [
+          ...(npmViaDesktop ? [bundledNpmCli] : []),
+          "install",
+          "-g",
+          "--prefix",
+          managedPrefix,
+          tgzPath,
+        ],
         { stdio: "inherit", env: installEnv },
       );
       claudeInstalled = detectInstalledClients().claude_code.path || "";
@@ -3081,7 +3195,7 @@ async function runSetup() {
   }
 
   // Find or install Python (platform-aware)
-  let python = run("which python3");
+  let python = resolveInstallerPython();
   if (!python) {
     if (platform === "darwin") {
       // v0.32.5 — Mac vanilla NO trae python3. La auto-instalación de
@@ -3122,7 +3236,7 @@ async function runSetup() {
         // fallan al import. Pinning a `python@3.12` evita el drift.
         log("Python 3.12 not found. Installing via Homebrew...");
         spawnSync("brew", ["install", "python@3.12"], { stdio: "inherit" });
-        python = run("which python3.12") || run("which python3");
+        python = resolveInstallerPython() || run("which python3.12") || run("which python3");
       }
     } else if (platform === "linux") {
       // Linux: try apt or yum
@@ -3132,7 +3246,7 @@ async function runSetup() {
       } else if (run("which yum")) {
         spawnSync("sudo", ["yum", "install", "-y", "python3", "python3-pip"], { stdio: "inherit" });
       }
-      python = run("which python3");
+      python = resolveInstallerPython();
     }
     if (!python) {
       log("Python 3 not found and couldn't install automatically.");
@@ -3140,7 +3254,13 @@ async function runSetup() {
       process.exit(1);
     }
   }
-  const pyVersion = run(`${python} --version`);
+  const pyVersion = pythonVersion(python);
+  if (!pyVersion || !pythonVersionMeetsMinimum(pyVersion)) {
+    log(pyVersion
+      ? `Python at ${python} is ${pyVersion}; NEXO Brain requires Python >=${MIN_INSTALLER_PYTHON_MAJOR}.${MIN_INSTALLER_PYTHON_MINOR}.`
+      : `Python at ${python || "(not found)"} is not executable.`);
+    process.exit(1);
+  }
   log(`Found ${pyVersion} at ${python}`);
   logMacPermissionsNotice(NEXO_HOME, python);
 

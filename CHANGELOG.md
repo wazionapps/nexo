@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.13.8] - 2026-05-06
+
+### Fixed — fresh Desktop installer Python floor
+
+- **Fresh Mac installs no longer accept Apple Python 3.9.** The Brain installer now rejects Python <3.10 before creating the managed venv, so Desktop can install or select a supported Python instead of failing later on `fastmcp>=2.9.0`.
+- **Prepared Python is honored explicitly.** Desktop-managed installs can pass `NEXO_BOOTSTRAP_PYTHON` / `NEXO_PYTHON`, and Brain validates that interpreter before dependency installation.
+- **The failure is now clear when Python is too old.** If an unsupported interpreter reaches Brain directly, the installer exits with a Python >=3.10 requirement instead of a misleading dependency-resolution error.
+
 ## [7.13.7] - 2026-05-05
 
 ### Added — authenticated official protocol cards client
