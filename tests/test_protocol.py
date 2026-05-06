@@ -715,6 +715,78 @@ def test_task_close_reject_done_without_evidence_dedupes_protocol_debt():
     assert count == 1
 
 
+def test_task_close_rejects_external_done_without_real_world_verification():
+    from db import get_db
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    sid = _register_session("nexo-1003-2003c")
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Send email reply to Maria about the meeting",
+            task_type="execute",
+            area="ops",
+            plan='["send", "verify"]',
+            verification_step="reopen the sent email and verify recipients and body",
+        )
+    )
+
+    closed = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="done",
+            evidence="Command output showed the email API returned success and the task can be marked complete.",
+        )
+    )
+
+    assert closed["ok"] is False
+    assert closed["blocked_by"] == "external_real_world_verify"
+    assert closed["debt_type"] == "external_real_world_verification_missing"
+    count = get_db().execute(
+        "SELECT COUNT(*) FROM protocol_debt WHERE task_id = ? AND debt_type = 'external_real_world_verification_missing' AND status = 'open'",
+        (opened["task_id"],),
+    ).fetchone()[0]
+    assert count == 1
+
+
+def test_task_close_accepts_external_done_with_real_world_verification():
+    from db import get_db
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    sid = _register_session("nexo-1003-2003d")
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Send calendar invite for the supplier call",
+            task_type="execute",
+            area="ops",
+            plan='["create invite", "verify event"]',
+            verification_step="reopen calendar event and verify invitees, date, timezone and Meet link",
+        )
+    )
+
+    closed = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="done",
+            evidence=(
+                "I reopened the calendar event after creation and verified invitees, date, timezone, "
+                "single Meet link, notes, and ownership against the requested call details."
+            ),
+        )
+    )
+
+    assert closed["ok"] is True
+    assert closed["status"] == "clean"
+    row = get_db().execute(
+        "SELECT status FROM protocol_tasks WHERE task_id = ?",
+        (opened["task_id"],),
+    ).fetchone()
+    assert row["status"] == "done"
+
+
 def test_task_close_rejects_invalid_outcome_without_mutating_task():
     from db import get_db
     from plugins.protocol import handle_task_open, handle_task_close

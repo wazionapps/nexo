@@ -621,6 +621,66 @@ def test_process_pre_tool_event_blocks_runtime_core_write(guardrail_env, monkeyp
     assert "~/.nexo/core" in message
 
 
+def test_process_pre_tool_event_blocks_legacy_client_memory_write(guardrail_env, monkeypatch, tmp_path):
+    legacy_home = tmp_path / "home"
+    target = legacy_home / ".claude" / "MEMORY.md"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("old", encoding="utf-8")
+
+    monkeypatch.setenv("HOME", str(legacy_home))
+    db, hook_guardrails = _reload_guardrail_stack()
+    db.init_db()
+    monkeypatch.setattr(hook_guardrails, "get_protocol_strictness", lambda: "strict")
+    db.register_session(
+        "nexo-2010-3011",
+        "legacy memory write",
+        external_session_id="claude-memory-1",
+        session_client="claude_code",
+    )
+
+    result = hook_guardrails.process_pre_tool_event(
+        {
+            "session_id": "claude-memory-1",
+            "tool_name": "Edit",
+            "tool_input": {"file_path": str(target)},
+        }
+    )
+
+    assert result["status"] == "blocked"
+    assert result["blocks"][0]["debt_type"] == "legacy_client_memory_write_blocked"
+    message = hook_guardrails.format_pretool_block_message(result)
+    assert "legacy Claude/Codex MEMORY files are read-only" in message
+
+
+def test_process_pre_tool_event_allows_legacy_memory_write_with_explicit_override(guardrail_env, monkeypatch, tmp_path):
+    legacy_home = tmp_path / "home"
+    target = legacy_home / ".codex" / "memories" / "legacy.md"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("old", encoding="utf-8")
+
+    monkeypatch.setenv("HOME", str(legacy_home))
+    monkeypatch.setenv("NEXO_ALLOW_LEGACY_MEMORY_WRITE", "1")
+    db, hook_guardrails = _reload_guardrail_stack()
+    db.init_db()
+    monkeypatch.setattr(hook_guardrails, "get_protocol_strictness", lambda: "lenient")
+    db.register_session(
+        "nexo-2010-3012",
+        "legacy memory override",
+        external_session_id="claude-memory-2",
+        session_client="claude_code",
+    )
+
+    result = hook_guardrails.process_pre_tool_event(
+        {
+            "session_id": "claude-memory-2",
+            "tool_name": "Edit",
+            "tool_input": {"file_path": str(target)},
+        }
+    )
+
+    assert result.get("status") in {"clean", "warn"} or result.get("skipped") is True
+
+
 def test_process_pre_tool_event_blocks_bash_mutation_into_runtime_core(guardrail_env, monkeypatch):
     core_target = guardrail_env / "core" / "scripts" / "nexo-email-monitor.py"
     core_target.parent.mkdir(parents=True, exist_ok=True)

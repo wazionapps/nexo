@@ -62,6 +62,21 @@ def test_r23m_ttl_fires_within_window():
     assert ok is True
 
 
+def test_post_external_action_enforcer_injects_reopen_verification_step():
+    from enforcement_engine import HeadlessEnforcer
+
+    enforcer = HeadlessEnforcer()
+    enforcer.on_tool_call(
+        "nexo_email_send",
+        {"to": "maria@example.com", "subject": "Meeting", "body": "Confirming the meeting"},
+    )
+
+    hits = [q for q in enforcer.injection_queue if q.get("rule_id") == "R23n_post_action_verification"]
+    assert hits
+    assert "reopen the real sent message/calendar item" in hits[-1]["prompt"]
+    assert "recipients" in hits[-1]["prompt"]
+
+
 def test_r23m_ring_buffer_caps_engine_state():
     from enforcement_engine import HeadlessEnforcer
     enforcer = HeadlessEnforcer()

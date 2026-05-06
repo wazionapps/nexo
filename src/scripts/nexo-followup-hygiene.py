@@ -5,7 +5,7 @@ NEXO Followup Hygiene — Weekly cleanup of followup/reminder statuses.
 
 Runs Sundays via LaunchAgent (or manually). Tasks:
 1. Normalize dirty statuses (COMPLETED YYYY-MM-DD -> COMPLETED)
-2. Flag PENDING followups >14 days without updates as STALE
+2. Escalate PENDING followups >14 days without updates to needs_decision
 3. Generate summary of orphaned/forgotten followups for synthesis
 
 No CLI needed — this is pure mechanical cleanup.
@@ -85,21 +85,38 @@ def main():
             )
         log(f"Normalized {dirty_r} dirty reminder statuses")
 
-    # 2. Flag stale followups (PENDING >14 days, no updates)
+    # 2. Escalate stale followups (PENDING >14 days, no updates)
     cutoff = (date.today() - timedelta(days=14)).isoformat()
+    updated_cutoff = datetime.now().timestamp() - (14 * 24 * 60 * 60)
     stale = conn.execute(
         "SELECT id, description, date, updated_at FROM followups "
         "WHERE status NOT LIKE 'COMPLETED%' "
-        "AND status NOT IN ('DELETED','archived','blocked','waiting') "
+        "AND status NOT IN ('DELETED','archived','blocked','waiting','needs_decision','waiting_user') "
         "AND date != '' AND date < ? "
+        "AND (updated_at IS NULL OR updated_at = '' OR updated_at < ?) "
         "ORDER BY date",
-        (cutoff,)
+        (cutoff, updated_cutoff)
     ).fetchall()
 
+    escalated_stale = []
     if stale:
-        log(f"Found {len(stale)} stale followups (>14 days overdue):")
+        log(f"Escalating {len(stale)} stale followups (>14 days overdue, no recent update):")
         for s in stale[:10]:
             log(f"  {s['id']}: {s['description'][:60]} (due: {s['date']})")
+        for s in stale:
+            result = nexo_db.update_followup(
+                str(s["id"]),
+                status="needs_decision",
+                date=TODAY,
+                history_actor="followup-hygiene",
+                history_event="stale_triage",
+                history_note=(
+                    "Weekly hygiene escalated this old due followup to needs_decision "
+                    "instead of leaving it in the executable briefing indefinitely."
+                ),
+            )
+            if not result.get("error"):
+                escalated_stale.append(str(s["id"]))
 
     # 3. Orphaned followups (no date, no recent update)
     orphans = conn.execute(
@@ -123,8 +140,10 @@ def main():
         "date": TODAY,
         "dirty_normalized": dirty_f + dirty_r,
         "stale_count": len(stale) if stale else 0,
+        "stale_escalated_count": len(escalated_stale),
         "orphan_count": len(orphans) if orphans else 0,
         "stale_ids": [s["id"] for s in stale[:20]] if stale else [],
+        "stale_escalated_ids": escalated_stale[:20],
         "orphan_ids": [o["id"] for o in orphans[:20]] if orphans else [],
     }
 
@@ -132,7 +151,7 @@ def main():
     summary_file.parent.mkdir(parents=True, exist_ok=True)
     summary_file.write_text(json.dumps(summary, indent=2))
 
-    log(f"Summary: {dirty_f + dirty_r} normalized, {len(stale) if stale else 0} stale, {len(orphans) if orphans else 0} orphans")
+    log(f"Summary: {dirty_f + dirty_r} normalized, {len(escalated_stale)} stale escalated, {len(orphans) if orphans else 0} orphans")
     log("=== Followup Hygiene complete ===")
 
 

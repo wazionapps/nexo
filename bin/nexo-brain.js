@@ -291,6 +291,23 @@ function findBundledWheel(wheelsDir, prefix) {
   }
 }
 
+function bundledWheelsSupportCurrentPlatform(wheelsDir) {
+  if (!fs.existsSync(wheelsDir)) return false;
+  if (process.platform === "linux") return true;
+  if (process.platform !== "darwin") return false;
+  try {
+    const names = fs.readdirSync(wheelsDir).map((name) => String(name || "").toLowerCase());
+    const archTag = process.arch === "arm64" ? "arm64" : "x86_64";
+    return names.some((name) => (
+      name.endsWith(".whl")
+      && name.includes("macosx")
+      && (name.includes("universal2") || name.includes(archTag))
+    ));
+  } catch {
+    return false;
+  }
+}
+
 function pythonHasPip(pythonBin) {
   try {
     const result = spawnSync(pythonBin, ["-m", "pip", "--version"], {
@@ -2436,7 +2453,9 @@ async function maybeConfigurePublicContribution(schedule, useDefaults) {
  * Resolve the venv python path for an existing NEXO_HOME installation.
  */
 function findVenvPython(nexoHome) {
+  const venvPath = path.join(nexoHome, ".venv");
   const venvPy = managedVenvPythonPath(nexoHome);
+  ensureManagedVenvCompatible(venvPath, venvPy);
   if (fs.existsSync(venvPy)) return venvPy;
   return null;
 }
@@ -3779,12 +3798,11 @@ async function runSetup() {
   // Detect bundled wheels in resources/python-wheels (offline-first). If
   // present, pip uses --no-index --find-links to install without internet.
   // Falls back to PyPI if bundle not found.
-  // v0.32.5 — el bundle empaca wheels manylinux (cp312 x86_64) porque
-  // en Win Brain corre dentro de WSL Ubuntu noble. En Mac, Brain corre
-  // nativo macOS y NO acepta esos wheels (ABI distinto). Si gateamos
-  // useBundle a !linux, pip cae al PyPI online — bien. macOS y Win
-  // (host nativo) deben tener red la primera vez.
-  const useBundle = process.platform === "linux" && fs.existsSync(bundledWheelsDir);
+  // Desktop bundles Linux/WSL wheels and, from 0.32.44, macOS arm64/x64
+  // wheels. Only use --no-index when the bundle clearly contains wheels
+  // compatible with the current runtime; otherwise fall back to PyPI
+  // instead of failing on ABI-mismatched wheels.
+  const useBundle = bundledWheelsSupportCurrentPlatform(bundledWheelsDir);
   const pipArgs = useBundle
     ? ["-m", "pip", "install", "--no-index", "--find-links", bundledWheelsDir, "--progress-bar", "off", "-r", requirementsFile]
     : ["-m", "pip", "install", "-v", "--progress-bar", "off", "--default-timeout=60", "-r", requirementsFile];

@@ -1,4 +1,4 @@
-<!-- nexo-codex-agents-version: 1.2.6 -->
+<!-- nexo-codex-agents-version: 1.2.7 -->
 ******CORE******
 <!-- nexo:core:start -->
 # {{NAME}} — NEXO Shared Brain for Codex
@@ -97,6 +97,11 @@ Operational rule R34 (Layer 2) watches this coherence.
 - **Evolution:** NEXO has a weekly self-improvement cycle. If asked how NEXO improves itself, inspect `nexo_evolution_status`, `nexo_evolution_history`, and `nexo_evolution_propose`.
 - **Skills:** reusable procedures plus `nexo_skill_evolution_candidates` for text->script and skill refinement.
 - **Watchdog / Immune / Followups:** reliability, quarantine, reminders, and self-healing are native parts of NEXO.
+
+## Memory Authority
+- `calibration.json`, `profile.json`, and NEXO Brain DB are authoritative for identity, profile, decisions, learnings, diary, and followups.
+- Legacy client memory files such as `MEMORY.md`, `.claude/memories`, and `.codex/memories` are lowest-authority read-only leftovers. Do not write them or use them to override Brain/calibration/profile.
+- If bootstrap text and Brain profile disagree, surface the conflict at startup and use Brain/calibration/profile until corrected.
 
 ## Project Atlas
 Search `{{NEXO_HOME}}/brain/project-atlas.json` BEFORE touching any project. Never assume server, port, or code location.

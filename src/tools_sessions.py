@@ -478,6 +478,18 @@ def handle_startup(
             lines.append(f"  {raw_line}")
         lines.append(f"  Full briefing: {briefing_path}")
 
+    try:
+        from memory_layer_audit import audit_memory_layers, format_memory_layer_warnings
+
+        memory_warnings = format_memory_layer_warnings(audit_memory_layers(max_warnings=4))
+        if memory_warnings:
+            lines.append("")
+            lines.append("MEMORY LAYER CHECK:")
+            for raw_line in memory_warnings:
+                lines.append(f"  {raw_line}")
+    except Exception:
+        pass
+
     # Check LaunchAgent health (macOS only)
     la_warnings = _check_launchagents()
     if la_warnings:

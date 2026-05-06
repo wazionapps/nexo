@@ -80,12 +80,127 @@ def _is_trivial_evidence(text: str) -> tuple[bool, str]:
     return False, ""
 
 
+def _external_real_world_text(task: dict, *parts: str) -> str:
+    fields = [
+        task.get("goal", ""),
+        task.get("area", ""),
+        task.get("project_hint", ""),
+        task.get("context_hint", ""),
+        task.get("verification_step", ""),
+    ]
+    fields.extend(part for part in parts if part)
+    return " ".join(str(part or "") for part in fields).lower()
+
+
+def _requires_external_real_world_check(task: dict, *parts: str) -> bool:
+    if str(task.get("task_type") or "").strip() not in ACTION_TASKS:
+        return False
+    text = _external_real_world_text(task, *parts)
+    return any(keyword in text for keyword in EXTERNAL_REAL_WORLD_ACTION_KEYWORDS)
+
+
+def _has_external_real_world_evidence(text: str) -> bool:
+    lowered = str(text or "").lower()
+    if _is_trivial_evidence(lowered)[0]:
+        return False
+    has_verify_verb = any(keyword in lowered for keyword in REAL_WORLD_VERIFICATION_VERBS)
+    has_artifact = any(keyword in lowered for keyword in REAL_WORLD_ARTIFACT_KEYWORDS)
+    return has_verify_verb and has_artifact
+
+
 ACTION_TASKS = {"edit", "execute", "delegate"}
 RESPONSE_TASKS = {"answer", "analyze"}
 _GUARD_TOUCH_DEBT_TYPES = {
     "strict_protocol_write_without_guard_ack",
     "conditioned_file_touch_without_guard_ack",
     "write_without_file_guard_check",
+}
+EXTERNAL_REAL_WORLD_ACTION_KEYWORDS = {
+    "email",
+    "e-mail",
+    "gmail",
+    "correo",
+    "mail",
+    "message",
+    "mensaje",
+    "whatsapp",
+    "telegram",
+    "sms",
+    "calendar",
+    "calendario",
+    "event",
+    "evento",
+    "invite",
+    "invitation",
+    "invitacion",
+    "invitación",
+    "meet",
+    "zoom",
+    "booking",
+    "reserva",
+    "send",
+    "sent",
+    "enviar",
+    "enviado",
+    "enviada",
+    "client",
+    "cliente",
+    "family",
+    "familia",
+}
+REAL_WORLD_VERIFICATION_VERBS = {
+    "verified",
+    "verify",
+    "checked",
+    "rechecked",
+    "re-read",
+    "reread",
+    "opened",
+    "inspected",
+    "confirmed",
+    "verificado",
+    "verifique",
+    "verifiqué",
+    "comprobado",
+    "comprobe",
+    "comprobé",
+    "revisado",
+    "revise",
+    "revisé",
+    "abierto",
+    "abri",
+    "abrí",
+    "confirmado",
+}
+REAL_WORLD_ARTIFACT_KEYWORDS = {
+    "sent folder",
+    "sent item",
+    "message-id",
+    "email",
+    "correo",
+    "destinatario",
+    "recipient",
+    "cc",
+    "bcc",
+    "subject",
+    "asunto",
+    "body",
+    "cuerpo",
+    "firma",
+    "signature",
+    "calendar",
+    "calendario",
+    "event",
+    "evento",
+    "invitee",
+    "invitado",
+    "meet link",
+    "meet",
+    "zoom",
+    "booking",
+    "reserva",
+    "sent",
+    "enviado",
 }
 HIGH_STAKES_KEYWORDS = {
     "medical",
@@ -1457,6 +1572,60 @@ def handle_task_close(
                     "debt_type": "claimed_done_without_evidence",
                     "evidence_quality_reason": trivial_reason,
                     "protocol_strictness": get_protocol_strictness(),
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+
+    if clean_outcome == "done" and _requires_external_real_world_check(
+        task,
+        clean_evidence,
+        clean_change_verify,
+        outcome_notes,
+        clean_change_summary,
+    ):
+        real_world_evidence = "\n".join(
+            part
+            for part in (
+                clean_evidence,
+                clean_change_verify,
+                outcome_notes,
+                clean_change_summary,
+            )
+            if part
+        )
+        if _has_external_real_world_evidence(real_world_evidence):
+            resolve_protocol_debts(
+                task_id=task_id,
+                debt_types=["external_real_world_verification_missing"],
+                resolution="task_close evidence includes post-action real-world verification.",
+            )
+        else:
+            debt = _ensure_open_debt(
+                task["session_id"],
+                task_id,
+                "external_real_world_verification_missing",
+                severity="error",
+                evidence=(
+                    "External-stakes task closed as done without proof that the real sent/event/booking "
+                    f"artifact was reopened and verified. Goal: {task.get('goal','')}. "
+                    f"Evidence provided: {real_world_evidence[:240]!r}"
+                ),
+                debts=debts_created,
+            )
+            return json.dumps(
+                {
+                    "ok": False,
+                    "error": "Cannot close external-stakes task as 'done' without post-action real-world verification.",
+                    "hint": (
+                        "Re-open the sent email/message/calendar/booking artifact and verify recipients, "
+                        "CC/BCC, subject, body/signature, date/time/timezone, links, invitees, and attachments as applicable. "
+                        "Then retry nexo_task_close with that evidence."
+                    ),
+                    "task_id": task_id,
+                    "blocked_by": "external_real_world_verify",
+                    "debt_id": debt.get("id"),
+                    "debt_type": "external_real_world_verification_missing",
                 },
                 ensure_ascii=False,
                 indent=2,

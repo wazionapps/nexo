@@ -1,5 +1,16 @@
 # Changelog
 
+## [7.14.0] - 2026-05-06
+
+### Added — installer hardening, memory authority audit, and real-world verification rails
+
+- **Desktop-managed install recovery now covers update/repair paths, not just fresh installs.** Any reuse of the managed `~/.nexo/.venv` checks the embedded Python first and moves aside incompatible environments before dependency work begins. Brain also only uses bundled Python wheels when they match the current platform, so macOS will not try to install Linux wheels offline.
+- **Windows/WSL bootstrap keeps Desktop-managed semantics inside the Linux bridge.** The WSL bridge now preserves Desktop bootstrap flags such as `NEXO_DESKTOP_MANAGED`, shell-profile suppression, launchd suppression, and model-warmup suppression, avoiding accidental interactive/background work during first install.
+- **Startup now audits memory authority conflicts.** NEXO Brain/calibration/profile remain authoritative, while legacy Claude/Codex `MEMORY.md` files are reported as low-authority read-only inputs. Location-like profile conflicts between managed bootstraps and Brain profile/calibration are surfaced at startup instead of being silently trusted.
+- **Legacy client memory writes are blocked by the guardrail hook.** Agents can no longer mutate `~/.claude/MEMORY.md`, `~/.codex/MEMORY.md`, or legacy memory directories unless the explicit override is set; durable facts must go through NEXO Brain profile/calibration/memory tools.
+- **External actions require post-execution verification before closure.** `task_close(outcome=done)` now rejects email/message/calendar/invite/booking-style tasks unless the evidence says the real sent item/event/booking was reopened or re-read and checked. The enforcement engine also prompts for this verification immediately after send/calendar tools.
+- **Followup briefings now triage stale due items.** Long-overdue followups with no recent movement are moved to `needs_decision`, capped in operator briefings, and surfaced through attention reminders instead of accumulating indefinitely in every daily briefing.
+
 ## [7.13.9] - 2026-05-06
 
 ### Fixed — stale Desktop installer venv recovery

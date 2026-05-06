@@ -139,6 +139,26 @@ def test_desktop_managed_installer_recreates_incompatible_existing_venv():
     assert "Python virtual environment is unsupported after creation" in text
 
 
+def test_existing_install_paths_repair_incompatible_venv_before_reuse():
+    text = INSTALLER.read_text()
+
+    find_start = text.index("function findVenvPython(nexoHome)")
+    find_block = text[find_start:text.index("/**", find_start + 1)]
+    assert 'const venvPath = path.join(nexoHome, ".venv");' in find_block
+    assert "ensureManagedVenvCompatible(venvPath, venvPy);" in find_block
+    assert "if (fs.existsSync(venvPy)) return venvPy;" in find_block
+
+
+def test_bundled_python_wheels_are_platform_gated():
+    text = INSTALLER.read_text()
+
+    assert "function bundledWheelsSupportCurrentPlatform(wheelsDir)" in text
+    assert 'process.platform === "linux"' in text
+    assert 'process.platform !== "darwin"' in text
+    assert 'name.includes("macosx")' in text
+    assert "const useBundle = bundledWheelsSupportCurrentPlatform(bundledWheelsDir);" in text
+
+
 def test_desktop_managed_npm_has_node_for_lifecycle_scripts():
     text = INSTALLER.read_text()
 

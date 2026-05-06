@@ -74,6 +74,9 @@ CLI_TIMEOUT = AUTOMATION_SUBPROCESS_TIMEOUT
 LOCK_FILE = LOG_DIR / "followup-runner.lock"
 MAX_FOLLOWUPS_PER_RUN = 5  # Focus: Opus can actually execute 5, not 30
 COOLDOWN_DAYS = 3  # Don't retry needs_decision/blocked for 3 days
+STALE_FOLLOWUP_TRIAGE_DAYS = 14
+MAX_STALE_TRIAGE_PER_RUN = 8
+MAX_NEEDS_OPERATOR_BRIEFING = 12
 DEFAULT_ASSISTANT_NAME = "Nova"
 DEFAULT_OPERATOR_LANGUAGE = "en"
 
@@ -101,6 +104,43 @@ def save_state(state: dict):
 
 
 # ── DB access ───────────────────────────────────────────────────────────
+def _parse_date(value: str) -> date | None:
+    try:
+        return date.fromisoformat(str(value or "").strip()[:10])
+    except ValueError:
+        return None
+
+
+def _followup_days_overdue(date_value: str, *, today_value: date | None = None) -> int:
+    due = _parse_date(date_value)
+    if not due:
+        return 0
+    today_obj = today_value or date.today()
+    return max(0, (today_obj - due).days)
+
+
+def _history_has_recent_movement(history, *, days: int = STALE_FOLLOWUP_TRIAGE_DAYS) -> bool:
+    if not history:
+        return False
+    cutoff = date.today() - timedelta(days=days)
+    for event in history:
+        if not isinstance(event, dict):
+            continue
+        created = _parse_date(str(event.get("created_at") or event.get("date") or ""))
+        if created and created >= cutoff:
+            return True
+    return False
+
+
+def _is_stale_followup_for_triage(followup: dict) -> bool:
+    status = str(followup.get("status") or "").strip().lower()
+    if status in {"needs_decision", "waiting_user", "blocked", "waiting"}:
+        return False
+    if _followup_days_overdue(str(followup.get("date") or "")) < STALE_FOLLOWUP_TRIAGE_DAYS:
+        return False
+    return not _history_has_recent_movement(followup.get("history") or [])
+
+
 def _is_in_cooldown(fu_id: str, state: dict) -> bool:
     """Check if a followup was recently attempted and should be skipped."""
     attempts = state.get("attempts", {})
@@ -252,14 +292,14 @@ def get_all_active_followups(state: dict) -> dict:
     operator_name = str(operator.get("operator_name") or "the operator")
     if not NEXO_DB.exists():
         log(f"DB not found: {NEXO_DB}")
-        return {"actionable": [], "needs_operator": [], "future": [], "backlog": []}
+        return {"actionable": [], "needs_operator": [], "future": [], "backlog": [], "cooled_down": [], "stale_triage": []}
 
     today = date.today().isoformat()
     conn = sqlite3.connect(str(NEXO_DB))
     conn.row_factory = sqlite3.Row
     try:
         rows = conn.execute(
-            "SELECT id, description, date, reasoning, verification, priority, recurrence, status "
+            "SELECT id, description, date, reasoning, verification, priority, recurrence, status, owner, updated_at "
             "FROM followups WHERE status NOT LIKE 'COMPLETED%' "
             "AND UPPER(COALESCE(status, '')) NOT IN ('BLOCKED', 'ARCHIVED', 'DELETED', 'WAITING') "
             "AND description NOT LIKE '[Abandoned]%' "
@@ -270,7 +310,7 @@ def get_all_active_followups(state: dict) -> dict:
             "  date ASC"
         ).fetchall()
 
-        result = {"actionable": [], "needs_operator": [], "future": [], "backlog": [], "cooled_down": []}
+        result = {"actionable": [], "needs_operator": [], "future": [], "backlog": [], "cooled_down": [], "stale_triage": []}
         undated_triage_budget = 2
 
         for row in rows:
@@ -296,7 +336,12 @@ def get_all_active_followups(state: dict) -> dict:
                     result["actionable"].append(triage_fu)
                     undated_triage_budget -= 1
             elif fu_date <= today:
-                if needs_operator:
+                if _is_stale_followup_for_triage(fu):
+                    stale_fu = dict(fu)
+                    stale_fu["stale_triage"] = True
+                    stale_fu["days_overdue"] = _followup_days_overdue(fu_date)
+                    result["stale_triage"].append(stale_fu)
+                elif needs_operator:
                     result["needs_operator"].append(fu)
                 elif _is_in_cooldown(fu["id"], state):
                     result["cooled_down"].append(fu)
@@ -310,12 +355,16 @@ def get_all_active_followups(state: dict) -> dict:
             overflow = result["actionable"][MAX_FOLLOWUPS_PER_RUN:]
             result["actionable"] = result["actionable"][:MAX_FOLLOWUPS_PER_RUN]
             log(f"Capped actionable to {MAX_FOLLOWUPS_PER_RUN}, deferred {len(overflow)} to next run")
+        if len(result["needs_operator"]) > MAX_NEEDS_OPERATOR_BRIEFING:
+            overflow = result["needs_operator"][MAX_NEEDS_OPERATOR_BRIEFING:]
+            result["needs_operator"] = result["needs_operator"][:MAX_NEEDS_OPERATOR_BRIEFING]
+            log(f"Capped needs_operator to {MAX_NEEDS_OPERATOR_BRIEFING}, deferred {len(overflow)} noisy items")
 
         return result
 
     except Exception as e:
         log(f"DB error: {e}")
-        return {"actionable": [], "needs_operator": [], "future": [], "backlog": [], "cooled_down": []}
+        return {"actionable": [], "needs_operator": [], "future": [], "backlog": [], "cooled_down": [], "stale_triage": []}
     finally:
         conn.close()
 
@@ -753,10 +802,37 @@ def main():
     groups = get_all_active_followups(state)
     all_actionable = list(groups["actionable"])
     cooled = groups.get("cooled_down", [])
+    stale_triage = groups.get("stale_triage", [])
 
     log(f"Actionable: {len(all_actionable)}, Cooled down: {len(cooled)}, "
         f"Needs operator: {len(groups['needs_operator'])}, "
-        f"Future: {len(groups['future'])}, Backlog: {len(groups['backlog'])}")
+        f"Future: {len(groups['future'])}, Backlog: {len(groups['backlog'])}, "
+        f"Stale triage: {len(stale_triage)}")
+
+    for fu in stale_triage[:MAX_STALE_TRIAGE_PER_RUN]:
+        fid = str(fu.get("id") or "")
+        if not fid:
+            continue
+        days_overdue = int(fu.get("days_overdue") or 0)
+        summary = (
+            f"Followup overdue for {days_overdue} days without recent movement. "
+            "Operator decision required: close as obsolete, reschedule with reason, or convert into a concrete next action."
+        )
+        update_followup_fields(
+            fid,
+            date_value=date.today().isoformat(),
+            status="needs_decision",
+            history_event="stale_triage",
+            history_note=summary,
+        )
+        upsert_attention_reminder(
+            fid,
+            summary=summary,
+            options={"a": "close obsolete", "b": "reschedule", "c": "convert to next action"},
+            status="needs_decision",
+            operator_language=_operator_language(),
+        )
+        record_attempt(state, fid, "needs_decision")
 
     results = []
 
@@ -851,7 +927,7 @@ def main():
             record_attempt(state, fid, r["status"])
             log(f"  {fid}: {r['status']} -> cooldown {COOLDOWN_DAYS} days")
 
-    total = len(all_actionable) + len(groups["needs_operator"]) + len(groups["future"]) + len(groups["backlog"])
+    total = len(all_actionable) + len(groups["needs_operator"]) + len(groups["future"]) + len(groups["backlog"]) + len(stale_triage)
     attention_handed_off = any(
         r.get("needs_attention") or r["status"] in ("needs_decision", "blocked")
         for r in results

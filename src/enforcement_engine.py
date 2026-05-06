@@ -1732,6 +1732,63 @@ class HeadlessEnforcer:
         self._enqueue(prompt, "R23m_message_duplicate", rule_id="R23m_message_duplicate")
         _logger.info("[R23m %s] enqueued", mode.upper())
 
+    def _check_post_external_action_verification(self, tool_name: str, tool_input):
+        """Require an explicit re-open/re-read step after outbound actions."""
+        external_tools = {
+            "nexo_send",
+            "nexo_email_send",
+            "gmail_send",
+            "nexo_calendar_create",
+            "nexo_calendar_update",
+            "google_calendar_create",
+            "google_calendar_update",
+            "calendar_create",
+            "calendar_update",
+        }
+        if tool_name not in external_tools:
+            return
+        target = ""
+        if isinstance(tool_input, dict):
+            target = str(
+                tool_input.get("to")
+                or tool_input.get("recipient")
+                or tool_input.get("thread")
+                or tool_input.get("title")
+                or tool_input.get("summary")
+                or ""
+            ).strip()
+        prompt = (
+            f"You just performed an external action with `{tool_name}`"
+            f"{(' for ' + target[:120]) if target else ''}. "
+            "Before you report it as sent or finished, reopen the real sent message/calendar item "
+            "and verify the external facts: recipients, CC/BCC, subject, body/signature, "
+            "date/time/timezone, links, invitees, attachments, and any identity/location claims. "
+            "If anything is wrong, fix it first; otherwise include that verification in the closure evidence."
+        )
+        self._enqueue(
+            prompt,
+            f"post-action-verify:{tool_name}:{self.tool_call_count}",
+            rule_id="R23n_post_action_verification",
+        )
+        if self._session_id:
+            try:
+                from db import create_protocol_debt, list_protocol_tasks  # type: ignore
+
+                tasks = list_protocol_tasks(status="open", session_id=self._session_id, limit=1)
+                task_id = str((tasks[0] if tasks else {}).get("task_id") or "")
+                create_protocol_debt(
+                    self._session_id,
+                    "post_external_action_verification_required",
+                    severity="warn",
+                    task_id=task_id,
+                    evidence=(
+                        f"{tool_name} was called for an external action. The agent must reopen/re-read "
+                        "the real sent/event artifact before claiming completion."
+                    ),
+                )
+            except Exception:
+                pass
+
     def _check_r23h(self, tool_name: str, tool_input):
         """R23h — script shebang vs interpreter mismatch (Fase D2 shadow)."""
         if _r23h_should is None:
@@ -2170,6 +2227,7 @@ class HeadlessEnforcer:
         self._check_r23i(name, tool_input)
         self._check_r23k(name, tool_input)
         self._check_r23m(name, tool_input)
+        self._check_post_external_action_verification(name, tool_input)
 
         # D2 shadow rules — low-signal, rolling out carefully.
         self._check_r23h(name, tool_input)

@@ -23,11 +23,14 @@ const helper = require({json.dumps(str(HELPER))});
 const payload = helper.buildWslExecSpec({{
   scriptPath: "C:\\\\Users\\\\franciscoc\\\\AppData\\\\Roaming\\\\npm\\\\node_modules\\\\nexo-brain\\\\bin\\\\nexo.js",
   args: ["doctor", "--json"],
-  env: {{
+    env: {{
     NEXO_HOME: "C:\\\\Users\\\\franciscoc\\\\.nexo",
     NEXO_CODE: "C:\\\\Users\\\\franciscoc\\\\src\\\\nexo\\\\src",
     NEXO_WSL_DISTRO: "Ubuntu-24.04",
-    NEXO_WSL_HOME: "/home/franciscoc/.nexo"
+    NEXO_WSL_HOME: "/home/franciscoc/.nexo",
+    NEXO_DESKTOP_MANAGED: "1",
+    NEXO_SKIP_SHELL_PROFILE: "1",
+    NEXO_SKIP_MODEL_WARMUP: "1"
   }},
   platform: "win32"
 }});
@@ -48,6 +51,9 @@ console.log(JSON.stringify(payload));
         "NEXO_WINDOWS_BRIDGE": "1",
         "NEXO_WINDOWS_HOST": "1",
         "NEXO_HOME": "/home/franciscoc/.nexo",
+        "NEXO_DESKTOP_MANAGED": "1",
+        "NEXO_SKIP_SHELL_PROFILE": "1",
+        "NEXO_SKIP_MODEL_WARMUP": "1",
     }
     # New interface (post Win11 clean-install fix iterations):
     # -d <distro>, -u root, --, env -i, PATH=..., NEXO_MANAGED_PATH=...,
@@ -66,6 +72,9 @@ console.log(JSON.stringify(payload));
     assert "NEXO_WINDOWS_BRIDGE=1" in payload["args"]
     assert "NEXO_WINDOWS_HOST=1" in payload["args"]
     assert "NEXO_HOME=/home/franciscoc/.nexo" in payload["args"]
+    assert "NEXO_DESKTOP_MANAGED=1" in payload["args"]
+    assert "NEXO_SKIP_SHELL_PROFILE=1" in payload["args"]
+    assert "NEXO_SKIP_MODEL_WARMUP=1" in payload["args"]
     # Last two args: /bin/dash <path-to-staged-script>. Path is os.homedir()
     # of the host running the test (translated to Linux form when on Win/WSL,
     # left as-is on macOS test runners). Either way must end in the staged

@@ -524,6 +524,59 @@ def _is_live_repo_path(path: str) -> bool:
         return False
 
 
+def _legacy_memory_write_allowed() -> bool:
+    return os.environ.get("NEXO_ALLOW_LEGACY_MEMORY_WRITE", "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _is_legacy_client_memory_path(path_value: str) -> bool:
+    if not str(path_value or "").strip():
+        return False
+    try:
+        candidate = _resolve_runtime_path(path_value)
+        home = Path.home().resolve(strict=False)
+        relative = candidate.relative_to(home)
+    except Exception:
+        return False
+    parts = relative.parts
+    if len(parts) == 2 and parts[0] in {".claude", ".codex"} and parts[1] == "MEMORY.md":
+        return True
+    if len(parts) >= 2 and parts[0] in {".claude", ".codex"} and parts[1] == "memories":
+        return True
+    return False
+
+
+def _collect_legacy_memory_write_blocks(conn, *, sid: str, task: dict | None, tool_name: str, files: list[str]) -> list[dict]:
+    if _legacy_memory_write_allowed():
+        return []
+    blocks: list[dict] = []
+    task_id = str((task or {}).get("task_id") or "").strip()
+    for filepath in files:
+        if not _is_legacy_client_memory_path(filepath):
+            continue
+        debt = _ensure_protocol_debt(
+            conn,
+            session_id=sid,
+            task_id=task_id,
+            debt_type="legacy_client_memory_write_blocked",
+            severity="error",
+            evidence=(
+                f"{tool_name} attempted to write {filepath}. Legacy Claude/Codex "
+                "MEMORY files are not durable NEXO Brain state and must not be "
+                "updated by agents. Use NEXO Brain memory/profile/calibration APIs instead."
+            ),
+            file_token=filepath,
+        )
+        blocks.append({
+            "file": filepath,
+            "task_id": task_id,
+            "debt_id": debt.get("id"),
+            "debt_type": "legacy_client_memory_write_blocked",
+            "reason_code": "legacy_client_memory_protected",
+            "severity": "error",
+        })
+    return blocks
+
+
 def _extract_touched_files(tool_input) -> list[str]:
     files: list[str] = []
     if not isinstance(tool_input, dict):
@@ -1481,6 +1534,24 @@ def process_pre_tool_event(payload: dict) -> dict:
     sid = _resolve_nexo_sid(conn, claude_sid)
     open_task = _find_any_open_task(conn, sid) if sid else None
     warnings: list[dict] = []
+    legacy_memory_blocks = _collect_legacy_memory_write_blocks(
+        conn,
+        sid=sid,
+        task=open_task,
+        tool_name=tool_name,
+        files=files,
+    )
+    if legacy_memory_blocks:
+        return {
+            "ok": True,
+            "session_id": sid,
+            "tool_name": tool_name,
+            "operation": op,
+            "strictness": strictness,
+            "blocks": legacy_memory_blocks,
+            "warnings": warnings,
+            "status": "blocked",
+        }
     if tool_name == "Bash":
         launchagent_operation_warnings = _collect_launchagent_operation_warnings(
             conn,
@@ -2112,6 +2183,11 @@ def format_pretool_block_message(result: dict) -> str:
             lines.append(
                 f"- {file_note}: `~/.nexo/core` is a protected install surface. "
                 "Route the change through the source repo + release/update flow instead of editing the live installed core."
+            )
+        elif item.get("reason_code") == "legacy_client_memory_protected":
+            lines.append(
+                f"- {file_note}: legacy Claude/Codex MEMORY files are read-only in NEXO. "
+                "Use NEXO Brain profile/calibration/memory tools instead."
             )
         elif item.get("reason_code") == "guard_unacknowledged":
             lines.append(

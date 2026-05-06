@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.13.9` is the current packaged-runtime line. Patch release over v7.13.8 — Brain now moves aside an existing managed `.venv` when it was created with unsupported Python <3.10, then recreates it with the supported interpreter prepared by Desktop.
+Version `7.14.0` is the current packaged-runtime line. Minor release over v7.13.9 — Brain closes the install/reliability loop with update-path venv recovery, platform-gated wheels, WSL Desktop-managed flag preservation, startup memory authority warnings, legacy MEMORY write blocking, post-action real-world verification, and stale followup triage.
+
+Previously in `7.13.9`: patch release — Brain moves aside an existing managed `.venv` when it was created with unsupported Python <3.10, then recreates it with the supported interpreter prepared by Desktop.
 
 Previously in `7.13.8`: patch release — Brain rejects Python <3.10 during Desktop-managed fresh installs, honors the Python interpreter prepared by Desktop, and fails clearly before dependency resolution if an unsupported Apple Python 3.9 reaches the installer.
 
