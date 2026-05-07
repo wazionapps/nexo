@@ -1605,7 +1605,7 @@ class TestRuntimeChecks:
         assert check.status == "degraded"
         assert any("read touches without protocol/guard review: 1" in item for item in check.evidence)
 
-    def test_codex_conditioned_file_discipline_ignores_prestartup_bootstrap_reads(self, nexo_home, monkeypatch):
+    def test_codex_conditioned_file_discipline_ignores_bootstrap_context_reads(self, nexo_home, monkeypatch):
         from doctor.providers import runtime
 
         schedule_file = nexo_home / "config" / "schedule.json"
@@ -1629,7 +1629,7 @@ class TestRuntimeChecks:
             (
                 "nexo-ops",
                 "Review calibration bootstrap files",
-                "Bootstrap reads of calibration/project atlas are allowed before startup.",
+                "Bootstrap reads of calibration/project atlas are allowed around startup.",
                 "calibration.json, project-atlas.json",
             ),
         )
@@ -1659,6 +1659,14 @@ class TestRuntimeChecks:
                 "type": "response_item",
                 "payload": {
                     "type": "function_call",
+                    "name": "mcp__nexo__nexo_startup",
+                    "arguments": "{}",
+                },
+            }) + "\n"
+            + json.dumps({
+                "type": "response_item",
+                "payload": {
+                    "type": "function_call",
                     "name": "exec_command",
                     "arguments": json.dumps({"cmd": f"cat {atlas}"}),
                 },
@@ -1667,8 +1675,16 @@ class TestRuntimeChecks:
                 "type": "response_item",
                 "payload": {
                     "type": "function_call",
-                    "name": "mcp__nexo__nexo_startup",
+                    "name": "mcp__nexo__nexo_smart_startup",
                     "arguments": "{}",
+                },
+            }) + "\n"
+            + json.dumps({
+                "type": "response_item",
+                "payload": {
+                    "type": "function_call",
+                    "name": "exec_command",
+                    "arguments": json.dumps({"cmd": f"sed -n '1,20p' {calibration}"}),
                 },
             }) + "\n"
         )

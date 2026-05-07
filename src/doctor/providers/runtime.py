@@ -503,14 +503,18 @@ def _extract_declared_file_targets(args: dict, cwd: str) -> set[str]:
     return resolved
 
 
-_CODEX_PRESTARTUP_READ_EXEMPT_FILENAMES = {"calibration.json", "project-atlas.json"}
+_CODEX_BOOTSTRAP_READ_EXEMPT_FILENAMES = {"calibration.json", "project-atlas.json"}
 
 
-def _is_codex_prestartup_runtime_read_exempt(touched: str, operation: str, startup_seen: bool) -> bool:
-    if startup_seen or operation != "read":
+def _is_codex_bootstrap_runtime_read_exempt(
+    touched: str,
+    operation: str,
+    bootstrap_context_phase: bool,
+) -> bool:
+    if not bootstrap_context_phase or operation != "read":
         return False
     normalized = _normalize_path_token(touched)
-    if Path(normalized).name not in _CODEX_PRESTARTUP_READ_EXEMPT_FILENAMES:
+    if Path(normalized).name not in _CODEX_BOOTSTRAP_READ_EXEMPT_FILENAMES:
         return False
     return "/.nexo/" in normalized
 
@@ -587,7 +591,7 @@ def _recent_codex_conditioned_file_discipline_status(*, days: int = 7, max_files
         protocol_files: set[str] = set()
         guard_files: set[str] = set()
         guard_ack = False
-        startup_seen = False
+        bootstrap_context_phase = True
         session_touches = 0
         session_samples: list[dict] = []
 
@@ -615,9 +619,9 @@ def _recent_codex_conditioned_file_discipline_status(*, days: int = 7, max_files
                     args = _parse_jsonish_arguments(payload.get("arguments"))
 
                     if name in {"mcp__nexo__nexo_startup", "nexo_startup"}:
-                        startup_seen = True
                         continue
                     if name in {"mcp__nexo__nexo_task_open", "nexo_task_open"}:
+                        bootstrap_context_phase = False
                         protocol_active = True
                         protocol_files.update(_extract_declared_file_targets(args, cwd))
                         continue
@@ -627,6 +631,7 @@ def _recent_codex_conditioned_file_discipline_status(*, days: int = 7, max_files
                         "mcp__nexo__nexo_guard_file_check",
                         "nexo_guard_file_check",
                     }:
+                        bootstrap_context_phase = False
                         guard_files.update(_extract_declared_file_targets(args, cwd))
                         continue
                     if name in {"mcp__nexo__nexo_task_acknowledge_guard", "nexo_task_acknowledge_guard"}:
@@ -644,7 +649,11 @@ def _recent_codex_conditioned_file_discipline_status(*, days: int = 7, max_files
                         continue
 
                     for touched, operation in touched_files:
-                        if _is_codex_prestartup_runtime_read_exempt(touched, operation, startup_seen):
+                        if _is_codex_bootstrap_runtime_read_exempt(
+                            touched,
+                            operation,
+                            bootstrap_context_phase,
+                        ):
                             continue
                         matches = [row for row in conditioned if _applies_to_matches_file(str(row.get("applies_to", "")), touched)]
                         if not matches:
