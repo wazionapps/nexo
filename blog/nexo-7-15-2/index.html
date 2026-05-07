@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.15.2: Codex bootstrap diagnostics cleanup</title>
+<meta name="description" content="NEXO Brain v7.15.2 treats normal Codex startup context reads of calibration and project atlas files as healthy bootstrap activity.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-15-2/">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.15.2: Codex bootstrap diagnostics cleanup","datePublished":"2026-05-07","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head><body><main><article style="max-width:760px;margin:80px auto;padding:0 24px;line-height:1.75;">
+<h1>NEXO 7.15.2 &mdash; Codex bootstrap diagnostics cleanup</h1>
+<p><em>Published 2026-05-07. Patch release over v7.15.1.</em></p>
+
+<h2>Bootstrap context is not drift</h2>
+<p>Codex normally reads NEXO calibration and project atlas files during startup context: after startup begins and before the first explicit work task or guard review. Runtime discipline checks now recognize that phase and stop counting those two reads as conditioned-file drift.</p>
+
+<h2>Real file work remains visible</h2>
+<p>The exemption is intentionally narrow: only reads of <code>calibration.json</code> and <code>project-atlas.json</code> under NEXO runtime paths during bootstrap context. Writes, deletes, other files, and post-bootstrap work continue through the normal protocol and guard audit.</p>
+
+<h2>Validation</h2>
+<pre><code>python3 -m pytest tests/test_doctor.py -k 'bootstrap_context or warns_on_read_without_protocol' -q
+PYTHONPATH=src python3 -c 'from doctor.providers.runtime import _recent_codex_conditioned_file_discipline_status as s; print(s(days=1, max_files=24)["read_without_protocol"])'
+python3 scripts/verify_release_readiness.py --ci
+</code></pre>
+
+<p><a href="/changelog/#v7152">Full changelog entry &rarr;</a> &middot; <a href="/blog/nexo-7-15-1/">Previous v7.15.1 release</a></p>
+</article></main></body></html>
