@@ -1605,6 +1605,82 @@ class TestRuntimeChecks:
         assert check.status == "degraded"
         assert any("read touches without protocol/guard review: 1" in item for item in check.evidence)
 
+    def test_codex_conditioned_file_discipline_ignores_prestartup_bootstrap_reads(self, nexo_home, monkeypatch):
+        from doctor.providers import runtime
+
+        schedule_file = nexo_home / "config" / "schedule.json"
+        schedule_file.parent.mkdir(parents=True, exist_ok=True)
+        schedule_file.write_text(json.dumps({
+            "interactive_clients": {
+                "claude_code": False,
+                "codex": True,
+                "claude_desktop": False,
+            },
+            "default_terminal_client": "codex",
+            "automation_enabled": False,
+            "automation_backend": "none",
+        }))
+        db_path = nexo_home / "data" / "nexo.db"
+        _create_learnings_table(db_path)
+        conn = sqlite3.connect(str(db_path))
+        conn.execute(
+            """INSERT INTO learnings (category, title, content, status, applies_to)
+               VALUES (?, ?, ?, 'active', ?)""",
+            (
+                "nexo-ops",
+                "Review calibration bootstrap files",
+                "Bootstrap reads of calibration/project atlas are allowed before startup.",
+                "calibration.json, project-atlas.json",
+            ),
+        )
+        conn.commit()
+        conn.close()
+
+        brain_dir = nexo_home / ".nexo" / "brain"
+        brain_dir.mkdir(parents=True, exist_ok=True)
+        calibration = brain_dir / "calibration.json"
+        atlas = brain_dir / "project-atlas.json"
+        calibration.write_text("{}")
+        atlas.write_text("{}")
+
+        codex_file = nexo_home / ".codex" / "sessions" / "2026" / "04" / "06" / "discipline-prestartup.jsonl"
+        codex_file.parent.mkdir(parents=True, exist_ok=True)
+        codex_file.write_text(
+            json.dumps({"type": "session_meta", "payload": {"originator": "codex_cli_rs", "cwd": str(nexo_home)}}) + "\n"
+            + json.dumps({
+                "type": "response_item",
+                "payload": {
+                    "type": "function_call",
+                    "name": "exec_command",
+                    "arguments": json.dumps({"cmd": f"cat {calibration}"}),
+                },
+            }) + "\n"
+            + json.dumps({
+                "type": "response_item",
+                "payload": {
+                    "type": "function_call",
+                    "name": "exec_command",
+                    "arguments": json.dumps({"cmd": f"cat {atlas}"}),
+                },
+            }) + "\n"
+            + json.dumps({
+                "type": "response_item",
+                "payload": {
+                    "type": "function_call",
+                    "name": "mcp__nexo__nexo_startup",
+                    "arguments": "{}",
+                },
+            }) + "\n"
+        )
+
+        monkeypatch.setattr(runtime, "SCHEDULE_FILE", schedule_file)
+        monkeypatch.setattr(runtime.Path, "home", lambda: nexo_home)
+
+        audit = runtime._recent_codex_conditioned_file_discipline_status()
+        assert audit["conditioned_touches"] == 0
+        check = runtime.check_codex_conditioned_file_discipline()
+        assert check.status == "healthy"
+
     def test_codex_conditioned_file_discipline_heals_old_read_only_drift_without_open_debt(self, nexo_home, monkeypatch):
         from doctor.providers import runtime
 

@@ -62,6 +62,12 @@ class TestM39HookRunsMigration:
         assert "idx_hook_runs_started_at" in names
         assert "idx_hook_runs_status" in names
 
+    def test_hook_runs_retention_migration_is_registered(self, isolated_db):
+        import db._schema as db_schema
+
+        migrations = {version: name for version, name, _fn in db_schema.MIGRATIONS}
+        assert migrations[57] == "hook_runs_retention"
+
 
 # ── record_hook_run ───────────────────────────────────────────────────────
 
@@ -127,6 +133,72 @@ class TestRecordHookRun:
         row = dict(get_db().execute("SELECT * FROM hook_runs WHERE id = ?", (rid,)).fetchone())
         assert len(row["summary"]) == 500
         assert len(row["metadata"]) <= 4096
+
+    def test_record_hook_run_applies_retention_before_insert(self, isolated_db):
+        _db, hook_observability = _reload_hook_observability()
+        from db import get_db
+
+        old_ts = time.time() - 86400 * 30
+        conn = get_db()
+        conn.execute(
+            "INSERT INTO hook_runs (hook_name, started_at, duration_ms, exit_code, status, created_at) "
+            "VALUES (?, ?, 0, 0, 'ok', ?)",
+            ("old-hook", old_ts, old_ts),
+        )
+        conn.commit()
+
+        rid = hook_observability.record_hook_run("fresh-hook")
+        assert rid > 0
+        names = {
+            row["hook_name"]
+            for row in conn.execute("SELECT hook_name FROM hook_runs").fetchall()
+        }
+        assert names == {"fresh-hook"}
+
+
+class TestHookRunsRetention:
+    def test_cleanup_deletes_rows_older_than_retention_window(self, isolated_db):
+        _db, hook_observability = _reload_hook_observability()
+        from db import get_db
+
+        now = time.time()
+        old_ts = now - 86400 * 20
+        fresh_ts = now - 60
+        conn = get_db()
+        for name, ts in (("old-hook", old_ts), ("fresh-hook", fresh_ts)):
+            conn.execute(
+                "INSERT INTO hook_runs (hook_name, started_at, duration_ms, exit_code, status, created_at) "
+                "VALUES (?, ?, 0, 0, 'ok', ?)",
+                (name, ts, ts),
+            )
+        conn.commit()
+
+        result = hook_observability.cleanup_hook_runs(now=now, conn=conn)
+        assert result["ok"] is True
+        assert result["deleted_old"] == 1
+        rows = conn.execute("SELECT hook_name FROM hook_runs").fetchall()
+        assert [row["hook_name"] for row in rows] == ["fresh-hook"]
+
+    def test_cleanup_trims_to_newest_rows_when_table_is_too_large(self, isolated_db):
+        _db, hook_observability = _reload_hook_observability()
+        from db import get_db
+
+        now = time.time()
+        conn = get_db()
+        for i in range(6):
+            ts = now - i
+            conn.execute(
+                "INSERT INTO hook_runs (hook_name, started_at, duration_ms, exit_code, status, created_at) "
+                "VALUES (?, ?, 0, 0, 'ok', ?)",
+                (f"hook-{i}", ts, ts),
+            )
+        conn.commit()
+
+        result = hook_observability.cleanup_hook_runs(now=now, max_rows=3, conn=conn)
+        assert result["ok"] is True
+        assert result["remaining"] == 3
+        rows = conn.execute("SELECT hook_name FROM hook_runs ORDER BY started_at DESC").fetchall()
+        assert [row["hook_name"] for row in rows] == ["hook-0", "hook-1", "hook-2"]
 
 
 # ── list_recent_hook_runs ─────────────────────────────────────────────────

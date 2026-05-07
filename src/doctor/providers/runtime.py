@@ -503,6 +503,18 @@ def _extract_declared_file_targets(args: dict, cwd: str) -> set[str]:
     return resolved
 
 
+_CODEX_PRESTARTUP_READ_EXEMPT_FILENAMES = {"calibration.json", "project-atlas.json"}
+
+
+def _is_codex_prestartup_runtime_read_exempt(touched: str, operation: str, startup_seen: bool) -> bool:
+    if startup_seen or operation != "read":
+        return False
+    normalized = _normalize_path_token(touched)
+    if Path(normalized).name not in _CODEX_PRESTARTUP_READ_EXEMPT_FILENAMES:
+        return False
+    return "/.nexo/" in normalized
+
+
 def _load_active_conditioned_learnings() -> list[dict]:
     db_path = paths.db_path()
     if not db_path.is_file():
@@ -575,6 +587,7 @@ def _recent_codex_conditioned_file_discipline_status(*, days: int = 7, max_files
         protocol_files: set[str] = set()
         guard_files: set[str] = set()
         guard_ack = False
+        startup_seen = False
         session_touches = 0
         session_samples: list[dict] = []
 
@@ -601,6 +614,9 @@ def _recent_codex_conditioned_file_discipline_status(*, days: int = 7, max_files
                     name = str(payload.get("name", "") or "")
                     args = _parse_jsonish_arguments(payload.get("arguments"))
 
+                    if name in {"mcp__nexo__nexo_startup", "nexo_startup"}:
+                        startup_seen = True
+                        continue
                     if name in {"mcp__nexo__nexo_task_open", "nexo_task_open"}:
                         protocol_active = True
                         protocol_files.update(_extract_declared_file_targets(args, cwd))
@@ -628,6 +644,8 @@ def _recent_codex_conditioned_file_discipline_status(*, days: int = 7, max_files
                         continue
 
                     for touched, operation in touched_files:
+                        if _is_codex_prestartup_runtime_read_exempt(touched, operation, startup_seen):
+                            continue
                         matches = [row for row in conditioned if _applies_to_matches_file(str(row.get("applies_to", "")), touched)]
                         if not matches:
                             continue

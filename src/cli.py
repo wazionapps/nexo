@@ -19,6 +19,7 @@ Entry points:
   nexo scripts run NAME_OR_PATH [-- args...]
   nexo scripts doctor [NAME_OR_PATH] [--json]
   nexo scripts call TOOL --input JSON [--json-output]
+  nexo automations reactivate NAME [--test-run] [--json]
   nexo skills list [--level ...] [--source-kind ...] [--json]
   nexo skills get ID [--json]
   nexo skills apply ID [--params JSON] [--mode ...] [--dry-run] [--json]
@@ -685,6 +686,22 @@ def _automations_set_enabled(args, enabled):
         return 1
     verb = "enabled" if enabled else "disabled"
     print(f"Automation {result['name']} {verb}.")
+    return 0
+
+
+def _automations_reactivate(args):
+    from script_registry import reactivate_automation
+
+    result = reactivate_automation(args.name, test_run=bool(getattr(args, "test_run", False)))
+    if args.json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return 0 if result.get("ok") else 1
+    if not result.get("ok"):
+        print(result.get("error", "Could not reactivate automation"), file=sys.stderr)
+        return 1
+    print(f"Automation {result['name']} enabled.")
+    if result.get("test_run"):
+        print("Test run completed.")
     return 0
 
 
@@ -2956,6 +2973,14 @@ def main():
     automations_disable_p.add_argument("name", help="Automation name or path")
     automations_disable_p.add_argument("--json", action="store_true", help="JSON output")
 
+    automations_reactivate_p = automations_sub.add_parser(
+        "reactivate",
+        help="Enable an automation and optionally run a check",
+    )
+    automations_reactivate_p.add_argument("name", help="Automation name or path")
+    automations_reactivate_p.add_argument("--test-run", action="store_true", help="Run the automation's check without sending")
+    automations_reactivate_p.add_argument("--json", action="store_true", help="JSON output")
+
     automations_status_p = automations_sub.add_parser("status", help="Read automation status")
     automations_status_p.add_argument("name", help="Automation name or path")
     automations_status_p.add_argument("--json", action="store_true", help="JSON output")
@@ -3439,6 +3464,8 @@ def main():
             return _automations_set_enabled(args, True)
         elif args.automations_command == "disable":
             return _automations_set_enabled(args, False)
+        elif args.automations_command == "reactivate":
+            return _automations_reactivate(args)
         elif args.automations_command == "status":
             return _automations_status(args)
         elif args.automations_command == "instructions":

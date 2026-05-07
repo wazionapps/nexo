@@ -14,6 +14,7 @@ import re
 import shutil
 import stat
 import subprocess
+import sys
 import time
 from pathlib import Path
 import paths
@@ -2359,6 +2360,73 @@ def get_personal_script_status(name_or_path: str) -> dict:
 def get_automation_status(name_or_path: str) -> dict:
     """Stable contract wrapper for operator-facing automation status."""
     return get_personal_script_status(name_or_path)
+
+
+def _script_execution_command(script: dict) -> list[str]:
+    path = str(script.get("path") or "").strip()
+    runtime = str(script.get("runtime") or "").strip().lower()
+    if runtime == "python" or path.endswith(".py"):
+        return [sys.executable, path]
+    if runtime == "shell" or path.endswith((".sh", ".bash", ".zsh")):
+        return ["/bin/bash", path]
+    return [path]
+
+
+def reactivate_automation(name_or_path: str, *, test_run: bool = False, timeout_seconds: int = 180) -> dict:
+    """Enable an operator automation and optionally run its built-in check."""
+    enable_result = set_automation_enabled(name_or_path, True)
+    if not enable_result.get("ok"):
+        return enable_result
+
+    status_result = get_automation_status(name_or_path)
+    result = {
+        "ok": bool(status_result.get("ok", True)),
+        "name": enable_result.get("name") or name_or_path,
+        "enabled": True,
+        "changed": bool(enable_result.get("changed")),
+        "status": status_result,
+    }
+    if not test_run:
+        return result
+
+    resolved = resolve_script_reference(str(result["name"])) or resolve_script_reference(name_or_path)
+    if not resolved:
+        result.update({"ok": False, "error": "Automation enabled, but the test run could not be started."})
+        return result
+    if str(resolved.get("name") or "").strip() != "morning-agent":
+        result.update({"ok": False, "error": "Test run is available for morning-agent only."})
+        return result
+
+    command = _script_execution_command(resolved) + ["--dry-run"]
+    env = os.environ.copy()
+    env["NEXO_HEADLESS"] = "1"
+    try:
+        completed = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            timeout=max(30, int(timeout_seconds)),
+            env=env,
+        )
+    except Exception as exc:
+        result.update({
+            "ok": False,
+            "error": "Test run could not start.",
+            "test_run": {"ok": False, "error": str(exc)},
+        })
+        return result
+
+    test_payload = {
+        "ok": completed.returncode == 0,
+        "exit_code": completed.returncode,
+        "stdout_tail": (completed.stdout or "")[-2000:],
+        "stderr_tail": (completed.stderr or "")[-2000:],
+    }
+    result["test_run"] = test_payload
+    if completed.returncode != 0:
+        result["ok"] = False
+        result["error"] = "Test run did not complete."
+    return result
 
 
 def set_script_extra_instructions(name_or_path: str, instructions: str) -> dict:

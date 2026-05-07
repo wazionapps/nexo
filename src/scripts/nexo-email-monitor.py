@@ -2102,6 +2102,48 @@ def build_processing_prompt(
     )
 
 
+_EMAIL_MONITOR_COMPLEXITY_HIGH_TERMS = (
+    "urgent", "urgente", "complaint", "queja", "reclamacion", "reclamación",
+    "legal", "contract", "contrato", "invoice", "factura", "payment", "pago",
+    "refund", "devolucion", "devolución", "booking", "reserva", "reservation",
+    "cancel", "cancelacion", "cancelación", "cancellation", "deadline",
+    "plazo", "claim", "dispute", "incidencia", "broken", "error",
+)
+_EMAIL_MONITOR_COMPLEXITY_SIMPLE_TERMS = (
+    "thanks", "thank you", "gracias", "ok", "okay", "received", "recibido",
+    "confirmado", "confirmation", "confirmacion", "confirmación", "perfecto",
+    "noted", "anotado",
+)
+
+
+def _email_monitor_complexity_tier(target_emails=None, *, needs_interactive=None, debt_block: str = "") -> str:
+    emails = list(target_emails or [])
+    interactive = list(needs_interactive or [])
+    if str(debt_block or "").strip() or interactive:
+        return "alto"
+    if len(emails) >= 3:
+        return "alto"
+
+    text_parts: list[str] = []
+    attempts = 0
+    for em in emails:
+        getter = em.get if hasattr(em, "get") else lambda key, default=None: default
+        attempts = max(attempts, _safe_int(getter("attempts", 0), 0))
+        for key in ("subject", "from_addr", "snippet", "body", "body_text"):
+            value = str(getter(key, "") or "").strip()
+            if value:
+                text_parts.append(value)
+    if attempts > 0:
+        return "alto"
+
+    joined = " ".join(text_parts).lower()
+    if any(term in joined for term in _EMAIL_MONITOR_COMPLEXITY_HIGH_TERMS):
+        return "alto"
+    if emails and len(emails) <= 1 and any(term in joined for term in _EMAIL_MONITOR_COMPLEXITY_SIMPLE_TERMS):
+        return "bajo"
+    return "medio"
+
+
 def launch_nexo(config, debt_block="", target_emails=None):
     """Launch NEXO through the configured automation backend to process emails.
     target_emails: optional list of dicts with message_id, subject, attempts."""
@@ -2137,6 +2179,11 @@ def launch_nexo(config, debt_block="", target_emails=None):
             f"Resuming from checkpoint(s) for {len(target_message_ids)} email(s); "
             "previous attempt context attached to prompt."
         )
+    email_tier = _email_monitor_complexity_tier(
+        target_emails=target_emails,
+        needs_interactive=needs_interactive,
+        debt_block=debt_block,
+    )
     prompt = build_processing_prompt(
         config=config,
         operator_name=operator_name,
@@ -2175,7 +2222,7 @@ def launch_nexo(config, debt_block="", target_emails=None):
     try:
         from resonance_map import resolve_model_and_effort
 
-        mapped_model, mapped_effort = resolve_model_and_effort("email_monitor", backend)
+        mapped_model, mapped_effort = resolve_model_and_effort("email_monitor", backend, explicit_tier=email_tier)
         profile_label = mapped_model or "default"
         if mapped_effort:
             profile_label = f"{profile_label}/{mapped_effort}"
@@ -2217,6 +2264,7 @@ def launch_nexo(config, debt_block="", target_emails=None):
             timeout=effective_timeout,
             output_format="text",
             allowed_tools="Read,Write,Edit,Glob,Grep,Bash,mcp__nexo__*",
+            tier=email_tier,
         )
 
         if result.stdout.strip():

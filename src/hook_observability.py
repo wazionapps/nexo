@@ -33,6 +33,8 @@ from db import get_db
 
 
 _VALID_STATUS = {"ok", "error", "skipped", "timeout", "blocked"}
+HOOK_RUNS_RETENTION_DAYS = 7
+HOOK_RUNS_MAX_ROWS = 19000
 
 
 def _coerce_status(exit_code: int, status: str = "") -> str:
@@ -43,6 +45,71 @@ def _coerce_status(exit_code: int, status: str = "") -> str:
     if exit_code == 0:
         return "ok"
     return "error"
+
+
+def cleanup_hook_runs(
+    *,
+    retention_days: int = HOOK_RUNS_RETENTION_DAYS,
+    max_rows: int = HOOK_RUNS_MAX_ROWS,
+    now: float | None = None,
+    vacuum: bool = False,
+    conn=None,
+) -> dict:
+    """Keep hook_runs bounded by age and newest-row count.
+
+    This is deliberately best-effort: hook observability must never make
+    the hook path fail. ``started_at`` is stored as REAL epoch seconds, so
+    the comparison is numeric and works across SQLite versions.
+    """
+    try:
+        days = max(1, int(retention_days))
+    except (TypeError, ValueError):
+        days = HOOK_RUNS_RETENTION_DAYS
+    try:
+        limit = max(1, int(max_rows))
+    except (TypeError, ValueError):
+        limit = HOOK_RUNS_MAX_ROWS
+    now_epoch = float(time.time() if now is None else now)
+    cutoff = now_epoch - (days * 86400)
+    try:
+        db_conn = conn or get_db()
+        old_cur = db_conn.execute("DELETE FROM hook_runs WHERE started_at < ?", (cutoff,))
+        deleted_old = int(old_cur.rowcount or 0)
+        count_row = db_conn.execute("SELECT COUNT(*) FROM hook_runs").fetchone()
+        remaining = int((count_row[0] if count_row else 0) or 0)
+        deleted_overflow = 0
+        if remaining > limit:
+            overflow_cur = db_conn.execute(
+                """
+                DELETE FROM hook_runs
+                WHERE id NOT IN (
+                    SELECT id
+                    FROM hook_runs
+                    ORDER BY started_at DESC, id DESC
+                    LIMIT ?
+                )
+                """,
+                (limit,),
+            )
+            deleted_overflow = int(overflow_cur.rowcount or 0)
+            remaining = limit
+        try:
+            db_conn.commit()
+        except Exception:
+            pass
+        if vacuum and (deleted_old or deleted_overflow):
+            try:
+                db_conn.execute("VACUUM")
+            except Exception:
+                pass
+        return {
+            "ok": True,
+            "deleted_old": deleted_old,
+            "deleted_overflow": deleted_overflow,
+            "remaining": remaining,
+        }
+    except Exception as exc:
+        return {"ok": False, "error": str(exc), "deleted_old": 0, "deleted_overflow": 0, "remaining": 0}
 
 
 def record_hook_run(
@@ -98,6 +165,10 @@ def record_hook_run(
     now_epoch = time.time()
     try:
         conn = get_db()
+        try:
+            cleanup_hook_runs(conn=conn)
+        except Exception:
+            pass
         cur = conn.execute(
             "INSERT INTO hook_runs (hook_name, started_at, duration_ms, exit_code, "
             "status, session_id, summary, metadata, created_at) "

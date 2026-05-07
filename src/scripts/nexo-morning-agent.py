@@ -71,6 +71,7 @@ CLI_TIMEOUT = 1800
 MAX_DUE_ITEMS = 8
 MAX_ACTIVE_ITEMS = 8
 MAX_DIARY_ITEMS = 6
+MORNING_BRIEFING_STALE_HOURS = 12
 
 
 def log(message: str) -> None:
@@ -94,6 +95,184 @@ def load_state() -> dict:
 def save_state(state: dict) -> None:
     STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
     STATE_FILE.write_text(json.dumps(state, indent=2, ensure_ascii=False) + "\n")
+
+
+def _morning_db_connection():
+    nexo_db.init_db()
+    return nexo_db.get_db()
+
+
+def _ensure_morning_briefing_runs_table(conn) -> None:
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS morning_briefing_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            local_date TEXT NOT NULL,
+            recipient TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'in_progress',
+            subject TEXT DEFAULT '',
+            send_output TEXT DEFAULT '',
+            error TEXT DEFAULT '',
+            started_at TEXT DEFAULT (datetime('now')),
+            finished_at TEXT DEFAULT NULL,
+            updated_at TEXT DEFAULT (datetime('now')),
+            UNIQUE(local_date, recipient)
+        )"""
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_morning_briefing_runs_date "
+        "ON morning_briefing_runs(local_date)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_morning_briefing_runs_status "
+        "ON morning_briefing_runs(status)"
+    )
+
+
+def _row_dict(row) -> dict:
+    if row is None:
+        return {}
+    try:
+        return dict(row)
+    except Exception:
+        return {}
+
+
+def _briefing_run_is_stale(row: dict) -> bool:
+    started_raw = str(row.get("started_at") or "").strip()
+    if not started_raw:
+        return True
+    try:
+        started = datetime.fromisoformat(started_raw.replace("Z", "+00:00"))
+        now = datetime.now(started.tzinfo) if started.tzinfo else datetime.now()
+        return (now - started).total_seconds() > (MORNING_BRIEFING_STALE_HOURS * 3600)
+    except Exception:
+        return True
+
+
+def _claim_morning_briefing_send(local_date: str, recipient: str, *, force: bool = False) -> dict:
+    clean_date = str(local_date or "").strip()
+    clean_recipient = str(recipient or "").strip()
+    if not clean_date or not clean_recipient:
+        return {"ok": False, "acquired": False, "reason": "missing recipient"}
+    now = datetime.now().astimezone().isoformat()
+    conn = _morning_db_connection()
+    _ensure_morning_briefing_runs_table(conn)
+    if force:
+        conn.execute(
+            """
+            INSERT INTO morning_briefing_runs
+                (local_date, recipient, status, subject, send_output, error, started_at, finished_at, updated_at)
+            VALUES (?, ?, 'in_progress', '', '', '', ?, NULL, ?)
+            ON CONFLICT(local_date, recipient) DO UPDATE SET
+                status = 'in_progress',
+                subject = '',
+                send_output = '',
+                error = '',
+                started_at = excluded.started_at,
+                finished_at = NULL,
+                updated_at = excluded.updated_at
+            """,
+            (clean_date, clean_recipient, now, now),
+        )
+        conn.commit()
+        return {"ok": True, "acquired": True, "reason": "force"}
+
+    cur = conn.execute(
+        """
+        INSERT OR IGNORE INTO morning_briefing_runs
+            (local_date, recipient, status, started_at, updated_at)
+        VALUES (?, ?, 'in_progress', ?, ?)
+        """,
+        (clean_date, clean_recipient, now, now),
+    )
+    conn.commit()
+    if int(cur.rowcount or 0) == 1:
+        return {"ok": True, "acquired": True, "reason": "new"}
+
+    row = _row_dict(conn.execute(
+        "SELECT * FROM morning_briefing_runs WHERE local_date = ? AND recipient = ?",
+        (clean_date, clean_recipient),
+    ).fetchone())
+    status = str(row.get("status") or "").strip().lower()
+    if status == "failed" or (status == "in_progress" and _briefing_run_is_stale(row)):
+        conn.execute(
+            """
+            UPDATE morning_briefing_runs
+            SET status = 'in_progress',
+                subject = '',
+                send_output = '',
+                error = '',
+                started_at = ?,
+                finished_at = NULL,
+                updated_at = ?
+            WHERE local_date = ? AND recipient = ?
+            """,
+            (now, now, clean_date, clean_recipient),
+        )
+        conn.commit()
+        return {"ok": True, "acquired": True, "reason": "retry"}
+    return {"ok": True, "acquired": False, "reason": status or "already claimed", "run": row}
+
+
+def _record_existing_morning_briefing_sent(local_date: str, recipient: str, state: dict) -> None:
+    now = datetime.now().astimezone().isoformat()
+    conn = _morning_db_connection()
+    _ensure_morning_briefing_runs_table(conn)
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO morning_briefing_runs
+            (local_date, recipient, status, subject, send_output, error, started_at, finished_at, updated_at)
+        VALUES (?, ?, 'sent', ?, ?, '', ?, ?, ?)
+        """,
+        (
+            str(local_date or "").strip(),
+            str(recipient or "").strip(),
+            str(state.get("last_subject") or ""),
+            str(state.get("last_send_output") or ""),
+            str(state.get("last_sent_at") or now),
+            str(state.get("last_sent_at") or now),
+            now,
+        ),
+    )
+    conn.commit()
+
+
+def _mark_morning_briefing_sent(local_date: str, recipient: str, *, subject: str, send_output: str) -> None:
+    now = datetime.now().astimezone().isoformat()
+    conn = _morning_db_connection()
+    _ensure_morning_briefing_runs_table(conn)
+    conn.execute(
+        """
+        UPDATE morning_briefing_runs
+        SET status = 'sent',
+            subject = ?,
+            send_output = ?,
+            error = '',
+            finished_at = ?,
+            updated_at = ?
+        WHERE local_date = ? AND recipient = ?
+        """,
+        (str(subject or ""), str(send_output or ""), now, now, str(local_date or ""), str(recipient or "")),
+    )
+    conn.commit()
+
+
+def _mark_morning_briefing_failed(local_date: str, recipient: str, *, error: str) -> None:
+    now = datetime.now().astimezone().isoformat()
+    conn = _morning_db_connection()
+    _ensure_morning_briefing_runs_table(conn)
+    conn.execute(
+        """
+        UPDATE morning_briefing_runs
+        SET status = 'failed',
+            error = ?,
+            finished_at = ?,
+            updated_at = ?
+        WHERE local_date = ? AND recipient = ?
+        """,
+        (str(error or "")[:1000], now, now, str(local_date or ""), str(recipient or "")),
+    )
+    conn.commit()
 
 
 def resolve_recipient(profile: dict | None = None, *, explicit_to: str = "") -> str:
@@ -411,8 +590,15 @@ def main(argv: list[str] | None = None) -> int:
     today = date.today().isoformat()
     if not args.force and not args.dry_run:
         if state.get("last_sent_date") == today and state.get("last_recipient") == recipient:
+            _record_existing_morning_briefing_sent(today, recipient, state)
             log(f"Morning briefing already sent today to {recipient}; use --force to resend.")
             return 0
+        claim = _claim_morning_briefing_send(today, recipient)
+        if not claim.get("acquired"):
+            log(f"Morning briefing already handled today for {recipient}.")
+            return 0
+    elif args.force and not args.dry_run:
+        _claim_morning_briefing_send(today, recipient, force=True)
 
     try:
         context = collect_context(profile)
@@ -430,6 +616,7 @@ def main(argv: list[str] | None = None) -> int:
 
         log(f"Sending morning briefing to {recipient}...")
         send_output = send_briefing(recipient=recipient, subject=subject, body=body)
+        _mark_morning_briefing_sent(today, recipient, subject=subject, send_output=send_output)
         save_state({
             "last_sent_date": today,
             "last_sent_at": datetime.now().astimezone().isoformat(),
@@ -440,9 +627,13 @@ def main(argv: list[str] | None = None) -> int:
         log("Morning briefing sent.")
         return 0
     except AutomationBackendUnavailableError as exc:
+        if not args.dry_run and recipient:
+            _mark_morning_briefing_failed(today, recipient, error=str(exc))
         log(f"Automation backend unavailable: {exc}")
         return 1
     except Exception as exc:
+        if not args.dry_run and recipient:
+            _mark_morning_briefing_failed(today, recipient, error=str(exc))
         log(f"Morning agent failed: {exc}")
         return 1
 

@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.15.1: runtime audit cleanup and morning briefing locks</title>
+<meta name="description" content="NEXO Brain v7.15.1 drains larger self-audit batches, bounds hook history, filters normal Codex bootstrap reads, routes email effort by complexity, and locks morning briefings.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-15-1/">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.15.1: runtime audit cleanup and morning briefing locks","datePublished":"2026-05-07","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head><body><main><article style="max-width:760px;margin:80px auto;padding:0 24px;line-height:1.75;">
+<h1>NEXO 7.15.1 &mdash; runtime audit cleanup and morning briefing locks</h1>
+<p><em>Published 2026-05-07. Patch release over v7.15.0 &mdash; closes deploy and runtime gaps found after the shared Brain/Desktop audit.</em></p>
+
+<h2>Self-audit drains real backlog volume</h2>
+<p>The daily self-audit no longer processes only five repeated or loose clusters per pass. Prevention and formalization loops now use a shared batch limit of 50, with a regression test pinning every relevant cap.</p>
+
+<h2>Hook history is bounded on update and during use</h2>
+<p><code>hook_runs</code> retention now compares numeric timestamps and trims old rows plus excess history. The update migration applies the same cleanup so existing installations converge without manual database work.</p>
+
+<h2>Codex startup reads stop looking like drift</h2>
+<p>Normal pre-startup reads of NEXO calibration and project atlas files are ignored by runtime discipline checks. Real untracked work remains visible, but healthy Codex bootstraps stop creating false diagnostic noise.</p>
+
+<h2>Email and morning automations use product-level routing</h2>
+<p>The email monitor now selects its automation tier from message complexity instead of treating every email as high effort. Morning briefings use an atomic lock by local date and recipient, so scheduler and daemon paths cannot race into duplicate sends.</p>
+
+<h2>Validation</h2>
+<pre><code>python3 -m pytest -q
+python3 -m py_compile src/hook_observability.py src/db/_schema.py src/doctor/providers/runtime.py src/script_registry.py src/cli.py src/scripts/nexo-email-monitor.py src/scripts/nexo-morning-agent.py src/scripts/nexo-daily-self-audit.py
+python3 scripts/verify_release_readiness.py
+</code></pre>
+
+<p><a href="/changelog/#v7151">Full changelog entry &rarr;</a> &middot; <a href="/blog/nexo-7-15-0/">Previous v7.15.0 release</a></p>
+</article></main></body></html>

@@ -1,5 +1,15 @@
 # Changelog
 
+## [7.15.1] - 2026-05-07
+
+### Fixed — audit drainage, bounded hook history, and briefing locks
+
+- **Daily self-audit drains large repeated-work clusters instead of freezing at five.** Prevention and formalization passes now process up to 50 clusters per run, with a source-level regression test pinning the cap.
+- **Hook run history is bounded on update and at write time.** Existing installs get migration v57, which deletes old `hook_runs`, trims the table below 20k rows, and vacuums after cleanup. New hook writes also run the same numeric retention path so the database does not grow indefinitely.
+- **Codex discipline checks ignore normal pre-startup bootstrap reads.** Reading NEXO calibration and project atlas before `nexo_startup` no longer counts as a conditioned-file drift, while post-startup and non-bootstrap file touches remain audited.
+- **Email monitor uses the router tier per message complexity.** Trivial acknowledgement-style mail can run at low cost, while retries, debt, manual-review cases, and complex commercial/legal/payment threads still escalate to the high tier.
+- **Morning briefings have an atomic send lock.** `morning_briefing_runs` dedupes by local date and recipient across scheduler/daemon races, preserves compatibility with the legacy JSON state file, retries failed/stale runs, and adds `nexo automations reactivate morning-agent --test-run`.
+
 ## [7.15.0] - 2026-05-07
 
 ### Added — shared continuity, multilingual recall, and automation hardening

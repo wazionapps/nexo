@@ -307,6 +307,39 @@ def test_email_monitor_processing_prompt_is_catalog_backed_and_generic(tmp_path,
     assert "franciscocp@gmail.com" not in prompt
 
 
+def test_email_monitor_complexity_tier_uses_low_cost_for_trivial_email(tmp_path, monkeypatch):
+    home = tmp_path / "nexo-home"
+    (home / "nexo-email").mkdir(parents=True)
+    monkeypatch.setenv("NEXO_HOME", str(home))
+    helper = types.ModuleType("nexo_helper")
+    helper.call_tool_text = lambda *args, **kwargs: ""
+    monkeypatch.setitem(sys.modules, "nexo_helper", helper)
+    module = _load_script_module("nexo_email_monitor_tier_simple_test", "nexo-email-monitor.py")
+
+    tier = module._email_monitor_complexity_tier([
+        {"subject": "Gracias, recibido", "from_addr": "client@example.test", "attempts": 0}
+    ])
+
+    assert tier == "bajo"
+
+
+def test_email_monitor_complexity_tier_escalates_complex_or_retry_emails(tmp_path, monkeypatch):
+    home = tmp_path / "nexo-home"
+    (home / "nexo-email").mkdir(parents=True)
+    monkeypatch.setenv("NEXO_HOME", str(home))
+    helper = types.ModuleType("nexo_helper")
+    helper.call_tool_text = lambda *args, **kwargs: ""
+    monkeypatch.setitem(sys.modules, "nexo_helper", helper)
+    module = _load_script_module("nexo_email_monitor_tier_complex_test", "nexo-email-monitor.py")
+
+    assert module._email_monitor_complexity_tier([
+        {"subject": "Urgente: contrato y factura pendiente", "attempts": 0}
+    ]) == "alto"
+    assert module._email_monitor_complexity_tier([
+        {"subject": "Follow-up", "attempts": 1}
+    ]) == "alto"
+
+
 def test_email_monitor_localizes_operator_escalation_email_for_spanish(tmp_path, monkeypatch):
     home = tmp_path / "nexo-home"
     (home / "nexo-email").mkdir(parents=True)
@@ -548,6 +581,72 @@ def test_morning_agent_contract_requires_operator_recipient(tmp_path, monkeypatc
     contract = automation_controls.get_script_runtime_contract("morning-agent")
     assert contract["available"] is False
     assert contract["blocked_reason_code"] == "missing_operator_recipient"
+
+
+def test_morning_agent_db_lock_dedupes_same_day_recipient(tmp_path, monkeypatch):
+    home = tmp_path / "nexo-home"
+    home.mkdir(parents=True)
+    monkeypatch.setenv("NEXO_HOME", str(home))
+    module = _load_script_module("nexo_morning_agent_lock_test", "nexo-morning-agent.py")
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    monkeypatch.setattr(module, "_morning_db_connection", lambda: conn)
+
+    first = module._claim_morning_briefing_send("2026-05-07", "owner@example.test")
+    second = module._claim_morning_briefing_send("2026-05-07", "owner@example.test")
+    forced = module._claim_morning_briefing_send("2026-05-07", "owner@example.test", force=True)
+
+    assert first["acquired"] is True
+    assert second["acquired"] is False
+    assert forced["acquired"] is True
+
+
+def test_morning_agent_migration_is_registered():
+    import db._schema as db_schema
+
+    migrations = {version: name for version, name, _fn in db_schema.MIGRATIONS}
+    assert migrations[58] == "morning_briefing_runs"
+
+
+def test_reactivate_automation_runs_morning_agent_dry_run(tmp_path, monkeypatch):
+    import script_registry
+
+    script_path = tmp_path / "nexo-morning-agent.py"
+    script_path.write_text("#!/usr/bin/env python3\n")
+    captured = {}
+
+    monkeypatch.setattr(
+        script_registry,
+        "set_automation_enabled",
+        lambda name, enabled: {"ok": True, "name": name, "changed": True},
+    )
+    monkeypatch.setattr(
+        script_registry,
+        "get_automation_status",
+        lambda name: {"ok": True, "name": name, "enabled": True},
+    )
+    monkeypatch.setattr(
+        script_registry,
+        "resolve_script_reference",
+        lambda _ref: {
+            "name": "morning-agent",
+            "runtime": "python",
+            "path": str(script_path),
+        },
+    )
+
+    def fake_run(command, **kwargs):
+        captured["command"] = command
+        captured["env"] = kwargs.get("env", {})
+        return types.SimpleNamespace(returncode=0, stdout='{"subject":"Test"}', stderr="")
+
+    monkeypatch.setattr(script_registry.subprocess, "run", fake_run)
+
+    result = script_registry.reactivate_automation("morning-agent", test_run=True)
+    assert result["ok"] is True
+    assert captured["command"][-1] == "--dry-run"
+    assert captured["env"]["NEXO_HEADLESS"] == "1"
 
 
 def test_core_automation_contracts_expose_product_controls(tmp_path, monkeypatch):

@@ -1,4 +1,6 @@
 """NEXO DB — Schema module."""
+import time
+
 from db._core import get_db
 from db._fts import _migrate_add_column, _migrate_add_index
 
@@ -945,6 +947,70 @@ def _m56_session_correction_requirements(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_session_correction_requirements_detected ON session_correction_requirements(detected_at)")
 
 
+def _m57_hook_runs_retention(conn):
+    """Bound hook_runs so existing installs stop growing without manual cleanup."""
+    try:
+        table = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='hook_runs'"
+        ).fetchone()
+    except Exception:
+        table = None
+    if not table:
+        _m39_hook_runs(conn)
+
+    retention_days = 7
+    max_rows = 19000
+    cutoff = time.time() - (retention_days * 86400)
+    conn.execute("DELETE FROM hook_runs WHERE started_at < ?", (cutoff,))
+    row = conn.execute("SELECT COUNT(*) FROM hook_runs").fetchone()
+    total = int((row[0] if row else 0) or 0)
+    if total > max_rows:
+        conn.execute(
+            """
+            DELETE FROM hook_runs
+            WHERE id NOT IN (
+                SELECT id
+                FROM hook_runs
+                ORDER BY started_at DESC, id DESC
+                LIMIT ?
+            )
+            """,
+            (max_rows,),
+        )
+    try:
+        conn.commit()
+        conn.execute("VACUUM")
+    except Exception:
+        pass
+
+
+def _m58_morning_briefing_runs(conn):
+    """Atomic dedupe lock for daily morning briefings."""
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS morning_briefing_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            local_date TEXT NOT NULL,
+            recipient TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'in_progress',
+            subject TEXT DEFAULT '',
+            send_output TEXT DEFAULT '',
+            error TEXT DEFAULT '',
+            started_at TEXT DEFAULT (datetime('now')),
+            finished_at TEXT DEFAULT NULL,
+            updated_at TEXT DEFAULT (datetime('now')),
+            UNIQUE(local_date, recipient)
+        )"""
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_morning_briefing_runs_date "
+        "ON morning_briefing_runs(local_date)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_morning_briefing_runs_status "
+        "ON morning_briefing_runs(status)"
+    )
+
+
 def _m39_hook_runs(conn):
     """Persist hook lifecycle observability — closes Fase 3 item 7.
 
@@ -1517,6 +1583,8 @@ MIGRATIONS = [
     (54, "continuity_snapshots", _m54_continuity_snapshots),
     (55, "cortex_critique_trace", _m55_cortex_critique_trace),
     (56, "session_correction_requirements", _m56_session_correction_requirements),
+    (57, "hook_runs_retention", _m57_hook_runs_retention),
+    (58, "morning_briefing_runs", _m58_morning_briefing_runs),
 ]
 
 

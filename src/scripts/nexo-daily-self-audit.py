@@ -88,6 +88,7 @@ AUDIT_HISTORY_DIR = LOG_DIR / "self-audit"
 AUDIT_HISTORY_DIR.mkdir(parents=True, exist_ok=True)
 LOG_FILE = LOG_DIR / "self-audit.log"
 NEXO_DB = data_dir() / "nexo.db"
+SELF_AUDIT_INLINE_BATCH_LIMIT = 50
 # Configure your main project repo to check for uncommitted changes (optional)
 PROJECT_REPO_DIR = None  # e.g., Path.home() / "projects" / "my-repo"
 HASH_REGISTRY = core_scripts_dir() / ".watchdog-hashes"
@@ -1228,7 +1229,7 @@ def check_error_memory_loop():
     if repeated:
         resolved = 0
         completed_followups = 0
-        for signature, items in list(repeated.items())[:5]:
+        for signature, items in list(repeated.items())[:SELF_AUDIT_INLINE_BATCH_LIMIT]:
             description = (
                 f"Mine a canonical prevention learning from repeated failed/blocked protocol tasks around {signature}"
             )
@@ -1433,7 +1434,7 @@ def check_unformalized_mentions():
     if loose_topics:
         resolved = 0
         completed_followups = 0
-        for (area, signature), items in list(loose_topics.items())[:5]:
+        for (area, signature), items in list(loose_topics.items())[:SELF_AUDIT_INLINE_BATCH_LIMIT]:
             sample_goal = str(items[0]["goal"] or "").strip()[:120]
             description = (
                 f"Formalize repeated unresolved theme in {area}: '{sample_goal}' "
@@ -1523,7 +1524,7 @@ def check_automation_opportunities():
     }
     if repeated:
         finding("INFO", "opportunities", f"{len(repeated)} repeated manual pattern(s) are good candidates for skills/scripts")
-        for (area, signature), items in list(repeated.items())[:5]:
+        for (area, signature), items in list(repeated.items())[:SELF_AUDIT_INLINE_BATCH_LIMIT]:
             sample_goal = str(items[0]["goal"] or "").strip()[:120]
             description = (
                 f"Extract a reusable automation for repeated {area} work around '{sample_goal}' "
