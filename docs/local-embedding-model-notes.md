@@ -33,9 +33,15 @@ That is not acceptable for reproducible retrieval/debugging across operators.
 
 | name | runtime model id | pinned source repo | pinned revision |
 |------|------------------|--------------------|-----------------|
-| embeddings (base) | `BAAI/bge-base-en-v1.5` | `qdrant/bge-base-en-v1.5-onnx-q` | `738cad1c108e2f23649db9e44b2eab988626493b` |
+| embeddings (base) | `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` | `qdrant/paraphrase-multilingual-MiniLM-L12-v2-onnx-Q` | `faf4aa4225822f3bc6376869cb1164e8e3feedd0` |
 | embeddings (small / migration) | `BAAI/bge-small-en-v1.5` | `qdrant/bge-small-en-v1.5-onnx-q` | `52398278842ec682c6f32300af41344b1c0b0bb2` |
 | reranker | `Xenova/ms-marco-MiniLM-L-6-v2` | `Xenova/ms-marco-MiniLM-L-6-v2` | `a09144355adeed5f58c8ed011d209bf8ee5a1fec` |
+
+The base embedding model is intentionally multilingual and 384-dimensional.
+That keeps the offline Desktop bundles below Windows installer limits while
+fixing Spanish/French/German/Portuguese/Italian recall for new and updated
+installs. Existing 768-dimensional stores are backed up and re-embedded because
+the active model marker includes both the pinned model revision and dimension.
 
 The full file manifest (required files + size + sha256) lives in:
 
@@ -52,6 +58,9 @@ Materialization / verification lives in:
 3. It copies only the required files into `~/.nexo/runtime/models/...`.
 4. It verifies size + sha256 for every required file.
 5. FastEmbed loads from that exact directory via `specific_model_path`.
+6. `cognitive.db` stores the active embedding model marker. On update, if the
+   marker differs from the current manifest, Brain backs up the database and
+   re-embeds STM, LTM, and quarantine rows with the pinned multilingual model.
 
 This means the runtime does **not** trust `fastembed` to choose artifacts by
 floating registry state.

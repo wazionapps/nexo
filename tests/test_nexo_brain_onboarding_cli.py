@@ -97,10 +97,10 @@ def test_warmup_models_dry_run_lists_current_local_models_without_onboarding(tmp
     targets = {target["name"]: target for target in payload["targets"]}
     model_ids = {target["model_id"] for target in targets.values()}
     assert "MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7" in model_ids
-    assert "BAAI/bge-base-en-v1.5" in model_ids
+    assert "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2" in model_ids
     assert "BAAI/bge-small-en-v1.5" in model_ids
     assert "Xenova/ms-marco-MiniLM-L-6-v2" in model_ids
-    assert targets["bge-base-embeddings"]["revision"] == "738cad1c108e2f23649db9e44b2eab988626493b"
+    assert targets["bge-base-embeddings"]["revision"] == "faf4aa4225822f3bc6376869cb1164e8e3feedd0"
     assert targets["bge-small-embeddings"]["revision"] == "52398278842ec682c6f32300af41344b1c0b0bb2"
     assert targets["cross-encoder-reranker"]["revision"] == "a09144355adeed5f58c8ed011d209bf8ee5a1fec"
     assert "preferred language" not in proc.stdout

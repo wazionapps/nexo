@@ -146,18 +146,30 @@ def search_learnings(query: str, category: str = None) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-def list_learnings(category: str = None) -> list[dict]:
-    """List all learnings, optionally filtered by category."""
+def list_learnings(
+    category: str = None,
+    created_after: float | None = None,
+    created_before: float | None = None,
+) -> list[dict]:
+    """List all learnings, optionally filtered by category and creation time."""
     conn = _core().get_db()
+    where = []
+    params: list[object] = []
     if category:
-        rows = conn.execute(
-            "SELECT * FROM learnings WHERE category = ? ORDER BY updated_at DESC",
-            (category,)
-        ).fetchall()
-    else:
-        rows = conn.execute(
-            "SELECT * FROM learnings ORDER BY category ASC, updated_at DESC"
-        ).fetchall()
+        where.append("category = ?")
+        params.append(category)
+    if created_after is not None:
+        where.append("created_at >= ?")
+        params.append(float(created_after))
+    if created_before is not None:
+        where.append("created_at <= ?")
+        params.append(float(created_before))
+    where_sql = f"WHERE {' AND '.join(where)}" if where else ""
+    order_sql = "updated_at DESC" if category else "category ASC, updated_at DESC"
+    rows = conn.execute(
+        f"SELECT * FROM learnings {where_sql} ORDER BY {order_sql}",
+        tuple(params),
+    ).fetchall()
     return [dict(r) for r in rows]
 
 

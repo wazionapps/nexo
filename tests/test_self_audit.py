@@ -113,6 +113,48 @@ def test_check_codex_conditioned_file_discipline_creates_protocol_debt(self_audi
     ]
 
 
+def test_check_auto_session_bursts_writes_idempotent_postmortem(self_audit_env):
+    module = _load_self_audit_module()
+    module.findings.clear()
+    conn = sqlite3.connect(str(self_audit_env / "data" / "nexo.db"))
+    conn.execute(
+        """CREATE TABLE session_diary (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT,
+            source TEXT,
+            summary TEXT,
+            created_at TEXT
+        )"""
+    )
+    rows = [
+        ("AUTO-N-4", "auto-close", "[AUTO-N] closed automatically", "2026-05-07T01:04:00"),
+        ("AUTO-N-3", "auto-close", "[AUTO-N] closed automatically", "2026-05-07T01:03:00"),
+        ("AUTO-N-2", "auto-close", "[AUTO-N] closed automatically", "2026-05-07T01:02:00"),
+        ("AUTO-N-1", "auto-close", "[AUTO-N] closed automatically", "2026-05-07T01:01:00"),
+        ("manual-1", "manual", "normal close", "2026-05-07T01:00:00"),
+    ]
+    for row in rows:
+        conn.execute(
+            "INSERT INTO session_diary (session_id, source, summary, created_at) VALUES (?, ?, ?, ?)",
+            row,
+        )
+    conn.commit()
+    conn.close()
+
+    module.check_auto_session_bursts()
+    module.check_auto_session_bursts()
+
+    assert len([f for f in module.findings if f["area"] == "postmortem"]) == 1
+    postmortems = [
+        path for path in (self_audit_env / "logs" / "self-audit").glob("auto-session-postmortem-*.json")
+        if "latest" not in path.name
+    ]
+    assert len(postmortems) == 1
+    payload = json.loads(postmortems[0].read_text())
+    assert payload["burst_count"] == 4
+    assert (self_audit_env / "runtime" / "operations" / "auto-session-burst-postmortem.json").exists()
+
+
 def test_check_codex_conditioned_file_discipline_dedupes_existing_protocol_debt(self_audit_env, monkeypatch):
     from doctor.providers import runtime
 
@@ -532,7 +574,7 @@ def test_check_error_memory_loop_creates_prevention_learning_inline(self_audit_e
 def test_check_repair_changes_missing_learning_capture_creates_debt_and_followup(self_audit_env):
     module = _load_self_audit_module()
     module.findings.clear()
-    module._attempt_repair_learning_auto_capture = lambda row: {"ok": False, "error": "forced failure"}
+    module._attempt_repair_learning_auto_capture = lambda _conn, row: {"ok": False, "error": "forced failure"}
 
     conn = sqlite3.connect(str(self_audit_env / "data" / "nexo.db"))
     conn.execute(

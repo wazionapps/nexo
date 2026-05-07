@@ -10,6 +10,7 @@ should still count as "the same thing".
 """
 
 from functools import lru_cache
+import os
 import re
 
 
@@ -49,6 +50,9 @@ def semantic_similarity_score(text_a: str, text_b: str) -> float | None:
     Returns ``None`` when embeddings are unavailable or any semantic path fails,
     so callers can cleanly fall back to deterministic heuristics.
     """
+    skip_semantic = os.environ.get("NEXO_SKIP_SEMANTIC_SIMILARITY", "").strip().lower()
+    if skip_semantic in {"1", "true", "yes"}:
+        return None
     left = normalize_similarity_text(text_a)
     right = normalize_similarity_text(text_b)
     if not left or not right:

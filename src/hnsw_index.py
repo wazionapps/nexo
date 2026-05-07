@@ -26,10 +26,22 @@ except ImportError:
 # When to activate HNSW (below this, brute force is fine)
 ACTIVATION_THRESHOLD = int(os.environ.get("NEXO_HNSW_THRESHOLD", "10000"))
 
+def _configured_embedding_dim() -> int:
+    try:
+        from local_models import get_local_model_spec
+
+        dim = int(get_local_model_spec("bge-base-embeddings").dimension or 0)
+        if dim > 0:
+            return dim
+    except Exception:
+        pass
+    return 384
+
+
 # Index params
-EMBEDDING_DIM = 768
+EMBEDDING_DIM = _configured_embedding_dim()
 EF_CONSTRUCTION = 200  # Higher = better recall during build, slower
-M = 16                 # Connections per node (16 is good for 768-dim)
+M = 16                 # Connections per node
 EF_SEARCH = 50         # Higher = better recall during search
 
 # Index file paths
@@ -162,7 +174,7 @@ def search(query_vec: np.ndarray, store: str = "stm", top_k: int = 50) -> Option
     """Search the HNSW index for approximate nearest neighbors.
 
     Args:
-        query_vec: Query embedding (768-dim float32)
+        query_vec: Query embedding (float32, matching EMBEDDING_DIM)
         store: "stm" or "ltm"
         top_k: Number of results
 

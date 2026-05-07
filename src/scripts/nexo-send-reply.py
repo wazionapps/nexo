@@ -526,6 +526,7 @@ def main(argv=None):
                 in_reply_to=args.in_reply_to,
                 references_header=args.references,
                 source="nexo-send-reply",
+                body_text=reply_body,
                 meta={
                     "sent_copy_saved": sent_copy_saved,
                     "lifecycle_event": lifecycle_event,

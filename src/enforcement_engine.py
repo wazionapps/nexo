@@ -471,6 +471,14 @@ class HeadlessEnforcer:
         # v7.7 Gap 1: latch so multi_step_task_detected fires at most once
         # per task cycle. Cleared on skill_match OR task_close.
         self._multi_step_event_fired: bool = False
+        self._post_close_cooldown_until: float = 0.0
+        try:
+            self._post_close_cooldown_seconds = max(
+                0,
+                int(os.environ.get("NEXO_ENFORCER_POST_CLOSE_COOLDOWN_SECONDS", "300")),
+            )
+        except Exception:
+            self._post_close_cooldown_seconds = 300
 
         if self.map:
             self._build_indexes()
@@ -2150,6 +2158,7 @@ class HeadlessEnforcer:
         # open tool so the next task cycle re-opens the obligation.
         if name == "nexo_task_close":
             self.reset_task_cycle("nexo_task_open")
+            self._start_post_close_cooldown()
 
         # v7.7 Gap 1 — autonomous detector for multi_step_task_detected.
         # The event was dispatched by the map but nothing ever raised it.
@@ -2428,7 +2437,47 @@ class HeadlessEnforcer:
         # defect applied to after_tool gates pointing at task_open.
         self._tool_last_instance.pop(tool, None)
 
+    def _post_close_cooldown_active(self) -> bool:
+        cooldown_until = float(getattr(self, "_post_close_cooldown_until", 0.0) or 0.0)
+        return bool(cooldown_until and time.time() < cooldown_until)
+
+    def _post_close_cooldown_blocks(self, prompt: str, tag: str) -> bool:
+        if not self._post_close_cooldown_active():
+            return False
+        normalized = str(prompt or "").lower()
+        tag_text = str(tag or "").lower()
+        if tag_text.startswith("r18:"):
+            return False
+        if tag_text.startswith("conditional:nexo_task_open"):
+            return False
+        if "nexo_" in normalized:
+            return True
+        return tag_text.startswith((
+            "start:",
+            "periodic_msg:",
+            "periodic_time:",
+            "after:nexo_task_close",
+            "on_event:",
+        ))
+
+    def _start_post_close_cooldown(self) -> None:
+        cooldown_seconds = int(getattr(self, "_post_close_cooldown_seconds", 300) or 0)
+        if cooldown_seconds <= 0:
+            return
+        self._post_close_cooldown_until = time.time() + cooldown_seconds
+        before = len(self.injection_queue)
+        self.injection_queue = [
+            item for item in self.injection_queue
+            if not self._post_close_cooldown_blocks(str(item.get("prompt", "")), str(item.get("tag", "")))
+        ]
+        removed = before - len(self.injection_queue)
+        if removed:
+            _logger.info("POST_CLOSE_COOLDOWN: cleared %d queued protocol injection(s)", removed)
+
     def check_periodic(self):
+        if self._post_close_cooldown_active():
+            _logger.info("POST_CLOSE_COOLDOWN: periodic checks suppressed")
+            return
         for entry in self._on_start:
             tool = entry["tool"]
             threshold = entry["rule"].get("threshold", 2)
@@ -2663,6 +2712,9 @@ class HeadlessEnforcer:
                 MUST pass the canonical ID.
         """
         normalized_prompt = _upgrade_silent_reminder_prompt(prompt)
+        if self._post_close_cooldown_blocks(normalized_prompt, tag):
+            _logger.info("POST_CLOSE_COOLDOWN: skip %s (rule_id=%s)", tag, rule_id or "?")
+            return
         if any(q["tag"] == tag for q in self.injection_queue):
             return
         # v7.11.2: suppress reminders that ask the agent to call nexo_*

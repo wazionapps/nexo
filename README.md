@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.14.0` is the current packaged-runtime line. Minor release over v7.13.9 — Brain closes the install/reliability loop with update-path venv recovery, platform-gated wheels, WSL Desktop-managed flag preservation, startup memory authority warnings, legacy MEMORY write blocking, post-action real-world verification, and stale followup triage.
+Version `7.15.0` is the current packaged-runtime line. Minor release over v7.14.0 — Brain unifies sent-email continuity across send paths, moves cognitive recall to multilingual embeddings, forces tagged learnings into context, hardens email loop guards and headless runners, exposes learning creation dates, and adds AUTO-N burst postmortems.
+
+Previously in `7.14.0`: minor release — Brain closes the install/reliability loop with update-path venv recovery, platform-gated wheels, WSL Desktop-managed flag preservation, startup memory authority warnings, legacy MEMORY write blocking, post-action real-world verification, and stale followup triage.
 
 Previously in `7.13.9`: patch release — Brain moves aside an existing managed `.venv` when it was created with unsupported Python <3.10, then recreates it with the supported interpreter prepared by Desktop.
 
@@ -383,7 +385,7 @@ That keeps the core Ebbinghaus model, but makes decay more individual and less p
 
 ### Semantic Search (Finding by Meaning)
 
-NEXO Brain doesn't search by keywords. It searches by **meaning** using vector embeddings (fastembed, 768 dimensions).
+NEXO Brain doesn't search by keywords. It searches by **meaning** using multilingual vector embeddings (fastembed, 384 dimensions).
 
 Example: If you search for "deploy problems", NEXO Brain will find a memory about "SSH connection timeout on production server" — even though they share zero words. This is how human associative memory works.
 
@@ -601,7 +603,7 @@ NEXO Brain was evaluated on [LoCoMo](https://github.com/snap-research/locomo) (A
 - 93.3% adversarial rejection rate — reliably says "I don't know" when information isn't available
 - 74.9% recall across 1,986 questions
 - Open-domain F1: 0.637 | Multi-hop F1: 0.333 | Temporal F1: 0.326
-- Runs on CPU with 768-dim embeddings (BAAI/bge-base-en-v1.5) — no GPU required
+- Runs on CPU with local multilingual embeddings — no GPU required
 - First MCP memory server benchmarked on a peer-reviewed dataset
 
 Full results in [`benchmarks/locomo/results/`](benchmarks/locomo/results/).
@@ -1447,7 +1449,7 @@ See [benchmarks/results/memory-recall-vs-static.md](benchmarks/results/memory-re
 
 ### v0.9.0 — Cognitive Memory (2026-03-15)
 - Atkinson-Shiffrin memory model (STM → LTM promotion)
-- Semantic RAG with fastembed (BAAI/bge-base-en-v1.5, 768 dims)
+- Semantic RAG with pinned local multilingual fastembed models
 - Trust scoring, sentiment detection, adaptive personality modes
 - Ebbinghaus decay, sister detection, quarantine system
 

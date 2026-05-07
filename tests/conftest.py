@@ -77,6 +77,9 @@ def isolated_db(tmp_path, monkeypatch):
     monkeypatch.setenv("NEXO_TEST_DB", test_db)
     monkeypatch.setenv("NEXO_COGNITIVE_DB", test_cog_db)
     monkeypatch.setenv("NEXO_SKIP_FS_INDEX", "1")
+    monkeypatch.setenv("NEXO_SKIP_LEARNING_COGNITIVE_INGEST", "1")
+    monkeypatch.setenv("NEXO_SKIP_SEMANTIC_SIMILARITY", "1")
+    monkeypatch.setenv("NEXO_SKIP_COGNITIVE_MODEL_DOWNLOAD", "1")
 
     import db._core as db_core
     import cognitive._core as cog_core

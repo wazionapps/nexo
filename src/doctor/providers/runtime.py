@@ -2340,6 +2340,75 @@ def check_codex_session_parity() -> DoctorCheck:
     )
 
 
+def check_bootstrap_reached_startup() -> DoctorCheck:
+    """installation_live: every recent Codex session must reach nexo_startup."""
+    try:
+        schedule = _load_json(SCHEDULE_FILE) if SCHEDULE_FILE.is_file() else {}
+    except Exception:
+        schedule = {}
+    prefs = normalize_client_preferences(schedule)
+    wants_codex = bool(
+        prefs.get("interactive_clients", {}).get("codex")
+        or prefs.get("default_terminal_client") == "codex"
+        or (prefs.get("automation_enabled", True) and prefs.get("automation_backend") == "codex")
+    )
+    if not wants_codex:
+        return DoctorCheck(
+            id="installation_live.bootstrap_reached_startup",
+            tier="runtime",
+            status="healthy",
+            severity="info",
+            summary="Startup reachability skipped (Codex not selected)",
+        )
+
+    audit = _recent_codex_session_parity_status(days=1, max_files=48)
+    files = int(audit.get("files") or 0)
+    startup_sessions = int(audit.get("startup_sessions") or 0)
+    missing = max(0, files - startup_sessions)
+    evidence = [
+        f"window=24h",
+        f"nexo_startup reached: {startup_sessions}/{files}",
+        f"missing_startup={missing}",
+    ]
+    for sample in (audit.get("samples") or [])[:5]:
+        if not sample.get("startup"):
+            evidence.append(f"missing startup: {sample.get('file')}")
+
+    if files <= 0:
+        return DoctorCheck(
+            id="installation_live.bootstrap_reached_startup",
+            tier="runtime",
+            status="degraded",
+            severity="warn",
+            summary="No Codex sessions in the last 24h to verify startup reachability",
+            evidence=evidence,
+            repair_plan=["Start Codex through the managed NEXO launcher and re-run doctor"],
+            escalation_prompt="NEXO cannot prove recent Codex sessions reached startup.",
+        )
+
+    status = "healthy" if missing == 0 else "critical"
+    severity = "info" if status == "healthy" else "error"
+    return DoctorCheck(
+        id="installation_live.bootstrap_reached_startup",
+        tier="runtime",
+        status=status,
+        severity=severity,
+        summary=(
+            "All recent Codex sessions reached NEXO startup"
+            if status == "healthy"
+            else "Some recent Codex sessions did not reach NEXO startup"
+        ),
+        evidence=evidence,
+        repair_plan=[
+            "Ensure SessionStart preload resolves deferred NEXO tools before the first assistant response",
+            "Start Codex through `nexo chat` or run `nexo clients sync --client codex`",
+        ] if status != "healthy" else [],
+        escalation_prompt=(
+            "Codex sessions are starting without the shared-brain startup step, so memory/guard continuity is not guaranteed."
+        ) if status != "healthy" else "",
+    )
+
+
 def check_codex_conditioned_file_discipline() -> DoctorCheck:
     try:
         schedule = _load_json(SCHEDULE_FILE) if SCHEDULE_FILE.is_file() else {}
@@ -3591,6 +3660,7 @@ def run_runtime_checks(fix: bool = False) -> list[DoctorCheck]:
         safe_check(check_client_backend_preferences, fix=fix),
         safe_check(check_client_bootstrap_parity, fix=fix),
         safe_check(check_codex_session_parity),
+        safe_check(check_bootstrap_reached_startup),
         safe_check(check_codex_conditioned_file_discipline),
         safe_check(check_codex_protocol_compliance),
         safe_check(check_claude_desktop_shared_brain),

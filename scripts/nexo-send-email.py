@@ -14,17 +14,29 @@ import smtplib
 import sqlite3
 import sys
 from email.mime.text import MIMEText
-from email.utils import formataddr
+from email.utils import formataddr, make_msgid
+from pathlib import Path
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+REPO_SRC = SCRIPT_DIR.parent / "src"
+if str(REPO_SRC) not in sys.path:
+    sys.path.insert(0, str(REPO_SRC))
+
+from email_sent_events import record_sent_email  # noqa: E402
 
 
 def load_smtp_config():
     """Load SMTP credentials from nexo.db credential store."""
-    nexo_home = os.environ.get("NEXO_HOME", os.path.expanduser("~/.nexo"))
-    db_path = os.path.join(nexo_home, "data", "nexo.db")
-    if not os.path.exists(db_path):
+    nexo_home = Path(os.environ.get("NEXO_HOME", os.path.expanduser("~/.nexo"))).expanduser()
+    candidates = [
+        nexo_home / "runtime" / "data" / "nexo.db",
+        nexo_home / "data" / "nexo.db",
+    ]
+    db_path = next((p for p in candidates if p.exists()), None)
+    if db_path is None:
         return None
     try:
-        conn = sqlite3.connect(db_path)
+        conn = sqlite3.connect(str(db_path))
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
             "SELECT key, value FROM credentials WHERE service = 'smtp'"
@@ -52,12 +64,26 @@ def send(subject, body, to, cc=None):
     if cc:
         msg["Cc"] = cc
     msg["Subject"] = subject
+    msg["Message-ID"] = make_msgid(domain=from_email.rsplit("@", 1)[-1] if "@" in from_email else None)
 
     port = int(config.get("port", "465"))
     smtp = smtplib.SMTP_SSL(config["host"], port)
     smtp.login(config["user"], config.get("password", ""))
     smtp.send_message(msg)
     smtp.quit()
+    try:
+        record_sent_email(
+            message_id=str(msg["Message-ID"] or ""),
+            sender=from_email,
+            to_addrs=to,
+            cc_addrs=cc or "",
+            subject=subject,
+            source="nexo-send-email",
+            body_text=body,
+            meta={"script": "scripts/nexo-send-email.py"},
+        )
+    except Exception as exc:
+        print(f"WARN: sent email continuity tracking failed: {exc}", file=sys.stderr)
     print(f"OK — sent to {to}")
 
 

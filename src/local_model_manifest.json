@@ -4,36 +4,37 @@
     {
       "name": "bge-base-embeddings",
       "kind": "fastembed_embedding",
-      "model_id": "BAAI/bge-base-en-v1.5",
-      "source_repo": "qdrant/bge-base-en-v1.5-onnx-q",
-      "revision": "738cad1c108e2f23649db9e44b2eab988626493b",
+      "model_id": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+      "source_repo": "qdrant/paraphrase-multilingual-MiniLM-L12-v2-onnx-Q",
+      "revision": "faf4aa4225822f3bc6376869cb1164e8e3feedd0",
       "model_file": "model_optimized.onnx",
+      "dimension": 384,
       "source": "src/cognitive/_core.py",
       "required_files": [
         {
           "path": "config.json",
-          "size": 740,
-          "sha256": "86f84a5285de7f1ee673f712387219ef1e261ec27dcd870e793a80f9da1aaa3b"
+          "size": 673,
+          "sha256": "c8ec081fdad2df991bf5abbf18418fec7a5cdaa421f60ffb060a30040b8c376f"
         },
         {
           "path": "model_optimized.onnx",
-          "size": 217824172,
-          "sha256": "4e556722bc4f65716c544c8a931f1e90fb3f866e5741fd93a96f051d673339c7"
+          "size": 235052644,
+          "sha256": "634d0f66c29dc934c8fa72b8a4fe91dd4d420a22f1d82a241058d4316e659a99"
         },
         {
           "path": "special_tokens_map.json",
-          "size": 695,
-          "sha256": "5d5b662e421ea9fac075174bb0688ee0d9431699900b90662acd44b2a350503a"
+          "size": 964,
+          "sha256": "8c785abebea9ae3257b61681b4e6fd8365ceafde980c21970d001e834cf10835"
         },
         {
           "path": "tokenizer.json",
-          "size": 711396,
-          "sha256": "d241a60d5e8f04cc1b2b3e9ef7a4921b27bf526d9f6050ab90f9267a1f9e5c66"
+          "size": 17083009,
+          "sha256": "fa685fc160bbdbab64058d4fc91b60e62d207e8dc60b9af5c002c5ab946ded00"
         },
         {
           "path": "tokenizer_config.json",
-          "size": 1242,
-          "sha256": "0b29c7bfc889e53b36d9dd3e686dd4300f6525110eaa98c76a5dafceb2029f53"
+          "size": 1416,
+          "sha256": "0666eebf692422757e1dddf3c9fb1ded73ba3dc726c5828671fc89e45bf3609f"
         }
       ]
     },
@@ -44,6 +45,7 @@
       "source_repo": "qdrant/bge-small-en-v1.5-onnx-q",
       "revision": "52398278842ec682c6f32300af41344b1c0b0bb2",
       "model_file": "model_optimized.onnx",
+      "dimension": 384,
       "source": "src/migrate_embeddings.py",
       "required_files": [
         {
@@ -80,6 +82,7 @@
       "source_repo": "Xenova/ms-marco-MiniLM-L-6-v2",
       "revision": "a09144355adeed5f58c8ed011d209bf8ee5a1fec",
       "model_file": "onnx/model.onnx",
+      "dimension": 0,
       "source": "src/cognitive/_core.py",
       "required_files": [
         {

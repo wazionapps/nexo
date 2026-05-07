@@ -1439,13 +1439,15 @@ def nexo_learning_delete(id: int) -> str:
 
 
 @mcp.tool
-def nexo_learning_list(category: str = "") -> str:
+def nexo_learning_list(category: str = "", created_after: str = "", created_before: str = "") -> str:
     """List all learnings, grouped by category.
 
     Args:
         category: Filter by category (optional). If empty, shows all grouped.
+        created_after: Filter to learnings created at or after this date/time (optional).
+        created_before: Filter to learnings created at or before this date/time (optional).
     """
-    return handle_learning_list(category)
+    return handle_learning_list(category, created_after, created_before)
 
 
 @mcp.tool

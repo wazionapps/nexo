@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>NEXO Brain — Libre Shared Brain for Claude Code, Codex, and MCP Agents</title>
-    <meta name="description" content="Libre/open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients. Version 7.14.0 adds installer hardening, memory authority checks, post-action verification, and followup triage.">
+    <meta name="description" content="Libre/open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients. Version 7.15.0 adds shared sent-email continuity, multilingual recall, learning context floors, and automation hardening.">
     <meta name="keywords" content="AI memory, cognitive architecture, MCP, Claude Code, Codex, Claude Desktop, agent memory, vector search, AI agents, shared brain, open source">
     <meta name="author" content="WAzion">
     <meta name="robots" content="index, follow">
@@ -14,7 +14,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com">
     <meta property="og:title" content="NEXO Brain — Libre Shared Brain for Claude Code, Codex, and MCP Agents">
-    <meta property="og:description" content="Libre/open-source cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Version 7.14.0 adds installer hardening, memory authority checks, post-action verification, and followup triage.">
+    <meta property="og:description" content="Libre/open-source cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Version 7.15.0 adds shared sent-email continuity, multilingual recall, learning context floors, and automation hardening.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-home.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -22,7 +22,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="NEXO Brain — Libre Shared Brain for Claude Code, Codex, and MCP Agents">
-    <meta name="twitter:description" content="Libre/open-source cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Version 7.14.0 adds installer hardening, memory authority checks, post-action verification, and followup triage.">
+    <meta name="twitter:description" content="Libre/open-source cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Version 7.15.0 adds shared sent-email continuity, multilingual recall, learning context floors, and automation hardening.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-home.png">
 
     <!-- Google Analytics (GA4) -->
@@ -46,12 +46,12 @@
         "@context": "https://schema.org",
         "@type": "SoftwareApplication",
         "name": "NEXO Brain",
-        "description": "Libre/open-source local cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Version 7.14.0 adds installer hardening, memory authority checks, post-action verification, and followup triage.",
+        "description": "Libre/open-source local cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Version 7.15.0 adds shared sent-email continuity, multilingual recall, learning context floors, and automation hardening.",
         "applicationCategory": "DeveloperApplication",
         "operatingSystem": "macOS, Linux, Windows",
         "url": "https://nexo-brain.com",
         "downloadUrl": "https://www.npmjs.com/package/nexo-brain",
-        "softwareVersion": "7.14.0",
+        "softwareVersion": "7.15.0",
         "license": "https://www.gnu.org/licenses/agpl-3.0",
         "author": {
             "@type": "Organization",
@@ -88,7 +88,7 @@
         "@type": "WebSite",
         "name": "NEXO Brain",
         "url": "https://nexo-brain.com",
-        "description": "Libre/open-source local cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Version 7.14.0 adds installer hardening, memory authority checks, post-action verification, and followup triage.",
+        "description": "Libre/open-source local cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Version 7.15.0 adds shared sent-email continuity, multilingual recall, learning context floors, and automation hardening.",
         "publisher": {
             "@type": "Organization",
             "name": "WAzion",
@@ -206,7 +206,7 @@
                 "name": "What vector embedding model does it use?",
                 "acceptedAnswer": {
                     "@type": "Answer",
-                    "text": "NEXO Brain uses BAAI/bge-base-en-v1.5, a 768-dimensional embedding model running locally via ONNX Runtime on CPU. No GPU required. The model is downloaded automatically during installation and provides high-quality semantic search for memory retrieval."
+                    "text": "NEXO Brain uses a pinned multilingual embedding model running locally via ONNX Runtime on CPU. No GPU required. Desktop bundles the required model files for offline-first installs, and Brain verifies pinned hashes before use."
                 }
             },
             {
@@ -697,7 +697,7 @@
     <div class="container">
         <div class="hero-badge fade-up">
             <span class="dot"></span>
-            <span id="version-badge">v7.14.0</span> Minor release — installer hardening, memory authority checks, post-action verification, and stale followup triage. <a href="/changelog/#v7140">Read the v7.14.0 notes</a>.
+            <span id="version-badge">v7.15.0</span> Minor release — shared sent-email continuity, multilingual recall, learning context floors, and automation hardening. <a href="/changelog/#v7150">Read the v7.15.0 notes</a>.
         </div>
         <div class="fade-up" style="display:flex;gap:8px;justify-content:center;margin-bottom:12px;">
             <img src="https://img.shields.io/npm/v/nexo-brain?color=7C3AED&label=npm" alt="npm version">
@@ -807,7 +807,7 @@
         </div>
         <div class="stat">
             <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg></div>
-            <div class="stat-value">768</div>
+            <div class="stat-value">384</div>
             <div class="stat-label">Vector Dimensions</div>
         </div>
         <div class="stat">
@@ -1040,7 +1040,7 @@
             <div class="feature-card">
                 <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
                 <h3>Semantic RAG</h3>
-                <p>Vector search with fastembed (BAAI/bge-base-en-v1.5). Query across all memory stores with cosine similarity. Retrieve what matters, not just what matches.</p>
+                <p>Vector search with pinned multilingual fastembed models. Query across all memory stores with cosine similarity. Retrieve what matters, not just what matches.</p>
             </div>
             <div class="feature-card">
                 <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
@@ -1119,8 +1119,8 @@
             </div>
             <div class="feature-card">
                 <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></svg></div>
-                <h3>768-dim Embeddings</h3>
-                <p>Upgraded from 384 to 768 dimensions (BAAI/bge-base-en-v1.5). Doubled semantic precision for richer memory representations — still CPU-only, no GPU required.</p>
+                <h3>Multilingual Embeddings</h3>
+                <p>Pinned local multilingual embeddings improve recall across Spanish, French, German, Portuguese, Italian, and English while staying CPU-only and bundle-friendly.</p>
             </div>
             <div class="feature-card">
                 <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
@@ -1135,7 +1135,7 @@
             <div class="feature-card">
                 <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg></div>
                 <h3>Auto-Migration</h3>
-                <p>Transparent 384→768 embedding upgrade on first startup. All existing memories are re-embedded automatically with zero user action required — no data loss, no manual steps.</p>
+                <p>Transparent embedding migration on first startup. Existing memories are backed up and re-embedded automatically with zero user action required — no data loss, no manual steps.</p>
             </div>
             <div class="feature-card">
                 <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96-.46 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96-.46 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2z"/></svg></div>
@@ -1486,7 +1486,7 @@
                     <span>What vector embedding model does it use?</span>
                     <svg class="faq-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                 </summary>
-                <div class="faq-answer">NEXO Brain uses BAAI/bge-base-en-v1.5, a 768-dimensional embedding model running locally via ONNX Runtime on CPU. No GPU required. The model is downloaded automatically during installation.</div>
+                <div class="faq-answer">NEXO Brain uses a pinned multilingual embedding model running locally via ONNX Runtime on CPU. No GPU required. Desktop bundles the required model files for offline-first installs, and Brain verifies pinned hashes before use.</div>
             </details>
 
             <details class="faq-item">

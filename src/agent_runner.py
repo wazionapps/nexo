@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import paths
 import shlex
 import shutil
@@ -383,6 +384,79 @@ def _headless_env(env: dict | None = None) -> dict:
     merged.pop("CLAUDECODE", None)
     merged.pop("CLAUDE_CODE", None)
     return merged
+
+
+_MUTATING_TOOL_NAMES = frozenset({
+    "write",
+    "edit",
+    "multiedit",
+    "notebookedit",
+    "delete",
+    "bash",
+    "shell",
+})
+
+
+def _runner_mutating_tools_allowed(allowed_tools: str) -> bool:
+    text = str(allowed_tools or "").strip().lower()
+    if not text:
+        return True
+    parts = {part.strip().split(":", 1)[0].lower() for part in re.split(r"[,;\s]+", text) if part.strip()}
+    return bool(parts & _MUTATING_TOOL_NAMES)
+
+
+def _extract_runner_guard_paths(prompt: str, cwd: Path) -> list[str]:
+    found: set[str] = set()
+    text = str(prompt or "")
+    for match in re.findall(r"(?<![A-Za-z0-9_])(?:/[^\s'\"`<>]+|[A-Za-z]:\\[^\s'\"`<>]+)", text):
+        cleaned = match.rstrip(".,);:]")
+        if cleaned:
+            found.add(cleaned)
+    for match in re.findall(r"(?<![A-Za-z0-9_])(?:src|scripts|tests|docs|lib|renderer|app)/[A-Za-z0-9_./-]+\.[A-Za-z0-9]+", text):
+        found.add(str((cwd / match.rstrip(".,);:]")).resolve()))
+    try:
+        resolved_cwd = cwd.resolve()
+    except Exception:
+        resolved_cwd = cwd
+    runtime_core = NEXO_HOME / "core"
+    try:
+        if resolved_cwd == runtime_core or runtime_core in resolved_cwd.parents:
+            found.add(str(resolved_cwd))
+    except Exception:
+        pass
+    return sorted(found)
+
+
+def _run_headless_runner_guard(*, caller: str, cwd: Path, prompt: str, allowed_tools: str) -> dict:
+    if not _runner_mutating_tools_allowed(allowed_tools):
+        return {"blocked": False, "skipped": "read_only_tools"}
+    guard_paths = _extract_runner_guard_paths(prompt, cwd)
+    if not guard_paths:
+        return {"blocked": False, "skipped": "no_explicit_paths"}
+    try:
+        runtime_root = str(NEXO_HOME)
+        if runtime_root and runtime_root not in sys.path:
+            sys.path.insert(0, runtime_root)
+        from plugins.guard import handle_guard_check  # type: ignore
+
+        output = handle_guard_check(
+            files=",".join(guard_paths),
+            area=f"runner:{caller or 'headless'}",
+            project_hint=f"headless runner caller={caller or 'unknown'} cwd={cwd}",
+            include_schemas="true",
+        )
+    except Exception as exc:
+        return {
+            "blocked": True,
+            "summary": f"Runner guard unavailable: {exc}",
+            "paths": guard_paths,
+        }
+    blocked = "BLOCKING RULES" in str(output or "")
+    return {
+        "blocked": blocked,
+        "summary": str(output or ""),
+        "paths": guard_paths,
+    }
 
 
 def _load_client_bootstrap_prompt(client: str) -> str:
@@ -1000,6 +1074,18 @@ def run_automation_prompt(
         reasoning_effort=reasoning_effort,
         preferences=prefs,
     )
+    guard_result = _run_headless_runner_guard(
+        caller=caller,
+        cwd=cwd_path,
+        prompt=prompt,
+        allowed_tools=allowed_tools,
+    )
+    if guard_result.get("blocked"):
+        stderr = "NEXO runner guard blocked this automation before editing shared files.\n"
+        summary = str(guard_result.get("summary") or "").strip()
+        if summary:
+            stderr = _append_stderr(stderr, summary)
+        return subprocess.CompletedProcess(["nexo-runner-guard"], 2, "", stderr)
     started_at = time.perf_counter()
 
     if selected_backend == CLIENT_CLAUDE_CODE:

@@ -150,6 +150,7 @@ def test_send_reply_records_sent_email_continuity_event(tmp_path, monkeypatch, c
     assert captured["message_id"] == "<msg-1@example.test>"
     assert captured["to_addrs"] == "Client <client@example.test>"
     assert captured["subject"] == "Re: Test"
+    assert captured["body_text"] == "Reply body"
     assert captured["meta"]["sent_copy_saved"] is True
     assert "OK:<msg-1@example.test>" in capsys.readouterr().out
 
@@ -175,6 +176,76 @@ def test_email_monitor_trusted_domains_and_runtime_path_are_generic(tmp_path, mo
     assert "/Users/franciscoc/.local/bin" not in runtime_path
     assert str(home.parent / ".local" / "bin") in runtime_path
     assert "/usr/bin" in runtime_path
+
+
+def test_email_monitor_hard_blocks_agent_self_sender_threads(tmp_path, monkeypatch):
+    home = tmp_path / "nexo-home"
+    (home / "nexo-email").mkdir(parents=True)
+    monkeypatch.setenv("NEXO_HOME", str(home))
+    helper = types.ModuleType("nexo_helper")
+    helper.call_tool_text = lambda *args, **kwargs: ""
+    monkeypatch.setitem(sys.modules, "nexo_helper", helper)
+    module = _load_script_module("nexo_email_monitor_loop_guard_test", "nexo-email-monitor.py")
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    module._ensure_emails_table(conn)
+    module.ensure_email_events_table(conn)
+    conn.execute(
+        """
+        INSERT INTO emails (message_id, from_addr, subject, received_at, status, attempts, thread_id)
+        VALUES (?, ?, ?, datetime('now'), 'pending', 0, ?)
+        """,
+        ("<self-1@example.test>", "NEXO <agent@example.test>", "Re: Booking", "<thread-1@example.test>"),
+    )
+    conn.commit()
+
+    actionable = module.get_actionable_emails(
+        conn,
+        config={"email": "agent@example.test"},
+        priority_aliases=[],
+    )
+
+    row = conn.execute("SELECT status, error FROM emails WHERE message_id = ?", ("<self-1@example.test>",)).fetchone()
+    event = conn.execute("SELECT event, detail FROM email_events WHERE email_id = ?", ("<self-1@example.test>",)).fetchone()
+    guard = conn.execute("SELECT reason FROM email_loop_guards LIMIT 1").fetchone()
+
+    assert actionable == []
+    assert row["status"] == "needs_interactive"
+    assert "manual review" in row["error"]
+    assert event["event"] == "debt_flagged"
+    assert "manual review" in event["detail"]
+    assert guard["reason"] == "agent_self_sender"
+
+
+def test_email_monitor_loop_guard_does_not_block_operator_alias(tmp_path, monkeypatch):
+    home = tmp_path / "nexo-home"
+    (home / "nexo-email").mkdir(parents=True)
+    monkeypatch.setenv("NEXO_HOME", str(home))
+    helper = types.ModuleType("nexo_helper")
+    helper.call_tool_text = lambda *args, **kwargs: ""
+    monkeypatch.setitem(sys.modules, "nexo_helper", helper)
+    module = _load_script_module("nexo_email_monitor_loop_guard_alias_test", "nexo-email-monitor.py")
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    module._ensure_emails_table(conn)
+    conn.execute(
+        """
+        INSERT INTO emails (message_id, from_addr, subject, received_at, status, attempts, thread_id)
+        VALUES (?, ?, ?, datetime('now'), 'pending', 0, ?)
+        """,
+        ("<operator-1@example.test>", "Owner <owner@example.test>", "Re: Booking", "<thread-2@example.test>"),
+    )
+    conn.commit()
+
+    actionable = module.get_actionable_emails(
+        conn,
+        config={"email": "agent@example.test"},
+        priority_aliases=["owner@example.test"],
+    )
+
+    assert [row["message_id"] for row in actionable] == ["<operator-1@example.test>"]
 
 
 def test_email_monitor_defaults_to_neutral_assistant_name(tmp_path, monkeypatch):

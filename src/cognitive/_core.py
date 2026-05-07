@@ -3,8 +3,10 @@
 import base64
 import json
 import math
+import hashlib
 import os
 import re
+import shutil
 import sqlite3
 import numpy as np
 from datetime import datetime, timedelta
@@ -18,7 +20,19 @@ _cognitive_dir = paths.cognitive_dir()
 _cognitive_dir.mkdir(parents=True, exist_ok=True)
 
 COGNITIVE_DB = str(_cognitive_dir / "cognitive.db")
-EMBEDDING_DIM = 768
+def _configured_embedding_dim() -> int:
+    try:
+        from local_models import get_local_model_spec
+
+        dim = int(get_local_model_spec("bge-base-embeddings").dimension or 0)
+        if dim > 0:
+            return dim
+    except Exception:
+        pass
+    return 384
+
+
+EMBEDDING_DIM = _configured_embedding_dim()
 LAMBDA_STM = 0.004126   # half-life = ln(2) / (7 * 24) ≈ 7 days
 LAMBDA_LTM = 0.000481  # half-life = ln(2) / (60 * 24) ≈ 60 days
 DEFAULT_MEMORY_STABILITY = 1.0
@@ -307,20 +321,37 @@ def _migrate_memory_personalization(conn: sqlite3.Connection):
 
 
 def _auto_migrate_embeddings(conn: sqlite3.Connection):
-    """Auto-detect old 384-dim embeddings and re-embed to 768-dim. Transparent to user."""
+    """Re-embed when vector dimension or pinned embedding model changes."""
     try:
-        row = conn.execute("SELECT embedding FROM stm_memories LIMIT 1").fetchone()
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS embedding_model_state (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                updated_at TEXT DEFAULT (datetime('now'))
+            )
+        """)
+        current_marker = _current_embedding_model_marker()
+        stored = conn.execute(
+            "SELECT value FROM embedding_model_state WHERE key = 'embedding_model_marker'"
+        ).fetchone()
+        stored_marker = stored["value"] if stored else ""
+
+        row = None
+        for table in ("stm_memories", "ltm_memories", "quarantine"):
+            row = conn.execute(f"SELECT embedding FROM {table} LIMIT 1").fetchone()
+            if row:
+                break
         if not row:
-            return  # Empty DB, nothing to migrate
+            _write_embedding_model_marker(conn, current_marker)
+            return
 
         vec = np.frombuffer(row["embedding"], dtype=np.float32)
-        if len(vec) == EMBEDDING_DIM:
-            return  # Already correct dimension
+        dimension_matches = len(vec) == EMBEDDING_DIM
+        model_matches = stored_marker == current_marker
+        if dimension_matches and model_matches:
+            return
 
-        if len(vec) != 384:
-            return  # Unknown dimension, don't touch
-
-        # Need migration: 384 → 768
+        _backup_cognitive_db_for_embedding_migration(stored_marker, current_marker)
         model = _get_model()
 
         for table in ("stm_memories", "ltm_memories", "quarantine"):
@@ -333,12 +364,73 @@ def _auto_migrate_embeddings(conn: sqlite3.Connection):
 
             embeddings = list(model.embed(contents))
             for mem_id, emb in zip(ids, embeddings):
-                blob = np.array(emb, dtype=np.float32).tobytes()
+                arr = np.array(emb, dtype=np.float32)
+                if len(arr) != EMBEDDING_DIM:
+                    raise ValueError(f"embedding dimension mismatch: {len(arr)} != {EMBEDDING_DIM}")
+                blob = arr.tobytes()
                 conn.execute(f"UPDATE {table} SET embedding = ? WHERE id = ?", (blob, mem_id))
 
+        _write_embedding_model_marker(conn, current_marker)
         conn.commit()
     except Exception:
         pass  # Don't break startup if migration fails
+
+
+def _current_embedding_model_marker() -> str:
+    try:
+        from local_models import get_local_model_spec
+
+        spec = get_local_model_spec("bge-base-embeddings")
+        return "|".join([
+            spec.name,
+            spec.kind,
+            spec.model_id,
+            spec.source_repo,
+            spec.revision,
+            str(EMBEDDING_DIM),
+        ])
+    except Exception:
+        return f"unknown|{EMBEDDING_DIM}"
+
+
+def _write_embedding_model_marker(conn: sqlite3.Connection, marker: str) -> None:
+    conn.execute(
+        """
+        INSERT INTO embedding_model_state (key, value, updated_at)
+        VALUES ('embedding_model_marker', ?, datetime('now'))
+        ON CONFLICT(key) DO UPDATE SET
+            value = excluded.value,
+            updated_at = excluded.updated_at
+        """,
+        (marker,),
+    )
+    conn.commit()
+
+
+def _backup_cognitive_db_for_embedding_migration(old_marker: str, new_marker: str) -> None:
+    db_path = Path(COGNITIVE_DB)
+    if not db_path.exists():
+        return
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    backup = db_path.with_name(f"{db_path.name}.bak-embedding-{stamp}")
+    meta = backup.with_suffix(backup.suffix + ".json")
+    try:
+        shutil.copy2(db_path, backup)
+        meta.write_text(
+            json.dumps(
+                {
+                    "old_marker": old_marker,
+                    "new_marker": new_marker,
+                    "created_at": datetime.now().isoformat(timespec="seconds"),
+                },
+                indent=2,
+                ensure_ascii=True,
+                sort_keys=True,
+            ) + "\n",
+            encoding="utf-8",
+        )
+    except Exception:
+        pass
 
 
 def _init_tables(conn: sqlite3.Connection):
@@ -558,6 +650,8 @@ def _get_model():
     """Lazy-load fastembed TextEmbedding model."""
     global _model
     if _model is None:
+        if _model_download_disabled():
+            raise RuntimeError("cognitive model loading disabled for this environment")
         from local_models import build_fastembed_embedding
 
         _model = build_fastembed_embedding("bge-base-embeddings")
@@ -575,6 +669,22 @@ def _get_reranker():
         except Exception:
             _reranker = False  # Mark as unavailable
     return _reranker if _reranker is not False else None
+
+
+def _model_download_disabled() -> bool:
+    return os.environ.get("NEXO_SKIP_COGNITIVE_MODEL_DOWNLOAD", "").strip().lower() in {"1", "true", "yes"}
+
+
+def _deterministic_fallback_embedding(text: str) -> np.ndarray:
+    """Return a stable vector for tests/offline fallback paths."""
+    digest = hashlib.sha256(str(text or "").encode("utf-8", errors="ignore")).digest()
+    arr = np.zeros(EMBEDDING_DIM, dtype=np.float32)
+    for index, byte in enumerate(digest):
+        arr[index] = (float(byte) / 255.0) - 0.5
+    norm = np.linalg.norm(arr)
+    if norm > 0:
+        arr = arr / norm
+    return arr.astype(np.float32)
 
 
 def rerank_results(query: str, results: list[dict], top_k: int = 5) -> list[dict]:
@@ -603,9 +713,11 @@ def rerank_results(query: str, results: list[dict], top_k: int = 5) -> list[dict
 
 
 def embed(text: str) -> np.ndarray:
-    """Embed text into a 768-dim float32 vector. Returns zeros for empty text."""
+    """Embed text into a float32 vector. Returns zeros for empty text."""
     if not text or not text.strip():
         return np.zeros(EMBEDDING_DIM, dtype=np.float32)
+    if _model_download_disabled():
+        return _deterministic_fallback_embedding(text)
     model = _get_model()
     embeddings = list(model.embed([text]))
     return np.array(embeddings[0], dtype=np.float32)

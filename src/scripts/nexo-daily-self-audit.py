@@ -795,13 +795,7 @@ def _learning_matches_change(row: sqlite3.Row, files: list[str], change_text: st
     return False
 
 
-def _attempt_repair_learning_auto_capture(row: sqlite3.Row) -> dict:
-    try:
-        from tools_learnings import find_conflicting_active_learning, handle_learning_add, handle_learning_update
-        from db._learnings import search_learnings
-    except Exception as exc:
-        return {"ok": False, "error": f"learning runtime unavailable: {exc}"}
-
+def _attempt_repair_learning_auto_capture(conn: sqlite3.Connection, row: sqlite3.Row) -> dict:
     files = _split_changed_files(str(row["files"] or ""))
     title_seed = str(row["what_changed"] or row["why"] or "").strip() or f"Repair change #{row['id']}"
     title = title_seed[:120]
@@ -816,53 +810,8 @@ def _attempt_repair_learning_auto_capture(row: sqlite3.Row) -> dict:
         content = f"Repair-oriented change log entry #{row['id']} required a canonical learning."
     applies_to = ",".join(files)
 
-    # --- Search-then-supersede: find existing same-topic learnings first ---
-    search_query = _topic_signature(f"{title} {content}")
-    existing_same_topic = None
-    if search_query:
-        candidates = search_learnings(search_query, category="nexo-ops")
-        for candidate in candidates:
-            if candidate.get("status") != "active":
-                continue
-            # Check if it covers the same files or topic
-            candidate_applies = str(candidate.get("applies_to") or "")
-            candidate_text = f"{candidate.get('title', '')} {candidate.get('content', '')}"
-            candidate_sig = _topic_signature(candidate_text)
-            if candidate_sig == search_query:
-                existing_same_topic = candidate
-                break
-            if applies_to and candidate_applies and any(
-                f in candidate_applies for f in files
-            ):
-                existing_same_topic = candidate
-                break
-
-    # If a same-topic learning already exists, update it instead of creating a duplicate
-    if existing_same_topic:
-        existing_id = int(existing_same_topic["id"])
-        updated_content = existing_same_topic.get("content", "") + f"\n\n[Audit {datetime.now().strftime('%Y-%m-%d')}] {content}"
-        response = handle_learning_update(
-            id=existing_id,
-            content=updated_content[:2000],
-            reasoning=f"Updated by daily self-audit with evidence from repair change #{row['id']}.",
-        )
-        if "ERROR:" not in response:
-            return {
-                "ok": True,
-                "learning_id": existing_id,
-                "response": response,
-                "action": "updated_existing",
-            }
-
-    # Fall back to conflict check + new learning only if no same-topic match
-    conflicting = find_conflicting_active_learning(
-        category="nexo-ops",
-        title=title,
-        content=content,
-        applies_to=applies_to,
-    )
-    supersedes_id = int(conflicting["id"]) if conflicting else 0
-    response = handle_learning_add(
+    result = _upsert_inline_learning(
+        conn,
         category="nexo-ops",
         title=title,
         content=content,
@@ -870,17 +819,15 @@ def _attempt_repair_learning_auto_capture(row: sqlite3.Row) -> dict:
         prevention="Review the canonical repair learning before touching the affected file again." if applies_to else "",
         applies_to=applies_to,
         priority="high",
-        supersedes_id=supersedes_id,
     )
-    match = re.search(r"Learning #(\d+)", response)
-    if match and "ERROR:" not in response:
+    if result.get("ok"):
         return {
             "ok": True,
-            "learning_id": int(match.group(1)),
-            "response": response,
-            "action": "created_new",
+            "learning_id": int(result.get("learning_id") or 0),
+            "response": f"Learning #{result.get('learning_id')} {result.get('action', 'upserted')} inline by self-audit.",
+            "action": result.get("action", "upserted"),
         }
-    return {"ok": False, "error": response}
+    return result
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -997,6 +944,125 @@ def check_stale_sessions():
     conn.close()
     if rows:
         finding("INFO", "sessions", f"{len(rows)} stale sessions (no heartbeat >2h)")
+
+
+def _auto_session_like(row: dict) -> bool:
+    text = " ".join(
+        str(row.get(key) or "")
+        for key in ("session_id", "source", "summary", "self_critique", "domain")
+    ).upper()
+    return "AUTO-N" in text or "AUTO_" in text or "AUTO-CLOSE" in text or "AUTO CLOSE" in text
+
+
+def _auto_session_burst_signature(rows: list[dict]) -> str:
+    seed = "|".join(
+        f"{row.get('id', '')}:{row.get('session_id', '')}:{row.get('created_at', '')}"
+        for row in rows
+    )
+    return hashlib.sha1(seed.encode("utf-8"), usedforsecurity=False).hexdigest()
+
+
+def _write_auto_session_postmortem(rows: list[dict], signature: str) -> Path:
+    AUDIT_HISTORY_DIR.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    path = AUDIT_HISTORY_DIR / f"auto-session-postmortem-{stamp}.json"
+    sample = [
+        {
+            "id": row.get("id", ""),
+            "session_id": row.get("session_id", ""),
+            "source": row.get("source", ""),
+            "created_at": row.get("created_at", ""),
+            "summary": str(row.get("summary", ""))[:300],
+        }
+        for row in rows[:10]
+    ]
+    payload = {
+        "signature": signature,
+        "created_at": datetime.now().isoformat(timespec="seconds"),
+        "burst_count": len(rows),
+        "probable_cause": (
+            "Consecutive automatic session closures usually mean headless work is ending without "
+            "a normal task/diary close path, or a runner is timing out before it can record a clean closure."
+        ),
+        "recommended_action": (
+            "Inspect the newest automatic sessions, confirm the caller, then fix the runner/closure path "
+            "that is producing repeated automatic endings."
+        ),
+        "sample": sample,
+    }
+    path.write_text(json.dumps(payload, indent=2, ensure_ascii=True, sort_keys=True))
+    latest = AUDIT_HISTORY_DIR / "auto-session-postmortem-latest.json"
+    latest.write_text(json.dumps(payload, indent=2, ensure_ascii=True, sort_keys=True))
+    md = AUDIT_HISTORY_DIR / "auto-session-postmortem-latest.md"
+    md.write_text(
+        "\n".join([
+            "# AUTO-N Session Burst Postmortem",
+            "",
+            f"- created_at: {payload['created_at']}",
+            f"- burst_count: {len(rows)}",
+            f"- signature: {signature}",
+            f"- probable_cause: {payload['probable_cause']}",
+            f"- recommended_action: {payload['recommended_action']}",
+            "",
+            "## Sample",
+            *[
+                f"- {item['created_at']} | {item['session_id']} | {item['source']} | {item['summary'][:120]}"
+                for item in sample
+            ],
+            "",
+        ]),
+        encoding="utf-8",
+    )
+    return path
+
+
+def check_auto_session_bursts():
+    if not NEXO_DB.exists():
+        return
+    conn = sqlite3.connect(str(NEXO_DB))
+    conn.row_factory = sqlite3.Row
+    try:
+        if not _table_exists(conn, "session_diary"):
+            return
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(session_diary)").fetchall()}
+        select_cols = [col for col in ("id", "session_id", "source", "summary", "self_critique", "domain", "created_at") if col in columns]
+        if not select_cols:
+            return
+        order_col = "created_at" if "created_at" in columns else ("id" if "id" in columns else select_cols[0])
+        rows = conn.execute(
+            f"SELECT {', '.join(select_cols)} FROM session_diary ORDER BY {order_col} DESC LIMIT 50"
+        ).fetchall()
+    finally:
+        conn.close()
+
+    burst: list[dict] = []
+    for raw in rows:
+        row = dict(raw)
+        if _auto_session_like(row):
+            burst.append(row)
+            continue
+        break
+    if len(burst) <= 3:
+        return
+
+    signature = _auto_session_burst_signature(burst)
+    state_file = operations_dir() / "auto-session-burst-postmortem.json"
+    try:
+        state = json.loads(state_file.read_text()) if state_file.exists() else {}
+    except Exception:
+        state = {}
+    if state.get("signature") == signature:
+        return
+
+    path = _write_auto_session_postmortem(burst, signature)
+    state_file.parent.mkdir(parents=True, exist_ok=True)
+    state_file.write_text(json.dumps({
+        "signature": signature,
+        "burst_count": len(burst),
+        "postmortem_path": str(path),
+        "updated_at": datetime.now().isoformat(timespec="seconds"),
+    }, indent=2, ensure_ascii=True, sort_keys=True))
+    finding("WARN", "postmortem", f"AUTO session burst {len(burst)} detected; postmortem written: {path}")
 
 
 def check_repetition_rate():
@@ -1267,7 +1333,7 @@ def check_repair_changes_missing_learning_capture():
         auto_captured = 0
         unresolved: list[sqlite3.Row] = []
         for row in missing:
-            captured = _attempt_repair_learning_auto_capture(row)
+            captured = _attempt_repair_learning_auto_capture(conn, row)
             if captured.get("ok"):
                 auto_captured += 1
                 continue
@@ -2198,6 +2264,7 @@ def main():
     check_disk_space()
     check_db_size()
     check_stale_sessions()
+    check_auto_session_bursts()
     check_repetition_rate()
     check_unused_learnings()
     check_memory_reviews()

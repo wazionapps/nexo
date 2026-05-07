@@ -25,6 +25,7 @@ def test_manifest_declares_revision_for_all_pinned_fastembed_models():
         assert len(spec.revision) == 40
         assert spec.source_repo
         assert spec.required_files
+    assert specs["bge-base-embeddings"].dimension == 384
 
 
 def test_list_local_model_specs_degrades_to_empty_when_manifest_is_missing(tmp_path, monkeypatch):

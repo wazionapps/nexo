@@ -225,7 +225,7 @@ def handle_cognitive_metrics(days: int = 7) -> str:
 
     if metrics["needs_multilingual"]:
         lines.append("")
-        lines.append("⚠ RECOMMENDATION: Switch to multilingual model (intfloat/multilingual-e5-small)")
+        lines.append("⚠ RECOMMENDATION: verify the multilingual embedding re-embedding completed")
         lines.append(f"  Reason: relevance {metrics['retrieval_relevance_pct']}% < 70% with {metrics['total_retrievals']}+ retrievals")
 
     if repeats["duplicates"]:

@@ -1392,6 +1392,72 @@ class TestRuntimeChecks:
         assert any("bootstrap markers seen in 1/2" in item for item in check.evidence)
         assert any("session drift: 1 missing bootstrap, 1 missing startup, 1 missing heartbeat" in item for item in check.evidence)
 
+    def test_bootstrap_reached_startup_is_critical_when_any_recent_session_misses_startup(self, nexo_home, monkeypatch):
+        from doctor.providers import runtime
+
+        schedule_file = nexo_home / "config" / "schedule.json"
+        schedule_file.parent.mkdir(parents=True, exist_ok=True)
+        schedule_file.write_text(json.dumps({
+            "interactive_clients": {
+                "claude_code": False,
+                "codex": True,
+                "claude_desktop": False,
+            },
+            "default_terminal_client": "codex",
+            "automation_enabled": False,
+            "automation_backend": "none",
+        }))
+        good_file = nexo_home / ".codex" / "sessions" / "2026" / "04" / "05" / "good-startup.jsonl"
+        good_file.parent.mkdir(parents=True, exist_ok=True)
+        good_file.write_text(
+            json.dumps({"type": "session_meta", "payload": {"originator": "codex_cli_rs"}}) + "\n"
+            + json.dumps({"type": "response_item", "payload": {"type": "function_call", "name": "nexo_startup"}}) + "\n"
+        )
+        drift_file = nexo_home / ".codex" / "sessions" / "2026" / "04" / "05" / "missing-startup.jsonl"
+        drift_file.write_text(
+            json.dumps({"type": "session_meta", "payload": {"originator": "codex_cli_rs"}}) + "\n"
+            + json.dumps({"type": "event_msg", "payload": {"type": "user_message", "message": "hola"}}) + "\n"
+        )
+
+        monkeypatch.setattr(runtime, "SCHEDULE_FILE", schedule_file)
+        monkeypatch.setattr(runtime.Path, "home", lambda: nexo_home)
+
+        check = runtime.check_bootstrap_reached_startup()
+
+        assert check.id == "installation_live.bootstrap_reached_startup"
+        assert check.status == "critical"
+        assert any("nexo_startup reached: 1/2" in item for item in check.evidence)
+
+    def test_bootstrap_reached_startup_is_healthy_when_all_recent_sessions_started(self, nexo_home, monkeypatch):
+        from doctor.providers import runtime
+
+        schedule_file = nexo_home / "config" / "schedule.json"
+        schedule_file.parent.mkdir(parents=True, exist_ok=True)
+        schedule_file.write_text(json.dumps({
+            "interactive_clients": {
+                "claude_code": False,
+                "codex": True,
+                "claude_desktop": False,
+            },
+            "default_terminal_client": "codex",
+            "automation_enabled": False,
+            "automation_backend": "none",
+        }))
+        session_file = nexo_home / ".codex" / "sessions" / "2026" / "04" / "05" / "all-started.jsonl"
+        session_file.parent.mkdir(parents=True, exist_ok=True)
+        session_file.write_text(
+            json.dumps({"type": "session_meta", "payload": {"originator": "codex_cli_rs"}}) + "\n"
+            + json.dumps({"type": "response_item", "payload": {"type": "function_call", "name": "mcp__nexo__nexo_startup"}}) + "\n"
+        )
+
+        monkeypatch.setattr(runtime, "SCHEDULE_FILE", schedule_file)
+        monkeypatch.setattr(runtime.Path, "home", lambda: nexo_home)
+
+        check = runtime.check_bootstrap_reached_startup()
+
+        assert check.status == "healthy"
+        assert any("nexo_startup reached: 1/1" in item for item in check.evidence)
+
     def test_codex_protocol_compliance_fails_when_violation_rate_exceeds_five_percent(self, nexo_home, monkeypatch):
         from doctor.providers import runtime
 

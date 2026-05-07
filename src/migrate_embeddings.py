@@ -3,9 +3,9 @@
 Migrate cognitive.db embeddings between models.
 
 Usage:
-  python migrate_embeddings.py upgrade   # 384 → 768 (bge-small → bge-base)
+  python migrate_embeddings.py upgrade   # re-embed to the current pinned model
   python migrate_embeddings.py rollback  # Restore from backup
-  python migrate_embeddings.py verify    # Check current embedding dims
+  python migrate_embeddings.py verify    # Check current embedding dims and model pin
 """
 
 import os
@@ -22,16 +22,27 @@ NEXO_HOME = os.environ.get("NEXO_HOME", os.path.expanduser("~/.nexo"))
 _cognitive_dir = paths.cognitive_dir()
 _cognitive_dir.mkdir(parents=True, exist_ok=True)
 DB_PATH = str(_cognitive_dir / "cognitive.db")
-BACKUP_PATH = DB_PATH + ".bak-384dims-pre-upgrade"
+BACKUP_PATH = DB_PATH + ".bak-embedding-current-pre-upgrade"
+
+
+def _base_embedding_dim() -> int:
+    try:
+        return int(get_local_model_spec("bge-base-embeddings").dimension or 384)
+    except Exception:
+        return 384
+
 
 MODELS = {
     "small": ("bge-small-embeddings", 384),
-    "base": ("bge-base-embeddings", 768),
+    "base": ("bge-base-embeddings", _base_embedding_dim()),
 }
 
 
 def verify():
-    """Check current embedding dimensions in the database."""
+    """Check current embedding dimensions and current pinned embedding model."""
+    model_name, expected_dim = MODELS["base"]
+    spec = get_local_model_spec(model_name)
+    print(f"  expected model: {spec.model_id}@{spec.revision} ({expected_dim} dims)")
     conn = sqlite3.connect(DB_PATH)
     try:
         for table in ["stm_memories", "ltm_memories"]:
@@ -47,7 +58,7 @@ def verify():
 
 
 def upgrade():
-    """Re-embed all memories from bge-small (384) to bge-base (768)."""
+    """Re-embed all memories to the current pinned base embedding model."""
     # Verify current state
     print("Current state:")
     verify()

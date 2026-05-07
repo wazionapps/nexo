@@ -50,6 +50,7 @@ class LocalModelSpec:
     model_file: str
     source: str
     required_files: tuple[LocalModelFile, ...]
+    dimension: int = 0
 
 
 def _slugify(value: str) -> str:
@@ -72,6 +73,7 @@ def _lock_payload(spec: LocalModelSpec) -> dict[str, Any]:
         "source_repo": spec.source_repo,
         "revision": spec.revision,
         "model_file": spec.model_file,
+        "dimension": spec.dimension,
         "required_files": [
             {"path": item.path, "size": item.size, "sha256": item.sha256}
             for item in spec.required_files
@@ -97,6 +99,7 @@ def _load_manifest() -> dict[str, LocalModelSpec]:
             model_file=str(raw["model_file"]),
             source=str(raw["source"]),
             required_files=files,
+            dimension=int(raw.get("dimension", 0) or 0),
         )
         specs[spec.name] = spec
     return specs

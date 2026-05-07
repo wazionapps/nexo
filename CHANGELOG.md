@@ -1,5 +1,19 @@
 # Changelog
 
+## [7.15.0] - 2026-05-07
+
+### Added — shared continuity, multilingual recall, and automation hardening
+
+- **Sent-email continuity now uses one product sink.** Successful sends from the reply daemon path and the direct SMTP CLI record message id, addresses, subject, source, metadata, and body text in `sent_email_events`, then mirror that evidence into cognitive memory so parallel NEXO clients can recall what was sent.
+- **Learning recall can be forced by operating context.** Category, tag, and source-id matches now load matching learnings with a floor score/strength of at least `1.0` before ranking, so recurring tasks can start with their declared rules even when semantic wording changes.
+- **Embeddings are multilingual by default.** The packaged embedding model now points at a pinned multilingual model sized for Mac and Windows offline bundles, and existing `cognitive.db` stores are backed up and re-embedded automatically when the model marker or dimension changes.
+- **Deferred MCP bootstrap is now release-gated.** Startup prompts document discovery/preload for deferred NEXO tools, and doctor adds `installation_live.bootstrap_reached_startup` to flag any recent Codex session that did not reach `nexo_startup`.
+- **Email automation has hard loop guards.** The email monitor now uses a durable thread-key cooldown for self-sent/repeated internal threads, while preserving operator aliases and trusted-domain handling for legitimate mail.
+- **Learning listings expose creation time.** `nexo_learning_list` now returns visible `created_at` values and supports created-before/after filters.
+- **Protocol enforcement cools down cleanly after task close.** Passive startup/periodic/event reinjections are suppressed after a clean close, while genuinely new work can still re-arm the task-open requirement.
+- **Headless runners and audit loops are safer.** Shared runner guard checks run before mutable automation starts, and self-audit writes an idempotent postmortem when AUTO-N session bursts exceed the threshold.
+- **Installer helper loading is side-effect safe.** Loading `bin/nexo-brain.js` from tests/tooling can use helper functions without launching install, WSL bridging, dependency installs, or model warmup.
+
 ## [7.14.0] - 2026-05-06
 
 ### Added — installer hardening, memory authority audit, and real-world verification rails

@@ -62,7 +62,7 @@ def test_migrate_embeddings_uses_runtime_cognitive_dir(tmp_path, monkeypatch):
     importlib.reload(migrate_embeddings)
 
     assert migrate_embeddings.DB_PATH == str(nexo_home / "runtime" / "cognitive" / "cognitive.db")
-    assert migrate_embeddings.BACKUP_PATH.endswith("runtime/cognitive/cognitive.db.bak-384dims-pre-upgrade")
+    assert migrate_embeddings.BACKUP_PATH.endswith("runtime/cognitive/cognitive.db.bak-embedding-current-pre-upgrade")
 
 
 def test_local_models_use_runtime_models_dir(tmp_path, monkeypatch):

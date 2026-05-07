@@ -24,7 +24,26 @@ const readline = require("readline");
 require = createRequire(path.join(__dirname, "nexo-brain.js"));
 const { runViaWsl } = require("./windows-wsl-bridge");
 
-if (process.platform === "win32") {
+function isCliEntrypoint() {
+  const invoked = process.argv && process.argv[1] ? String(process.argv[1]) : "";
+  if (!invoked) return false;
+
+  const normalize = (candidate) => {
+    try {
+      return fs.realpathSync.native(candidate);
+    } catch {
+      try {
+        return fs.realpathSync(candidate);
+      } catch {
+        return path.resolve(candidate);
+      }
+    }
+  };
+
+  return normalize(invoked) === normalize(__filename);
+}
+
+if (process.platform === "win32" && isCliEntrypoint()) {
   const bridged = runViaWsl({
     scriptPath: __filename,
     args: process.argv.slice(2),
@@ -4983,8 +5002,10 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  closeReadline();
-  console.error("Setup failed:", err.message);
-  process.exit(1);
-});
+if (isCliEntrypoint()) {
+  Promise.resolve(main()).catch((err) => {
+    closeReadline();
+    console.error("Setup failed:", err.message);
+    process.exit(1);
+  });
+}

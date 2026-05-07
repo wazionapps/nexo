@@ -215,6 +215,53 @@ def test_run_automation_prompt_uses_claude_backend_command(monkeypatch, tmp_path
     assert captured["cwd"] == str(tmp_path.resolve())
 
 
+def test_runner_guard_detects_mutating_tool_scopes():
+    import agent_runner
+
+    assert agent_runner._runner_mutating_tools_allowed("Read,Write") is True
+    assert agent_runner._runner_mutating_tools_allowed("Bash") is True
+    assert agent_runner._runner_mutating_tools_allowed("Read,Grep") is False
+
+
+def test_run_automation_prompt_aborts_when_runner_guard_blocks(monkeypatch, tmp_path):
+    import agent_runner
+
+    monkeypatch.setattr(agent_runner, "_resolve_claude_cli", lambda: "/tmp/fake-claude")
+    monkeypatch.setattr(agent_runner, "_build_enforcement_system_prompt", lambda: "")
+    monkeypatch.setattr(agent_runner, "load_client_preferences", lambda: {
+        "interactive_clients": {"claude_code": True, "codex": False, "claude_desktop": False},
+        "default_terminal_client": "claude_code",
+        "automation_enabled": True,
+        "automation_backend": "claude_code",
+        "client_runtime_profiles": {
+            "claude_code": {"model": "claude-opus-4-7[1m]", "reasoning_effort": "max"},
+            "codex": {"model": "gpt-5.4", "reasoning_effort": "xhigh"},
+        },
+    })
+    monkeypatch.setattr(agent_runner, "_run_headless_runner_guard", lambda **kwargs: {
+        "blocked": True,
+        "summary": "BLOCKING RULES (resolve BEFORE writing):\n  #1 guard",
+    })
+    monkeypatch.setattr(
+        agent_runner.subprocess,
+        "run",
+        lambda *args, **kwargs: pytest.fail("subprocess.run should not be called when guard blocks"),
+    )
+
+    result = agent_runner.run_automation_prompt(
+        "Edit /repo/src/app.py",
+        caller="test/harness",
+        cwd=tmp_path,
+        output_format="text",
+        allowed_tools="Read,Write",
+    )
+
+    assert result.returncode == 2
+    assert result.args == ["nexo-runner-guard"]
+    assert "blocked this automation" in result.stderr
+    assert "BLOCKING RULES" in result.stderr
+
+
 def test_run_automation_prompt_uses_codex_exec_output_file(monkeypatch, tmp_path):
     import agent_runner
 

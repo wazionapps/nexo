@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS sent_email_events (
     source TEXT NOT NULL DEFAULT '',
     status TEXT NOT NULL DEFAULT 'sent',
     sent_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    body_text TEXT NOT NULL DEFAULT '',
     meta TEXT NOT NULL DEFAULT '{}'
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_sent_email_message_id
@@ -47,6 +48,10 @@ def sent_email_db_path() -> Path:
 
 def ensure_sent_email_table(conn: sqlite3.Connection) -> None:
     conn.executescript(EMAIL_SENT_TABLE_SQL)
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(sent_email_events)").fetchall()}
+    if "body_text" not in columns:
+        conn.execute("ALTER TABLE sent_email_events ADD COLUMN body_text TEXT NOT NULL DEFAULT ''")
+    conn.commit()
 
 
 def _connect(db_path: str | Path | None = None) -> sqlite3.Connection:
@@ -79,10 +84,13 @@ def _record_cognitive_memory(event: dict[str, str]) -> None:
         to_value = event.get("to_addrs", "")
         subject = event.get("subject", "")
         message_id = event.get("message_id", "")
+        body = event.get("body_text", "")
         content = (
             "Sent email recorded by NEXO. "
             f"To: {to_value}. Subject: {subject}. Message-ID: {message_id}."
         )
+        if body:
+            content = f"{content} Body: {body}"
         cognitive.ingest_to_ltm(
             content,
             source_type="email_sent",
@@ -107,6 +115,7 @@ def record_sent_email(
     references_header: str = "",
     source: str = "",
     status: str = "sent",
+    body_text: str = "",
     meta: dict[str, Any] | None = None,
     db_path: str | Path | None = None,
     record_memory: bool = True,
@@ -121,6 +130,7 @@ def record_sent_email(
         "references_header": _clean(references_header, 1000),
         "source": _clean(source or "unknown", 120),
         "status": _clean(status or "sent", 80),
+        "body_text": _clean(body_text, 8000),
         "meta": _safe_meta(meta),
     }
     conn = _connect(db_path)
@@ -129,9 +139,9 @@ def record_sent_email(
             """
             INSERT OR REPLACE INTO sent_email_events (
                 message_id, sender, to_addrs, cc_addrs, subject, in_reply_to,
-                references_header, source, status, meta
+                references_header, source, status, body_text, meta
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 event["message_id"],
@@ -143,6 +153,7 @@ def record_sent_email(
                 event["references_header"],
                 event["source"],
                 event["status"],
+                event["body_text"],
                 event["meta"],
             ),
         )
@@ -167,7 +178,7 @@ def recent_sent_emails(
         rows = conn.execute(
             """
             SELECT message_id, sender, to_addrs, cc_addrs, subject, in_reply_to,
-                   references_header, source, status, sent_at, meta
+                   references_header, source, status, sent_at, body_text, meta
             FROM sent_email_events
             WHERE sent_at >= ?
             ORDER BY sent_at DESC

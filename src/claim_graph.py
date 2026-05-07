@@ -22,13 +22,28 @@ def _get_db():
 
 
 def _embed(text: str) -> np.ndarray:
-    import cognitive
-    return cognitive.embed(text)
+    try:
+        import cognitive
+        return cognitive.embed(text)
+    except Exception:
+        try:
+            import cognitive
+            dim = int(getattr(cognitive, "EMBEDDING_DIM", 384) or 384)
+        except Exception:
+            dim = 768
+        return np.zeros(dim, dtype=np.float32)
 
 
 def _cosine_similarity(a, b) -> float:
-    import cognitive
-    return cognitive.cosine_similarity(a, b)
+    try:
+        import cognitive
+        return cognitive.cosine_similarity(a, b)
+    except Exception:
+        norm_a = np.linalg.norm(a)
+        norm_b = np.linalg.norm(b)
+        if norm_a == 0 or norm_b == 0:
+            return 0.0
+        return float(np.dot(a, b) / (norm_a * norm_b))
 
 
 def _array_to_blob(arr: np.ndarray) -> bytes:

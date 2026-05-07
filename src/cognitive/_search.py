@@ -4,6 +4,7 @@ import os
 import re
 import sqlite3
 import time
+import unicodedata
 import numpy as np
 from datetime import datetime, timezone
 
@@ -355,6 +356,145 @@ def _result_confidence(score: float) -> str:
     if score >= 0.66:
         return "medium"
     return "low"
+
+
+_LEARNING_CONTEXT_MIN_TERM_CHARS = 3
+_LEARNING_CONTEXT_STOP_TERMS = frozenset({
+    "all", "any", "the", "and", "for", "from", "with", "sin", "con", "para",
+    "por", "que", "del", "las", "los", "una", "uno", "learning", "learn",
+})
+
+
+def _context_norm(text: object) -> str:
+    value = unicodedata.normalize("NFKD", str(text or "").lower())
+    value = "".join(ch for ch in value if not unicodedata.combining(ch))
+    return re.sub(r"\s+", " ", value.replace("_", " ").strip())
+
+
+def _context_tokens(text: object) -> set[str]:
+    tokens = set()
+    for token in re.findall(r"[a-z0-9][a-z0-9.-]*", _context_norm(text)):
+        token = token.strip(".-")
+        if len(token) >= _LEARNING_CONTEXT_MIN_TERM_CHARS and token not in _LEARNING_CONTEXT_STOP_TERMS:
+            tokens.add(token)
+            if "-" in token:
+                tokens.add(token.replace("-", " "))
+                tokens.update(part for part in token.split("-") if len(part) >= _LEARNING_CONTEXT_MIN_TERM_CHARS)
+    return tokens
+
+
+def _learning_context_terms(row: dict) -> set[str]:
+    terms: set[str] = set()
+    for field in ("domain", "tags"):
+        raw = row.get(field, "")
+        for chunk in re.split(r"[,;#\n]+", str(raw or "")):
+            normalized = _context_norm(chunk)
+            if len(normalized) >= _LEARNING_CONTEXT_MIN_TERM_CHARS and normalized not in _LEARNING_CONTEXT_STOP_TERMS:
+                terms.add(normalized)
+                if "-" in normalized:
+                    terms.add(normalized.replace("-", " "))
+            terms.update(_context_tokens(chunk))
+    source_id = _context_norm(row.get("source_id", ""))
+    if re.fullmatch(r"l\d+", source_id):
+        terms.add(source_id)
+    return terms
+
+
+def _learning_context_match(query_text: str, row: dict) -> str:
+    query_norm = _context_norm(query_text)
+    if not query_norm:
+        return ""
+    query_padded = f" {query_norm} "
+    query_tokens = _context_tokens(query_norm)
+    for term in sorted(_learning_context_terms(row), key=len, reverse=True):
+        if " " in term or "-" in term or "." in term:
+            variants = {term, term.replace("-", " "), term.replace(" ", "-")}
+            if any(f" {variant} " in query_padded for variant in variants):
+                return term
+            continue
+        if term in query_tokens:
+            return term
+    return ""
+
+
+def _learning_floor_entry(store: str, row: dict, matched_term: str) -> dict:
+    strength = max(1.0, float(row.get("strength") or 0.0))
+    entry = {
+        "store": store,
+        "id": row["id"],
+        "content": row["content"],
+        "source_type": row["source_type"],
+        "source_id": row["source_id"],
+        "source_title": row["source_title"],
+        "domain": row["domain"],
+        "created_at": row["created_at"],
+        "strength": strength,
+        "access_count": row["access_count"],
+        "score": 1.0,
+        "learning_context_floor": True,
+        "learning_context_match": matched_term,
+        "lifecycle_state": row.get("lifecycle_state") or "active",
+    }
+    if store == "ltm":
+        entry["tags"] = row.get("tags", "")
+    return entry
+
+
+def _learning_context_floor_results(
+    query_text: str,
+    *,
+    stores: str = "both",
+    source_type_filter: str = "",
+    include_archived: bool = False,
+    top_k: int = 10,
+) -> list[dict]:
+    if source_type_filter and source_type_filter != "learning":
+        return []
+    db = _get_db()
+    results: list[dict] = []
+    store_specs = []
+    if stores in ("both", "stm"):
+        store_specs.append(("stm", "stm_memories", "promoted_to_ltm = 0"))
+    if stores in ("both", "ltm"):
+        store_specs.append(("ltm", "ltm_memories", "is_dormant = 0"))
+    lifecycle = "AND (lifecycle_state IS NULL OR lifecycle_state = 'active' OR lifecycle_state = 'pinned'"
+    if include_archived:
+        lifecycle += " OR lifecycle_state = 'archived'"
+    lifecycle += ")"
+    for store, table, base_where in store_specs:
+        rows = db.execute(
+            f"SELECT * FROM {table} WHERE {base_where} AND source_type = 'learning' {lifecycle} "
+            "ORDER BY strength DESC, access_count DESC, created_at DESC LIMIT ?",
+            (max(10, int(top_k) * 8),),
+        ).fetchall()
+        for row in rows:
+            row_dict = dict(row)
+            matched = _learning_context_match(query_text, row_dict)
+            if matched:
+                results.append(_learning_floor_entry(store, row_dict, matched))
+    results.sort(key=lambda r: (r.get("strength", 0), r.get("access_count", 0), r.get("created_at", "")), reverse=True)
+    return results[: max(1, int(top_k))]
+
+
+def _merge_learning_context_floor(results: list[dict], floor_results: list[dict], top_k: int | None = None) -> list[dict]:
+    if not floor_results:
+        return results
+    by_key = {(r.get("store"), r.get("id")): r for r in results}
+    for floor in floor_results:
+        key = (floor.get("store"), floor.get("id"))
+        current = by_key.get(key)
+        if current is None:
+            results.append(floor.copy())
+            by_key[key] = results[-1]
+            continue
+        current["score"] = max(float(current.get("score") or 0.0), 1.0)
+        current["strength"] = max(float(current.get("strength") or 0.0), 1.0)
+        current["learning_context_floor"] = True
+        current["learning_context_match"] = floor.get("learning_context_match", "")
+    results.sort(key=lambda x: x.get("score", 0), reverse=True)
+    if top_k is not None:
+        return results[: max(1, int(top_k))]
+    return results
 
 
 # ============================================================================
@@ -1146,6 +1286,17 @@ def search(
     # warnings about painful areas more aggressively.
     results = _somatic_boost_results(results)
 
+    # Deterministic learning floor: category/tag/source-id matches must surface
+    # even when semantic similarity alone would miss the operational context.
+    learning_floor_results = _learning_context_floor_results(
+        query_text,
+        stores=stores,
+        source_type_filter=source_type_filter,
+        include_archived=include_archived,
+        top_k=top_k,
+    )
+    results = _merge_learning_context_floor(results, learning_floor_results)
+
     # Sort by score descending, take top-20 for reranking
     results.sort(key=lambda x: x.get("score", 0), reverse=True)
 
@@ -1154,6 +1305,7 @@ def search(
         results = rerank_results(query_text, results[:top_k * 4], top_k=top_k)
     else:
         results = results[:top_k]
+    results = _merge_learning_context_floor(results, learning_floor_results, top_k=top_k)
 
     # Spreading activation: boost co-activated neighbors (Feature 2)
     co_activation_applied = False
@@ -1213,6 +1365,8 @@ def search(
             results.sort(key=lambda x: x["score"], reverse=True)
             results = results[:top_k]
 
+    results = _merge_learning_context_floor(results, learning_floor_results, top_k=top_k)
+
     # Add rank explanations
     for rank, r in enumerate(results, 1):
         score = r["score"]
@@ -1233,6 +1387,8 @@ def search(
             parts.append(f"kg_boost=+{r['kg_boost']:.3f} ({r.get('kg_connections', 0)} edges)")
         if r.get("co_activation_boost"):
             parts.append(f"co_activation_boost=+{r['co_activation_boost']:.3f}")
+        if r.get("learning_context_floor"):
+            parts.append(f"learning_context_floor=1.000 match={r.get('learning_context_match', '')}")
         if use_hyde is None and resolved_use_hyde:
             parts.append("hyde=auto")
         if spreading_depth is None and resolved_spreading_depth > 0:

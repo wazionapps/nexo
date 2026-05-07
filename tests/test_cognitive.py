@@ -326,6 +326,75 @@ def test_spreading_activation_keeps_top_k_and_explains_auto_strategy(monkeypatch
     assert any("auto_strategy=" in item["explanation"] for item in results)
 
 
+def test_learning_context_floor_surfaces_category_matches(monkeypatch):
+    import importlib
+
+    _search = importlib.import_module("cognitive._search")
+
+    class _Cursor:
+        def __init__(self, rows=None):
+            self._rows = rows or []
+
+        def fetchall(self):
+            return self._rows
+
+    learning_row = {
+        "id": 7,
+        "embedding": np.array([0.1], dtype=np.float32),
+        "content": "Always validate release artifacts before publishing.",
+        "source_type": "learning",
+        "source_id": "L7",
+        "source_title": "Release validation",
+        "domain": "nexo-ops",
+        "created_at": "2026-04-05T01:00:00",
+        "strength": 0.4,
+        "access_count": 0,
+        "lifecycle_state": "active",
+        "promoted_to_ltm": 0,
+        "temporal_date": "",
+    }
+
+    class _DB:
+        def execute(self, sql, params=()):
+            if "FROM stm_memories" in sql and "SELECT *" in sql:
+                return _Cursor([learning_row])
+            if "FROM ltm_memories" in sql and "SELECT *" in sql:
+                return _Cursor([])
+            return _Cursor([])
+
+        def commit(self):
+            return None
+
+    monkeypatch.setattr(_search, "_get_db", lambda: _DB())
+    monkeypatch.setattr(_search, "_blob_to_array", lambda value: value)
+    monkeypatch.setattr(_search, "embed", lambda query: np.array([1.0], dtype=np.float32))
+    monkeypatch.setattr(_search, "cosine_similarity", lambda query, vec: float(vec[0]))
+    monkeypatch.setattr(_search, "_auto_use_hyde", lambda query, source_type_filter="": False)
+    monkeypatch.setattr(_search, "_auto_spreading_depth", lambda query, source_type_filter="": 0)
+    monkeypatch.setattr(_search, "_apply_temporal_boost", lambda results, query: results)
+    monkeypatch.setattr(_search, "_kg_boost_results", lambda results: results)
+    monkeypatch.setattr(_search, "_somatic_boost_results", lambda results: results)
+    monkeypatch.setattr(_search, "_auto_restore_snoozed", lambda db: None)
+    monkeypatch.setattr(_search, "_rehearse_results", lambda results, skip_ids=None: None)
+    monkeypatch.setattr(_search, "record_co_activation", lambda items: None)
+
+    results = _search.search(
+        "nexo ops release process",
+        top_k=3,
+        min_score=0.8,
+        hybrid=False,
+        rehearse=False,
+        decompose=False,
+    )
+
+    assert results
+    assert results[0]["source_id"] == "L7"
+    assert results[0]["score"] == 1.0
+    assert results[0]["strength"] == 1.0
+    assert results[0]["learning_context_floor"] is True
+    assert "learning_context_floor=1.000" in results[0]["explanation"]
+
+
 def test_memory_personalization_changes_decay_rate():
     import cognitive
 
@@ -340,6 +409,51 @@ def test_memory_personalization_changes_decay_rate():
         difficulty=0.9,
     )
     assert easier < harder
+
+
+def test_embedding_migration_reembeds_when_model_marker_changes(tmp_path, monkeypatch):
+    import importlib
+    import sqlite3
+
+    _core = importlib.import_module("cognitive._core")
+    db_path = tmp_path / "cognitive.db"
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    _core._init_tables(conn)
+    old_vec = np.ones(_core.EMBEDDING_DIM, dtype=np.float32).tobytes()
+    conn.execute(
+        "INSERT INTO stm_memories (content, embedding, source_type) VALUES (?, ?, ?)",
+        ("Spanish source content", old_vec, "learning"),
+    )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS embedding_model_state (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT)"
+    )
+    conn.execute(
+        "INSERT INTO embedding_model_state (key, value, updated_at) VALUES (?, ?, datetime('now'))",
+        ("embedding_model_marker", "old-english-model"),
+    )
+    conn.commit()
+
+    class FakeModel:
+        def embed(self, texts):
+            for _text in texts:
+                yield np.full(_core.EMBEDDING_DIM, 0.25, dtype=np.float32)
+
+    monkeypatch.setattr(_core, "COGNITIVE_DB", str(db_path))
+    monkeypatch.setattr(_core, "_current_embedding_model_marker", lambda: "new-multilingual-model")
+    monkeypatch.setattr(_core, "_get_model", lambda: FakeModel())
+
+    _core._auto_migrate_embeddings(conn)
+
+    row = conn.execute("SELECT embedding FROM stm_memories LIMIT 1").fetchone()
+    migrated = np.frombuffer(row["embedding"], dtype=np.float32)
+    marker = conn.execute(
+        "SELECT value FROM embedding_model_state WHERE key = 'embedding_model_marker'"
+    ).fetchone()["value"]
+
+    assert migrated[0] == pytest.approx(0.25)
+    assert marker == "new-multilingual-model"
+    assert list(tmp_path.glob("cognitive.db.bak-embedding-*"))
 
 
 def test_rehearsal_profile_update_rewards_strong_recall():

@@ -25,11 +25,13 @@ import sys
 import json
 import hashlib
 import logging
+import re
 import sqlite3
 import signal
 import time
 import uuid
 from datetime import datetime, timedelta
+from email.utils import parseaddr
 from pathlib import Path
 from logging.handlers import RotatingFileHandler
 
@@ -106,6 +108,17 @@ CREATE TABLE IF NOT EXISTS email_events (
 CREATE INDEX IF NOT EXISTS idx_ee_email ON email_events(email_id);
 CREATE INDEX IF NOT EXISTS idx_ee_event ON email_events(event);
 CREATE INDEX IF NOT EXISTS idx_ee_ts ON email_events(timestamp);
+"""
+EMAIL_LOOP_GUARD_SQL = """
+CREATE TABLE IF NOT EXISTS email_loop_guards (
+    thread_key TEXT PRIMARY KEY,
+    cooldown_until TEXT NOT NULL,
+    last_message_id TEXT NOT NULL DEFAULT '',
+    reason TEXT NOT NULL DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now','localtime')),
+    updated_at TEXT DEFAULT (datetime('now','localtime'))
+);
+CREATE INDEX IF NOT EXISTS idx_email_loop_guards_until ON email_loop_guards(cooldown_until);
 """
 
 BASE_DIR.mkdir(parents=True, exist_ok=True)
@@ -524,6 +537,10 @@ def ensure_email_events_table(conn):
     conn.executescript(EVENT_TABLE_SQL)
 
 
+def ensure_email_loop_guard_table(conn):
+    conn.executescript(EMAIL_LOOP_GUARD_SQL)
+
+
 def _table_exists(conn, table_name):
     row = conn.execute(
         "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
@@ -537,6 +554,145 @@ def _insert_event(conn, email_id, event, detail="", meta=None):
         "INSERT INTO email_events (email_id, event, detail, meta) VALUES (?, ?, ?, ?)",
         (email_id, event, detail, json.dumps(meta or {}, ensure_ascii=True, sort_keys=True)),
     )
+
+
+def _row_value(row, key, default=""):
+    try:
+        return row[key]
+    except Exception:
+        if isinstance(row, dict):
+            return row.get(key, default)
+        return default
+
+
+def _normalize_email_addr(value):
+    parsed = parseaddr(str(value or ""))[1] or str(value or "")
+    return parsed.strip().lower()
+
+
+def _normalize_subject_for_thread(value):
+    text = " ".join(str(value or "").lower().split())
+    while True:
+        new_text = re.sub(r"^(re|fw|fwd)\s*:\s*", "", text, flags=re.IGNORECASE).strip()
+        if new_text == text:
+            break
+        text = new_text
+    return text[:300]
+
+
+def _email_thread_key(row):
+    thread_id = str(_row_value(row, "thread_id", "") or "").strip()
+    in_reply_to = str(_row_value(row, "in_reply_to", "") or "").strip()
+    subject = _normalize_subject_for_thread(_row_value(row, "subject", ""))
+    seed = thread_id or in_reply_to or subject or str(_row_value(row, "message_id", "") or "")
+    digest = hashlib.sha1(seed.encode("utf-8"), usedforsecurity=False).hexdigest()
+    return digest
+
+
+def _is_agent_self_sender(row, config, priority_aliases=None):
+    sender = _normalize_email_addr(_row_value(row, "from_addr", ""))
+    if not sender:
+        return False
+    aliases = {_normalize_email_addr(item) for item in (priority_aliases or []) if _normalize_email_addr(item)}
+    if sender in aliases:
+        return False
+    configured = _normalize_email_addr((config or {}).get("email", ""))
+    return bool(configured and sender == configured)
+
+
+def _loop_cooldown_active(conn, thread_key):
+    row = conn.execute(
+        """
+        SELECT cooldown_until
+        FROM email_loop_guards
+        WHERE thread_key = ?
+          AND datetime(replace(cooldown_until, 'T', ' ')) > datetime('now','localtime')
+        LIMIT 1
+        """,
+        (thread_key,),
+    ).fetchone()
+    return bool(row)
+
+
+def _recent_thread_rows(conn, thread_key, *, limit=12):
+    rows = conn.execute(
+        """
+        SELECT message_id, subject, from_addr, status, thread_id, in_reply_to, received_at
+        FROM emails
+        ORDER BY datetime(COALESCE(NULLIF(received_at, ''), '1970-01-01 00:00:00')) DESC, rowid DESC
+        LIMIT 80
+        """
+    ).fetchall()
+    matched = []
+    for row in rows:
+        if _email_thread_key(row) == thread_key:
+            matched.append(row)
+        if len(matched) >= limit:
+            break
+    return matched
+
+
+def _agent_thread_streak(conn, thread_key, config, priority_aliases=None):
+    streak = 0
+    for row in _recent_thread_rows(conn, thread_key):
+        if _is_agent_self_sender(row, config, priority_aliases=priority_aliases):
+            streak += 1
+            continue
+        break
+    return streak
+
+
+def _mark_loop_blocked(conn, row, *, thread_key, reason):
+    mid = str(_row_value(row, "message_id", "") or "")
+    cooldown_until = (datetime.now() + timedelta(hours=24)).isoformat(timespec="seconds")
+    plain_detail = "Paused for manual review: repeated internal email activity in this thread."
+    conn.execute(
+        """
+        UPDATE emails
+        SET status = 'needs_interactive', error = ?
+        WHERE message_id = ?
+        """,
+        (plain_detail, mid),
+    )
+    _insert_event(
+        conn,
+        mid,
+        "debt_flagged",
+        plain_detail,
+        {"guard": "self_thread_cooldown", "thread_key": thread_key, "reason": reason},
+    )
+    conn.execute(
+        """
+        INSERT INTO email_loop_guards (thread_key, cooldown_until, last_message_id, reason, updated_at)
+        VALUES (?, ?, ?, ?, datetime('now','localtime'))
+        ON CONFLICT(thread_key) DO UPDATE SET
+            cooldown_until = excluded.cooldown_until,
+            last_message_id = excluded.last_message_id,
+            reason = excluded.reason,
+            updated_at = excluded.updated_at
+        """,
+        (thread_key, cooldown_until, mid, reason),
+    )
+    conn.commit()
+    log.warning("Paused email thread for manual review: %s (%s)", mid, reason)
+
+
+def _email_loop_guard_blocks(conn, row, *, config=None, priority_aliases=None):
+    if not config:
+        return False
+    thread_key = _email_thread_key(row)
+    if not thread_key:
+        return False
+    if _loop_cooldown_active(conn, thread_key):
+        _mark_loop_blocked(conn, row, thread_key=thread_key, reason="thread_cooldown_active")
+        return True
+    if _is_agent_self_sender(row, config, priority_aliases=priority_aliases):
+        _mark_loop_blocked(conn, row, thread_key=thread_key, reason="agent_self_sender")
+        return True
+    if _agent_thread_streak(conn, thread_key, config, priority_aliases=priority_aliases) >= 3:
+        _mark_loop_blocked(conn, row, thread_key=thread_key, reason="agent_thread_streak")
+        return True
+    return False
 
 
 def _normalize_sqlite_ts(value):
@@ -1246,9 +1402,11 @@ def _emails_in_active_sessions():
     return ids
 
 
-def get_actionable_emails(conn, *, priority_aliases=None):
+def get_actionable_emails(conn, *, priority_aliases=None, config=None):
     """Get emails ready to process: pending/stuck, not in an active session,
     and under MAX_EMAIL_ATTEMPTS. Returns list of dicts."""
+    ensure_email_events_table(conn)
+    ensure_email_loop_guard_table(conn)
     active_ids = _emails_in_active_sessions()
     aliases = [str(item or "").strip().lower() for item in (priority_aliases or []) if str(item or "").strip()]
     params = [MAX_EMAIL_ATTEMPTS]
@@ -1275,6 +1433,8 @@ def get_actionable_emails(conn, *, priority_aliases=None):
     for row in rows:
         mid = row["message_id"]
         if mid in active_ids:
+            continue
+        if _email_loop_guard_blocks(conn, row, config=config, priority_aliases=priority_aliases):
             continue
         actionable.append(dict(row))
     return actionable
@@ -2258,7 +2418,7 @@ def main():
         conn = sqlite3.connect(str(EMAIL_DB_PATH))
         conn.row_factory = sqlite3.Row
         _ensure_emails_table(conn)
-        actionable = get_actionable_emails(conn, priority_aliases=_operator_aliases(config))
+        actionable = get_actionable_emails(conn, priority_aliases=_operator_aliases(config), config=config)
         conn.close()
 
         stuck_count = len(actionable)
@@ -2327,7 +2487,7 @@ def main():
             conn = sqlite3.connect(str(EMAIL_DB_PATH))
             conn.row_factory = sqlite3.Row
             _ensure_emails_table(conn)
-            actionable = get_actionable_emails(conn)
+            actionable = get_actionable_emails(conn, priority_aliases=_operator_aliases(config), config=config)
             conn.close()
 
             if actionable:

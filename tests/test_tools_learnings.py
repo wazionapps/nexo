@@ -229,4 +229,30 @@ def test_learning_list_and_search_include_quality_score(learning_env):
     found = tools_learnings.handle_learning_search("shared edits", "nexo-ops")
 
     assert "q=" in listed
+    assert "created_at=" in listed
     assert "q=" in found
+
+
+def test_learning_list_filters_by_created_at(learning_env):
+    db, tools_learnings = _reload_learning_stack()
+    db.init_db()
+
+    tools_learnings.handle_learning_add(
+        category="nexo-ops",
+        title="Old rule",
+        content="Old content.",
+    )
+    tools_learnings.handle_learning_add(
+        category="nexo-ops",
+        title="New rule",
+        content="New content.",
+    )
+    conn = db.get_db()
+    conn.execute("UPDATE learnings SET created_at = ? WHERE title = ?", (1000.0, "Old rule"))
+    conn.execute("UPDATE learnings SET created_at = ? WHERE title = ?", (2000.0, "New rule"))
+    conn.commit()
+
+    listed = tools_learnings.handle_learning_list("nexo-ops", created_after="1500")
+
+    assert "New rule" in listed
+    assert "Old rule" not in listed

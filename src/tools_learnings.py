@@ -1,5 +1,6 @@
 """Learnings CRUD tools: add, search, update, delete, list."""
 
+import os
 import re
 from datetime import datetime
 
@@ -23,6 +24,11 @@ CONTRADICTION_PAIRS = (
     ("validate", "bypass"),
     ("include", "exclude"),
 )
+
+
+def _skip_cognitive_learning_side_effects() -> bool:
+    value = os.environ.get("NEXO_SKIP_LEARNING_COGNITIVE_INGEST", "").strip().lower()
+    return value in {"1", "true", "yes"}
 
 
 def _split_applies_to(applies_to: str) -> list[str]:
@@ -173,6 +179,16 @@ def _parse_timestamp(value) -> float:
         except Exception:
             continue
     return 0.0
+
+
+def _format_timestamp(value) -> str:
+    ts = _parse_timestamp(value)
+    if not ts:
+        return ""
+    try:
+        return datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M:%S")
+    except Exception:
+        return str(value or "")
 
 
 def _recency_score(row: dict) -> float:
@@ -383,11 +399,12 @@ def handle_learning_add(category: str, title: str, content: str, reasoning: str 
 
     # Cognitive ingest — embed learning for semantic search
     new_id = result["id"]
-    try:
-        import cognitive
-        cognitive.ingest(f"{title}: {content}", "learning", f"L{new_id}", title, category)
-    except Exception:
-        pass
+    if not _skip_cognitive_learning_side_effects():
+        try:
+            import cognitive
+            cognitive.ingest(f"{title}: {content}", "learning", f"L{new_id}", title, category)
+        except Exception:
+            pass
 
     # Similarity check — detect repeated errors
     matches = find_similar_learnings(new_id, title, content, category)
@@ -513,12 +530,13 @@ def handle_learning_search(query: str, category: str = '') -> str:
             lines.append(f"    Prevention: {r['prevention'][:100]}")
 
     # v1.2: Passive rehearsal — strengthen matching cognitive memories
-    try:
-        import cognitive
-        for r in results[:5]:
-            cognitive.rehearse_by_content(f"{r.get('title', '')} {r.get('content', '')[:200]}")
-    except Exception:
-        pass
+    if not _skip_cognitive_learning_side_effects():
+        try:
+            import cognitive
+            for r in results[:5]:
+                cognitive.rehearse_by_content(f"{r.get('title', '')} {r.get('content', '')[:200]}")
+        except Exception:
+            pass
 
     return "\n".join(lines)
 
@@ -609,9 +627,11 @@ def handle_learning_delete(id: int) -> str:
     return f"Learning #{id} deleted."
 
 
-def handle_learning_list(category: str = '') -> str:
+def handle_learning_list(category: str = '', created_after: str = '', created_before: str = '') -> str:
     """List all learnings, grouped by category if no filter given."""
-    results = list_learnings(category if category else None)
+    after_ts = _parse_timestamp(created_after) if str(created_after or "").strip() else None
+    before_ts = _parse_timestamp(created_before) if str(created_before or "").strip() else None
+    results = list_learnings(category if category else None, after_ts, before_ts)
     if not results:
         label = category if category else "ALL"
         return f"LEARNINGS {label} (0): No entries."
@@ -625,7 +645,8 @@ def handle_learning_list(category: str = '') -> str:
             w = r.get("weight", 0.5) or 0.5
             quality = score_learning_quality(r, conn)
             pri_icon = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "⚪"}.get(pri, "🟡")
-            lines.append(f"  #{r['id']} [{r.get('status','active')}] {pri_icon}{pri} w={w:.2f} q={quality['score']} {r['title']}")
+            created = _format_timestamp(r.get("created_at")) or "unknown"
+            lines.append(f"  #{r['id']} [{r.get('status','active')}] created_at={created} {pri_icon}{pri} w={w:.2f} q={quality['score']} {r['title']}")
     else:
         lines = [f"LEARNINGS ALL ({len(results)}):"]
         current_cat = None
@@ -637,7 +658,8 @@ def handle_learning_list(category: str = '') -> str:
             w = r.get("weight", 0.5) or 0.5
             quality = score_learning_quality(r, conn)
             pri_icon = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "⚪"}.get(pri, "🟡")
-            lines.append(f"    #{r['id']} [{r.get('status','active')}] {pri_icon}{pri} w={w:.2f} q={quality['score']} {r['title']}")
+            created = _format_timestamp(r.get("created_at")) or "unknown"
+            lines.append(f"    #{r['id']} [{r.get('status','active')}] created_at={created} {pri_icon}{pri} w={w:.2f} q={quality['score']} {r['title']}")
 
     return "\n".join(lines)
 
