@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.16.0: Memory Observations v2</title>
+<meta name="description" content="NEXO Brain v7.16.0 adds Memory Observations v2: evidence-backed operational memory, update-safe backfill, dashboard visibility, and stricter memory answers.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-16-0/">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.16.0: Memory Observations v2","datePublished":"2026-05-10","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head><body><main><article style="max-width:760px;margin:80px auto;padding:0 24px;line-height:1.75;">
+<h1>NEXO 7.16.0 &mdash; Memory Observations v2</h1>
+<p><em>Published 2026-05-10. Minor release over v7.15.2.</em></p>
+
+<h2>Operational memory now has evidence</h2>
+<p>Brain now records durable <code>memory_events</code> from file-write hooks and task closeouts, then derives <code>memory_observations</code> that keep subject, summary, entities, salience, confidence, and direct evidence refs together. Retrieval can answer from that layer without pretending unsupported memory is fact.</p>
+
+<h2>Existing installs converge</h2>
+<p>Fresh installs create the schema directly. Updates receive migrations through v62, a fast observation index, bounded startup maintenance, and idempotent backfill from older <code>protocol_tasks</code>, <code>change_log</code>, <code>session_diary</code>, and <code>recent_events</code>. Re-running backfill is safe and paginates past rows already imported.</p>
+
+<h2>Visible and maintainable</h2>
+<p>The Brain dashboard <code>/memory</code> now shows Memory Observations, raw evidence events, queue metrics, search, and manual backfill next to the older cognitive memory flow. New MCP tools expose health, maintenance, event listing, observation listing, evidence-first search, answers, and timelines.</p>
+
+<h2>Validation</h2>
+<pre><code>python3 -m pytest tests/test_memory_v2.py tests/test_migrations.py tests/test_server_protocol_exports.py tests/test_dashboard_app.py -q
+python3 -m ruff check src/db/_memory_v2.py src/memory_retrieval.py src/tools_memory_v2.py src/server.py src/tools_sessions.py src/dashboard/app.py
+</code></pre>
+
+<p><a href="/changelog/#v7160">Full changelog entry &rarr;</a> &middot; <a href="/blog/nexo-7-15-2/">Previous v7.15.2 release</a></p>
+</article></main></body></html>
