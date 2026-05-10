@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.16.1] - 2026-05-10
+
+### Fixed — operator email-monitor escalation no longer re-notifies the same email
+
+- **`_escalate_exhausted_emails` deduplicates per email.** The emails table now carries a `escalation_notified_at` column, populated only after the operator-facing "needs_interactive" notification email is successfully sent. Subsequent runs covering the same exhausted message skip the operator notification instead of resending it. Schema migration is idempotent (`_ensure_emails_table` adds the column when missing).
+- **Failed sends do not stamp the dedup column.** A non-zero exit from `nexo-send-reply.py` leaves `escalation_notified_at` NULL so the next successful escalation cycle still reaches the operator.
+- Regression coverage: `tests/test_email_monitor_escalation_dedup.py` pins first-notify, dup-skip, mixed-batch, and failed-send semantics.
+
 ## [7.16.0] - 2026-05-10
 
 ### Added — Memory Observations v2

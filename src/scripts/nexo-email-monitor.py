@@ -30,7 +30,7 @@ import sqlite3
 import signal
 import time
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from email.utils import parseaddr
 from pathlib import Path
 from logging.handlers import RotatingFileHandler
@@ -1269,6 +1269,8 @@ def _ensure_emails_table(conn):
         conn.execute("ALTER TABLE emails ADD COLUMN attempts INTEGER DEFAULT 0")
     if "error" not in cols:
         conn.execute("ALTER TABLE emails ADD COLUMN error TEXT")
+    if "escalation_notified_at" not in cols:
+        conn.execute("ALTER TABLE emails ADD COLUMN escalation_notified_at TEXT")
 
 
 def _email_table_columns(conn):
@@ -2356,15 +2358,80 @@ def _mark_needs_interactive(email_ids):
         log.warning(f"Failed to mark needs_interactive: {e}")
 
 
+def _filter_already_notified(message_ids):
+    """Return the subset of message_ids that have NOT been escalated yet
+    (i.e. emails.escalation_notified_at IS NULL). Idempotent: if the column
+    is missing for any reason, no row is filtered out."""
+    if not message_ids:
+        return []
+    try:
+        conn = sqlite3.connect(str(EMAIL_DB_PATH))
+        try:
+            _ensure_emails_table(conn)
+            placeholders = ",".join("?" for _ in message_ids)
+            rows = conn.execute(
+                f"""
+                SELECT message_id FROM emails
+                WHERE message_id IN ({placeholders})
+                  AND escalation_notified_at IS NULL
+                """,
+                tuple(message_ids),
+            ).fetchall()
+            return [r[0] for r in rows]
+        finally:
+            conn.close()
+    except Exception as e:
+        log.warning(f"escalation_notified_at filter failed, falling through: {e}")
+        return list(message_ids)
+
+
+def _mark_escalation_notified(message_ids):
+    """Stamp emails.escalation_notified_at = now() so we never re-notify
+    the operator about the same exhausted email."""
+    if not message_ids:
+        return
+    try:
+        conn = sqlite3.connect(str(EMAIL_DB_PATH))
+        try:
+            _ensure_emails_table(conn)
+            now_iso = datetime.now(timezone.utc).isoformat()
+            for mid in message_ids:
+                conn.execute(
+                    "UPDATE emails SET escalation_notified_at = ? WHERE message_id = ?",
+                    (now_iso, mid),
+                )
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception as e:
+        log.warning(f"Failed to stamp escalation_notified_at: {e}")
+
+
 def _escalate_exhausted_emails(config, batch):
     """After all retries exhausted, directly escalate emails with attempts >= MAX
-    by marking them needs_interactive and sending email to operator via nexo-send-reply.py."""
+    by marking them needs_interactive and sending email to operator via nexo-send-reply.py.
+
+    Deduplicated by emails.escalation_notified_at: if an email is already in
+    needs_interactive state from a previous run, we do not re-notify the operator."""
     exhausted = [e for e in batch if (e.get("attempts", 0) + 1) >= MAX_EMAIL_ATTEMPTS]
     if not exhausted:
         return
     ids = [e["message_id"] for e in exhausted]
     _mark_needs_interactive(ids)
     log.info(f"Marked {len(ids)} email(s) as needs_interactive after exhausting retries")
+
+    pending_notify_ids = set(_filter_already_notified(ids))
+    if not pending_notify_ids:
+        log.info(
+            f"All {len(ids)} exhausted email(s) already escalated to operator earlier — skipping duplicate notification."
+        )
+        return
+    skipped = len(ids) - len(pending_notify_ids)
+    if skipped:
+        log.info(
+            f"Escalation dedup: {skipped} email(s) already notified, will only escalate {len(pending_notify_ids)} new one(s)."
+        )
+    exhausted = [e for e in exhausted if e["message_id"] in pending_notify_ids]
 
     operator_name, assistant_name, operator_language = _get_operator_info()
     operator_email = config.get("operator_email", "")
@@ -2387,8 +2454,9 @@ def _escalate_exhausted_emails(config, batch):
     body_file.write_text(body, encoding="utf-8")
 
     send_script = get_send_reply_script_path(local_script_dir=_script_dir)
+    send_ok = False
     try:
-        subprocess.run(
+        result = subprocess.run(
             [
                 sys.executable, str(send_script),
                 "--to", f"{operator_name} <{operator_email}>",
@@ -2398,11 +2466,21 @@ def _escalate_exhausted_emails(config, batch):
             timeout=30,
             capture_output=True,
         )
-        log.info(f"Escalation email sent to {operator_email}")
+        send_ok = (result.returncode == 0)
+        if send_ok:
+            log.info(f"Escalation email sent to {operator_email}")
+        else:
+            log.warning(
+                f"Escalation send returned exit={result.returncode}; "
+                f"stderr={(result.stderr or b'').decode('utf-8', 'replace')[:200]}"
+            )
     except Exception as e:
         log.warning(f"Failed to send escalation email: {e}")
     finally:
         body_file.unlink(missing_ok=True)
+
+    if send_ok:
+        _mark_escalation_notified(list(pending_notify_ids))
 
 
 def main():
