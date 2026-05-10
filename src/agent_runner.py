@@ -477,6 +477,7 @@ def _run_headless_runner_guard(*, caller: str, cwd: Path, prompt: str, allowed_t
             area=f"runner:{caller or 'headless'}",
             project_hint=f"headless runner caller={caller or 'unknown'} cwd={cwd}",
             include_schemas="true",
+            enforce_runtime_core_block="false",
         )
     except Exception as exc:
         return {

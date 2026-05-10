@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.16.3] - 2026-05-10
+
+### Fixed — runner pre-emptive guard no longer duplicates the runtime-core write protection
+
+- **`handle_guard_check` accepts `enforce_runtime_core_block="false"` to opt out of the runtime-core blocking rule.** The pre-emptive guard called from `_run_headless_runner_guard` now passes that flag because actual writes on `~/.nexo/core/` paths are already blocked at the PreToolUse layer (`hook_guardrails._collect_runtime_core_write_blocks`, severity `error`). The previous duplication caused the runner to abort sessions whenever a prompt merely mentioned a core path — even a literal mention without an interpreter prefix — which 7.16.2 only addressed for the specific subprocess pattern.
+- **Default callers keep the historical behaviour.** Direct `nexo_guard_check` calls from agents still surface the runtime-core blocking rule. Only the headless runner explicitly opts out, with the safety tradeoff documented in the function docstring.
+- **Coverage:** `tests/test_guard.py::test_handle_guard_check_skips_runtime_core_when_caller_opts_out` and `::test_handle_guard_check_default_still_blocks_runtime_core` pin both sides of the contract. Combined sweep across guard + runner extractor + email-monitor: 47/47 passing.
+
 ## [7.16.2] - 2026-05-10
 
 ### Fixed — every forwarded email landed in `needs_interactive` (runner guard false positive)

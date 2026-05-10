@@ -309,6 +309,7 @@ def handle_guard_check(
     area: str = "",
     project_hint: str = "",
     include_schemas: str = "true",
+    enforce_runtime_core_block: str = "true",
 ) -> str:
     """Check learnings relevant to files/area before editing. Call BEFORE any code change.
 
@@ -316,11 +317,21 @@ def handle_guard_check(
         files: Comma-separated file paths about to be edited
         area: System area (webapp, shopify, infrastructure, nexo-ops, etc.)
         include_schemas: Include DB table schemas if files touch database code (true/false)
+        enforce_runtime_core_block: When ``true`` (default) any path under
+            ``~/.nexo/core/`` adds a ``runtime-core`` blocking rule. When
+            ``false`` the caller is opting out because another guard layer
+            already protects those writes (the PreToolUse hook in
+            ``hook_guardrails._collect_runtime_core_write_blocks`` blocks any
+            actual Write/Edit on core paths with severity ``error``).
+            ``_run_headless_runner_guard`` passes ``false`` so that paths
+            mentioned in a prompt — e.g. invocations of helper scripts —
+            no longer abort the session pre-emptively.
     """
     conn = get_db()
     include_schemas_bool = include_schemas.lower() in ("true", "1", "yes")
     file_list = [f.strip() for f in files.split(",") if f.strip()] if files else []
     project_hint_active = bool(_project_hint_tokens(project_hint))
+    enforce_runtime_core_bool = str(enforce_runtime_core_block or "").lower() in ("true", "1", "yes")
 
     result = {
         "learnings": [],
@@ -335,18 +346,19 @@ def handle_guard_check(
     conditioned_blocking_seen = set()
     conditioned_by_file = _load_conditioned_learnings(conn, file_list) if file_list else {}
 
-    runtime_core_hits = [filepath for filepath in file_list if _is_runtime_core_path(filepath)]
-    for filepath in runtime_core_hits:
-        result["blocking_rules"].append({
-            "id": "runtime-core",
-            "rule": (
-                "Installed runtime core files are protected. Edit the source repo, validate there, "
-                "then ship the change through release/update instead of mutating ~/.nexo/core directly."
-            ),
-            "repetitions": 0,
-            "reason": "runtime_core_protected",
-            "file": filepath,
-        })
+    if enforce_runtime_core_bool:
+        runtime_core_hits = [filepath for filepath in file_list if _is_runtime_core_path(filepath)]
+        for filepath in runtime_core_hits:
+            result["blocking_rules"].append({
+                "id": "runtime-core",
+                "rule": (
+                    "Installed runtime core files are protected. Edit the source repo, validate there, "
+                    "then ship the change through release/update instead of mutating ~/.nexo/core directly."
+                ),
+                "repetitions": 0,
+                "reason": "runtime_core_protected",
+                "file": filepath,
+            })
 
     # 1. File-conditioned learnings — explicit applies_to guardrails for target files
     hit_ids = []

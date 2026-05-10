@@ -148,6 +148,53 @@ def test_handle_guard_check_blocks_installed_runtime_core_paths(guard_env):
     assert "Installed runtime core files are protected" in output
 
 
+def test_handle_guard_check_skips_runtime_core_when_caller_opts_out(guard_env):
+    """The pre-emptive runner guard opts out of the runtime-core block via
+    ``enforce_runtime_core_block='false'`` because the PreToolUse hook
+    (``hook_guardrails._collect_runtime_core_write_blocks``) already blocks
+    actual writes on those paths with severity ``error``. Without this opt
+    out, every email-monitor/followup-runner/morning-agent session aborted
+    pre-emptively because their prompts mention runtime-core helper script
+    paths (e.g. ``python3 ~/.nexo/core/scripts/nexo-send-reply.py ...``)
+    which the path extractor cannot easily distinguish from edits.
+    """
+    db, guard = _reload_guard_stack()
+    db.init_db()
+
+    runtime_core_file = guard_env / "core" / "scripts" / "nexo-send-reply.py"
+    runtime_core_file.parent.mkdir(parents=True, exist_ok=True)
+    runtime_core_file.write_text("# installed runtime core helper\n", encoding="utf-8")
+
+    output = guard.handle_guard_check(
+        files=str(runtime_core_file),
+        area="runner:email-monitor",
+        enforce_runtime_core_block="false",
+    )
+
+    assert "BLOCKING RULES" not in output, (
+        "with enforce_runtime_core_block='false' the runtime-core path must NOT trigger a blocking rule"
+    )
+    assert "Installed runtime core files are protected" not in output
+
+
+def test_handle_guard_check_default_still_blocks_runtime_core(guard_env):
+    """Default callers (no opt-out) keep the historic behaviour: a runtime-core
+    path raises the BLOCKING RULES banner. This pins the back-compat contract
+    so the new opt-out parameter cannot regress regular ``nexo_guard_check``
+    invocations from agents."""
+    db, guard = _reload_guard_stack()
+    db.init_db()
+
+    runtime_core_file = guard_env / "core" / "scripts" / "nexo-send-reply.py"
+    runtime_core_file.parent.mkdir(parents=True, exist_ok=True)
+    runtime_core_file.write_text("# installed runtime core helper\n", encoding="utf-8")
+
+    output = guard.handle_guard_check(files=str(runtime_core_file), area="nexo-ops")
+
+    assert "BLOCKING RULES" in output
+    assert "Installed runtime core files are protected" in output
+
+
 def test_handle_guard_check_does_not_match_generic_parent_directory_tokens(guard_env):
     db, guard = _reload_guard_stack()
     db.init_db()
