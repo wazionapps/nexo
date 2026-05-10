@@ -439,6 +439,11 @@ def _extract_runner_guard_paths(prompt: str, cwd: Path) -> list[str]:
 
     for match in re.findall(r"(?<![A-Za-z0-9_])(?:/[^\s'\"`<>]+|[A-Za-z]:\\[^\s'\"`<>]+)", text):
         cleaned = match.rstrip(".,);:]")
+        # Drop trailing slashes — `/tmp/` and friends are directories, not
+        # edit targets. Without this the followup-runner prompt's mention
+        # of `/tmp/` reached `handle_guard_check`, which tried to `open()`
+        # the directory and crashed the whole pre-emptive guard.
+        cleaned = cleaned.rstrip("/")
         if not cleaned or cleaned in exec_only_paths:
             continue
         found.add(cleaned)
@@ -461,17 +466,47 @@ def _extract_runner_guard_paths(prompt: str, cwd: Path) -> list[str]:
 
 
 def _run_headless_runner_guard(*, caller: str, cwd: Path, prompt: str, allowed_tools: str) -> dict:
+    """Pre-emptive runner guard — observational, never blocking.
+
+    The pre-emptive guard scans the *prompt text* for paths the agent might
+    edit. That is heuristic: it cannot tell whether a path will actually be
+    written, read, executed, or just mentioned in passing. Treating the
+    learnings/blocking-rules surfaced by that heuristic as hard blockers
+    has caused a year's worth of operational pain — every time a learning's
+    ``applies_to`` happens to match a path the prompt mentions for any
+    reason, every cron, every email-monitor session, every Deep Sleep
+    synth aborts with exit 2.
+
+    The authoritative gate is the PreToolUse hook
+    (``hook_guardrails._collect_runtime_core_write_blocks`` and the
+    learning-aware blocks alongside it). That layer fires only when the
+    agent *actually attempts* a Write/Edit, with severity ``error``, and
+    prevents the protected mutation. The pre-emptive guard's job is to
+    surface relevant learnings/schemas to the agent up front so it can
+    reason about them, plus log to ``guard_checks`` for observability —
+    not to abort the run on a regex match.
+
+    Therefore this function always returns ``blocked=False``. Errors from
+    ``handle_guard_check`` are also non-blocking; we let the run start so
+    the PreToolUse layer can do its job, and we log the unavailability for
+    diagnostics.
+    """
     if not _runner_mutating_tools_allowed(allowed_tools):
         return {"blocked": False, "skipped": "read_only_tools"}
     guard_paths = _extract_runner_guard_paths(prompt, cwd)
     if not guard_paths:
         return {"blocked": False, "skipped": "no_explicit_paths"}
+    summary = ""
     try:
         runtime_root = str(NEXO_HOME)
         if runtime_root and runtime_root not in sys.path:
             sys.path.insert(0, runtime_root)
         from plugins.guard import handle_guard_check  # type: ignore
 
+        # We still pass ``enforce_runtime_core_block="false"`` because that
+        # opt-out predates the advisory-only switch and other callers may
+        # still rely on it. With the advisory contract in place this flag
+        # is effectively redundant, but kept for back-compat.
         output = handle_guard_check(
             files=",".join(guard_paths),
             area=f"runner:{caller or 'headless'}",
@@ -479,17 +514,16 @@ def _run_headless_runner_guard(*, caller: str, cwd: Path, prompt: str, allowed_t
             include_schemas="true",
             enforce_runtime_core_block="false",
         )
+        summary = str(output or "")
     except Exception as exc:
-        return {
-            "blocked": True,
-            "summary": f"Runner guard unavailable: {exc}",
-            "paths": guard_paths,
-        }
-    blocked = "BLOCKING RULES" in str(output or "")
+        # Guard unavailable is observational, not blocking. The PreToolUse
+        # hook will catch any actual protected write at execute time.
+        summary = f"Runner guard unavailable: {exc}"
     return {
-        "blocked": blocked,
-        "summary": str(output or ""),
+        "blocked": False,
+        "summary": summary,
         "paths": guard_paths,
+        "advisory": True,
     }
 
 

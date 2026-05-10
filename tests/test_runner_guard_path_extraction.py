@@ -96,6 +96,83 @@ def test_mixed_exec_and_edit_only_keeps_edit(runner_module, tmp_path):
     assert "/tmp/r.txt" in paths
 
 
+def test_trailing_slash_is_stripped_from_directory_paths(runner_module, tmp_path):
+    """Bug 2026-05-10 (followup-runner v8): the prompt mentioned ``/tmp/`` as
+    a working directory. The extractor used to keep the literal ``/tmp/``
+    and pass it to ``handle_guard_check`` → ``open('/tmp/')`` →
+    ``IsADirectoryError`` not in the except list → the entire pre-emptive
+    guard crashed and the runner aborted every hourly run with
+    ``Runner guard unavailable: [Errno 21] Is a directory: '/tmp/'``.
+
+    The fix has two layers: the extractor strips the trailing slash
+    (so the guard never sees ``/tmp/`` again), and ``handle_guard_check``
+    silently skips paths that resolve to a real directory on disk (so even
+    a bare ``/tmp`` does not crash the schema scan). This test pins the
+    extractor side: the literal ``/tmp/`` form must NOT survive into the
+    guard's file list.
+    """
+    prompt = "Save the body to /tmp/ and reply via the helper.\n"
+    paths = runner_module._extract_runner_guard_paths(prompt, tmp_path)
+    assert "/tmp/" not in paths, "trailing-slash form must be normalised away"
+
+
+def test_runner_guard_is_advisory_never_blocks(runner_module, tmp_path, monkeypatch):
+    """7.17.0 contract: ``_run_headless_runner_guard`` is observational, not
+    enforcing. Even when ``handle_guard_check`` returns blocking rules
+    (runtime-core, file-conditioned learnings, anything), the pre-emptive
+    guard reports ``blocked=False`` and lets the run start. The
+    PreToolUse hook is the authoritative gate at write time; the
+    pre-emptive layer's heuristic over prompt text must not abort runs.
+
+    Without this contract, every email-monitor / followup-runner /
+    Deep Sleep synth / postmortem-consolidation cycle was vulnerable to
+    aborting with exit 2 whenever any learning's ``applies_to`` happened
+    to match a path the prompt mentioned in passing.
+    """
+    def fake_handle_guard_check(**kwargs):
+        return (
+            "BLOCKING RULES (resolve BEFORE writing):\n"
+            "  #99 [FILE RULE:/some/path]: A made-up conditioned learning that\n"
+            "      would have aborted the runner under the pre-7.17.0 contract.\n"
+        )
+
+    fake_module = type("M", (), {"handle_guard_check": fake_handle_guard_check})
+    monkeypatch.setitem(sys.modules, "plugins.guard", fake_module)
+
+    result = runner_module._run_headless_runner_guard(
+        caller="email-monitor",
+        cwd=tmp_path,
+        prompt="Edit /some/path to update something.\n",
+        allowed_tools="Bash,Edit,Write",
+    )
+    assert result["blocked"] is False, "advisory contract: pre-emptive guard must never block"
+    assert result.get("advisory") is True
+    assert "BLOCKING RULES" in (result.get("summary") or ""), (
+        "the advisory summary must still surface the blocking rules text for observability"
+    )
+
+
+def test_runner_guard_is_advisory_even_when_unavailable(runner_module, tmp_path, monkeypatch):
+    """If ``handle_guard_check`` raises (eg. DB locked, disk full, an
+    unhandled OSError), the pre-emptive guard MUST still let the run start.
+    The PreToolUse hook is what enforces protection at write time.
+    """
+    def boom(**kwargs):
+        raise RuntimeError("simulated guard failure (eg. db locked)")
+
+    fake_module = type("M", (), {"handle_guard_check": boom})
+    monkeypatch.setitem(sys.modules, "plugins.guard", fake_module)
+
+    result = runner_module._run_headless_runner_guard(
+        caller="email-monitor",
+        cwd=tmp_path,
+        prompt="Edit /some/path to update something.\n",
+        allowed_tools="Bash,Edit,Write",
+    )
+    assert result["blocked"] is False
+    assert "Runner guard unavailable" in (result.get("summary") or "")
+
+
 def test_email_monitor_template_does_not_trigger_runtime_core(runner_module, tmp_path):
     """Reproducción directa del bug del 2026-05-10: prompt del email-monitor
     rendereado debe NO meter ``nexo-send-reply.py`` en la lista de paths del

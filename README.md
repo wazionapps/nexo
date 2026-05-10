@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.16.3` is the current packaged-runtime line. Patch release over v7.16.2 - the headless runner guard opts out of the runtime-core blocking rule because actual writes on those paths are already blocked at the PreToolUse layer. The duplicated pre-emptive check no longer aborts sessions over plain mentions of core helper script paths.
+Version `7.17.0` is the current packaged-runtime line. Minor release over v7.16.3 - the headless runner pre-emptive guard becomes advisory: it surfaces learnings/schemas to the agent and logs to `guard_checks`, but never returns `blocked=True`. The PreToolUse hook is the authoritative gate at write time. This closes the family of bugs where heuristic path matches in the prompt aborted email-monitor sessions, followup-runner cycles, Deep Sleep synth, and postmortem-consolidation. Also rolls in the directory-path hardening planned for 7.16.4.
+
+Previously in `7.16.3`: patch release over v7.16.2 - the headless runner guard opts out of the runtime-core blocking rule because actual writes on those paths are already blocked at the PreToolUse layer.
 
 Previously in `7.16.0`: minor release over v7.15.2 - Brain adds Memory Observations v2: evidence-backed event capture, derived observations, update-safe backfill, MCP retrieval, dashboard visibility, and safer refusal when memory lacks evidence.
 

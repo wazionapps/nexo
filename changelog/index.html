@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.16.3 retires the duplicated runtime-core check from the headless runner pre-emptive guard.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.17.0 makes the headless runner pre-emptive guard advisory only.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.16.3 retires the duplicated runtime-core check from the headless runner pre-emptive guard.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.17.0 makes the headless runner pre-emptive guard advisory only.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.16.3 retires the duplicated runtime-core check from the headless runner pre-emptive guard.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.17.0 makes the headless runner pre-emptive guard advisory only.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.16.3 retires the duplicated runtime-core check from the headless runner pre-emptive guard.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.17.0 makes the headless runner pre-emptive guard advisory only.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -87,13 +87,13 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v7.16.3 live</span>
+                    <span class="page-chip">v7.17.0 live</span>
                     <span class="page-chip">Guardian active</span>
                     <span class="page-chip">F0.6 hardening</span>
                     <span class="page-chip">Adaptive empirical</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v7163" class="btn btn-primary">Start with v7.16.3</a>
+                    <a href="#v7170" class="btn btn-primary">Start with v7.17.0</a>
                     <a href="#v7122" class="btn btn-secondary">See v7.12.2</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -101,6 +101,10 @@
             <div class="page-visual">
                 <div class="page-stack">
                     <div class="page-stack-card">
+                        <strong>v7.17.0</strong>
+                        <span>Minor - headless runner pre-emptive guard becomes advisory only. PreToolUse hook keeps protecting actual writes; the heuristic-as-enforcement contract is retired. Closes a family of cron and email-monitor abort bugs. Rolls in the directory-path hardening planned for 7.16.4.</span>
+                    </div>
+                                        <div class="page-stack-card">
                         <strong>v7.16.3</strong>
                         <span>Patch - headless runner pre-emptive guard opts out of the runtime-core blocking rule. PreToolUse keeps blocking actual core writes; the duplicated text-heuristic layer steps back.</span>
                     </div>
@@ -330,6 +334,16 @@
         <p><strong>About NEXO Desktop.</strong> NEXO Desktop is a separate closed-source companion client distributed at <a href="https://nexo-desktop.com/">nexo-desktop.com</a>. When a changelog entry mentions NEXO Desktop it refers to a coordinated client release that consumes the Brain CLI/MCP contract. Desktop source does not live in this repo; the Brain (AGPL-3.0) remains fully usable on its own from terminal, Codex, Claude Code, or any MCP client.</p>
     </div>
 </section>
+
+<section id="v7170" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#0ea5e9 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.17.0 <span style="opacity:.5;font-weight:400;">&mdash; May 10, 2026 &mdash; <strong>MINOR</strong></span></div>
+        <h2 class="section-title">Pre-emptive runner guard becomes advisory only</h2>
+        <p class="section-subtitle"><code>_run_headless_runner_guard</code> never returns <code>blocked=True</code>. It still surfaces learnings, schemas, and blocking-rule text to the agent up front for context (and still writes to <code>guard_checks</code> for observability), but the run always proceeds. The authoritative protection layer is the PreToolUse hook (<code>hook_guardrails._collect_runtime_core_write_blocks</code> and the file-conditioned learning blocks alongside it), which fires only when the agent actually attempts a Write/Edit, with severity <code>error</code>. That layer has full intent context; the pre-emptive layer was relying on regex over prompt text, which cannot tell a write from a read or a passing mention. v7.16.2 closed the subprocess-invocation case, v7.16.3 closed the runtime-core duplication, and v7.16.4 (rolled into this release) closed the directory-path crash. v7.17.0 closes the entire family. Errors from <code>handle_guard_check</code> are also non-blocking now: even an unhandled exception logs as advisory and lets the run start.</p>
+    </div>
+</section>
+
+
 
 <section id="v7163" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#0ea5e9 100%);">
     <div class="container">

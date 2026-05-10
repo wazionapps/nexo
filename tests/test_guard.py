@@ -177,6 +177,28 @@ def test_handle_guard_check_skips_runtime_core_when_caller_opts_out(guard_env):
     assert "Installed runtime core files are protected" not in output
 
 
+def test_handle_guard_check_does_not_crash_on_directory_paths(guard_env, tmp_path):
+    """Bug 2026-05-10 (followup-runner): the path extractor passed ``/tmp/``
+    to handle_guard_check, the SQL-schema scan tried ``open(filepath)`` on
+    the directory, and the resulting IsADirectoryError was not caught,
+    crashing the entire pre-emptive guard. handle_guard_check must now skip
+    directories silently so the runner does not abort over an irrelevant
+    path mention. Pinning this here keeps the regression closed.
+    """
+    db, guard = _reload_guard_stack()
+    db.init_db()
+
+    a_directory = tmp_path / "some_dir"
+    a_directory.mkdir()
+
+    output = guard.handle_guard_check(files=str(a_directory), area="nexo-ops")
+
+    assert "BLOCKING RULES" not in output, (
+        "a directory path is not a real edit target — the guard must not raise blocking rules over it"
+    )
+    assert "Is a directory" not in output, "the directory must be skipped, not surfaced as an error"
+
+
 def test_handle_guard_check_default_still_blocks_runtime_core(guard_env):
     """Default callers (no opt-out) keep the historic behaviour: a runtime-core
     path raises the BLOCKING RULES banner. This pins the back-compat contract

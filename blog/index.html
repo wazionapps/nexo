@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Blog — NEXO Brain</title>
-    <meta name="description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.16.3 runner pre-emptive guard refactor.">
+    <meta name="description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.17.0 advisory-runner-guard release.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/blog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/blog/">
     <meta property="og:title" content="Blog — NEXO Brain">
-    <meta property="og:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.16.3 runner pre-emptive guard refactor.">
+    <meta property="og:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.17.0 advisory-runner-guard release.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Blog — NEXO Brain">
-    <meta name="twitter:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.16.3 runner pre-emptive guard refactor.">
+    <meta name="twitter:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.17.0 advisory-runner-guard release.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Blog — NEXO Brain",
-        "description": "Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.16.3 runner pre-emptive guard refactor.",
+        "description": "Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.17.0 advisory-runner-guard release.",
         "url": "https://nexo-brain.com/blog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -134,7 +134,7 @@
                     <span class="page-chip">Shared brain product notes</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="/blog/nexo-7-16-3/" class="btn btn-primary">Read latest release</a>
+                    <a href="/blog/nexo-7-17-0/" class="btn btn-primary">Read latest release</a>
                     <a href="/changelog/" class="btn btn-secondary">Latest release notes</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -146,22 +146,22 @@
                     <span class="compare-chip">May 10, 2026</span>
                     <span class="compare-chip">Runner guard</span>
                     <span class="compare-chip">Architecture</span>
-                    <span class="compare-chip">Patch</span>
+                    <span class="compare-chip">Minor</span>
                 </div>
-                <h2>NEXO 7.16.3: runner pre-emptive guard stops duplicating runtime-core protection</h2>
-                <p>Patch release over v7.16.2. The headless runner pre-emptive guard opts out of the runtime-core blocking rule; the PreToolUse hook keeps blocking actual core writes with severity error. Plain mentions of a core path in a prompt no longer abort the session.</p>
+                <h2>NEXO 7.17.0: pre-emptive runner guard becomes advisory only</h2>
+                <p>Minor release over v7.16.3. The headless runner pre-emptive guard surfaces learnings and schemas to the agent up front but never returns blocked=True. The PreToolUse hook is the authoritative gate at write time. Closes the family of bugs where heuristic path matches in the prompt aborted email-monitor, followup-runner, Deep Sleep synth, and postmortem-consolidation. Also rolls in the directory-path hardening planned for 7.16.4.</p>
                 <div class="hero-actions" style="justify-content:flex-start;margin-bottom:18px;">
-                    <a href="/blog/nexo-7-16-3/" class="btn btn-primary">Open article</a>
-                    <a href="/changelog/#v7163" class="btn btn-secondary">Open changelog</a>
+                    <a href="/blog/nexo-7-17-0/" class="btn btn-primary">Open article</a>
+                    <a href="/changelog/#v7170" class="btn btn-secondary">Open changelog</a>
                 </div>
                 <div class="blog-mini-stack">
                     <div class="blog-mini-card">
                         <strong>Companion view</strong>
-                        <span><a href="/changelog/#v7163">See the full v7.16.3 changelog</a></span>
+                        <span><a href="/changelog/#v7170">See the full v7.17.0 changelog</a></span>
                     </div>
                     <div class="blog-mini-card">
                         <strong>Previous release</strong>
-                        <span><a href="/blog/nexo-7-16-2/">NEXO 7.16.2: runner guard no longer blocks email-monitor sessions</a>.</span>
+                        <span><a href="/blog/nexo-7-16-3/">NEXO 7.16.3: runner pre-emptive guard stops duplicating runtime-core protection</a>.</span>
                     </div>
                 </div>
             </div>
@@ -194,6 +194,15 @@
             <div class="blog-grid">
 
             <div class="blog-card">
+                <div class="blog-card-date">May 10, 2026</div>
+                <h2><a href="/blog/nexo-7-17-0/">NEXO 7.17.0: pre-emptive runner guard becomes advisory only</a></h2>
+                <p>Minor release. The headless runner pre-emptive surfaces learnings to the agent but never blocks. PreToolUse keeps protecting actual writes. Closes a family of cron and email-monitor abort bugs.</p>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/blog/nexo-7-17-0/" class="btn btn-secondary">Read more</a>
+                </div>
+            </div>
+
+                        <div class="blog-card">
                 <div class="blog-card-date">May 10, 2026</div>
                 <h2><a href="/blog/nexo-7-16-3/">NEXO 7.16.3: runner pre-emptive guard stops duplicating runtime-core protection</a></h2>
                 <p>Patch release. The headless runner opts out of the runtime-core block; PreToolUse keeps protecting actual writes. Plain prompt mentions of a core path no longer abort the session.</p>

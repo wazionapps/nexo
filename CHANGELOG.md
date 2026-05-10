@@ -1,5 +1,26 @@
 # Changelog
 
+## [7.17.0] - 2026-05-10
+
+### Changed — headless runner pre-emptive guard is now advisory only
+
+- **`_run_headless_runner_guard` never returns `blocked=True`.** It still surfaces relevant learnings, schemas, and blocking-rule text to the agent up front for context (and still writes to the `guard_checks` table for observability), but the run always proceeds. The authoritative protection layer is the PreToolUse hook (`hook_guardrails._collect_runtime_core_write_blocks` and the file-conditioned learning blocks alongside it), which fires only when the agent actually attempts a Write/Edit, with severity `error`. That layer has full intent context; the pre-emptive layer was relying on regex over prompt text, which cannot tell a write from a read or a passing mention.
+- **Why:** every time a learning's `applies_to` matched a path the prompt mentioned for any reason, every email-monitor session aborted, every followup-runner hourly cycle aborted, every Deep Sleep synth aborted, every postmortem-consolidation nightly aborted. v7.16.2 closed the subprocess-invocation case, v7.16.3 closed the runtime-core duplication, v7.16.4 (rolled into this release) closed the directory-path crash. v7.17.0 closes the entire family by removing the heuristic-as-enforcement contract.
+- **Errors are also non-blocking.** If `handle_guard_check` raises (DB locked, OSError, anything else), the pre-emptive guard logs the failure as advisory and lets the run start. The PreToolUse hook still gates the actual write.
+
+### Fixed — directory paths no longer crash the schema scan (rolled in from 7.16.4)
+
+- `handle_guard_check` now checks `Path(filepath).is_dir()` and skips silently. The except clause is widened to include `IsADirectoryError` and `OSError` as a final safety net.
+- `_extract_runner_guard_paths` strips trailing slashes so paths like `/tmp/` never reach the guard in the first place.
+
+### Coverage
+
+- `tests/test_runner_guard_path_extraction.py::test_runner_guard_is_advisory_never_blocks` pins that even a synthetic `BLOCKING RULES` payload from the guard does not abort the run.
+- `tests/test_runner_guard_path_extraction.py::test_runner_guard_is_advisory_even_when_unavailable` pins that an exception in `handle_guard_check` still lets the run start.
+- `tests/test_runner_guard_path_extraction.py::test_trailing_slash_is_stripped_from_directory_paths`
+- `tests/test_guard.py::test_handle_guard_check_does_not_crash_on_directory_paths`
+- Sweep across guard + runner extractor + email-monitor: **51/51 passing**.
+
 ## [7.16.3] - 2026-05-10
 
 ### Fixed — runner pre-emptive guard no longer duplicates the runtime-core write protection

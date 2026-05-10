@@ -494,12 +494,24 @@ def handle_guard_check(
         all_tables = set()
         for filepath in file_list:
             try:
+                # Skip directories silently — the path extractor that calls
+                # us is permissive and can hand back paths that end in `/`
+                # (e.g. `/tmp/`) or that resolve to real directories. Opening
+                # one of those raises IsADirectoryError, which is an OSError
+                # subclass; the prior except only caught FileNotFoundError /
+                # PermissionError, so the exception propagated and the whole
+                # runner pre-emptive guard returned `blocked=True` with
+                # "Runner guard unavailable: [Errno 21] Is a directory".
+                # That is exactly what was killing the followup-runner every
+                # hour after 7.16.0.
+                if Path(filepath).is_dir():
+                    continue
                 with open(filepath, 'r', errors='ignore') as f:
                     content = f.read()
                 sql_keywords = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'CREATE TABLE']
                 if any(kw in content.upper() for kw in sql_keywords):
                     all_tables.update(_extract_table_names(content))
-            except (FileNotFoundError, PermissionError):
+            except (FileNotFoundError, PermissionError, IsADirectoryError, OSError):
                 continue
 
         cache = _load_schema_cache()
