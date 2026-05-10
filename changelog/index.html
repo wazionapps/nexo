@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.16.0 adds evidence-first Memory Observations with update-safe backfill.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.16.2 fixes a runner guard false positive that was demoting every forwarded email to needs_interactive.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.16.0 adds evidence-first Memory Observations with update-safe backfill.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.16.2 fixes a runner guard false positive that was demoting every forwarded email to needs_interactive.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.16.0 adds evidence-first Memory Observations with update-safe backfill.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.16.2 fixes a runner guard false positive that was demoting every forwarded email to needs_interactive.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.16.0 adds evidence-first Memory Observations with update-safe backfill.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.16.2 fixes a runner guard false positive that was demoting every forwarded email to needs_interactive.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -87,13 +87,13 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v7.16.0 live</span>
+                    <span class="page-chip">v7.16.2 live</span>
                     <span class="page-chip">Guardian active</span>
                     <span class="page-chip">F0.6 hardening</span>
                     <span class="page-chip">Adaptive empirical</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v7160" class="btn btn-primary">Start with v7.16.0</a>
+                    <a href="#v7162" class="btn btn-primary">Start with v7.16.2</a>
                     <a href="#v7122" class="btn btn-secondary">See v7.12.2</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -101,6 +101,10 @@
             <div class="page-visual">
                 <div class="page-stack">
                     <div class="page-stack-card">
+                        <strong>v7.16.2</strong>
+                        <span>Patch - runner pre-emptive guard distinguishes subprocess invocations from edits, ending the runtime-core false positive that demoted every forwarded email to needs_interactive.</span>
+                    </div>
+                                        <div class="page-stack-card">
                         <strong>v7.16.0</strong>
                         <span>Minor - Memory Observations v2 captures evidence-backed operational memory, backfills existing installs, and refuses unsupported memory answers.</span>
                     </div>
@@ -320,6 +324,14 @@
 <section class="section-compact" style="background:rgba(124,58,237,0.08);">
     <div class="container desktop-disclaimer" style="max-width:860px;font-size:13px;line-height:1.55;">
         <p><strong>About NEXO Desktop.</strong> NEXO Desktop is a separate closed-source companion client distributed at <a href="https://nexo-desktop.com/">nexo-desktop.com</a>. When a changelog entry mentions NEXO Desktop it refers to a coordinated client release that consumes the Brain CLI/MCP contract. Desktop source does not live in this repo; the Brain (AGPL-3.0) remains fully usable on its own from terminal, Codex, Claude Code, or any MCP client.</p>
+    </div>
+</section>
+
+<section id="v7162" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#0ea5e9 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.16.2 <span style="opacity:.5;font-weight:400;">&mdash; May 10, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">Runner guard no longer blocks email-monitor sessions</h2>
+        <p class="section-subtitle">The pre-emptive runner guard scanned the prompt for absolute paths and treated every match as an edit target. The email-monitor template instructs the agent with <code>python3 /Users/.../core/scripts/nexo-send-reply.py --to ...</code>, so the path of the reply tool itself entered the guard&apos;s file list, the runtime-core rule fired, and the session aborted with exit 2 before the agent could draft a reply. Brain now recognises subprocess invocations: paths that follow a known interpreter (python, python3, node, bash, sh, npx, pnpm, yarn, uv, pipx, env, pwsh, powershell) are excluded from the guard list. Paths in genuine edit instructions and other CLI args (body files, quote files) still go through the guard.</p>
     </div>
 </section>
 

@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.16.0` is the current packaged-runtime line. Minor release over v7.15.2 - Brain adds Memory Observations v2: evidence-backed event capture, derived observations, update-safe backfill, MCP retrieval, dashboard visibility, and safer refusal when memory lacks evidence.
+Version `7.16.2` is the current packaged-runtime line. Patch release over v7.16.0 - Brain stops the pre-emptive runner guard from blocking email-monitor sessions over the reply tool: paths after a known interpreter (`python3`, `node`, `bash`, etc.) are recognised as subprocess invocations, not edits, so the runtime-core rule no longer aborts sessions whose prompt invokes core helper scripts.
+
+Previously in `7.16.0`: minor release over v7.15.2 - Brain adds Memory Observations v2: evidence-backed event capture, derived observations, update-safe backfill, MCP retrieval, dashboard visibility, and safer refusal when memory lacks evidence.
 
 Previously in `7.15.2`: patch release over v7.15.1 - Brain treats normal Codex startup context reads of calibration and project atlas files as healthy bootstrap activity instead of conditioned-file drift.
 
