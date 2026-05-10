@@ -1,5 +1,14 @@
 # Changelog
 
+## [7.17.1] - 2026-05-10
+
+### Fixed — morning-agent stopped failing with "invalid JSON output" on every cron tick
+
+- **`_extract_claude_telemetry` now handles the Claude CLI 2.1+ direct-JSON response shape.** Pre-7.17.1 the function only knew the classic wrapper `{"result": "...", "usage": {...}}`. When Claude CLI 2.1.x runs with `bare_mode=True` + `output_format="json"` + a prompt asking for raw JSON, the wrapper is dropped and the entire stdout IS the agent's answer (e.g. `{"subject":..., "body":...}`). The old code did `payload.get("result", "")`, returned an empty string, and the caller's downstream JSON parser raised `"Morning agent returned invalid JSON output"` — even though the agent had answered correctly and the answer was already persisted in `automation_runs.metadata.raw`.
+- **Symptom on 2026-05-10**: 178 `Morning agent failed: Morning agent returned invalid JSON output` lines in `morning-agent.log` vs 75 `status=ok` rows in `automation_runs` with intact `subject`+`body` payloads — every fail had a matching successful telemetry row at the same wall-clock second (Madrid vs UTC offset). Morning briefings have been silently failing since Claude CLI 2.1.x landed.
+- **Fix**: when `payload` carries no `"result"` key, treat the entire payload as the agent's answer and surface it as `final_stdout` (JSON-serialised when `output_format="json"`). Telemetry of usage/cost is unavailable in this shape; we surface zeros rather than invent figures. Classic-wrapper callers are untouched.
+- **Coverage**: `tests/test_agent_runner.py` adds `test_claude_telemetry_classic_wrapper_passes_result_through`, `test_claude_telemetry_direct_agent_json_response_surfaces_full_payload`, and `test_claude_telemetry_direct_agent_json_unblocks_morning_agent_parser` (integration with the morning-agent parser). Sweep across agent_runner + guard + email-monitor: **71/71 passing**.
+
 ## [7.17.0] - 2026-05-10
 
 ### Changed — headless runner pre-emptive guard is now advisory only

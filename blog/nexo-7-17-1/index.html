@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.17.1: handle Claude CLI 2.1+ direct-JSON response shape</title>
+<meta name="description" content="NEXO Brain v7.17.1 teaches _extract_claude_telemetry to handle the Claude CLI 2.1+ direct-JSON response shape so morning-agent stops failing silently with 'Morning agent returned invalid JSON output' every cron tick.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-17-1/">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.17.1: handle Claude CLI 2.1+ direct-JSON response shape","datePublished":"2026-05-10","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head><body><main><article style="max-width:760px;margin:80px auto;padding:0 24px;line-height:1.75;">
+<h1>NEXO 7.17.1 &mdash; handle Claude CLI 2.1+ direct-JSON response shape</h1>
+<p><em>Published 2026-05-10. Patch release over v7.17.0.</em></p>
+
+<h2>Silent daily failure</h2>
+<p>The morning-agent cron has been failing every tick with <code>Morning agent returned invalid JSON output</code> &mdash; 178 log lines on 2026-05-10 alone. The peculiar part: <code>automation_runs</code> showed 75 <code>status=ok</code> rows for the same runs, each carrying a perfectly formed <code>subject</code>+<code>body</code> in <code>metadata.raw</code>. Every fail had a matching successful telemetry row at the same wall-clock second. The agent had answered correctly. The caller had not received the answer.</p>
+
+<h2>Root cause</h2>
+<p>Claude CLI 2.1+ with <code>bare_mode=True</code> + <code>output_format="json"</code> + a prompt asking for raw JSON drops the classic <code>{"result": "...", "usage": {...}}</code> wrapper. The entire stdout becomes the agent's JSON answer (<code>{"subject":..., "body":...}</code>). <code>_extract_claude_telemetry</code> did <code>payload.get("result", "")</code>, which now returned an empty string. The empty <code>final_stdout</code> reached morning-agent's downstream JSON parser, which raised <code>"Morning agent returned invalid JSON output"</code>. Telemetry persistence already happened earlier, which is why the DB rows looked healthy while the caller died.</p>
+
+<h2>Fix</h2>
+<p>When <code>payload</code> has no <code>"result"</code> key, treat the entire payload as the agent's answer. Surface it as <code>final_stdout</code>, serialised as JSON when <code>output_format="json"</code>. Telemetry of usage/cost is unavailable in this shape; we surface zeros rather than invent figures. Classic-wrapper callers are untouched &mdash; pinned by the existing <code>_claude_json_result</code>-based tests.</p>
+
+<h2>Validation</h2>
+<pre><code>python3 -m pytest tests/test_agent_runner.py tests/test_guard.py tests/test_runner_guard_path_extraction.py tests/test_email_monitor_parser.py tests/test_email_monitor_checkpoints.py tests/test_email_monitor_escalation_dedup.py -q
+# 71 passed</code></pre>
+<p>New tests pin: the classic wrapper passes <code>result</code> through unchanged; the direct-JSON shape surfaces the full payload as <code>final_stdout</code>; the morning-agent's <code>_extract_json_payload</code> can consume the result without raising. Three regressions impossible to come back.</p>
+
+<p><a href="/changelog/#v7171">Full changelog entry &rarr;</a> &middot; <a href="/blog/nexo-7-17-0/">Previous v7.17.0 release</a></p>
+</article></main></body></html>

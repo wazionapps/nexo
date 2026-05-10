@@ -709,3 +709,83 @@ def test_claude_telemetry_uses_backend_cost():
     assert telemetry["total_cost_usd"] == 0.42
     assert telemetry["cost_source"] == "backend"
     assert telemetry["usage"]["output_tokens"] == 7
+
+
+def test_claude_telemetry_classic_wrapper_passes_result_through():
+    """Backwards-compat pin: when Claude CLI returns the classic wrapper
+    ``{"result": "agent answer", "usage": {...}}``, ``_extract_claude_telemetry``
+    must surface the wrapped ``result`` as ``final_stdout`` (unchanged from
+    pre-7.17.1 behaviour). This is the case all existing tests rely on via
+    ``_claude_json_result``.
+    """
+    import agent_runner
+
+    final_stdout, telemetry = agent_runner._extract_claude_telemetry(
+        _claude_json_result("the agent answer"),
+        requested_output_format="text",
+    )
+    assert final_stdout == "the agent answer"
+    assert telemetry["usage"]["output_tokens"] == 7
+
+
+def test_claude_telemetry_direct_agent_json_response_surfaces_full_payload():
+    """7.17.1 contract: Claude CLI 2.1+ with bare_mode + output_format=json +
+    a prompt asking for raw JSON drops the wrapper and returns the agent's
+    answer directly. Without this fix, ``_extract_claude_telemetry`` looked
+    up ``payload.get("result", "")`` and returned an empty string, which made
+    the morning-agent's ``_extract_json_payload`` raise "Morning agent
+    returned invalid JSON output" every single cron tick — even though the
+    agent had answered correctly and the answer was already persisted in
+    ``automation_runs.metadata.raw``.
+
+    Now the entire payload is treated as the agent's JSON answer when no
+    ``"result"`` key is present. ``final_stdout`` is the JSON-serialised
+    payload, ready for downstream callers to parse with their own schema
+    (e.g. morning-agent expects ``{"subject":..., "body":...}``).
+    """
+    import agent_runner
+
+    raw_stdout = json.dumps({
+        "subject": "Briefing matinal — domingo 10/05/2026",
+        "body": "Buenos días, Francisco.\n\nResumen tranquilo del día.",
+    })
+    final_stdout, telemetry = agent_runner._extract_claude_telemetry(
+        raw_stdout,
+        requested_output_format="json",
+    )
+    parsed = json.loads(final_stdout)
+    assert parsed["subject"].startswith("Briefing matinal")
+    assert parsed["body"].startswith("Buenos d")
+    # Sin wrapper, no hay telemetry de usage/cost. Importante que NO se inventen.
+    assert telemetry["usage"] == {"input_tokens": 0, "cached_input_tokens": 0, "output_tokens": 0}
+    assert telemetry.get("total_cost_usd") in (None, 0.0)
+    assert telemetry["telemetry_source"] == "claude_json"
+
+
+def test_claude_telemetry_direct_agent_json_unblocks_morning_agent_parser():
+    """Integration-style: the output of ``_extract_claude_telemetry`` for a
+    direct-JSON Claude CLI response must be parseable by morning-agent's
+    ``_extract_json_payload`` without raising. This pins the real cure for the
+    178 "invalid JSON output" log lines seen on 2026-05-10.
+    """
+    import agent_runner
+    import importlib.util
+    from pathlib import Path
+
+    script_path = Path(__file__).resolve().parent.parent / "src" / "scripts" / "nexo-morning-agent.py"
+    spec = importlib.util.spec_from_file_location("ma_inline_test", str(script_path))
+    ma = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(ma)
+    except Exception as exc:
+        import pytest
+        pytest.skip(f"nexo-morning-agent.py could not load in test env: {exc}")
+
+    raw_stdout = json.dumps({"subject": "X", "body": "Y"})
+    final_stdout, _ = agent_runner._extract_claude_telemetry(
+        raw_stdout,
+        requested_output_format="json",
+    )
+    parsed = ma._extract_json_payload(final_stdout)
+    assert parsed["subject"] == "X"
+    assert parsed["body"] == "Y"

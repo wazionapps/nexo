@@ -94,15 +94,32 @@ def _extract_claude_telemetry(raw_stdout: str, *, requested_output_format: str) 
             "warnings": ["backend did not return parseable JSON telemetry"],
         }
 
-    result_payload = payload.get("result", "")
+    # Two shapes can arrive in raw_stdout:
+    #   (a) Classic Claude CLI wrapper:
+    #       {"result": "<agent text or stringified JSON>", "usage": {...}, "total_cost_usd": N}
+    #   (b) Direct agent JSON (Claude CLI 2.1+ with bare_mode + output_format=json
+    #       + a prompt that requests raw JSON only). The wrapper is dropped and
+    #       the entire payload IS the agent's answer, e.g. {"subject":..., "body":...}.
+    # Pre-7.17.1 only handled (a): payload.get("result", "") returned "" in case (b),
+    # which left result.stdout empty for the caller. morning-agent then raised
+    # "Morning agent returned invalid JSON output" on every cron tick even though
+    # the agent had answered correctly and the answer was already persisted in
+    # automation_runs.metadata.raw. The branch below normalises both shapes.
+    if "result" in payload:
+        result_payload = payload["result"]
+        telemetry_payload = payload
+    else:
+        result_payload = payload
+        telemetry_payload = {}
+
     if requested_output_format and requested_output_format.lower() == "json" and not isinstance(result_payload, str):
         final_stdout = json.dumps(result_payload, ensure_ascii=False)
     else:
         final_stdout = result_payload if isinstance(result_payload, str) else json.dumps(result_payload, ensure_ascii=False)
 
-    usage = payload.get("usage") or {}
-    model_usage = payload.get("modelUsage") or {}
-    explicit_cost = payload.get("total_cost_usd")
+    usage = telemetry_payload.get("usage") or {}
+    model_usage = telemetry_payload.get("modelUsage") or {}
+    explicit_cost = telemetry_payload.get("total_cost_usd")
     if explicit_cost is None and isinstance(model_usage, dict):
         explicit_cost = sum(
             float((item or {}).get("costUSD") or 0.0)

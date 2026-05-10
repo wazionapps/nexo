@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.17.0` is the current packaged-runtime line. Minor release over v7.16.3 - the headless runner pre-emptive guard becomes advisory: it surfaces learnings/schemas to the agent and logs to `guard_checks`, but never returns `blocked=True`. The PreToolUse hook is the authoritative gate at write time. This closes the family of bugs where heuristic path matches in the prompt aborted email-monitor sessions, followup-runner cycles, Deep Sleep synth, and postmortem-consolidation. Also rolls in the directory-path hardening planned for 7.16.4.
+Version `7.17.1` is the current packaged-runtime line. Patch release over v7.17.0 - the headless Claude CLI 2.1+ direct-JSON response shape is now handled: when the wrapper `{"result": ...}` is absent and the agent's answer is returned directly, `_extract_claude_telemetry` surfaces the full payload to the caller instead of an empty string. Fixes the daily morning-agent failure with "Morning agent returned invalid JSON output".
+
+Previously in `7.17.0`: minor release over v7.16.3 - the headless runner pre-emptive guard becomes advisory: it surfaces learnings/schemas to the agent and logs to `guard_checks`, but never returns `blocked=True`. The PreToolUse hook is the authoritative gate at write time.
 
 Previously in `7.16.3`: patch release over v7.16.2 - the headless runner guard opts out of the runtime-core blocking rule because actual writes on those paths are already blocked at the PreToolUse layer.
 
