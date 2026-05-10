@@ -39,6 +39,19 @@ from tools_transcripts import (
     handle_transcript_search,
     handle_transcript_read,
 )
+from tools_memory_v2 import (
+    handle_memory_answer,
+    handle_memory_backfill,
+    handle_memory_event_list,
+    handle_memory_event_stats,
+    handle_memory_health,
+    handle_memory_maintenance,
+    handle_memory_observation_list,
+    handle_memory_observation_process,
+    handle_memory_observation_stats,
+    handle_memory_search,
+    handle_memory_timeline,
+)
 from tools_system_catalog import (
     handle_system_catalog,
     handle_tool_explain,
@@ -781,6 +794,108 @@ def nexo_transcript_search(query: str = "", hours: int = 24, client: str = "", l
 def nexo_transcript_read(session_ref: str = "", transcript_path: str = "", client: str = "", max_messages: int = 80) -> str:
     """Read a full transcript fallback by session id, transcript display name, session_uid, or exact path."""
     return handle_transcript_read(session_ref, transcript_path, client, max_messages)
+
+
+@mcp.tool
+def nexo_memory_event_list(
+    query: str = "",
+    event_type: str = "",
+    source_type: str = "",
+    source_id: str = "",
+    session_id: str = "",
+    project_key: str = "",
+    limit: int = 20,
+) -> str:
+    """List raw Memory Observations v2 events captured by hooks/tasks."""
+    return handle_memory_event_list(query, event_type, source_type, source_id, session_id, project_key, limit)
+
+
+@mcp.tool
+def nexo_memory_event_stats(days: int = 7) -> str:
+    """Summarize raw Memory Observations v2 event counts."""
+    return handle_memory_event_stats(days)
+
+
+@mcp.tool
+def nexo_memory_observation_process(limit: int = 25) -> str:
+    """Process pending raw memory events into passive observations."""
+    return handle_memory_observation_process(limit)
+
+
+@mcp.tool
+def nexo_memory_observation_list(
+    query: str = "",
+    observation_type: str = "",
+    session_id: str = "",
+    project_key: str = "",
+    status: str = "",
+    limit: int = 20,
+) -> str:
+    """List passive Memory Observations v2 rows."""
+    return handle_memory_observation_list(query, observation_type, session_id, project_key, status, limit)
+
+
+@mcp.tool
+def nexo_memory_observation_stats(days: int = 7) -> str:
+    """Summarize passive Memory Observations v2 rows and queue status."""
+    return handle_memory_observation_stats(days)
+
+
+@mcp.tool
+def nexo_memory_backfill(sources: str = "", limit: int = 100) -> str:
+    """Backfill Memory Observations v2 from existing Brain tables."""
+    return handle_memory_backfill(sources, limit)
+
+
+@mcp.tool
+def nexo_memory_health() -> str:
+    """Return Memory Observations v2 health and table status."""
+    return handle_memory_health()
+
+
+@mcp.tool
+def nexo_memory_maintenance(
+    process_limit: int = 100,
+    retry_failed: bool = True,
+    backfill_sources: str = "",
+    backfill_limit: int = 0,
+) -> str:
+    """Run safe Memory Observations v2 maintenance."""
+    return handle_memory_maintenance(process_limit, retry_failed, backfill_sources, backfill_limit)
+
+
+@mcp.tool
+def nexo_memory_search(
+    query: str,
+    project_hint: str = "",
+    time_range: str = "",
+    depth: str = "brief",
+    limit: int = 10,
+) -> str:
+    """Search Memory Observations v2 with evidence-first results."""
+    return handle_memory_search(query, project_hint, time_range, depth, limit)
+
+
+@mcp.tool
+def nexo_memory_answer(
+    query: str,
+    project_hint: str = "",
+    time_range: str = "",
+    limit: int = 5,
+) -> str:
+    """Answer a memory question only when evidence exists."""
+    return handle_memory_answer(query, project_hint, time_range, limit)
+
+
+@mcp.tool
+def nexo_memory_timeline(
+    query: str = "",
+    project_hint: str = "",
+    time_range: str = "",
+    limit: int = 20,
+) -> str:
+    """Return a chronological Memory Observations v2 timeline."""
+    return handle_memory_timeline(query, project_hint, time_range, limit)
 
 
 @mcp.tool

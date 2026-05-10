@@ -144,6 +144,39 @@ def test_protocol_routes_render_and_return_snapshot():
     assert "recent_tasks" in payload
 
 
+def test_dashboard_memory_observations_routes_are_evidence_first(isolated_db):
+    db = _db()
+    client = TestClient(app)
+
+    db.record_memory_event(
+        event_type="tool_write",
+        source_type="tool",
+        source_id="dashboard-tool-1",
+        session_id="nexo-5-5",
+        project_key="nexo",
+        tool_name="Edit",
+        file_paths=["src/dashboard_observation.py"],
+        metadata={"summary": "Edit wrote dashboard_observation evidence into memory."},
+        idempotency_key="dashboard-tool-1",
+    )
+
+    page = client.get("/memory")
+    observations = client.get("/api/memory/observations?q=dashboard_observation&project_key=nexo")
+    search = client.get("/api/memory/search-v2?query=dashboard_observation&project_hint=nexo")
+    backfill = client.post("/api/memory/backfill?sources=protocol_tasks&limit=5")
+
+    assert page.status_code == 200
+    assert "Memory Observations" in page.text
+    assert observations.status_code == 200
+    obs_payload = observations.json()
+    assert obs_payload["count"] >= 1
+    assert obs_payload["observations"][0]["evidence_refs"][0].startswith("memory_event:")
+    assert search.status_code == 200
+    assert search.json()["has_evidence"] is True
+    assert backfill.status_code == 200
+    assert backfill.json()["ok"] is True
+
+
 def test_dashboard_reminder_delete_is_soft_and_history_visible(isolated_db):
     client = TestClient(app)
 

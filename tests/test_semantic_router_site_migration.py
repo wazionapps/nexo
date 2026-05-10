@@ -170,6 +170,7 @@ def test_r34_engine_default_routes_through_semantic_router(fake_semantic_router)
     enforcer.tool_timestamps = {}
     enforcer._guardian_mode_cache = {}
     enforcer._guardian_rule_mode = lambda _rule_id: "hard"
+    enforcer._mcp_restart_pending = lambda: False
     enforcer.on_assistant_message("yo no he hecho eso")
     assert enforcer.injection_queue
     assert fake_semantic_router[-1]["decision_kind"] == "r34_identity_coherence"

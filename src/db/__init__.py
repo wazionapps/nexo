@@ -55,6 +55,7 @@ _drive = _load_submodule("db._drive")
 _outcomes = _load_submodule("db._outcomes")
 _goal_profiles = _load_submodule("db._goal_profiles")
 _continuity = _load_submodule("db._continuity")
+_memory_v2 = _load_submodule("db._memory_v2")
 
 # Core: connection, constants, init, utils
 from db._core import (
@@ -91,6 +92,21 @@ from db._continuity import (
     write_continuity_snapshot,
     list_continuity_snapshots,
     latest_continuity_snapshot,
+)
+
+from db._memory_v2 import (
+    build_memory_event_uid,
+    record_memory_event,
+    list_memory_events,
+    memory_event_stats,
+    upsert_memory_observation,
+    process_memory_observation_queue,
+    list_memory_observations,
+    search_memory_observations_fts,
+    backfill_memory_observations,
+    memory_observation_health,
+    maintain_memory_observations,
+    memory_observation_stats,
 )
 
 # PostToolUse inbox-reminder rate limit (v6.0.1)

@@ -2110,6 +2110,116 @@
       },
       "triggers_after": []
     },
+    "nexo_memory_answer": {
+      "description": "Answer memory questions only when Memory Observations evidence exists",
+      "category": "memory",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {"level": "none", "rules": []},
+      "triggers_after": []
+    },
+    "nexo_memory_backfill": {
+      "description": "Backfill Memory Observations from existing durable Brain tables",
+      "category": "memory",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {"level": "none", "rules": []},
+      "triggers_after": []
+    },
+    "nexo_memory_event_list": {
+      "description": "List raw Memory Observations v2 events",
+      "category": "memory",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {"level": "none", "rules": []},
+      "triggers_after": []
+    },
+    "nexo_memory_event_stats": {
+      "description": "Summarize raw Memory Observations v2 event counts",
+      "category": "memory",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {"level": "none", "rules": []},
+      "triggers_after": []
+    },
+    "nexo_memory_health": {
+      "description": "Report Memory Observations v2 health and table status",
+      "category": "memory",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {"level": "none", "rules": []},
+      "triggers_after": []
+    },
+    "nexo_memory_maintenance": {
+      "description": "Run safe Memory Observations queue processing and optional backfill",
+      "category": "memory",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {"level": "none", "rules": []},
+      "triggers_after": []
+    },
+    "nexo_memory_observation_list": {
+      "description": "List passive Memory Observations v2 rows",
+      "category": "memory",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {"level": "none", "rules": []},
+      "triggers_after": []
+    },
+    "nexo_memory_observation_process": {
+      "description": "Process pending Memory Observations v2 event queue",
+      "category": "memory",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {"level": "none", "rules": []},
+      "triggers_after": []
+    },
+    "nexo_memory_observation_stats": {
+      "description": "Summarize Memory Observations v2 rows and queue status",
+      "category": "memory",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {"level": "none", "rules": []},
+      "triggers_after": []
+    },
+    "nexo_memory_search": {
+      "description": "Search Memory Observations v2 with evidence refs",
+      "category": "memory",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {"level": "none", "rules": []},
+      "triggers_after": []
+    },
+    "nexo_memory_timeline": {
+      "description": "Return a chronological Memory Observations v2 timeline",
+      "category": "memory",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {"level": "none", "rules": []},
+      "triggers_after": []
+    },
     "nexo_memory_backend_status": {
       "description": "Show active memory backend contract",
       "category": "memory",

@@ -17,7 +17,9 @@ def test_init_db_creates_core_tables():
         "task_history", "task_frequencies", "plugins", "entities",
         "preferences", "agents", "change_log", "decisions",
         "protocol_tasks", "protocol_debt", "item_history", "item_read_tokens",
-        "hot_context", "recent_events",
+        "hot_context", "recent_events", "memory_events",
+        "memory_observations", "memory_observation_queue",
+        "memory_observations_fts",
     }
     assert expected.issubset(tables), f"Missing tables: {expected - tables}"
 
@@ -27,7 +29,7 @@ def test_migrations_idempotent():
     db_mod.run_migrations()
     db_mod.run_migrations()
     version = db_mod.get_schema_version()
-    assert version >= 30
+    assert version >= 62
 
 
 def test_session_crud():

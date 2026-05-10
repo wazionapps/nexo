@@ -1900,6 +1900,47 @@ def handle_task_close(
         },
         ttl_hours=24,
     )
+    memory_event = None
+    try:
+        from db import record_memory_event
+
+        memory_event = record_memory_event(
+            event_type=f"protocol_task_{clean_outcome}",
+            source_type="protocol_task",
+            source_id=task_id,
+            session_id=task.get("session_id") or sid,
+            project_key=task.get("project_hint") or task.get("area") or "",
+            actor=sid or task.get("session_id") or "nexo",
+            file_paths=effective_files,
+            tool_input={
+                "goal": task.get("goal") or "",
+                "task_type": task.get("task_type") or "",
+                "area": task.get("area") or "",
+                "project_hint": task.get("project_hint") or "",
+                "outcome": clean_outcome,
+            },
+            tool_output={
+                "evidence": clean_evidence,
+                "change_summary": clean_change_summary,
+                "outcome_notes": outcome_notes,
+            },
+            raw_ref=f"protocol_task:{task_id}",
+            privacy_level="normal",
+            confidence=1.0,
+            metadata={
+                "change_log_id": change_log_id,
+                "learning_id": learning_id,
+                "followup_id": created_followup_id,
+                "status": task.get("status"),
+                "goal": task.get("goal") or "",
+                "outcome": clean_outcome,
+                "evidence_preview": clean_evidence[:600],
+                "change_summary": clean_change_summary[:600],
+            },
+            idempotency_key=f"protocol_task:{task_id}:{clean_outcome}",
+        )
+    except Exception as exc:
+        memory_event = {"ok": False, "error": str(exc)}
     # ── Drive/Curiosity: detect signals from task evidence (best-effort) ──
     try:
         _drive_text = " ".join(filter(None, [
@@ -1969,6 +2010,8 @@ def handle_task_close(
         ],
         "status": status,
         "next_action": next_action,
+        "memory_event": memory_event,
+        "memory_event_ok": bool(memory_event and memory_event.get("ok")),
     }
     if durable_checkpoint:
         response["durable_checkpoint"] = durable_checkpoint

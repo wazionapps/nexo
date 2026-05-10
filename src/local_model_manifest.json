@@ -111,6 +111,23 @@
           "sha256": "0b29c7bfc889e53b36d9dd3e686dd4300f6525110eaa98c76a5dafceb2029f53"
         }
       ]
+    },
+    {
+      "name": "qwen3-0.6b-q4-local-presence",
+      "kind": "local_presence_llm",
+      "model_id": "ggml-org/Qwen3-0.6B-GGUF",
+      "source_repo": "ggml-org/Qwen3-0.6B-GGUF",
+      "revision": "a41486f827d17edd055fe6b3b0ba3f8d427c0519",
+      "model_file": "Qwen3-0.6B-Q4_0.gguf",
+      "dimension": 0,
+      "source": "nexo-desktop/hey-nero-local-presence",
+      "required_files": [
+        {
+          "path": "Qwen3-0.6B-Q4_0.gguf",
+          "size": 428970080,
+          "sha256": "da2572f16c06133561ce56accaa822216f2391ef4d37fba427801cd6736417d4"
+        }
+      ]
     }
   ]
 }

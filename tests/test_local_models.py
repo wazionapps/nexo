@@ -20,12 +20,14 @@ def test_manifest_declares_revision_for_all_pinned_fastembed_models():
         "bge-base-embeddings",
         "bge-small-embeddings",
         "cross-encoder-reranker",
+        "qwen3-0.6b-q4-local-presence",
     }
     for spec in specs.values():
         assert len(spec.revision) == 40
         assert spec.source_repo
         assert spec.required_files
     assert specs["bge-base-embeddings"].dimension == 384
+    assert specs["qwen3-0.6b-q4-local-presence"].kind == "local_presence_llm"
 
 
 def test_list_local_model_specs_degrades_to_empty_when_manifest_is_missing(tmp_path, monkeypatch):

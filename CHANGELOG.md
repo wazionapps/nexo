@@ -1,5 +1,14 @@
 # Changelog
 
+## [7.16.0] - 2026-05-10
+
+### Added — Memory Observations v2
+
+- **Brain now has an evidence-first Memory Observations layer.** Tool writes and task closeouts are captured into `memory_events`, converted into durable `memory_observations`, indexed for retrieval, and exposed through MCP tools and the Brain dashboard.
+- **Existing installs converge automatically.** Startup runs bounded maintenance/backfill, and `nexo_memory_backfill` / `nexo_memory_maintenance` can safely process older `protocol_tasks`, `change_log`, `session_diary`, and `recent_events` without duplicating rows.
+- **Memory answers refuse unsupported claims.** `nexo_memory_answer` now requires candidates with evidence refs, accepts project path hints such as repo paths, and surfaces FTS degradation and producer capture failures instead of silently pretending all memory paths are healthy.
+- **Dashboard `/memory` shows the new operational layer.** The page now includes observations, raw evidence events, queue metrics, search, and manual backfill alongside the existing cognitive memory flow.
+
 ## [7.15.2] - 2026-05-07
 
 ### Fixed — Codex bootstrap diagnostics

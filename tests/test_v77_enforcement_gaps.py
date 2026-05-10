@@ -329,6 +329,7 @@ def test_rail_10_conditional_rearm_is_behavioural_not_just_counter():
     continue inside _check_conditional.
     """
     eng = _build_engine_for_behavioral_test()
+    eng._mcp_restart_pending = lambda: False
     # Cycle 1: task_open → task_close.
     eng.on_tool_call("nexo_task_open")
     eng.on_tool_call("nexo_task_close")

@@ -17,7 +17,7 @@ from db import (
     SESSION_STALE_SECONDS, check_session_has_diary,
     save_checkpoint, read_checkpoint, increment_compaction_count,
     get_db, build_pre_action_context, format_pre_action_context_bundle,
-    capture_context_event,
+    capture_context_event, maintain_memory_observations,
 )
 
 try:
@@ -418,6 +418,16 @@ def handle_startup(
         session_client=inferred_client,
         conversation_id=conversation,
     )
+    memory_maintenance = None
+    try:
+        backfill_limit = int(os.environ.get("NEXO_MEMORY_STARTUP_BACKFILL_LIMIT", "250") or "250")
+        memory_maintenance = maintain_memory_observations(
+            process_limit=100,
+            retry_failed=True,
+            backfill_limit=backfill_limit,
+        )
+    except Exception as exc:
+        memory_maintenance = {"ok": False, "error": str(exc)}
     # v43 hotfix: also register in session_claude_aliases so multi-
     # conversation NEXO Desktop spawns (each with its own claude UUID)
     # resolve to the same NEXO sid on every PreToolUse hook lookup.
@@ -462,6 +472,11 @@ def handle_startup(
                 f"  {row['sid']} ({age}) — {row['task']} "
                 f"[client={row.get('session_client') or '?'} external={row.get('external_session_id') or '?'}]"
             )
+
+    if memory_maintenance and not memory_maintenance.get("ok"):
+        lines.append("")
+        lines.append("MEMORY OBSERVATIONS:")
+        lines.append(f"  Maintenance warning: {memory_maintenance.get('error') or memory_maintenance}")
 
     if inbox:
         lines.append("")

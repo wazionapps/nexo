@@ -704,6 +704,77 @@ async def api_memories(
     return {"query": q, "store": store, "count": len(serialized), "results": serialized}
 
 
+@app.get("/api/memory/observations")
+async def api_memory_observations(
+    q: str = Query("", description="Search query"),
+    observation_type: str = Query("", description="Filter by observation type"),
+    project_key: str = Query("", description="Filter by project key"),
+    limit: int = Query(20, ge=1, le=100),
+):
+    """Operational view of Memory Observations v2."""
+    db = _db()
+    try:
+        queue_result = db.process_memory_observation_queue(limit=50)
+    except Exception as exc:
+        queue_result = {"ok": False, "error": str(exc)}
+    observations = db.list_memory_observations(
+        query=q,
+        observation_type=observation_type,
+        project_key=project_key,
+        limit=limit,
+    )
+    events = db.list_memory_events(
+        query=q,
+        project_key=project_key,
+        limit=min(limit, 50),
+    )
+    return {
+        "query": q,
+        "observation_type": observation_type,
+        "project_key": project_key,
+        "count": len(observations),
+        "event_count": len(events),
+        "queue": queue_result,
+        "stats": db.memory_observation_stats(days=7),
+        "event_stats": db.memory_event_stats(days=7),
+        "observations": observations,
+        "events": events,
+    }
+
+
+@app.get("/api/memory/search-v2")
+async def api_memory_search_v2(
+    query: str = Query("", description="Search query"),
+    project_hint: str = Query("", description="Project hint"),
+    time_range: str = Query("", description="today, yesterday, anteayer, last N h/d"),
+    depth: str = Query("brief", description="brief, timeline, evidence, or raw"),
+    limit: int = Query(10, ge=1, le=50),
+):
+    """Evidence-first Memory Observations v2 search."""
+    if not query:
+        return {"query": query, "count": 0, "candidates": [], "has_evidence": False}
+    from memory_retrieval import memory_search
+
+    return memory_search(
+        query,
+        project_hint=project_hint,
+        time_range=time_range,
+        depth=depth,
+        limit=limit,
+    )
+
+
+@app.post("/api/memory/backfill")
+async def api_memory_backfill(
+    sources: str = Query("", description="Comma-separated source list"),
+    limit: int = Query(100, ge=1, le=1000),
+):
+    """Run idempotent Memory Observations v2 backfill from durable Brain tables."""
+    requested = [item.strip() for item in (sources or "").split(",") if item.strip()]
+    result = _db().backfill_memory_observations(sources=requested or None, limit=limit)
+    return result
+
+
 @app.get("/api/somatic")
 async def api_somatic():
     """Somatic marker risk scores."""

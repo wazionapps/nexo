@@ -95,6 +95,12 @@ def _warm_fastembed_reranker(target: WarmupTarget) -> None:
     build_fastembed_reranker(target.name)
 
 
+def _warm_local_presence_llm(target: WarmupTarget) -> None:
+    from local_models import ensure_local_model
+
+    ensure_local_model(target.name, local_files_only=True)
+
+
 def warm_target(target: WarmupTarget) -> None:
     if target.kind == "transformers_sequence_classifier":
         _warm_transformers(target)
@@ -104,6 +110,9 @@ def warm_target(target: WarmupTarget) -> None:
         return
     if target.kind == "fastembed_reranker":
         _warm_fastembed_reranker(target)
+        return
+    if target.kind == "local_presence_llm":
+        _warm_local_presence_llm(target)
         return
     raise ValueError(f"unknown warmup target kind: {target.kind}")
 

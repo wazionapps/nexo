@@ -167,6 +167,70 @@
   </div>
 </div>
 
+<!-- Memory Observations -->
+<div class="mb-6">
+  <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between mb-3">
+    <div>
+      <h2 class="text-xs uppercase tracking-wider text-slate-500 font-semibold flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-sky-400 glow-dot" style="color:#38bdf8"></span>
+        Memory Observations
+      </h2>
+      <p class="text-xs text-slate-600 mt-1">Evidence-backed operational memory captured from tasks, edits, and durable context.</p>
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+      <input type="text" id="obs-query" placeholder="Search observations..."
+        class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500 w-56"
+        onkeydown="if(event.key==='Enter')loadMemoryObservations()">
+      <input type="text" id="obs-project" placeholder="Project"
+        class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500 w-32"
+        onkeydown="if(event.key==='Enter')loadMemoryObservations()">
+      <button onclick="loadMemoryObservations()" class="px-3 py-1.5 text-xs bg-sky-600 text-white rounded-lg hover:bg-sky-500 transition-colors font-medium">Refresh</button>
+      <button onclick="runMemoryBackfill()" class="px-3 py-1.5 text-xs bg-slate-800 text-slate-200 border border-slate-700 rounded-lg hover:bg-slate-700 transition-colors font-medium">Backfill</button>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+    <div class="bg-slate-900/50 border border-slate-800/60 rounded-xl p-3">
+      <div class="text-[10px] uppercase tracking-wider text-slate-500">Observations</div>
+      <div class="text-2xl font-display font-bold text-sky-300" id="obs-count">--</div>
+    </div>
+    <div class="bg-slate-900/50 border border-slate-800/60 rounded-xl p-3">
+      <div class="text-[10px] uppercase tracking-wider text-slate-500">Raw Events</div>
+      <div class="text-2xl font-display font-bold text-violet-300" id="obs-event-count">--</div>
+    </div>
+    <div class="bg-slate-900/50 border border-slate-800/60 rounded-xl p-3">
+      <div class="text-[10px] uppercase tracking-wider text-slate-500">Queue Pending</div>
+      <div class="text-2xl font-display font-bold text-amber-300" id="obs-queue-count">--</div>
+    </div>
+    <div class="bg-slate-900/50 border border-slate-800/60 rounded-xl p-3">
+      <div class="text-[10px] uppercase tracking-wider text-slate-500">Last Process</div>
+      <div class="text-2xl font-display font-bold text-emerald-300" id="obs-processed-count">--</div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 xl:grid-cols-2 gap-5">
+    <div class="bg-sky-500/5 border border-sky-500/20 rounded-xl p-4">
+      <div class="flex items-center justify-between mb-3">
+        <div class="text-xs uppercase tracking-wider text-sky-400 font-semibold">Observations</div>
+        <div class="text-[10px] text-slate-500 font-mono" id="obs-list-count">--</div>
+      </div>
+      <div class="space-y-2" id="obs-list">
+        <div class="text-xs text-slate-600 text-center py-6">Loading...</div>
+      </div>
+    </div>
+
+    <div class="bg-violet-500/5 border border-violet-500/20 rounded-xl p-4">
+      <div class="flex items-center justify-between mb-3">
+        <div class="text-xs uppercase tracking-wider text-violet-400 font-semibold">Evidence Events</div>
+        <div class="text-[10px] text-slate-500 font-mono" id="obs-raw-count">--</div>
+      </div>
+      <div class="space-y-2" id="obs-events">
+        <div class="text-xs text-slate-600 text-center py-6">Loading...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Two-column: STM and LTM Recent -->
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-6" id="columns-area">
   <!-- Recent STM -->
@@ -313,6 +377,41 @@
     </div>`;
   }
 
+  function renderObservationCard(item) {
+    const refs = item.evidence_refs || [];
+    const entities = item.entities || [];
+    const created = item.created_at ? recentTime(item.created_at) : '';
+    const score = item.salience != null ? Number(item.salience).toFixed(2) : '--';
+    return `<div class="bg-slate-900/50 border border-sky-500/15 rounded-xl p-4">
+      <div class="flex items-center gap-2 mb-2 flex-wrap">
+        <span class="text-[10px] px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-400 font-medium">${escapeHtml(item.observation_type || 'observation')}</span>
+        ${item.project_key ? `<span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-500">${escapeHtml(item.project_key)}</span>` : ''}
+        <span class="text-[10px] text-slate-600 ml-auto font-mono">${escapeHtml(created)}</span>
+      </div>
+      <div class="text-sm text-slate-200 leading-relaxed">${escapeHtml(item.summary || '')}</div>
+      <div class="flex items-center gap-2 mt-2 flex-wrap">
+        <span class="text-[10px] text-slate-600 font-mono">score ${escapeHtml(score)}</span>
+        ${entities.slice(0, 3).map(e => `<span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-500">${escapeHtml(e)}</span>`).join('')}
+      </div>
+      <div class="text-[10px] text-slate-600 font-mono mt-2 break-all">${escapeHtml(refs.slice(0, 3).join(' | '))}</div>
+    </div>`;
+  }
+
+  function renderMemoryEventCard(item) {
+    const created = item.created_at ? recentTime(item.created_at) : '';
+    const paths = item.file_paths || [];
+    const source = `${item.source_type || '?'}:${item.source_id || ''}`;
+    return `<div class="bg-slate-900/50 border border-violet-500/15 rounded-xl p-4">
+      <div class="flex items-center gap-2 mb-2 flex-wrap">
+        <span class="text-[10px] px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-400 font-medium">${escapeHtml(item.event_type || 'event')}</span>
+        <span class="text-[10px] text-slate-600 ml-auto font-mono">${escapeHtml(created)}</span>
+      </div>
+      <div class="text-sm text-slate-200 leading-relaxed">${escapeHtml(source)}</div>
+      ${paths.length ? `<div class="text-xs text-slate-500 mt-2">${escapeHtml(paths.slice(0, 4).join(', '))}</div>` : ''}
+      <div class="text-[10px] text-slate-600 font-mono mt-2 break-all">${escapeHtml(item.event_uid || '')}</div>
+    </div>`;
+  }
+
   async function loadRecentContext() {
     const q = document.getElementById('context-query').value.trim();
     const url = '/api/recent-context?hours=24&limit=8' + (q ? `&query=${encodeURIComponent(q)}` : '');
@@ -330,6 +429,45 @@
     document.getElementById('hot-event-list').innerHTML = events.length === 0
       ? '<div class="text-xs text-slate-600 text-center py-6">No recent events in the last 24h</div>'
       : events.map(renderHotEventCard).join('');
+  }
+
+  async function loadMemoryObservations() {
+    const q = document.getElementById('obs-query').value.trim();
+    const project = document.getElementById('obs-project').value.trim();
+    const url = '/api/memory/observations?limit=12'
+      + (q ? `&q=${encodeURIComponent(q)}` : '')
+      + (project ? `&project_key=${encodeURIComponent(project)}` : '');
+    const data = await fetchJSON(url);
+    if (!data) return;
+
+    const stats = data.stats || {};
+    const queue = stats.queue || {};
+    const processed = (data.queue && data.queue.processed) || 0;
+    const observations = data.observations || [];
+    const events = data.events || [];
+    document.getElementById('obs-count').textContent = formatNumber(stats.total || observations.length);
+    document.getElementById('obs-event-count').textContent = formatNumber((data.event_stats && data.event_stats.total) || events.length);
+    document.getElementById('obs-queue-count').textContent = formatNumber(queue.pending || 0);
+    document.getElementById('obs-processed-count').textContent = formatNumber(processed);
+    document.getElementById('obs-list-count').textContent = formatNumber(observations.length);
+    document.getElementById('obs-raw-count').textContent = formatNumber(events.length);
+    document.getElementById('obs-list').innerHTML = observations.length === 0
+      ? '<div class="text-xs text-slate-600 text-center py-6">No observations found</div>'
+      : observations.map(renderObservationCard).join('');
+    document.getElementById('obs-events').innerHTML = events.length === 0
+      ? '<div class="text-xs text-slate-600 text-center py-6">No evidence events found</div>'
+      : events.map(renderMemoryEventCard).join('');
+  }
+
+  async function runMemoryBackfill() {
+    const res = await fetch('/api/memory/backfill?sources=protocol_tasks,change_log,session_diary,recent_events&limit=200', { method: 'POST' });
+    if (!res.ok) {
+      showToast('Backfill failed');
+      return;
+    }
+    const data = await res.json();
+    showToast(`Backfill ${data.created_or_updated || 0}/${data.seen || 0}`);
+    loadMemoryObservations();
   }
 
   async function loadFlow() {
@@ -413,8 +551,10 @@
 
   // Init
   loadRecentContext();
+  loadMemoryObservations();
   loadFlow();
   setInterval(loadRecentContext, REFRESH_MS);
+  setInterval(loadMemoryObservations, REFRESH_MS);
   setInterval(loadFlow, REFRESH_MS);
 </script>
 {% endblock %}

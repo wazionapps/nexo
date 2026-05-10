@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import sys
 from pathlib import Path
 
@@ -12,7 +13,7 @@ if str(REPO_SRC) not in sys.path:
 def test_server_exposes_protocol_runtime_tools(isolated_db):
     import server
 
-    for name in (
+    expected = (
         "nexo_cortex_check",
         "nexo_continuity_snapshot_write",
         "nexo_continuity_snapshot_read",
@@ -25,6 +26,40 @@ def test_server_exposes_protocol_runtime_tools(isolated_db):
         "nexo_task_close",
         "nexo_workflow_open",
         "nexo_workflow_update",
-    ):
+        "nexo_memory_event_list",
+        "nexo_memory_event_stats",
+        "nexo_memory_observation_process",
+        "nexo_memory_observation_list",
+        "nexo_memory_observation_stats",
+        "nexo_memory_backfill",
+        "nexo_memory_health",
+        "nexo_memory_maintenance",
+        "nexo_memory_search",
+        "nexo_memory_answer",
+        "nexo_memory_timeline",
+    )
+    for name in expected:
         assert hasattr(server, name), f"{name} missing from server.py"
         assert callable(getattr(server, name)), f"{name} is not callable"
+
+
+def test_memory_tools_are_registered_with_fastmcp(isolated_db):
+    import server
+
+    tools = asyncio.run(server.mcp.list_tools())
+    names = {tool.name for tool in tools}
+
+    for name in (
+        "nexo_memory_event_list",
+        "nexo_memory_event_stats",
+        "nexo_memory_observation_process",
+        "nexo_memory_observation_list",
+        "nexo_memory_observation_stats",
+        "nexo_memory_backfill",
+        "nexo_memory_health",
+        "nexo_memory_maintenance",
+        "nexo_memory_search",
+        "nexo_memory_answer",
+        "nexo_memory_timeline",
+    ):
+        assert name in names

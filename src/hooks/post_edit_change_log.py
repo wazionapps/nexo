@@ -101,7 +101,7 @@ def record_post_edit_change(payload: dict) -> dict:
         return {"ok": True, "skipped": True, "reason": "missing_file_path"}
 
     try:
-        from db import init_db, log_change
+        from db import init_db, log_change, record_memory_event
     except Exception as exc:
         return {"ok": False, "error": f"db_import_failed: {exc}"}
 
@@ -122,7 +122,39 @@ def record_post_edit_change(payload: dict) -> dict:
         )
         if "error" in result:
             return {"ok": False, "error": result["error"]}
-        return {"ok": True, "change_log_id": result.get("id"), "files": paths}
+        memory_event = None
+        try:
+            memory_event = record_memory_event(
+                event_type="tool_write",
+                source_type="tool",
+                source_id=str(payload.get("tool_use_id") or result.get("id") or ""),
+                session_id=sid,
+                external_session_id=str(payload.get("session_id") or ""),
+                actor=sid,
+                tool_name=tool_name,
+                file_paths=paths,
+                tool_input=_tool_input(payload),
+                tool_output=payload.get("tool_response") or payload.get("tool_result") or payload.get("result") or "",
+                raw_ref=f"change_log:{result.get('id')}",
+                privacy_level="normal",
+                confidence=1.0,
+                metadata={
+                    "change_log_id": result.get("id"),
+                    "hook": "post_edit_change_log.py",
+                    "summary": f"{tool_name} wrote {len(paths)} file(s): {', '.join(paths[:4])}",
+                    "path_count": len(paths),
+                },
+                idempotency_key=f"tool_write:{payload.get('tool_use_id') or result.get('id')}",
+            )
+        except Exception as exc:
+            memory_event = {"ok": False, "error": str(exc)}
+        return {
+            "ok": True,
+            "change_log_id": result.get("id"),
+            "files": paths,
+            "memory_event": memory_event,
+            "memory_event_ok": bool(memory_event and memory_event.get("ok")),
+        }
     except Exception as exc:
         return {"ok": False, "error": str(exc)}
 

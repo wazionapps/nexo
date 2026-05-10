@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.15.2` is the current packaged-runtime line. Patch release over v7.15.1 - Brain treats normal Codex startup context reads of calibration and project atlas files as healthy bootstrap activity instead of conditioned-file drift.
+Version `7.16.0` is the current packaged-runtime line. Minor release over v7.15.2 - Brain adds Memory Observations v2: evidence-backed event capture, derived observations, update-safe backfill, MCP retrieval, dashboard visibility, and safer refusal when memory lacks evidence.
+
+Previously in `7.15.2`: patch release over v7.15.1 - Brain treats normal Codex startup context reads of calibration and project atlas files as healthy bootstrap activity instead of conditioned-file drift.
 
 Previously in `7.15.1`: patch release over v7.15.0 - Brain drains larger self-audit clusters, bounds hook history with update-time cleanup, filters normal Codex bootstrap reads, routes email-monitor effort by message complexity, and locks morning briefings by local date and recipient.
 

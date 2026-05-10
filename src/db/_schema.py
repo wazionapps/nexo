@@ -1526,6 +1526,245 @@ def _m54_continuity_snapshots(conn):
     _migrate_add_index(conn, "idx_continuity_snapshots_created", "continuity_snapshots", "created_at")
 
 
+def _m59_memory_events(conn):
+    """Memory Observations v2 phase 1: append-only event log.
+
+    The table is deliberately independent from the later observation,
+    retrieval, viewer, and promotion layers. Fresh installs get it through
+    ``init_db() -> run_migrations()``; existing installs receive the same
+    idempotent migration on the next startup/update.
+    """
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS memory_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_uid TEXT NOT NULL UNIQUE,
+            created_at REAL NOT NULL,
+            session_id TEXT DEFAULT '',
+            external_session_id TEXT DEFAULT '',
+            client TEXT DEFAULT '',
+            conversation_id TEXT DEFAULT '',
+            project_key TEXT DEFAULT '',
+            source_type TEXT NOT NULL,
+            source_id TEXT DEFAULT '',
+            event_type TEXT NOT NULL,
+            actor TEXT DEFAULT '',
+            tool_name TEXT DEFAULT '',
+            file_paths_json TEXT DEFAULT '[]',
+            command_digest TEXT DEFAULT '',
+            input_hash TEXT DEFAULT '',
+            output_digest TEXT DEFAULT '',
+            raw_ref TEXT DEFAULT '',
+            privacy_level TEXT DEFAULT 'normal',
+            redaction_applied INTEGER DEFAULT 0,
+            confidence REAL DEFAULT 1.0,
+            metadata_json TEXT DEFAULT '{}'
+        )
+        """
+    )
+    _migrate_add_index(conn, "idx_memory_events_created", "memory_events", "created_at")
+    _migrate_add_index(conn, "idx_memory_events_session", "memory_events", "session_id, created_at")
+    _migrate_add_index(conn, "idx_memory_events_source", "memory_events", "source_type, source_id")
+    _migrate_add_index(conn, "idx_memory_events_type", "memory_events", "event_type, created_at")
+    _migrate_add_index(conn, "idx_memory_events_project", "memory_events", "project_key, created_at")
+
+
+def _m60_memory_observations(conn):
+    """Memory Observations v2 phase 2: passive derived observations."""
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS memory_observations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            observation_uid TEXT NOT NULL UNIQUE,
+            created_at REAL NOT NULL,
+            updated_at REAL NOT NULL,
+            project_key TEXT DEFAULT '',
+            session_id TEXT DEFAULT '',
+            observation_type TEXT NOT NULL,
+            subject TEXT DEFAULT '',
+            summary TEXT NOT NULL,
+            facts_json TEXT DEFAULT '{}',
+            evidence_refs_json TEXT NOT NULL DEFAULT '[]',
+            entities_json TEXT DEFAULT '[]',
+            salience REAL DEFAULT 0.5,
+            confidence REAL DEFAULT 0.5,
+            stability REAL DEFAULT 1.0,
+            status TEXT DEFAULT 'active',
+            promotion_state TEXT DEFAULT 'observation',
+            decay_policy TEXT DEFAULT 'normal',
+            source_hash TEXT DEFAULT '',
+            metadata_json TEXT DEFAULT '{}'
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS memory_observation_queue (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_uid TEXT NOT NULL UNIQUE,
+            status TEXT NOT NULL DEFAULT 'pending',
+            attempts INTEGER DEFAULT 0,
+            last_error TEXT DEFAULT '',
+            created_at REAL NOT NULL,
+            updated_at REAL NOT NULL,
+            processed_at REAL DEFAULT NULL
+        )
+        """
+    )
+    _migrate_add_index(conn, "idx_memory_obs_type", "memory_observations", "observation_type, created_at")
+    _migrate_add_index(conn, "idx_memory_obs_project", "memory_observations", "project_key, created_at")
+    _migrate_add_index(conn, "idx_memory_obs_session", "memory_observations", "session_id, created_at")
+    _migrate_add_index(conn, "idx_memory_obs_status", "memory_observations", "status, promotion_state")
+    _migrate_add_index(conn, "idx_memory_obs_queue_status", "memory_observation_queue", "status, updated_at")
+
+
+def _m61_memory_observations_fts(conn):
+    """FTS5 index for Memory Observations v2."""
+    try:
+        conn.execute(
+            """
+            CREATE VIRTUAL TABLE IF NOT EXISTS memory_observations_fts USING fts5(
+                observation_uid UNINDEXED,
+                summary,
+                subject,
+                observation_type,
+                project_key,
+                entities,
+                tokenize='unicode61 remove_diacritics 2'
+            )
+            """
+        )
+    except Exception:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS memory_observations_fts (
+                observation_uid TEXT PRIMARY KEY,
+                summary TEXT DEFAULT '',
+                subject TEXT DEFAULT '',
+                observation_type TEXT DEFAULT '',
+                project_key TEXT DEFAULT '',
+                entities TEXT DEFAULT ''
+            )
+            """
+        )
+    conn.executescript(
+        """
+        CREATE TRIGGER IF NOT EXISTS memory_observations_fts_insert
+        AFTER INSERT ON memory_observations BEGIN
+            INSERT INTO memory_observations_fts(
+                rowid, observation_uid, summary, subject, observation_type, project_key, entities
+            )
+            VALUES (
+                new.id, new.observation_uid, new.summary, new.subject,
+                new.observation_type, new.project_key, new.entities_json
+            );
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS memory_observations_fts_delete
+        AFTER DELETE ON memory_observations BEGIN
+            DELETE FROM memory_observations_fts WHERE rowid = old.id;
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS memory_observations_fts_update
+        AFTER UPDATE OF summary, subject, observation_type, project_key, entities_json ON memory_observations BEGIN
+            DELETE FROM memory_observations_fts WHERE rowid = old.id;
+            INSERT INTO memory_observations_fts(
+                rowid, observation_uid, summary, subject, observation_type, project_key, entities
+            )
+            VALUES (
+                new.id, new.observation_uid, new.summary, new.subject,
+                new.observation_type, new.project_key, new.entities_json
+            );
+        END;
+        """
+    )
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO memory_observations_fts(
+            rowid, observation_uid, summary, subject, observation_type, project_key, entities
+        )
+        SELECT id, observation_uid, summary, subject, observation_type, project_key, entities_json
+          FROM memory_observations
+        """
+    )
+
+
+def _m62_memory_observations_fts_trigger_fix(conn):
+    """Make Memory Observations FTS triggers safe for repeated upserts."""
+    try:
+        conn.execute(
+            """
+            CREATE VIRTUAL TABLE IF NOT EXISTS memory_observations_fts USING fts5(
+                observation_uid UNINDEXED,
+                summary,
+                subject,
+                observation_type,
+                project_key,
+                entities,
+                tokenize='unicode61 remove_diacritics 2'
+            )
+            """
+        )
+    except Exception:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS memory_observations_fts (
+                observation_uid TEXT PRIMARY KEY,
+                summary TEXT DEFAULT '',
+                subject TEXT DEFAULT '',
+                observation_type TEXT DEFAULT '',
+                project_key TEXT DEFAULT '',
+                entities TEXT DEFAULT ''
+            )
+            """
+        )
+    conn.executescript(
+        """
+        DROP TRIGGER IF EXISTS memory_observations_fts_insert;
+        DROP TRIGGER IF EXISTS memory_observations_fts_delete;
+        DROP TRIGGER IF EXISTS memory_observations_fts_update;
+
+        CREATE TRIGGER IF NOT EXISTS memory_observations_fts_insert
+        AFTER INSERT ON memory_observations BEGIN
+            INSERT INTO memory_observations_fts(
+                rowid, observation_uid, summary, subject, observation_type, project_key, entities
+            )
+            VALUES (
+                new.id, new.observation_uid, new.summary, new.subject,
+                new.observation_type, new.project_key, new.entities_json
+            );
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS memory_observations_fts_delete
+        AFTER DELETE ON memory_observations BEGIN
+            DELETE FROM memory_observations_fts WHERE rowid = old.id;
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS memory_observations_fts_update
+        AFTER UPDATE OF summary, subject, observation_type, project_key, entities_json ON memory_observations BEGIN
+            DELETE FROM memory_observations_fts WHERE rowid = old.id;
+            INSERT INTO memory_observations_fts(
+                rowid, observation_uid, summary, subject, observation_type, project_key, entities
+            )
+            VALUES (
+                new.id, new.observation_uid, new.summary, new.subject,
+                new.observation_type, new.project_key, new.entities_json
+            );
+        END;
+        """
+    )
+    conn.execute("DELETE FROM memory_observations_fts")
+    conn.execute(
+        """
+        INSERT INTO memory_observations_fts(
+            rowid, observation_uid, summary, subject, observation_type, project_key, entities
+        )
+        SELECT id, observation_uid, summary, subject, observation_type, project_key, entities_json
+          FROM memory_observations
+        """
+    )
+
+
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
     (2, "followups_reasoning", _m2_followups_reasoning),
@@ -1585,6 +1824,10 @@ MIGRATIONS = [
     (56, "session_correction_requirements", _m56_session_correction_requirements),
     (57, "hook_runs_retention", _m57_hook_runs_retention),
     (58, "morning_briefing_runs", _m58_morning_briefing_runs),
+    (59, "memory_events", _m59_memory_events),
+    (60, "memory_observations", _m60_memory_observations),
+    (61, "memory_observations_fts", _m61_memory_observations_fts),
+    (62, "memory_observations_fts_trigger_fix", _m62_memory_observations_fts_trigger_fix),
 ]
 
 
