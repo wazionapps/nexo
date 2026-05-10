@@ -405,15 +405,48 @@ def _runner_mutating_tools_allowed(allowed_tools: str) -> bool:
     return bool(parts & _MUTATING_TOOL_NAMES)
 
 
+_RUNNER_GUARD_EXEC_INVOCATION_PATTERN = re.compile(
+    r"\b(?:python3?|python|node|nodejs|bash|sh|zsh|ruby|deno|perl|pwsh|powershell|"
+    r"npx|pnpm|yarn|uv|pipx|env)\b\s+"
+    r"(/[^\s'\"`<>]+|[A-Za-z]:\\[^\s'\"`<>]+)"
+)
+
+
 def _extract_runner_guard_paths(prompt: str, cwd: Path) -> list[str]:
+    """Return paths that the prompt seems to instruct the agent to *edit*.
+
+    Paths that appear immediately after a known interpreter
+    (``python3 /path/to/tool.py ...``) are stripped out: those are
+    subprocess executions, not edits, and the runner guard must not treat
+    them as protected-file writes. Without this exclusion the email-monitor
+    prompt — which explicitly instructs the agent to invoke
+    ``~/.nexo/core/scripts/nexo-send-reply.py`` to deliver the reply —
+    triggers the ``runtime-core`` blocking rule on every email and the
+    session aborts with exit 2 before any reply is generated.
+    """
     found: set[str] = set()
     text = str(prompt or "")
+
+    exec_only_paths: set[str] = set()
+    for match in _RUNNER_GUARD_EXEC_INVOCATION_PATTERN.finditer(text):
+        candidate = match.group(1).rstrip(".,);:]")
+        if candidate:
+            exec_only_paths.add(candidate)
+            try:
+                exec_only_paths.add(str(Path(candidate).expanduser().resolve(strict=False)))
+            except Exception:
+                pass
+
     for match in re.findall(r"(?<![A-Za-z0-9_])(?:/[^\s'\"`<>]+|[A-Za-z]:\\[^\s'\"`<>]+)", text):
         cleaned = match.rstrip(".,);:]")
-        if cleaned:
-            found.add(cleaned)
+        if not cleaned or cleaned in exec_only_paths:
+            continue
+        found.add(cleaned)
     for match in re.findall(r"(?<![A-Za-z0-9_])(?:src|scripts|tests|docs|lib|renderer|app)/[A-Za-z0-9_./-]+\.[A-Za-z0-9]+", text):
-        found.add(str((cwd / match.rstrip(".,);:]")).resolve()))
+        resolved = str((cwd / match.rstrip(".,);:]")).resolve())
+        if resolved in exec_only_paths:
+            continue
+        found.add(resolved)
     try:
         resolved_cwd = cwd.resolve()
     except Exception:

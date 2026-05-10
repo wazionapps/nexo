@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.16.2] - 2026-05-10
+
+### Fixed — every forwarded email landed in `needs_interactive` (runner guard false positive)
+
+- **Runner pre-emptive guard no longer blocks email-monitor sessions over `nexo-send-reply.py`.** `_extract_runner_guard_paths` was treating any absolute path mentioned in the prompt as an edit target. The email-monitor template instructs the agent with `python3 /Users/.../core/scripts/nexo-send-reply.py --to ...`, so the path landed in the guard's `file_list`, the `runtime-core` blocking rule fired, and the session aborted with `exit 2` before the agent ever drafted a reply. As a result every forwarded email exhausted its 3 attempts and was demoted to `status='needs_interactive'`, regardless of subject or sender.
+- **Fix:** paths that appear immediately after a known interpreter (`python`, `python3`, `node`, `bash`, `sh`, `npx`, `pnpm`, `yarn`, `uv`, `pipx`, `env`, `pwsh`, `powershell`, etc.) are recognised as subprocess executions and excluded from the runner guard path list. Paths in genuine edit contexts and other arguments (body files, quote files, etc.) still go through the guard.
+- **Coverage:** `tests/test_runner_guard_path_extraction.py` pins the python/node/npx exclusions, the edit-instruction capture, and a direct repro of the email-monitor template scenario so the regression cannot return.
+
 ## [7.16.1] - 2026-05-10
 
 ### Fixed — operator email-monitor escalation no longer re-notifies the same email
