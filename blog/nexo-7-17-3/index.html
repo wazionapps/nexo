@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.17.3: standalone update no longer aborts on the Desktop-only local-presence model</title>
+<meta name="description" content="NEXO Brain v7.17.3 fixes standalone install/update when the Desktop-only qwen3-0.6b-q4-local-presence model is not bundled or already cached locally.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-17-3/">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.17.3: standalone update no longer aborts on the Desktop-only local-presence model","datePublished":"2026-05-11","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head><body><main><article style="max-width:760px;margin:80px auto;padding:0 24px;line-height:1.75;">
+<h1>NEXO 7.17.3 &mdash; standalone update no longer aborts on the Desktop-only local-presence model</h1>
+<p><em>Published 2026-05-11. Corrective patch release over v7.17.2.</em></p>
+
+<h2>Why this patch exists</h2>
+<p><code>nexo-brain@7.17.2</code> shipped a real regression in the public npm update path. The postinstall flow warmed every model from the local manifest with <code>local_files_only=True</code>, but the npm package did not bundle the Desktop local-presence GGUF snapshot. On hosts without that snapshot already cached, <code>nexo update</code> aborted even though the missing model was not part of the standalone Brain contract.</p>
+
+<h2>What changed</h2>
+<p><code>LocalModelSpec</code> now carries a <code>required</code> flag loaded from <code>src/local_model_manifest.json</code>. The <code>qwen3-0.6b-q4-local-presence</code> entry is marked optional because it belongs to the Desktop local-presence path, not the required standalone Brain runtime.</p>
+<p><code>warmup_targets()</code> now propagates that requirement bit into strict warmup. Required Brain models &mdash; classifier, embeddings, and reranker &mdash; still fail install/update if warmup breaks. The missing Desktop-only GGUF now degrades cleanly instead of aborting the release path.</p>
+
+<h2>Validation</h2>
+<pre><code>python3 -m pytest tests/test_local_models.py tests/test_model_warmup.py tests/test_nexo_brain_onboarding_cli.py -q
+# 13 passed
+
+node bin/nexo-brain.js warmup-models --postinstall
+# exit 0 on the live machine, with the optional local-presence model reported as non-fatal when absent</code></pre>
+
+<p><a href="/changelog/#v7173">Full changelog entry &rarr;</a> &middot; <a href="/blog/nexo-7-17-2/">Previous v7.17.2 release</a></p>
+</article></main></body></html>
