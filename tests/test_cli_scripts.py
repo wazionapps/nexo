@@ -107,6 +107,39 @@ def test_help_prefers_installed_when_cached_latest_is_older(nexo_home):
     assert "NEXO Latest: v9.9.9 | Installed: v9.9.9" in result.stdout
 
 
+def test_version_prints_version_status_from_cache(nexo_home):
+    (nexo_home / "config").mkdir(exist_ok=True)
+    (nexo_home / "config" / "cli-version-status.json").write_text(json.dumps({
+        "latest": "9.9.10",
+        "checked_at": 4102444800,
+    }))
+    (nexo_home / "version.json").write_text(json.dumps({"version": "9.9.9"}))
+
+    result = _run_cli(nexo_home, "--version")
+
+    assert result.returncode == 0
+    assert "nexo v9.9.9" in result.stdout
+    assert "NEXO Latest: v9.9.10 | Installed: v9.9.9" in result.stdout
+
+
+def test_version_json_reports_update_status(nexo_home):
+    (nexo_home / "config").mkdir(exist_ok=True)
+    (nexo_home / "config" / "cli-version-status.json").write_text(json.dumps({
+        "latest": "9.9.10",
+        "checked_at": 4102444800,
+    }))
+    (nexo_home / "version.json").write_text(json.dumps({"version": "9.9.9"}))
+
+    result = _run_cli(nexo_home, "--version", "--json")
+
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    assert payload["installed"] == "9.9.9"
+    assert payload["latest"] == "9.9.10"
+    assert payload["hasUpdate"] is True
+    assert payload["unknown"] is False
+
+
 class TestScriptsList:
     def test_empty_list(self, nexo_home):
         result = _run_cli(nexo_home, "scripts", "list")

@@ -3,6 +3,7 @@
 
 Entry points:
   nexo chat [PATH]
+  nexo --version [--json]
   nexo export [PATH] [--json]
   nexo import-inspect PATH [--json]
   nexo import PATH [--json]
@@ -233,17 +234,41 @@ def _version_sort_key(raw: str) -> tuple[tuple[int, ...], int, str]:
     return (tuple(parts), 1 if not suffix else 0, suffix)
 
 
-def _version_status_line() -> str:
+def _version_status_payload() -> dict:
     installed = _get_version()
     latest = _load_latest_version_cache()
+    latest_source = "cache" if latest else ""
     if latest is None and _should_refresh_latest_version():
         latest = _fetch_latest_version()
+        latest_source = "npm" if latest else ""
     if latest and installed and _version_sort_key(latest) < _version_sort_key(installed):
         latest = installed
+        latest_source = "installed"
         try:
             _save_latest_version_cache(installed)
         except Exception:
             pass
+    has_update = bool(
+        latest
+        and installed
+        and _version_sort_key(latest) > _version_sort_key(installed)
+    )
+    return {
+        "ok": True,
+        "name": "nexo",
+        "package": LATEST_NPM_PACKAGE,
+        "installed": installed,
+        "latest": latest or "",
+        "hasUpdate": has_update,
+        "unknown": not bool(installed and latest),
+        "latestSource": latest_source,
+    }
+
+
+def _version_status_line(payload: dict | None = None) -> str:
+    payload = payload or _version_status_payload()
+    installed = str(payload.get("installed") or "?").strip()
+    latest = str(payload.get("latest") or "").strip()
     if latest:
         return f"NEXO Latest: v{latest} | Installed: v{installed}"
     return f"NEXO Installed: v{installed}"
@@ -2823,6 +2848,7 @@ def main():
     parser = argparse.ArgumentParser(prog="nexo", description="NEXO Runtime CLI", add_help=False)
     parser.add_argument("-h", "--help", action="store_true", help="Show help")
     parser.add_argument("-v", "--version", action="store_true", help="Show version")
+    parser.add_argument("--json", action="store_true", help="JSON output for --version")
     sub = parser.add_subparsers(dest="command")
 
     # -- email (Plan F1 — interactive wizard for email accounts) --
@@ -3408,7 +3434,12 @@ def main():
         _print_help()
         return 0
     if args.version:
-        print(f"nexo v{_get_version()}")
+        payload = _version_status_payload()
+        if args.json:
+            print(json.dumps(payload, ensure_ascii=False))
+        else:
+            print(f"nexo v{payload.get('installed') or _get_version()}")
+            print(_version_status_line(payload))
         return 0
 
     if args.command == "email":

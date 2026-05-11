@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.17.4` is the current packaged-runtime line. Corrective patch over v7.17.3 - automation runners now keep full NEXO discipline for real background agents while strict JSON children stay clean, and runtime doctor/metrics expose caller coverage and Guardian injection telemetry instead of hiding blind spots.
+Version `7.17.5` is the current packaged-runtime line. Patch release over v7.17.4 - `nexo --version --json` now returns fast machine-readable update status (`installed`, `latest`, `hasUpdate`, `unknown`, `latestSource`) while the human output keeps the legacy `nexo vX` line plus a compact latest/installed status line for Desktop compatibility.
+
+Previously in `7.17.4`: corrective patch over v7.17.3 - automation runners now keep full NEXO discipline for real background agents while strict JSON children stay clean, and runtime doctor/metrics expose caller coverage and Guardian injection telemetry instead of hiding blind spots.
 
 Previously in `7.17.3`: corrective patch over v7.17.2 - standalone Brain install/update no longer aborts when the Desktop-only `qwen3-0.6b-q4-local-presence` model is not bundled or already cached locally. Required Brain warmups stay strict; only the optional local-presence GGUF now degrades cleanly.
 

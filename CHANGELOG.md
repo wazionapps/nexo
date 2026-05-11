@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.17.5] - 2026-05-11
+
+### Added — fast version status for Desktop
+
+- **`nexo --version --json` now returns machine-readable update status.** The payload includes `installed`, `latest`, `hasUpdate`, `unknown` and `latestSource`, so NEXO Desktop can populate the Updates panel without scraping the slower help output.
+- **Human version output remains compatible.** `nexo --version` still prints the existing `nexo vX` first line and now adds `NEXO Latest: vX | Installed: vY` as a second line for older Desktop fallbacks.
+- **Coverage:** `tests/test_cli_scripts.py` covers both the human and JSON version outputs, with `python3 -m py_compile src/cli.py` and the targeted CLI test suite passing.
+
 ## [7.17.4] - 2026-05-11
 
 ### Fixed — automation discipline contracts and Guardian observability
