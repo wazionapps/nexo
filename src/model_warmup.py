@@ -56,6 +56,7 @@ def warmup_targets() -> list[WarmupTarget]:
                 revision=spec.revision,
                 source=spec.source,
                 source_repo=spec.source_repo,
+                required=spec.required,
             )
         )
     return targets

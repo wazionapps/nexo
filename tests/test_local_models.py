@@ -28,6 +28,7 @@ def test_manifest_declares_revision_for_all_pinned_fastembed_models():
         assert spec.required_files
     assert specs["bge-base-embeddings"].dimension == 384
     assert specs["qwen3-0.6b-q4-local-presence"].kind == "local_presence_llm"
+    assert specs["qwen3-0.6b-q4-local-presence"].required is False
 
 
 def test_list_local_model_specs_degrades_to_empty_when_manifest_is_missing(tmp_path, monkeypatch):

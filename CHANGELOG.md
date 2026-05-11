@@ -1,5 +1,14 @@
 # Changelog
 
+## [7.17.3] - 2026-05-11
+
+### Fixed — standalone Brain install/update no longer aborts on the Desktop-only local-presence model
+
+- **`qwen3-0.6b-q4-local-presence` is now explicit optional metadata in the local model manifest.** `LocalModelSpec` carries a `required` flag sourced from `src/local_model_manifest.json`, and the Qwen GGUF entry is marked `required: false` because it belongs to the Desktop local-presence path, not the standalone Brain runtime contract.
+- **Strict warmup now stays strict only for required Brain models.** `warmup_targets()` propagates the manifest's `required` bit into `WarmupTarget`, so classifier, embeddings, and reranker failures still fail install/update, while a missing cached/bundled local-presence GGUF degrades cleanly instead of aborting `nexo update`.
+- **Why this patch exists:** `nexo-brain@7.17.2` published a postinstall path that warmed every manifest model with `local_files_only=True`, but the npm package did not bundle the Qwen snapshot. Hosts without that snapshot already cached hit `Setup failed: model warmup failed with exit 1` during `nexo update`, even though the Desktop-only model is not required for standalone Brain.
+- **Coverage:** targeted local-model and warmup regressions now pass (**13/13**), including a strict-mode check that optional model failures are tolerated while required model failures still abort.
+
 ## [7.17.2] - 2026-05-11
 
 ### Fixed — Desktop-bundled Brain hardening for release 0.32.57

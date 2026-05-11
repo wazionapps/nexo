@@ -51,6 +51,7 @@ class LocalModelSpec:
     source: str
     required_files: tuple[LocalModelFile, ...]
     dimension: int = 0
+    required: bool = True
 
 
 def _slugify(value: str) -> str:
@@ -100,6 +101,7 @@ def _load_manifest() -> dict[str, LocalModelSpec]:
             source=str(raw["source"]),
             required_files=files,
             dimension=int(raw.get("dimension", 0) or 0),
+            required=bool(raw.get("required", True)),
         )
         specs[spec.name] = spec
     return specs

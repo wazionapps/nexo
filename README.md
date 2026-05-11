@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.17.2` is the current packaged-runtime line. Patch release over v7.17.1 - email-monitor now guards its `/tmp/nexo-*` draft buffers before writing, morning-agent closes interrupted/stale briefing claims deterministically, and Codex managed config migrates from the legacy `codex_hooks` flag to `[features].hooks`.
+Version `7.17.3` is the current packaged-runtime line. Corrective patch over v7.17.2 - standalone Brain install/update no longer aborts when the Desktop-only `qwen3-0.6b-q4-local-presence` model is not bundled or already cached locally. Required Brain warmups stay strict; only the optional local-presence GGUF now degrades cleanly.
+
+Previously in `7.17.2`: patch release over v7.17.1 - email-monitor now guards its `/tmp/nexo-*` draft buffers before writing, morning-agent closes interrupted/stale briefing claims deterministically, and Codex managed config migrates from the legacy `codex_hooks` flag to `[features].hooks`.
 
 Previously in `7.17.1`: patch release over v7.17.0 - the headless Claude CLI 2.1+ direct-JSON response shape is now handled: when the wrapper `{"result": ...}` is absent and the agent's answer is returned directly, `_extract_claude_telemetry` surfaces the full payload to the caller instead of an empty string. Fixes the daily morning-agent failure with "Morning agent returned invalid JSON output".
 

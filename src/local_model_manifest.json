@@ -120,6 +120,7 @@
       "revision": "a41486f827d17edd055fe6b3b0ba3f8d427c0519",
       "model_file": "Qwen3-0.6B-Q4_0.gguf",
       "dimension": 0,
+      "required": false,
       "source": "nexo-desktop/hey-nero-local-presence",
       "required_files": [
         {
