@@ -18,7 +18,11 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.17.6` is the current packaged-runtime line. Patch release over v7.17.5 - cron health diagnostics are clearer for macOS TCC approval, and catch-up fallback executions now stay visible in `cron_runs` even on legacy or partially migrated runtimes.
+Version `7.17.7` is the current packaged-runtime line. Patch release over v7.17.6 - macOS TCC privacy denials now become a guided Full Disk Access permission state instead of an unexplained cron failure, with Desktop-ready status written for user action.
+
+Previously in `7.17.6`: patch release over v7.17.5 - cron health diagnostics are clearer for macOS TCC approval, and catch-up fallback executions now stay visible in `cron_runs` even on legacy or partially migrated runtimes.
+
+Previously in `7.17.5`: patch release over v7.17.4 - `nexo --version --json` now returns machine-readable update status so NEXO Desktop can populate the Updates panel without scraping slower human output.
 
 Previously in `7.17.4`: corrective patch over v7.17.3 - automation runners now keep full NEXO discipline for real background agents while strict JSON children stay clean, and runtime doctor/metrics expose caller coverage and Guardian injection telemetry instead of hiding blind spots.
 

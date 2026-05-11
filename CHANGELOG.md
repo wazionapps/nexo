@@ -1,5 +1,14 @@
 # Changelog
 
+## [7.17.7] - 2026-05-12
+
+### Fixed — macOS Full Disk Access is now a guided permission state
+
+- **`tcc-approve` now treats macOS privacy denials as a degraded permission state instead of a broken cron.** When launchd cannot open the user TCC database, the helper writes `runtime/state/full-disk-access-required.json`, marks `full_disk_access_status="later"` in schedule config, keeps approval markers unset, and exits successfully with a wrapper-visible message so health reports can prompt the user instead of showing an unexplained failure.
+- **Runtime power diagnostics now recognise the real TCC denial log.** `detect_full_disk_access_reasons()` reads `tcc-auto-approve.log` as well as cron stderr logs and classifies `authorization denied` / protected TCC database failures as macOS privacy denials.
+- **First-response wording checks are packaged as a tested helper.** `src/scripts/jargon_first_response.py` can scan visible replies for internal NEXO terms before future hook integration, with `tests/test_jargon_first_response.py` covering token matching and debt registration behaviour.
+- **Coverage:** `tests/test_tcc_approve.py` pins the permission-denied path and keeps non-privacy sqlite failures red, `tests/test_runtime_power.py` verifies the new TCC log detection, and `tests/test_jargon_first_response.py` covers the new wording helper. Targeted cron/runtime sweep passes (`59 passed`) and the full pre-release gate passes (`2517 passed, 2 skipped, 1 xfailed, 4 xpassed`).
+
 ## [7.17.6] - 2026-05-11
 
 ### Fixed — cron health diagnostics and catch-up observability

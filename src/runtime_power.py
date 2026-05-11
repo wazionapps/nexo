@@ -550,7 +550,12 @@ def _tail_has_permission_denial(log_file: Path) -> bool:
             size = fh.tell()
             fh.seek(max(size - 4096, 0))
             tail = fh.read().decode("utf-8", errors="ignore")
-        return "Operation not permitted" in tail
+        lowered = tail.lower()
+        return (
+            "operation not permitted" in lowered
+            or "authorization denied" in lowered
+            or "unable to open database" in lowered and "com.apple.tcc/tcc.db" in lowered
+        )
     except Exception:
         return False
 
@@ -568,10 +573,12 @@ def detect_full_disk_access_reasons(*, system: str | None = None) -> list[str]:
 
     logs_dir = paths.logs_dir()
     if logs_dir.is_dir():
-        for log_file in sorted(logs_dir.glob("*-stderr.log")):
+        log_files = list(logs_dir.glob("*-stderr.log"))
+        log_files.extend(logs_dir.glob("tcc-auto-approve.log"))
+        for log_file in sorted(log_files):
             if _tail_has_permission_denial(log_file):
                 reasons.append(
-                    f"Recent background job stderr hit 'Operation not permitted' ({log_file.name})"
+                    f"Recent background job hit a macOS privacy denial ({log_file.name})"
                 )
                 break
     return reasons

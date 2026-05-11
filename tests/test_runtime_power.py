@@ -290,6 +290,27 @@ def test_detect_full_disk_access_reasons_flags_protected_runtime(tmp_path, monke
     assert "protected macOS folder" in reasons[0]
 
 
+def test_detect_full_disk_access_reasons_reads_tcc_authorization_denied_log(tmp_path, monkeypatch):
+    import runtime_power
+
+    nexo_home = tmp_path / "nexo"
+    logs_dir = nexo_home / "runtime" / "logs"
+    logs_dir.mkdir(parents=True)
+    (logs_dir / "tcc-auto-approve.log").write_text(
+        'Error: unable to open database "/Users/tester/Library/Application Support/com.apple.TCC/TCC.db": authorization denied\n',
+        encoding="utf-8",
+    )
+
+    monkeypatch.setenv("NEXO_HOME", str(nexo_home))
+    monkeypatch.setattr(runtime_power, "NEXO_HOME", nexo_home)
+    monkeypatch.setattr(runtime_power.paths, "logs_dir", lambda: logs_dir)
+    monkeypatch.setattr(runtime_power.platform, "system", lambda: "Darwin")
+
+    reasons = runtime_power.detect_full_disk_access_reasons(system="Darwin")
+
+    assert reasons == ["Recent background job hit a macOS privacy denial (tcc-auto-approve.log)"]
+
+
 def test_ensure_full_disk_access_choice_prompts_and_marks_granted(tmp_path, monkeypatch):
     import runtime_power
 
