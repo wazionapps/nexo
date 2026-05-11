@@ -1,5 +1,14 @@
 # Changelog
 
+## [7.17.2] - 2026-05-11
+
+### Fixed — Desktop-bundled Brain hardening for release 0.32.57
+
+- **`email-monitor` now guards every `/tmp/nexo-*` temporary buffer before writing or editing it.** The core prompt now requires `nexo_guard_check` for the suffixed reply, quote, and thread files (`/tmp/nexo-reply-UID.txt`, `/tmp/nexo-quote-UID.txt`, `/tmp/nexo-thread-UID.txt`) before the first Write/Edit. This keeps the prompt aligned with the write-time safety model instead of treating temp files as an unguarded exception.
+- **`morning-agent` now closes interrupted or stale send claims deterministically.** The runner installs SIGTERM/SIGINT handlers, marks the active `morning_briefing_runs` row failed before exit, keeps the CLI timeout below the supervisor ceiling, and retries stale `in_progress` claims in-band with previous-run metadata. The recent sent-block helper is pinned as idempotent so duplicate status text does not accumulate across retries.
+- **Codex managed config migrates to the current hooks flag.** `_sync_codex_managed_config` now writes `[features].hooks = true` and removes the legacy `codex_hooks` key so freshly managed Codex installs match the current client config surface.
+- **Coverage**: targeted Brain checks pass for the prompt/automation/guard slice (**56/56**), Codex config sync (**29/29**), and runtime doctor contracts (**108/108**).
+
 ## [7.17.1] - 2026-05-10
 
 ### Fixed — morning-agent stopped failing with "invalid JSON output" on every cron tick

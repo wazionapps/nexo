@@ -473,7 +473,8 @@ def test_sync_codex_uses_codex_cli_when_available(tmp_path, monkeypatch):
     assert 'approval_policy = "never"' in config_text
     assert 'sandbox_mode = "danger-full-access"' in config_text
     assert "[features]" in config_text
-    assert "codex_hooks = true" in config_text
+    assert "hooks = true" in config_text
+    assert "codex_hooks" not in config_text
     assert "[mcp_servers.nexo]" in config_text
     assert 'NEXO_MCP_CLIENT = "codex"' in config_text
     hooks_path = home / ".codex" / "hooks.json"
@@ -533,7 +534,31 @@ def test_sync_codex_preserves_explicit_approval_and_sandbox(tmp_path):
     assert 'approval_policy = "on-request"' in config_text
     assert 'sandbox_mode = "workspace-write"' in config_text
     assert 'model = "gpt-5.4-mini"' in config_text
-    assert "codex_hooks = true" in config_text
+    assert "hooks = true" in config_text
+    assert "codex_hooks" not in config_text
+
+
+def test_sync_codex_managed_config_migrates_deprecated_codex_hooks_flag(tmp_path):
+    import client_sync
+
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        "[features]\n"
+        "codex_hooks = true\n",
+        encoding="utf-8",
+    )
+
+    result = client_sync._sync_codex_managed_config(
+        config_path,
+        bootstrap_prompt="",
+        runtime_profile={},
+        server_config={},
+    )
+
+    assert result["ok"] is True
+    config_text = config_path.read_text(encoding="utf-8")
+    assert "hooks = true" in config_text
+    assert "codex_hooks" not in config_text
 
 
 def test_sync_all_clients_treats_missing_codex_as_non_fatal(tmp_path, monkeypatch):

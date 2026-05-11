@@ -34,6 +34,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import signal
 import subprocess
 import sys
 import tempfile
@@ -67,11 +68,12 @@ LOG_FILE = LOG_DIR / "morning-agent.log"
 STATE_FILE = data_dir() / "morning-agent-state.json"
 LATEST_BRIEFING_FILE = operations_dir() / "morning-briefing-latest.md"
 CALLER = "morning_agent"
-CLI_TIMEOUT = 1800
+CLI_TIMEOUT = 1500
 MAX_DUE_ITEMS = 8
 MAX_ACTIVE_ITEMS = 8
 MAX_DIARY_ITEMS = 6
 MORNING_BRIEFING_STALE_HOURS = 12
+_ACTIVE_CLAIM: dict[str, str] = {}
 
 
 def log(message: str) -> None:
@@ -149,6 +151,27 @@ def _briefing_run_is_stale(row: dict) -> bool:
         return True
 
 
+def _mark_stale_morning_briefing_failed(conn, row: dict, *, now: str) -> None:
+    conn.execute(
+        """
+        UPDATE morning_briefing_runs
+        SET status = 'failed',
+            error = ?,
+            finished_at = COALESCE(finished_at, ?),
+            updated_at = ?
+        WHERE local_date = ? AND recipient = ? AND status = 'in_progress'
+        """,
+        (
+            "stale in_progress reconciled before retry: parent process likely interrupted before completion",
+            now,
+            now,
+            str(row.get("local_date") or ""),
+            str(row.get("recipient") or ""),
+        ),
+    )
+    conn.commit()
+
+
 def _claim_morning_briefing_send(local_date: str, recipient: str, *, force: bool = False) -> dict:
     clean_date = str(local_date or "").strip()
     clean_recipient = str(recipient or "").strip()
@@ -194,7 +217,10 @@ def _claim_morning_briefing_send(local_date: str, recipient: str, *, force: bool
         (clean_date, clean_recipient),
     ).fetchone())
     status = str(row.get("status") or "").strip().lower()
-    if status == "failed" or (status == "in_progress" and _briefing_run_is_stale(row)):
+    stale_retry = status == "in_progress" and _briefing_run_is_stale(row)
+    if stale_retry:
+        _mark_stale_morning_briefing_failed(conn, row, now=now)
+    if status == "failed" or stale_retry:
         conn.execute(
             """
             UPDATE morning_briefing_runs
@@ -210,7 +236,12 @@ def _claim_morning_briefing_send(local_date: str, recipient: str, *, force: bool
             (now, now, clean_date, clean_recipient),
         )
         conn.commit()
-        return {"ok": True, "acquired": True, "reason": "retry"}
+        return {
+            "ok": True,
+            "acquired": True,
+            "reason": "retry_stale" if stale_retry else "retry",
+            "previous_run": row,
+        }
     return {"ok": True, "acquired": False, "reason": status or "already claimed", "run": row}
 
 
@@ -273,6 +304,38 @@ def _mark_morning_briefing_failed(local_date: str, recipient: str, *, error: str
         (str(error or "")[:1000], now, now, str(local_date or ""), str(recipient or "")),
     )
     conn.commit()
+
+
+def _set_active_claim(local_date: str, recipient: str) -> None:
+    _ACTIVE_CLAIM.clear()
+    if local_date and recipient:
+        _ACTIVE_CLAIM.update({"local_date": str(local_date), "recipient": str(recipient)})
+
+
+def _clear_active_claim() -> None:
+    _ACTIVE_CLAIM.clear()
+
+
+def _handle_shutdown_signal(signum, _frame) -> None:
+    local_date = _ACTIVE_CLAIM.get("local_date", "")
+    recipient = _ACTIVE_CLAIM.get("recipient", "")
+    signal_name = getattr(signal.Signals(signum), "name", f"SIG{signum}")
+    if local_date and recipient:
+        try:
+            _mark_morning_briefing_failed(
+                local_date,
+                recipient,
+                error=f"interrupted before completion: {signal_name}",
+            )
+        except Exception as exc:
+            log(f"Failed to mark morning briefing interrupted by {signal_name}: {exc}")
+    log(f"Morning agent interrupted by {signal_name}.")
+    raise SystemExit(128 + int(signum))
+
+
+def _install_shutdown_signal_handlers() -> None:
+    signal.signal(signal.SIGTERM, _handle_shutdown_signal)
+    signal.signal(signal.SIGINT, _handle_shutdown_signal)
 
 
 def resolve_recipient(profile: dict | None = None, *, explicit_to: str = "") -> str:
@@ -575,6 +638,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    _install_shutdown_signal_handlers()
     contract = get_script_runtime_contract("morning-agent")
     if not args.dry_run and not contract.get("available", True):
         log(f"Runtime blocked: {contract.get('blocked_reason') or 'missing prerequisite'}")
@@ -597,8 +661,10 @@ def main(argv: list[str] | None = None) -> int:
         if not claim.get("acquired"):
             log(f"Morning briefing already handled today for {recipient}.")
             return 0
+        _set_active_claim(today, recipient)
     elif args.force and not args.dry_run:
         _claim_morning_briefing_send(today, recipient, force=True)
+        _set_active_claim(today, recipient)
 
     try:
         context = collect_context(profile)
@@ -617,6 +683,7 @@ def main(argv: list[str] | None = None) -> int:
         log(f"Sending morning briefing to {recipient}...")
         send_output = send_briefing(recipient=recipient, subject=subject, body=body)
         _mark_morning_briefing_sent(today, recipient, subject=subject, send_output=send_output)
+        _clear_active_claim()
         save_state({
             "last_sent_date": today,
             "last_sent_at": datetime.now().astimezone().isoformat(),
@@ -629,11 +696,13 @@ def main(argv: list[str] | None = None) -> int:
     except AutomationBackendUnavailableError as exc:
         if not args.dry_run and recipient:
             _mark_morning_briefing_failed(today, recipient, error=str(exc))
+            _clear_active_claim()
         log(f"Automation backend unavailable: {exc}")
         return 1
     except Exception as exc:
         if not args.dry_run and recipient:
             _mark_morning_briefing_failed(today, recipient, error=str(exc))
+            _clear_active_claim()
         log(f"Morning agent failed: {exc}")
         return 1
 

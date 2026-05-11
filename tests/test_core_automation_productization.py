@@ -602,6 +602,88 @@ def test_morning_agent_db_lock_dedupes_same_day_recipient(tmp_path, monkeypatch)
     assert forced["acquired"] is True
 
 
+def test_morning_agent_reconciles_stale_in_progress_before_retry(tmp_path, monkeypatch):
+    home = tmp_path / "nexo-home"
+    home.mkdir(parents=True)
+    monkeypatch.setenv("NEXO_HOME", str(home))
+    module = _load_script_module("nexo_morning_agent_stale_retry_test", "nexo-morning-agent.py")
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    monkeypatch.setattr(module, "_morning_db_connection", lambda: conn)
+    module._ensure_morning_briefing_runs_table(conn)
+    conn.execute(
+        """
+        INSERT INTO morning_briefing_runs
+            (local_date, recipient, status, started_at, updated_at)
+        VALUES (?, ?, 'in_progress', '2026-05-07T01:00:00', '2026-05-07T01:00:00')
+        """,
+        ("2026-05-07", "owner@example.test"),
+    )
+    conn.commit()
+    monkeypatch.setattr(module, "_briefing_run_is_stale", lambda _row: True)
+
+    claim = module._claim_morning_briefing_send("2026-05-07", "owner@example.test")
+    row = conn.execute(
+        "SELECT status, started_at, finished_at, error FROM morning_briefing_runs WHERE local_date = ? AND recipient = ?",
+        ("2026-05-07", "owner@example.test"),
+    ).fetchone()
+
+    assert claim["acquired"] is True
+    assert claim["reason"] == "retry_stale"
+    assert claim["previous_run"]["status"] == "in_progress"
+    assert row["status"] == "in_progress"
+    assert row["finished_at"] is None
+    assert row["error"] == ""
+
+
+def test_morning_agent_marks_active_claim_failed_on_sigterm(tmp_path, monkeypatch):
+    home = tmp_path / "nexo-home"
+    home.mkdir(parents=True)
+    monkeypatch.setenv("NEXO_HOME", str(home))
+    module = _load_script_module("nexo_morning_agent_signal_test", "nexo-morning-agent.py")
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    monkeypatch.setattr(module, "_morning_db_connection", lambda: conn)
+    module._claim_morning_briefing_send("2026-05-07", "owner@example.test")
+    module._set_active_claim("2026-05-07", "owner@example.test")
+
+    try:
+        module._handle_shutdown_signal(15, None)
+    except SystemExit as exc:
+        assert exc.code == 143
+    else:
+        raise AssertionError("SIGTERM handler must exit")
+
+    row = conn.execute(
+        "SELECT status, finished_at, error FROM morning_briefing_runs WHERE local_date = ? AND recipient = ?",
+        ("2026-05-07", "owner@example.test"),
+    ).fetchone()
+    assert row["status"] == "failed"
+    assert row["finished_at"]
+    assert "SIGTERM" in row["error"]
+
+
+def test_morning_agent_recent_sent_email_block_is_idempotent(tmp_path, monkeypatch):
+    home = tmp_path / "nexo-home"
+    home.mkdir(parents=True)
+    monkeypatch.setenv("NEXO_HOME", str(home))
+    module = _load_script_module("nexo_morning_agent_recent_sent_block_test", "nexo-morning-agent.py")
+
+    monkeypatch.setattr(
+        module,
+        "format_recent_sent_email_block",
+        lambda **_kwargs: "== EMAILS ENVIADOS ULTIMAS 24H ==\n- Test",
+    )
+
+    first = module.append_recent_sent_email_block("Body")
+    second = module.append_recent_sent_email_block(first)
+
+    assert first.count("EMAILS ENVIADOS ULTIMAS 24H") == 1
+    assert second == first
+
+
 def test_morning_agent_migration_is_registered():
     import db._schema as db_schema
 

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Blog — NEXO Brain</title>
-    <meta name="description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.17.1 morning-agent JSON-shape fix.">
+    <meta name="description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.17.2 release hardening patch.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/blog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/blog/">
     <meta property="og:title" content="Blog — NEXO Brain">
-    <meta property="og:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.17.1 morning-agent JSON-shape fix.">
+    <meta property="og:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.17.2 release hardening patch.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Blog — NEXO Brain">
-    <meta name="twitter:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.17.1 morning-agent JSON-shape fix.">
+    <meta name="twitter:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.17.2 release hardening patch.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Blog — NEXO Brain",
-        "description": "Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.17.1 morning-agent JSON-shape fix.",
+        "description": "Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.17.2 release hardening patch.",
         "url": "https://nexo-brain.com/blog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -134,7 +134,7 @@
                     <span class="page-chip">Shared brain product notes</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="/blog/nexo-7-17-1/" class="btn btn-primary">Read latest release</a>
+                    <a href="/blog/nexo-7-17-2/" class="btn btn-primary">Read latest release</a>
                     <a href="/changelog/" class="btn btn-secondary">Latest release notes</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -143,25 +143,25 @@
             <div class="blog-featured-card">
                 <div class="section-label">Latest release</div>
                 <div class="blog-featured-meta">
-                    <span class="compare-chip">May 10, 2026</span>
-                    <span class="compare-chip">Claude CLI 2.1+</span>
+                    <span class="compare-chip">May 11, 2026</span>
+                    <span class="compare-chip">Email monitor</span>
                     <span class="compare-chip">Morning agent</span>
                     <span class="compare-chip">Patch</span>
                 </div>
-                <h2>NEXO 7.17.1: handle Claude CLI 2.1+ direct-JSON response shape</h2>
-                <p>Patch release over v7.17.0. Claude CLI 2.1+ with bare_mode + output_format=json drops the classic <code>{"result": ...}</code> wrapper and returns the agent's JSON answer directly. _extract_claude_telemetry now handles both shapes. Unblocks the daily morning-agent briefing that had been failing silently with "Morning agent returned invalid JSON output" every cron tick.</p>
+                <h2>NEXO 7.17.2: temp-buffer guards, stale briefing recovery, Codex hooks config</h2>
+                <p>Patch release over v7.17.1. Email-monitor now guards its suffixed <code>/tmp/nexo-*</code> draft buffers before writes, morning-agent marks interrupted or stale briefing claims failed before retrying, and Codex managed config migrates to <code>[features].hooks</code>.</p>
                 <div class="hero-actions" style="justify-content:flex-start;margin-bottom:18px;">
-                    <a href="/blog/nexo-7-17-1/" class="btn btn-primary">Open article</a>
-                    <a href="/changelog/#v7171" class="btn btn-secondary">Open changelog</a>
+                    <a href="/blog/nexo-7-17-2/" class="btn btn-primary">Open article</a>
+                    <a href="/changelog/#v7172" class="btn btn-secondary">Open changelog</a>
                 </div>
                 <div class="blog-mini-stack">
                     <div class="blog-mini-card">
                         <strong>Companion view</strong>
-                        <span><a href="/changelog/#v7171">See the full v7.17.1 changelog</a></span>
+                        <span><a href="/changelog/#v7172">See the full v7.17.2 changelog</a></span>
                     </div>
                     <div class="blog-mini-card">
                         <strong>Previous release</strong>
-                        <span><a href="/blog/nexo-7-17-0/">NEXO 7.17.0: pre-emptive runner guard becomes advisory only</a>.</span>
+                        <span><a href="/blog/nexo-7-17-1/">NEXO 7.17.1: handle Claude CLI 2.1+ direct-JSON response shape</a>.</span>
                     </div>
                 </div>
             </div>
@@ -192,6 +192,15 @@
 <section class="section-flush-top">
     <div class="container">
             <div class="blog-grid">
+
+            <div class="blog-card">
+                <div class="blog-card-date">May 11, 2026</div>
+                <h2><a href="/blog/nexo-7-17-2/">NEXO 7.17.2: temp-buffer guards, stale briefing recovery, Codex hooks config</a></h2>
+                <p>Patch release. Email-monitor temp drafts are guarded before writes, morning-agent closes interrupted/stale claims deterministically, and Codex managed config writes the current hooks flag.</p>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/blog/nexo-7-17-2/" class="btn btn-secondary">Read more</a>
+                </div>
+            </div>
 
             <div class="blog-card">
                 <div class="blog-card-date">May 10, 2026</div>

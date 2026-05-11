@@ -154,6 +154,11 @@ def test_render_core_prompt_replaces_named_tokens():
     assert "This is your mailbox (agent@example.com)." in prompt
     assert "ALWAYS use the operator's preferred language: en." in prompt
     assert "/tmp/project-atlas.json" in prompt
+    assert "== TEMP BUFFER WRITE SAFETY ==" in prompt
+    assert "nexo_guard_check(files=\"/tmp/nexo-reply-UID.txt,/tmp/nexo-quote-UID.txt,/tmp/nexo-thread-UID.txt\", area=\"email-monitor\")" in prompt
+    assert "/tmp/nexo-reply-UID.txt" in prompt
+    assert "/tmp/nexo-quote-UID.txt" in prompt
+    assert "/tmp/nexo-thread-UID.txt" in prompt
 
 
 def test_render_core_prompt_supports_catchup_and_immune_templates():

@@ -133,13 +133,21 @@ If it is a duplicate: mark `skipped`, keep it SEEN in IMAP, and continue.
 If the operator is missing from every field, add [[send_reply_target]] to CC.
 Operator aliases to recognise and prioritise: [[operator_aliases_label]]
 
+== TEMP BUFFER WRITE SAFETY ==
+Before the first Write/Edit to any `/tmp/nexo-*.txt` reply buffer for a thread, call:
+`nexo_guard_check(files="/tmp/nexo-reply-UID.txt,/tmp/nexo-quote-UID.txt,/tmp/nexo-thread-UID.txt", area="email-monitor")`
+
+Replace `UID` with the exact UID or stable suffix you will use for that thread. Use that same suffix consistently for the reply, quote, and full-thread files. If no IMAP UID is available, derive one stable safe suffix from the Message-ID or thread ID; do not use unsuffixed `/tmp/nexo-reply.txt`, `/tmp/nexo-quote.txt`, or `/tmp/nexo-thread.txt` for a new write.
+
+This guard call must happen before creating or editing the buffer files. Do not use an allowlist and do not skip this for temporary files.
+
 == KEEP THE FULL RELATED HISTORY ==
 When replying, the email MUST include the COMPLETE related history below,
 not just the immediate thread.
 Mandatory steps before sending:
 1. Reuse the MERGED TIMELINE from `nexo_email_related(uid)` as the source of truth.
 2. Sort it chronologically (oldest first).
-3. Concatenate it into `/tmp/nexo-thread-N.txt` with this format for each message:
+3. Concatenate it into `/tmp/nexo-thread-UID.txt` with this format for each message:
    -- From: Name <email>
    -- Date: YYYY-MM-DD HH:MM
    -- Subject: Re: ...
@@ -147,14 +155,14 @@ Mandatory steps before sending:
    [message body]
 
    (separator between messages: one blank line)
-4. Save the immediate message body (the one you are replying to) into `/tmp/nexo-quote-N.txt`.
+4. Save the immediate message body (the one you are replying to) into `/tmp/nexo-quote-UID.txt`.
 5. If there are relevant files in RELATED FILES, reuse those local paths directly.
    Do NOT lose older attachments just because they were included earlier in the same context.
 6. Use BOTH: `--quote-file` for the immediate quote + `--thread-file` for the full related history.
    The bottom of the email must preserve message -> reply -> message -> reply without dropping previous answers.
 
 == SEND VIA `nexo-send-reply.py` ==
-[[python_executable]] [[send_reply_script]] --to X --cc Y --subject 'Re: Z' --in-reply-to '<msgid>' --references '<refs>' --body-file /tmp/nexo-reply.txt --quote-file /tmp/nexo-quote.txt --quote-from 'Name <email>' --quote-date 'date' --thread-file /tmp/nexo-thread.txt [--attach /path/to/file]
+[[python_executable]] [[send_reply_script]] --to X --cc Y --subject 'Re: Z' --in-reply-to '<msgid>' --references '<refs>' --body-file /tmp/nexo-reply-UID.txt --quote-file /tmp/nexo-quote-UID.txt --quote-from 'Name <email>' --quote-date 'date' --thread-file /tmp/nexo-thread-UID.txt [--attach /path/to/file]
 
 == ANTI-LOOP PROTECTION ==
 Do not reply to auto-replies, [[agent_email_label]] itself, `noreply@`,

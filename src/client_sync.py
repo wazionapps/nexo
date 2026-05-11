@@ -639,9 +639,10 @@ def _sync_codex_managed_config(
 
     features = payload.setdefault("features", {})
     if isinstance(features, dict):
-        features["codex_hooks"] = True
+        features["hooks"] = True
+        features.pop("codex_hooks", None)
     else:
-        payload["features"] = {"codex_hooks": True}
+        payload["features"] = {"hooks": True}
 
     payload["initial_messages"] = [
         {
