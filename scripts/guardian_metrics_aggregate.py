@@ -93,7 +93,7 @@ def aggregate(home: Path | None = None) -> dict:
         bucket = by_rule.setdefault(rid, {"triggered": 0, "injected": 0, "fp": 0})
         if event in ("trigger", "fire"):
             bucket["triggered"] += 1
-        elif event in ("enqueue", "inject"):
+        elif event in ("enqueue", "inject", "injection"):
             bucket["injected"] += 1
             bucket["triggered"] += 1
             if rid in CORE_RULE_IDS:

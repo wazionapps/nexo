@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.17.4: automation discipline contracts and Guardian observability</title>
+<meta name="description" content="NEXO Brain v7.17.4 hardens automation runner discipline contracts, Guardian metrics, and runtime doctor caller coverage.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-17-4/">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.17.4: automation discipline contracts and Guardian observability","datePublished":"2026-05-11","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head><body><main><article style="max-width:760px;margin:80px auto;padding:0 24px;line-height:1.75;">
+<h1>NEXO 7.17.4 &mdash; automation discipline contracts and Guardian observability</h1>
+<p><em>Published 2026-05-11. Corrective patch release over v7.17.3.</em></p>
+
+<h2>Why this patch exists</h2>
+<p>Some automation paths needed opposite behavior. Real background agents such as email monitor, followup runner, sleep, evolution and immune must keep full NEXO discipline: task tracking, evidence, closure, diary, learnings and followups when they apply. Strict technical children such as Deep Sleep extraction, synthesis and morning JSON generation must stay clean so their JSON does not get polluted by global protocol prompts.</p>
+
+<h2>What changed</h2>
+<p>The runner now classifies automation callers into full NEXO agents, strict JSON children and isolated children. Full agents keep the enforcement wrapper. Strict children run under their local output contract while the parent job remains accountable for the work.</p>
+<p>Automation telemetry now records caller, session type and automation contract consistently across Claude and Codex. Guardian metrics also count the real <code>injection</code> event, and runtime doctor now warns when core cron activity has no matching caller-attributed automation row.</p>
+
+<h2>Validation</h2>
+<pre><code>PYTHONPATH=src pytest -q tests/test_agent_runner.py tests/test_guardian_metrics_aggregate.py tests/test_doctor.py tests/test_runner_guard_path_extraction.py tests/test_agent_runner_bare_mode.py tests/test_operator_language.py tests/test_protocol_strictness_tty.py
+# 175 passed
+
+PYTHONPATH=src python3 src/scripts/nexo-morning-agent.py --dry-run
+# generated valid subject/body JSON and did not send email
+
+python3 scripts/guardian_metrics_aggregate.py
+# capture_rate=1.0 in live guardian-metrics.ndjson</code></pre>
+
+<p><a href="/changelog/#v7174">Full changelog entry &rarr;</a> &middot; <a href="/blog/nexo-7-17-3/">Previous v7.17.3 release</a></p>
+</article></main></body></html>

@@ -55,6 +55,15 @@ OPTIONALS_FILE = paths.config_dir() / "optionals.json"
 SCHEDULE_FILE = paths.config_dir() / "schedule.json"
 PACKAGE_JSON = NEXO_CODE / "package.json"
 CHANGELOG_FILE = NEXO_CODE / "CHANGELOG.md"
+CORE_AUTOMATION_CALLERS_BY_CRON = {
+    "catchup": ("catchup/morning",),
+    "deep-sleep": ("deep-sleep/extract", "deep-sleep/synthesize"),
+    "email-monitor": ("email_monitor",),
+    "evolution": ("evolution/run",),
+    "followup-runner": ("followup_runner",),
+    "morning-agent": ("morning_agent",),
+    "sleep": ("sleep/nightly",),
+}
 
 
 def _evolution_objective_payload() -> dict:
@@ -3676,6 +3685,154 @@ def check_automation_telemetry(days: int = 7) -> DoctorCheck:
     )
 
 
+def check_automation_caller_coverage(days: int = 7) -> DoctorCheck:
+    """Compare core cron activity with caller-attributed automation rows.
+
+    This is a support signal, not proof of failure: a cron can legitimately
+    have no model call when there is no work. It still catches the regression
+    class where a runner branch records rows without caller/session context.
+    """
+    db_path = paths.db_path()
+    if not db_path.is_file():
+        return DoctorCheck(
+            id="runtime.automation_caller_coverage",
+            tier="runtime",
+            status="degraded",
+            severity="warn",
+            summary="Automation caller coverage DB is missing",
+            evidence=[str(db_path)],
+            repair_plan=["Run NEXO once so migrations create the shared runtime DB"],
+            escalation_prompt="Support cannot compare core cron activity with automation caller traces.",
+        )
+
+    expected_crons = tuple(CORE_AUTOMATION_CALLERS_BY_CRON)
+    placeholders = ",".join("?" for _ in expected_crons)
+
+    try:
+        conn = sqlite3.connect(str(db_path), timeout=2)
+        conn.row_factory = sqlite3.Row
+        try:
+            tables = {
+                row["name"]
+                for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+            }
+            missing_tables = [name for name in ("cron_runs", "automation_runs") if name not in tables]
+            if missing_tables:
+                return DoctorCheck(
+                    id="runtime.automation_caller_coverage",
+                    tier="runtime",
+                    status="degraded",
+                    severity="warn",
+                    summary="Automation caller coverage schema is incomplete",
+                    evidence=[f"missing_tables={','.join(missing_tables)}"],
+                    repair_plan=["Run NEXO migrations before trusting automation caller coverage"],
+                    escalation_prompt="Core automation activity cannot be matched to caller-attributed model runs.",
+                )
+            cron_rows = conn.execute(
+                f"""
+                SELECT cron_id, COUNT(*) AS runs, MAX(started_at) AS last_started
+                FROM cron_runs
+                WHERE started_at >= datetime('now', ?)
+                  AND cron_id IN ({placeholders})
+                GROUP BY cron_id
+                ORDER BY cron_id
+                """,
+                (f"-{days} days", *expected_crons),
+            ).fetchall()
+            caller_rows = conn.execute(
+                """
+                SELECT caller, COUNT(*) AS runs,
+                       MAX(COALESCE(started_at, created_at)) AS last_seen
+                FROM automation_runs
+                WHERE COALESCE(started_at, created_at) >= datetime('now', ?)
+                GROUP BY caller
+                """,
+                (f"-{days} days",),
+            ).fetchall()
+        finally:
+            conn.close()
+    except Exception as exc:
+        return DoctorCheck(
+            id="runtime.automation_caller_coverage",
+            tier="runtime",
+            status="degraded",
+            severity="warn",
+            summary="Automation caller coverage is unreadable",
+            evidence=[str(exc)],
+            repair_plan=["Inspect runtime DB cron_runs and automation_runs tables"],
+            escalation_prompt="Support cannot verify whether core automations are leaving caller traces.",
+        )
+
+    caller_counts = {str(row["caller"] or ""): int(row["runs"] or 0) for row in caller_rows}
+    caller_last_seen = {str(row["caller"] or ""): str(row["last_seen"] or "") for row in caller_rows}
+    cron_rows = list(cron_rows)
+
+    evidence = [f"window={days}d", f"core_crons_seen={len(cron_rows)}"]
+    missing_matches: list[str] = []
+    for row in cron_rows:
+        cron_id = str(row["cron_id"] or "")
+        expected_callers = CORE_AUTOMATION_CALLERS_BY_CRON.get(cron_id, ())
+        matched = [caller for caller in expected_callers if caller_counts.get(caller, 0) > 0]
+        if matched:
+            evidence.append(
+                f"{cron_id}: cron_runs={int(row['runs'] or 0)} caller_runs="
+                + ",".join(f"{caller}:{caller_counts[caller]}" for caller in matched)
+            )
+        else:
+            expected = "|".join(expected_callers)
+            missing_matches.append(cron_id)
+            evidence.append(
+                f"{cron_id}: cron_runs={int(row['runs'] or 0)} no_matching_caller={expected} "
+                f"last_started={row['last_started']}"
+            )
+
+    empty_caller_runs = caller_counts.get("", 0)
+    if empty_caller_runs:
+        evidence.append(f"empty_caller_runs={empty_caller_runs}")
+    for caller in sorted(caller_counts):
+        if caller:
+            evidence.append(f"caller_seen={caller}:{caller_counts[caller]} last={caller_last_seen.get(caller, '')}")
+
+    if not cron_rows:
+        return DoctorCheck(
+            id="runtime.automation_caller_coverage",
+            tier="runtime",
+            status="healthy",
+            severity="info",
+            summary="No recent core automation cron activity to match",
+            evidence=evidence,
+            repair_plan=[],
+            escalation_prompt="",
+        )
+
+    status = "healthy"
+    severity = "info"
+    repair_plan: list[str] = []
+    if empty_caller_runs or missing_matches:
+        status = "degraded"
+        severity = "warn"
+        repair_plan.append(
+            "If the cron had work, inspect run_automation_prompt caller attribution; if it was a no-op tick, no user action is needed"
+        )
+
+    return DoctorCheck(
+        id="runtime.automation_caller_coverage",
+        tier="runtime",
+        status=status,
+        severity=severity,
+        summary=(
+            "Core automation caller coverage looks healthy"
+            if status == "healthy"
+            else "Core automation caller coverage needs review"
+        ),
+        evidence=evidence,
+        repair_plan=repair_plan,
+        escalation_prompt=(
+            "A core automation cron ran without a matching caller-attributed automation row in the selected window."
+        ) if status != "healthy" else "",
+    )
+
+
 def run_runtime_checks(fix: bool = False) -> list[DoctorCheck]:
     """Run all runtime-tier checks. Read-only by default."""
     return [
@@ -3695,6 +3852,7 @@ def run_runtime_checks(fix: bool = False) -> list[DoctorCheck]:
         safe_check(check_client_assumption_regressions),
         safe_check(check_protocol_compliance),
         safe_check(check_automation_telemetry),
+        safe_check(check_automation_caller_coverage),
         safe_check(check_state_watchers),
         safe_check(check_release_artifact_sync),
         safe_check(check_release_trace_hygiene),

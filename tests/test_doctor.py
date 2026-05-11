@@ -2831,6 +2831,60 @@ class TestRuntimeChecks:
         assert any("scored_successful_runs=1" in item for item in check.evidence)
         assert any("headless_unmetered_runs_excluded=2" in item for item in check.evidence)
 
+    def test_automation_caller_coverage_warns_on_core_cron_without_matching_caller(self, nexo_home):
+        db_path = nexo_home / "data" / "nexo.db"
+        conn = sqlite3.connect(str(db_path))
+        conn.execute(
+            """CREATE TABLE automation_runs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                caller TEXT DEFAULT '',
+                session_type TEXT DEFAULT 'headless',
+                started_at TEXT DEFAULT (datetime('now')),
+                created_at TEXT DEFAULT (datetime('now'))
+            )"""
+        )
+        conn.execute(
+            "INSERT INTO cron_runs (cron_id, started_at, ended_at, exit_code) "
+            "VALUES ('email-monitor', datetime('now'), datetime('now'), 0)"
+        )
+        conn.commit()
+        conn.close()
+
+        from doctor.providers.runtime import check_automation_caller_coverage
+
+        check = check_automation_caller_coverage()
+        assert check.status == "degraded"
+        assert any("email-monitor:" in item and "no_matching_caller=email_monitor" in item for item in check.evidence)
+
+    def test_automation_caller_coverage_accepts_matching_caller(self, nexo_home):
+        db_path = nexo_home / "data" / "nexo.db"
+        conn = sqlite3.connect(str(db_path))
+        conn.execute(
+            """CREATE TABLE automation_runs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                caller TEXT DEFAULT '',
+                session_type TEXT DEFAULT 'headless',
+                started_at TEXT DEFAULT (datetime('now')),
+                created_at TEXT DEFAULT (datetime('now'))
+            )"""
+        )
+        conn.execute(
+            "INSERT INTO cron_runs (cron_id, started_at, ended_at, exit_code) "
+            "VALUES ('email-monitor', datetime('now'), datetime('now'), 0)"
+        )
+        conn.execute(
+            "INSERT INTO automation_runs (caller, session_type, started_at, created_at) "
+            "VALUES ('email_monitor', 'headless', datetime('now'), datetime('now'))"
+        )
+        conn.commit()
+        conn.close()
+
+        from doctor.providers.runtime import check_automation_caller_coverage
+
+        check = check_automation_caller_coverage()
+        assert check.status == "healthy"
+        assert any("email-monitor: cron_runs=1 caller_runs=email_monitor:1" in item for item in check.evidence)
+
 
 class TestDeepChecks:
     def test_schema_version(self, nexo_home):

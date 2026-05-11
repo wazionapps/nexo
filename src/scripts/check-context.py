@@ -190,7 +190,7 @@ def smart_check(action_description: str, context: str = "") -> dict:
             timeout=300,
             output_format="text",
             append_system_prompt=render_core_prompt("json-object-only"),
-            allowed_tools="Read,Write,Edit,Glob,Grep,Bash,mcp__nexo__*",
+            allowed_tools="Read,Glob,Grep",
         )
         if result.returncode == 0:
             parsed = _extract_json(result.stdout)

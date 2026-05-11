@@ -333,6 +333,184 @@ def test_run_automation_prompt_uses_codex_exec_output_file(monkeypatch, tmp_path
     assert captured["cmd"][-1] == prompt
 
 
+def test_strict_child_claude_skips_global_discipline_prompt_and_wrapper(monkeypatch, tmp_path):
+    import agent_runner
+
+    captured = {}
+    recorded = {}
+    monkeypatch.setattr(agent_runner, "_resolve_claude_cli", lambda: "/tmp/fake-claude")
+    monkeypatch.setattr(agent_runner, "_build_enforcement_system_prompt", lambda: "MUST CALL nexo_task_open")
+    monkeypatch.setattr(agent_runner, "_record_automation_run", lambda **kwargs: recorded.update(kwargs) or (True, ""))
+    monkeypatch.setattr(agent_runner, "load_client_preferences", lambda: {
+        "interactive_clients": {"claude_code": True, "codex": False, "claude_desktop": False},
+        "default_terminal_client": "claude_code",
+        "automation_enabled": True,
+        "automation_backend": "claude_code",
+        "client_runtime_profiles": {
+            "claude_code": {"model": "claude-opus-4-7[1m]", "reasoning_effort": "max"},
+            "codex": {"model": "gpt-5.4", "reasoning_effort": "xhigh"},
+        },
+    })
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = cmd
+        return subprocess.CompletedProcess(cmd, 0, _claude_json_result('{"subject":"S","body":"B"}'), "")
+
+    monkeypatch.setattr(agent_runner.subprocess, "run", fake_run)
+    import enforcement_engine
+    monkeypatch.setattr(
+        enforcement_engine,
+        "run_with_enforcement",
+        lambda *args, **kwargs: pytest.fail("strict child calls must not use enforcement wrapper"),
+    )
+
+    result = agent_runner.run_automation_prompt(
+        "Return JSON only",
+        caller="morning_agent",
+        cwd=tmp_path,
+        output_format="json",
+        append_system_prompt="JSON ONLY",
+        allowed_tools="Read,Grep",
+        bare_mode=False,
+    )
+
+    assert result.returncode == 0
+    assert "--append-system-prompt" in captured["cmd"]
+    append_value = captured["cmd"][captured["cmd"].index("--append-system-prompt") + 1]
+    assert append_value == "JSON ONLY"
+    assert "MUST CALL nexo_task_open" not in append_value
+    assert recorded["caller"] == "morning_agent"
+
+
+def test_full_agent_claude_keeps_global_discipline_prompt_and_wrapper(monkeypatch, tmp_path):
+    import agent_runner
+
+    captured = {}
+    monkeypatch.setattr(agent_runner, "_resolve_claude_cli", lambda: "/tmp/fake-claude")
+    monkeypatch.setattr(agent_runner, "_build_enforcement_system_prompt", lambda: "MUST CALL nexo_task_open")
+    monkeypatch.setattr(agent_runner, "_record_automation_run", lambda **kwargs: (True, ""))
+    monkeypatch.setattr(agent_runner, "load_client_preferences", lambda: {
+        "interactive_clients": {"claude_code": True, "codex": False, "claude_desktop": False},
+        "default_terminal_client": "claude_code",
+        "automation_enabled": True,
+        "automation_backend": "claude_code",
+        "client_runtime_profiles": {
+            "claude_code": {"model": "claude-opus-4-7[1m]", "reasoning_effort": "max"},
+            "codex": {"model": "gpt-5.4", "reasoning_effort": "xhigh"},
+        },
+    })
+
+    def fake_enforced(cmd, **kwargs):
+        captured["cmd"] = cmd
+        captured["prompt"] = kwargs.get("prompt")
+        return subprocess.CompletedProcess(cmd, 0, _claude_json_result("ok"), "")
+
+    import enforcement_engine
+    monkeypatch.setattr(enforcement_engine, "run_with_enforcement", fake_enforced)
+
+    result = agent_runner.run_automation_prompt(
+        "Process inbox",
+        caller="email_monitor",
+        cwd=tmp_path,
+        output_format="text",
+        allowed_tools="Read,Write,Edit,Glob,Grep,Bash,mcp__nexo__*",
+    )
+
+    assert result.returncode == 0
+    assert "--append-system-prompt" in captured["cmd"]
+    append_value = captured["cmd"][captured["cmd"].index("--append-system-prompt") + 1]
+    assert "MUST CALL nexo_task_open" in append_value
+    assert captured["prompt"] and "Process inbox" in captured["prompt"]
+
+
+def test_strict_child_codex_skips_protocol_contract(monkeypatch, tmp_path):
+    import agent_runner
+
+    captured = {}
+    monkeypatch.setattr(agent_runner, "_resolve_codex_cli", lambda: "/tmp/fake-codex")
+    monkeypatch.setattr(agent_runner, "_load_client_bootstrap_prompt", lambda client: "You are NEXO.")
+    monkeypatch.setattr(agent_runner, "_codex_managed_initial_messages_enabled", lambda: False)
+    monkeypatch.setattr(agent_runner, "_build_enforcement_system_prompt", lambda: "MUST CALL nexo_task_open")
+    monkeypatch.setattr(agent_runner, "_record_automation_run", lambda **kwargs: (True, ""))
+    monkeypatch.setattr(agent_runner, "load_client_preferences", lambda: {
+        "interactive_clients": {"claude_code": True, "codex": True, "claude_desktop": False},
+        "default_terminal_client": "codex",
+        "automation_enabled": True,
+        "automation_backend": "codex",
+        "client_runtime_profiles": {
+            "claude_code": {"model": "claude-opus-4-7[1m]", "reasoning_effort": "max"},
+            "codex": {"model": "gpt-5.4", "reasoning_effort": "xhigh"},
+        },
+    })
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = cmd
+        out_idx = cmd.index("-o") + 1
+        with open(cmd[out_idx], "w", encoding="utf-8") as fh:
+            fh.write('{"subject":"S","body":"B"}')
+        return subprocess.CompletedProcess(cmd, 0, _codex_json_usage(), "")
+
+    monkeypatch.setattr(agent_runner.subprocess, "run", fake_run)
+
+    result = agent_runner.run_automation_prompt(
+        "Return JSON only",
+        caller="morning_agent",
+        cwd=tmp_path,
+        output_format="json",
+        append_system_prompt="JSON ONLY",
+        allowed_tools="Read,Grep",
+        bare_mode=False,
+    )
+
+    assert result.returncode == 0
+    prompt = captured["cmd"][-1]
+    assert "Return JSON only" in prompt
+    assert "SYSTEM INSTRUCTIONS:\nJSON ONLY" in prompt
+    assert "NEXO PROTOCOL (MANDATORY)" not in prompt
+    assert "nexo_task_open" not in prompt
+
+
+def test_codex_backend_records_caller_session_and_contract(monkeypatch, tmp_path):
+    import agent_runner
+
+    recorded = {}
+    monkeypatch.setattr(agent_runner, "_resolve_codex_cli", lambda: "/tmp/fake-codex")
+    monkeypatch.setattr(agent_runner, "_load_client_bootstrap_prompt", lambda client: "You are NEXO.")
+    monkeypatch.setattr(agent_runner, "_codex_managed_initial_messages_enabled", lambda: False)
+    monkeypatch.setattr(agent_runner, "_record_automation_run", lambda **kwargs: recorded.update(kwargs) or (True, ""))
+    monkeypatch.setattr(agent_runner, "load_client_preferences", lambda: {
+        "interactive_clients": {"claude_code": True, "codex": True, "claude_desktop": False},
+        "default_terminal_client": "codex",
+        "automation_enabled": True,
+        "automation_backend": "codex",
+        "client_runtime_profiles": {
+            "claude_code": {"model": "claude-opus-4-7[1m]", "reasoning_effort": "max"},
+            "codex": {"model": "gpt-5.4", "reasoning_effort": "xhigh"},
+        },
+    })
+
+    def fake_run(cmd, **kwargs):
+        out_idx = cmd.index("-o") + 1
+        with open(cmd[out_idx], "w", encoding="utf-8") as fh:
+            fh.write("OK")
+        return subprocess.CompletedProcess(cmd, 0, _codex_json_usage(), "")
+
+    monkeypatch.setattr(agent_runner.subprocess, "run", fake_run)
+
+    agent_runner.run_automation_prompt(
+        "Process followups",
+        caller="followup_runner",
+        cwd=tmp_path,
+        output_format="text",
+        allowed_tools="Read,Write,Edit,Glob,Grep,Bash,mcp__*",
+    )
+
+    assert recorded["caller"] == "followup_runner"
+    assert recorded["session_type"] == "headless"
+    assert recorded["resonance_tier"] == "alto"
+    assert recorded["telemetry"]["automation_contract"] == "full_nexo_agent"
+
+
 def test_run_automation_prompt_marks_public_contribution_env(monkeypatch, tmp_path):
     import agent_runner
 

@@ -273,6 +273,7 @@ def _record_automation_end(
         {
             "warnings": (telemetry or {}).get("warnings") or [],
             "raw": (telemetry or {}).get("raw") or {},
+            "automation_contract": (telemetry or {}).get("automation_contract") or "",
         },
         ensure_ascii=False,
     )
@@ -922,10 +923,11 @@ def _build_codex_prompt(
     output_format: str = "",
     append_system_prompt: str = "",
     allowed_tools: str = "",
+    include_protocol_contract: bool = True,
 ) -> str:
-    protocol_contract = render_core_prompt("codex-protocol-contract")
     instructions: list[str] = []
-    instructions.append(protocol_contract)
+    if include_protocol_contract:
+        instructions.append(render_core_prompt("codex-protocol-contract"))
     if append_system_prompt:
         instructions.append(f"SYSTEM INSTRUCTIONS:\n{append_system_prompt}")
     if output_format and output_format.lower() == "text":
@@ -1047,11 +1049,53 @@ BARE_MODE_SAFE_CALLERS: frozenset[str] = frozenset({
     "deep-sleep/synthesize",
 })
 
+# Execution contracts keep background agents disciplined without polluting
+# machine-only child calls that must return strict JSON.
+AUTOMATION_CONTRACT_FULL_NEXO_AGENT = "full_nexo_agent"
+AUTOMATION_CONTRACT_STRICT_CHILD = "strict_child_json"
+AUTOMATION_CONTRACT_PUBLIC_CHILD = "public_isolated_child"
+AUTOMATION_CONTRACT_DEFAULT = AUTOMATION_CONTRACT_FULL_NEXO_AGENT
+
+FULL_NEXO_AGENT_CALLERS: frozenset[str] = frozenset({
+    "catchup/morning",
+    "daily_self_audit",
+    "email_monitor",
+    "evolution/run",
+    "followup_runner",
+    "immune/scan",
+    "postmortem_consolidator",
+    "sleep/nightly",
+})
+
+STRICT_CHILD_CALLERS: frozenset[str] = frozenset({
+    "automation_probe",
+    "check_context",
+    "deep-sleep/extract",
+    "deep-sleep/synthesize",
+    "learning_validator",
+    "morning_agent",
+})
+
+PUBLIC_CHILD_CALLERS: frozenset[str] = frozenset()
+
 MACHINE_ONLY_LANGUAGE_CONTRACT_CALLERS: frozenset[str] = frozenset({
     "automation_probe",
     "check_context",
     "learning_validator",
 })
+
+
+def _automation_contract_for_caller(caller: str) -> str:
+    clean = str(caller or "").strip()
+    if clean in STRICT_CHILD_CALLERS:
+        return AUTOMATION_CONTRACT_STRICT_CHILD
+    if clean in PUBLIC_CHILD_CALLERS:
+        return AUTOMATION_CONTRACT_PUBLIC_CHILD
+    return AUTOMATION_CONTRACT_FULL_NEXO_AGENT
+
+
+def _caller_uses_global_discipline(caller: str) -> bool:
+    return _automation_contract_for_caller(caller) == AUTOMATION_CONTRACT_FULL_NEXO_AGENT
 
 
 def _should_apply_operator_language_contract(caller: str) -> bool:
@@ -1140,7 +1184,8 @@ def run_automation_prompt(
     if mapped_effort and not reasoning_effort:
         reasoning_effort = mapped_effort
 
-    enforcement_fragment = _build_enforcement_system_prompt()
+    automation_contract = _automation_contract_for_caller(caller)
+    enforcement_fragment = _build_enforcement_system_prompt() if _caller_uses_global_discipline(caller) else ""
     if enforcement_fragment:
         if append_system_prompt:
             append_system_prompt = append_system_prompt + "\n\n" + enforcement_fragment
@@ -1239,19 +1284,29 @@ def run_automation_prompt(
         if allowed_tools:
             cmd.extend(["--allowedTools", allowed_tools])
         cmd.extend(extra_args)
-        try:
-            import sys as _sys
-            if str(NEXO_HOME) not in _sys.path:
-                _sys.path.insert(0, str(NEXO_HOME))
-            from enforcement_engine import run_with_enforcement
-            result = run_with_enforcement(
-                cmd,
-                prompt=prompt,
-                cwd=str(cwd_path),
-                env=run_env,
-                timeout=timeout,
-            )
-        except ImportError:
+        if _caller_uses_global_discipline(caller):
+            try:
+                import sys as _sys
+                if str(NEXO_HOME) not in _sys.path:
+                    _sys.path.insert(0, str(NEXO_HOME))
+                from enforcement_engine import run_with_enforcement
+                result = run_with_enforcement(
+                    cmd,
+                    prompt=prompt,
+                    cwd=str(cwd_path),
+                    env=run_env,
+                    timeout=timeout,
+                )
+            except ImportError:
+                result = subprocess.run(
+                    cmd,
+                    cwd=str(cwd_path),
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout,
+                    env=run_env,
+                )
+        else:
             result = subprocess.run(
                 cmd,
                 cwd=str(cwd_path),
@@ -1264,6 +1319,7 @@ def run_automation_prompt(
             result.stdout or "",
             requested_output_format=requested_output_format,
         )
+        telemetry["automation_contract"] = automation_contract
         recorded, record_error = _record_automation_run(
             backend=selected_backend,
             task_profile=task_profile,
@@ -1323,6 +1379,7 @@ def run_automation_prompt(
                     output_format=output_format,
                     append_system_prompt=append_system_prompt,
                     allowed_tools=allowed_tools,
+                    include_protocol_contract=_caller_uses_global_discipline(caller),
                 )
             )
             result = subprocess.run(
@@ -1340,6 +1397,7 @@ def run_automation_prompt(
                 final_stdout=stdout,
                 model=resolved_model,
             )
+            telemetry["automation_contract"] = automation_contract
             recorded, record_error = _record_automation_run(
                 backend=selected_backend,
                 task_profile=task_profile,
@@ -1351,6 +1409,9 @@ def run_automation_prompt(
                 returncode=result.returncode,
                 duration_ms=int((time.perf_counter() - started_at) * 1000),
                 telemetry=telemetry,
+                caller=caller,
+                session_type="headless",
+                resonance_tier=resonance_tier,
             )
             stderr = result.stderr or ""
             if not recorded:

@@ -50,6 +50,18 @@ def test_capture_rate_counts_injections(mod, tmp_path):
     assert out["per_rule"]["R13_pre_edit_guard"]["injected"] == 1
 
 
+def test_capture_rate_counts_real_injection_event_name(mod, tmp_path):
+    _seed_telemetry(tmp_path, [
+        {"ts": 1, "rule_id": "R13_pre_edit_guard", "event": "trigger", "session_id": "s1"},
+        {"ts": 2, "rule_id": "R13_pre_edit_guard", "event": "injection", "mode": "hard", "session_id": "s1"},
+    ])
+    out = mod.aggregate(home=tmp_path)
+    assert out["events_read"] == 2
+    assert out["capture_rate"] == 0.5
+    assert out["per_rule"]["R13_pre_edit_guard"]["injected"] == 1
+    assert out["core_rule_violations_per_session"] == 1.0
+
+
 def test_core_rule_violations_per_session(mod, tmp_path):
     _seed_telemetry(tmp_path, [
         {"ts": 1, "rule_id": "R13_pre_edit_guard", "event": "enqueue", "mode": "hard", "session_id": "s1"},

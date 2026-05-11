@@ -1,5 +1,15 @@
 # Changelog
 
+## [7.17.4] - 2026-05-11
+
+### Fixed — automation discipline contracts and Guardian observability
+
+- **Automation runners now distinguish full NEXO agents from strict technical children.** Full background jobs such as `email_monitor`, `followup_runner`, `sleep/nightly`, `evolution/run`, `daily_self_audit`, `immune/scan`, `postmortem_consolidator` and `catchup/morning` keep the complete task/evidence/diary/learning/followup discipline, while strict JSON children such as `deep-sleep/extract`, `deep-sleep/synthesize`, `morning_agent`, `learning_validator` and `check_context` no longer receive the global protocol prompt that can contaminate JSON output or create post-close loops.
+- **Claude and Codex automation telemetry now records the caller contract.** `automation_runs` rows carry caller/session/contract metadata consistently, including the Codex branch, so support can see whether a real background job ran as a disciplined agent or as a strict child owned by a parent job.
+- **Guardian metrics now count the real `injection` event.** The daily aggregator accepts `enqueue`, `inject` and `injection`, preventing capture-rate metrics from reading zero while Desktop/Brain telemetry is actually firing.
+- **Runtime doctor now surfaces cron/caller coverage drift.** Core automation crons are compared with matching `automation_runs` callers; missing caller-attributed rows become a support warning instead of a silent blind spot.
+- **Coverage:** targeted runner/metrics/doctor checks pass (**175/175**), lifecycle/email/productization sweep passes (**193 passed, 2 xpassed**), evolution/skills/watchdog passes (**60/60**), and live runtime evidence shows caller-attributed `morning_agent` dry-run plus Guardian metrics `capture_rate=1.0`.
+
 ## [7.17.3] - 2026-05-11
 
 ### Fixed — standalone Brain install/update no longer aborts on the Desktop-only local-presence model
