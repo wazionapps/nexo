@@ -1480,3 +1480,7 @@ AGPL-3.0 -- see [LICENSE](LICENSE)
 ---
 
 Created by **Francisco Cerdà Puigserver** & **NEXO** (Claude Opus) · Built by [WAzion](https://www.wazion.com)
+
+## Download History
+
+[![Download History](https://skill-history.com/chart/wazionapps/nexo-brain.svg)](https://skill-history.com/wazionapps/nexo-brain)
