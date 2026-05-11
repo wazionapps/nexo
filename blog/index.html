@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Blog — NEXO Brain</title>
-    <meta name="description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.16.0 Memory Observations release.">
+    <meta name="description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.17.2 release hardening patch.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/blog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/blog/">
     <meta property="og:title" content="Blog — NEXO Brain">
-    <meta property="og:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.16.0 Memory Observations release.">
+    <meta property="og:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.17.2 release hardening patch.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Blog — NEXO Brain">
-    <meta name="twitter:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.16.0 Memory Observations release.">
+    <meta name="twitter:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.17.2 release hardening patch.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Blog — NEXO Brain",
-        "description": "Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.16.0 Memory Observations release.",
+        "description": "Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.17.2 release hardening patch.",
         "url": "https://nexo-brain.com/blog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -134,7 +134,7 @@
                     <span class="page-chip">Shared brain product notes</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="/blog/nexo-7-16-0/" class="btn btn-primary">Read latest release</a>
+                    <a href="/blog/nexo-7-17-2/" class="btn btn-primary">Read latest release</a>
                     <a href="/changelog/" class="btn btn-secondary">Latest release notes</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -143,25 +143,25 @@
             <div class="blog-featured-card">
                 <div class="section-label">Latest release</div>
                 <div class="blog-featured-meta">
-                    <span class="compare-chip">May 10, 2026</span>
-                    <span class="compare-chip">Memory Observations</span>
-                    <span class="compare-chip">Evidence-first</span>
-                    <span class="compare-chip">Update-safe</span>
+                    <span class="compare-chip">May 11, 2026</span>
+                    <span class="compare-chip">Email monitor</span>
+                    <span class="compare-chip">Morning agent</span>
+                    <span class="compare-chip">Patch</span>
                 </div>
-                <h2>NEXO 7.16.0: Memory Observations v2</h2>
-                <p>Minor release over v7.15.2. Brain now captures evidence-backed operational memory, derives observations, backfills existing installs safely, and exposes the layer through MCP and the dashboard.</p>
+                <h2>NEXO 7.17.2: temp-buffer guards, stale briefing recovery, Codex hooks config</h2>
+                <p>Patch release over v7.17.1. Email-monitor now guards its suffixed <code>/tmp/nexo-*</code> draft buffers before writes, morning-agent marks interrupted or stale briefing claims failed before retrying, and Codex managed config migrates to <code>[features].hooks</code>.</p>
                 <div class="hero-actions" style="justify-content:flex-start;margin-bottom:18px;">
-                    <a href="/blog/nexo-7-16-0/" class="btn btn-primary">Open article</a>
-                    <a href="/changelog/#v7160" class="btn btn-secondary">Open changelog</a>
+                    <a href="/blog/nexo-7-17-2/" class="btn btn-primary">Open article</a>
+                    <a href="/changelog/#v7172" class="btn btn-secondary">Open changelog</a>
                 </div>
                 <div class="blog-mini-stack">
                     <div class="blog-mini-card">
                         <strong>Companion view</strong>
-                        <span><a href="/changelog/#v7160">See the full v7.16.0 changelog</a></span>
+                        <span><a href="/changelog/#v7172">See the full v7.17.2 changelog</a></span>
                     </div>
                     <div class="blog-mini-card">
                         <strong>Previous release</strong>
-                        <span><a href="/blog/nexo-7-15-2/">NEXO 7.15.2: Codex bootstrap diagnostics cleanup</a>.</span>
+                        <span><a href="/blog/nexo-7-17-1/">NEXO 7.17.1: handle Claude CLI 2.1+ direct-JSON response shape</a>.</span>
                     </div>
                 </div>
             </div>
@@ -194,6 +194,51 @@
             <div class="blog-grid">
 
             <div class="blog-card">
+                <div class="blog-card-date">May 11, 2026</div>
+                <h2><a href="/blog/nexo-7-17-2/">NEXO 7.17.2: temp-buffer guards, stale briefing recovery, Codex hooks config</a></h2>
+                <p>Patch release. Email-monitor temp drafts are guarded before writes, morning-agent closes interrupted/stale claims deterministically, and Codex managed config writes the current hooks flag.</p>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/blog/nexo-7-17-2/" class="btn btn-secondary">Read more</a>
+                </div>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">May 10, 2026</div>
+                <h2><a href="/blog/nexo-7-17-1/">NEXO 7.17.1: handle Claude CLI 2.1+ direct-JSON response shape</a></h2>
+                <p>Patch release. Claude CLI 2.1+ drops the result wrapper when output_format=json and the prompt asks for raw JSON. _extract_claude_telemetry now handles both shapes. Unblocks the daily morning-agent briefing.</p>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/blog/nexo-7-17-1/" class="btn btn-secondary">Read more</a>
+                </div>
+            </div>
+
+                        <div class="blog-card">
+                <div class="blog-card-date">May 10, 2026</div>
+                <h2><a href="/blog/nexo-7-17-0/">NEXO 7.17.0: pre-emptive runner guard becomes advisory only</a></h2>
+                <p>Minor release. The headless runner pre-emptive surfaces learnings to the agent but never blocks. PreToolUse keeps protecting actual writes. Closes a family of cron and email-monitor abort bugs.</p>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/blog/nexo-7-17-0/" class="btn btn-secondary">Read more</a>
+                </div>
+            </div>
+
+                        <div class="blog-card">
+                <div class="blog-card-date">May 10, 2026</div>
+                <h2><a href="/blog/nexo-7-16-3/">NEXO 7.16.3: runner pre-emptive guard stops duplicating runtime-core protection</a></h2>
+                <p>Patch release. The headless runner opts out of the runtime-core block; PreToolUse keeps protecting actual writes. Plain prompt mentions of a core path no longer abort the session.</p>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/blog/nexo-7-16-3/" class="btn btn-secondary">Read more</a>
+                </div>
+            </div>
+
+                        <div class="blog-card">
+                <div class="blog-card-date">May 10, 2026</div>
+                <h2><a href="/blog/nexo-7-16-2/">NEXO 7.16.2: runner guard no longer blocks email-monitor sessions</a></h2>
+                <p>Patch release. Paths after a known interpreter are recognised as subprocess invocations, ending the runtime-core false positive that demoted every forwarded email to needs_interactive.</p>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/blog/nexo-7-16-2/" class="btn btn-secondary">Read more</a>
+                </div>
+            </div>
+
+                        <div class="blog-card">
                 <div class="blog-card-date">May 10, 2026</div>
                 <h2><a href="/blog/nexo-7-16-0/">NEXO 7.16.0: Memory Observations v2</a></h2>
                 <p>Brain captures evidence-backed operational memory from edits, tasks, and durable context; existing installs backfill safely; retrieval refuses unsupported memory claims.</p>

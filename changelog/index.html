@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.16.0 adds evidence-first Memory Observations with update-safe backfill.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.17.2 hardens email-monitor temp-buffer guards, morning-agent stale/interrupted send claims, and Codex hooks config.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.16.0 adds evidence-first Memory Observations with update-safe backfill.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.17.2 hardens email-monitor temp-buffer guards, morning-agent stale/interrupted send claims, and Codex hooks config.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.16.0 adds evidence-first Memory Observations with update-safe backfill.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.17.2 hardens email-monitor temp-buffer guards, morning-agent stale/interrupted send claims, and Codex hooks config.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.16.0 adds evidence-first Memory Observations with update-safe backfill.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.17.2 hardens email-monitor temp-buffer guards, morning-agent stale/interrupted send claims, and Codex hooks config.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -87,13 +87,13 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v7.16.0 live</span>
+                    <span class="page-chip">v7.17.2 live</span>
                     <span class="page-chip">Guardian active</span>
                     <span class="page-chip">F0.6 hardening</span>
                     <span class="page-chip">Adaptive empirical</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v7160" class="btn btn-primary">Start with v7.16.0</a>
+                    <a href="#v7172" class="btn btn-primary">Start with v7.17.2</a>
                     <a href="#v7122" class="btn btn-secondary">See v7.12.2</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -101,6 +101,22 @@
             <div class="page-visual">
                 <div class="page-stack">
                     <div class="page-stack-card">
+                        <strong>v7.17.1</strong>
+                        <span>Patch - _extract_claude_telemetry handles the Claude CLI 2.1+ direct-JSON response shape (no <code>result</code> wrapper). Unblocks the daily morning-agent briefing that had been silently failing with "Morning agent returned invalid JSON output" every cron tick.</span>
+                    </div>
+                                        <div class="page-stack-card">
+                        <strong>v7.17.0</strong>
+                        <span>Minor - headless runner pre-emptive guard becomes advisory only. PreToolUse hook keeps protecting actual writes; the heuristic-as-enforcement contract is retired. Closes a family of cron and email-monitor abort bugs. Rolls in the directory-path hardening planned for 7.16.4.</span>
+                    </div>
+                                        <div class="page-stack-card">
+                        <strong>v7.16.3</strong>
+                        <span>Patch - headless runner pre-emptive guard opts out of the runtime-core blocking rule. PreToolUse keeps blocking actual core writes; the duplicated text-heuristic layer steps back.</span>
+                    </div>
+                                        <div class="page-stack-card">
+                        <strong>v7.16.2</strong>
+                        <span>Patch - runner pre-emptive guard distinguishes subprocess invocations from edits, ending the runtime-core false positive that demoted every forwarded email to needs_interactive.</span>
+                    </div>
+                                        <div class="page-stack-card">
                         <strong>v7.16.0</strong>
                         <span>Minor - Memory Observations v2 captures evidence-backed operational memory, backfills existing installs, and refuses unsupported memory answers.</span>
                     </div>
@@ -320,6 +336,48 @@
 <section class="section-compact" style="background:rgba(124,58,237,0.08);">
     <div class="container desktop-disclaimer" style="max-width:860px;font-size:13px;line-height:1.55;">
         <p><strong>About NEXO Desktop.</strong> NEXO Desktop is a separate closed-source companion client distributed at <a href="https://nexo-desktop.com/">nexo-desktop.com</a>. When a changelog entry mentions NEXO Desktop it refers to a coordinated client release that consumes the Brain CLI/MCP contract. Desktop source does not live in this repo; the Brain (AGPL-3.0) remains fully usable on its own from terminal, Codex, Claude Code, or any MCP client.</p>
+    </div>
+</section>
+
+<section id="v7172" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#0ea5e9 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.17.2 <span style="opacity:.5;font-weight:400;">&mdash; May 11, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">Temp-buffer guards, stale briefing recovery, Codex hooks config</h2>
+        <p class="section-subtitle"><code>email-monitor</code> now requires a guard check before creating or editing its suffixed <code>/tmp/nexo-reply-UID.txt</code>, <code>/tmp/nexo-quote-UID.txt</code>, and <code>/tmp/nexo-thread-UID.txt</code> draft buffers. <code>morning-agent</code> now installs SIGTERM/SIGINT handlers, marks active briefing claims failed on interruption, retries stale <code>in_progress</code> claims with previous-run metadata, keeps the CLI timeout under the supervisor ceiling, and keeps the recent sent-block idempotent. Codex managed config now writes <code>[features].hooks = true</code> and removes the legacy <code>codex_hooks</code> key.</p>
+    </div>
+</section>
+
+<section id="v7171" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#0ea5e9 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.17.1 <span style="opacity:.5;font-weight:400;">&mdash; May 10, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">Handle Claude CLI 2.1+ direct-JSON response shape</h2>
+        <p class="section-subtitle">Claude CLI 2.1+ with <code>bare_mode=True</code> + <code>output_format="json"</code> + a prompt requesting raw JSON drops the classic <code>{"result": "...", "usage": {...}}</code> wrapper and returns the agent's JSON answer directly. Pre-7.17.1 <code>_extract_claude_telemetry</code> only knew the wrapper shape: <code>payload.get("result", "")</code> returned <code>""</code> and the empty <code>final_stdout</code> made every downstream JSON parser raise. The morning-agent cron was failing silently every tick &mdash; 178 fails in <code>morning-agent.log</code> on 2026-05-10 vs 75 successful telemetry rows in <code>automation_runs</code> with intact <code>subject</code>+<code>body</code> payloads. Now both shapes are normalised: classic-wrapper callers keep their behaviour; direct-JSON callers receive the full payload as <code>final_stdout</code> (usage/cost telemetry is unavailable in this mode, so we surface zeros rather than invent figures).</p>
+    </div>
+</section>
+
+<section id="v7170" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#0ea5e9 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.17.0 <span style="opacity:.5;font-weight:400;">&mdash; May 10, 2026 &mdash; <strong>MINOR</strong></span></div>
+        <h2 class="section-title">Pre-emptive runner guard becomes advisory only</h2>
+        <p class="section-subtitle"><code>_run_headless_runner_guard</code> never returns <code>blocked=True</code>. It still surfaces learnings, schemas, and blocking-rule text to the agent up front for context (and still writes to <code>guard_checks</code> for observability), but the run always proceeds. The authoritative protection layer is the PreToolUse hook (<code>hook_guardrails._collect_runtime_core_write_blocks</code> and the file-conditioned learning blocks alongside it), which fires only when the agent actually attempts a Write/Edit, with severity <code>error</code>. That layer has full intent context; the pre-emptive layer was relying on regex over prompt text, which cannot tell a write from a read or a passing mention. v7.16.2 closed the subprocess-invocation case, v7.16.3 closed the runtime-core duplication, and v7.16.4 (rolled into this release) closed the directory-path crash. v7.17.0 closes the entire family. Errors from <code>handle_guard_check</code> are also non-blocking now: even an unhandled exception logs as advisory and lets the run start.</p>
+    </div>
+</section>
+
+
+
+<section id="v7163" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#0ea5e9 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.16.3 <span style="opacity:.5;font-weight:400;">&mdash; May 10, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">Runner pre-emptive guard stops duplicating runtime-core protection</h2>
+        <p class="section-subtitle"><code>handle_guard_check</code> now accepts <code>enforce_runtime_core_block="false"</code>. The headless runner pre-emptive guard passes that flag because actual writes on <code>~/.nexo/core/</code> paths are already blocked at the PreToolUse layer (<code>hook_guardrails._collect_runtime_core_write_blocks</code>, severity <code>error</code>). The previous duplication caused the runner to abort sessions whenever a prompt merely mentioned a core path, even without an interpreter prefix; v7.16.2 only addressed the specific subprocess pattern. Default callers (direct <code>nexo_guard_check</code> from agents) keep the historical behaviour and still surface the runtime-core blocking rule.</p>
+    </div>
+</section>
+
+<section id="v7162" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#0ea5e9 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.16.2 <span style="opacity:.5;font-weight:400;">&mdash; May 10, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">Runner guard no longer blocks email-monitor sessions</h2>
+        <p class="section-subtitle">The pre-emptive runner guard scanned the prompt for absolute paths and treated every match as an edit target. The email-monitor template instructs the agent with <code>python3 /Users/.../core/scripts/nexo-send-reply.py --to ...</code>, so the path of the reply tool itself entered the guard&apos;s file list, the runtime-core rule fired, and the session aborted with exit 2 before the agent could draft a reply. Brain now recognises subprocess invocations: paths that follow a known interpreter (python, python3, node, bash, sh, npx, pnpm, yarn, uv, pipx, env, pwsh, powershell) are excluded from the guard list. Paths in genuine edit instructions and other CLI args (body files, quote files) still go through the guard.</p>
     </div>
 </section>
 
