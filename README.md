@@ -18,7 +18,7 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.17.5` is the current packaged-runtime line. Patch release over v7.17.4 - `nexo --version --json` now returns fast machine-readable update status (`installed`, `latest`, `hasUpdate`, `unknown`, `latestSource`) while the human output keeps the legacy `nexo vX` line plus a compact latest/installed status line for Desktop compatibility.
+Version `7.17.6` is the current packaged-runtime line. Patch release over v7.17.5 - cron health diagnostics are clearer for macOS TCC approval, and catch-up fallback executions now stay visible in `cron_runs` even on legacy or partially migrated runtimes.
 
 Previously in `7.17.4`: corrective patch over v7.17.3 - automation runners now keep full NEXO discipline for real background agents while strict JSON children stay clean, and runtime doctor/metrics expose caller coverage and Guardian injection telemetry instead of hiding blind spots.
 

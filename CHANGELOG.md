@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.17.6] - 2026-05-11
+
+### Fixed — cron health diagnostics and catch-up observability
+
+- **`tcc-approve` now fails with actionable diagnostics instead of a silent `exit 1`.** The macOS TCC helper captures `sqlite3` failures per service, writes the concrete reason to `tcc-auto-approve.log`, keeps the Claude-version marker unset until every service succeeds, and prints a concise wrapper-visible status so `cron_runs.summary/error` is useful.
+- **`catchup` now records direct fallback executions in `cron_runs`.** Normal installs still use `nexo-cron-wrapper.sh` as the single writer, but legacy or partially migrated runtimes that must execute a catch-up task directly now insert/update a `cron_runs` row instead of only touching `.catchup-state.json`.
+- **Coverage:** `tests/test_tcc_approve.py` covers successful and failed TCC approval marker semantics, `tests/test_catchup_direct_fallback.py` pins direct fallback `cron_runs` visibility, and the targeted cron suite passes (`42 passed`).
+
 ## [7.17.5] - 2026-05-11
 
 ### Added — fast version status for Desktop

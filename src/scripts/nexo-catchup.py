@@ -8,9 +8,10 @@ Legacy .catchup-state.json is now only a fallback for pre-wrapper history.
 import fcntl
 import json
 import os
+import sqlite3
 import subprocess
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -93,6 +94,85 @@ def _resolve_runtime_command(script_type: str) -> str:
     return NEXO_PYTHON
 
 
+def _cron_run_db_path() -> Path:
+    return paths.data_dir() / "nexo.db"
+
+
+def _utc_timestamp() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _summarize_output(stdout: str, stderr: str) -> tuple[str, str]:
+    combined = "\n".join(part for part in (stdout or "", stderr or "") if part)
+    lines = [line.strip() for line in combined.splitlines() if line.strip()]
+    summary = (lines[-1] if lines else "")[:500]
+    error = ""
+    for line in reversed(lines):
+        lowered = line.lower()
+        if any(marker in lowered for marker in ("error", "exception", "fail", "traceback")):
+            error = line[:500]
+            break
+    return summary, error
+
+
+def _start_direct_cron_run(cron_id: str) -> dict | None:
+    """Record a catch-up run when the shell wrapper is unavailable.
+
+    Normal installs use nexo-cron-wrapper.sh as the single writer. This
+    fallback exists for legacy/partially-migrated runtimes where catch-up can
+    still execute a script directly; without it, the run only updates
+    .catchup-state.json and stays invisible to cron health.
+    """
+    db_path = _cron_run_db_path()
+    started_at = _utc_timestamp()
+    try:
+        conn = sqlite3.connect(str(db_path))
+        try:
+            exists = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='cron_runs'"
+            ).fetchone()
+            if not exists:
+                return None
+            cur = conn.execute(
+                "INSERT INTO cron_runs (cron_id, started_at, ended_at) VALUES (?, ?, NULL)",
+                (cron_id, started_at),
+            )
+            conn.commit()
+            return {"id": cur.lastrowid, "started_at": started_at}
+        finally:
+            conn.close()
+    except Exception as e:
+        log(f"    WARNING: could not start direct cron_runs record for {cron_id}: {e}")
+        return None
+
+
+def _finish_direct_cron_run(record: dict | None, cron_id: str, exit_code: int, stdout: str = "", stderr: str = ""):
+    if not record:
+        return
+    ended_at = _utc_timestamp()
+    summary, error = _summarize_output(stdout, stderr)
+    if exit_code != 0 and not error:
+        error = (stderr or stdout or f"exit {exit_code}")[:500]
+    db_path = _cron_run_db_path()
+    try:
+        conn = sqlite3.connect(str(db_path))
+        try:
+            conn.execute(
+                """
+                UPDATE cron_runs
+                   SET ended_at=?, exit_code=?, summary=?, error=?,
+                       duration_secs=(julianday(?) - julianday(started_at)) * 86400.0
+                 WHERE id=?
+                """,
+                (ended_at, int(exit_code), summary, error, ended_at, int(record["id"])),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception as e:
+        log(f"    WARNING: could not finish direct cron_runs record for {cron_id}: {e}")
+
+
 def _acquire_lock():
     LOCK_FILE.parent.mkdir(parents=True, exist_ok=True)
     handle = LOCK_FILE.open("w")
@@ -150,12 +230,14 @@ def run_task(candidate: dict, state: dict) -> bool:
         command = [runtime_cmd, str(script_path)]
 
     log(f"  RUNNING {name}: {script_name}")
+    direct_record = None if WRAPPER.exists() else _start_direct_cron_run(name)
     try:
         result = subprocess.run(
             command,
             capture_output=True, text=True, timeout=AUTOMATION_SUBPROCESS_TIMEOUT,
             env={**os.environ, "HOME": str(HOME), "NEXO_CATCHUP": "1"}
         )
+        _finish_direct_cron_run(direct_record, name, result.returncode, result.stdout, result.stderr)
         if result.returncode == 0:
             log(f"  OK {name} (exit 0)")
             state[name] = datetime.now().isoformat()
@@ -167,9 +249,11 @@ def run_task(candidate: dict, state: dict) -> bool:
                 log(f"    stderr: {result.stderr[:300]}")
             return False
     except subprocess.TimeoutExpired:
+        _finish_direct_cron_run(direct_record, name, 124, stderr=f"TIMEOUT after {AUTOMATION_SUBPROCESS_TIMEOUT}s")
         log(f"  TIMEOUT {name} ({AUTOMATION_SUBPROCESS_TIMEOUT}s)")
         return False
     except Exception as e:
+        _finish_direct_cron_run(direct_record, name, 1, stderr=str(e))
         log(f"  ERROR {name}: {e}")
         return False
 

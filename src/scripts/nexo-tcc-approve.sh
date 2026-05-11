@@ -28,6 +28,54 @@ LOG="$NEXO_HOME/runtime/logs/tcc-auto-approve.log"
 
 mkdir -p "$MARKER_DIR" "$(dirname "$LOG")"
 
+FAILED=0
+APPROVED_VERSIONS=0
+PYTHON_APPROVED=0
+
+log_line() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') $*" >> "$LOG"
+}
+
+approve_service() {
+    local svc="$1"
+    local client="$2"
+    local output
+
+    if output=$(sqlite3 "$TCC_DB" "
+        INSERT OR REPLACE INTO access (service, client, client_type, auth_value, auth_reason, auth_version)
+        VALUES ('$svc', '$client', 1, 2, 4, 1);
+        " 2>&1); then
+        return 0
+    fi
+
+    log_line "WARN: failed TCC approval service=$svc client=$client: ${output:-sqlite3 failed}"
+    return 1
+}
+
+approve_client() {
+    local label="$1"
+    local client="$2"
+    local marker="${3:-}"
+    local failed=0
+
+    log_line "Approving $label"
+
+    for svc in "${SERVICES[@]}"; do
+        if ! approve_service "$svc" "$client"; then
+            failed=$((failed + 1))
+        fi
+    done
+
+    if [ "$failed" -eq 0 ]; then
+        [ -n "$marker" ] && touch "$marker"
+        log_line "Done: $label — ${#SERVICES[@]} services approved"
+        return 0
+    fi
+
+    log_line "FAILED: $label — $failed/${#SERVICES[@]} services failed"
+    return 1
+}
+
 # TCC services Claude Code needs
 SERVICES=(
     kTCCServiceSystemPolicyDocumentsFolder
@@ -49,17 +97,11 @@ if [ -d "$VERSIONS_DIR" ]; then
         # Skip if already approved
         [ -f "$marker" ] && continue
 
-        echo "$(date '+%Y-%m-%d %H:%M:%S') Approving Claude $version" >> "$LOG"
-
-        for svc in "${SERVICES[@]}"; do
-            sqlite3 "$TCC_DB" "
-            INSERT OR REPLACE INTO access (service, client, client_type, auth_value, auth_reason, auth_version)
-            VALUES ('$svc', '$bin_path', 1, 2, 4, 1);
-            " 2>/dev/null
-        done
-
-        touch "$marker"
-        echo "$(date '+%Y-%m-%d %H:%M:%S') Done: Claude $version — ${#SERVICES[@]} services approved" >> "$LOG"
+        if approve_client "Claude $version" "$bin_path" "$marker"; then
+            APPROVED_VERSIONS=$((APPROVED_VERSIONS + 1))
+        else
+            FAILED=1
+        fi
     done
 fi
 
@@ -69,11 +111,21 @@ if [ -n "$NEXO_CODE" ]; then
     PYTHON_BIN="$(dirname "$NEXO_CODE")/.venv/bin/python"
     if [ -e "$PYTHON_BIN" ]; then
         PYTHON_REAL=$(readlink -f "$PYTHON_BIN" 2>/dev/null || echo "$PYTHON_BIN")
-        for svc in "${SERVICES[@]}"; do
-            sqlite3 "$TCC_DB" "
-            INSERT OR REPLACE INTO access (service, client, client_type, auth_value, auth_reason, auth_version)
-            VALUES ('$svc', '$PYTHON_REAL', 1, 2, 4, 1);
-            " 2>/dev/null
-        done
+        if approve_client "NEXO Python" "$PYTHON_REAL"; then
+            PYTHON_APPROVED=1
+        else
+            FAILED=1
+        fi
     fi
+fi
+
+if [ "$FAILED" -ne 0 ]; then
+    echo "TCC auto-approve failed; see $LOG" >&2
+    exit 1
+fi
+
+if [ "$APPROVED_VERSIONS" -eq 0 ] && [ "$PYTHON_APPROVED" -eq 0 ]; then
+    echo "TCC auto-approve: nothing pending"
+else
+    echo "TCC auto-approve: approved $APPROVED_VERSIONS Claude version(s)"
 fi
