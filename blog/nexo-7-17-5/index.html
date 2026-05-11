@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.17.5: fast version status for Desktop</title>
+<meta name="description" content="NEXO Brain v7.17.5 adds fast JSON version status for NEXO Desktop updates while keeping legacy version output compatible.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-17-5/">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.17.5: fast version status for Desktop","datePublished":"2026-05-11","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head><body><main><article style="max-width:760px;margin:80px auto;padding:0 24px;line-height:1.75;">
+<h1>NEXO 7.17.5 &mdash; fast version status for Desktop</h1>
+<p><em>Published 2026-05-11. Patch release over v7.17.4.</em></p>
+
+<h2>Why this patch exists</h2>
+<p>NEXO Desktop needs a quick, reliable way to know the installed Brain version, the latest available version, and whether an update exists. Scraping <code>nexo --help</code> worked as a fallback, but it was slower and forced Desktop to parse user-facing text.</p>
+
+<h2>What changed</h2>
+<p><code>nexo --version --json</code> now returns <code>installed</code>, <code>latest</code>, <code>hasUpdate</code>, <code>unknown</code> and <code>latestSource</code>. The regular <code>nexo --version</code> command still prints <code>nexo vX</code> first, then adds <code>NEXO Latest: vX | Installed: vY</code> for older Desktop fallbacks.</p>
+
+<h2>Validation</h2>
+<pre><code>python3 -m py_compile src/cli.py
+pytest -q tests/test_cli_scripts.py
+# 40 passed
+
+python3 src/cli.py --version --json
+# returns installed/latest/hasUpdate/unknown/latestSource</code></pre>
+
+<p><a href="/changelog/#v7175">Full changelog entry &rarr;</a> &middot; <a href="/blog/nexo-7-17-4/">Previous v7.17.4 release</a></p>
+</article></main></body></html>
