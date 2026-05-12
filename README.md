@@ -18,7 +18,93 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.9.22` is the current packaged-runtime line. Patch release over `7.9.21`: Desktop lifecycle shutdowns now have an emergency Brain-side fallback diary path, so close/archive/app-exit can preserve title, goal, session ids, and transcript tail even when the live agent does not answer the injected diary prompt before shutdown.
+Version `7.20.1` is the current packaged-runtime line. Patch release over v7.20.0 — the Local Context service now recovers from orphaned locks and mixed-version cycle failures instead of leaving the background index stuck.
+
+Previously in `7.20.0`: minor release over v7.19.0 — the Local Context index now reconciles known files and folders on every service cycle, so created, modified, deleted and newly excluded local files are reflected automatically between full scans.
+
+Previously in `7.19.0`: minor release over v7.18.1 - bundle-managed installations (NEXO Desktop `brain-bundle/`) can now pin Brain to the host application release cycle via `NEXO_BRAIN_AUTO_UPDATE=false`, and the server auto-exits with code 75 on fingerprint mismatch so MCP clients respawn the server with the new code instead of leaving stale `server.py` processes alive.
+
+Previously in `7.18.1`: patch release over v7.18.0 - packaged Brain runtimes now include the `local_context` package, so Desktop Local Memory and `nexo local-context` do not get stuck behind `ModuleNotFoundError` or zero-file status; the local-index service also keeps detecting newly mounted volumes automatically.
+
+Previously in `7.18.0`: minor release over v7.17.8 - Brain adds the Local Context Layer: a local-only background memory index with checkpoints, extraction, graph links, embeddings, MCP/CLI controls, and pre-action evidence for NEXO agents.
+
+Previously in `7.17.8`: patch release over v7.17.7 - standalone `nexo chat` now surfaces macOS Full Disk Access guidance, and Brain clears stale permission state after a live access probe succeeds.
+
+Previously in `7.17.7`: patch release over v7.17.6 - macOS TCC privacy denials now become a guided Full Disk Access permission state instead of an unexplained cron failure, with Desktop-ready status written for user action.
+
+Previously in `7.17.6`: patch release over v7.17.5 - cron health diagnostics are clearer for macOS TCC approval, and catch-up fallback executions now stay visible in `cron_runs` even on legacy or partially migrated runtimes.
+
+Previously in `7.17.5`: patch release over v7.17.4 - `nexo --version --json` now returns machine-readable update status so NEXO Desktop can populate the Updates panel without scraping slower human output.
+
+Previously in `7.17.4`: corrective patch over v7.17.3 - automation runners now keep full NEXO discipline for real background agents while strict JSON children stay clean, and runtime doctor/metrics expose caller coverage and Guardian injection telemetry instead of hiding blind spots.
+
+Previously in `7.17.3`: corrective patch over v7.17.2 - standalone Brain install/update no longer aborts when the Desktop-only `qwen3-0.6b-q4-local-presence` model is not bundled or already cached locally. Required Brain warmups stay strict; only the optional local-presence GGUF now degrades cleanly.
+
+Previously in `7.17.2`: patch release over v7.17.1 - email-monitor now guards its `/tmp/nexo-*` draft buffers before writing, morning-agent closes interrupted/stale briefing claims deterministically, and Codex managed config migrates from the legacy `codex_hooks` flag to `[features].hooks`.
+
+Previously in `7.17.1`: patch release over v7.17.0 - the headless Claude CLI 2.1+ direct-JSON response shape is now handled: when the wrapper `{"result": ...}` is absent and the agent's answer is returned directly, `_extract_claude_telemetry` surfaces the full payload to the caller instead of an empty string. Fixes the daily morning-agent failure with "Morning agent returned invalid JSON output".
+
+Previously in `7.17.0`: minor release over v7.16.3 - the headless runner pre-emptive guard becomes advisory: it surfaces learnings/schemas to the agent and logs to `guard_checks`, but never returns `blocked=True`. The PreToolUse hook is the authoritative gate at write time.
+
+Previously in `7.16.3`: patch release over v7.16.2 - the headless runner guard opts out of the runtime-core blocking rule because actual writes on those paths are already blocked at the PreToolUse layer.
+
+Previously in `7.16.0`: minor release over v7.15.2 - Brain adds Memory Observations v2: evidence-backed event capture, derived observations, update-safe backfill, MCP retrieval, dashboard visibility, and safer refusal when memory lacks evidence.
+
+Previously in `7.15.2`: patch release over v7.15.1 - Brain treats normal Codex startup context reads of calibration and project atlas files as healthy bootstrap activity instead of conditioned-file drift.
+
+Previously in `7.15.1`: patch release over v7.15.0 - Brain drains larger self-audit clusters, bounds hook history with update-time cleanup, filters normal Codex bootstrap reads, routes email-monitor effort by message complexity, and locks morning briefings by local date and recipient.
+
+Previously in `7.15.0`: minor release — Brain unifies sent-email continuity across send paths, moves cognitive recall to multilingual embeddings, forces tagged learnings into context, hardens email loop guards and headless runners, exposes learning creation dates, and adds AUTO-N burst postmortems.
+
+Previously in `7.14.0`: minor release — Brain closes the install/reliability loop with update-path venv recovery, platform-gated wheels, WSL Desktop-managed flag preservation, startup memory authority warnings, legacy MEMORY write blocking, post-action real-world verification, and stale followup triage.
+
+Previously in `7.13.9`: patch release — Brain moves aside an existing managed `.venv` when it was created with unsupported Python <3.10, then recreates it with the supported interpreter prepared by Desktop.
+
+Previously in `7.13.8`: patch release — Brain rejects Python <3.10 during Desktop-managed fresh installs, honors the Python interpreter prepared by Desktop, and fails clearly before dependency resolution if an unsupported Apple Python 3.9 reaches the installer.
+
+Previously in `7.13.7`: patch release — Brain adds an authenticated official protocol-card client (`nexo_card_catalog`, `nexo_card_get`, `nexo_card_match`) so agents can ask the NEXO Desktop backend for the right task protocol at runtime. The protocol corpus stays private on the server; this open-source package ships only the client, tool map, and agent guidance.
+
+Previously in `7.13.6`: patch release — Codex hook sync now renders the managed `PreToolUse` shell/exec_command guard with native Windows `cmd.exe` syntax while preserving the existing POSIX command on macOS/Linux. Result: coordinated Desktop bundles can ship the fixed Brain without changing the Mac/Windows installation contract.
+
+Previously in `7.13.3`: unified release — doctor now repairs orphan personal script metadata and ignores historical `versions/**` snapshots, `nexo update` prunes runtime snapshots older than two back, protocol compliance self-heals missing task-open/change-log/stale-session gaps, headless automation uses bounded timeouts, Guardian false positives are tightened, and Codex CLI config/default checks are release-gated. Result: coordinated Desktop bundles can ship the new Brain without changing the Mac/Windows installation contract.
+
+Previously in `7.12.15`: patch release — same-version packaged updates now still run the safe maintenance path, Deep Sleep clears process locks on shutdown, sent replies are recorded in durable continuity, and personal script schedule-marker drift is surfaced during reconcile. Result: coordinated Desktop bundles can refresh Brain safely without breaking install/update parity on macOS, Windows via WSL, or Linux.
+
+Previously in `7.12.0`: minor release — adds `nexo support-snapshot` for generic local runtime diagnostics and completes the silent-reminder hardening on the live Protocol Enforcer path. The support collector emits one JSON bundle with version/platform metadata, runtime path presence, health-check output, and recent event/operation tails, while map-driven reminders (`nexo_startup`, `nexo_smart_startup`, `nexo_heartbeat`, `nexo_reminders`, `nexo_session_diary_*`, `nexo_stop`, `nexo_task_close`, compaction checkpoint prompts) now say explicitly that silence owns the entire reminder turn.
+
+Previously in `7.11.5`: patch release — Desktop-managed installs now block the standalone dashboard at the same product-mode layer as evolution, so `installation_live`, cron sync, and watchdog no longer disagree about whether `com.nexo.dashboard` should exist. Validation: `125` targeted tests across product-mode, cron sync, and doctor, plus a full pre-release wrapper (`2321 passed, 2 skipped, 1 xfailed, 4 xpassed`).
+
+Previously in `7.11.4`: patch release — packaged runtimes now receive root JSON contracts such as `local_model_manifest.json`, install/update paths sync core crons from `src/crons/manifest.json` instead of depending on a stale JS list, `runner-health-check` is wired into cron/doctor/dashboard instead of writing an unread file, and the watchdog retries failed crons immediately while treating `run_once_on_wake` as catchup-style recovery. Validation: `117` targeted tests across packaged update, cron sync/recovery, dashboard, local models, and runtime update contracts.
+
+Previously in `7.11.3`: patch release — root-cause fix for the `mcp_restart_required` lockup that v7.11.2 only masked at the enforcer layer. `_FINGERPRINT_EXCLUDE_DIRS` in `src/runtime_versioning.py` was missing `"versions"`, so `compute_mcp_runtime_fingerprint()` walked into `core/versions/<old>/**.py` whenever it was called against the live runtime root. `installed_runtime_fingerprint()` (which resolves through `active_runtime_root()` → `core/versions/<active>/`) returned a clean per-snapshot hash, while `prime_process_fingerprint()` (which starts from `Path(__file__).resolve().parent` → live `core/`) accumulated every retained snapshot. The two never matched after the second-ever `nexo update` on a host. Every update wrote `mcp-restart-required.json` and the marker could never be cleared by `_ack_current_client_if_restarted()` because the `installed_fp != process_fp` test always returned `True`. Every non-allowlisted MCP tool (`nexo_reminders`, `nexo_smart_startup`, `nexo_guard_check`, `nexo_task_open`, …) returned `{"error": "mcp_restart_required", "reason": "fingerprint_mismatch"}` indefinitely, even after the operator restarted the client. Adding `"versions"` to `_FINGERPRINT_EXCLUDE_DIRS` restores parity; 21 runtime-fingerprint tests stayed green.
+
+Previously in `7.11.2`: patch release — two reliability fixes in the same family ("components ignoring signals they should respect"): (1) `STUCK CRON REAPER` added to `nexo-watchdog.sh` and (2) the Guardian/Enforcer now honors the `mcp-restart-required` marker. The watchdog reaper closes the v5.8.1 in-flight gap: truly hung wrappers (e.g. headless `claude --bare` blocked on an MCP that flagged `mcp_restart_required`) used to hold their slot for days. The reaper sweeps `cron_runs` rows with `ended_at IS NULL` past `stuck_after_seconds` (per-cron from `manifest.json`, fallback 12h global), SIGTERMs the wrapper (trap closes row at `exit 143`), grace 10s, SIGKILL on survivors. Generous defaults (deep-sleep 8h, sleep/evolution 4h) prevent any v5.8.1 regression. The enforcer gate skips `nexo_*`-mentioning reminders when the marker file is present (cached per-instance, 30s TTL); reminders that don't reference `nexo_*` still fire. 12 new tests; 3 existing watchdog tests + 52 existing enforcer tests stay green.
+
+Previously in `7.11.1`: patch release — caches the runtime fingerprint by `(file_count, size_total, max_mtime)` signature so MCP startup and the per-tool-call `resolve_restart_required` skip the 263-file rehash when nothing on disk changed. ~11× speedup warm path (~40ms → ~3.7ms locally), ~10-20s/day saved across Claude Code / Codex / headless / deep-sleep / cron startups. Cache miss is always safe (falls through to full hash and self-repairs). Default `use_cache=False` keeps `plugins/update.py` on the ground-truth path around `git pull` / `npm update`. Builds on the v7.11.0 runtime fingerprint that gates `mcp-restart-required.json`. Full write-up in [`docs/runtime-fingerprint.md`](docs/runtime-fingerprint.md).
+
+Previously in `7.10.0`: minor release — **removes the LLM proxy override path that 7.9.28 → 7.9.34 introduced**. Background: 7.9.28 added two opt-in files at `~/.nexo/config/llm_endpoint.json` and `~/.nexo/config/auth_provider.json` that let a third-party orchestrator (NEXO Desktop) redirect every Anthropic SDK call from Brain to a custom proxy and resolve the bearer via a local helper, with concrete model names translated to wire aliases (`nexo-max`, `nexo-high`, `nexo-medium`, `nexo-low`, `nexo-mini`) and an `Idempotency-Key` per request. NEXO Desktop's commercial model has changed: Desktop is now a wrapper over the user's own Claude Code subscription (Max / Pro), with a separate Desktop licence. Brain calls go directly to `api.anthropic.com` using the user's existing OAuth (the one stored under `~/.claude/` and consumed by Claude Code spawns) or a plain `ANTHROPIC_API_KEY`. There is no NEXO bearer, no NEXO proxy, no NEXO credit accounting in this codebase. Every proxy symbol is gone from `call_model_raw.py` and `agent_runner.py`; the proxy-specific tests and `docs/api/override-files.md` are removed; any pre-existing override files on disk are simply ignored from this release forward.
+
+Previously in `7.9.34`: two fixes — the email monitor's header parser was dropping any email whose RFC822 headers came back as `email.header.Header` instances (Q-encoded utf-8 / quoted-printable). Every `msg.get(...)` now goes through `_decode_header`, and the failure log is lifted from DEBUG to WARNING. The PreToolUse Guardian gate hardens hard blocks with stderr + exit 2 enforcement so terminal Claude cannot ignore the deny channel mid-tool-loop.
+
+Previously in `7.9.33`: adds ``usedforsecurity=False`` to the SHA-1 call that derives a filesystem-safe checkpoint filename from the email's Message-ID, so Bandit's B324 audit no longer fails the publish workflow on a non-security usage. The ``v7.9.32`` git tag is preserved for traceability but no npm release ever shipped for it; ``nexo-brain@7.9.33`` is the first release that carries the 7.9.32 email-recovery checkpoints.
+
+Previously in `7.9.32`: hardens the email monitor's recovery so emails that fall between Brain releases never end up in a permanent limbo. The periodic ``_recover_unreplied_processed`` sweep now looks back 7 days (was 24h), and every failed worker run persists a per-email checkpoint at ``~/.nexo/nexo-email/checkpoints/`` capturing files touched, last assistant narration, and error. Retry attempts inject that context into the next prompt so a long task (drafting a presentation, multi-step analysis) continues from where the previous attempt died instead of restarting from scratch. Stale checkpoints are pruned automatically after 7 days. 15 new unit tests cover the helpers.
+
+Previously in `7.9.31`: fixes a wire-level bug where ``call_model_raw`` was sending ``stop_sequences=["\n", ".", " "]`` by default, which the current Anthropic Messages API rejects with HTTP 400 ``each stop sequence must contain non-whitespace``. The default is now ``None`` (no ``stop_sequences`` field sent) since ``max_tokens=3`` already caps the yes/no classifier output. A local guard rejects whitespace-only caller values up front so the error shows where the caller is, not as a remote 400. Also removes an internal design document that did not belong in the open-source distribution.
+
+Previously in `7.9.30`: hotfix for a missing ``import sys`` in ``src/agent_runner.py`` that ruff F821 caught in CI and blocked the 7.9.29 publish workflow before any npm artifact shipped. ``nexo-brain@7.9.30`` is the first npm release that carries the 7.9.29 override-path hardening.
+
+Previously in `7.9.29`: hardening pass on the optional LLM endpoint and auth provider override path. The bearer is now passed to the Anthropic SDK via `auth_token` so it lands in the standard `Authorization: Bearer` header (7.9.28 sent it as `X-Api-Key` and any compatible proxy rejected every request with 401). The Brain config directory is resolved on each call instead of cached at import, so LaunchAgent crons that export `NEXO_HOME` via a wrapper now reach the right `~/.nexo/config/`. The `Idempotency-Key` header accepts a caller-provided value so application-level retries reuse the same dedup key. Override mode is strict about its bearer source: if `auth_provider.json` is missing or the helper fails, the call raises `ClassifierUnavailableError` instead of falling back to the operator's real `ANTHROPIC_API_KEY`, which would otherwise leak to the custom proxy as a second header. A new end-to-end test suite drives the real SDK against a local `http.server` and asserts on captured wire headers and body, complementing the SDK-mock unit tests.
+
+Previously in `7.9.28`: optional override files at `~/.nexo/config/llm_endpoint.json` and `~/.nexo/config/auth_provider.json` let third-party orchestrators redirect Brain's Anthropic SDK calls and delegate bearer token resolution to a local command (analogous to git's `credential.helper`). The same redirection is propagated to every CLI child Brain spawns (deep-sleep, evolution, followup-runner, morning-agent, email-monitor, `nexo chat`) by injecting `ANTHROPIC_BASE_URL` and `ANTHROPIC_API_KEY` into the spawned environment, so headless crons reach the proxy too. An `Idempotency-Key` (UUID4 hex) is attached per request for proxy-side dedup of transparent retries within 24h. Brain libre standalone (no override files) hits `api.anthropic.com` directly with `ANTHROPIC_API_KEY` exactly as before.
+
+Previously in `7.9.27`: server startup no longer hangs the MCP `initialize` handshake when legacy followups/reminders still need owner backfill — the synchronous startup migration now runs `--rules-only` and skips the multi-minute `LocalZeroShotClassifier` load, keeping handshake under a few seconds.
+
+Previously in `7.9.26`: headless automation prompts now receive the operator-language contract centrally, so reports, diaries, syntheses, followups, escalations, and Deep Sleep-generated memory text follow calibration even when the underlying template is English.
+
+Previously in `7.9.23`: Desktop lifecycle fallback diaries now enrich sparse lifecycle events from continuity snapshots, so app-exit fallback evidence preserves recent turn context even when the live agent does not answer the injected diary prompt before shutdown.
+
+Previously in `7.9.22`: Desktop lifecycle shutdowns gained an emergency Brain-side fallback diary path, so close/archive/app-exit can preserve title, goal, session ids, and transcript tail even when the live agent does not answer the injected diary prompt before shutdown.
 
 Previously in `7.9.21`: LaunchAgent reload/repair now handles macOS already-loaded races by booting out jobs with modern launchctl forms, falling back to legacy load, and treating an already-loaded job as healthy only when it points at the expected plist.
 
@@ -335,7 +421,7 @@ That keeps the core Ebbinghaus model, but makes decay more individual and less p
 
 ### Semantic Search (Finding by Meaning)
 
-NEXO Brain doesn't search by keywords. It searches by **meaning** using vector embeddings (fastembed, 768 dimensions).
+NEXO Brain doesn't search by keywords. It searches by **meaning** using multilingual vector embeddings (fastembed, 384 dimensions).
 
 Example: If you search for "deploy problems", NEXO Brain will find a memory about "SSH connection timeout on production server" — even though they share zero words. This is how human associative memory works.
 
@@ -553,7 +639,7 @@ NEXO Brain was evaluated on [LoCoMo](https://github.com/snap-research/locomo) (A
 - 93.3% adversarial rejection rate — reliably says "I don't know" when information isn't available
 - 74.9% recall across 1,986 questions
 - Open-domain F1: 0.637 | Multi-hop F1: 0.333 | Temporal F1: 0.326
-- Runs on CPU with 768-dim embeddings (BAAI/bge-base-en-v1.5) — no GPU required
+- Runs on CPU with local multilingual embeddings — no GPU required
 - First MCP memory server benchmarked on a peer-reviewed dataset
 
 Full results in [`benchmarks/locomo/results/`](benchmarks/locomo/results/).
@@ -1399,7 +1485,7 @@ See [benchmarks/results/memory-recall-vs-static.md](benchmarks/results/memory-re
 
 ### v0.9.0 — Cognitive Memory (2026-03-15)
 - Atkinson-Shiffrin memory model (STM → LTM promotion)
-- Semantic RAG with fastembed (BAAI/bge-base-en-v1.5, 768 dims)
+- Semantic RAG with pinned local multilingual fastembed models
 - Trust scoring, sentiment detection, adaptive personality modes
 - Ebbinghaus decay, sister detection, quarantine system
 
