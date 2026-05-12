@@ -23,6 +23,9 @@ LOCAL_INDEX_SERVICE_LABEL = "com.nexo.local-index"
 LOCAL_INDEX_SCRIPT_NAME = "nexo-local-index.py"
 LOCAL_INDEX_WINDOWS_TASK = "NEXO Local Memory"
 LOCAL_INDEX_LINUX_UNIT = "nexo-local-index.service"
+DEFAULT_LIVE_ASSET_LIMIT = int(os.environ.get("NEXO_LOCAL_INDEX_LIVE_ASSET_LIMIT", "2000") or "2000")
+DEFAULT_LIVE_DIR_LIMIT = int(os.environ.get("NEXO_LOCAL_INDEX_LIVE_DIR_LIMIT", "300") or "300")
+DEFAULT_LIVE_FILE_LIMIT = int(os.environ.get("NEXO_LOCAL_INDEX_LIVE_FILE_LIMIT", "1000") or "1000")
 
 
 def ensure_ready() -> None:
@@ -205,6 +208,11 @@ def _is_excluded(path: str, exclusions: list[str]) -> bool:
     return any(value == item or value.startswith(item + os.sep) for item in exclusions)
 
 
+def _path_prefix(path: str) -> str:
+    normalized = norm_path(path)
+    return normalized + os.sep if normalized else os.sep
+
+
 def _file_type(path: Path) -> str:
     if path.is_dir():
         return "folder"
@@ -230,6 +238,65 @@ def _permission_state(path: Path) -> str:
     except OSError:
         return "limited"
     return "granted"
+
+
+def _dir_fingerprint(path: Path, stat_result: os.stat_result | None = None) -> str:
+    st = stat_result or path.stat()
+    ctime_ns = getattr(st, "st_ctime_ns", int(float(st.st_ctime) * 1_000_000_000))
+    return f"{int(st.st_mtime_ns)}:{int(ctime_ns)}"
+
+
+def _upsert_dir(
+    conn,
+    root_id: int,
+    path: Path,
+    seen_at: float,
+    stat_result: os.stat_result | None = None,
+) -> tuple[bool, str]:
+    raw_path = str(path)
+    normalized = norm_path(raw_path)
+    dir_id = stable_id("dir", normalized)
+    parent = norm_path(path.parent)
+    try:
+        fingerprint = _dir_fingerprint(path, stat_result)
+    except Exception:
+        return False, "error"
+    row = conn.execute(
+        "SELECT quick_fingerprint, status FROM local_index_dirs WHERE dir_id=?",
+        (dir_id,),
+    ).fetchone()
+    changed = not row or row["quick_fingerprint"] != fingerprint or row["status"] == "deleted"
+    conn.execute(
+        """
+        INSERT INTO local_index_dirs(
+          dir_id, root_id, path, display_path, parent_path, quick_fingerprint,
+          status, first_seen_at, last_seen_at, updated_at, deleted_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, NULL)
+        ON CONFLICT(dir_id) DO UPDATE SET
+          root_id=excluded.root_id,
+          path=excluded.path,
+          display_path=excluded.display_path,
+          parent_path=excluded.parent_path,
+          quick_fingerprint=excluded.quick_fingerprint,
+          status='active',
+          last_seen_at=excluded.last_seen_at,
+          updated_at=excluded.updated_at,
+          deleted_at=NULL
+        """,
+        (
+            dir_id,
+            root_id,
+            normalized,
+            raw_path,
+            parent,
+            fingerprint,
+            seen_at,
+            seen_at,
+            seen_at,
+        ),
+    )
+    return changed, fingerprint
 
 
 def _upsert_asset(conn, root_id: int, path: Path, seen_at: float, root_depth: int) -> tuple[str, bool, str]:
@@ -321,6 +388,43 @@ def _upsert_asset(conn, root_id: int, path: Path, seen_at: float, root_depth: in
     return asset_id, changed, "ok"
 
 
+def _mark_asset_deleted(conn, asset_id: str, deleted_at: float | None = None) -> None:
+    deleted_at = deleted_at or now()
+    conn.execute(
+        "UPDATE local_assets SET status='deleted', deleted_at=?, updated_at=? WHERE asset_id=? AND status!='deleted'",
+        (deleted_at, deleted_at, asset_id),
+    )
+    conn.execute(
+        """
+        UPDATE local_index_jobs
+        SET status='done', last_error_code='asset_deleted', updated_at=?
+        WHERE asset_id=? AND status IN ('pending', 'running')
+        """,
+        (deleted_at, asset_id),
+    )
+
+
+def _mark_dir_subtree_deleted(conn, dir_path: str, deleted_at: float | None = None) -> int:
+    deleted_at = deleted_at or now()
+    normalized = norm_path(dir_path)
+    prefix = _path_prefix(normalized)
+    conn.execute(
+        """
+        UPDATE local_index_dirs
+        SET status='deleted', deleted_at=?, updated_at=?
+        WHERE status='active' AND (path=? OR path LIKE ?)
+        """,
+        (deleted_at, deleted_at, normalized, prefix + "%"),
+    )
+    rows = conn.execute(
+        "SELECT asset_id FROM local_assets WHERE status='active' AND (path=? OR path LIKE ?)",
+        (normalized, prefix + "%"),
+    ).fetchall()
+    for row in rows:
+        _mark_asset_deleted(conn, row["asset_id"], deleted_at)
+    return len(rows)
+
+
 def enqueue_job(conn, asset_id: str, job_type: str, *, priority: int = 50) -> str:
     job_id = stable_id("job", f"{asset_id}:{job_type}")
     conn.execute(
@@ -334,7 +438,17 @@ def enqueue_job(conn, asset_id: str, job_type: str, *, priority: int = 50) -> st
     return job_id
 
 
-def _iter_files(root: Path, exclusions: list[str], *, limit: int | None = None, start_after: str = ""):
+def _iter_files(
+    conn,
+    root_id: int,
+    root: Path,
+    exclusions: list[str],
+    *,
+    limit: int | None = None,
+    start_after: str = "",
+    seen_at: float | None = None,
+):
+    seen_at = seen_at or now()
     seen_dirs: set[tuple[int, int]] = set()
     count = 0
     stack = [root]
@@ -353,6 +467,7 @@ def _iter_files(root: Path, exclusions: list[str], *, limit: int | None = None, 
         if key in seen_dirs:
             continue
         seen_dirs.add(key)
+        _upsert_dir(conn, root_id, current, seen_at, st)
         try:
             entries = sorted(current.iterdir(), key=lambda item: str(item).lower())
         except Exception:
@@ -427,6 +542,242 @@ def _clear_checkpoint(conn, root_id: int) -> None:
     conn.execute("DELETE FROM local_index_checkpoints WHERE root_id=? AND phase='quick_index'", (root_id,))
 
 
+def _reconcile_known_assets(conn, exclusions: list[str], *, limit: int) -> dict:
+    stats = {"checked": 0, "modified": 0, "deleted": 0, "excluded": 0, "offline": 0, "errors": 0}
+    if limit <= 0:
+        return stats
+    rows = conn.execute(
+        """
+        SELECT a.asset_id, a.path, a.root_id, a.quick_fingerprint, a.depth, r.root_path
+        FROM local_assets a
+        LEFT JOIN local_index_roots r ON r.id = a.root_id
+        WHERE a.status='active'
+        ORDER BY a.updated_at ASC
+        LIMIT ?
+        """,
+        (int(limit),),
+    ).fetchall()
+    seen_at = now()
+    for row in rows:
+        stats["checked"] += 1
+        path = str(row["path"])
+        root_path = Path(row["root_path"]).expanduser() if row["root_path"] else None
+        if _is_excluded(path, exclusions):
+            _mark_asset_deleted(conn, row["asset_id"], seen_at)
+            stats["excluded"] += 1
+            continue
+        if root_path is not None and not root_path.exists():
+            stats["offline"] += 1
+            continue
+        file_path = Path(path)
+        try:
+            if not file_path.exists() or not file_path.is_file():
+                _mark_asset_deleted(conn, row["asset_id"], seen_at)
+                stats["deleted"] += 1
+                continue
+            st = file_path.stat()
+            fingerprint = quick_fingerprint(file_path, st)
+        except Exception:
+            stats["errors"] += 1
+            continue
+        if fingerprint != row["quick_fingerprint"]:
+            _, changed, state = _upsert_asset(conn, int(row["root_id"] or 0), file_path, seen_at, int(row["depth"] or 2))
+            if changed:
+                stats["modified"] += 1
+            if state != "ok":
+                stats["errors"] += 1
+        else:
+            conn.execute("UPDATE local_assets SET updated_at=? WHERE asset_id=?", (seen_at, row["asset_id"]))
+    return stats
+
+
+def _prune_missing_children(
+    conn,
+    directory: Path,
+    seen_files: set[str],
+    seen_dirs: set[str],
+    seen_at: float,
+) -> tuple[int, int]:
+    parent = norm_path(directory)
+    deleted_files = 0
+    deleted_dirs = 0
+    file_rows = conn.execute(
+        "SELECT asset_id, path FROM local_assets WHERE parent_path=? AND status='active'",
+        (parent,),
+    ).fetchall()
+    for row in file_rows:
+        if row["path"] not in seen_files:
+            _mark_asset_deleted(conn, row["asset_id"], seen_at)
+            deleted_files += 1
+    dir_rows = conn.execute(
+        "SELECT path FROM local_index_dirs WHERE parent_path=? AND status='active'",
+        (parent,),
+    ).fetchall()
+    for row in dir_rows:
+        if row["path"] not in seen_dirs:
+            deleted_files += _mark_dir_subtree_deleted(conn, row["path"], seen_at)
+            deleted_dirs += 1
+    return deleted_files, deleted_dirs
+
+
+def _scan_known_directory(
+    conn,
+    root_id: int,
+    directory: Path,
+    root_depth: int,
+    exclusions: list[str],
+    stats: dict,
+    *,
+    file_limit: int,
+    dir_limit: int,
+) -> None:
+    stack = [directory]
+    seen_at = now()
+    scanned_dirs = 0
+    while stack and stats["files_scanned"] < file_limit and scanned_dirs < dir_limit:
+        current = stack.pop()
+        if _is_excluded(str(current), exclusions):
+            _mark_dir_subtree_deleted(conn, str(current), seen_at)
+            stats["excluded_dirs"] += 1
+            continue
+        if current != directory and should_skip_tree(str(current)):
+            continue
+        try:
+            st = current.stat()
+            if not current.is_dir():
+                continue
+            entries = sorted(current.iterdir(), key=lambda item: str(item).lower())
+        except Exception:
+            stats["errors"] += 1
+            continue
+        scanned_dirs += 1
+        stats["dirs_scanned"] += 1
+        _upsert_dir(conn, root_id, current, seen_at, st)
+        seen_files: set[str] = set()
+        seen_dirs: set[str] = set()
+        for entry in entries:
+            if _is_excluded(str(entry), exclusions):
+                continue
+            try:
+                if entry.is_symlink():
+                    continue
+                if entry.is_dir():
+                    if should_skip_tree(str(entry)):
+                        continue
+                    changed, _ = _upsert_dir(conn, root_id, entry, seen_at)
+                    seen_dirs.add(norm_path(entry))
+                    if changed and scanned_dirs + len(stack) < dir_limit:
+                        stack.append(entry)
+                    continue
+                if entry.is_file():
+                    seen_files.add(norm_path(entry))
+                    if stats["files_scanned"] >= file_limit:
+                        continue
+                    _, changed, state = _upsert_asset(conn, root_id, entry, seen_at, root_depth)
+                    stats["files_scanned"] += 1
+                    if changed:
+                        stats["files_changed"] += 1
+                    if state != "ok":
+                        stats["errors"] += 1
+            except Exception:
+                stats["errors"] += 1
+        deleted_files, deleted_dirs = _prune_missing_children(conn, current, seen_files, seen_dirs, seen_at)
+        stats["files_deleted"] += deleted_files
+        stats["dirs_deleted"] += deleted_dirs
+
+
+def _reconcile_known_dirs(conn, exclusions: list[str], *, dir_limit: int, file_limit: int) -> dict:
+    stats = {
+        "checked": 0,
+        "changed": 0,
+        "dirs_scanned": 0,
+        "files_scanned": 0,
+        "files_changed": 0,
+        "files_deleted": 0,
+        "dirs_deleted": 0,
+        "excluded_dirs": 0,
+        "offline": 0,
+        "errors": 0,
+    }
+    if dir_limit <= 0 or file_limit <= 0:
+        return stats
+    rows = conn.execute(
+        """
+        SELECT d.dir_id, d.path, d.quick_fingerprint, d.root_id, r.root_path, r.depth
+        FROM local_index_dirs d
+        LEFT JOIN local_index_roots r ON r.id = d.root_id
+        WHERE d.status='active'
+        ORDER BY d.updated_at ASC
+        LIMIT ?
+        """,
+        (int(dir_limit),),
+    ).fetchall()
+    seen_at = now()
+    for row in rows:
+        stats["checked"] += 1
+        dir_path = Path(row["path"])
+        root_path = Path(row["root_path"]).expanduser() if row["root_path"] else None
+        if _is_excluded(str(dir_path), exclusions):
+            stats["files_deleted"] += _mark_dir_subtree_deleted(conn, str(dir_path), seen_at)
+            stats["excluded_dirs"] += 1
+            continue
+        if root_path is not None and not root_path.exists():
+            stats["offline"] += 1
+            continue
+        try:
+            if not dir_path.exists() or not dir_path.is_dir():
+                stats["files_deleted"] += _mark_dir_subtree_deleted(conn, str(dir_path), seen_at)
+                stats["dirs_deleted"] += 1
+                continue
+            st = dir_path.stat()
+            fingerprint = _dir_fingerprint(dir_path, st)
+        except Exception:
+            stats["errors"] += 1
+            continue
+        if fingerprint != row["quick_fingerprint"]:
+            stats["changed"] += 1
+            _scan_known_directory(
+                conn,
+                int(row["root_id"] or 0),
+                dir_path,
+                int(row["depth"] or 2),
+                exclusions,
+                stats,
+                file_limit=file_limit,
+                dir_limit=dir_limit,
+            )
+        else:
+            conn.execute("UPDATE local_index_dirs SET updated_at=? WHERE dir_id=?", (seen_at, row["dir_id"]))
+    return stats
+
+
+def reconcile_live_changes(
+    *,
+    asset_limit: int = DEFAULT_LIVE_ASSET_LIMIT,
+    dir_limit: int = DEFAULT_LIVE_DIR_LIMIT,
+    file_limit: int = DEFAULT_LIVE_FILE_LIMIT,
+) -> dict:
+    conn = _conn()
+    if _is_paused():
+        return {"ok": True, "paused": True, "assets": {}, "dirs": {}}
+    exclusions = [row["path"] for row in list_exclusions()]
+    asset_stats = _reconcile_known_assets(conn, exclusions, limit=int(asset_limit or 0))
+    dir_stats = _reconcile_known_dirs(conn, exclusions, dir_limit=int(dir_limit or 0), file_limit=int(file_limit or 0))
+    conn.commit()
+    changed_total = (
+        int(asset_stats.get("modified", 0))
+        + int(asset_stats.get("deleted", 0))
+        + int(asset_stats.get("excluded", 0))
+        + int(dir_stats.get("files_changed", 0))
+        + int(dir_stats.get("files_deleted", 0))
+        + int(dir_stats.get("dirs_deleted", 0))
+        + int(dir_stats.get("excluded_dirs", 0))
+    )
+    if changed_total:
+        log_event("info", "live_reconcile_finished", "Local memory live changes reconciled", assets=asset_stats, dirs=dir_stats)
+    return {"ok": True, "assets": asset_stats, "dirs": dir_stats}
+
+
 def scan_once(*, limit: int | None = None) -> dict:
     conn = _conn()
     if _is_paused():
@@ -455,7 +806,15 @@ def scan_once(*, limit: int | None = None) -> dict:
         cycle_started_at = float(checkpoint["cycle_started_at"])
         seen_for_root = 0
         last_seen_path = ""
-        for file_path in _iter_files(root_path, exclusions, limit=limit, start_after=str(checkpoint["current_path"] or "")):
+        for file_path in _iter_files(
+            conn,
+            root_id,
+            root_path,
+            exclusions,
+            limit=limit,
+            start_after=str(checkpoint["current_path"] or ""),
+            seen_at=cycle_started_at,
+        ):
             asset_id, changed, state = _upsert_asset(conn, root_id, file_path, cycle_started_at, int(root["depth"] or 2))
             last_seen_path = norm_path(file_path)
             totals["seen"] += 1
@@ -630,12 +989,25 @@ def process_jobs(*, limit: int = 100) -> dict:
     return {"ok": True, "processed": processed, "failed": failed}
 
 
-def run_once(*, root: str | None = None, limit: int | None = None, process_limit: int = 100) -> dict:
+def run_once(
+    *,
+    root: str | None = None,
+    limit: int | None = None,
+    process_limit: int = 100,
+    live_asset_limit: int = DEFAULT_LIVE_ASSET_LIMIT,
+    live_dir_limit: int = DEFAULT_LIVE_DIR_LIMIT,
+    live_file_limit: int = DEFAULT_LIVE_FILE_LIMIT,
+) -> dict:
     if root:
         add_root(root)
+    live_result = reconcile_live_changes(
+        asset_limit=live_asset_limit,
+        dir_limit=live_dir_limit,
+        file_limit=live_file_limit,
+    )
     scan_result = scan_once(limit=limit)
     job_result = process_jobs(limit=process_limit)
-    return {"ok": True, "scan": scan_result, "jobs": job_result}
+    return {"ok": True, "live": live_result, "scan": scan_result, "jobs": job_result}
 
 
 def _problem_rows(conn) -> list[dict]:
@@ -955,6 +1327,21 @@ def context_query(query: str, *, intent: str = "answer", limit: int = 12, eviden
         (f"%{query.lower()}%", int(limit)),
     ).fetchall()
     entities_payload = [dict(row) for row in entity_rows]
+    relations_payload: list[dict] = []
+    if seen_assets:
+        asset_ids = list(seen_assets)[: int(limit)]
+        placeholders = ",".join("?" for _ in asset_ids)
+        relation_rows = conn.execute(
+            f"""
+            SELECT relation_id, source_asset_id, target_ref, relation_type, confidence, evidence
+            FROM local_relations
+            WHERE active=1 AND source_asset_id IN ({placeholders})
+            ORDER BY confidence DESC
+            LIMIT ?
+            """,
+            [*asset_ids, int(limit) * 3],
+        ).fetchall()
+        relations_payload = [dict(row) for row in relation_rows]
     warnings = []
     if evidence_required and not evidence_refs:
         warnings.append("No local evidence found for this query.")
@@ -984,7 +1371,7 @@ def context_query(query: str, *, intent: str = "answer", limit: int = 12, eviden
         "summary": summary,
         "assets": assets,
         "entities": entities_payload,
-        "relations": [],
+        "relations": relations_payload,
         "chunks": chunks,
         "warnings": warnings,
         "evidence_refs": evidence_refs,
@@ -1034,6 +1421,7 @@ def clear_index() -> dict:
         "local_chunks",
         "local_entities",
         "local_relations",
+        "local_index_dirs",
         "local_index_errors",
         "local_index_jobs",
         "local_asset_versions",

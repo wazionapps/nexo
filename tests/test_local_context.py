@@ -32,6 +32,7 @@ def test_scan_extract_query_and_purge(tmp_path):
     context = local_context.context_query("factura portatil Maria", limit=5)
     assert context["ok"] is True
     assert context["evidence_refs"]
+    assert context["relations"]
     assert any("factura-portatil" in asset["path"] for asset in context["assets"])
 
     asset_id = context["assets"][0]["asset_id"]
@@ -162,6 +163,82 @@ def test_checkpoint_advances_partial_scans(tmp_path):
     conn = db.get_db()
     row = conn.execute("SELECT COUNT(*) AS total FROM local_assets WHERE status='active'").fetchone()
     assert row["total"] == 3
+
+
+def test_live_reconcile_marks_deleted_file_without_full_rescan(tmp_path):
+    root = tmp_path / "docs"
+    root.mkdir()
+    path = root / "note.txt"
+    path.write_text("delete me", encoding="utf-8")
+
+    local_context.add_root(str(root))
+    local_context.run_once(limit=20, process_limit=20)
+    path.unlink()
+
+    result = local_context.reconcile_live_changes(asset_limit=20, dir_limit=0, file_limit=0)
+
+    assert result["assets"]["deleted"] == 1
+    conn = db.get_db()
+    row = conn.execute("SELECT status FROM local_assets WHERE display_path=?", (str(path),)).fetchone()
+    assert row["status"] == "deleted"
+
+
+def test_live_reconcile_reindexes_modified_file(tmp_path):
+    root = tmp_path / "docs"
+    root.mkdir()
+    path = root / "note.txt"
+    path.write_text("first version", encoding="utf-8")
+
+    local_context.add_root(str(root))
+    local_context.run_once(limit=20, process_limit=20)
+    conn = db.get_db()
+    before = conn.execute("SELECT COUNT(*) AS total FROM local_asset_versions").fetchone()["total"]
+
+    path.write_text("second version with more content", encoding="utf-8")
+    result = local_context.reconcile_live_changes(asset_limit=20, dir_limit=0, file_limit=0)
+
+    after = conn.execute("SELECT COUNT(*) AS total FROM local_asset_versions").fetchone()["total"]
+    pending = conn.execute("SELECT COUNT(*) AS total FROM local_index_jobs WHERE status='pending'").fetchone()["total"]
+    assert result["assets"]["modified"] == 1
+    assert after > before
+    assert pending >= 1
+
+
+def test_live_reconcile_discovers_new_file_in_known_directory(tmp_path):
+    root = tmp_path / "docs"
+    root.mkdir()
+    initial = root / "initial.txt"
+    created = root / "created.txt"
+    initial.write_text("initial", encoding="utf-8")
+
+    local_context.add_root(str(root))
+    local_context.run_once(limit=20, process_limit=20)
+    created.write_text("created after first scan", encoding="utf-8")
+
+    result = local_context.reconcile_live_changes(asset_limit=0, dir_limit=20, file_limit=20)
+
+    assert result["dirs"]["files_changed"] >= 1
+    conn = db.get_db()
+    row = conn.execute("SELECT status FROM local_assets WHERE display_path=?", (str(created),)).fetchone()
+    assert row["status"] == "active"
+
+
+def test_live_reconcile_marks_existing_files_deleted_after_exclusion(tmp_path):
+    root = tmp_path / "docs"
+    ignored = root / "ignored"
+    ignored.mkdir(parents=True)
+    path = ignored / "secret.txt"
+    path.write_text("already indexed", encoding="utf-8")
+
+    local_context.add_root(str(root))
+    local_context.run_once(limit=20, process_limit=20)
+    local_context.add_exclusion(str(ignored))
+    result = local_context.reconcile_live_changes(asset_limit=20, dir_limit=20, file_limit=20)
+
+    assert result["assets"]["excluded"] + result["dirs"]["excluded_dirs"] >= 1
+    conn = db.get_db()
+    row = conn.execute("SELECT status FROM local_assets WHERE display_path=?", (str(path),)).fetchone()
+    assert row["status"] == "deleted"
 
 
 def test_service_config_renders_macos_and_windows():

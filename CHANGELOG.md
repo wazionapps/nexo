@@ -1,5 +1,16 @@
 # Changelog
 
+## [7.20.0] - 2026-05-12
+
+### Added — live local memory reconciliation
+
+- **Local Context now keeps the index alive between full scans.** Each service cycle reconciles known files and directories before processing the normal queue, so created, modified, deleted and newly excluded files are reflected automatically without waiting for a full root pass to finish.
+- **Known directories are tracked as first-class index state.** Migration `64` adds `local_index_dirs`, allowing bounded rescans of changed folders, safe pruning of removed children and protection against mass tombstoning when a mounted root is temporarily offline.
+- **Agents can retrieve graph relations with local evidence.** `context_query()` now returns matched relations alongside assets, chunks and entities, giving Brain traceability over documents, projects, code and linked local artifacts.
+- **CLI and service entrypoints expose the live reconcile pass.** `nexo local-context reconcile --json` and the resident local-index cycle run the same bounded live-change detector, keeping macOS LaunchAgent and Windows Scheduled Task behavior aligned.
+- **Full Disk Access stale prompts are cleared after real verification.** If macOS access is already granted, `nexo chat` clears obsolete prompt state and avoids showing the disk-permission warning again.
+- **Coverage:** targeted local-context/runtime suites pass across live deletion, modification, new-file discovery, exclusion tombstoning, graph relation query, CLI reconcile and macOS permission-state cleanup.
+
 ## [7.19.0] - 2026-05-12
 
 ### Added — Bundle-managed Brain updates and version-drift autoexit

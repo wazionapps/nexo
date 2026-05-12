@@ -920,7 +920,20 @@ def ensure_full_disk_access_choice(
         probe = probe_fn()
         if probe.get("granted") is True:
             verified = True
-            message = f"Full Disk Access verified via {probe.get('probe_path')}."
+            schedule[FULL_DISK_ACCESS_STATUS_KEY] = FULL_DISK_ACCESS_GRANTED
+            schedule[FULL_DISK_ACCESS_REASONS_KEY] = []
+            clear_full_disk_access_required_state()
+            save_schedule_config(schedule)
+            return {
+                "status": FULL_DISK_ACCESS_GRANTED,
+                "prompted": False,
+                "verified": True,
+                "settings_opened": False,
+                "reasons": [],
+                "schedule_file": str(SCHEDULE_FILE),
+                "message": "",
+                "relevant": False,
+            }
         else:
             status = FULL_DISK_ACCESS_LATER
             message = (

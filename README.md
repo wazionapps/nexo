@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.19.0` is the current packaged-runtime line. Minor release over v7.18.1 — bundle-managed installations (NEXO Desktop `brain-bundle/`) can now pin Brain to the host application release cycle via `NEXO_BRAIN_AUTO_UPDATE=false`, and the server auto-exits with code 75 on fingerprint mismatch so MCP clients respawn the server with the new code instead of leaving stale `server.py` processes alive.
+Version `7.20.0` is the current packaged-runtime line. Minor release over v7.19.0 — the Local Context index now reconciles known files and folders on every service cycle, so created, modified, deleted and newly excluded local files are reflected automatically between full scans.
+
+Previously in `7.19.0`: minor release over v7.18.1 - bundle-managed installations (NEXO Desktop `brain-bundle/`) can now pin Brain to the host application release cycle via `NEXO_BRAIN_AUTO_UPDATE=false`, and the server auto-exits with code 75 on fingerprint mismatch so MCP clients respawn the server with the new code instead of leaving stale `server.py` processes alive.
 
 Previously in `7.18.1`: patch release over v7.18.0 - packaged Brain runtimes now include the `local_context` package, so Desktop Local Memory and `nexo local-context` do not get stuck behind `ModuleNotFoundError` or zero-file status; the local-index service also keeps detecting newly mounted volumes automatically.
 

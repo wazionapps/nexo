@@ -20,7 +20,7 @@ Entry points:
   nexo scripts run NAME_OR_PATH [-- args...]
   nexo scripts doctor [NAME_OR_PATH] [--json]
   nexo scripts call TOOL --input JSON [--json-output]
-  nexo local-context status|run-once|pause|resume|roots|exclusions|query|diagnostics|models [--json]
+  nexo local-context status|run-once|reconcile|pause|resume|roots|exclusions|query|diagnostics|models [--json]
   nexo automations reactivate NAME [--test-run] [--json]
   nexo skills list [--level ...] [--source-kind ...] [--json]
   nexo skills get ID [--json]
@@ -1286,6 +1286,18 @@ def _local_context_run_once(args) -> int:
             root=getattr(args, "root", "") or None,
             limit=getattr(args, "limit", None),
             process_limit=int(getattr(args, "process_limit", 100) or 100),
+        ),
+        args,
+    )
+
+
+def _local_context_reconcile(args) -> int:
+    import local_context
+    return _local_context_emit(
+        local_context.reconcile_live_changes(
+            asset_limit=int(getattr(args, "asset_limit", 2000) or 0),
+            dir_limit=int(getattr(args, "dir_limit", 300) or 0),
+            file_limit=int(getattr(args, "file_limit", 1000) or 0),
         ),
         args,
     )
@@ -3154,6 +3166,12 @@ def main():
     local_context_run_p.add_argument("--process-limit", type=int, default=100, help="Maximum extraction/graph jobs to process")
     local_context_run_p.add_argument("--json", action="store_true", help="JSON output")
 
+    local_context_reconcile_p = local_context_sub.add_parser("reconcile", help="Reconcile changed, deleted and new local files")
+    local_context_reconcile_p.add_argument("--asset-limit", type=int, default=2000, help="Maximum known files to verify")
+    local_context_reconcile_p.add_argument("--dir-limit", type=int, default=300, help="Maximum known folders to verify")
+    local_context_reconcile_p.add_argument("--file-limit", type=int, default=1000, help="Maximum files to scan inside changed folders")
+    local_context_reconcile_p.add_argument("--json", action="store_true", help="JSON output")
+
     local_context_pause_p = local_context_sub.add_parser("pause", help="Pause local memory indexing")
     local_context_pause_p.add_argument("--json", action="store_true", help="JSON output")
 
@@ -3734,6 +3752,8 @@ def main():
             return _local_context_status(args)
         if args.local_context_command == "run-once":
             return _local_context_run_once(args)
+        if args.local_context_command == "reconcile":
+            return _local_context_reconcile(args)
         if args.local_context_command in {"pause", "resume", "clear-index"}:
             return _local_context_control(args)
         if args.local_context_command == "roots":

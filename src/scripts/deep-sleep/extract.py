@@ -70,6 +70,57 @@ TRANSIENT_ERROR_KINDS = {
 }
 REQUIRED_PROTOCOL_SUMMARY_KEYS = ("guard_check", "heartbeat", "change_log")
 
+# Compact few-shot rendered into the prompt on a `json_schema` retry. Keeps
+# the placeholder structure intact so the model sees the exact contract that
+# `_is_valid_extraction` enforces. Kept as a string to avoid pulling in a
+# template engine for a one-shot block.
+JSON_SCHEMA_FEWSHOT = (
+    "RETRY_HINT: the previous attempt produced JSON that did not match the "
+    "Deep Sleep extraction contract. The response must be a SINGLE JSON "
+    "object with the following minimum shape (extra keys allowed):\n"
+    "{\n"
+    '  "session_id": "<exact session id, string>",\n'
+    '  "findings": [ { "type": "...", "summary": "...", "evidence": "..." } ],\n'
+    '  "protocol_summary": {\n'
+    '    "guard_check": { "ran": true|false, "notes": "..." },\n'
+    '    "heartbeat":   { "count": 0, "notes": "..." },\n'
+    '    "change_log":  { "entries": 0, "notes": "..." }\n'
+    "  }\n"
+    "}\n"
+    "Mandatory: session_id is a non-empty string equal to {{SESSION_ID}}; "
+    "findings is a list of objects; protocol_summary contains the three "
+    "object keys above. Return ONLY the JSON object, no prose, no fences."
+)
+
+
+def _record_protocol_debt(
+    session_id: str,
+    *,
+    debt_type: str,
+    severity: str,
+    evidence: str,
+) -> None:
+    """Best-effort registration of an extraction failure as protocol debt.
+
+    Imported lazily so the extractor still runs in environments where the
+    DB layer is unavailable (e.g. partial installs, unit tests). Any error
+    inside the debt path is swallowed: we never want a debt-logging issue
+    to mask the real extraction failure already being reported.
+    """
+    try:
+        from db._protocol import create_protocol_debt
+    except Exception:  # pragma: no cover - best effort
+        return
+    try:
+        create_protocol_debt(
+            session_id,
+            debt_type,
+            severity=severity,
+            evidence=evidence[:3500],
+        )
+    except Exception as exc:  # pragma: no cover - best effort
+        print(f"    Warning: could not record protocol_debt: {exc}", file=sys.stderr)
+
 
 def _classify_cli_result(result) -> tuple[str, str]:
     """Return (kind, short_message) describing a failed automation backend call.
@@ -211,11 +262,18 @@ def analyze_session(
     date_dir: Path,
     shared_context_file: Path | None,
     session_txt_map: dict[str, str] | None = None,
+    *,
+    prior_error_kind: str = "",
 ) -> tuple[dict | None, str | None]:
     """Send a session to the automation backend for extraction analysis.
 
     Returns (parsed_result, error_kind). `error_kind` is only set on failure.
     See `_classify_cli_result` for possible values.
+
+    ``prior_error_kind`` is consumed by the retry path: when the previous
+    attempt failed validation with ``json_schema`` we append a few-shot of
+    the contract so the model sees the exact shape it must produce instead
+    of repeating the same structurally wrong payload.
     """
     session_file = find_session_file(session_id, date_dir, session_txt_map=session_txt_map)
     if not session_file:
@@ -236,6 +294,15 @@ def analyze_session(
     prompt = prompt_template.replace("{{CONTEXT_FILE}}", str(session_file))
     prompt = prompt.replace("{{SESSION_ID}}", session_id)
     prompt += shared_ctx_instruction
+    if prior_error_kind == "json_schema":
+        prompt += "\n\n" + JSON_SCHEMA_FEWSHOT.replace("{{SESSION_ID}}", session_id)
+
+    # Bootstrap the subagent with the day's deep-sleep dir as cwd so its
+    # default Read allowlist already covers the session transcript, the
+    # shared context, and the day's working files. Without this, the CLI
+    # subprocess inherits the parent's cwd (often "/") and fails with
+    # `cannot_comply` the first time it tries to Read the session file.
+    subagent_cwd = str(date_dir) if date_dir and Path(date_dir).exists() else None
 
     try:
         json_system_prompt = render_core_prompt(
@@ -246,6 +313,7 @@ def analyze_session(
         result = run_automation_prompt(
             prompt,
             caller="deep-sleep/extract",
+            cwd=subagent_cwd,
             timeout=CLAUDE_TIMEOUT,
             output_format="text",
             append_system_prompt=json_system_prompt,
@@ -276,6 +344,7 @@ def analyze_session(
             convert_result = run_automation_prompt(
                 convert_prompt,
                 caller="deep-sleep/extract",
+                cwd=subagent_cwd,
                 timeout=120,
                 output_format="text",
                 append_system_prompt=json_system_prompt,
@@ -471,6 +540,7 @@ def main():
                 date_dir,
                 shared_context_file,
                 session_txt_map=session_txt_map,
+                prior_error_kind=last_error_kind,
             )
             if result:
                 break
@@ -522,6 +592,21 @@ def main():
             }
             all_extractions.append(failed_entry)
             _save_checkpoint(checkpoint_file, failed_entry)
+            # Surface deterministic extractor failures as protocol debt so
+            # the aggregate self-audit cannot silently absorb the pattern.
+            # Severity escalates once the session is poisoned because by
+            # then it stops being a per-run hiccup and becomes a recurring
+            # runtime issue worth a louder signal.
+            _record_protocol_debt(
+                session_id,
+                debt_type=f"deep-sleep.extract.{last_error_kind}",
+                severity="error" if state == "poisoned" else "warn",
+                evidence=(
+                    f"date={target_date} state={state} attempts={new_count}/"
+                    f"{MAX_POISON_ATTEMPTS} kind={last_error_kind} "
+                    f"checkpoint={checkpoint_file}"
+                ),
+            )
             if state == "poisoned":
                 poisoned += 1
 

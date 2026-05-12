@@ -295,6 +295,8 @@ def test_full_disk_access_verified_clears_required_state(tmp_path, monkeypatch):
 
     assert result["status"] == "granted"
     assert result["verified"] is True
+    assert result["relevant"] is False
+    assert result["message"] == ""
     assert state_file.exists() is False
     assert runtime_power.load_schedule_config()["full_disk_access_reasons"] == []
 

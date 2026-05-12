@@ -39,6 +39,9 @@ LOCK_FILE = LOG_DIR / "local-index.lock"
 LOCK_STALE_SECONDS = int(os.environ.get("NEXO_LOCAL_INDEX_LOCK_STALE_SECONDS", "1800") or "1800")
 SCAN_LIMIT = int(os.environ.get("NEXO_LOCAL_INDEX_SCAN_LIMIT", "1000") or "1000")
 PROCESS_LIMIT = int(os.environ.get("NEXO_LOCAL_INDEX_PROCESS_LIMIT", "200") or "200")
+LIVE_ASSET_LIMIT = int(os.environ.get("NEXO_LOCAL_INDEX_LIVE_ASSET_LIMIT", "2000") or "2000")
+LIVE_DIR_LIMIT = int(os.environ.get("NEXO_LOCAL_INDEX_LIVE_DIR_LIMIT", "300") or "300")
+LIVE_FILE_LIMIT = int(os.environ.get("NEXO_LOCAL_INDEX_LIVE_FILE_LIMIT", "1000") or "1000")
 
 
 def log(message: str) -> None:
@@ -79,7 +82,13 @@ def main() -> int:
     try:
         if os.environ.get("NEXO_LOCAL_INDEX_DISABLE_DEFAULT_ROOTS", "").strip() != "1":
             api.ensure_default_roots()
-        result = api.run_once(limit=SCAN_LIMIT, process_limit=PROCESS_LIMIT)
+        result = api.run_once(
+            limit=SCAN_LIMIT,
+            process_limit=PROCESS_LIMIT,
+            live_asset_limit=LIVE_ASSET_LIMIT,
+            live_dir_limit=LIVE_DIR_LIMIT,
+            live_file_limit=LIVE_FILE_LIMIT,
+        )
         log_event("info", "service_cycle_finished", "Local memory service cycle finished", result=result)
         log(json.dumps(result, ensure_ascii=False, sort_keys=True))
         return 0 if result.get("ok") else 2

@@ -56,6 +56,24 @@ def test_local_context_cli_indexes_and_queries(tmp_path):
     assert run["ok"] is True
     assert run["scan"]["seen"] >= 1
 
+    (docs / "nueva-factura.txt").write_text("Nueva factura relacionada con Maria.", encoding="utf-8")
+    reconcile = _json(
+        _run_cli(
+            nexo_home,
+            "local-context",
+            "reconcile",
+            "--asset-limit",
+            "0",
+            "--dir-limit",
+            "20",
+            "--file-limit",
+            "20",
+            "--json",
+        )
+    )
+    assert reconcile["ok"] is True
+    assert reconcile["dirs"]["files_changed"] >= 1
+
     query = _json(_run_cli(nexo_home, "local-context", "query", "factura Maria BMW", "--limit", "5", "--json"))
     assert query["ok"] is True
     assert query["evidence_refs"]

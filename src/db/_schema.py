@@ -1972,6 +1972,36 @@ def _m63_local_context_layer(conn):
     )
 
 
+def _m64_local_context_live_dirs(conn):
+    """Track known folders so local context can detect new/deleted/changed files quickly."""
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS local_index_dirs (
+            dir_id TEXT PRIMARY KEY,
+            root_id INTEGER,
+            path TEXT NOT NULL UNIQUE,
+            display_path TEXT NOT NULL,
+            parent_path TEXT NOT NULL DEFAULT '',
+            quick_fingerprint TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'active',
+            first_seen_at REAL NOT NULL,
+            last_seen_at REAL NOT NULL,
+            updated_at REAL NOT NULL,
+            deleted_at REAL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_local_index_dirs_root_status
+            ON local_index_dirs(root_id, status);
+        CREATE INDEX IF NOT EXISTS idx_local_index_dirs_path
+            ON local_index_dirs(path);
+        CREATE INDEX IF NOT EXISTS idx_local_index_dirs_parent
+            ON local_index_dirs(parent_path);
+        CREATE INDEX IF NOT EXISTS idx_local_assets_updated
+            ON local_assets(updated_at);
+        """
+    )
+
+
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
     (2, "followups_reasoning", _m2_followups_reasoning),
@@ -2036,6 +2066,7 @@ MIGRATIONS = [
     (61, "memory_observations_fts", _m61_memory_observations_fts),
     (62, "memory_observations_fts_trigger_fix", _m62_memory_observations_fts_trigger_fix),
     (63, "local_context_layer", _m63_local_context_layer),
+    (64, "local_context_live_dirs", _m64_local_context_live_dirs),
 ]
 
 

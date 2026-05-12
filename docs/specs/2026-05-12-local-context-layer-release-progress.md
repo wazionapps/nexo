@@ -190,3 +190,147 @@ Chosen execution strategy:
 - Regression coverage added for the overlap lifecycle and stream routing contract. Full DOM smoke remains part of Desktop release verification.
 - Wake-word packaged asset loading fixed by serving Vosk model assets through `nexo-voice://` instead of `file://` in packaged builds.
 - Desktop beta and stable are intentionally unsigned for this release flow; upload was performed with `ALLOW_UNSIGNED=1`.
+
+## Active Continuation Checkpoint - 2026-05-12 19:40 Europe/Madrid
+
+This section is the compact-safe handoff for the current continuation. If the chat compacts, resume from here before doing any release work.
+
+Current public baseline before this continuation:
+
+- Brain published baseline: `7.19.0`.
+- Desktop published baseline: `0.33.2`.
+- Both repos were clean at the start of this continuation.
+- Target now: one coordinated Brain + Desktop release, beta and stable, with the live local memory fixes and the Desktop UI corrections below.
+
+User-critical requirements for this continuation:
+
+- The local memory processor must be live: created, modified and deleted files must be detected and reflected automatically, not only after a full scan finishes.
+- Must work on macOS and Windows.
+- UI must remain simple: excluded folders, current state, file counts/progress and basic controls only.
+- Desktop must keep shipping the local LLM/model bundle so install/update does not require users to download large models during setup.
+- `Limpiar índice` must require confirmation before deleting local index progress.
+- `Forzar pasada` must be renamed/explained as a normal-user action, not technical wording.
+- Preferences loading surface should use `Cargando...` as title and `Leyendo estado de memoria local...` as subtitle.
+- `nexo chat` must not keep asking for Full Disk Access when it is already verified.
+
+Brain changes currently implemented but not released:
+
+- Added migration `64` with `local_index_dirs` to track known folders and detect live directory changes.
+- Added live reconciliation before each index cycle:
+  - known active files are checked for deletion/modification;
+  - known active folders are checked for directory mtime changes;
+  - changed folders are scanned in bounded batches to discover new files and prune deleted children;
+  - exclusions now tombstone already-indexed files under excluded folders;
+  - offline roots are not treated as mass deletion.
+- `run_once()` now returns `live`, `scan`, and `jobs`.
+- `src/scripts/nexo-local-index.py` now runs live reconciliation limits before scan/process.
+- Added `nexo local-context reconcile --json`.
+- `context_query()` now returns graph relations for matched assets, not only chunks/assets/entities.
+- Fixed Full Disk Access prompt loop: if the probe verifies granted access, `ensure_full_disk_access_choice()` clears stale reasons/state and returns no visible message.
+
+Brain verification already passed in this continuation:
+
+- `python3 -m compileall -q src/local_context src/db/_schema.py src/cli.py src/runtime_power.py src/scripts/nexo-local-index.py` -> passed.
+- `python3 -m pytest tests/test_local_context.py tests/test_local_context_cli.py tests/test_runtime_power.py -q` -> `39 passed`.
+- `python3 src/cli.py local-context service-config --platform windows --json` -> rendered Windows Scheduled Task metadata.
+- `python3 src/cli.py local-context service-config --platform macos --json` -> rendered macOS LaunchAgent metadata.
+
+Desktop changes currently implemented but not released:
+
+- Fixed React i18n interpolation to support both `{time}` and `{{time}}`, so "Última comprobación {{time}}" no longer renders braces.
+- Local Memory tab now separates fast status polling from heavier auxiliary calls:
+  - initial/full refresh loads status, service config, permissions, exclusions and support log;
+  - recurring refresh polls only status and support log;
+  - this avoids a slow auxiliary call making the UI look frozen.
+- Loading for Local Memory now uses title `Cargando...` and subtitle `Leyendo estado de memoria local...`.
+- `Limpiar índice` opens the existing React `ConfirmDialog` before calling `clear_index`.
+- `Forzar pasada` fallback text changed to `Check changes now`; update i18n keys next so Spanish reads `Comprobar cambios ahora`.
+- Manual `Actualizar` fallback changed to `Refresh status`; update i18n keys next so Spanish reads `Actualizar estado`.
+
+Desktop changes still pending before release:
+
+- Investigate any remaining Updates tab version correctness issue during installed-app smoke.
+- Run focused Desktop tests/build:
+  - `node --test tests/local-memory-settings.test.js tests/i18n-tn-plural.test.js`
+  - `npm run build:react`
+  - any update-status focused tests if Updates tab is modified.
+
+Desktop verification after UI continuation:
+
+- Updated Local Memory i18n:
+  - `force`: `Comprobar cambios ahora` / `Check changes now`.
+  - `refresh`: `Actualizar estado` / `Refresh status`.
+  - added clear-index confirmation title/body/hint/ok keys.
+- Added/adjusted Desktop tests for:
+  - `ConfirmDialog` guarding `clear_index`;
+  - fast status polling vs full auxiliary refresh;
+  - i18n interpolation for both `{time}` and `{{time}}`;
+  - Updates tab non-blocking local-first load.
+- Changed Updates tab to render local versions first and run remote Brain/Desktop update checks in the background.
+- Verified Desktop i18n JSON:
+  - `python3 -m json.tool renderer/i18n/es.json >/dev/null`
+  - `python3 -m json.tool renderer/i18n/en.json >/dev/null`
+- Verified focused Desktop suite:
+  - `node --test tests/local-memory-settings.test.js tests/i18n-tn-plural.test.js tests/react-settings-contract.test.js tests/update-orchestrator-brain.test.js` -> `28 passed`.
+- Verified React build:
+  - `npm run build:react` -> passed.
+
+Release still pending:
+
+- Brain version bump for this continuation, likely `7.20.0` if treated as feature-level live reconciliation, or `7.19.1` if treated as hardening. Prefer `7.20.0` because DB migration `64` changes behavior and CLI surface.
+- Desktop version bump after Brain publish/bundle, likely `0.33.3`.
+- Desktop must bundle the new Brain version and preserve packaged local model artifacts.
+- Publish both beta and stable unsigned as requested by Francisco.
+- Verify public manifests for beta/stable and verify Desktop points to the new Brain bundle.
+
+## 2026-05-12 20:46 CEST - Release closure evidence
+
+Brain release:
+
+- Version bumped to `7.20.0`.
+- `npm publish --access public` completed successfully.
+- Public npm verification:
+  - `npm view nexo-brain version` -> `7.20.0`.
+  - `npm view nexo-brain dist-tags --json` -> `{"beta":"0.10.0-beta.8","latest":"7.20.0"}`.
+
+Brain verification:
+
+- `python3 -m compileall -q src/local_context src/db/_schema.py src/cli.py src/runtime_power.py src/scripts/nexo-local-index.py` passed.
+- `python3 -m pytest tests/test_local_context.py tests/test_local_context_cli.py tests/test_runtime_power.py -q` -> `39 passed`.
+- Full pre-release pytest run before public-surface fixes -> `2546 passed, 2 skipped, 1 xfailed, 4 xpassed`.
+- `python3 scripts/sync_release_artifacts.py --release-version 7.20.0 && python3 scripts/verify_release_readiness.py --ci` -> `216 passed`.
+- `scripts/pre-release-verify.sh --release v7.20.0 --skip pytest` -> `4 passed, 0 failed, 1 skipped`.
+
+Desktop release:
+
+- Version bumped to `0.33.3`.
+- `npm run verify:brain-bundle-source` -> `ok Desktop 0.33.3 -> Brain 7.20.0`.
+- `ALLOW_UNSIGNED=1 npm run dist:release` completed successfully.
+- Generated release artifacts:
+  - `dist/release/NEXO Desktop-0.33.3-arm64.dmg`.
+  - `dist/release/NEXO Desktop-0.33.3-x64.dmg`.
+  - `dist/release-win/desktop/NEXO Desktop Setup 0.33.3.exe`.
+  - `dist/release-win/desktop/NEXO Desktop 0.33.3.exe`.
+- `ALLOW_UNSIGNED=1 CHANNEL=beta npm run release:upload` completed successfully.
+- `ALLOW_UNSIGNED=1 CHANNEL=stable npm run release:upload` completed successfully.
+
+Desktop verification:
+
+- `npm run check` -> `1716 pass / 2 skipped / 0 fail` plus lint warnings only.
+- `npm run verify:llm-bundle` -> `ok (4 models, 16 files, 801 MB)`.
+- `npm run verify:llm-runtime-bundle` -> `ok (3 platforms, 72 native libs)`.
+- `npm run verify:voice-bundle` -> `ok (1 models, 38 MB)`.
+- `node scripts/verify-release-artifacts.js --allow-unsigned true --dist dist/release` passed for macOS arm64/x64 DMGs.
+- `node scripts/verify-release-artifacts.js --platform win --allow-unsigned true --dist dist/release-win/desktop` passed for Windows x64 installer/portable.
+- `npm run verify:release:matrix:public` passed for stable public manifests.
+- Direct public manifest checks returned `0.33.3` for:
+  - `update-beta-mac-arm64.json`.
+  - `update-beta-mac-x64.json`.
+  - `update-beta-win-x64.json`.
+  - `update-mac-arm64.json`.
+  - `update-mac-x64.json`.
+  - `update-win-x64.json`.
+
+Remaining operational note:
+
+- Commit/tag/push still need to be completed so repositories match the already-published npm/Desktop artifacts.
