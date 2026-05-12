@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.20.4: local memory privacy hardening</title>
+<meta name="description" content="NEXO Brain v7.20.4 hardens Local Context privacy by blocking private dotfiles, hidden folders and secret-bearing content before agent context is built.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-20-4/">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.20.4: local memory privacy hardening","datePublished":"2026-05-13","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head><body><main><article style="max-width:760px;margin:80px auto;padding:0 24px;line-height:1.75;">
+<h1>NEXO 7.20.4 &mdash; local memory privacy hardening</h1>
+<p><em>Published 2026-05-13. Patch release over v7.20.3.</em></p>
+
+<h2>Why this release exists</h2>
+<p>Local Context is designed to give NEXO a useful memory of local files, projects and documents. v7.20.4 tightens the privacy boundary so private runtime folders, credential dotfiles, hidden project folders and files containing token-like secrets never become searchable chunks, embeddings, graph relations or agent context.</p>
+
+<h2>What changed</h2>
+<ul>
+<li><strong>Private paths are blocked earlier.</strong> Dotfiles such as <code>.npmrc</code>, <code>.boto</code>, <code>.claude.json</code>, <code>.mcp.json</code>, <code>.nexo/**</code>, hidden project folders and temporary files are skipped before inventory or extraction.</li>
+<li><strong>Secret-bearing content is inventory-only.</strong> If a normal-looking file contains token, password or private-key patterns, Brain removes chunks, embeddings, entities and relations and keeps only a blocked asset marker.</li>
+<li><strong>Old residue is repaired.</strong> Local index hygiene, doctor fix and the background service cycle purge private assets, stale jobs, chunks, embeddings, entities, relations and directory checkpoints left by older builds.</li>
+<li><strong>Agent context is redacted.</strong> Context queries return redacted <code>display_path</code> values only and filter non-queryable privacy classes before results reach agents.</li>
+</ul>
+
+<h2>Validation</h2>
+<pre><code>PYTHONDONTWRITEBYTECODE=1 pytest -q tests/test_local_context.py \
+  tests/test_local_context_cli.py \
+  tests/test_local_context_pre_action.py -p no:cacheprovider
+# 31 passed
+
+python3 -m py_compile src/local_context/privacy.py \
+  src/local_context/api.py \
+  src/local_context/extractors.py \
+  src/doctor/providers/runtime.py
+# clean
+
+# Live operator DB hygiene after fix:
+# private residue: 0
+# hidden chunk hits: 0
+# secret chunk hits: 0</code></pre>
+
+<p><a href="/changelog/#v7204">Full changelog entry &rarr;</a> &middot; <a href="/blog/nexo-7-20-2/">Previous public Local Context hardening note</a></p>
+</article></main></body></html>

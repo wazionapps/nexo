@@ -1,9 +1,11 @@
 # NEXO Brain
 
-> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v7.20.2). NEXO Desktop is a separate closed-source companion app distributed at nexo-desktop.com; its source does not ship in this repo. Mentions of "NEXO Desktop" in changelog entries describe coordinated client releases that consume the Brain CLI / MCP contract. For the commercial Desktop product, contact info@wazion.com.
+> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v7.20.4). NEXO Desktop is a separate closed-source companion app distributed at nexo-desktop.com; its source does not ship in this repo. Mentions of "NEXO Desktop" in changelog entries describe coordinated client releases that consume the Brain CLI / MCP contract. For the commercial Desktop product, contact info@wazion.com.
 
 NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. It adds a local shared brain across supported clients, configurable terminal and automation backends, recovery-aware background jobs, startup preflight, runtime self-healing, smarter retrieval defaults, long-horizon overnight analysis, and 150+ MCP tools.
 
+v7.20.4: patch release. Local Context now blocks private dotfiles, hidden project folders and secret-bearing content before chunks, embeddings, graph relations or agent context are created.
+v7.20.3: patch release. Installer DMG volumes are no longer added as local-memory roots, removed roots purge stale payloads, and doctor can repair removed-root residue.
 v7.20.2: patch release. Local Context now requeues retryable failed jobs, recovers expired running leases, reports real macOS/Windows service health, records scan errors and preserves Windows drive roots.
 v7.20.1: patch release. Local Context service cycles now recover from orphaned locks and mixed-version `run_once()` parameter drift, so the background index keeps advancing instead of silently getting stuck.
 v7.20.0: minor release. Local Context now reconciles known files and folders on every service cycle, so created, modified, deleted and newly excluded local files are reflected automatically between full scans. It also returns graph relations with local evidence and clears stale macOS Full Disk Access prompts after real verification.
