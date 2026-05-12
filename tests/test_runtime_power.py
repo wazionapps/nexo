@@ -265,6 +265,40 @@ def test_apply_linux_power_policy_uses_manifest_sync(tmp_path, monkeypatch):
     assert result["service_path"] == str(service_path)
 
 
+def test_full_disk_access_verified_clears_required_state(tmp_path, monkeypatch):
+    import runtime_power
+
+    nexo_home = tmp_path / "nexo"
+    schedule_file = nexo_home / "config" / "schedule.json"
+    state_file = nexo_home / "runtime" / "state" / "full-disk-access-required.json"
+    schedule_file.parent.mkdir(parents=True)
+    state_file.parent.mkdir(parents=True)
+    schedule_file.write_text('{"full_disk_access_status":"granted"}')
+    state_file.write_text('{"status":"later"}')
+
+    monkeypatch.setenv("NEXO_HOME", str(nexo_home))
+    monkeypatch.setattr(runtime_power, "NEXO_HOME", nexo_home)
+    monkeypatch.setattr(runtime_power, "CONFIG_DIR", nexo_home / "config")
+    monkeypatch.setattr(runtime_power, "SCHEDULE_FILE", schedule_file)
+    monkeypatch.setattr(runtime_power, "FULL_DISK_ACCESS_STATE_FILE", state_file)
+    monkeypatch.setattr(runtime_power.platform, "system", lambda: "Darwin")
+    monkeypatch.setattr(
+        runtime_power,
+        "detect_full_disk_access_reasons",
+        lambda **_kwargs: ["Recent background job hit a macOS privacy denial"],
+    )
+
+    result = runtime_power.ensure_full_disk_access_choice(
+        interactive=False,
+        probe_fn=lambda: {"granted": True, "probe_path": "/Users/tester/Library/Application Support/com.apple.TCC/TCC.db"},
+    )
+
+    assert result["status"] == "granted"
+    assert result["verified"] is True
+    assert state_file.exists() is False
+    assert runtime_power.load_schedule_config()["full_disk_access_reasons"] == []
+
+
 def test_sync_core_crons_for_power_policy_is_noop_when_sync_surface_missing(monkeypatch):
     import runtime_power
 

@@ -2187,6 +2187,29 @@ def _prompt_for_terminal_client(
         print("Invalid choice. Try again.", file=sys.stderr)
 
 
+def _ensure_chat_full_disk_access_notice(*, interactive: bool | None = None) -> dict:
+    runtime_power = _load_runtime_power_support()
+    if interactive is None:
+        interactive = bool(getattr(sys.stdin, "isatty", lambda: False)())
+    try:
+        choice = runtime_power["ensure_full_disk_access_choice"](
+            interactive=interactive,
+            reason="chat",
+            output_fn=lambda message: print(message, file=sys.stderr),
+        )
+    except EOFError:
+        return {
+            "status": "later",
+            "prompted": False,
+            "reasons": [],
+            "message": "Full Disk Access setup skipped because stdin closed.",
+        }
+    message = str(choice.get("message") or "").strip()
+    if message and (choice.get("prompted") or choice.get("relevant")):
+        print(f"[NEXO] Full Disk Access: {message}", file=sys.stderr)
+    return choice
+
+
 def _chat(args):
     target = args.path or "."
     selected_client = getattr(args, "client", None)
@@ -2210,6 +2233,11 @@ def _chat(args):
             print(f"[NEXO] Startup preflight warning: {preflight['error']}", file=sys.stderr)
     except Exception:
         pass
+
+    try:
+        _ensure_chat_full_disk_access_notice()
+    except Exception as exc:
+        print(f"[NEXO] Full Disk Access check warning: {exc}", file=sys.stderr)
 
     try:
         from client_preferences import (

@@ -1,5 +1,14 @@
 # Changelog
 
+## [7.17.8] - 2026-05-12
+
+### Fixed — Brain clears stale macOS permission prompts
+
+- **`nexo chat` now surfaces the Full Disk Access requirement for standalone Brain users.** When macOS has blocked a background privacy check and Desktop is not the entrypoint, the terminal flow prints a concise instruction to open Full Disk Access and enable NEXO Desktop plus the helper executable mentioned by the denial.
+- **Runtime power clears stale Full Disk Access state after the permission is actually granted.** `runtime_power` now performs a live macOS probe before keeping `full-disk-access-required.json` or schedule markers active, so a user who already enabled the permission no longer gets stuck behind the same warning.
+- **Desktop can consume Brain's state without duplicating the decision.** The Brain-side status file remains the source for standalone and Desktop entrypoints; clients can now recheck and clear it instead of showing a stale modal.
+- **Coverage:** targeted Brain checks pass (`27 passed`) across `tests/test_cli_chat_client_picker.py`, `tests/test_runtime_power.py`, and `tests/test_tcc_approve.py`, with `python3 -m py_compile src/cli.py src/runtime_power.py` clean.
+
 ## [7.17.7] - 2026-05-12
 
 ### Fixed — macOS Full Disk Access is now a guided permission state

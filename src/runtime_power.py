@@ -49,6 +49,7 @@ FULL_DISK_ACCESS_UNSET = "unset"
 FULL_DISK_ACCESS_GRANTED = "granted"
 FULL_DISK_ACCESS_DECLINED = "declined"
 FULL_DISK_ACCESS_LATER = "later"
+FULL_DISK_ACCESS_STATE_FILE = NEXO_HOME / "runtime" / "state" / "full-disk-access-required.json"
 VALID_FULL_DISK_ACCESS_STATUSES = {
     FULL_DISK_ACCESS_UNSET,
     FULL_DISK_ACCESS_GRANTED,
@@ -794,12 +795,23 @@ def set_power_policy(policy: str) -> dict:
 
 def set_full_disk_access_status(status: str, *, reasons: list[str] | None = None) -> dict:
     schedule = load_schedule_config()
-    schedule[FULL_DISK_ACCESS_STATUS_KEY] = normalize_full_disk_access_status(status)
+    normalized = normalize_full_disk_access_status(status)
+    schedule[FULL_DISK_ACCESS_STATUS_KEY] = normalized
     schedule[FULL_DISK_ACCESS_STATUS_VERSION_KEY] = FULL_DISK_ACCESS_STATUS_VERSION
+    if normalized == FULL_DISK_ACCESS_GRANTED:
+        reasons = []
+        clear_full_disk_access_required_state()
     if reasons is not None:
         schedule[FULL_DISK_ACCESS_REASONS_KEY] = normalize_full_disk_access_reasons(reasons)
     save_schedule_config(schedule)
     return schedule
+
+
+def clear_full_disk_access_required_state() -> None:
+    try:
+        FULL_DISK_ACCESS_STATE_FILE.unlink(missing_ok=True)
+    except Exception:
+        pass
 
 
 def prompt_for_power_policy(
@@ -938,6 +950,9 @@ def ensure_full_disk_access_choice(
         )
 
     schedule[FULL_DISK_ACCESS_STATUS_KEY] = status
+    if status == FULL_DISK_ACCESS_GRANTED:
+        schedule[FULL_DISK_ACCESS_REASONS_KEY] = []
+        clear_full_disk_access_required_state()
     save_schedule_config(schedule)
     return {
         "status": status,

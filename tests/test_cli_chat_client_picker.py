@@ -107,3 +107,35 @@ def test_claude_desktop_excluded_from_chat_picker():
     clients = cli._ordered_available_terminal_clients(preferences, detected)
     assert "claude_desktop" not in clients
     assert set(clients) == {"claude_code", "codex"}
+
+
+def test_chat_full_disk_access_notice_uses_interactive_terminal_prompt(monkeypatch, capsys):
+    calls = []
+
+    def fake_runtime_power_support():
+        def ensure_full_disk_access_choice(**kwargs):
+            calls.append(kwargs)
+            kwargs["output_fn"]("[NEXO] Open Full Disk Access setup now?")
+            return {
+                "status": "later",
+                "prompted": True,
+                "relevant": True,
+                "reasons": ["Recent background job hit a macOS privacy denial"],
+                "message": "Full Disk Access setup deferred for later.",
+            }
+
+        return {
+            "ensure_full_disk_access_choice": ensure_full_disk_access_choice,
+        }
+
+    monkeypatch.setattr(cli, "_load_runtime_power_support", fake_runtime_power_support)
+
+    result = cli._ensure_chat_full_disk_access_notice(interactive=True)
+
+    assert result["status"] == "later"
+    assert len(calls) == 1
+    assert calls[0]["interactive"] is True
+    assert calls[0]["reason"] == "chat"
+    captured = capsys.readouterr()
+    assert "Open Full Disk Access setup now" in captured.err
+    assert "Full Disk Access setup deferred for later" in captured.err
