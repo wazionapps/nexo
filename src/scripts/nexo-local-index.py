@@ -51,6 +51,13 @@ def log(message: str) -> None:
         handle.write(line + "\n")
 
 
+def _log_event_best_effort(level: str, event: str, message: str, **metadata) -> None:
+    try:
+        log_event(level, event, message, **metadata)
+    except Exception as exc:
+        log(f"ERROR: failed to record local-index event {event}: {type(exc).__name__}: {exc}")
+
+
 def _read_lock() -> dict:
     try:
         return json.loads(LOCK_FILE.read_text(encoding="utf-8"))
@@ -121,7 +128,7 @@ def _run_index_cycle() -> dict:
         live_kwargs = ("live_asset_limit", "live_dir_limit", "live_file_limit")
         if not any(name in message for name in live_kwargs):
             raise
-        log_event(
+        _log_event_best_effort(
             "warn",
             "service_cycle_compat_fallback",
             "Local memory service used compatibility fallback",
@@ -134,17 +141,18 @@ def _run_index_cycle() -> dict:
 def main() -> int:
     if not acquire_lock():
         log("Skipped: previous local-index cycle is still running.")
+        _log_event_best_effort("warn", "service_cycle_skipped_lock", "Local memory service skipped because a previous cycle is still running")
         return 0
     try:
         if os.environ.get("NEXO_LOCAL_INDEX_DISABLE_DEFAULT_ROOTS", "").strip() != "1":
             api.ensure_default_roots()
         result = _run_index_cycle()
-        log_event("info", "service_cycle_finished", "Local memory service cycle finished", result=result)
+        _log_event_best_effort("info", "service_cycle_finished", "Local memory service cycle finished", result=result)
         log(json.dumps(result, ensure_ascii=False, sort_keys=True))
         return 0 if result.get("ok") else 2
     except Exception as exc:
-        log_event("error", "service_cycle_failed", "Local memory service cycle failed", error=type(exc).__name__)
         log(f"ERROR: {type(exc).__name__}: {exc}")
+        _log_event_best_effort("error", "service_cycle_failed", "Local memory service cycle failed", error=type(exc).__name__)
         return 2
     finally:
         release_lock()

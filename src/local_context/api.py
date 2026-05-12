@@ -425,6 +425,48 @@ def _mark_dir_subtree_deleted(conn, dir_path: str, deleted_at: float | None = No
     return len(rows)
 
 
+def _record_index_error(
+    conn,
+    *,
+    asset_id: str = "",
+    path: str = "",
+    phase: str,
+    error_code: str,
+    user_message: str,
+    technical_detail: str,
+    retryable: bool = True,
+) -> None:
+    conn.execute(
+        """
+        INSERT INTO local_index_errors(asset_id, path, phase, error_code, user_message, technical_detail, retryable, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (asset_id, path, phase, error_code, user_message, technical_detail, 1 if retryable else 0, now()),
+    )
+
+
+def _record_scan_error(conn, stats: dict | None, path: str, phase: str, exc: Exception) -> None:
+    if stats is not None:
+        stats["errors"] = int(stats.get("errors", 0) or 0) + 1
+        logged = int(stats.get("_errors_logged", 0) or 0)
+        if logged >= 20:
+            return
+        stats["_errors_logged"] = logged + 1
+    _record_index_error(
+        conn,
+        path=path,
+        phase=phase,
+        error_code=type(exc).__name__,
+        user_message="Algunas carpetas o archivos no se pudieron leer",
+        technical_detail=str(exc),
+        retryable=True,
+    )
+
+
+def _public_stats(stats: dict) -> dict:
+    return {key: value for key, value in stats.items() if not str(key).startswith("_")}
+
+
 def enqueue_job(conn, asset_id: str, job_type: str, *, priority: int = 50) -> str:
     job_id = stable_id("job", f"{asset_id}:{job_type}")
     conn.execute(
@@ -447,6 +489,7 @@ def _iter_files(
     limit: int | None = None,
     start_after: str = "",
     seen_at: float | None = None,
+    stats: dict | None = None,
 ):
     seen_at = seen_at or now()
     seen_dirs: set[tuple[int, int]] = set()
@@ -461,7 +504,8 @@ def _iter_files(
             continue
         try:
             st = current.stat()
-        except Exception:
+        except Exception as exc:
+            _record_scan_error(conn, stats, str(current), "quick_index", exc)
             continue
         key = (getattr(st, "st_dev", 0), getattr(st, "st_ino", 0))
         if key in seen_dirs:
@@ -470,7 +514,8 @@ def _iter_files(
         _upsert_dir(conn, root_id, current, seen_at, st)
         try:
             entries = sorted(current.iterdir(), key=lambda item: str(item).lower())
-        except Exception:
+        except Exception as exc:
+            _record_scan_error(conn, stats, str(current), "quick_index", exc)
             continue
         dirs: list[Path] = []
         for entry in entries:
@@ -577,8 +622,8 @@ def _reconcile_known_assets(conn, exclusions: list[str], *, limit: int) -> dict:
                 continue
             st = file_path.stat()
             fingerprint = quick_fingerprint(file_path, st)
-        except Exception:
-            stats["errors"] += 1
+        except Exception as exc:
+            _record_scan_error(conn, stats, path, "live_reconcile", exc)
             continue
         if fingerprint != row["quick_fingerprint"]:
             _, changed, state = _upsert_asset(conn, int(row["root_id"] or 0), file_path, seen_at, int(row["depth"] or 2))
@@ -647,8 +692,8 @@ def _scan_known_directory(
             if not current.is_dir():
                 continue
             entries = sorted(current.iterdir(), key=lambda item: str(item).lower())
-        except Exception:
-            stats["errors"] += 1
+        except Exception as exc:
+            _record_scan_error(conn, stats, str(current), "live_reconcile", exc)
             continue
         scanned_dirs += 1
         stats["dirs_scanned"] += 1
@@ -679,8 +724,8 @@ def _scan_known_directory(
                         stats["files_changed"] += 1
                     if state != "ok":
                         stats["errors"] += 1
-            except Exception:
-                stats["errors"] += 1
+            except Exception as exc:
+                _record_scan_error(conn, stats, str(entry), "live_reconcile", exc)
         deleted_files, deleted_dirs = _prune_missing_children(conn, current, seen_files, seen_dirs, seen_at)
         stats["files_deleted"] += deleted_files
         stats["dirs_deleted"] += deleted_dirs
@@ -731,8 +776,8 @@ def _reconcile_known_dirs(conn, exclusions: list[str], *, dir_limit: int, file_l
                 continue
             st = dir_path.stat()
             fingerprint = _dir_fingerprint(dir_path, st)
-        except Exception:
-            stats["errors"] += 1
+        except Exception as exc:
+            _record_scan_error(conn, stats, str(dir_path), "live_reconcile", exc)
             continue
         if fingerprint != row["quick_fingerprint"]:
             stats["changed"] += 1
@@ -773,9 +818,18 @@ def reconcile_live_changes(
         + int(dir_stats.get("dirs_deleted", 0))
         + int(dir_stats.get("excluded_dirs", 0))
     )
-    if changed_total:
-        log_event("info", "live_reconcile_finished", "Local memory live changes reconciled", assets=asset_stats, dirs=dir_stats)
-    return {"ok": True, "assets": asset_stats, "dirs": dir_stats}
+    error_total = int(asset_stats.get("errors", 0) or 0) + int(dir_stats.get("errors", 0) or 0)
+    public_asset_stats = _public_stats(asset_stats)
+    public_dir_stats = _public_stats(dir_stats)
+    if changed_total or error_total:
+        log_event(
+            "warn" if error_total else "info",
+            "live_reconcile_finished",
+            "Local memory live changes reconciled",
+            assets=public_asset_stats,
+            dirs=public_dir_stats,
+        )
+    return {"ok": True, "assets": public_asset_stats, "dirs": public_dir_stats}
 
 
 def scan_once(*, limit: int | None = None) -> dict:
@@ -814,6 +868,7 @@ def scan_once(*, limit: int | None = None) -> dict:
             limit=limit,
             start_after=str(checkpoint["current_path"] or ""),
             seen_at=cycle_started_at,
+            stats=totals,
         ):
             asset_id, changed, state = _upsert_asset(conn, root_id, file_path, cycle_started_at, int(root["depth"] or 2))
             last_seen_path = norm_path(file_path)
@@ -833,7 +888,7 @@ def scan_once(*, limit: int | None = None) -> dict:
                 path=redact_path(str(root_path)),
             )
             if last_seen_path:
-                _save_checkpoint(conn, root_id, last_seen_path, cycle_started_at=cycle_started_at, totals=totals)
+                _save_checkpoint(conn, root_id, last_seen_path, cycle_started_at=cycle_started_at, totals=_public_stats(totals))
         else:
             rows = conn.execute(
                 "SELECT asset_id FROM local_assets WHERE root_id=? AND status='active' AND last_seen_at < ?",
@@ -850,8 +905,9 @@ def scan_once(*, limit: int | None = None) -> dict:
             (now(), now(), root_id),
         )
     conn.commit()
-    log_event("info", "scan_finished", "Local memory scan finished", **totals)
-    return {"ok": True, **totals}
+    public_totals = _public_stats(totals)
+    log_event("warn" if public_totals.get("errors") else "info", "scan_finished", "Local memory scan finished", **public_totals)
+    return {"ok": True, **public_totals}
 
 
 def _latest_version_id(conn, asset_id: str) -> str:
@@ -913,11 +969,35 @@ def _replace_entities(conn, asset_id: str, version_id: str, values: list[str]) -
         )
 
 
+def _requeue_due_jobs(conn) -> dict:
+    current = now()
+    failed = conn.execute(
+        """
+        UPDATE local_index_jobs
+        SET status='pending', claimed_by='', lease_expires_at=NULL, updated_at=?
+        WHERE status='failed' AND (next_attempt_at IS NULL OR next_attempt_at <= ?)
+        """,
+        (current, current),
+    ).rowcount
+    expired = conn.execute(
+        """
+        UPDATE local_index_jobs
+        SET status='pending', claimed_by='', lease_expires_at=NULL, updated_at=?
+        WHERE status='running' AND lease_expires_at IS NOT NULL AND lease_expires_at <= ?
+        """,
+        (current, current),
+    ).rowcount
+    if failed or expired:
+        log_event("warn", "jobs_requeued", "Local memory recovered stalled jobs", failed=failed, expired=expired)
+    return {"failed": int(failed or 0), "expired": int(expired or 0)}
+
+
 def process_jobs(*, limit: int = 100) -> dict:
     conn = _conn()
     if _is_paused():
         log_event("info", "jobs_skipped_paused", "Local memory jobs skipped because indexing is paused")
         return {"ok": True, "paused": True, "processed": 0, "failed": 0}
+    recovered = _requeue_due_jobs(conn)
     rows = conn.execute(
         """
         SELECT j.*, a.path, a.depth, a.status AS asset_status
@@ -976,17 +1056,20 @@ def process_jobs(*, limit: int = 100) -> dict:
                 """,
                 (now() + 3600, type(exc).__name__, now(), job_id),
             )
-            conn.execute(
-                """
-                INSERT INTO local_index_errors(asset_id, path, phase, error_code, user_message, technical_detail, retryable, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, 1, ?)
-                """,
-                (asset_id, row["path"], job_type, type(exc).__name__, "Algunos archivos no se pudieron leer", str(exc), now()),
+            _record_index_error(
+                conn,
+                asset_id=asset_id,
+                path=row["path"],
+                phase=job_type,
+                error_code=type(exc).__name__,
+                user_message="Algunos archivos no se pudieron leer",
+                technical_detail=str(exc),
+                retryable=True,
             )
     conn.commit()
     if processed or failed:
         log_event("info", "jobs_processed", "Local memory jobs processed", processed=processed, failed=failed)
-    return {"ok": True, "processed": processed, "failed": failed}
+    return {"ok": True, "processed": processed, "failed": failed, "recovered": recovered}
 
 
 def run_once(
@@ -1000,6 +1083,12 @@ def run_once(
 ) -> dict:
     if root:
         add_root(root)
+    elif (
+        os.environ.get("NEXO_LOCAL_INDEX_DISABLE_DEFAULT_ROOTS", "").strip() != "1"
+        and os.environ.get("NEXO_SKIP_FS_INDEX", "").strip() != "1"
+        and not list_roots()
+    ):
+        ensure_default_roots()
     live_result = reconcile_live_changes(
         asset_limit=live_asset_limit,
         dir_limit=live_dir_limit,
@@ -1040,7 +1129,7 @@ def _problem_rows(conn) -> list[dict]:
         """
         SELECT created_at, level, event, message, metadata_json
         FROM local_index_logs
-        WHERE event IN ('service_cycle_failed', 'service_cycle_compat_fallback')
+        WHERE event IN ('service_cycle_failed', 'service_cycle_compat_fallback', 'service_cycle_skipped_lock')
           AND created_at > ?
         ORDER BY id DESC
         LIMIT 5
@@ -1101,6 +1190,7 @@ def _macos_local_index_service_status() -> dict:
     running = False
     active_process = False
     pid = ""
+    launchctl_status = ""
 
     code, stdout, _ = _command_output(["launchctl", "list"], timeout=2)
     if code == 0:
@@ -1109,6 +1199,7 @@ def _macos_local_index_service_status() -> dict:
             if len(parts) >= 3 and parts[-1] == LOCAL_INDEX_SERVICE_LABEL:
                 installed = True
                 pid = parts[0]
+                launchctl_status = parts[1]
                 running = True
                 active_process = pid.isdigit() and int(pid) > 0
                 break
@@ -1128,6 +1219,7 @@ def _macos_local_index_service_status() -> dict:
         "manager": "launchagent",
         "label": LOCAL_INDEX_SERVICE_LABEL,
         "pid": pid,
+        "last_exit_code": launchctl_status,
         "config_path": str(plist_path),
     }
 
@@ -1135,11 +1227,22 @@ def _macos_local_index_service_status() -> dict:
 def _windows_local_index_service_status() -> dict:
     command = (
         "$task = Get-ScheduledTask -TaskName 'NEXO Local Memory' -ErrorAction SilentlyContinue; "
-        "if ($task) { Write-Output $task.State }"
+        "$info = if ($task) { Get-ScheduledTaskInfo -TaskName 'NEXO Local Memory' -ErrorAction SilentlyContinue }; "
+        "if ($task) { "
+        "$lastRun = if ($info -and $info.LastRunTime) { $info.LastRunTime.ToString('o') } else { '' }; "
+        "$nextRun = if ($info -and $info.NextRunTime) { $info.NextRunTime.ToString('o') } else { '' }; "
+        "$lastResult = if ($info) { [string]$info.LastTaskResult } else { '' }; "
+        "Write-Output ($task.State.ToString() + '|' + $lastResult + '|' + $lastRun + '|' + $nextRun) "
+        "}"
     )
     code, stdout, _ = _command_output(["powershell", "-NoProfile", "-Command", command], timeout=4)
-    task_state = stdout.strip()
+    raw = stdout.strip()
+    parts = raw.split("|") if "|" in raw else [raw]
+    task_state = parts[0].strip() if parts else ""
     task_state_key = task_state.lower()
+    last_task_result = parts[1].strip() if len(parts) > 1 else ""
+    last_run_time = parts[2].strip() if len(parts) > 2 else ""
+    next_run_time = parts[3].strip() if len(parts) > 3 else ""
     installed = code == 0 and bool(task_state)
     active_process = task_state_key == "running"
     if not active_process:
@@ -1152,6 +1255,9 @@ def _windows_local_index_service_status() -> dict:
         "manager": "scheduled_task",
         "task_name": LOCAL_INDEX_WINDOWS_TASK,
         "task_state": task_state,
+        "last_task_result": last_task_result,
+        "last_run_time": last_run_time,
+        "next_run_time": next_run_time,
     }
 
 
@@ -1194,15 +1300,103 @@ def _local_index_service_status() -> dict:
     return service
 
 
+def _service_cycle_observation(conn) -> dict:
+    last_success = conn.execute(
+        "SELECT MAX(created_at) AS created_at FROM local_index_logs WHERE event='service_cycle_finished'"
+    ).fetchone()["created_at"] or 0
+    latest = conn.execute(
+        """
+        SELECT created_at, event, level, message, metadata_json
+        FROM local_index_logs
+        WHERE event IN ('service_cycle_finished', 'service_cycle_failed', 'service_cycle_compat_fallback', 'service_cycle_skipped_lock')
+        ORDER BY id DESC
+        LIMIT 1
+        """
+    ).fetchone()
+    latest_error = conn.execute(
+        """
+        SELECT created_at, event, level, message, metadata_json
+        FROM local_index_logs
+        WHERE event IN ('service_cycle_failed', 'service_cycle_compat_fallback', 'service_cycle_skipped_lock')
+          AND created_at > ?
+        ORDER BY id DESC
+        LIMIT 1
+        """,
+        (last_success,),
+    ).fetchone()
+    observation = {
+        "last_success_at": float(last_success or 0),
+        "last_error_at": 0,
+        "last_error_code": "",
+        "last_error_detail": "",
+        "healthy": latest_error is None,
+    }
+    if latest:
+        observation["last_heartbeat_at"] = float(latest["created_at"] or 0)
+    if latest_error:
+        observation["last_error_at"] = float(latest_error["created_at"] or 0)
+        observation["last_error_code"] = latest_error["event"]
+        observation["last_error_detail"] = f"{latest_error['message']} {latest_error['metadata_json']}"
+    return observation
+
+
+def _service_scheduler_has_error(service: dict) -> bool:
+    if service.get("manager") == "launchagent":
+        code = str(service.get("last_exit_code") or "").strip()
+        return bool(code and code not in {"0", "-"})
+    if service.get("manager") == "scheduled_task":
+        code = str(service.get("last_task_result") or "").strip()
+        return bool(code and code not in {"0"})
+    return False
+
+
+def _service_problem(service: dict) -> dict | None:
+    if not service.get("installed"):
+        return {
+            "support_code": "local_index_service_not_installed",
+            "user_message": "La memoria local aun no tiene activo el servicio en segundo plano",
+            "recommended_action": "Reabre NEXO Desktop o actualiza a la ultima version para instalarlo automaticamente.",
+            "technical_detail": f"manager={service.get('manager')} platform={service.get('platform')}",
+        }
+    if not service.get("running"):
+        return {
+            "support_code": "local_index_service_not_running",
+            "user_message": "La memoria local no se esta actualizando en segundo plano",
+            "recommended_action": "NEXO intentara recuperarlo automaticamente. Si se repite, abre soporte y diagnostico.",
+            "technical_detail": f"manager={service.get('manager')} platform={service.get('platform')}",
+        }
+    if _service_scheduler_has_error(service):
+        code = service.get("last_exit_code") or service.get("last_task_result") or ""
+        return {
+            "support_code": "local_index_service_last_run_failed",
+            "user_message": "La ultima comprobacion de memoria local no termino correctamente",
+            "recommended_action": "NEXO lo volvera a intentar automaticamente.",
+            "technical_detail": f"last_result={code}",
+        }
+    if not service.get("healthy", True):
+        return {
+            "support_code": service.get("last_error_code") or "local_index_service_failed",
+            "user_message": "La memoria local tuvo un problema temporal y NEXO la reintentara automaticamente",
+            "recommended_action": "No tienes que hacer nada. Si se repite, abre soporte y diagnostico para ver el detalle.",
+            "technical_detail": service.get("last_error_detail") or "",
+        }
+    return None
+
+
 def status() -> dict:
     conn = _conn()
     paused = _is_paused()
     assets = conn.execute(
         "SELECT COUNT(*) AS total, SUM(CASE WHEN status='active' THEN 1 ELSE 0 END) AS active FROM local_assets"
     ).fetchone()
-    pending = conn.execute("SELECT COUNT(*) AS total FROM local_index_jobs WHERE status='pending'").fetchone()["total"]
-    done = conn.execute("SELECT COUNT(*) AS total FROM local_index_jobs WHERE status='done'").fetchone()["total"]
-    total_jobs = pending + done
+    job_rows = conn.execute("SELECT status, COUNT(*) AS total FROM local_index_jobs GROUP BY status").fetchall()
+    job_counts = {row["status"]: int(row["total"] or 0) for row in job_rows}
+    pending = int(job_counts.get("pending", 0) or 0)
+    running_jobs = int(job_counts.get("running", 0) or 0)
+    failed_jobs = int(job_counts.get("failed", 0) or 0)
+    done = int(job_counts.get("done", 0) or 0)
+    active_jobs = pending + running_jobs + failed_jobs
+    total_jobs = active_jobs + done
     percent = 100 if total_jobs == 0 else int((done / max(total_jobs, 1)) * 100)
     roots = list_roots()
     volumes = []
@@ -1212,23 +1406,42 @@ def status() -> dict:
     for row in by_volume:
         volumes.append({"id": row["volume_id"], "label": row["volume_id"] or "Disk", "files": row["files"], "status": "active"})
     service = _local_index_service_status()
-    service["state"] = "paused" if paused else ("idle" if pending == 0 else "indexing")
+    service.update(_service_cycle_observation(conn))
+    problem = _service_problem(service)
+    service["healthy"] = problem is None
+    service["state"] = "paused" if paused else ("attention" if problem else ("idle" if active_jobs == 0 else "indexing"))
+    problems = _problem_rows(conn)
+    if problem:
+        problems.insert(0, {
+            "user_message": problem["user_message"],
+            "recommended_action": problem["recommended_action"],
+            "technical_detail": problem["technical_detail"],
+            "support_code": problem["support_code"],
+            "severity": "warning",
+            "retryable": True,
+            "path": "",
+            "phase": "service",
+            "created_at": now(),
+        })
     return {
         "ok": True,
         "service": service,
         "global": {
-            "phase": "paused" if paused else ("idle" if pending == 0 else "light_extraction"),
+            "phase": "paused" if paused else ("service_attention" if problem else ("idle" if active_jobs == 0 else "light_extraction")),
             "percent": percent,
             "files_found": int(assets["total"] or 0),
             "files_processed": int(done or 0),
-            "changes_pending": int(pending or 0),
+            "changes_pending": int(active_jobs or 0),
+            "jobs_pending": pending,
+            "jobs_running": running_jobs,
+            "jobs_failed": failed_jobs,
             "elapsed_seconds": 0,
             "eta_seconds": None,
         },
         "volumes": volumes,
         "roots": roots,
         "exclusions": list_exclusions(),
-        "problems": _problem_rows(conn),
+        "problems": problems,
         "permissions": [],
         "models": model_status()["models"],
         "support_log_available": True,

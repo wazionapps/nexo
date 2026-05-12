@@ -356,3 +356,28 @@ Verification:
 - `python3 scripts/verify_release_readiness.py --ci` -> `216 passed` and release readiness OK.
 - `python3 -m py_compile src/scripts/nexo-local-index.py src/local_context/api.py` -> clean.
 - `scripts/pre-release-verify.sh --release v7.20.1 --skip pytest` -> `4 passed, 0 failed, 1 skipped`.
+
+## 2026-05-12 22:00 CEST - Follow-up audit hardening for Brain 7.20.2
+
+Additional read-only audits found release blockers before Desktop 0.33.4 was uploaded:
+
+- Retryable `failed` local-index jobs were never selected again, and expired `running` leases were never reclaimed.
+- macOS LaunchAgent / Windows Scheduled Task state could look operational even when the last scheduler result failed.
+- Filesystem scan errors were counted inconsistently or swallowed without a visible local-memory problem.
+- Direct MCP/CLI `run_once()` calls did not bootstrap default roots when the resident service had not done it yet.
+- Windows root normalization could collapse `C:\` into drive-relative `C:`.
+
+Fixes implemented for Brain `7.20.2`:
+
+- `process_jobs()` requeues due `failed` jobs and expired `running` leases before selecting work.
+- `status()` counts pending/running/failed jobs as outstanding work, exposes job counters, service health, last success/error/heartbeat metadata and scheduler result codes.
+- Scan and live-reconcile read errors insert retryable local-index problems and log warn-level cycle summaries.
+- `run_once()` creates default roots for MCP/CLI paths unless disabled by runtime env.
+- `norm_path()` preserves Windows drive roots.
+- The local-index script logs skipped-lock cycles to DB diagnostics and writes file-log errors before DB logging so DB failures do not erase evidence.
+
+Verification so far:
+
+- `python3 -m pytest tests/test_local_index_service_runtime.py tests/test_local_context.py::test_status_reports_macos_launchagent_running tests/test_local_context.py::test_status_reports_loaded_macos_launchagent_as_operational tests/test_local_context.py::test_status_reports_windows_scheduled_task_running tests/test_local_context.py::test_status_reports_ready_windows_scheduled_task_as_operational tests/test_local_context.py::test_default_roots_add_new_mounted_volumes_incrementally tests/test_local_context.py::test_live_reconcile_discovers_new_file_in_known_directory tests/test_local_context.py::test_live_reconcile_marks_deleted_file_without_full_rescan -q` -> `20 passed`.
+- `python3 -m pytest tests/test_local_context.py tests/test_local_context_cli.py tests/test_local_index_service_runtime.py tests/test_local_context_pre_action.py -q` -> `35 passed`.
+- `python3 -m py_compile src/local_context/api.py src/local_context/util.py src/scripts/nexo-local-index.py` -> clean.

@@ -1,5 +1,16 @@
 # Changelog
 
+## [7.20.2] - 2026-05-12
+
+### Fixed — local memory service hardening
+
+- **Failed and interrupted local-memory jobs now recover automatically.** Retryable `failed` jobs are requeued when their retry time arrives, and expired `running` leases are reclaimed, so the index cannot report idle while work is stuck.
+- **macOS and Windows service health now reflects the real scheduler result.** Status includes LaunchAgent exit code / Windows Scheduled Task result, last successful cycle, last heartbeat and unresolved service failures, making frozen or failed background indexing visible to Desktop support diagnostics.
+- **Scan and live-reconcile read errors are no longer swallowed silently.** Permission or filesystem read failures are counted, logged as retryable local-memory problems and surfaced until subsequent cycles succeed.
+- **Fresh MCP/CLI runs now bootstrap default roots automatically.** Direct `run_once()` callers install the default local roots when no roots exist, while tests can still disable filesystem indexing via `NEXO_SKIP_FS_INDEX=1`.
+- **Windows drive roots remain true roots.** `C:\` / `C:/` normalization no longer collapses to drive-relative `C:`, preventing incorrect Windows root records.
+- **Coverage:** local-memory service runtime and local-context suites pass (`35 passed`) plus Python compilation for the changed modules.
+
 ## [7.20.1] - 2026-05-12
 
 ### Fixed — local memory service recovery

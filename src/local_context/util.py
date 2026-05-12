@@ -15,7 +15,15 @@ def now() -> float:
 
 
 def norm_path(path: str | os.PathLike[str]) -> str:
-    return str(Path(path).expanduser()).rstrip(os.sep)
+    text = str(Path(path).expanduser())
+    if re.match(r"^[A-Za-z]:[\\/]*$", text):
+        return f"{text[0].upper()}:\\"
+    if text in {"/", "\\"}:
+        return text
+    stripped = text.rstrip("/\\")
+    if re.match(r"^[A-Za-z]:$", stripped):
+        return f"{stripped[0].upper()}:\\"
+    return stripped or text
 
 
 def stable_id(prefix: str, value: str) -> str:

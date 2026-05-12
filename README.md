@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.20.1` is the current packaged-runtime line. Patch release over v7.20.0 — the Local Context service now recovers from orphaned locks and mixed-version cycle failures instead of leaving the background index stuck.
+Version `7.20.2` is the current packaged-runtime line. Patch release over v7.20.1 — Local Context now requeues stalled work, reports real macOS/Windows background-service health, records scan errors and preserves Windows drive roots.
+
+Previously in `7.20.1`: patch release over v7.20.0 — the Local Context service now recovers from orphaned locks and mixed-version cycle failures instead of leaving the background index stuck.
 
 Previously in `7.20.0`: minor release over v7.19.0 — the Local Context index now reconciles known files and folders on every service cycle, so created, modified, deleted and newly excluded local files are reflected automatically between full scans.
 
