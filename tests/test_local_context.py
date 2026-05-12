@@ -155,6 +155,83 @@ def test_service_config_renders_macos_and_windows():
     assert "powershell" in win["install"]
 
 
+def test_status_reports_macos_launchagent_running(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    launch_agents = home / "Library" / "LaunchAgents"
+    launch_agents.mkdir(parents=True)
+    (launch_agents / "com.nexo.local-index.plist").write_text("<plist />", encoding="utf-8")
+
+    monkeypatch.setattr(api.Path, "home", staticmethod(lambda: home))
+    monkeypatch.setattr(api, "system_label", lambda: "macos")
+    monkeypatch.setattr(
+        api,
+        "_command_output",
+        lambda args, **kwargs: (
+            0,
+            "123\t0\tcom.nexo.local-index\n" if args == ["launchctl", "list"] else "",
+            "",
+        ),
+    )
+
+    result = api.status()
+
+    assert result["service"]["installed"] is True
+    assert result["service"]["running"] is True
+    assert result["service"]["active_process"] is True
+    assert result["service"]["manager"] == "launchagent"
+
+
+def test_status_reports_loaded_macos_launchagent_as_operational(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    launch_agents = home / "Library" / "LaunchAgents"
+    launch_agents.mkdir(parents=True)
+    (launch_agents / "com.nexo.local-index.plist").write_text("<plist />", encoding="utf-8")
+
+    monkeypatch.setattr(api.Path, "home", staticmethod(lambda: home))
+    monkeypatch.setattr(api, "system_label", lambda: "macos")
+    monkeypatch.setattr(api, "_process_running", lambda pattern: False)
+    monkeypatch.setattr(
+        api,
+        "_command_output",
+        lambda args, **kwargs: (
+            0,
+            "-\t0\tcom.nexo.local-index\n" if args == ["launchctl", "list"] else "",
+            "",
+        ),
+    )
+
+    result = api.status()
+
+    assert result["service"]["installed"] is True
+    assert result["service"]["running"] is True
+    assert result["service"]["active_process"] is False
+
+
+def test_status_reports_windows_scheduled_task_running(monkeypatch):
+    monkeypatch.setattr(api, "system_label", lambda: "windows")
+    monkeypatch.setattr(api, "_command_output", lambda args, **kwargs: (0, "Running\n", ""))
+
+    result = api.status()
+
+    assert result["service"]["installed"] is True
+    assert result["service"]["running"] is True
+    assert result["service"]["active_process"] is True
+    assert result["service"]["manager"] == "scheduled_task"
+    assert result["service"]["task_name"] == "NEXO Local Memory"
+
+
+def test_status_reports_ready_windows_scheduled_task_as_operational(monkeypatch):
+    monkeypatch.setattr(api, "system_label", lambda: "windows")
+    monkeypatch.setattr(api, "_command_output", lambda args, **kwargs: (0, "Ready\n", ""))
+    monkeypatch.setattr(api, "_process_running", lambda pattern: False)
+
+    result = api.status()
+
+    assert result["service"]["installed"] is True
+    assert result["service"]["running"] is True
+    assert result["service"]["active_process"] is False
+
+
 def test_model_status_has_local_fallback():
     result = api.model_status()
     assert result["ok"] is True

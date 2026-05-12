@@ -5,6 +5,7 @@ import os
 import shutil
 import stat
 import hashlib
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -17,6 +18,11 @@ from .extractors import chunk_text, entities, extract_text, summarize
 from .logging import log_event, tail
 from .privacy import classify_path, should_extract
 from .util import content_hash, json_dumps, json_loads, norm_path, now, quick_fingerprint, redact_path, stable_id, system_label, tokenize
+
+LOCAL_INDEX_SERVICE_LABEL = "com.nexo.local-index"
+LOCAL_INDEX_SCRIPT_NAME = "nexo-local-index.py"
+LOCAL_INDEX_WINDOWS_TASK = "NEXO Local Memory"
+LOCAL_INDEX_LINUX_UNIT = "nexo-local-index.service"
 
 
 def ensure_ready() -> None:
@@ -653,6 +659,136 @@ def _problem_rows(conn) -> list[dict]:
     ]
 
 
+def _command_output(args: list[str], *, timeout: int = 2) -> tuple[int, str, str]:
+    try:
+        result = subprocess.run(args, capture_output=True, text=True, timeout=timeout)
+    except FileNotFoundError as exc:
+        return 127, "", str(exc)
+    except subprocess.TimeoutExpired as exc:
+        return 124, exc.stdout or "", exc.stderr or "timeout"
+    except Exception as exc:
+        return 1, "", str(exc)
+    return result.returncode, result.stdout or "", result.stderr or ""
+
+
+def _process_running(pattern: str) -> bool:
+    if system_label() == "windows":
+        command = (
+            "$pattern = '" + pattern.replace("'", "''") + "'; "
+            "$match = Get-CimInstance Win32_Process | "
+            "Where-Object { $_.CommandLine -like \"*$pattern*\" } | "
+            "Select-Object -First 1 -ExpandProperty ProcessId; "
+            "if ($match) { Write-Output $match }"
+        )
+        code, stdout, _ = _command_output(["powershell", "-NoProfile", "-Command", command], timeout=4)
+        return code == 0 and bool(stdout.strip())
+
+    code, stdout, _ = _command_output(["pgrep", "-f", pattern], timeout=2)
+    if code == 0 and stdout.strip():
+        return True
+    code, stdout, _ = _command_output(["ps", "aux"], timeout=2)
+    return code == 0 and pattern in stdout
+
+
+def _macos_local_index_service_status() -> dict:
+    plist_path = Path.home() / "Library" / "LaunchAgents" / f"{LOCAL_INDEX_SERVICE_LABEL}.plist"
+    installed = plist_path.is_file()
+    running = False
+    active_process = False
+    pid = ""
+
+    code, stdout, _ = _command_output(["launchctl", "list"], timeout=2)
+    if code == 0:
+        for line in stdout.splitlines():
+            parts = line.split()
+            if len(parts) >= 3 and parts[-1] == LOCAL_INDEX_SERVICE_LABEL:
+                installed = True
+                pid = parts[0]
+                running = True
+                active_process = pid.isdigit() and int(pid) > 0
+                break
+
+    if not installed:
+        code, _, _ = _command_output(["launchctl", "print", f"gui/{os.getuid()}/{LOCAL_INDEX_SERVICE_LABEL}"], timeout=2)
+        installed = code == 0
+
+    if not active_process:
+        active_process = _process_running(LOCAL_INDEX_SCRIPT_NAME)
+    running = running or active_process
+
+    return {
+        "installed": installed,
+        "running": running,
+        "active_process": active_process,
+        "manager": "launchagent",
+        "label": LOCAL_INDEX_SERVICE_LABEL,
+        "pid": pid,
+        "config_path": str(plist_path),
+    }
+
+
+def _windows_local_index_service_status() -> dict:
+    command = (
+        "$task = Get-ScheduledTask -TaskName 'NEXO Local Memory' -ErrorAction SilentlyContinue; "
+        "if ($task) { Write-Output $task.State }"
+    )
+    code, stdout, _ = _command_output(["powershell", "-NoProfile", "-Command", command], timeout=4)
+    task_state = stdout.strip()
+    task_state_key = task_state.lower()
+    installed = code == 0 and bool(task_state)
+    active_process = task_state_key == "running"
+    if not active_process:
+        active_process = _process_running(LOCAL_INDEX_SCRIPT_NAME)
+    running = task_state_key in {"ready", "running"} or active_process
+    return {
+        "installed": installed,
+        "running": running,
+        "active_process": active_process,
+        "manager": "scheduled_task",
+        "task_name": LOCAL_INDEX_WINDOWS_TASK,
+        "task_state": task_state,
+    }
+
+
+def _linux_local_index_service_status() -> dict:
+    unit_dir = Path.home() / ".config" / "systemd" / "user"
+    unit_path = unit_dir / LOCAL_INDEX_LINUX_UNIT
+    timer_path = unit_dir / "nexo-local-index.timer"
+    installed = unit_path.is_file() or timer_path.is_file()
+
+    code, stdout, _ = _command_output(["systemctl", "--user", "is-active", LOCAL_INDEX_LINUX_UNIT], timeout=2)
+    unit_state = stdout.strip()
+    running = code == 0 and unit_state == "active"
+    active_process = _process_running(LOCAL_INDEX_SCRIPT_NAME)
+    running = running or active_process
+
+    return {
+        "installed": installed,
+        "running": running,
+        "active_process": active_process,
+        "manager": "systemd_user",
+        "unit": LOCAL_INDEX_LINUX_UNIT,
+        "unit_state": unit_state,
+        "config_path": str(unit_path),
+    }
+
+
+def _local_index_service_status() -> dict:
+    platform_value = system_label()
+    if platform_value == "macos":
+        service = _macos_local_index_service_status()
+    elif platform_value == "windows":
+        service = _windows_local_index_service_status()
+    else:
+        service = _linux_local_index_service_status()
+    service.setdefault("installed", False)
+    service.setdefault("running", False)
+    service["platform"] = platform_value
+    service["started_at"] = ""
+    service["last_heartbeat_at"] = ""
+    return service
+
+
 def status() -> dict:
     conn = _conn()
     paused = _is_paused()
@@ -670,16 +806,11 @@ def status() -> dict:
     ).fetchall()
     for row in by_volume:
         volumes.append({"id": row["volume_id"], "label": row["volume_id"] or "Disk", "files": row["files"], "status": "active"})
+    service = _local_index_service_status()
+    service["state"] = "paused" if paused else ("idle" if pending == 0 else "indexing")
     return {
         "ok": True,
-        "service": {
-            "installed": False,
-            "running": False,
-            "state": "paused" if paused else ("idle" if pending == 0 else "indexing"),
-            "platform": system_label(),
-            "started_at": "",
-            "last_heartbeat_at": "",
-        },
+        "service": service,
         "global": {
             "phase": "paused" if paused else ("idle" if pending == 0 else "light_extraction"),
             "percent": percent,
