@@ -334,3 +334,25 @@ Desktop verification:
 Remaining operational note:
 
 - Commit/tag/push still need to be completed so repositories match the already-published npm/Desktop artifacts.
+
+## 2026-05-12 21:35 CEST - Local index service hotfix evidence
+
+Observed live install stall after Desktop `0.33.3` / Brain `7.20.0` update:
+
+- `nexo local-context diagnostics --json` showed repeated `service_cycle_failed` events with `{"error":"TypeError"}`.
+- `~/.nexo/runtime/logs/local-index.log` showed `TypeError: run_once() got an unexpected keyword argument 'live_asset_limit'`.
+- After the error loop, `local-index.lock` contained dead pid `63795`; `ps -p 63795` returned no process, so LaunchAgent kept skipping cycles as "previous local-index cycle is still running".
+- Removing the orphaned lock and kickstarting `com.nexo.local-index` produced a successful cycle with `live.assets.checked=2000`, `scan.seen=1000`, `jobs.processed=200`.
+
+Hotfix implemented for Brain `7.20.1`:
+
+- `src/scripts/nexo-local-index.py` now removes dead-PID locks immediately and only releases locks owned by the current process.
+- The service entrypoint now falls back to the older `run_once(limit, process_limit)` signature when a mixed runtime does not accept live-reconcile limits, preventing the repeated TypeError loop.
+- `src/local_context/api.py` now surfaces unrecovered service-cycle failures in `status()["problems"]` until a later successful cycle clears them.
+
+Verification:
+
+- `python3 -m pytest tests/test_local_index_service_runtime.py tests/test_local_context.py::test_live_reconcile_marks_deleted_file_without_full_rescan tests/test_local_context.py::test_live_reconcile_discovers_new_file_in_known_directory tests/test_local_context.py::test_default_roots_add_new_mounted_volumes_incrementally tests/test_local_context_cli.py::test_local_context_cli_indexes_and_queries -q` -> `8 passed`.
+- `python3 scripts/verify_release_readiness.py --ci` -> `216 passed` and release readiness OK.
+- `python3 -m py_compile src/scripts/nexo-local-index.py src/local_context/api.py` -> clean.
+- `scripts/pre-release-verify.sh --release v7.20.1 --skip pytest` -> `4 passed, 0 failed, 1 skipped`.

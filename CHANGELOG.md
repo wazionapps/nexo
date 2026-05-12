@@ -1,5 +1,14 @@
 # Changelog
 
+## [7.20.1] - 2026-05-12
+
+### Fixed — local memory service recovery
+
+- **The local memory service now recovers from orphaned cycle locks.** If the previous index process is gone but left `local-index.lock` behind, the next macOS LaunchAgent / Windows Scheduled Task cycle removes the stale lock and continues instead of staying stuck forever.
+- **Mixed Brain/Desktop runtime versions no longer kill every local-index cycle.** The service entrypoint now falls back safely when an older `local_context.api.run_once()` is loaded without live-reconcile limit parameters, avoiding the repeated `TypeError` loop seen in 7.20.0 installs.
+- **Unrecovered service-cycle failures are now visible in status diagnostics.** A failed background cycle appears as a retryable local-memory problem until a later cycle succeeds, so support can see why the UI stopped moving without exposing raw logs to normal users.
+- **Coverage:** targeted local-index service runtime, live reconciliation, default mounted-volume roots and CLI index/query suites pass (`8 passed`).
+
 ## [7.20.0] - 2026-05-12
 
 ### Added — live local memory reconciliation

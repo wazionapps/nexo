@@ -1019,7 +1019,7 @@ def _problem_rows(conn) -> list[dict]:
         LIMIT 20
         """
     ).fetchall()
-    return [
+    problems = [
         {
             "user_message": row["user_message"],
             "recommended_action": "NEXO lo volvera a intentar mas tarde" if row["retryable"] else "Revisa permisos o archivo",
@@ -1033,6 +1033,35 @@ def _problem_rows(conn) -> list[dict]:
         }
         for row in rows
     ]
+    last_success = conn.execute(
+        "SELECT MAX(created_at) AS created_at FROM local_index_logs WHERE event='service_cycle_finished'"
+    ).fetchone()["created_at"] or 0
+    service_rows = conn.execute(
+        """
+        SELECT created_at, level, event, message, metadata_json
+        FROM local_index_logs
+        WHERE event IN ('service_cycle_failed', 'service_cycle_compat_fallback')
+          AND created_at > ?
+        ORDER BY id DESC
+        LIMIT 5
+        """,
+        (last_success,),
+    ).fetchall()
+    problems.extend(
+        {
+            "user_message": "La memoria local tuvo un problema temporal y NEXO la reintentara automaticamente",
+            "recommended_action": "No tienes que hacer nada. Si se repite, abre soporte y diagnostico para ver el detalle.",
+            "technical_detail": f"{row['event']}: {row['message']} {row['metadata_json']}",
+            "support_code": row["event"],
+            "severity": "warning" if row["level"] == "warn" else "error",
+            "retryable": True,
+            "path": "",
+            "phase": "service",
+            "created_at": row["created_at"],
+        }
+        for row in service_rows
+    )
+    return problems
 
 
 def _command_output(args: list[str], *, timeout: int = 2) -> tuple[int, str, str]:
