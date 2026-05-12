@@ -295,6 +295,29 @@ def test_copy_runtime_from_source_creates_skill_scaffold_dirs(tmp_path, monkeypa
     assert (dest / "presets" / "guardian_default.json").is_file()
 
 
+def test_copy_runtime_from_source_includes_local_context_package(tmp_path, monkeypatch):
+    import auto_update
+
+    src_dir = tmp_path / "src"
+    repo_dir = tmp_path / "repo"
+    dest = tmp_path / "runtime"
+
+    (src_dir / "db").mkdir(parents=True)
+    (src_dir / "local_context").mkdir(parents=True)
+    (src_dir / "local_context" / "__init__.py").write_text("from .api import status\n")
+    (src_dir / "local_context" / "api.py").write_text("def status():\n    return {'ok': True}\n")
+    (repo_dir / "templates").mkdir(parents=True)
+    (repo_dir / "package.json").write_text("{}\n")
+
+    monkeypatch.setattr(auto_update, "_installed_scripts_classification", lambda _dest: {})
+
+    result = auto_update._copy_runtime_from_source(src_dir, repo_dir, dest)
+
+    assert result["packages"] >= 2
+    assert (dest / "local_context" / "__init__.py").is_file()
+    assert (dest / "local_context" / "api.py").read_text() == "def status():\n    return {'ok': True}\n"
+
+
 def test_copy_runtime_from_source_replaces_f06_symlink_package_targets(tmp_path, monkeypatch):
     import auto_update
 

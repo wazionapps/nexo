@@ -66,20 +66,62 @@ def list_roots() -> list[dict]:
     return [dict(row) for row in rows]
 
 
+def _dedupe_roots(roots: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for root in roots:
+        normalized = norm_path(root)
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        result.append(normalized)
+    return result
+
+
+def _mounted_volume_roots() -> list[str]:
+    candidates: list[Path] = []
+    if sys.platform == "darwin":
+        candidates.extend((Path("/Volumes")).iterdir() if Path("/Volumes").is_dir() else [])
+    elif sys.platform.startswith("win"):
+        candidates.extend(Path(f"{letter}:\\") for letter in "ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+    else:
+        user = os.environ.get("USER") or os.environ.get("USERNAME") or ""
+        mount_bases = [Path("/mnt")]
+        if user:
+            mount_bases.extend([Path("/media") / user, Path("/run/media") / user])
+        for base in mount_bases:
+            if base.is_dir():
+                candidates.extend(base.iterdir())
+
+    roots: list[str] = []
+    root_resolved = Path("/").resolve()
+    for candidate in candidates:
+        try:
+            if candidate.name.startswith(".") or not candidate.is_dir():
+                continue
+            resolved = candidate.resolve()
+            if resolved == root_resolved:
+                continue
+            roots.append(str(candidate))
+        except Exception:
+            continue
+    return roots
+
+
 def default_roots() -> list[str]:
     home = Path.home()
     configured = os.environ.get("NEXO_LOCAL_INDEX_DEFAULT_ROOTS", "").strip()
     if configured:
-        return [norm_path(item) for item in configured.split(os.pathsep) if item.strip()]
-    return [norm_path(home)]
+        return _dedupe_roots([item for item in configured.split(os.pathsep) if item.strip()])
+    return _dedupe_roots([str(home), *_mounted_volume_roots()])
 
 
 def ensure_default_roots() -> dict:
-    existing = list_roots()
-    if existing:
-        return {"ok": True, "created": 0, "roots": existing}
+    existing_paths = {row["root_path"] for row in list_roots()}
     created = []
     for root in default_roots():
+        if root in existing_paths:
+            continue
         candidate = Path(root).expanduser()
         if candidate.exists() and candidate.is_dir():
             created.append(add_root(str(candidate), mode="normal", depth=2))

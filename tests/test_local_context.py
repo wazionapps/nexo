@@ -86,6 +86,28 @@ def test_exclusion_prevents_indexing(tmp_path):
     assert row["total"] == 0
 
 
+def test_default_roots_add_new_mounted_volumes_incrementally(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    external = tmp_path / "ExternalDrive"
+    home.mkdir()
+    external.mkdir()
+
+    monkeypatch.delenv("NEXO_LOCAL_INDEX_DEFAULT_ROOTS", raising=False)
+    monkeypatch.setattr(api.Path, "home", staticmethod(lambda: home))
+    monkeypatch.setattr(api, "_mounted_volume_roots", lambda: [])
+
+    first = api.ensure_default_roots()
+    assert first["created"] == 1
+
+    monkeypatch.setattr(api, "_mounted_volume_roots", lambda: [str(external)])
+    second = api.ensure_default_roots()
+
+    roots = {row["root_path"] for row in api.list_roots()}
+    assert second["created"] == 1
+    assert api.norm_path(str(home)) in roots
+    assert api.norm_path(str(external)) in roots
+
+
 def test_pause_stops_scan_until_resume(tmp_path):
     root = tmp_path / "docs"
     root.mkdir()

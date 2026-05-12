@@ -1,5 +1,14 @@
 # Changelog
 
+## [7.18.1] - 2026-05-12
+
+### Fixed — Local Context package is installed into packaged runtimes
+
+- **Packaged Brain runtimes now include the `local_context` package during fresh install, migration and source sync.** The 7.18.0 npm/Desktop bundle contained `src/local_context`, but the installer copied only the older allowlisted packages into the flattened runtime tree, so installed hosts could hit `ModuleNotFoundError: No module named 'local_context'`.
+- **Desktop Local Memory no longer reads as zero because Brain cannot import the index API.** Once updated, `nexo local-context status --json` can load the Brain-side Local Context API that Desktop uses for progress, files, exclusions and diagnostics.
+- **The autonomous root bootstrap now keeps adding newly mounted volumes.** The local-index service rechecks default roots on every cycle, so a disk connected after first setup becomes an indexed root automatically unless the user excludes it.
+- **Coverage:** targeted runtime packaging and Local Context checks pass (`14 passed`) across the new copy contract plus CLI/index/query/pre-action suites.
+
 ## [7.18.0] - 2026-05-12
 
 ### Added — Local Context Layer and background memory index
