@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.18.0: Local Context Layer gives agents a local memory index</title>
+<meta name="description" content="NEXO Brain v7.18.0 adds the Local Context Layer: a local-only background memory index with checkpoints, extraction, graph links, embeddings, MCP/CLI controls and pre-action evidence.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-18-0/">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.18.0: Local Context Layer gives agents a local memory index","datePublished":"2026-05-12","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head><body><main><article style="max-width:760px;margin:80px auto;padding:0 24px;line-height:1.75;">
+<h1>NEXO 7.18.0 &mdash; Local Context Layer gives agents a local memory index</h1>
+<p><em>Published 2026-05-12. Minor release over v7.17.8.</em></p>
+
+<h2>Why this release exists</h2>
+<p>NEXO agents need grounded local context before answering, drafting, or changing code. Version 7.18.0 adds a local-only index that can remember files, extracted text, entities, relations and evidence without calling an external API.</p>
+
+<h2>What changed</h2>
+<p>Brain now ships the Local Context Layer: schema migration, roots and exclusions, checkpointed scanner, extraction jobs, graph relations, deterministic local embedding fallback, diagnostics, and background-service metadata for macOS LaunchAgent and Windows Scheduled Task operation.</p>
+<p>The layer is usable through MCP tools and through <code>nexo local-context ...</code> CLI commands. It is also wired into <code>nexo_pre_action_context</code>, so agents can retrieve local evidence before acting instead of relying only on the active chat transcript.</p>
+
+<h2>Validation</h2>
+<pre><code>python3 -m py_compile src/cli.py tests/test_local_context_cli.py
+pytest -q tests/test_local_context_cli.py tests/test_local_context.py tests/test_local_context_pre_action.py
+# 12 passed</code></pre>
+
+<p><a href="/changelog/#v7180">Full changelog entry &rarr;</a> &middot; <a href="/blog/nexo-7-17-8/">Previous v7.17.8 release</a></p>
+</article></main></body></html>
