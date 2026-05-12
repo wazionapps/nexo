@@ -86,6 +86,26 @@ def test_exclusion_prevents_indexing(tmp_path):
     assert row["total"] == 0
 
 
+def test_noisy_dependency_trees_are_skipped_by_default(tmp_path):
+    root = tmp_path / "project"
+    root.mkdir()
+    dependency = root / ".venv" / "lib" / "package.py"
+    source = root / "src" / "app.py"
+    dependency.parent.mkdir(parents=True)
+    source.parent.mkdir(parents=True)
+    dependency.write_text("print('dependency')", encoding="utf-8")
+    source.write_text("print('source')", encoding="utf-8")
+
+    local_context.add_root(str(root))
+    local_context.run_once(limit=20, process_limit=20)
+
+    conn = db.get_db()
+    skipped = conn.execute("SELECT COUNT(*) AS total FROM local_assets WHERE path=?", (str(dependency),)).fetchone()
+    indexed = conn.execute("SELECT COUNT(*) AS total FROM local_assets WHERE path=?", (str(source),)).fetchone()
+    assert skipped["total"] == 0
+    assert indexed["total"] == 1
+
+
 def test_default_roots_add_new_mounted_volumes_incrementally(tmp_path, monkeypatch):
     home = tmp_path / "home"
     external = tmp_path / "ExternalDrive"

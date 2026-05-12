@@ -16,7 +16,7 @@ from db._schema import run_migrations
 from . import embeddings
 from .extractors import chunk_text, entities, extract_text, summarize
 from .logging import log_event, tail
-from .privacy import classify_path, should_extract
+from .privacy import classify_path, should_extract, should_skip_tree
 from .util import content_hash, json_dumps, json_loads, norm_path, now, quick_fingerprint, redact_path, stable_id, system_label, tokenize
 
 LOCAL_INDEX_SERVICE_LABEL = "com.nexo.local-index"
@@ -343,6 +343,8 @@ def _iter_files(root: Path, exclusions: list[str], *, limit: int | None = None, 
         current = stack.pop()
         if _is_excluded(str(current), exclusions):
             continue
+        if current != root and should_skip_tree(str(current)):
+            continue
         try:
             st = current.stat()
         except Exception:
@@ -362,6 +364,8 @@ def _iter_files(root: Path, exclusions: list[str], *, limit: int | None = None, 
             if entry.is_symlink():
                 continue
             if entry.is_dir():
+                if should_skip_tree(str(entry)):
+                    continue
                 dirs.append(entry)
                 continue
             if entry.is_file():

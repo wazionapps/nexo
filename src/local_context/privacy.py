@@ -36,10 +36,24 @@ NOISY_PARTS = {
     "dist",
     "build",
     ".git",
+    ".venv",
+    "venv",
+    "env",
     ".cache",
     "cache",
     "coverage",
     "__pycache__",
+    ".tox",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".next",
+    ".nuxt",
+    ".turbo",
+    ".parcel-cache",
+    ".bun",
+    ".gradle",
+    "target",
 }
 
 SYSTEM_PARTS = {
@@ -69,6 +83,15 @@ def classify_path(path: str) -> tuple[int, str, str]:
     if parts & NOISY_PARTS:
         return 1, "inventory_only", "noisy_tree"
     return 2, "normal", "default"
+
+
+def should_skip_tree(path: str) -> bool:
+    p = Path(path)
+    lowered = str(p).replace("\\", "/").lower()
+    parts = {part.lower() for part in p.parts}
+    if any(item in lowered for item in SYSTEM_PARTS):
+        return True
+    return bool(parts & NOISY_PARTS)
 
 
 def should_extract(path: str, depth: int) -> bool:
