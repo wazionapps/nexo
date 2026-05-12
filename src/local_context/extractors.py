@@ -32,6 +32,26 @@ TEXT_SUFFIXES = {
     ".css",
 }
 
+SECRET_PATTERNS: tuple[re.Pattern, ...] = (
+    re.compile(r"\bBearer\s+[A-Za-z0-9._\-~+/]{12,}\b", re.I),
+    re.compile(r"\bsk-(?:[a-z]+-)?[A-Za-z0-9_\-]{20,}\b"),
+    re.compile(r"\bpk-(?:[a-z]+-)?[A-Za-z0-9_\-]{20,}\b"),
+    re.compile(r"\b(ghp|gho|ghu|ghs|ghr|github_pat|glpat|xoxb|xoxp|shpat)_[A-Za-z0-9_]{16,}\b", re.I),
+    re.compile(r"\b(AKIA|ASIA)[A-Z0-9]{16,}\b"),
+    re.compile(r"\bey[A-Za-z0-9_-]{10,}\.ey[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b"),
+    re.compile(r"-----BEGIN (?:RSA |DSA |EC |OPENSSH |PGP )?PRIVATE KEY-----", re.I),
+    re.compile(r"\b([A-Z][A-Z0-9_]*(?:TOKEN|SECRET|KEY|PASSWORD|PASS)\s*[:=]\s*)['\"]?[A-Za-z0-9._/+=\-]{12,}", re.I),
+    re.compile(r"\b(?:api[_-]?key|secret[_-]?key|auth[_-]?token)\s*[:=]\s*['\"]?[A-Za-z0-9._/+=\-]{12,}", re.I),
+    re.compile(r"\b(?:password|passwd|pwd)\s*[:=]\s*['\"][^'\"]{6,}['\"]", re.I),
+)
+
+
+def contains_secret(text: str) -> bool:
+    if not text:
+        return False
+    sample = text[:MAX_CHARS]
+    return any(pattern.search(sample) for pattern in SECRET_PATTERNS)
+
 
 def _read_text(path: Path) -> str:
     data = path.read_bytes()[:MAX_TEXT_BYTES]

@@ -18,7 +18,11 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.20.2` is the current packaged-runtime line. Patch release over v7.20.1 — Local Context now requeues stalled work, reports real macOS/Windows background-service health, records scan errors and preserves Windows drive roots.
+Version `7.20.4` is the current packaged-runtime line. Patch release over v7.20.3 — Local Context now blocks private dotfiles, hidden project folders and secret-bearing content before chunks, embeddings, graph relations or agent context are created.
+
+Previously in `7.20.3`: patch release over v7.20.2 — installer DMG volumes are no longer added as local-memory roots, removed roots purge stale payloads, and doctor can repair removed-root residue.
+
+Previously in `7.20.2`: patch release over v7.20.1 — Local Context now requeues stalled work, reports real macOS/Windows background-service health, records scan errors and preserves Windows drive roots.
 
 Previously in `7.20.1`: patch release over v7.20.0 — the Local Context service now recovers from orphaned locks and mixed-version cycle failures instead of leaving the background index stuck.
 

@@ -1,5 +1,15 @@
 # Changelog
 
+## [7.20.4] - 2026-05-13
+
+### Fixed — local memory privacy hardening
+
+- **Local memory no longer indexes credential dotfiles, hidden profile folders or hidden project folders.** Files such as `.npmrc`, `.boto`, `.claude.json`, `.mcp.json`, `.nexo/**`, `.shopify/**`, temporary files and known credential/key paths are skipped before inventory, extraction, chunks, embeddings or graph relations are created.
+- **Existing private residue is repaired automatically.** `local_index_hygiene(fix=True)`, `nexo doctor --tier runtime --fix` and the resident index cycle purge stale private assets, directory checkpoints, jobs, chunks, embeddings, entities and relations left by older builds.
+- **Secret-bearing code/content is inventory-only and not queryable.** If a normal-looking file contains token/password/private-key patterns, Brain keeps only a blocked asset marker and removes chunks, embeddings, entities and relations, even when the secret appears late in a large document.
+- **Context queries no longer expose raw local paths.** Local evidence returns redacted `display_path` only and filters out non-queryable privacy classes before results reach NEXO Brain/agents.
+- **Coverage:** local-context privacy, CLI and pre-action suites pass (`31 passed`), Python compilation is clean, and live hygiene on the operator DB reports zero private residue, zero hidden chunks and zero secret chunks.
+
 ## [7.20.3] - 2026-05-12
 
 ### Fixed — local memory installer-volume hygiene

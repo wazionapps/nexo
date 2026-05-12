@@ -77,7 +77,8 @@ def test_local_context_cli_indexes_and_queries(tmp_path):
     query = _json(_run_cli(nexo_home, "local-context", "query", "factura Maria BMW", "--limit", "5", "--json"))
     assert query["ok"] is True
     assert query["evidence_refs"]
-    assert any("factura-portatil" in asset["path"] for asset in query["assets"])
+    assert any("factura-portatil" in asset["display_path"] for asset in query["assets"])
+    assert all("path" not in asset for asset in query["assets"])
 
     status = _json(_run_cli(nexo_home, "local-context", "status", "--json"))
     assert status["ok"] is True

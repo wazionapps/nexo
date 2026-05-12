@@ -14,9 +14,9 @@ from db import get_db, init_db
 from db._schema import run_migrations
 
 from . import embeddings
-from .extractors import chunk_text, entities, extract_text, summarize
+from .extractors import chunk_text, contains_secret, entities, extract_text, summarize
 from .logging import log_event, tail
-from .privacy import classify_path, should_extract, should_skip_tree
+from .privacy import classify_path, is_queryable_path, should_extract, should_skip_file, should_skip_tree
 from .util import content_hash, json_dumps, json_loads, norm_path, now, quick_fingerprint, redact_path, stable_id, system_label, tokenize
 
 LOCAL_INDEX_SERVICE_LABEL = "com.nexo.local-index"
@@ -41,6 +41,9 @@ def _conn():
 def add_root(path: str, *, mode: str = "normal", depth: int | None = None) -> dict:
     conn = _conn()
     root_path = norm_path(path)
+    if should_skip_tree(root_path):
+        log_event("warn", "root_rejected_private", "Root rejected by local memory privacy rules", path=redact_path(root_path))
+        return {"ok": False, "error": "root_blocked_by_privacy", "root_path": root_path}
     depth_value = 2 if depth is None else int(depth)
     conn.execute(
         """
@@ -220,6 +223,7 @@ def _purge_removed_root_payloads(conn, *, root_paths: list[str] | None = None) -
     for table in ("local_embeddings", "local_chunks", "local_entities", "local_asset_versions"):
         conn.execute(f"DELETE FROM {table} WHERE asset_id IN ({asset_subquery})", tuple(params))
     conn.execute(f"DELETE FROM local_relations WHERE source_asset_id IN ({asset_subquery})", tuple(params))
+    conn.execute(f"DELETE FROM local_relations WHERE target_asset_id IN ({asset_subquery})", tuple(params))
     conn.execute(f"DELETE FROM local_relations WHERE target_ref IN ({asset_subquery})", tuple(params))
     conn.execute(f"DELETE FROM local_index_jobs WHERE asset_id IN ({asset_subquery})", tuple(params))
     conn.execute(f"DELETE FROM local_index_errors WHERE asset_id IN ({asset_subquery})", tuple(params))
@@ -235,12 +239,136 @@ def _purge_removed_root_payloads(conn, *, root_paths: list[str] | None = None) -
     return counts
 
 
+def _purge_asset_ids(conn, asset_ids: list[str]) -> dict:
+    unique_ids = [asset_id for asset_id in dict.fromkeys(asset_ids) if asset_id]
+    counts = {"assets": len(unique_ids), "jobs": 0, "errors": 0, "chunks": 0, "embeddings": 0, "entities": 0, "relations": 0, "versions": 0}
+    if not unique_ids:
+        return counts
+    for start in range(0, len(unique_ids), 500):
+        batch = unique_ids[start:start + 500]
+        placeholders = ",".join("?" for _ in batch)
+        for key, table in (
+            ("embeddings", "local_embeddings"),
+            ("chunks", "local_chunks"),
+            ("entities", "local_entities"),
+            ("versions", "local_asset_versions"),
+            ("jobs", "local_index_jobs"),
+            ("errors", "local_index_errors"),
+        ):
+            counts[key] += int(conn.execute(f"DELETE FROM {table} WHERE asset_id IN ({placeholders})", tuple(batch)).rowcount or 0)
+        counts["relations"] += int(conn.execute(f"DELETE FROM local_relations WHERE source_asset_id IN ({placeholders})", tuple(batch)).rowcount or 0)
+        counts["relations"] += int(conn.execute(f"DELETE FROM local_relations WHERE target_asset_id IN ({placeholders})", tuple(batch)).rowcount or 0)
+        counts["relations"] += int(conn.execute(f"DELETE FROM local_relations WHERE target_ref IN ({placeholders})", tuple(batch)).rowcount or 0)
+        conn.execute(f"DELETE FROM local_assets WHERE asset_id IN ({placeholders})", tuple(batch))
+    return counts
+
+
+def _privacy_unsafe_asset_ids(conn) -> list[str]:
+    rows = conn.execute("SELECT asset_id, path, privacy_class FROM local_assets").fetchall()
+    unsafe: list[str] = []
+    for row in rows:
+        privacy_class = str(row["privacy_class"] or "")
+        if should_skip_file(str(row["path"] or "")) or privacy_class in {"private_profile_blocked", "system_blocked", "sensitive_inventory_only"}:
+            unsafe.append(str(row["asset_id"]))
+    return unsafe
+
+
+def _privacy_unsafe_dir_ids(conn) -> list[str]:
+    rows = conn.execute("SELECT dir_id, path FROM local_index_dirs").fetchall()
+    return [str(row["dir_id"]) for row in rows if should_skip_tree(str(row["path"] or ""))]
+
+
+def _content_secret_asset_ids(conn) -> list[str]:
+    rows = conn.execute(
+        """
+        SELECT c.asset_id, c.text
+        FROM local_chunks c
+        JOIN local_assets a ON a.asset_id=c.asset_id
+        WHERE a.status='active'
+          AND COALESCE(a.privacy_class, 'normal')='normal'
+        ORDER BY c.asset_id, c.chunk_index
+        """
+    ).fetchall()
+    secret_ids: set[str] = set()
+    for row in rows:
+        asset_id = str(row["asset_id"])
+        if asset_id in secret_ids:
+            continue
+        if contains_secret(str(row["text"] or "")):
+            secret_ids.add(asset_id)
+    return sorted(secret_ids)
+
+
+def _mark_content_secret_assets(conn, asset_ids: list[str]) -> int:
+    unique_ids = [asset_id for asset_id in dict.fromkeys(asset_ids) if asset_id]
+    if not unique_ids:
+        return 0
+    for start in range(0, len(unique_ids), 500):
+        batch = unique_ids[start:start + 500]
+        placeholders = ",".join("?" for _ in batch)
+        for table in ("local_embeddings", "local_chunks", "local_entities"):
+            conn.execute(f"DELETE FROM {table} WHERE asset_id IN ({placeholders})", tuple(batch))
+        conn.execute(f"DELETE FROM local_relations WHERE source_asset_id IN ({placeholders})", tuple(batch))
+        conn.execute(f"DELETE FROM local_relations WHERE target_asset_id IN ({placeholders})", tuple(batch))
+        conn.execute(f"DELETE FROM local_relations WHERE target_ref IN ({placeholders})", tuple(batch))
+        conn.execute(
+            f"""
+            UPDATE local_index_jobs
+            SET status='done', last_error_code='content_secret_blocked', updated_at=?
+            WHERE asset_id IN ({placeholders})
+            """,
+            (now(), *batch),
+        )
+        conn.execute(
+            f"""
+            UPDATE local_asset_versions
+            SET summary='', metadata_json=?
+            WHERE asset_id IN ({placeholders})
+            """,
+            (json_dumps({"content_blocked": "secret_pattern"}), *batch),
+        )
+        conn.execute(
+            f"""
+            UPDATE local_assets
+            SET privacy_class='content_secret_inventory_only',
+                depth=1,
+                depth_reason='content_secret',
+                phase='privacy_blocked',
+                updated_at=?
+            WHERE asset_id IN ({placeholders})
+            """,
+            (now(), *batch),
+        )
+    return len(unique_ids)
+
+
+def local_index_privacy_hygiene(*, fix: bool = False) -> dict:
+    conn = _conn()
+    asset_ids = _privacy_unsafe_asset_ids(conn)
+    dir_ids = _privacy_unsafe_dir_ids(conn)
+    content_secret_ids = _content_secret_asset_ids(conn)
+    residue = {"assets": len(asset_ids), "dirs": len(dir_ids), "content_secret_assets": len(content_secret_ids)}
+    cleanup = {"assets": 0, "jobs": 0, "errors": 0, "chunks": 0, "embeddings": 0, "entities": 0, "relations": 0, "versions": 0, "dirs": 0, "content_secret_assets": 0}
+    if fix:
+        cleanup.update(_purge_asset_ids(conn, asset_ids))
+        if dir_ids:
+            for start in range(0, len(dir_ids), 500):
+                batch = dir_ids[start:start + 500]
+                placeholders = ",".join("?" for _ in batch)
+                cleanup["dirs"] += int(conn.execute(f"DELETE FROM local_index_dirs WHERE dir_id IN ({placeholders})", tuple(batch)).rowcount or 0)
+        cleanup["content_secret_assets"] = _mark_content_secret_assets(conn, content_secret_ids)
+        conn.commit()
+        if asset_ids or dir_ids or content_secret_ids:
+            log_event("warn", "privacy_hygiene_repaired", "Local memory privacy hygiene repaired", cleanup=cleanup)
+    return {"ok": True, "fix": fix, "residue": residue, "cleanup": cleanup}
+
+
 def local_index_hygiene(*, fix: bool = False) -> dict:
     conn = _conn()
     removed_paths: list[str] = []
     for row in conn.execute("SELECT id, root_path FROM local_index_roots").fetchall():
         path = str(row["root_path"] or "")
-        if _should_skip_mounted_root(Path(path)):
+        if _should_skip_mounted_root(Path(path)) or should_skip_tree(path):
             removed_paths.append(path)
             if fix:
                 conn.execute("UPDATE local_index_roots SET status='removed', updated_at=? WHERE id=?", (now(), row["id"]))
@@ -249,9 +377,10 @@ def local_index_hygiene(*, fix: bool = False) -> dict:
     if fix:
         cleanup = _purge_removed_root_payloads(conn)
     conn.commit()
+    privacy = local_index_privacy_hygiene(fix=fix)
     if fix and (removed_paths or any(int(cleanup.get(key, 0) or 0) for key in ("assets", "jobs", "errors", "dirs", "checkpoints"))):
         log_event("info", "index_hygiene_repaired", "Local memory index hygiene repaired", roots=[redact_path(path) for path in removed_paths], cleanup=cleanup)
-    return {"ok": True, "fix": fix, "removed_roots": removed_paths, "residue": before, "cleanup": cleanup}
+    return {"ok": True, "fix": fix, "removed_roots": removed_paths, "residue": before, "cleanup": cleanup, "privacy": privacy}
 
 
 def repair_index_hygiene() -> dict:
@@ -424,6 +553,8 @@ def _upsert_asset(conn, root_id: int, path: Path, seen_at: float, root_depth: in
     raw_path = str(path)
     normalized = norm_path(raw_path)
     asset_id = stable_id("asset", normalized)
+    if should_skip_file(normalized):
+        return asset_id, False, "skipped"
     perm = _permission_state(path)
     depth, privacy_class, depth_reason = classify_path(normalized)
     depth = min(depth, root_depth)
@@ -546,6 +677,20 @@ def _mark_dir_subtree_deleted(conn, dir_path: str, deleted_at: float | None = No
     return len(rows)
 
 
+def _purge_dir_subtree(conn, dir_path: str) -> int:
+    normalized = norm_path(dir_path)
+    prefix = _path_prefix(normalized)
+    rows = conn.execute(
+        "SELECT asset_id FROM local_assets WHERE path=? OR path LIKE ?",
+        (normalized, prefix + "%"),
+    ).fetchall()
+    asset_ids = [str(row["asset_id"]) for row in rows]
+    _purge_asset_ids(conn, asset_ids)
+    conn.execute("DELETE FROM local_index_dirs WHERE path=? OR path LIKE ?", (normalized, prefix + "%"))
+    conn.execute("DELETE FROM local_index_errors WHERE path=? OR path LIKE ?", (normalized, prefix + "%"))
+    return len(asset_ids)
+
+
 def _record_index_error(
     conn,
     *,
@@ -651,6 +796,8 @@ def _iter_files(
                 continue
             if entry.is_file():
                 normalized = norm_path(entry)
+                if should_skip_file(normalized):
+                    continue
                 if start_after_norm and normalized <= start_after_norm:
                     continue
                 yield entry
@@ -729,7 +876,11 @@ def _reconcile_known_assets(conn, exclusions: list[str], *, limit: int) -> dict:
         path = str(row["path"])
         root_path = Path(row["root_path"]).expanduser() if row["root_path"] else None
         if _is_excluded(path, exclusions):
-            _mark_asset_deleted(conn, row["asset_id"], seen_at)
+            _purge_asset_ids(conn, [row["asset_id"]])
+            stats["excluded"] += 1
+            continue
+        if should_skip_file(path):
+            _purge_asset_ids(conn, [row["asset_id"]])
             stats["excluded"] += 1
             continue
         if root_path is not None and not root_path.exists():
@@ -836,6 +987,8 @@ def _scan_known_directory(
                         stack.append(entry)
                     continue
                 if entry.is_file():
+                    if should_skip_file(str(entry)):
+                        continue
                     seen_files.add(norm_path(entry))
                     if stats["files_scanned"] >= file_limit:
                         continue
@@ -843,7 +996,7 @@ def _scan_known_directory(
                     stats["files_scanned"] += 1
                     if changed:
                         stats["files_changed"] += 1
-                    if state != "ok":
+                    if state not in {"ok", "skipped"}:
                         stats["errors"] += 1
             except Exception as exc:
                 _record_scan_error(conn, stats, str(entry), "live_reconcile", exc)
@@ -885,6 +1038,10 @@ def _reconcile_known_dirs(conn, exclusions: list[str], *, dir_limit: int, file_l
         root_path = Path(row["root_path"]).expanduser() if row["root_path"] else None
         if _is_excluded(str(dir_path), exclusions):
             stats["files_deleted"] += _mark_dir_subtree_deleted(conn, str(dir_path), seen_at)
+            stats["excluded_dirs"] += 1
+            continue
+        if should_skip_tree(str(dir_path)):
+            stats["files_deleted"] += _purge_dir_subtree(conn, str(dir_path))
             stats["excluded_dirs"] += 1
             continue
         if root_path is not None and not root_path.exists():
@@ -966,6 +1123,12 @@ def scan_once(*, limit: int | None = None) -> dict:
     for root in roots:
         root_path = Path(root["root_path"]).expanduser()
         root_id = int(root["id"])
+        if should_skip_tree(str(root_path)):
+            conn.execute(
+                "UPDATE local_index_roots SET status='removed', last_scan_at=?, updated_at=? WHERE id=?",
+                (now(), now(), root_id),
+            )
+            continue
         if not root_path.exists():
             conn.execute(
                 "UPDATE local_index_roots SET status='offline', last_scan_at=?, updated_at=? WHERE id=?",
@@ -997,7 +1160,7 @@ def scan_once(*, limit: int | None = None) -> dict:
             seen_for_root += 1
             if changed:
                 totals["changed"] += 1
-            if state != "ok":
+            if state not in {"ok", "skipped"}:
                 totals["errors"] += 1
         partial_root = bool(limit and seen_for_root >= limit)
         totals["partial"] = bool(totals["partial"] or partial_root)
@@ -1121,7 +1284,7 @@ def process_jobs(*, limit: int = 100) -> dict:
     recovered = _requeue_due_jobs(conn)
     rows = conn.execute(
         """
-        SELECT j.*, a.path, a.depth, a.status AS asset_status
+        SELECT j.*, a.path, a.depth, a.privacy_class, a.status AS asset_status
         FROM local_index_jobs j
         JOIN local_assets a ON a.asset_id = j.asset_id
         WHERE j.status='pending'
@@ -1143,9 +1306,24 @@ def process_jobs(*, limit: int = 100) -> dict:
         try:
             if row["asset_status"] != "active":
                 raise FileNotFoundError(row["path"])
+            if str(row["privacy_class"] or "normal") != "normal":
+                conn.execute(
+                    "UPDATE local_index_jobs SET status='done', updated_at=?, last_error_code='privacy_blocked' WHERE job_id=?",
+                    (now(), job_id),
+                )
+                processed += 1
+                continue
             if job_type == "light_extraction":
                 text, metadata = extract_text(Path(row["path"]))
                 version_id = _latest_version_id(conn, asset_id)
+                if contains_secret(text):
+                    _mark_content_secret_assets(conn, [asset_id])
+                    conn.execute(
+                        "UPDATE local_index_jobs SET status='done', updated_at=?, last_error_code='content_secret_blocked' WHERE job_id=?",
+                        (now(), job_id),
+                    )
+                    processed += 1
+                    continue
                 summary = summarize(text)
                 conn.execute(
                     "UPDATE local_asset_versions SET summary=?, metadata_json=? WHERE version_id=?",
@@ -1202,6 +1380,9 @@ def run_once(
     live_dir_limit: int = DEFAULT_LIVE_DIR_LIMIT,
     live_file_limit: int = DEFAULT_LIVE_FILE_LIMIT,
 ) -> dict:
+    if _get_state("privacy_hygiene_v2", "0") != "1":
+        local_index_privacy_hygiene(fix=True)
+        _set_state("privacy_hygiene_v2", "1")
     if root:
         add_root(root)
     elif (
@@ -1680,17 +1861,21 @@ def context_query(query: str, *, intent: str = "answer", limit: int = 12, eviden
     qvec = embeddings.embed_text(query)
     rows = conn.execute(
         """
-        SELECT c.chunk_id, c.asset_id, c.text, a.path, a.file_type, v.summary, e.vector_json
+        SELECT c.chunk_id, c.asset_id, c.text, a.path, a.file_type, a.privacy_class, v.summary, e.vector_json
         FROM local_chunks c
         JOIN local_assets a ON a.asset_id = c.asset_id
         LEFT JOIN local_asset_versions v ON v.version_id = c.version_id
         LEFT JOIN local_embeddings e ON e.chunk_id = c.chunk_id
         WHERE a.status='active'
-        LIMIT 1000
+          AND a.privacy_class='normal'
+        ORDER BY c.created_at DESC
+        LIMIT 5000
         """
     ).fetchall()
     scored = []
     for row in rows:
+        if not is_queryable_path(str(row["path"] or ""), str(row["privacy_class"] or "")):
+            continue
         vector = json_loads(row["vector_json"], [])
         score = max(_search_text_score(query, row["text"]), embeddings.cosine(qvec, vector))
         if score > 0:
@@ -1704,7 +1889,6 @@ def context_query(query: str, *, intent: str = "answer", limit: int = 12, eviden
         if row["asset_id"] not in seen_assets:
             assets.append({
                 "asset_id": row["asset_id"],
-                "path": row["path"],
                 "display_path": redact_path(row["path"]),
                 "file_type": row["file_type"],
                 "score": round(float(score), 4),
@@ -1798,13 +1982,7 @@ def get_neighbors(asset_id: str, *, limit: int = 30) -> dict:
 
 def purge_asset(asset_id: str) -> dict:
     conn = _conn()
-    for table in ("local_embeddings", "local_chunks", "local_entities"):
-        conn.execute(f"DELETE FROM {table} WHERE asset_id=?", (asset_id,))
-    conn.execute("DELETE FROM local_relations WHERE source_asset_id=?", (asset_id,))
-    conn.execute("DELETE FROM local_index_errors WHERE asset_id=?", (asset_id,))
-    conn.execute("DELETE FROM local_index_jobs WHERE asset_id=?", (asset_id,))
-    conn.execute("DELETE FROM local_asset_versions WHERE asset_id=?", (asset_id,))
-    conn.execute("DELETE FROM local_assets WHERE asset_id=?", (asset_id,))
+    _purge_asset_ids(conn, [asset_id])
     conn.commit()
     log_event("info", "asset_purged", "Asset purged", asset_id=asset_id)
     return {"ok": True, "asset_id": asset_id}

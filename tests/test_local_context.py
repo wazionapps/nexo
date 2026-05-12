@@ -33,7 +33,8 @@ def test_scan_extract_query_and_purge(tmp_path):
     assert context["ok"] is True
     assert context["evidence_refs"]
     assert context["relations"]
-    assert any("factura-portatil" in asset["path"] for asset in context["assets"])
+    assert any("factura-portatil" in asset["display_path"] for asset in context["assets"])
+    assert all("path" not in asset for asset in context["assets"])
 
     asset_id = context["assets"][0]["asset_id"]
     purge = local_context.purge_asset(asset_id)
@@ -41,7 +42,7 @@ def test_scan_extract_query_and_purge(tmp_path):
     assert local_context.get_asset(asset_id)["ok"] is False
 
 
-def test_sensitive_files_are_inventory_only(tmp_path):
+def test_sensitive_files_are_not_indexed(tmp_path):
     root = tmp_path / "project"
     root.mkdir()
     secret = root / ".env"
@@ -50,11 +51,53 @@ def test_sensitive_files_are_inventory_only(tmp_path):
     local_context.add_root(str(root))
     local_context.run_once(limit=20, process_limit=20)
     conn = db.get_db()
-    row = conn.execute("SELECT depth, privacy_class FROM local_assets WHERE path=?", (str(secret),)).fetchone()
-    assert row["depth"] == 1
-    assert row["privacy_class"] == "sensitive_inventory_only"
+    row = conn.execute("SELECT COUNT(*) AS total FROM local_assets WHERE path=?", (str(secret),)).fetchone()
+    assert row["total"] == 0
     chunks = conn.execute("SELECT COUNT(*) AS total FROM local_chunks").fetchone()["total"]
     assert chunks == 0
+
+
+def test_private_profile_and_credential_files_are_not_indexed(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setattr(api.Path, "home", staticmethod(lambda: home))
+    monkeypatch.setattr("local_context.privacy.Path.home", staticmethod(lambda: home))
+
+    files = [
+        home / ".npmrc",
+        home / ".boto",
+        home / ".claude.json",
+        home / ".grunt-init" / "jquery" / "qunit.js",
+        home / ".nexo" / "data" / "secret.txt",
+        home / "Documents" / "project" / ".mcp.json",
+        home / "Documents" / "shopify-app" / ".shopify" / "deploy-bundle" / "manifest.json",
+        home / "$tmp" / "runtime" / "note.py",
+        home / "~$tmp.docx",
+    ]
+    for path in files:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("private token secret", encoding="utf-8")
+    normal = home / "Documents" / "factura.txt"
+    normal.parent.mkdir(parents=True, exist_ok=True)
+    normal.write_text("Factura normal de Maria", encoding="utf-8")
+
+    local_context.add_root(str(home))
+    local_context.run_once(limit=100, process_limit=100)
+
+    conn = db.get_db()
+    for path in files:
+        row = conn.execute("SELECT COUNT(*) AS total FROM local_assets WHERE path=?", (str(path),)).fetchone()
+        assert row["total"] == 0
+    indexed = conn.execute("SELECT COUNT(*) AS total FROM local_assets WHERE path=?", (str(normal),)).fetchone()
+    assert indexed["total"] == 1
+
+
+def test_windows_style_private_paths_are_blocked():
+    from local_context.privacy import should_skip_file, should_skip_tree
+
+    assert should_skip_file(r"C:\Users\me\.boto\credentials") is True
+    assert should_skip_file(r"C:\Users\me\AppData\Roaming\npm\.npmrc") is True
+    assert should_skip_tree(r"C:\Users\me\.nexo\data") is True
 
 
 def test_deleted_file_becomes_tombstone(tmp_path):
@@ -356,8 +399,147 @@ def test_live_reconcile_marks_existing_files_deleted_after_exclusion(tmp_path):
 
     assert result["assets"]["excluded"] + result["dirs"]["excluded_dirs"] >= 1
     conn = db.get_db()
-    row = conn.execute("SELECT status FROM local_assets WHERE display_path=?", (str(path),)).fetchone()
-    assert row["status"] == "deleted"
+    row = conn.execute("SELECT COUNT(*) AS total FROM local_assets WHERE display_path=?", (str(path),)).fetchone()
+    assert row["total"] == 0
+
+
+def test_privacy_hygiene_purges_existing_private_payloads(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setattr(api.Path, "home", staticmethod(lambda: home))
+    monkeypatch.setattr("local_context.privacy.Path.home", staticmethod(lambda: home))
+    private = home / ".claude.json"
+    private.write_text("token secret", encoding="utf-8")
+    normal = home / "Documents" / "note.txt"
+    normal.parent.mkdir(parents=True)
+    normal.write_text("normal note", encoding="utf-8")
+
+    local_context.add_root(str(home))
+    conn = db.get_db()
+    root_id = conn.execute("SELECT id FROM local_index_roots WHERE root_path=?", (api.norm_path(str(home)),)).fetchone()["id"]
+    asset_id = api.stable_id("asset", api.norm_path(str(private)))
+    version_id = api.stable_id("ver", asset_id)
+    conn.execute(
+        """
+        INSERT INTO local_assets(asset_id, root_id, path, display_path, parent_path, volume_id, file_type, extension,
+          size_bytes, quick_fingerprint, depth, depth_reason, phase, status, privacy_class, permission_state,
+          first_seen_at, last_seen_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, '/', 'document', '.json', 1, 'old', 2, 'old', 'embeddings', 'active', 'normal', 'granted', 1, 1, 1)
+        """,
+        (asset_id, root_id, str(private), str(private), str(private.parent)),
+    )
+    conn.execute(
+        "INSERT INTO local_asset_versions(version_id, asset_id, quick_fingerprint, content_hash, size_bytes, modified_at_fs, summary, created_at) VALUES (?, ?, 'old', '', 1, 1, 'secret', 1)",
+        (version_id, asset_id),
+    )
+    conn.execute(
+        "INSERT INTO local_chunks(chunk_id, asset_id, version_id, chunk_index, text, token_count, created_at) VALUES ('chunk_private', ?, ?, 0, 'secret token', 2, 1)",
+        (asset_id, version_id),
+    )
+    conn.execute(
+        "INSERT INTO local_embeddings(embedding_id, asset_id, chunk_id, model_id, model_revision, dimension, vector_json, created_at) VALUES ('emb_private', ?, 'chunk_private', 'm', 'r', 1, '[1]', 1)",
+        (asset_id,),
+    )
+    conn.execute(
+        "INSERT INTO local_entities(entity_id, asset_id, version_id, name, entity_type, confidence, evidence, created_at) VALUES ('ent_private', ?, ?, 'Secret', 'entity', 1, '', 1)",
+        (asset_id, version_id),
+    )
+    conn.execute(
+        "INSERT INTO local_relations(relation_id, source_asset_id, target_asset_id, target_ref, relation_type, confidence, evidence, active, created_at) VALUES ('rel_private', ?, ?, ?, 'test', 1, '', 1, 1)",
+        (asset_id, asset_id, asset_id),
+    )
+    conn.execute(
+        "INSERT INTO local_index_jobs(job_id, asset_id, job_type, status, created_at, updated_at) VALUES ('job_private', ?, 'graph', 'pending', 1, 1)",
+        (asset_id,),
+    )
+    conn.commit()
+
+    result = api.local_index_privacy_hygiene(fix=True)
+
+    assert result["cleanup"]["assets"] == 1
+    assert conn.execute("SELECT COUNT(*) AS total FROM local_assets WHERE asset_id=?", (asset_id,)).fetchone()["total"] == 0
+    assert conn.execute("SELECT COUNT(*) AS total FROM local_chunks WHERE asset_id=?", (asset_id,)).fetchone()["total"] == 0
+    assert conn.execute("SELECT COUNT(*) AS total FROM local_embeddings WHERE asset_id=?", (asset_id,)).fetchone()["total"] == 0
+    assert conn.execute("SELECT COUNT(*) AS total FROM local_entities WHERE asset_id=?", (asset_id,)).fetchone()["total"] == 0
+    assert conn.execute("SELECT COUNT(*) AS total FROM local_relations WHERE source_asset_id=? OR target_asset_id=? OR target_ref=?", (asset_id, asset_id, asset_id)).fetchone()["total"] == 0
+    assert conn.execute("SELECT COUNT(*) AS total FROM local_index_jobs WHERE asset_id=?", (asset_id,)).fetchone()["total"] == 0
+
+
+def test_privacy_hygiene_blocks_secrets_in_late_chunks(tmp_path):
+    root = tmp_path / "project"
+    root.mkdir()
+    path = root / "app.php"
+    path.write_text("safe file", encoding="utf-8")
+
+    local_context.add_root(str(root))
+    conn = db.get_db()
+    root_id = conn.execute("SELECT id FROM local_index_roots WHERE root_path=?", (api.norm_path(str(root)),)).fetchone()["id"]
+    asset_id = api.stable_id("asset", api.norm_path(str(path)))
+    version_id = api.stable_id("ver", asset_id)
+    conn.execute(
+        """
+        INSERT INTO local_assets(asset_id, root_id, path, display_path, parent_path, volume_id, file_type, extension,
+          size_bytes, quick_fingerprint, depth, depth_reason, phase, status, privacy_class, permission_state,
+          first_seen_at, last_seen_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, '/', 'code', '.php', 1, 'old', 5, 'old', 'embeddings', 'active', 'normal', 'granted', 1, 1, 1)
+        """,
+        (asset_id, root_id, str(path), str(path), str(path.parent)),
+    )
+    conn.execute(
+        "INSERT INTO local_asset_versions(version_id, asset_id, quick_fingerprint, content_hash, size_bytes, modified_at_fs, summary, created_at) VALUES (?, ?, 'old', '', 1, 1, 'summary', 1)",
+        (version_id, asset_id),
+    )
+    for idx in range(30):
+        conn.execute(
+            "INSERT INTO local_chunks(chunk_id, asset_id, version_id, chunk_index, text, token_count, created_at) VALUES (?, ?, ?, ?, ?, 2, 1)",
+            (f"chunk_safe_{idx}", asset_id, version_id, idx, f"safe chunk {idx}"),
+        )
+    conn.execute(
+        "INSERT INTO local_chunks(chunk_id, asset_id, version_id, chunk_index, text, token_count, created_at) VALUES ('chunk_secret_late', ?, ?, 30, ?, 2, 1)",
+        (asset_id, version_id, 'ShopInternalAccessToken = "993bbecc13b61ea9a1b6c8d467b4b8eeb681d5a36fc6d575e2fd361e0dd74482ac3cee59f07f1237036fc5c2381673919407";'),
+    )
+    conn.execute(
+        "INSERT INTO local_embeddings(embedding_id, asset_id, chunk_id, model_id, model_revision, dimension, vector_json, created_at) VALUES ('emb_late_secret', ?, 'chunk_secret_late', 'm', 'r', 1, '[1]', 1)",
+        (asset_id,),
+    )
+    conn.execute(
+        "INSERT INTO local_index_jobs(job_id, asset_id, job_type, status, created_at, updated_at) VALUES ('job_late_secret', ?, 'graph', 'pending', 1, 1)",
+        (asset_id,),
+    )
+    conn.commit()
+
+    result = api.local_index_privacy_hygiene(fix=True)
+
+    assert result["cleanup"]["content_secret_assets"] == 1
+    row = conn.execute("SELECT privacy_class, phase FROM local_assets WHERE asset_id=?", (asset_id,)).fetchone()
+    assert row["privacy_class"] == "content_secret_inventory_only"
+    assert row["phase"] == "privacy_blocked"
+    assert conn.execute("SELECT COUNT(*) AS total FROM local_chunks WHERE asset_id=?", (asset_id,)).fetchone()["total"] == 0
+    assert conn.execute("SELECT COUNT(*) AS total FROM local_embeddings WHERE asset_id=?", (asset_id,)).fetchone()["total"] == 0
+
+
+def test_secret_bearing_content_is_inventory_only_not_queryable(tmp_path):
+    root = tmp_path / "project"
+    root.mkdir()
+    token_file = root / "sendwa.php"
+    token_file.write_text(
+        'ShopInternalAccessToken = "993bbecc13b61ea9a1b6c8d467b4b8eeb681d5a36fc6d575e2fd361e0dd74482ac3cee59f07f1237036fc5c2381673919407";',
+        encoding="utf-8",
+    )
+
+    local_context.add_root(str(root))
+    local_context.run_once(limit=20, process_limit=20)
+
+    conn = db.get_db()
+    row = conn.execute("SELECT privacy_class, phase FROM local_assets WHERE path=?", (str(token_file),)).fetchone()
+    assert row["privacy_class"] == "content_secret_inventory_only"
+    assert row["phase"] == "privacy_blocked"
+    assert conn.execute("SELECT COUNT(*) AS total FROM local_chunks").fetchone()["total"] == 0
+    assert conn.execute("SELECT COUNT(*) AS total FROM local_embeddings").fetchone()["total"] == 0
+
+    query = local_context.context_query("sendwa", limit=5)
+    assert query["assets"] == []
+    assert query["warnings"]
 
 
 def test_service_config_renders_macos_and_windows():

@@ -3840,16 +3840,23 @@ def check_local_index_hygiene(fix: bool = False) -> DoctorCheck:
         result = local_context_api.local_index_hygiene(fix=fix)
         residue = result.get("residue") or {}
         cleanup = result.get("cleanup") or {}
+        privacy = result.get("privacy") or {}
+        privacy_residue = privacy.get("residue") or {}
+        privacy_cleanup = privacy.get("cleanup") or {}
         suspect_roots = [str(path) for path in result.get("removed_roots") or []]
         residue_total = sum(int(residue.get(key, 0) or 0) for key in ("assets", "jobs", "errors", "dirs", "checkpoints"))
         cleanup_total = sum(int(cleanup.get(key, 0) or 0) for key in ("assets", "jobs", "errors", "dirs", "checkpoints"))
+        privacy_residue_total = sum(int(privacy_residue.get(key, 0) or 0) for key in ("assets", "dirs", "content_secret_assets"))
+        privacy_cleanup_total = sum(int(privacy_cleanup.get(key, 0) or 0) for key in ("assets", "jobs", "errors", "chunks", "embeddings", "entities", "relations", "versions", "dirs", "content_secret_assets"))
         evidence = [
             "suspect_installer_roots=" + str(len(suspect_roots)),
             "residue=" + json.dumps(residue, sort_keys=True),
             "cleanup=" + json.dumps(cleanup, sort_keys=True),
+            "privacy_residue=" + json.dumps(privacy_residue, sort_keys=True),
+            "privacy_cleanup=" + json.dumps(privacy_cleanup, sort_keys=True),
         ]
         evidence.extend(f"root={path}" for path in suspect_roots[:5])
-        if residue_total == 0 and not suspect_roots:
+        if residue_total == 0 and privacy_residue_total == 0 and not suspect_roots:
             return DoctorCheck(
                 id="runtime.local_index_hygiene",
                 tier="runtime",
@@ -3868,17 +3875,17 @@ def check_local_index_hygiene(fix: bool = False) -> DoctorCheck:
                 summary="Local memory index hygiene repaired",
                 evidence=evidence,
                 repair_plan=[],
-                fixed=cleanup_total > 0 or bool(suspect_roots),
+                fixed=cleanup_total > 0 or privacy_cleanup_total > 0 or bool(suspect_roots),
             )
         return DoctorCheck(
             id="runtime.local_index_hygiene",
             tier="runtime",
             status="degraded",
             severity="warn",
-            summary="Local memory index has stale removed-root residue",
+            summary="Local memory index has stale or private residue",
             evidence=evidence,
-            repair_plan=["Run `nexo doctor --tier runtime --fix` to purge stale local memory roots and installer-volume residue"],
-            escalation_prompt="Local memory status may show stale pending or failed jobs from removed roots.",
+            repair_plan=["Run `nexo doctor --tier runtime --fix` to purge stale local memory roots and private local-memory residue"],
+            escalation_prompt="Local memory may contain stale or private index payloads that should be purged before indexing continues.",
         )
     except Exception as exc:
         return DoctorCheck(
