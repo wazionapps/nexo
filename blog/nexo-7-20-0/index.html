@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.20.0: live Local Context reconciliation</title>
+<meta name="description" content="NEXO Brain v7.20.0 keeps Local Context live by reconciling created, modified, deleted and excluded files between full scans.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-20-0/">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.20.0: live Local Context reconciliation","datePublished":"2026-05-12","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head><body><main><article style="max-width:760px;margin:80px auto;padding:0 24px;line-height:1.75;">
+<h1>NEXO 7.20.0 &mdash; live Local Context reconciliation</h1>
+<p><em>Published 2026-05-12. Minor release over v7.19.0.</em></p>
+
+<h2>Why this release exists</h2>
+<p>The first Local Context release gave Brain a resident local memory index, but a user should not have to wait for a complete root scan before everyday changes are reflected. A living memory layer must notice when files are created, modified, deleted or newly excluded, and it must do that safely on both macOS and Windows without repeatedly reindexing the whole computer.</p>
+
+<h2>What changed</h2>
+<ul>
+<li><strong>Live file reconciliation.</strong> Every service cycle checks a bounded set of known active files for deletion, modification and exclusion changes before processing the normal scan queue.</li>
+<li><strong>Known directory tracking.</strong> Migration <code>64</code> adds <code>local_index_dirs</code>, so changed folders can be rescanned in batches to discover new files and prune removed children while offline roots are protected from mass deletion.</li>
+<li><strong>Traceable local evidence.</strong> <code>context_query()</code> now returns matched graph relations alongside assets, chunks and entities, giving agents a clearer map of how local files connect.</li>
+<li><strong>CLI/service parity.</strong> <code>nexo local-context reconcile --json</code> and the resident local-index script use the same bounded reconcile path, keeping macOS LaunchAgent and Windows Scheduled Task behavior aligned.</li>
+<li><strong>Stale permission prompts clear.</strong> If macOS Full Disk Access is already granted, <code>nexo chat</code> clears obsolete prompt state and avoids showing the same warning again.</li>
+</ul>
+
+<h2>Validation</h2>
+<pre><code>python3 -m compileall -q src/local_context src/db/_schema.py src/cli.py src/runtime_power.py src/scripts/nexo-local-index.py
+python3 -m pytest tests/test_local_context.py tests/test_local_context_cli.py tests/test_runtime_power.py -q
+# 39 passed</code></pre>
+
+<p><a href="/changelog/#v7200">Full changelog entry &rarr;</a> &middot; <a href="/blog/nexo-7-19-0/">Previous v7.19.0 release</a></p>
+</article></main></body></html>
