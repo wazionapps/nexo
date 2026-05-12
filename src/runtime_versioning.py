@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import hashlib
 import json
 import os
 import re
 import shutil
+import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -814,6 +816,31 @@ def prime_process_fingerprint() -> str:
     return PROCESS_FINGERPRINT
 
 
+_DRIFT_AUTOEXIT_SCHEDULED = False
+_DRIFT_EXIT_CODE = 75
+_DRIFT_EXIT_DELAY_SECONDS = 0.5
+
+
+def _request_drift_exit() -> None:
+    try:
+        os._exit(_DRIFT_EXIT_CODE)
+    except Exception:
+        os._exit(1)
+
+
+def _schedule_drift_autoexit() -> None:
+    global _DRIFT_AUTOEXIT_SCHEDULED
+    if _DRIFT_AUTOEXIT_SCHEDULED:
+        return
+    _DRIFT_AUTOEXIT_SCHEDULED = True
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        _request_drift_exit()
+        return
+    loop.call_later(_DRIFT_EXIT_DELAY_SECONDS, _request_drift_exit)
+
+
 @dataclass
 class RestartRequiredMiddleware(Middleware):
     client: str = ""
@@ -893,4 +920,7 @@ class RestartRequiredMiddleware(Middleware):
             "reason": state["reason"],
             "client_action": state["client_action"],
         }
-        return await self._tool_result_for_restart_required(context, payload)
+        result = await self._tool_result_for_restart_required(context, payload)
+        if state.get("reason") == "fingerprint_mismatch":
+            _schedule_drift_autoexit()
+        return result

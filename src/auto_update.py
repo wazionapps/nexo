@@ -5372,6 +5372,11 @@ def startup_preflight(*, entrypoint: str, interactive: bool = False) -> dict:
             return result
 
         try:
+            env_auto_update = os.environ.get("NEXO_BRAIN_AUTO_UPDATE", "").strip().lower()
+            if env_auto_update in ("0", "false", "off", "no"):
+                result["skipped_reason"] = "auto_update disabled via NEXO_BRAIN_AUTO_UPDATE env var"
+                _write_update_summary(result)
+                return result
             last_check = _read_last_check()
             now = time.time()
             schedule_file = _runtime_config_dir(NEXO_HOME) / "schedule.json"

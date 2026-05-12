@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.19.0] - 2026-05-12
+
+### Added — Bundle-managed Brain updates and version-drift autoexit
+
+- **`NEXO_BRAIN_AUTO_UPDATE=false` env var disables npm-based self-update.** When the variable is set to `0`, `false`, `off` or `no`, `startup_preflight` skips the auto-update check entirely and records `skipped_reason="auto_update disabled via NEXO_BRAIN_AUTO_UPDATE env var"`. This lets bundle-managed installations (e.g. NEXO Desktop `brain-bundle/`) pin the Brain version against the host application release cycle instead of drifting via npm and producing fingerprint mismatches between the bundled snapshot and the live process.
+- **Brain auto-exits with code 75 on fingerprint mismatch.** When `RestartRequiredMiddleware` detects `installed_version != process_version` (the existing `mcp_restart_required` payload reason `fingerprint_mismatch`), the server schedules `os._exit(75)` (EX_TEMPFAIL) ~500 ms after delivering the response so the MCP client respawns the server with the new code instead of leaving stale `server.py` processes alive. The autoexit is idempotent (single schedule per process) and degrades to an immediate exit when no asyncio loop is running.
+- **Coverage:** targeted unit tests covering `auto_update.startup_preflight` env-var path and `runtime_versioning` drift autoexit pass alongside the existing pre-release sweep.
+
 ## [7.18.1] - 2026-05-12
 
 ### Fixed — Local Context package is installed into packaged runtimes
