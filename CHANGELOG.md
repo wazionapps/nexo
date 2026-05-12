@@ -1,5 +1,15 @@
 # Changelog
 
+## [7.20.3] - 2026-05-12
+
+### Fixed — local memory installer-volume hygiene
+
+- **macOS installer DMGs are no longer added as local-memory roots.** Default mounted-volume discovery skips NEXO Desktop installer volumes such as `/Volumes/NEXO Desktop`, while still allowing normal external disks to be indexed automatically.
+- **Removing a root now removes its stale local-memory payload.** Assets, jobs, errors, directory checkpoints and relations tied to removed roots are purged so old offline volumes cannot keep `jobs_failed`, pending work or support problems alive.
+- **Status ignores removed-root residue defensively.** Even if an older install has stale data, progress, volumes, pending jobs and problems are computed only from active roots.
+- **Doctor can repair this class of issue.** `nexo doctor --tier runtime --fix` now checks and cleans stale local-memory installer/root residue deterministically.
+- **Coverage:** targeted local-context and local-index runtime suites pass (`36 passed`) plus Python compilation for the changed Brain modules.
+
 ## [7.20.2] - 2026-05-12
 
 ### Fixed — local memory service hardening

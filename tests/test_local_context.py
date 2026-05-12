@@ -129,6 +129,125 @@ def test_default_roots_add_new_mounted_volumes_incrementally(tmp_path, monkeypat
     assert api.norm_path(str(external)) in roots
 
 
+def test_installer_volume_is_not_a_default_mounted_root(tmp_path):
+    installer = tmp_path / "NEXO Desktop"
+    external = tmp_path / "ExternalDrive"
+    installer.mkdir()
+    external.mkdir()
+
+    assert api._should_skip_mounted_root(installer) is True
+    assert api._should_skip_mounted_root(external) is False
+
+
+def test_remove_root_purges_stale_assets_jobs_and_errors(tmp_path):
+    root = tmp_path / "docs"
+    root.mkdir()
+    note = root / "note.txt"
+    note.write_text("stale removed root", encoding="utf-8")
+
+    local_context.add_root(str(root))
+    local_context.run_once(limit=20, process_limit=0)
+    conn = db.get_db()
+    asset = conn.execute("SELECT asset_id FROM local_assets WHERE path=?", (str(note),)).fetchone()
+    assert asset is not None
+    conn.execute(
+        """
+        INSERT INTO local_index_errors(asset_id, path, phase, error_code, user_message, technical_detail, retryable, created_at)
+        VALUES (?, ?, 'light_extraction', 'TestError', 'test', 'test', 1, 1)
+        """,
+        (asset["asset_id"], str(note)),
+    )
+    conn.commit()
+
+    result = local_context.remove_root(str(root))
+
+    assert result["cleanup"]["assets"] >= 1
+    assert conn.execute("SELECT COUNT(*) AS total FROM local_assets WHERE path=?", (str(note),)).fetchone()["total"] == 0
+    assert conn.execute("SELECT COUNT(*) AS total FROM local_index_jobs WHERE asset_id=?", (asset["asset_id"],)).fetchone()["total"] == 0
+    assert conn.execute("SELECT COUNT(*) AS total FROM local_index_errors WHERE asset_id=?", (asset["asset_id"],)).fetchone()["total"] == 0
+
+
+def test_status_ignores_removed_root_residue(tmp_path):
+    active_root = tmp_path / "active"
+    removed_root = tmp_path / "removed"
+    active_root.mkdir()
+    removed_root.mkdir()
+
+    local_context.add_root(str(active_root))
+    local_context.add_root(str(removed_root))
+    conn = db.get_db()
+    removed = conn.execute("SELECT id FROM local_index_roots WHERE root_path=?", (api.norm_path(str(removed_root)),)).fetchone()
+    conn.execute("UPDATE local_index_roots SET status='removed' WHERE id=?", (removed["id"],))
+    conn.execute(
+        """
+        INSERT INTO local_assets(asset_id, root_id, path, display_path, parent_path, volume_id, status, first_seen_at, last_seen_at, updated_at)
+        VALUES ('asset_removed', ?, ?, ?, ?, '/', 'active', 1, 1, 1)
+        """,
+        (removed["id"], str(removed_root / "ghost.txt"), str(removed_root / "ghost.txt"), str(removed_root)),
+    )
+    conn.execute(
+        "INSERT INTO local_index_jobs(job_id, asset_id, job_type, status, created_at, updated_at) VALUES ('job_removed', 'asset_removed', 'graph', 'failed', 1, 1)"
+    )
+    conn.execute(
+        """
+        INSERT INTO local_index_errors(asset_id, path, phase, error_code, user_message, technical_detail, retryable, created_at)
+        VALUES ('asset_removed', ?, 'graph', 'RemovedRoot', 'removed', 'removed', 1, 1)
+        """,
+        (str(removed_root / "ghost.txt"),),
+    )
+    conn.commit()
+
+    result = local_context.status()
+
+    assert result["global"]["jobs_failed"] == 0
+    assert result["global"]["files_found"] == 0
+    assert not any(problem["support_code"] == "RemovedRoot" for problem in result["problems"])
+
+
+def test_doctor_local_index_hygiene_repairs_removed_root_residue(tmp_path):
+    from doctor.providers.runtime import check_local_index_hygiene
+
+    removed_root = tmp_path / "NEXO Desktop"
+    removed_root.mkdir()
+    conn = db.get_db()
+    conn.execute(
+        """
+        INSERT INTO local_index_roots(root_path, display_path, mode, depth, status, created_at, updated_at)
+        VALUES (?, ?, 'normal', 2, 'removed', 1, 1)
+        """,
+        (api.norm_path(str(removed_root)), str(removed_root)),
+    )
+    root_id = conn.execute("SELECT id FROM local_index_roots WHERE root_path=?", (api.norm_path(str(removed_root)),)).fetchone()["id"]
+    conn.execute(
+        """
+        INSERT INTO local_assets(asset_id, root_id, path, display_path, parent_path, volume_id, status, first_seen_at, last_seen_at, updated_at)
+        VALUES ('asset_removed', ?, ?, ?, ?, '/', 'active', 1, 1, 1)
+        """,
+        (root_id, str(removed_root / "ghost.txt"), str(removed_root / "ghost.txt"), str(removed_root)),
+    )
+    conn.execute(
+        "INSERT INTO local_index_jobs(job_id, asset_id, job_type, status, created_at, updated_at) VALUES ('job_removed', 'asset_removed', 'graph', 'failed', 1, 1)"
+    )
+    conn.execute(
+        """
+        INSERT INTO local_index_errors(asset_id, path, phase, error_code, user_message, technical_detail, retryable, created_at)
+        VALUES ('asset_removed', ?, 'graph', 'RemovedRoot', 'removed', 'removed', 1, 1)
+        """,
+        (str(removed_root / "ghost.txt"),),
+    )
+    conn.commit()
+
+    dry = check_local_index_hygiene(fix=False)
+    fixed = check_local_index_hygiene(fix=True)
+
+    assert dry.status == "degraded"
+    assert fixed.status == "healthy"
+    assert fixed.fixed is True
+    assert conn.execute("SELECT COUNT(*) AS total FROM local_assets WHERE root_id=?", (root_id,)).fetchone()["total"] == 0
+    assert conn.execute("SELECT COUNT(*) AS total FROM local_index_jobs WHERE asset_id='asset_removed'").fetchone()["total"] == 0
+    assert conn.execute("SELECT COUNT(*) AS total FROM local_index_errors WHERE asset_id='asset_removed'").fetchone()["total"] == 0
+
+
 def test_pause_stops_scan_until_resume(tmp_path):
     root = tmp_path / "docs"
     root.mkdir()

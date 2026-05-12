@@ -3833,6 +3833,66 @@ def check_automation_caller_coverage(days: int = 7) -> DoctorCheck:
     )
 
 
+def check_local_index_hygiene(fix: bool = False) -> DoctorCheck:
+    try:
+        from local_context import api as local_context_api
+
+        result = local_context_api.local_index_hygiene(fix=fix)
+        residue = result.get("residue") or {}
+        cleanup = result.get("cleanup") or {}
+        suspect_roots = [str(path) for path in result.get("removed_roots") or []]
+        residue_total = sum(int(residue.get(key, 0) or 0) for key in ("assets", "jobs", "errors", "dirs", "checkpoints"))
+        cleanup_total = sum(int(cleanup.get(key, 0) or 0) for key in ("assets", "jobs", "errors", "dirs", "checkpoints"))
+        evidence = [
+            "suspect_installer_roots=" + str(len(suspect_roots)),
+            "residue=" + json.dumps(residue, sort_keys=True),
+            "cleanup=" + json.dumps(cleanup, sort_keys=True),
+        ]
+        evidence.extend(f"root={path}" for path in suspect_roots[:5])
+        if residue_total == 0 and not suspect_roots:
+            return DoctorCheck(
+                id="runtime.local_index_hygiene",
+                tier="runtime",
+                status="healthy",
+                severity="info",
+                summary="Local memory index hygiene is clean",
+                evidence=evidence,
+                repair_plan=[],
+            )
+        if fix:
+            return DoctorCheck(
+                id="runtime.local_index_hygiene",
+                tier="runtime",
+                status="healthy",
+                severity="info",
+                summary="Local memory index hygiene repaired",
+                evidence=evidence,
+                repair_plan=[],
+                fixed=cleanup_total > 0 or bool(suspect_roots),
+            )
+        return DoctorCheck(
+            id="runtime.local_index_hygiene",
+            tier="runtime",
+            status="degraded",
+            severity="warn",
+            summary="Local memory index has stale removed-root residue",
+            evidence=evidence,
+            repair_plan=["Run `nexo doctor --tier runtime --fix` to purge stale local memory roots and installer-volume residue"],
+            escalation_prompt="Local memory status may show stale pending or failed jobs from removed roots.",
+        )
+    except Exception as exc:
+        return DoctorCheck(
+            id="runtime.local_index_hygiene",
+            tier="runtime",
+            status="degraded",
+            severity="warn",
+            summary="Local memory index hygiene could not be checked",
+            evidence=[str(exc)],
+            repair_plan=["Inspect local_context.api.local_index_hygiene and runtime DB tables"],
+            escalation_prompt="Support cannot verify local memory index residue.",
+        )
+
+
 def run_runtime_checks(fix: bool = False) -> list[DoctorCheck]:
     """Run all runtime-tier checks. Read-only by default."""
     return [
@@ -3854,6 +3914,7 @@ def run_runtime_checks(fix: bool = False) -> list[DoctorCheck]:
         safe_check(check_automation_telemetry),
         safe_check(check_automation_caller_coverage),
         safe_check(check_state_watchers),
+        safe_check(check_local_index_hygiene, fix=fix),
         safe_check(check_release_artifact_sync),
         safe_check(check_release_trace_hygiene),
         safe_check(check_launchagent_inventory),

@@ -64,9 +64,10 @@ def remove_root(path: str) -> dict:
     conn = _conn()
     root_path = norm_path(path)
     conn.execute("UPDATE local_index_roots SET status='removed', updated_at=? WHERE root_path=?", (now(), root_path))
+    cleanup = _purge_removed_root_payloads(conn, root_paths=[root_path])
     conn.commit()
-    log_event("info", "root_removed", "Root removed", path=redact_path(root_path))
-    return {"ok": True, "root_path": root_path}
+    log_event("info", "root_removed", "Root removed", path=redact_path(root_path), cleanup=cleanup)
+    return {"ok": True, "root_path": root_path, "cleanup": cleanup}
 
 
 def list_roots() -> list[dict]:
@@ -108,6 +109,8 @@ def _mounted_volume_roots() -> list[str]:
         try:
             if candidate.name.startswith(".") or not candidate.is_dir():
                 continue
+            if _should_skip_mounted_root(candidate):
+                continue
             resolved = candidate.resolve()
             if resolved == root_resolved:
                 continue
@@ -135,6 +138,124 @@ def ensure_default_roots() -> dict:
         if candidate.exists() and candidate.is_dir():
             created.append(add_root(str(candidate), mode="normal", depth=2))
     return {"ok": True, "created": len(created), "roots": list_roots()}
+
+
+def _should_skip_mounted_root(candidate: Path) -> bool:
+    name = candidate.name.strip().lower()
+    if name in {"nexo desktop", "nexo desktop beta"} or name.startswith("nexo desktop "):
+        return True
+    try:
+        app_bundles = [child.name.lower() for child in candidate.iterdir() if child.suffix.lower() == ".app"]
+    except Exception:
+        app_bundles = []
+    if any(name.startswith("nexo desktop") for name in app_bundles):
+        installer_markers = (
+            candidate / ".background",
+            candidate / "Applications",
+            candidate / ".DS_Store",
+        )
+        if any(marker.exists() for marker in installer_markers):
+            return True
+    return False
+
+
+def _removed_root_filters(conn, *, root_paths: list[str] | None = None) -> tuple[list[int], list[str]]:
+    if root_paths:
+        placeholders = ",".join("?" for _ in root_paths)
+        rows = conn.execute(
+            f"SELECT id, root_path FROM local_index_roots WHERE root_path IN ({placeholders}) AND status='removed'",
+            tuple(root_paths),
+        ).fetchall()
+    else:
+        rows = conn.execute("SELECT id, root_path FROM local_index_roots WHERE status='removed'").fetchall()
+    return [int(row["id"]) for row in rows], [str(row["root_path"]) for row in rows]
+
+
+def _removed_root_payload_counts(conn, *, root_paths: list[str] | None = None) -> dict:
+    root_ids, removed_paths = _removed_root_filters(conn, root_paths=root_paths)
+    if not root_ids and not removed_paths:
+        return {"assets": 0, "jobs": 0, "errors": 0, "dirs": 0, "checkpoints": 0}
+    asset_filter, params = _removed_root_asset_filter(root_ids, removed_paths)
+    if not asset_filter:
+        return {"assets": 0, "jobs": 0, "errors": 0, "dirs": 0, "checkpoints": 0}
+    asset_subquery = f"SELECT asset_id FROM local_assets WHERE {asset_filter}"
+    assets = int(conn.execute(f"SELECT COUNT(*) AS total FROM local_assets WHERE {asset_filter}", tuple(params)).fetchone()["total"] or 0)
+    jobs = int(conn.execute(f"SELECT COUNT(*) AS total FROM local_index_jobs WHERE asset_id IN ({asset_subquery})", tuple(params)).fetchone()["total"] or 0)
+    errors = int(conn.execute(f"SELECT COUNT(*) AS total FROM local_index_errors WHERE asset_id IN ({asset_subquery})", tuple(params)).fetchone()["total"] or 0)
+    for path in removed_paths:
+        errors += int(conn.execute("SELECT COUNT(*) AS total FROM local_index_errors WHERE asset_id='' AND (path = ? OR path LIKE ?)", (path, f"{path}/%")).fetchone()["total"] or 0)
+    dirs = 0
+    checkpoints = 0
+    if root_ids:
+        root_placeholders = ",".join("?" for _ in root_ids)
+        dirs = int(conn.execute(f"SELECT COUNT(*) AS total FROM local_index_dirs WHERE root_id IN ({root_placeholders})", tuple(root_ids)).fetchone()["total"] or 0)
+        checkpoints = int(conn.execute(f"SELECT COUNT(*) AS total FROM local_index_checkpoints WHERE root_id IN ({root_placeholders})", tuple(root_ids)).fetchone()["total"] or 0)
+    return {"assets": assets, "jobs": jobs, "errors": errors, "dirs": dirs, "checkpoints": checkpoints}
+
+
+def _removed_root_asset_filter(root_ids: list[int], removed_paths: list[str]) -> tuple[str, list[Any]]:
+    filters: list[str] = []
+    params: list[Any] = []
+    if root_ids:
+        root_placeholders = ",".join("?" for _ in root_ids)
+        filters.append(f"root_id IN ({root_placeholders})")
+        params.extend(root_ids)
+    for path in removed_paths:
+        filters.append("(path = ? OR path LIKE ?)")
+        params.extend([path, f"{path}/%"])
+    return " OR ".join(filters), params
+
+
+def _purge_removed_root_payloads(conn, *, root_paths: list[str] | None = None) -> dict:
+    root_ids, removed_paths = _removed_root_filters(conn, root_paths=root_paths)
+    if not root_ids and not removed_paths:
+        return {"assets": 0, "jobs": 0, "errors": 0, "dirs": 0, "checkpoints": 0}
+
+    asset_filter, params = _removed_root_asset_filter(root_ids, removed_paths)
+    if not asset_filter:
+        return {"assets": 0, "jobs": 0, "errors": 0, "dirs": 0, "checkpoints": 0}
+    asset_subquery = f"SELECT asset_id FROM local_assets WHERE {asset_filter}"
+    counts = _removed_root_payload_counts(conn, root_paths=root_paths)
+
+    for table in ("local_embeddings", "local_chunks", "local_entities", "local_asset_versions"):
+        conn.execute(f"DELETE FROM {table} WHERE asset_id IN ({asset_subquery})", tuple(params))
+    conn.execute(f"DELETE FROM local_relations WHERE source_asset_id IN ({asset_subquery})", tuple(params))
+    conn.execute(f"DELETE FROM local_relations WHERE target_ref IN ({asset_subquery})", tuple(params))
+    conn.execute(f"DELETE FROM local_index_jobs WHERE asset_id IN ({asset_subquery})", tuple(params))
+    conn.execute(f"DELETE FROM local_index_errors WHERE asset_id IN ({asset_subquery})", tuple(params))
+
+    for path in removed_paths:
+        conn.execute("DELETE FROM local_index_errors WHERE path = ? OR path LIKE ?", (path, f"{path}/%"))
+
+    if root_ids:
+        root_placeholders = ",".join("?" for _ in root_ids)
+        conn.execute(f"DELETE FROM local_index_dirs WHERE root_id IN ({root_placeholders})", tuple(root_ids))
+        conn.execute(f"DELETE FROM local_index_checkpoints WHERE root_id IN ({root_placeholders})", tuple(root_ids))
+    conn.execute(f"DELETE FROM local_assets WHERE {asset_filter}", tuple(params))
+    return counts
+
+
+def local_index_hygiene(*, fix: bool = False) -> dict:
+    conn = _conn()
+    removed_paths: list[str] = []
+    for row in conn.execute("SELECT id, root_path FROM local_index_roots").fetchall():
+        path = str(row["root_path"] or "")
+        if _should_skip_mounted_root(Path(path)):
+            removed_paths.append(path)
+            if fix:
+                conn.execute("UPDATE local_index_roots SET status='removed', updated_at=? WHERE id=?", (now(), row["id"]))
+    before = _removed_root_payload_counts(conn)
+    cleanup = {"assets": 0, "jobs": 0, "errors": 0, "dirs": 0, "checkpoints": 0}
+    if fix:
+        cleanup = _purge_removed_root_payloads(conn)
+    conn.commit()
+    if fix and (removed_paths or any(int(cleanup.get(key, 0) or 0) for key in ("assets", "jobs", "errors", "dirs", "checkpoints"))):
+        log_event("info", "index_hygiene_repaired", "Local memory index hygiene repaired", roots=[redact_path(path) for path in removed_paths], cleanup=cleanup)
+    return {"ok": True, "fix": fix, "removed_roots": removed_paths, "residue": before, "cleanup": cleanup}
+
+
+def repair_index_hygiene() -> dict:
+    return local_index_hygiene(fix=True)
 
 
 def add_exclusion(path: str, *, reason: str = "user") -> dict:
@@ -398,7 +519,7 @@ def _mark_asset_deleted(conn, asset_id: str, deleted_at: float | None = None) ->
         """
         UPDATE local_index_jobs
         SET status='done', last_error_code='asset_deleted', updated_at=?
-        WHERE asset_id=? AND status IN ('pending', 'running')
+        WHERE asset_id=? AND status IN ('pending', 'running', 'failed')
         """,
         (deleted_at, asset_id),
     )
@@ -1102,9 +1223,19 @@ def run_once(
 def _problem_rows(conn) -> list[dict]:
     rows = conn.execute(
         """
-        SELECT path, phase, error_code, user_message, technical_detail, retryable, created_at
-        FROM local_index_errors
-        ORDER BY id DESC
+        SELECT e.path, e.phase, e.error_code, e.user_message, e.technical_detail, e.retryable, e.created_at
+        FROM local_index_errors e
+        LEFT JOIN local_assets a ON a.asset_id=e.asset_id
+        LEFT JOIN local_index_roots r ON r.id=a.root_id
+        WHERE COALESCE(r.status, 'active') != 'removed'
+          AND NOT EXISTS (
+            SELECT 1
+            FROM local_index_roots rr
+            WHERE rr.status='removed'
+              AND e.path != ''
+              AND (e.path = rr.root_path OR e.path LIKE rr.root_path || '/%')
+          )
+        ORDER BY e.id DESC
         LIMIT 20
         """
     ).fetchall()
@@ -1387,9 +1518,24 @@ def status() -> dict:
     conn = _conn()
     paused = _is_paused()
     assets = conn.execute(
-        "SELECT COUNT(*) AS total, SUM(CASE WHEN status='active' THEN 1 ELSE 0 END) AS active FROM local_assets"
+        """
+        SELECT COUNT(*) AS total, SUM(CASE WHEN a.status='active' THEN 1 ELSE 0 END) AS active
+        FROM local_assets a
+        LEFT JOIN local_index_roots r ON r.id=a.root_id
+        WHERE COALESCE(r.status, 'active') != 'removed'
+        """
     ).fetchone()
-    job_rows = conn.execute("SELECT status, COUNT(*) AS total FROM local_index_jobs GROUP BY status").fetchall()
+    job_rows = conn.execute(
+        """
+        SELECT j.status, COUNT(*) AS total
+        FROM local_index_jobs j
+        JOIN local_assets a ON a.asset_id=j.asset_id
+        LEFT JOIN local_index_roots r ON r.id=a.root_id
+        WHERE a.status='active'
+          AND COALESCE(r.status, 'active') != 'removed'
+        GROUP BY j.status
+        """
+    ).fetchall()
     job_counts = {row["status"]: int(row["total"] or 0) for row in job_rows}
     pending = int(job_counts.get("pending", 0) or 0)
     running_jobs = int(job_counts.get("running", 0) or 0)
@@ -1401,7 +1547,15 @@ def status() -> dict:
     roots = list_roots()
     volumes = []
     by_volume = conn.execute(
-        "SELECT volume_id, COUNT(*) AS files FROM local_assets WHERE status='active' GROUP BY volume_id ORDER BY volume_id"
+        """
+        SELECT a.volume_id, COUNT(*) AS files
+        FROM local_assets a
+        LEFT JOIN local_index_roots r ON r.id=a.root_id
+        WHERE a.status='active'
+          AND COALESCE(r.status, 'active') != 'removed'
+        GROUP BY a.volume_id
+        ORDER BY a.volume_id
+        """
     ).fetchall()
     for row in by_volume:
         volumes.append({"id": row["volume_id"], "label": row["volume_id"] or "Disk", "files": row["files"], "status": "active"})
