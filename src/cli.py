@@ -20,6 +20,7 @@ Entry points:
   nexo scripts run NAME_OR_PATH [-- args...]
   nexo scripts doctor [NAME_OR_PATH] [--json]
   nexo scripts call TOOL --input JSON [--json-output]
+  nexo local-context status|run-once|pause|resume|roots|exclusions|query|diagnostics|models [--json]
   nexo automations reactivate NAME [--test-run] [--json]
   nexo skills list [--level ...] [--source-kind ...] [--json]
   nexo skills get ID [--json]
@@ -1267,6 +1268,135 @@ def _scripts_call(args):
                 return recovered
         print(f"Error calling tool {tool_name}: {e}", file=sys.stderr)
         return 1
+
+
+def _local_context_emit(payload: dict, args) -> int:
+    return _print_json_or_text(payload, as_json=bool(getattr(args, "json", False)))
+
+
+def _local_context_status(args) -> int:
+    import local_context
+    return _local_context_emit(local_context.status(), args)
+
+
+def _local_context_run_once(args) -> int:
+    import local_context
+    return _local_context_emit(
+        local_context.run_once(
+            root=getattr(args, "root", "") or None,
+            limit=getattr(args, "limit", None),
+            process_limit=int(getattr(args, "process_limit", 100) or 100),
+        ),
+        args,
+    )
+
+
+def _local_context_control(args) -> int:
+    import local_context
+    command = str(getattr(args, "local_context_command", "") or "")
+    if command == "pause":
+        return _local_context_emit(local_context.pause(), args)
+    if command == "resume":
+        return _local_context_emit(local_context.resume(), args)
+    if command == "clear-index":
+        return _local_context_emit(local_context.clear_index(), args)
+    return _local_context_emit({"ok": False, "error": f"unsupported control command: {command}"}, args)
+
+
+def _local_context_roots(args) -> int:
+    import local_context
+    command = str(getattr(args, "local_context_roots_command", "") or "")
+    if command == "list":
+        return _local_context_emit({"ok": True, "roots": local_context.list_roots()}, args)
+    if command == "add":
+        return _local_context_emit(
+            local_context.add_root(
+                getattr(args, "path", ""),
+                mode=getattr(args, "mode", "normal") or "normal",
+                depth=getattr(args, "depth", None),
+            ),
+            args,
+        )
+    if command == "remove":
+        return _local_context_emit(local_context.remove_root(getattr(args, "path", "")), args)
+    return _local_context_emit({"ok": False, "error": f"unsupported roots command: {command}"}, args)
+
+
+def _local_context_exclusions(args) -> int:
+    import local_context
+    command = str(getattr(args, "local_context_exclusions_command", "") or "")
+    if command == "list":
+        return _local_context_emit({"ok": True, "exclusions": local_context.list_exclusions()}, args)
+    if command == "add":
+        return _local_context_emit(
+            local_context.add_exclusion(
+                getattr(args, "path", ""),
+                reason=getattr(args, "reason", "user") or "user",
+            ),
+            args,
+        )
+    if command == "remove":
+        return _local_context_emit(local_context.remove_exclusion(getattr(args, "path", "")), args)
+    return _local_context_emit({"ok": False, "error": f"unsupported exclusions command: {command}"}, args)
+
+
+def _local_context_query(args) -> int:
+    import local_context
+    return _local_context_emit(
+        local_context.context_query(
+            getattr(args, "query", "") or "",
+            intent=getattr(args, "intent", "answer") or "answer",
+            limit=int(getattr(args, "limit", 12) or 12),
+            evidence_required=not bool(getattr(args, "no_evidence_required", False)),
+            current_context=getattr(args, "current_context", "") or "",
+        ),
+        args,
+    )
+
+
+def _local_context_diagnostics(args) -> int:
+    import local_context
+    return _local_context_emit(
+        local_context.diagnostics_tail(limit=int(getattr(args, "limit", 100) or 100)),
+        args,
+    )
+
+
+def _local_context_models(args) -> int:
+    import local_context
+    command = str(getattr(args, "local_context_models_command", "") or "status")
+    if command == "warmup":
+        return _local_context_emit(
+            local_context.warmup_models(local_files_only=not bool(getattr(args, "allow_download", False))),
+            args,
+        )
+    return _local_context_emit(local_context.model_status(), args)
+
+
+def _local_context_service_config(args) -> int:
+    from local_context import api as local_context_api
+    return _local_context_emit(
+        local_context_api.render_service_config(getattr(args, "platform", "") or None),
+        args,
+    )
+
+
+def _local_context_asset(args) -> int:
+    import local_context
+    command = str(getattr(args, "local_context_asset_command", "") or "")
+    if command == "get":
+        return _local_context_emit(local_context.get_asset(getattr(args, "asset_id", "")), args)
+    if command == "neighbors":
+        return _local_context_emit(
+            local_context.get_neighbors(
+                getattr(args, "asset_id", ""),
+                limit=int(getattr(args, "limit", 30) or 30),
+            ),
+            args,
+        )
+    if command == "purge":
+        return _local_context_emit(local_context.purge_asset(getattr(args, "asset_id", "")), args)
+    return _local_context_emit({"ok": False, "error": f"unsupported asset command: {command}"}, args)
 
 
 def _recover(args):
@@ -3012,6 +3142,89 @@ def main():
     call_p.add_argument("--input", default="{}", help="JSON input payload")
     call_p.add_argument("--json-output", action="store_true", help="Force JSON output")
 
+    local_context_parser = sub.add_parser("local-context", help="Manage the local memory index")
+    local_context_sub = local_context_parser.add_subparsers(dest="local_context_command")
+
+    local_context_status_p = local_context_sub.add_parser("status", help="Show local memory index status")
+    local_context_status_p.add_argument("--json", action="store_true", help="JSON output")
+
+    local_context_run_p = local_context_sub.add_parser("run-once", help="Run one incremental scan/extract cycle")
+    local_context_run_p.add_argument("--root", default="", help="Optional folder to add before running")
+    local_context_run_p.add_argument("--limit", type=int, default=None, help="Maximum files to scan in this cycle")
+    local_context_run_p.add_argument("--process-limit", type=int, default=100, help="Maximum extraction/graph jobs to process")
+    local_context_run_p.add_argument("--json", action="store_true", help="JSON output")
+
+    local_context_pause_p = local_context_sub.add_parser("pause", help="Pause local memory indexing")
+    local_context_pause_p.add_argument("--json", action="store_true", help="JSON output")
+
+    local_context_resume_p = local_context_sub.add_parser("resume", help="Resume local memory indexing")
+    local_context_resume_p.add_argument("--json", action="store_true", help="JSON output")
+
+    local_context_clear_p = local_context_sub.add_parser("clear-index", help="Clear the local memory index")
+    local_context_clear_p.add_argument("--json", action="store_true", help="JSON output")
+
+    local_context_roots_p = local_context_sub.add_parser("roots", help="Manage included folders")
+    local_context_roots_sub = local_context_roots_p.add_subparsers(dest="local_context_roots_command")
+    local_context_roots_list_p = local_context_roots_sub.add_parser("list", help="List included folders")
+    local_context_roots_list_p.add_argument("--json", action="store_true", help="JSON output")
+    local_context_roots_add_p = local_context_roots_sub.add_parser("add", help="Add an included folder")
+    local_context_roots_add_p.add_argument("path", help="Folder path")
+    local_context_roots_add_p.add_argument("--mode", choices=["normal", "developer", "complete"], default="normal", help="Indexing mode")
+    local_context_roots_add_p.add_argument("--depth", type=int, default=None, help="Privacy depth override")
+    local_context_roots_add_p.add_argument("--json", action="store_true", help="JSON output")
+    local_context_roots_remove_p = local_context_roots_sub.add_parser("remove", help="Remove an included folder")
+    local_context_roots_remove_p.add_argument("path", help="Folder path")
+    local_context_roots_remove_p.add_argument("--json", action="store_true", help="JSON output")
+
+    local_context_exclusions_p = local_context_sub.add_parser("exclusions", help="Manage excluded folders")
+    local_context_exclusions_sub = local_context_exclusions_p.add_subparsers(dest="local_context_exclusions_command")
+    local_context_exclusions_list_p = local_context_exclusions_sub.add_parser("list", help="List excluded folders")
+    local_context_exclusions_list_p.add_argument("--json", action="store_true", help="JSON output")
+    local_context_exclusions_add_p = local_context_exclusions_sub.add_parser("add", help="Add an excluded folder")
+    local_context_exclusions_add_p.add_argument("path", help="Folder path")
+    local_context_exclusions_add_p.add_argument("--reason", default="user", help="Reason label")
+    local_context_exclusions_add_p.add_argument("--json", action="store_true", help="JSON output")
+    local_context_exclusions_remove_p = local_context_exclusions_sub.add_parser("remove", help="Remove an excluded folder")
+    local_context_exclusions_remove_p.add_argument("path", help="Folder path")
+    local_context_exclusions_remove_p.add_argument("--json", action="store_true", help="JSON output")
+
+    local_context_query_p = local_context_sub.add_parser("query", help="Query local memory evidence")
+    local_context_query_p.add_argument("query", help="Question or search phrase")
+    local_context_query_p.add_argument("--intent", default="answer", help="Intent label stored with the query audit row")
+    local_context_query_p.add_argument("--limit", type=int, default=12, help="Maximum evidence rows")
+    local_context_query_p.add_argument("--current-context", default="", help="Optional current conversation/task context")
+    local_context_query_p.add_argument("--no-evidence-required", action="store_true", help="Allow empty evidence results")
+    local_context_query_p.add_argument("--json", action="store_true", help="JSON output")
+
+    local_context_diagnostics_p = local_context_sub.add_parser("diagnostics", help="Tail local memory diagnostic events")
+    local_context_diagnostics_p.add_argument("--limit", type=int, default=100, help="Maximum log rows")
+    local_context_diagnostics_p.add_argument("--json", action="store_true", help="JSON output")
+
+    local_context_service_p = local_context_sub.add_parser("service-config", help="Render macOS/Windows service config metadata")
+    local_context_service_p.add_argument("--platform", choices=["", "macos", "windows", "linux"], default="", help="Override platform")
+    local_context_service_p.add_argument("--json", action="store_true", help="JSON output")
+
+    local_context_models_p = local_context_sub.add_parser("models", help="Show or warm local model profiles")
+    local_context_models_sub = local_context_models_p.add_subparsers(dest="local_context_models_command")
+    local_context_models_status_p = local_context_models_sub.add_parser("status", help="Show local model status")
+    local_context_models_status_p.add_argument("--json", action="store_true", help="JSON output")
+    local_context_models_warmup_p = local_context_models_sub.add_parser("warmup", help="Warm local model profiles without network by default")
+    local_context_models_warmup_p.add_argument("--allow-download", action="store_true", help="Allow model downloads")
+    local_context_models_warmup_p.add_argument("--json", action="store_true", help="JSON output")
+
+    local_context_asset_p = local_context_sub.add_parser("asset", help="Inspect or purge one indexed asset")
+    local_context_asset_sub = local_context_asset_p.add_subparsers(dest="local_context_asset_command")
+    local_context_asset_get_p = local_context_asset_sub.add_parser("get", help="Get indexed asset details")
+    local_context_asset_get_p.add_argument("asset_id", help="Asset id")
+    local_context_asset_get_p.add_argument("--json", action="store_true", help="JSON output")
+    local_context_asset_neighbors_p = local_context_asset_sub.add_parser("neighbors", help="Get graph neighbors")
+    local_context_asset_neighbors_p.add_argument("asset_id", help="Asset id")
+    local_context_asset_neighbors_p.add_argument("--limit", type=int, default=30, help="Maximum relation rows")
+    local_context_asset_neighbors_p.add_argument("--json", action="store_true", help="JSON output")
+    local_context_asset_purge_p = local_context_asset_sub.add_parser("purge", help="Purge one indexed asset")
+    local_context_asset_purge_p.add_argument("asset_id", help="Asset id")
+    local_context_asset_purge_p.add_argument("--json", action="store_true", help="JSON output")
+
     automations_parser = sub.add_parser("automations", help="Manage Desktop-facing automations")
     automations_sub = automations_parser.add_subparsers(dest="automations_command")
 
@@ -3516,6 +3729,40 @@ def main():
         else:
             scripts_parser.print_help()
             return 0
+    elif args.command == "local-context":
+        if args.local_context_command == "status":
+            return _local_context_status(args)
+        if args.local_context_command == "run-once":
+            return _local_context_run_once(args)
+        if args.local_context_command in {"pause", "resume", "clear-index"}:
+            return _local_context_control(args)
+        if args.local_context_command == "roots":
+            if not args.local_context_roots_command:
+                local_context_roots_p.print_help()
+                return 0
+            return _local_context_roots(args)
+        if args.local_context_command == "exclusions":
+            if not args.local_context_exclusions_command:
+                local_context_exclusions_p.print_help()
+                return 0
+            return _local_context_exclusions(args)
+        if args.local_context_command == "query":
+            return _local_context_query(args)
+        if args.local_context_command == "diagnostics":
+            return _local_context_diagnostics(args)
+        if args.local_context_command == "service-config":
+            return _local_context_service_config(args)
+        if args.local_context_command == "models":
+            if not args.local_context_models_command:
+                args.local_context_models_command = "status"
+            return _local_context_models(args)
+        if args.local_context_command == "asset":
+            if not args.local_context_asset_command:
+                local_context_asset_p.print_help()
+                return 0
+            return _local_context_asset(args)
+        local_context_parser.print_help()
+        return 0
     elif args.command == "automations":
         if args.automations_command == "list":
             return _automations_list(args)

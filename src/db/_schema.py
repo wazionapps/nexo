@@ -1765,6 +1765,213 @@ def _m62_memory_observations_fts_trigger_fix(conn):
     )
 
 
+def _m63_local_context_layer(conn):
+    """Local Context Layer storage for on-device memory indexing."""
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS local_index_roots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            root_path TEXT NOT NULL UNIQUE,
+            display_path TEXT NOT NULL,
+            mode TEXT NOT NULL DEFAULT 'normal',
+            depth INTEGER NOT NULL DEFAULT 2,
+            status TEXT NOT NULL DEFAULT 'active',
+            last_scan_at REAL,
+            created_at REAL NOT NULL,
+            updated_at REAL NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS local_index_exclusions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            path TEXT NOT NULL UNIQUE,
+            display_path TEXT NOT NULL,
+            reason TEXT NOT NULL DEFAULT 'user',
+            created_at REAL NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS local_index_jobs (
+            job_id TEXT PRIMARY KEY,
+            asset_id TEXT NOT NULL,
+            job_type TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending',
+            priority INTEGER NOT NULL DEFAULT 50,
+            claimed_by TEXT NOT NULL DEFAULT '',
+            lease_expires_at REAL,
+            attempt_count INTEGER NOT NULL DEFAULT 0,
+            next_attempt_at REAL,
+            last_error_code TEXT NOT NULL DEFAULT '',
+            created_at REAL NOT NULL,
+            updated_at REAL NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS local_index_checkpoints (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            root_id INTEGER,
+            phase TEXT NOT NULL DEFAULT 'quick_index',
+            current_path TEXT NOT NULL DEFAULT '',
+            total_seen INTEGER NOT NULL DEFAULT 0,
+            total_changed INTEGER NOT NULL DEFAULT 0,
+            total_errors INTEGER NOT NULL DEFAULT 0,
+            eta_seconds REAL,
+            metadata_json TEXT NOT NULL DEFAULT '{}',
+            created_at REAL NOT NULL,
+            updated_at REAL NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS local_index_state (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            updated_at REAL NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS local_index_errors (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            asset_id TEXT NOT NULL DEFAULT '',
+            path TEXT NOT NULL DEFAULT '',
+            phase TEXT NOT NULL,
+            error_code TEXT NOT NULL,
+            user_message TEXT NOT NULL DEFAULT '',
+            technical_detail TEXT NOT NULL DEFAULT '',
+            retryable INTEGER NOT NULL DEFAULT 1,
+            created_at REAL NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS local_index_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at REAL NOT NULL,
+            level TEXT NOT NULL,
+            event TEXT NOT NULL,
+            message TEXT NOT NULL,
+            metadata_json TEXT NOT NULL DEFAULT '{}'
+        );
+
+        CREATE TABLE IF NOT EXISTS local_assets (
+            asset_id TEXT PRIMARY KEY,
+            root_id INTEGER,
+            path TEXT NOT NULL UNIQUE,
+            display_path TEXT NOT NULL,
+            parent_path TEXT NOT NULL DEFAULT '',
+            volume_id TEXT NOT NULL DEFAULT '',
+            file_type TEXT NOT NULL DEFAULT 'file',
+            extension TEXT NOT NULL DEFAULT '',
+            size_bytes INTEGER NOT NULL DEFAULT 0,
+            created_at_fs REAL,
+            modified_at_fs REAL,
+            quick_fingerprint TEXT NOT NULL DEFAULT '',
+            depth INTEGER NOT NULL DEFAULT 2,
+            depth_reason TEXT NOT NULL DEFAULT 'default',
+            phase TEXT NOT NULL DEFAULT 'quick_index',
+            status TEXT NOT NULL DEFAULT 'active',
+            privacy_class TEXT NOT NULL DEFAULT 'normal',
+            permission_state TEXT NOT NULL DEFAULT 'unknown',
+            first_seen_at REAL NOT NULL,
+            last_seen_at REAL NOT NULL,
+            updated_at REAL NOT NULL,
+            deleted_at REAL
+        );
+
+        CREATE TABLE IF NOT EXISTS local_asset_versions (
+            version_id TEXT PRIMARY KEY,
+            asset_id TEXT NOT NULL,
+            quick_fingerprint TEXT NOT NULL DEFAULT '',
+            content_hash TEXT NOT NULL DEFAULT '',
+            size_bytes INTEGER NOT NULL DEFAULT 0,
+            modified_at_fs REAL,
+            summary TEXT NOT NULL DEFAULT '',
+            metadata_json TEXT NOT NULL DEFAULT '{}',
+            created_at REAL NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS local_chunks (
+            chunk_id TEXT PRIMARY KEY,
+            asset_id TEXT NOT NULL,
+            version_id TEXT NOT NULL,
+            chunk_index INTEGER NOT NULL DEFAULT 0,
+            text TEXT NOT NULL DEFAULT '',
+            token_count INTEGER NOT NULL DEFAULT 0,
+            created_at REAL NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS local_entities (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            entity_id TEXT NOT NULL,
+            asset_id TEXT NOT NULL,
+            version_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            entity_type TEXT NOT NULL DEFAULT 'entity',
+            confidence REAL NOT NULL DEFAULT 0.5,
+            evidence TEXT NOT NULL DEFAULT '',
+            created_at REAL NOT NULL,
+            UNIQUE(entity_id, asset_id, version_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS local_relations (
+            relation_id TEXT PRIMARY KEY,
+            source_asset_id TEXT NOT NULL,
+            target_asset_id TEXT NOT NULL DEFAULT '',
+            target_ref TEXT NOT NULL DEFAULT '',
+            relation_type TEXT NOT NULL,
+            confidence REAL NOT NULL DEFAULT 0.5,
+            evidence TEXT NOT NULL DEFAULT '',
+            active INTEGER NOT NULL DEFAULT 1,
+            created_at REAL NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS local_embeddings (
+            embedding_id TEXT PRIMARY KEY,
+            asset_id TEXT NOT NULL,
+            chunk_id TEXT NOT NULL,
+            model_id TEXT NOT NULL,
+            model_revision TEXT NOT NULL DEFAULT '',
+            dimension INTEGER NOT NULL,
+            vector_json TEXT NOT NULL,
+            created_at REAL NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS local_context_queries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            query_hash TEXT NOT NULL,
+            intent TEXT NOT NULL DEFAULT 'answer',
+            result_count INTEGER NOT NULL DEFAULT 0,
+            confidence REAL NOT NULL DEFAULT 0.0,
+            warnings_json TEXT NOT NULL DEFAULT '[]',
+            created_at REAL NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_local_index_roots_status
+            ON local_index_roots(status);
+        CREATE INDEX IF NOT EXISTS idx_local_index_jobs_status_priority
+            ON local_index_jobs(status, priority, created_at);
+        CREATE INDEX IF NOT EXISTS idx_local_index_jobs_asset
+            ON local_index_jobs(asset_id);
+        CREATE INDEX IF NOT EXISTS idx_local_index_errors_created
+            ON local_index_errors(created_at);
+        CREATE INDEX IF NOT EXISTS idx_local_index_logs_created
+            ON local_index_logs(created_at);
+        CREATE INDEX IF NOT EXISTS idx_local_assets_root_status
+            ON local_assets(root_id, status);
+        CREATE INDEX IF NOT EXISTS idx_local_assets_path
+            ON local_assets(path);
+        CREATE INDEX IF NOT EXISTS idx_local_assets_parent
+            ON local_assets(parent_path);
+        CREATE INDEX IF NOT EXISTS idx_local_assets_volume
+            ON local_assets(volume_id);
+        CREATE INDEX IF NOT EXISTS idx_local_versions_asset
+            ON local_asset_versions(asset_id, created_at);
+        CREATE INDEX IF NOT EXISTS idx_local_chunks_asset
+            ON local_chunks(asset_id);
+        CREATE INDEX IF NOT EXISTS idx_local_entities_name
+            ON local_entities(name);
+        CREATE INDEX IF NOT EXISTS idx_local_entities_asset
+            ON local_entities(asset_id);
+        CREATE INDEX IF NOT EXISTS idx_local_relations_source
+            ON local_relations(source_asset_id, relation_type);
+        CREATE INDEX IF NOT EXISTS idx_local_embeddings_chunk
+            ON local_embeddings(chunk_id);
+        """
+    )
+
+
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
     (2, "followups_reasoning", _m2_followups_reasoning),
@@ -1828,6 +2035,7 @@ MIGRATIONS = [
     (60, "memory_observations", _m60_memory_observations),
     (61, "memory_observations_fts", _m61_memory_observations_fts),
     (62, "memory_observations_fts_trigger_fix", _m62_memory_observations_fts_trigger_fix),
+    (63, "local_context_layer", _m63_local_context_layer),
 ]
 
 

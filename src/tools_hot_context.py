@@ -15,6 +15,37 @@ from db import (
 )
 
 
+def _format_local_context_evidence(query: str, *, limit: int = 4) -> str:
+    clean_query = (query or "").strip()
+    if not clean_query:
+        return ""
+    try:
+        from local_context import api as local_context_api
+
+        result = local_context_api.context_query(
+            clean_query,
+            intent="pre_action",
+            limit=max(1, min(int(limit or 4), 8)),
+            evidence_required=False,
+        )
+    except Exception:
+        return ""
+    assets = result.get("assets") or []
+    if not assets:
+        return ""
+    lines = ["", "LOCAL CONTEXT EVIDENCE:"]
+    for asset in assets[:limit]:
+        display_path = str(asset.get("display_path") or asset.get("path") or "")
+        score = asset.get("score")
+        summary = str(asset.get("summary") or "").strip()
+        suffix = f" — {summary[:180]}" if summary else ""
+        lines.append(f"- {display_path} ({asset.get('file_type', 'file')}, score={score}){suffix}")
+    refs = result.get("evidence_refs") or []
+    if refs:
+        lines.append(f"Evidence refs: {', '.join(str(ref) for ref in refs[:limit])}")
+    return "\n".join(lines)
+
+
 def _parse_metadata(metadata: str = "") -> dict:
     if not metadata or not metadata.strip():
         return {}
@@ -119,7 +150,9 @@ def handle_pre_action_context(
         hours=hours,
         limit=limit,
     )
-    return format_pre_action_context_bundle(bundle)
+    rendered = format_pre_action_context_bundle(bundle)
+    local_context = _format_local_context_evidence(" | ".join(query_bits), limit=min(limit or 4, 4))
+    return f"{rendered}{local_context}" if local_context else rendered
 
 
 def handle_recent_context_resolve(

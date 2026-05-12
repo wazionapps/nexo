@@ -303,6 +303,19 @@
       "run_on_wake": true
     },
     {
+      "id": "local-index",
+      "script": "scripts/nexo-local-index.py",
+      "interval_seconds": 60,
+      "description": "Local Context Layer indexing cycle for on-device memory",
+      "core": true,
+      "recovery_policy": "restart",
+      "idempotent": true,
+      "max_catchup_age": 600,
+      "stuck_after_seconds": 900,
+      "run_on_boot": true,
+      "run_on_wake": true
+    },
+    {
       "id": "email-monitor",
       "script": "scripts/nexo-email-monitor.py",
       "interval_seconds": 60,

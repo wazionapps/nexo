@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.17.8` is the current packaged-runtime line. Patch release over v7.17.7 - standalone `nexo chat` now surfaces macOS Full Disk Access guidance, and Brain clears stale permission state after a live access probe succeeds.
+Version `7.18.0` is the current packaged-runtime line. Minor release over v7.17.8 - Brain adds the Local Context Layer: a local-only background memory index with checkpoints, extraction, graph links, embeddings, MCP/CLI controls, and pre-action evidence for NEXO agents.
+
+Previously in `7.17.8`: patch release over v7.17.7 - standalone `nexo chat` now surfaces macOS Full Disk Access guidance, and Brain clears stale permission state after a live access probe succeeds.
 
 Previously in `7.17.7`: patch release over v7.17.6 - macOS TCC privacy denials now become a guided Full Disk Access permission state instead of an unexplained cron failure, with Desktop-ready status written for user action.
 

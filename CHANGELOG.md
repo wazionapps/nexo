@@ -1,5 +1,15 @@
 # Changelog
 
+## [7.18.0] - 2026-05-12
+
+### Added — Local Context Layer and background memory index
+
+- **Brain now ships a local-only Context Layer for NEXO memory.** The new schema, scanner, extraction queue, checkpoints, diagnostic logs, asset/chunk/entity/relation tables and local embedding fallback let NEXO build durable evidence over local files without external APIs.
+- **The background indexer is incremental and service-ready.** `src/scripts/nexo-local-index.py` runs cooperative cycles with a lock file, pause/resume state, default-root bootstrap, folder exclusions, partial-scan checkpoints, deletion reconciliation and support logs for macOS LaunchAgent / Windows Scheduled Task operation.
+- **Agents can use the index before acting.** Local Context evidence is merged into `nexo_pre_action_context`, and Brain exposes MCP plus CLI controls through `nexo_local_*` tools and `nexo local-context ...` commands.
+- **Desktop can consume the contract in the coordinated 0.33.0 release.** The interface supports progress, roots, exclusions, diagnostics, service metadata, model status and local evidence retrieval while keeping photos/video recognition deferred.
+- **Coverage:** targeted Local Context suites pass (`12 passed`) across CLI, index, query and pre-action integration, with service-cycle dry run and MCP export checks verified before publication.
+
 ## [7.17.8] - 2026-05-12
 
 ### Fixed — Brain clears stale macOS permission prompts

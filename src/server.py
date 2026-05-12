@@ -110,6 +110,7 @@ from runtime_versioning import (
     prime_process_fingerprint,
     prime_process_version,
 )
+from local_context import api as local_context_api
 
 
 # ── Graceful shutdown: close DB on any termination signal ──────────
@@ -618,6 +619,128 @@ def nexo_workflow_update(
 def nexo_status(keyword: str = "") -> str:
     """List active sessions. Filter by keyword if provided."""
     return handle_status(keyword if keyword else None)
+
+
+@mcp.tool
+def nexo_local_index_status() -> str:
+    """Return local memory index status for Desktop settings and support diagnostics."""
+    return json.dumps(local_context_api.status(), ensure_ascii=False)
+
+
+@mcp.tool
+def nexo_local_index_control(action: str = "run_once", root: str = "", limit: int = 0, process_limit: int = 100) -> str:
+    """Control the local memory index.
+
+    Args:
+        action: one of run_once, pause, resume, clear_index.
+        root: optional folder to add and scan when action=run_once.
+        limit: optional per-root scan limit for cooperative background cycles.
+        process_limit: max pending jobs to process in this cycle.
+    """
+    normalized = str(action or "run_once").strip().lower()
+    if normalized == "pause":
+        result = local_context_api.pause()
+    elif normalized == "resume":
+        result = local_context_api.resume()
+    elif normalized == "clear_index":
+        result = local_context_api.clear_index()
+    elif normalized == "run_once":
+        result = local_context_api.run_once(root=root or None, limit=limit or None, process_limit=process_limit)
+    else:
+        result = {"ok": False, "error": "unknown_action", "allowed": ["run_once", "pause", "resume", "clear_index"]}
+    return json.dumps(result, ensure_ascii=False)
+
+
+@mcp.tool
+def nexo_local_index_roots(action: str = "list", path: str = "", mode: str = "normal", depth: int = 2) -> str:
+    """List, add or remove local memory roots."""
+    normalized = str(action or "list").strip().lower()
+    if normalized == "list":
+        result = {"ok": True, "roots": local_context_api.list_roots()}
+    elif normalized == "add":
+        result = local_context_api.add_root(path, mode=mode, depth=depth)
+    elif normalized == "remove":
+        result = local_context_api.remove_root(path)
+    else:
+        result = {"ok": False, "error": "unknown_action", "allowed": ["list", "add", "remove"]}
+    return json.dumps(result, ensure_ascii=False)
+
+
+@mcp.tool
+def nexo_local_index_exclusions(action: str = "list", path: str = "", reason: str = "user") -> str:
+    """List, add or remove local memory exclusions."""
+    normalized = str(action or "list").strip().lower()
+    if normalized == "list":
+        result = {"ok": True, "exclusions": local_context_api.list_exclusions()}
+    elif normalized == "add":
+        result = local_context_api.add_exclusion(path, reason=reason)
+    elif normalized == "remove":
+        result = local_context_api.remove_exclusion(path)
+    else:
+        result = {"ok": False, "error": "unknown_action", "allowed": ["list", "add", "remove"]}
+    return json.dumps(result, ensure_ascii=False)
+
+
+@mcp.tool
+def nexo_local_context(query: str, intent: str = "answer", limit: int = 12, evidence_required: bool = True, current_context: str = "") -> str:
+    """Retrieve local evidence before answering or acting."""
+    result = local_context_api.context_query(
+        query,
+        intent=intent,
+        limit=limit,
+        evidence_required=evidence_required,
+        current_context=current_context,
+    )
+    return json.dumps(result, ensure_ascii=False)
+
+
+@mcp.tool
+def nexo_local_asset_get(asset_id: str) -> str:
+    """Return one indexed local asset by asset id."""
+    return json.dumps(local_context_api.get_asset(asset_id), ensure_ascii=False)
+
+
+@mcp.tool
+def nexo_local_asset_neighbors(asset_id: str, limit: int = 30) -> str:
+    """Return graph relations around one indexed local asset."""
+    return json.dumps(local_context_api.get_neighbors(asset_id, limit=limit), ensure_ascii=False)
+
+
+@mcp.tool
+def nexo_local_index_diagnostics_tail(limit: int = 100) -> str:
+    """Return recent local memory diagnostic log entries."""
+    return json.dumps(local_context_api.diagnostics_tail(limit), ensure_ascii=False)
+
+
+@mcp.tool
+def nexo_local_index_purge(asset_id: str = "", clear_all: bool = False) -> str:
+    """Purge one indexed asset or clear the full local index."""
+    if clear_all:
+        result = local_context_api.clear_index()
+    elif asset_id:
+        result = local_context_api.purge_asset(asset_id)
+    else:
+        result = {"ok": False, "error": "asset_id_required"}
+    return json.dumps(result, ensure_ascii=False)
+
+
+@mcp.tool
+def nexo_local_index_service_config(platform_name: str = "") -> str:
+    """Render service configuration metadata for macOS, Windows or Linux."""
+    return json.dumps(local_context_api.render_service_config(platform_name or None), ensure_ascii=False)
+
+
+@mcp.tool
+def nexo_local_index_models(action: str = "status", local_files_only: bool = True) -> str:
+    """Return or warm local model state for the Local Context Layer."""
+    normalized = str(action or "status").strip().lower()
+    if normalized == "status":
+        result = local_context_api.model_status()
+    elif normalized == "warmup":
+        result = local_context_api.warmup_models(local_files_only=local_files_only)
+    else:
+        result = {"ok": False, "error": "unknown_action", "allowed": ["status", "warmup"]}
+    return json.dumps(result, ensure_ascii=False)
 
 
 @mcp.tool

@@ -1855,6 +1855,171 @@
       },
       "triggers_after": []
     },
+    "nexo_local_asset_get": {
+      "description": "Read one indexed local asset with extracted evidence",
+      "category": "local_context",
+      "source": "server",
+      "requires": [],
+      "provides": [
+        "local_asset"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_local_asset_neighbors": {
+      "description": "List graph neighbors for an indexed local asset",
+      "category": "local_context",
+      "source": "server",
+      "requires": [],
+      "provides": [
+        "local_relations"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_local_context": {
+      "description": "Retrieve local-only indexed evidence for a query before answering or acting",
+      "category": "local_context",
+      "source": "server",
+      "requires": [],
+      "provides": [
+        "local_context_evidence"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_local_index_control": {
+      "description": "Control the Local Context background indexer",
+      "category": "local_context",
+      "source": "server",
+      "requires": [],
+      "provides": [
+        "local_index_state"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_local_index_diagnostics_tail": {
+      "description": "Read recent Local Context diagnostic log entries",
+      "category": "local_context",
+      "source": "server",
+      "requires": [],
+      "provides": [
+        "local_index_logs"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_local_index_exclusions": {
+      "description": "List, add, or remove Local Context excluded folders",
+      "category": "local_context",
+      "source": "server",
+      "requires": [],
+      "provides": [
+        "local_index_exclusions"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_local_index_models": {
+      "description": "Inspect or warm Local Context local model availability",
+      "category": "local_context",
+      "source": "server",
+      "requires": [],
+      "provides": [
+        "local_model_status"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_local_index_purge": {
+      "description": "Purge one Local Context asset or clear the local index",
+      "category": "local_context",
+      "source": "server",
+      "requires": [],
+      "provides": [
+        "local_index_purge_result"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_local_index_roots": {
+      "description": "List, add, or remove Local Context indexed roots",
+      "category": "local_context",
+      "source": "server",
+      "requires": [],
+      "provides": [
+        "local_index_roots"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_local_index_service_config": {
+      "description": "Return Local Context service metadata for macOS and Windows",
+      "category": "local_context",
+      "source": "server",
+      "requires": [],
+      "provides": [
+        "local_index_service_config"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_local_index_status": {
+      "description": "Read Local Context indexing progress and health",
+      "category": "local_context",
+      "source": "server",
+      "requires": [],
+      "provides": [
+        "local_index_status"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
     "nexo_learning_add": {
       "description": "Add a reusable learning (error pattern, gotcha, rule). Auto-applies retroactively to recent decisions. Ingests to cognitive STM.",
       "category": "learning",
