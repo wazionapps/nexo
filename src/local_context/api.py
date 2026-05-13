@@ -1455,14 +1455,13 @@ def run_once(
     if _get_state("privacy_hygiene_v2", "0") != "1":
         local_index_privacy_hygiene(fix=True)
         _set_state("privacy_hygiene_v2", "1")
-    if root:
-        add_root(root)
-    elif (
+    if (
         os.environ.get("NEXO_LOCAL_INDEX_DISABLE_DEFAULT_ROOTS", "").strip() != "1"
         and os.environ.get("NEXO_SKIP_FS_INDEX", "").strip() != "1"
-        and not list_roots()
     ):
         ensure_default_roots()
+    if root:
+        add_root(root)
     live_result = reconcile_live_changes(
         asset_limit=live_asset_limit,
         dir_limit=live_dir_limit,

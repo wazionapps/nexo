@@ -247,6 +247,25 @@ def test_run_once_creates_default_roots_for_mcp_and_cli_paths(tmp_path, monkeypa
     assert [row["root_path"] for row in api.list_roots()] == [norm_path(str(home))]
 
 
+def test_run_once_refreshes_new_default_roots_after_initial_setup(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    home.mkdir()
+    mounted = tmp_path / "external-drive"
+    mounted.mkdir()
+    monkeypatch.setenv("NEXO_SKIP_FS_INDEX", "0")
+    monkeypatch.delenv("NEXO_LOCAL_INDEX_DEFAULT_ROOTS", raising=False)
+    monkeypatch.setattr(api.Path, "home", staticmethod(lambda: home))
+    monkeypatch.setattr(api, "_mounted_volume_roots", lambda: [str(mounted)])
+
+    local_context.add_root(str(home), depth=api.DEFAULT_ROOT_DEPTH)
+    result = api.run_once(limit=0, process_limit=0, live_asset_limit=0, live_dir_limit=0, live_file_limit=0)
+
+    roots = {row["root_path"] for row in api.list_roots()}
+    assert result["ok"] is True
+    assert norm_path(str(home)) in roots
+    assert norm_path(str(mounted)) in roots
+
+
 def test_norm_path_preserves_windows_drive_root():
     assert norm_path("C:\\") == "C:\\"
     assert norm_path("c:/") == "C:\\"

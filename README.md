@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.20.9` is the current packaged-runtime line. Patch release over v7.20.8 — Local Context scans automatic roots at full operational depth, falls back to crontab when Linux/WSL systemd user timers fail, passes Windows AppData email roots into WSL, and blocks Google API keys before HTML cleaning.
+Version `7.20.10` is the current packaged-runtime line. Patch release over v7.20.9 — Local Context manual refreshes now reconcile automatic roots every time, so newly mounted disks and upgraded default roots are picked up immediately from Desktop's "comprobar cambios" path.
+
+Previously in `7.20.9`: patch release over v7.20.8 — Local Context scans automatic roots at full operational depth, falls back to crontab when Linux/WSL systemd user timers fail, passes Windows AppData email roots into WSL, and blocks Google API keys before HTML cleaning.
 
 Previously in `7.20.8`: patch release over v7.20.7 — Local Context recognises Windows Mail package roots and Outlook Mac profile roots as bounded local-email sources instead of rejecting them as generic AppData / Group Containers.
 

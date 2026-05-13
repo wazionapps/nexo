@@ -1,5 +1,12 @@
 # Changelog
 
+## [7.20.10] - 2026-05-13
+
+### Fixed — local memory manual refresh keeps automatic roots current
+
+- **Manual local-memory cycles now refresh automatic roots every time.** `nexo local-context run-once` and Desktop's "comprobar cambios" path now call the same automatic root reconciliation as the resident service, so newly mounted disks and upgraded default roots are picked up immediately instead of waiting for the next background cycle.
+- **Coverage:** service runtime test covers the migrated case where the home root already exists and a new mounted root appears later.
+
 ## [7.20.9] - 2026-05-13
 
 ### Fixed — local memory full-depth roots and Windows service fallback
