@@ -893,3 +893,38 @@ def test_sync_linux_installs_crontab_fallback_when_systemd_unavailable(tmp_path,
     assert "* * * * *" in installed_crontab["body"]
     assert "nexo-local-index.py" in installed_crontab["body"]
     assert f"NEXO_HOME={runtime_root}" in installed_crontab["body"]
+
+
+def test_sync_wsl_installs_windows_host_local_index_task(tmp_path, monkeypatch):
+    from crons import sync as cron_sync
+
+    home = tmp_path / "home"
+    runtime_root = tmp_path / "nexo-home"
+    (runtime_root / "core" / "scripts").mkdir(parents=True)
+    (runtime_root / "core" / "scripts" / "nexo-local-index.py").write_text("print('index')\n", encoding="utf-8")
+
+    monkeypatch.setenv("WSL_DISTRO_NAME", "Ubuntu-24.04")
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
+    monkeypatch.setattr(cron_sync, "NEXO_HOME", runtime_root)
+    monkeypatch.setattr(cron_sync, "RUNTIME_ROOT", runtime_root)
+    monkeypatch.setattr(cron_sync, "running_inside_wsl", lambda: True)
+    monkeypatch.setattr(cron_sync, "resolve_windows_host_binary", lambda command: "/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe" if command == "powershell.exe" else "")
+
+    calls = []
+
+    def fake_run(args, **kwargs):
+        calls.append((args, kwargs))
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+    monkeypatch.setattr(cron_sync.subprocess, "run", fake_run)
+
+    result = cron_sync._sync_wsl_windows_host_local_index_task()
+
+    assert result["ok"] is True
+    assert result["task_name"] == "NEXO Local Memory"
+    assert "Ubuntu-24.04" in result["argument"]
+    assert "nexo-local-index.py" in result["argument"]
+    assert calls
+    command = calls[0][0][-1]
+    assert "Register-ScheduledTask" in command
+    assert "Start-ScheduledTask" in command

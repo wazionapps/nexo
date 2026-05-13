@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import stat
 import hashlib
@@ -30,6 +31,12 @@ DEFAULT_ROOT_DEPTH = int(os.environ.get("NEXO_LOCAL_INDEX_DEFAULT_DEPTH", "24") 
 DEFAULT_EMAIL_ROOT_DEPTH = int(os.environ.get("NEXO_LOCAL_INDEX_EMAIL_ROOT_DEPTH", "24") or "24")
 DEFAULT_MOUNTED_ROOT_DEPTH = int(os.environ.get("NEXO_LOCAL_INDEX_MOUNTED_ROOT_DEPTH", "24") or "24")
 DEFAULT_SYSTEM_ROOT_DEPTH = int(os.environ.get("NEXO_LOCAL_INDEX_SYSTEM_ROOT_DEPTH", "24") or "24")
+DEFAULT_CONTEXT_MAX_CHARS = int(os.environ.get("NEXO_LOCAL_CONTEXT_MAX_CHARS", "20000") or "20000")
+DEFAULT_ROUTER_MAX_CHARS = int(os.environ.get("NEXO_LOCAL_CONTEXT_ROUTER_MAX_CHARS", "6000") or "6000")
+DEFAULT_MAX_JOB_ATTEMPTS = int(os.environ.get("NEXO_LOCAL_INDEX_MAX_JOB_ATTEMPTS", "3") or "3")
+INITIAL_INDEX_COMPLETE_KEY = "initial_index_complete"
+INITIAL_INDEX_STARTED_AT_KEY = "initial_index_started_at"
+VALID_CONTEXT_MODES = {"compact", "full"}
 
 
 def ensure_ready() -> None:
@@ -49,6 +56,7 @@ def add_root(path: str, *, mode: str = "normal", depth: int | None = None) -> di
         log_event("warn", "root_rejected_private", "Root rejected by local memory privacy rules", path=redact_path(root_path))
         return {"ok": False, "error": "root_blocked_by_privacy", "root_path": root_path}
     depth_value = 2 if depth is None else int(depth)
+    existing = conn.execute("SELECT id, status FROM local_index_roots WHERE root_path=?", (root_path,)).fetchone()
     conn.execute(
         """
         INSERT INTO local_index_roots(root_path, display_path, mode, depth, status, created_at, updated_at)
@@ -62,6 +70,12 @@ def add_root(path: str, *, mode: str = "normal", depth: int | None = None) -> di
         """,
         (root_path, path, mode, depth_value, now(), now()),
     )
+    row = conn.execute("SELECT id FROM local_index_roots WHERE root_path=?", (root_path,)).fetchone()
+    existing_status = str(existing["status"] or "") if existing else ""
+    if row and (not existing or existing_status in {"removed", "offline"}):
+        _set_state_conn(conn, _root_initial_scan_key(int(row["id"])), "0")
+        _set_initial_index_complete(conn, False)
+        _set_initial_index_started_at(conn, now())
     conn.commit()
     log_event("info", "root_added", "Root added", path=redact_path(root_path), mode=mode, depth=depth_value)
     return {"ok": True, "root_path": root_path, "mode": mode, "depth": depth_value}
@@ -504,8 +518,7 @@ def list_exclusions() -> list[dict]:
     return [dict(row) for row in rows]
 
 
-def _set_state(key: str, value: str) -> None:
-    conn = _conn()
+def _set_state_conn(conn, key: str, value: str) -> None:
     conn.execute(
         """
         INSERT INTO local_index_state(key, value, updated_at)
@@ -514,13 +527,125 @@ def _set_state(key: str, value: str) -> None:
         """,
         (key, value, now()),
     )
+
+
+def _set_state(key: str, value: str) -> None:
+    conn = _conn()
+    _set_state_conn(conn, key, value)
     conn.commit()
+
+
+def _get_state_conn(conn, key: str, default: str = "") -> str:
+    row = conn.execute("SELECT value FROM local_index_state WHERE key=?", (key,)).fetchone()
+    return row["value"] if row else default
 
 
 def _get_state(key: str, default: str = "") -> str:
     conn = _conn()
-    row = conn.execute("SELECT value FROM local_index_state WHERE key=?", (key,)).fetchone()
-    return row["value"] if row else default
+    return _get_state_conn(conn, key, default)
+
+
+def _root_initial_scan_key(root_id: int) -> str:
+    return f"root:{int(root_id)}:initial_scan_complete"
+
+
+def _root_initial_scan_complete(conn, root: dict) -> bool:
+    root_id = int(root["id"])
+    row = conn.execute("SELECT value FROM local_index_state WHERE key=?", (_root_initial_scan_key(root_id),)).fetchone()
+    if row:
+        return str(row["value"]) == "1"
+    checkpoint = conn.execute(
+        "SELECT 1 FROM local_index_checkpoints WHERE root_id=? AND phase='quick_index' LIMIT 1",
+        (root_id,),
+    ).fetchone()
+    return bool(root.get("last_scan_at") and not checkpoint)
+
+
+def _set_root_initial_scan_complete(conn, root_id: int, complete: bool) -> None:
+    _set_state_conn(conn, _root_initial_scan_key(root_id), "1" if complete else "0")
+
+
+def _initial_index_complete(conn) -> bool:
+    return _get_state_conn(conn, INITIAL_INDEX_COMPLETE_KEY, "0") == "1"
+
+
+def _set_initial_index_complete(conn, complete: bool) -> None:
+    _set_state_conn(conn, INITIAL_INDEX_COMPLETE_KEY, "1" if complete else "0")
+
+
+def _set_initial_index_started_at(conn, started_at: float) -> None:
+    _set_state_conn(conn, INITIAL_INDEX_STARTED_AT_KEY, str(float(started_at or now())))
+
+
+def _earliest_index_activity(conn) -> float:
+    candidates = []
+    for sql in (
+        "SELECT MIN(created_at) AS value FROM local_index_roots WHERE status!='removed'",
+        "SELECT MIN(first_seen_at) AS value FROM local_assets WHERE status!='deleted'",
+        "SELECT MIN(created_at) AS value FROM local_index_jobs",
+        "SELECT MIN(created_at) AS value FROM local_index_logs WHERE event IN ('root_added', 'scan_started', 'scan_finished', 'jobs_processed', 'service_cycle_finished')",
+    ):
+        try:
+            value = conn.execute(sql).fetchone()["value"] or 0
+        except Exception:
+            value = 0
+        if value:
+            candidates.append(float(value))
+    return min(candidates) if candidates else 0.0
+
+
+def _ensure_initial_index_started_at(conn) -> float:
+    raw = _get_state_conn(conn, INITIAL_INDEX_STARTED_AT_KEY, "")
+    try:
+        value = float(raw or 0)
+    except Exception:
+        value = 0.0
+    if value > 0:
+        return value
+    value = _earliest_index_activity(conn) or now()
+    _set_initial_index_started_at(conn, value)
+    conn.commit()
+    return value
+
+
+def _active_job_count(conn) -> int:
+    row = conn.execute(
+        """
+        SELECT COUNT(*) AS total
+        FROM local_index_jobs
+        WHERE status IN ('pending', 'running', 'failed')
+        """
+    ).fetchone()
+    return int(row["total"] or 0)
+
+
+def _refresh_initial_index_complete(conn, initial_scan: dict | None = None, active_jobs: int | None = None) -> bool:
+    if _initial_index_complete(conn):
+        return True
+    scan_state = initial_scan if initial_scan is not None else _initial_scan_status(conn)
+    remaining = _active_job_count(conn) if active_jobs is None else int(active_jobs or 0)
+    complete = bool(scan_state.get("complete")) and remaining == 0
+    if complete:
+        _set_initial_index_complete(conn, True)
+        conn.commit()
+    return complete
+
+
+def _initial_scan_status(conn, roots: list[dict] | None = None) -> dict:
+    rows = roots if roots is not None else list_roots()
+    tracked = _effective_scan_roots([dict(row) for row in rows if str(row.get("status") or "active") not in {"removed", "offline"}])
+    pending = [row for row in tracked if not _root_initial_scan_complete(conn, row)]
+    checkpoints = conn.execute(
+        "SELECT COUNT(*) AS total FROM local_index_checkpoints WHERE phase='quick_index'"
+    ).fetchone()["total"] or 0
+    complete = bool(tracked) and not pending
+    return {
+        "complete": complete,
+        "mode": "watching_changes" if complete else "initial_indexing",
+        "pending_roots": len(pending),
+        "total_roots": len(tracked),
+        "checkpoint_count": int(checkpoints or 0),
+    }
 
 
 def pause() -> dict:
@@ -555,7 +680,12 @@ def _is_excluded(path: str, exclusions: list[str]) -> bool:
 
 def _path_prefix(path: str) -> str:
     normalized = norm_path(path)
-    return normalized + os.sep if normalized else os.sep
+    if not normalized:
+        return os.sep
+    if normalized in {"/", "\\"}:
+        return normalized
+    sep = "\\" if re.match(r"^[A-Za-z]:\\", normalized) or "\\" in normalized else os.sep
+    return normalized if normalized.endswith(sep) else normalized + sep
 
 
 def _is_nested_path(path: str, parent: str) -> bool:
@@ -563,9 +693,20 @@ def _is_nested_path(path: str, parent: str) -> bool:
     base = norm_path(parent)
     if not value or not base or value == base:
         return False
-    if base == os.sep:
-        return value.startswith(os.sep)
-    return value.startswith(_path_prefix(base))
+    value_cmp = value.replace("\\", "/")
+    base_cmp = base.replace("\\", "/")
+    if re.match(r"^[A-Za-z]:/?$", base_cmp):
+        base_cmp = f"{base_cmp[0].upper()}:/"
+    if re.match(r"^[A-Za-z]:/?$", value_cmp):
+        value_cmp = f"{value_cmp[0].upper()}:/"
+    if base_cmp != "/":
+        base_cmp = base_cmp.rstrip("/")
+    if value_cmp != "/":
+        value_cmp = value_cmp.rstrip("/")
+    if base_cmp == "/":
+        return value_cmp.startswith("/")
+    prefix = base_cmp if base_cmp.endswith("/") else f"{base_cmp}/"
+    return value_cmp.startswith(prefix)
 
 
 def _is_discovered_mount_path(path: str) -> bool:
@@ -612,6 +753,19 @@ def _file_type(path: Path) -> str:
     if suffix in {".pdf", ".docx", ".pptx", ".xlsx", ".md", ".txt", ".csv", ".tsv"}:
         return "document"
     return "file"
+
+
+def _volume_id_for_path(path: Path) -> str:
+    normalized = norm_path(path).replace("\\", "/")
+    match = re.match(r"^([A-Za-z]):/", normalized)
+    if match:
+        return f"{match.group(1).upper()}:\\"
+    parts = [part for part in normalized.split("/") if part]
+    if len(parts) >= 2 and parts[0] in {"Volumes", "mnt", "media"}:
+        return f"/{parts[0]}/{parts[1]}"
+    if len(parts) >= 3 and parts[0] == "run" and parts[1] == "media":
+        return f"/run/media/{parts[2]}"
+    return path.anchor or "/"
 
 
 def _permission_state(path: Path) -> str:
@@ -744,7 +898,7 @@ def _upsert_asset(conn, root_id: int, path: Path, seen_at: float, root_depth: in
             normalized,
             raw_path,
             parent,
-            path.anchor or "/",
+            _volume_id_for_path(path),
             _file_type(path),
             path.suffix.lower(),
             int(st.st_size),
@@ -1259,6 +1413,7 @@ def scan_once(*, limit: int | None = None) -> dict:
     for root in roots:
         root_path = Path(root["root_path"]).expanduser()
         root_id = int(root["id"])
+        root_initial_complete = _root_initial_scan_complete(conn, dict(root))
         if should_skip_tree(str(root_path)) and not _allow_explicit_blocked_root(str(root_path)):
             conn.execute(
                 "UPDATE local_index_roots SET status='removed', last_scan_at=?, updated_at=? WHERE id=?",
@@ -1301,6 +1456,8 @@ def scan_once(*, limit: int | None = None) -> dict:
         partial_root = bool(limit and seen_for_root >= limit)
         totals["partial"] = bool(totals["partial"] or partial_root)
         if partial_root:
+            if not root_initial_complete:
+                _set_root_initial_scan_complete(conn, root_id, False)
             log_event(
                 "info",
                 "scan_partial",
@@ -1315,11 +1472,10 @@ def scan_once(*, limit: int | None = None) -> dict:
                 (root_id, cycle_started_at),
             ).fetchall()
             for row in rows:
-                conn.execute(
-                    "UPDATE local_assets SET status='deleted', deleted_at=?, updated_at=? WHERE asset_id=?",
-                    (now(), now(), row["asset_id"]),
-                )
+                _mark_asset_deleted(conn, row["asset_id"])
             _clear_checkpoint(conn, root_id)
+            if not root_initial_complete:
+                _set_root_initial_scan_complete(conn, root_id, True)
         conn.execute(
             "UPDATE local_index_roots SET status='active', last_scan_at=?, updated_at=? WHERE id=?",
             (now(), now(), root_id),
@@ -1391,13 +1547,23 @@ def _replace_entities(conn, asset_id: str, version_id: str, values: list[str]) -
 
 def _requeue_due_jobs(conn) -> dict:
     current = now()
+    exhausted = conn.execute(
+        """
+        UPDATE local_index_jobs
+        SET status='done', next_attempt_at=NULL, claimed_by='', lease_expires_at=NULL, updated_at=?
+        WHERE status='failed' AND attempt_count >= ?
+        """,
+        (current, DEFAULT_MAX_JOB_ATTEMPTS),
+    ).rowcount
     failed = conn.execute(
         """
         UPDATE local_index_jobs
         SET status='pending', claimed_by='', lease_expires_at=NULL, updated_at=?
-        WHERE status='failed' AND (next_attempt_at IS NULL OR next_attempt_at <= ?)
+        WHERE status='failed'
+          AND attempt_count < ?
+          AND (next_attempt_at IS NULL OR next_attempt_at <= ?)
         """,
-        (current, current),
+        (current, DEFAULT_MAX_JOB_ATTEMPTS, current),
     ).rowcount
     expired = conn.execute(
         """
@@ -1407,9 +1573,9 @@ def _requeue_due_jobs(conn) -> dict:
         """,
         (current, current),
     ).rowcount
-    if failed or expired:
-        log_event("warn", "jobs_requeued", "Local memory recovered stalled jobs", failed=failed, expired=expired)
-    return {"failed": int(failed or 0), "expired": int(expired or 0)}
+    if failed or expired or exhausted:
+        log_event("warn", "jobs_requeued", "Local memory recovered stalled jobs", failed=failed, expired=expired, exhausted=exhausted)
+    return {"failed": int(failed or 0), "expired": int(expired or 0), "exhausted": int(exhausted or 0)}
 
 
 def process_jobs(*, limit: int = 100) -> dict:
@@ -1483,13 +1649,15 @@ def process_jobs(*, limit: int = 100) -> dict:
             processed += 1
         except Exception as exc:
             failed += 1
+            attempts = int(row["attempt_count"] or 0) + 1
+            terminal = attempts >= DEFAULT_MAX_JOB_ATTEMPTS
             conn.execute(
                 """
                 UPDATE local_index_jobs
-                SET status='failed', attempt_count=attempt_count+1, next_attempt_at=?, last_error_code=?, updated_at=?
+                SET status=?, attempt_count=attempt_count+1, next_attempt_at=?, claimed_by='', lease_expires_at=NULL, last_error_code=?, updated_at=?
                 WHERE job_id=?
                 """,
-                (now() + 3600, type(exc).__name__, now(), job_id),
+                ("done" if terminal else "failed", None if terminal else now() + 3600, type(exc).__name__, now(), job_id),
             )
             _record_index_error(
                 conn,
@@ -1499,7 +1667,7 @@ def process_jobs(*, limit: int = 100) -> dict:
                 error_code=type(exc).__name__,
                 user_message="Algunos archivos no se pudieron leer",
                 technical_detail=str(exc),
-                retryable=True,
+                retryable=not terminal,
             )
     conn.commit()
     if processed or failed:
@@ -1526,14 +1694,37 @@ def run_once(
         ensure_default_roots()
     if root:
         add_root(root)
-    live_result = reconcile_live_changes(
-        asset_limit=live_asset_limit,
-        dir_limit=live_dir_limit,
-        file_limit=live_file_limit,
-    )
+    conn = _conn()
+    initial_before = _initial_scan_status(conn, list_roots())
+    initial_index_before = _refresh_initial_index_complete(conn, initial_before)
+    if initial_index_before:
+        live_result = reconcile_live_changes(
+            asset_limit=live_asset_limit,
+            dir_limit=live_dir_limit,
+            file_limit=live_file_limit,
+        )
+    else:
+        live_result = {
+            "ok": True,
+            "skipped": True,
+            "reason": "initial_scan_in_progress",
+            "assets": {},
+            "dirs": {},
+        }
     scan_result = scan_once(limit=limit)
     job_result = process_jobs(limit=process_limit)
-    return {"ok": True, "live": live_result, "scan": scan_result, "jobs": job_result}
+    conn_after = _conn()
+    initial_after = _initial_scan_status(conn_after, list_roots())
+    active_after = _active_job_count(conn_after)
+    initial_index_after = _refresh_initial_index_complete(conn_after, initial_after, active_after)
+    return {
+        "ok": True,
+        "initial_scan": initial_after,
+        "initial_index_complete": initial_index_after,
+        "live": live_result,
+        "scan": scan_result,
+        "jobs": job_result,
+    }
 
 
 def _problem_rows(conn) -> list[dict]:
@@ -1788,21 +1979,7 @@ def _service_cycle_observation(conn) -> dict:
 
 
 def _index_timing(conn, *, done: int, active_jobs: int, percent: int) -> dict:
-    first_seen = conn.execute(
-        """
-        SELECT MIN(created_at) AS created_at
-        FROM local_index_logs
-        WHERE event IN ('root_added', 'scan_started', 'scan_finished', 'jobs_processed', 'service_cycle_finished')
-        """
-    ).fetchone()["created_at"] or 0
-    if not first_seen:
-        first_seen = conn.execute(
-            """
-            SELECT MIN(first_seen_at) AS first_seen_at
-            FROM local_assets
-            WHERE status!='deleted'
-            """
-        ).fetchone()["first_seen_at"] or 0
+    first_seen = _ensure_initial_index_started_at(conn)
     elapsed_seconds = max(0, int(now() - float(first_seen))) if first_seen else 0
     eta_seconds = None
     if elapsed_seconds > 0 and done > 0 and active_jobs > 0 and 0 < percent < 100:
@@ -1885,6 +2062,8 @@ def status() -> dict:
     percent = 100 if total_jobs == 0 else int((done / max(total_jobs, 1)) * 100)
     timing = _index_timing(conn, done=done, active_jobs=active_jobs, percent=percent)
     roots = list_roots()
+    initial_scan = _initial_scan_status(conn, roots)
+    initial_index_complete = _refresh_initial_index_complete(conn, initial_scan, active_jobs)
     volumes = []
     by_volume = conn.execute(
         """
@@ -1903,7 +2082,7 @@ def status() -> dict:
     service.update(_service_cycle_observation(conn))
     problem = _service_problem(service)
     service["healthy"] = problem is None
-    service["state"] = "paused" if paused else ("attention" if problem else ("idle" if active_jobs == 0 else "indexing"))
+    service["state"] = "paused" if paused else ("attention" if problem else ("idle" if active_jobs == 0 and initial_index_complete else "indexing"))
     problems = _problem_rows(conn)
     if problem:
         problems.insert(0, {
@@ -1917,11 +2096,21 @@ def status() -> dict:
             "phase": "service",
             "created_at": now(),
         })
+    if paused:
+        phase = "paused"
+    elif problem:
+        phase = "service_attention"
+    elif not initial_index_complete:
+        phase = "initial_indexing"
+    elif active_jobs == 0:
+        phase = "idle"
+    else:
+        phase = "updating_changes"
     return {
         "ok": True,
         "service": service,
         "global": {
-            "phase": "paused" if paused else ("service_attention" if problem else ("idle" if active_jobs == 0 else "light_extraction")),
+            "phase": phase,
             "percent": percent,
             "files_found": int(assets["total"] or 0),
             "files_processed": int(done or 0),
@@ -1931,7 +2120,14 @@ def status() -> dict:
             "jobs_failed": failed_jobs,
             "elapsed_seconds": timing["elapsed_seconds"],
             "eta_seconds": timing["eta_seconds"],
+            "index_started_at": _get_state_conn(conn, INITIAL_INDEX_STARTED_AT_KEY, ""),
+            "initial_scan_complete": bool(initial_index_complete),
+            "initial_discovery_complete": bool(initial_scan["complete"]),
+            "initial_index_complete": bool(initial_index_complete),
+            "index_mode": "watching_changes" if initial_index_complete else "initial_indexing",
         },
+        "initial_scan": initial_scan,
+        "initial_index_complete": bool(initial_index_complete),
         "volumes": volumes,
         "roots": roots,
         "exclusions": list_exclusions(),
@@ -2165,19 +2361,321 @@ def _context_candidate_rows(conn, entity_asset_ids: list[str], *, base_limit: in
     return rows
 
 
-def context_query(query: str, *, intent: str = "answer", limit: int = 12, evidence_required: bool = True, current_context: str = "") -> dict:
+def _compact_text(value: str, *, max_chars: int) -> str:
+    text = " ".join(str(value or "").split())
+    if max_chars <= 0 or len(text) <= max_chars:
+        return text
+    return text[: max(0, max_chars - 1)].rstrip() + "…"
+
+
+def _payload_size(payload: dict) -> int:
+    return len(json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
+
+
+def _normalize_context_mode(mode: str) -> tuple[str, list[str]]:
+    value = str(mode or "compact").strip().lower()
+    if value in VALID_CONTEXT_MODES:
+        return value, []
+    return "compact", [f"Unsupported local context mode '{value}'. Falling back to compact mode."]
+
+
+def _context_usage_hint(payload: dict) -> dict:
+    current = {
+        "mode": payload.get("mode", "compact"),
+        "limit": payload.get("limit"),
+        "max_chars": payload.get("max_chars"),
+        "include_entities": bool(payload.get("include_entities")),
+        "include_relations": bool(payload.get("include_relations")),
+    }
+    return {
+        "tool": "nexo_local_context",
+        "current_params": current,
+        "recommended_call": "nexo_local_context(query='...', mode='compact', limit=4, max_chars=12000, include_entities=false, include_relations=false)",
+        "recommended_params": {
+            "mode": "compact",
+            "limit": 4,
+            "max_chars": 12000,
+            "include_entities": False,
+            "include_relations": False,
+        },
+        "expand": "Use mode='full' only for debugging, with a specific query and explicit max_chars.",
+        "refine": "Add names, dates, project names, file types, paths, or email subjects to reduce noise.",
+    }
+
+
+def _minimal_truncated_context_payload(payload: dict, *, max_chars: int) -> dict:
+    mode = str(payload.get("mode") or "compact")
+    minimal = {
+        "ok": bool(payload.get("ok", True)),
+        "mode": mode,
+        "truncated": True,
+        "warnings": ["truncated"],
+        "usage_hint": "nexo_local_context(query='...', mode='compact', limit=4, max_chars=12000)",
+        "assets": [],
+        "chunks": [],
+        "entities": [],
+        "relations": [],
+        "evidence_refs": [],
+    }
+    if max_chars and _payload_size(minimal) > max_chars:
+        tiny = {
+            "ok": bool(payload.get("ok", True)),
+            "mode": mode,
+            "truncated": True,
+            "usage_hint": "nexo_local_context(mode='compact',limit=4,max_chars=12000)",
+        }
+        return tiny
+    return minimal
+
+
+def _sync_context_payload_refs(payload: dict) -> None:
+    chunks = payload.get("chunks") or []
+    chunk_ids = {str(chunk.get("chunk_id") or "") for chunk in chunks if chunk.get("chunk_id")}
+    asset_ids = {str(chunk.get("asset_id") or "") for chunk in chunks if chunk.get("asset_id")}
+    if chunk_ids:
+        payload["evidence_refs"] = [
+            ref for ref in (payload.get("evidence_refs") or [])
+            if any(f"#chunk:{chunk_id}" in str(ref) for chunk_id in chunk_ids)
+        ]
+        payload["assets"] = [
+            asset for asset in (payload.get("assets") or [])
+            if str(asset.get("asset_id") or "") in asset_ids
+        ]
+    elif not chunks:
+        payload["evidence_refs"] = []
+
+
+def _truncate_context_payload(payload: dict, *, max_chars: int) -> dict:
+    if not max_chars or max_chars <= 0 or _payload_size(payload) <= max_chars:
+        return payload
+    warnings = list(payload.get("warnings") or [])
+    warnings.append(
+        "Local context result was truncated. Use mode='compact', lower limit, raise max_chars, or refine the query with more specific names, dates, paths, projects, or file types."
+    )
+    payload["warnings"] = warnings
+    payload["truncated"] = True
+    payload["usage_hint"] = _context_usage_hint(payload)
+    payload["query"] = _compact_text(payload.get("query") or "", max_chars=240)
+    payload["summary"] = _compact_text(payload.get("summary") or "", max_chars=240)
+    for chunk in payload.get("chunks") or []:
+        chunk["text"] = _compact_text(chunk.get("text") or "", max_chars=220)
+    for asset in payload.get("assets") or []:
+        asset["display_path"] = _compact_text(asset.get("display_path") or "", max_chars=240)
+        asset["summary"] = _compact_text(asset.get("summary") or "", max_chars=160)
+    if not payload.get("include_entities"):
+        payload["entities"] = []
+    if not payload.get("include_relations"):
+        payload["relations"] = []
+    while _payload_size(payload) > max_chars and len(payload.get("chunks") or []) > 1:
+        payload["chunks"].pop()
+    while _payload_size(payload) > max_chars and len(payload.get("assets") or []) > 1:
+        removed = payload["assets"].pop()
+        removed_asset_id = removed.get("asset_id")
+        payload["chunks"] = [chunk for chunk in payload.get("chunks") or [] if chunk.get("asset_id") != removed_asset_id]
+        payload["evidence_refs"] = payload.get("evidence_refs", [])[: len(payload.get("assets") or [])]
+    if _payload_size(payload) > max_chars:
+        payload["entities"] = []
+        payload["relations"] = []
+    if _payload_size(payload) > max_chars:
+        payload["chunks"] = [
+            {
+                "chunk_id": chunk.get("chunk_id", ""),
+                "asset_id": chunk.get("asset_id", ""),
+                "text": _compact_text(chunk.get("text") or "", max_chars=120),
+                "score": chunk.get("score", 0),
+            }
+            for chunk in (payload.get("chunks") or [])[:1]
+        ]
+        payload["assets"] = [
+            {
+                "asset_id": asset.get("asset_id", ""),
+                "display_path": asset.get("display_path", ""),
+                "file_type": asset.get("file_type", "file"),
+                "score": asset.get("score", 0),
+            }
+            for asset in (payload.get("assets") or [])[:1]
+        ]
+        payload["evidence_refs"] = (payload.get("evidence_refs") or [])[:1]
+    _sync_context_payload_refs(payload)
+    if _payload_size(payload) > max_chars:
+        return _minimal_truncated_context_payload(payload, max_chars=max_chars)
+    return payload
+
+
+def _shape_context_payload(
+    payload: dict,
+    *,
+    mode: str,
+    max_chars: int,
+    include_entities: bool,
+    include_relations: bool,
+    snippet_chars: int,
+) -> dict:
+    normalized_mode, mode_warnings = _normalize_context_mode(mode)
+    shaped = dict(payload)
+    shaped["warnings"] = [*(shaped.get("warnings") or []), *mode_warnings]
+    shaped["mode"] = normalized_mode
+    shaped["limit"] = len(shaped.get("assets") or [])
+    shaped["include_entities"] = bool(include_entities)
+    shaped["include_relations"] = bool(include_relations)
+    shaped["truncated"] = False
+    shaped["max_chars"] = int(max_chars or 0)
+    if normalized_mode == "compact":
+        seen_chunk_assets: set[str] = set()
+        compact_chunks = []
+        for chunk in shaped.get("chunks") or []:
+            asset_id = str(chunk.get("asset_id") or "")
+            if asset_id in seen_chunk_assets:
+                continue
+            seen_chunk_assets.add(asset_id)
+            compact_chunks.append({
+                "chunk_id": chunk.get("chunk_id", ""),
+                "asset_id": asset_id,
+                "text": _compact_text(chunk.get("text") or "", max_chars=max(80, int(snippet_chars or 360))),
+                "score": chunk.get("score", 0),
+            })
+        shaped["chunks"] = compact_chunks
+        shaped["assets"] = [
+            {
+                "asset_id": asset.get("asset_id", ""),
+                "display_path": asset.get("display_path", ""),
+                "file_type": asset.get("file_type", "file"),
+                "score": asset.get("score", 0),
+                "summary": _compact_text(asset.get("summary") or "", max_chars=180),
+            }
+            for asset in shaped.get("assets") or []
+        ]
+    else:
+        shaped["chunks"] = [
+            {
+                **chunk,
+                "text": _compact_text(chunk.get("text") or "", max_chars=max(200, int(snippet_chars or 1200))),
+            }
+            for chunk in shaped.get("chunks") or []
+        ]
+    if not include_entities:
+        shaped["entities"] = []
+    if not include_relations:
+        shaped["relations"] = []
+    _sync_context_payload_refs(shaped)
+    return _truncate_context_payload(shaped, max_chars=int(max_chars or 0))
+
+
+def render_context_evidence(result: dict, *, limit: int = 4, max_chars: int = DEFAULT_ROUTER_MAX_CHARS) -> str:
+    assets = result.get("assets") or []
+    if not assets:
+        return ""
+    lines = ["", "LOCAL CONTEXT EVIDENCE:"]
+    lines.append("Use this local evidence if it is relevant to the user's request. Do not mention files that are not supported by the evidence.")
+    chunks_by_asset = {}
+    for chunk in result.get("chunks") or []:
+        chunks_by_asset.setdefault(chunk.get("asset_id"), chunk)
+    for asset in assets[: max(1, int(limit or 4))]:
+        display_path = str(asset.get("display_path") or "")
+        score = asset.get("score")
+        summary = _compact_text(asset.get("summary") or "", max_chars=160)
+        suffix = f" — {summary}" if summary else ""
+        lines.append(f"- {display_path} ({asset.get('file_type', 'file')}, score={score}){suffix}")
+        chunk = chunks_by_asset.get(asset.get("asset_id"))
+        if chunk and chunk.get("text"):
+            lines.append(f"  excerpt: {_compact_text(chunk.get('text') or '', max_chars=320)}")
+    refs = result.get("evidence_refs") or []
+    if refs:
+        lines.append(f"Evidence refs: {', '.join(str(ref) for ref in refs[: max(1, int(limit or 4))])}")
+    if result.get("truncated"):
+        lines.append("Result was compacted. Refine the query or call nexo_local_context(mode='full', max_chars=...) if deeper inspection is needed.")
+    rendered = "\n".join(lines)
+    if max_chars and len(rendered) > max_chars:
+        return rendered[: max(0, max_chars - 1)].rstrip() + "…"
+    return rendered
+
+
+def _router_payload_size(payload: dict) -> int:
+    return len(json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
+
+
+def context_router(
+    query: str,
+    *,
+    intent: str = "answer",
+    limit: int = 4,
+    current_context: str = "",
+    max_chars: int = DEFAULT_ROUTER_MAX_CHARS,
+) -> dict:
+    output_max_chars = int(max_chars or 0)
+    internal_max_chars = max(output_max_chars * 3, 4000) if output_max_chars > 0 else 0
+    result = context_query(
+        query,
+        intent=intent,
+        limit=max(1, min(int(limit or 4), 8)),
+        evidence_required=False,
+        current_context=current_context,
+        mode="compact",
+        max_chars=internal_max_chars,
+        include_entities=False,
+        include_relations=False,
+        snippet_chars=360,
+    )
+    rendered = render_context_evidence(result, limit=limit, max_chars=output_max_chars)
+    payload = {
+        "ok": True,
+        "query": query,
+        "intent": intent,
+        "should_inject": bool(result.get("evidence_refs")),
+        "rendered": rendered,
+        "evidence_refs": result.get("evidence_refs") or [],
+        "truncated": bool(result.get("truncated") or (output_max_chars and len(rendered) >= output_max_chars)),
+        "usage_hint": result.get("usage_hint"),
+    }
+    if output_max_chars and _router_payload_size(payload) > output_max_chars:
+        payload["rendered"] = _compact_text(rendered, max_chars=max(80, output_max_chars // 2))
+        payload["truncated"] = True
+    if output_max_chars and _router_payload_size(payload) > output_max_chars:
+        payload["evidence_refs"] = (payload.get("evidence_refs") or [])[:1]
+        payload["usage_hint"] = "nexo_local_context(query='...', mode='compact', limit=4, max_chars=12000)"
+    if output_max_chars and _router_payload_size(payload) > output_max_chars:
+        return {
+            "ok": True,
+            "query": _compact_text(query, max_chars=120),
+            "intent": intent,
+            "should_inject": bool(payload.get("evidence_refs")),
+            "truncated": True,
+            "rendered": _compact_text(rendered, max_chars=max(40, output_max_chars // 2)),
+            "evidence_refs": (payload.get("evidence_refs") or [])[:1],
+            "usage_hint": "nexo_local_context(mode='compact',limit=4,max_chars=12000)",
+        }
+    return payload
+
+
+def context_query(
+    query: str,
+    *,
+    intent: str = "answer",
+    limit: int = 12,
+    evidence_required: bool = True,
+    current_context: str = "",
+    mode: str = "full",
+    max_chars: int = DEFAULT_CONTEXT_MAX_CHARS,
+    include_entities: bool = True,
+    include_relations: bool = True,
+    snippet_chars: int = 1200,
+) -> dict:
     conn = _conn()
-    qvec = embeddings.embed_text(query)
-    entities_payload, entity_boosts = _entity_matches_for_query(conn, query, limit=max(int(limit), 1))
+    clean_query = str(query or "").strip()
+    normalized_mode, mode_warnings = _normalize_context_mode(mode)
+    context_tail = _compact_text(current_context or "", max_chars=1000)
+    search_query = clean_query if not context_tail else f"{clean_query}\n{context_tail}"
+    qvec = embeddings.embed_text(search_query)
+    entities_payload, entity_boosts = _entity_matches_for_query(conn, search_query, limit=max(int(limit), 1))
     rows = _context_candidate_rows(conn, list(entity_boosts.keys()), base_limit=5000)
     scored = []
     for row in rows:
         if not is_queryable_path(str(row["path"] or ""), str(row["privacy_class"] or "")):
             continue
         vector = json_loads(row["vector_json"], [])
-        text_score = _search_text_score(query, row["text"])
-        path_score = _search_text_score(query, row["path"] or "")
-        summary_score = _search_text_score(query, row["summary"] or "")
+        text_score = _search_text_score(search_query, row["text"])
+        path_score = _search_text_score(search_query, row["path"] or "")
+        summary_score = _search_text_score(search_query, row["summary"] or "")
         entity_score = entity_boosts.get(row["asset_id"], 0.0)
         vector_score = embeddings.cosine(qvec, vector)
         score = max(text_score, path_score, summary_score, vector_score)
@@ -2216,7 +2714,7 @@ def context_query(query: str, *, intent: str = "answer", limit: int = 12, eviden
         evidence_refs.append(f"local_asset:{row['asset_id']}#chunk:{row['chunk_id']}")
     relations_payload: list[dict] = []
     relation_asset_ids = list(dict.fromkeys([*seen_assets, *entity_boosts.keys()]))[: int(limit)]
-    if relation_asset_ids:
+    if include_relations and relation_asset_ids:
         asset_ids = relation_asset_ids
         placeholders = ",".join("?" for _ in asset_ids)
         relation_rows = conn.execute(
@@ -2230,19 +2728,19 @@ def context_query(query: str, *, intent: str = "answer", limit: int = 12, eviden
             [*asset_ids, int(limit) * 3],
         ).fetchall()
         relations_payload = [dict(row) for row in relation_rows]
-    warnings = []
+    warnings = list(mode_warnings)
     if evidence_required and not evidence_refs:
         warnings.append("No local evidence found for this query.")
     summary = ""
     if assets:
-        summary = f"Found {len(assets)} local asset(s) related to '{query}'."
+        summary = f"Found {len(assets)} local asset(s) related to '{clean_query}'."
     conn.execute(
         """
         INSERT INTO local_context_queries(query_hash, intent, result_count, confidence, warnings_json, created_at)
         VALUES (?, ?, ?, ?, ?, ?)
         """,
         (
-            hashlib.sha256(query.encode("utf-8", errors="ignore")).hexdigest(),
+            hashlib.sha256(clean_query.encode("utf-8", errors="ignore")).hexdigest(),
             intent,
             len(assets),
             0.75 if evidence_refs else 0.0,
@@ -2251,9 +2749,9 @@ def context_query(query: str, *, intent: str = "answer", limit: int = 12, eviden
         ),
     )
     conn.commit()
-    return {
+    payload = {
         "ok": True,
-        "query": query,
+        "query": clean_query,
         "intent": intent,
         "confidence": 0.75 if evidence_refs else 0.0,
         "summary": summary,
@@ -2264,6 +2762,14 @@ def context_query(query: str, *, intent: str = "answer", limit: int = 12, eviden
         "warnings": warnings,
         "evidence_refs": evidence_refs,
     }
+    return _shape_context_payload(
+        payload,
+        mode=normalized_mode,
+        max_chars=int(max_chars or 0),
+        include_entities=bool(include_entities),
+        include_relations=bool(include_relations),
+        snippet_chars=int(snippet_chars or 1200),
+    )
 
 
 def get_asset(asset_id: str) -> dict:
@@ -2306,11 +2812,23 @@ def clear_index() -> dict:
         "local_index_dirs",
         "local_index_errors",
         "local_index_jobs",
+        "local_index_checkpoints",
         "local_asset_versions",
         "local_assets",
         "local_context_queries",
     ):
         conn.execute(f"DELETE FROM {table}")
+    conn.execute("DELETE FROM local_index_state WHERE key LIKE 'root:%:initial_scan_complete'")
+    conn.execute("DELETE FROM local_index_state WHERE key=?", (INITIAL_INDEX_COMPLETE_KEY,))
+    conn.execute("DELETE FROM local_index_state WHERE key=?", (INITIAL_INDEX_STARTED_AT_KEY,))
+    rows = conn.execute("SELECT id FROM local_index_roots WHERE status!='removed'").fetchall()
+    for row in rows:
+        _set_root_initial_scan_complete(conn, int(row["id"]), False)
+    conn.execute(
+        "UPDATE local_index_roots SET last_scan_at=NULL, status='active', updated_at=? WHERE status!='removed'",
+        (now(),),
+    )
+    _set_initial_index_complete(conn, False)
     conn.commit()
     log_event("warn", "index_cleared", "Local memory index cleared")
     return {"ok": True}

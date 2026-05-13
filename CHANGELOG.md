@@ -1,5 +1,16 @@
 # Changelog
 
+## [7.20.12] - 2026-05-13
+
+### Fixed — local memory first-pass stability and compact Brain evidence
+
+- **Initial indexing no longer regresses into live-change mode too early.** Brain keeps the first full pass separate from later created/modified/deleted file reconciliation, so the UI can explain when NEXO is still building its first local map.
+- **Elapsed indexing time is persisted explicitly.** Local memory now stores `initial_index_started_at` instead of recalculating from recent logs/jobs, avoiding confusing timer resets after refreshes or service cycles; clearing the index starts a new run deliberately.
+- **Agent context from local memory is bounded and injectable.** `nexo_local_context` defaults to compact output with `mode`, `max_chars`, entity/relation toggles and usage hints; `nexo_context_router` returns a short evidence block instead of huge single-line JSON payloads.
+- **Evidence ranking prefers real co-occurrence.** Entity hits such as projects/functions/clients boost the right asset, but chunks containing the actual query terms outrank unrelated chunks from the same long document.
+- **Windows keeps indexing after reboot/Desktop close.** WSL installs a Windows host Scheduled Task for the local-memory cycle, preserving Mac/Windows parity for the autonomous background service.
+- **Coverage:** local-context, CLI, pre-action/hot-context, runtime service and cron suites pass (`110 passed`), plus Python compilation of the touched Brain modules.
+
 ## [7.20.11] - 2026-05-13
 
 ### Fixed — local memory whole-device coverage and automatic evidence injection

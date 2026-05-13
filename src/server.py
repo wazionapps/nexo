@@ -683,14 +683,45 @@ def nexo_local_index_exclusions(action: str = "list", path: str = "", reason: st
 
 
 @mcp.tool
-def nexo_local_context(query: str, intent: str = "answer", limit: int = 12, evidence_required: bool = True, current_context: str = "") -> str:
-    """Retrieve local evidence before answering or acting."""
+def nexo_local_context(
+    query: str,
+    intent: str = "answer",
+    limit: int = 8,
+    evidence_required: bool = True,
+    current_context: str = "",
+    mode: str = "compact",
+    max_chars: int = 20000,
+    include_entities: bool = False,
+    include_relations: bool = False,
+) -> str:
+    """Retrieve local evidence before answering or acting.
+
+    Use mode='compact' for normal answers. Use mode='full' only for deep
+    debugging, ideally with a higher max_chars and a specific query.
+    """
     result = local_context_api.context_query(
         query,
         intent=intent,
         limit=limit,
         evidence_required=evidence_required,
         current_context=current_context,
+        mode=mode,
+        max_chars=max_chars,
+        include_entities=include_entities,
+        include_relations=include_relations,
+    )
+    return json.dumps(result, ensure_ascii=False)
+
+
+@mcp.tool
+def nexo_context_router(query: str, intent: str = "answer", limit: int = 4, current_context: str = "", max_chars: int = 6000) -> str:
+    """Return compact local context evidence suitable for injection before a reply."""
+    result = local_context_api.context_router(
+        query,
+        intent=intent,
+        limit=limit,
+        current_context=current_context,
+        max_chars=max_chars,
     )
     return json.dumps(result, ensure_ascii=False)
 

@@ -36,6 +36,14 @@ if str(_runtime_root) not in sys.path:
 import paths
 from cron_recovery import is_cron_enabled, resolve_declared_schedule, should_run_at_load
 try:
+    from windows_runtime import resolve_windows_host_binary, running_inside_wsl
+except ImportError:
+    def resolve_windows_host_binary(command: str) -> str:
+        return ""
+
+    def running_inside_wsl() -> bool:
+        return False
+try:
     from runtime_power import (
         launchctl_side_effects_allowed,
         reload_launchagent_plist,
@@ -548,6 +556,65 @@ def _install_linux_crontab_fallback(entries: list[str]) -> dict:
     return {"ok": True, "entries": len(entries)}
 
 
+def _powershell_single_quote(value: str | os.PathLike[str]) -> str:
+    return "'" + str(value).replace("'", "''") + "'"
+
+
+def _windows_argument_quote(value: str | os.PathLike[str]) -> str:
+    text = str(value)
+    return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def _sync_wsl_windows_host_local_index_task(dry_run: bool = False) -> dict:
+    if not running_inside_wsl():
+        return {"ok": True, "skipped": True, "reason": "not_wsl"}
+    powershell = resolve_windows_host_binary("powershell.exe")
+    if not powershell:
+        log("WARNING: Windows host PowerShell not available; local-index host task not installed.")
+        return {"ok": False, "skipped": True, "reason": "powershell_missing"}
+
+    distro = str(os.environ.get("WSL_DISTRO_NAME", "")).strip()
+    if not distro:
+        log("WARNING: WSL_DISTRO_NAME missing; local-index host task not installed.")
+        return {"ok": False, "skipped": True, "reason": "wsl_distro_missing"}
+
+    python_bin = "/usr/bin/python3" if Path("/usr/bin/python3").exists() else "python3"
+    script_path = _runtime_code_dir() / "scripts" / "nexo-local-index.py"
+    command = (
+        f"cd {shlex.quote(str(Path.home()))} && "
+        f"NEXO_HOME={shlex.quote(str(NEXO_HOME))} "
+        f"NEXO_CODE={shlex.quote(str(_runtime_code_dir()))} "
+        f"{shlex.quote(python_bin)} {shlex.quote(str(script_path))}"
+    )
+    wsl_args = " ".join(
+        _windows_argument_quote(arg)
+        for arg in ("-d", distro, "--exec", "/bin/bash", "-lc", command)
+    )
+    task_name = "NEXO Local Memory"
+    ps_script = (
+        f"$action = New-ScheduledTaskAction -Execute 'wsl.exe' -Argument {_powershell_single_quote(wsl_args)}; "
+        "$trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) "
+        "-RepetitionInterval (New-TimeSpan -Minutes 1) -RepetitionDuration (New-TimeSpan -Days 3650); "
+        "$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries "
+        "-StartWhenAvailable -MultipleInstances IgnoreNew; "
+        f"Register-ScheduledTask -TaskName {_powershell_single_quote(task_name)} -Action $action -Trigger $trigger "
+        "-Settings $settings -Description 'NEXO Local Memory background indexing' -Force | Out-Null; "
+        f"Start-ScheduledTask -TaskName {_powershell_single_quote(task_name)}"
+    )
+
+    if dry_run:
+        log(f"  DRY-RUN: would install Windows host task: {task_name}")
+        return {"ok": True, "dry_run": True, "task_name": task_name, "argument": wsl_args}
+
+    result = subprocess.run([powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_script], capture_output=True, text=True, timeout=45)
+    if result.returncode != 0:
+        error = (result.stderr or result.stdout or "windows_host_task_install_failed").strip()
+        log(f"WARNING: Windows host local-index task install failed: {error}")
+        return {"ok": False, "task_name": task_name, "error": error}
+    log(f"Windows host task installed: {task_name}")
+    return {"ok": True, "task_name": task_name, "argument": wsl_args}
+
+
 def _enable_systemd_user_units(units: list[str]) -> dict:
     errors: list[str] = []
     daemon = subprocess.run(["systemctl", "--user", "daemon-reload"], capture_output=True, text=True)
@@ -699,6 +766,7 @@ def sync(dry_run: bool = False):
     system = platform.system()
     if system == "Linux":
         sync_linux(dry_run)
+        _sync_wsl_windows_host_local_index_task(dry_run)
         return
     if system != "Darwin":
         log(f"Unsupported platform: {system}. Skipping.")

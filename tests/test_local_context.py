@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import db
@@ -141,7 +142,10 @@ def test_status_reports_elapsed_and_eta_for_active_index(tmp_path, monkeypatch):
     local_context.add_root(str(root))
     local_context.run_once(limit=20, process_limit=1)
     conn = db.get_db()
-    conn.execute("UPDATE local_index_logs SET created_at=1000")
+    conn.execute(
+        "INSERT OR REPLACE INTO local_index_state(key, value, updated_at) VALUES (?, ?, ?)",
+        (api.INITIAL_INDEX_STARTED_AT_KEY, "1000", 1000),
+    )
     conn.commit()
     monkeypatch.setattr(api, "now", lambda: 1600)
 
@@ -151,6 +155,201 @@ def test_status_reports_elapsed_and_eta_for_active_index(tmp_path, monkeypatch):
     assert status["global"]["files_processed"] >= 1
     assert status["global"]["changes_pending"] >= 1
     assert status["global"]["eta_seconds"] and status["global"]["eta_seconds"] > 0
+
+
+def test_initial_scan_status_separates_first_pass_from_live_reconcile(tmp_path):
+    root = tmp_path / "docs"
+    root.mkdir()
+    for index in range(3):
+        (root / f"doc-{index}.txt").write_text(f"Documento {index} sobre Maria.", encoding="utf-8")
+
+    local_context.add_root(str(root))
+    first = local_context.run_once(limit=1, process_limit=0)
+
+    assert first["initial_scan"]["complete"] is False
+    assert first["live"]["skipped"] is True
+    status = local_context.status()
+    assert status["global"]["phase"] == "initial_indexing"
+    assert status["global"]["initial_scan_complete"] is False
+
+    second = local_context.run_once(limit=20, process_limit=0)
+
+    assert second["initial_scan"]["complete"] is True
+    status = local_context.status()
+    assert status["initial_scan"]["complete"] is True
+    assert status["global"]["initial_discovery_complete"] is True
+    assert status["global"]["initial_scan_complete"] is False
+    assert status["global"]["phase"] == "initial_indexing"
+
+    third = local_context.run_once(limit=20, process_limit=20)
+
+    assert third["initial_index_complete"] is True
+    status = local_context.status()
+    assert status["global"]["initial_scan_complete"] is True
+    assert status["global"]["initial_index_complete"] is True
+
+
+def test_initial_index_complete_does_not_regress_during_later_partial_scans(tmp_path):
+    root = tmp_path / "docs"
+    root.mkdir()
+    for index in range(3):
+        (root / f"note-{index}.txt").write_text(f"Documento posterior {index}.", encoding="utf-8")
+
+    local_context.add_root(str(root))
+    local_context.run_once(limit=20, process_limit=20)
+    assert local_context.status()["global"]["initial_scan_complete"] is True
+
+    later = local_context.run_once(limit=1, process_limit=0)
+
+    assert later["scan"]["partial"] is True
+    status = local_context.status()
+    assert status["global"]["initial_scan_complete"] is True
+    assert status["global"]["index_mode"] == "watching_changes"
+
+
+def test_clear_index_resets_initial_index_state(tmp_path):
+    root = tmp_path / "docs"
+    root.mkdir()
+    (root / "note.txt").write_text("Documento inicial.", encoding="utf-8")
+
+    local_context.add_root(str(root))
+    local_context.run_once(limit=20, process_limit=20)
+    assert local_context.status()["global"]["initial_scan_complete"] is True
+
+    result = local_context.clear_index()
+
+    assert result["ok"] is True
+    status = local_context.status()
+    assert status["global"]["files_found"] == 0
+    assert status["global"]["initial_scan_complete"] is False
+    assert status["global"]["phase"] == "initial_indexing"
+    assert float(status["global"]["index_started_at"]) > 0
+    assert status["global"]["elapsed_seconds"] >= 0
+
+
+def test_clear_index_removes_stale_checkpoints(tmp_path):
+    root = tmp_path / "docs"
+    root.mkdir()
+    for index in range(3):
+        (root / f"note-{index}.txt").write_text(f"Documento {index}.", encoding="utf-8")
+
+    local_context.add_root(str(root))
+    local_context.run_once(limit=1, process_limit=0)
+    conn = db.get_db()
+    assert conn.execute("SELECT COUNT(*) AS total FROM local_index_checkpoints").fetchone()["total"] >= 1
+
+    local_context.clear_index()
+    local_context.run_once(limit=20, process_limit=0)
+
+    assert conn.execute("SELECT COUNT(*) AS total FROM local_index_checkpoints").fetchone()["total"] == 0
+    assert conn.execute("SELECT COUNT(*) AS total FROM local_assets WHERE status='active'").fetchone()["total"] == 3
+
+
+def test_index_elapsed_time_uses_persistent_start_state(tmp_path):
+    root = tmp_path / "docs"
+    root.mkdir()
+    (root / "note.txt").write_text("Documento con tiempo estable.", encoding="utf-8")
+
+    local_context.add_root(str(root))
+    conn = db.get_db()
+    conn.execute(
+        "UPDATE local_index_state SET value=? WHERE key=?",
+        ("1000", api.INITIAL_INDEX_STARTED_AT_KEY),
+    )
+    conn.commit()
+
+    status = local_context.status()
+
+    assert status["global"]["index_started_at"] == "1000"
+    assert status["global"]["elapsed_seconds"] > 1000
+
+
+def test_context_query_compact_mode_limits_payload_and_explains_parameters(tmp_path):
+    root = tmp_path / "docs"
+    root.mkdir()
+    for index in range(4):
+        (root / f"maria-{index}.txt").write_text(
+            "Maria Riera presupuesto factura proyecto " + ("detalle operativo " * 80),
+            encoding="utf-8",
+        )
+
+    local_context.add_root(str(root))
+    local_context.run_once(limit=20, process_limit=20)
+
+    context = local_context.context_query(
+        "Maria Riera presupuesto factura",
+        limit=8,
+        mode="compact",
+        max_chars=1800,
+        include_entities=False,
+        include_relations=False,
+    )
+
+    assert context["mode"] == "compact"
+    assert context["truncated"] is True
+    assert context["usage_hint"]["recommended_call"].startswith("nexo_local_context")
+    assert context["usage_hint"]["current_params"]["max_chars"] == 1800
+    assert context["entities"] == []
+    assert context["relations"] == []
+    assert len(json.dumps(context, ensure_ascii=False, separators=(",", ":"))) <= 1800
+
+
+def test_context_query_enforces_tiny_payload_limit_and_normalizes_mode(tmp_path):
+    root = tmp_path / ("docs-" + ("x" * 120))
+    root.mkdir()
+    (root / ("maria-" + ("y" * 120) + ".txt")).write_text(
+        "Maria Riera presupuesto factura " + ("detalle " * 200),
+        encoding="utf-8",
+    )
+
+    local_context.add_root(str(root))
+    local_context.run_once(limit=20, process_limit=20)
+
+    context = local_context.context_query(
+        "Maria Riera " + ("consulta " * 80),
+        limit=8,
+        mode="garbage",
+        max_chars=260,
+        include_entities=True,
+        include_relations=True,
+    )
+
+    assert context["mode"] == "compact"
+    assert context["truncated"] is True
+    assert len(json.dumps(context, ensure_ascii=False, separators=(",", ":"))) <= 260
+
+
+def test_context_router_is_compact_and_does_not_duplicate_result_payload(tmp_path):
+    root = tmp_path / "docs"
+    root.mkdir()
+    for index in range(5):
+        (root / f"maria-router-{index}.txt").write_text("Maria Riera aceptó presupuesto " + ("detalle " * 80), encoding="utf-8")
+
+    local_context.add_root(str(root))
+    local_context.run_once(limit=20, process_limit=20)
+
+    routed = local_context.context_router("Maria Riera presupuesto", limit=8, max_chars=1000)
+
+    assert "result" not in routed
+    assert routed["should_inject"] is True
+    assert len(json.dumps(routed, ensure_ascii=False, separators=(",", ":"))) <= 1000
+
+
+def test_context_router_returns_injectable_compact_evidence(tmp_path):
+    root = tmp_path / "docs"
+    root.mkdir()
+    note = root / "maria-router.txt"
+    note.write_text("Maria Riera aceptó el presupuesto y pagó la factura.", encoding="utf-8")
+
+    local_context.add_root(str(root))
+    local_context.run_once(limit=20, process_limit=20)
+
+    routed = local_context.context_router("que sabes de Maria Riera presupuesto", limit=4, max_chars=3000)
+
+    assert routed["ok"] is True
+    assert routed["should_inject"] is True
+    assert "LOCAL CONTEXT EVIDENCE" in routed["rendered"]
+    assert "maria-router.txt" in routed["rendered"]
 
 
 def test_sensitive_files_are_not_indexed(tmp_path):
@@ -493,6 +692,9 @@ def test_nested_home_root_is_not_scanned_twice_when_volume_root_exists(tmp_path)
     row = conn.execute("SELECT root_id FROM local_assets WHERE path=?", (str(doc),)).fetchone()
     startup_root = conn.execute("SELECT id FROM local_index_roots WHERE root_path=?", (api.norm_path(str(startup)),)).fetchone()
     assert row["root_id"] == startup_root["id"]
+    status = local_context.status()
+    assert status["initial_scan"]["complete"] is True
+    assert status["global"]["initial_discovery_complete"] is True
 
 
 def test_effective_scan_roots_keep_mounted_volumes_with_system_root():
@@ -509,6 +711,32 @@ def test_effective_scan_roots_keep_mounted_volumes_with_system_root():
     assert "/Volumes/SharedDisk" in effective
     assert "/Users/me/Library/Mail" in effective
     assert "/Users/me" not in effective
+
+
+def test_windows_drive_roots_detect_nested_paths():
+    assert api._is_nested_path(r"C:\Users\me", r"C:\\") is True
+    assert api._is_nested_path(r"C:\Users\me\Documents", r"C:\Users\me") is True
+    assert api._path_prefix(r"C:\Users\me") == "C:\\Users\\me\\"
+
+
+def test_reactivated_offline_root_resets_initial_index_state(tmp_path):
+    root = tmp_path / "external"
+    root.mkdir()
+    (root / "first.txt").write_text("Primer archivo", encoding="utf-8")
+    local_context.add_root(str(root))
+    local_context.run_once(limit=20, process_limit=20)
+    assert local_context.status()["global"]["initial_scan_complete"] is True
+
+    conn = db.get_db()
+    conn.execute("UPDATE local_index_roots SET status='offline' WHERE root_path=?", (api.norm_path(str(root)),))
+    conn.commit()
+    (root / "second.txt").write_text("Segundo archivo", encoding="utf-8")
+
+    local_context.add_root(str(root))
+    status = local_context.status()
+
+    assert status["global"]["initial_scan_complete"] is False
+    assert status["global"]["phase"] == "initial_indexing"
 
 
 def test_system_temporary_paths_are_skipped_from_root_scan(monkeypatch):
@@ -691,6 +919,28 @@ def test_live_reconcile_marks_deleted_file_without_full_rescan(tmp_path):
     conn = db.get_db()
     row = conn.execute("SELECT status FROM local_assets WHERE display_path=?", (str(path),)).fetchone()
     assert row["status"] == "deleted"
+
+
+def test_full_scan_marks_deleted_file_and_closes_jobs(tmp_path):
+    root = tmp_path / "docs"
+    root.mkdir()
+    path = root / "note.txt"
+    path.write_text("delete me with pending jobs", encoding="utf-8")
+
+    local_context.add_root(str(root))
+    local_context.run_once(limit=20, process_limit=0)
+    conn = db.get_db()
+    asset = conn.execute("SELECT asset_id FROM local_assets WHERE path=?", (str(path),)).fetchone()
+    assert asset is not None
+    assert conn.execute("SELECT COUNT(*) AS total FROM local_index_jobs WHERE asset_id=? AND status='pending'", (asset["asset_id"],)).fetchone()["total"] >= 1
+
+    path.unlink()
+    local_context.run_once(limit=20, process_limit=0)
+
+    assert conn.execute("SELECT status FROM local_assets WHERE asset_id=?", (asset["asset_id"],)).fetchone()["status"] == "deleted"
+    jobs = conn.execute("SELECT status, last_error_code FROM local_index_jobs WHERE asset_id=?", (asset["asset_id"],)).fetchall()
+    assert jobs
+    assert all(row["status"] == "done" and row["last_error_code"] == "asset_deleted" for row in jobs)
 
 
 def test_live_reconcile_reindexes_modified_file(tmp_path):

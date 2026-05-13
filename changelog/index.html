@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.20.11 expands Local Context to whole-device volume roots and automatic evidence injection.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.20.12 stabilizes Local Context first-pass indexing and compact evidence injection.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.20.11 expands Local Context to whole-device volume roots and automatic evidence injection.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.20.12 stabilizes Local Context first-pass indexing and compact evidence injection.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.20.11 expands Local Context to whole-device volume roots and automatic evidence injection.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.20.12 stabilizes Local Context first-pass indexing and compact evidence injection.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.20.11 expands Local Context to whole-device volume roots and automatic evidence injection.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.20.12 stabilizes Local Context first-pass indexing and compact evidence injection.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -87,13 +87,13 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v7.20.11 live</span>
+                    <span class="page-chip">v7.20.12 live</span>
                     <span class="page-chip">Local Context Layer</span>
                     <span class="page-chip">Background memory index</span>
                     <span class="page-chip">Desktop 0.33.0 companion</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v72011" class="btn btn-primary">Start with v7.20.11</a>
+                    <a href="#v72012" class="btn btn-primary">Start with v7.20.12</a>
                     <a href="#v7122" class="btn btn-secondary">See v7.12.2</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -101,8 +101,8 @@
             <div class="page-visual">
                 <div class="page-stack">
                     <div class="page-stack-card">
-                        <strong>v7.20.11</strong>
-                        <span>Patch - Local Context covers whole-device volume roots, skips system noise and injects local evidence automatically before work.</span>
+                        <strong>v7.20.12</strong>
+                        <span>Patch - Local Context keeps first-pass indexing stable, returns compact bounded evidence and keeps Windows WSL indexing scheduled after reboot.</span>
                     </div>
                     <div class="page-stack-card">
                         <strong>v7.17.8</strong>
@@ -344,6 +344,14 @@
 <section class="section-compact" style="background:rgba(124,58,237,0.08);">
     <div class="container desktop-disclaimer" style="max-width:860px;font-size:13px;line-height:1.55;">
         <p><strong>About NEXO Desktop.</strong> NEXO Desktop is a separate closed-source companion client distributed at <a href="https://nexo-desktop.com/">nexo-desktop.com</a>. When a changelog entry mentions NEXO Desktop it refers to a coordinated client release that consumes the Brain CLI/MCP contract. Desktop source does not live in this repo; the Brain (AGPL-3.0) remains fully usable on its own from terminal, Codex, Claude Code, or any MCP client.</p>
+    </div>
+</section>
+
+<section id="v72012" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#0ea5e9 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.20.12 <span style="opacity:.5;font-weight:400;">&mdash; May 13, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">First-pass stability and compact evidence</h2>
+        <p class="section-subtitle">Local Context now keeps initial indexing separate from live change tracking, persists the current indexing start time, returns compact bounded evidence for agents and installs the Windows host scheduler needed to keep WSL indexing alive after reboot.</p>
     </div>
 </section>
 

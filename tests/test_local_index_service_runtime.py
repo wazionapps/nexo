@@ -192,7 +192,7 @@ def test_status_counts_failed_and_running_jobs_as_pending_work(tmp_path, monkeyp
     assert status["global"]["changes_pending"] >= 2
     assert status["global"]["jobs_failed"] == 1
     assert status["global"]["jobs_running"] == 1
-    assert status["global"]["phase"] == "light_extraction"
+    assert status["global"]["phase"] == "initial_indexing"
 
 
 def test_status_marks_macos_loaded_service_with_failed_exit_as_problem(tmp_path, monkeypatch):

@@ -81,7 +81,7 @@ def test_heartbeat_includes_local_context_evidence_automatically(tmp_path):
 
     assert "LOCAL CONTEXT EVIDENCE" in output
     assert "maria-local.txt" in output
-    assert "Relevant excerpts:" in output
+    assert "excerpt:" in output
 
 
 def test_heartbeat_latches_execute_until_blocker_on_explicit_go(

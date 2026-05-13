@@ -27,45 +27,17 @@ def _format_local_context_evidence(query: str, *, limit: int = 4) -> str:
     try:
         from local_context import api as local_context_api
 
-        result = local_context_api.context_query(
+        routed = local_context_api.context_router(
             clean_query,
             intent="pre_action",
             limit=max(1, min(int(limit or 4), 8)),
-            evidence_required=False,
+            max_chars=6000,
         )
     except Exception:
         return ""
-    assets = result.get("assets") or []
-    if not assets:
+    if not routed.get("should_inject"):
         return ""
-    lines = ["", "LOCAL CONTEXT EVIDENCE:"]
-    for asset in assets[:limit]:
-        display_path = str(asset.get("display_path") or asset.get("path") or "")
-        score = asset.get("score")
-        summary = str(asset.get("summary") or "").strip()
-        suffix = f" — {summary[:180]}" if summary else ""
-        lines.append(f"- {display_path} ({asset.get('file_type', 'file')}, score={score}){suffix}")
-    chunks = result.get("chunks") or []
-    if chunks:
-        lines.append("Relevant excerpts:")
-        for chunk in chunks[:limit]:
-            text = " ".join(str(chunk.get("text") or "").split())
-            if not text:
-                continue
-            lines.append(f"- {text[:360]}")
-    refs = result.get("evidence_refs") or []
-    if refs:
-        lines.append(f"Evidence refs: {', '.join(str(ref) for ref in refs[:limit])}")
-    relations = result.get("relations") or []
-    if relations:
-        lines.append("Local relations:")
-        for relation in relations[:limit]:
-            relation_type = str(relation.get("relation_type") or "related")
-            target = str(relation.get("target_ref") or relation.get("target_asset_id") or "").strip()
-            evidence = str(relation.get("evidence") or "").strip()
-            suffix = f" — {evidence[:120]}" if evidence else ""
-            lines.append(f"- {relation_type}: {target}{suffix}")
-    return "\n".join(lines)
+    return str(routed.get("rendered") or "")
 
 
 def _parse_metadata(metadata: str = "") -> dict:

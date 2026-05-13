@@ -1361,6 +1361,10 @@ def _local_context_query(args) -> int:
             limit=int(getattr(args, "limit", 12) or 12),
             evidence_required=not bool(getattr(args, "no_evidence_required", False)),
             current_context=getattr(args, "current_context", "") or "",
+            mode=getattr(args, "mode", "compact") or "compact",
+            max_chars=int(getattr(args, "max_chars", 20000) or 0),
+            include_entities=bool(getattr(args, "include_entities", False)),
+            include_relations=bool(getattr(args, "include_relations", False)),
         ),
         args,
     )
@@ -3211,6 +3215,10 @@ def main():
     local_context_query_p.add_argument("--intent", default="answer", help="Intent label stored with the query audit row")
     local_context_query_p.add_argument("--limit", type=int, default=12, help="Maximum evidence rows")
     local_context_query_p.add_argument("--current-context", default="", help="Optional current conversation/task context")
+    local_context_query_p.add_argument("--mode", choices=["compact", "full"], default="compact", help="Payload shape. Compact is safe for chat clients; full is for debugging.")
+    local_context_query_p.add_argument("--max-chars", type=int, default=20000, help="Maximum JSON payload size before truncation. Use 0 to disable.")
+    local_context_query_p.add_argument("--include-entities", action="store_true", help="Include matched entities in the JSON payload.")
+    local_context_query_p.add_argument("--include-relations", action="store_true", help="Include graph relations in the JSON payload.")
     local_context_query_p.add_argument("--no-evidence-required", action="store_true", help="Allow empty evidence results")
     local_context_query_p.add_argument("--json", action="store_true", help="JSON output")
 

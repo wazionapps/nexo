@@ -979,11 +979,13 @@
       "triggers_after": []
     },
     "nexo_context_router": {
-      "description": "Route a query through local context layers (placeholder entry added pre-emptively for pre-commit hook unblock)",
-      "category": "memory",
+      "description": "Return compact local-memory evidence that can be injected before an answer or action",
+      "category": "local_context",
       "source": "server",
       "requires": [],
-      "provides": [],
+      "provides": [
+        "local_context_evidence"
+      ],
       "internal_calls": [],
       "enforcement": {
         "level": "none",

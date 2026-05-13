@@ -17,6 +17,6 @@ def test_pre_action_context_includes_local_evidence(tmp_path):
 
     assert "LOCAL CONTEXT EVIDENCE" in rendered
     assert "maria-seguro.txt" in rendered
-    assert "Relevant excerpts:" in rendered
+    assert "excerpt:" in rendered
     assert "Maria tiene un seguro de coche" in rendered
-    assert "Local relations:" in rendered
+    assert "Evidence refs:" in rendered
