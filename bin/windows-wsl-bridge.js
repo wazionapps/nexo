@@ -93,6 +93,20 @@ function resolveLinuxEnv(env = process.env) {
   return linuxEnv;
 }
 
+function resolveWindowsHostPathEnv(env = process.env) {
+  const result = {};
+  for (const key of ["LOCALAPPDATA", "APPDATA"]) {
+    const value = String(env[key] || "").trim();
+    if (!value) continue;
+    if (isWindowsStylePath(value)) {
+      result[key] = toWslPath(value);
+    } else if (value.startsWith("/")) {
+      result[key] = value;
+    }
+  }
+  return result;
+}
+
 function uniqueValues(values = []) {
   const seen = new Set();
   return values.filter((value) => {
@@ -242,6 +256,10 @@ function buildWslExecSpec({
   for (const [key, value] of Object.entries(linuxEnv)) {
     wslArgs.push(`${key}=${value}`);
   }
+  const windowsHostPathEnv = resolveWindowsHostPathEnv(env);
+  for (const [key, value] of Object.entries(windowsHostPathEnv)) {
+    wslArgs.push(`${key}=${value}`);
+  }
 
   // Build the staging shell script. Stages the bundle from /mnt/c (DrvFs/9P)
   // to /tmp (native ext4) BEFORE invoking node. Without staging, node hangs
@@ -296,6 +314,7 @@ function buildWslExecSpec({
     command: "wsl.exe",
     args: wslArgs,
     linuxEnv,
+    windowsHostPathEnv,
     managedLinuxPath,
     translatedScriptPath,
   };
@@ -338,6 +357,7 @@ module.exports = {
   probeWslUserHome,
   resolveLinuxEnv,
   resolveLinuxUserHome,
+  resolveWindowsHostPathEnv,
   runViaWsl,
   toWslPath,
 };

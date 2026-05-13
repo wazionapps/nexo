@@ -26,6 +26,9 @@ LOCAL_INDEX_LINUX_UNIT = "nexo-local-index.service"
 DEFAULT_LIVE_ASSET_LIMIT = int(os.environ.get("NEXO_LOCAL_INDEX_LIVE_ASSET_LIMIT", "2000") or "2000")
 DEFAULT_LIVE_DIR_LIMIT = int(os.environ.get("NEXO_LOCAL_INDEX_LIVE_DIR_LIMIT", "300") or "300")
 DEFAULT_LIVE_FILE_LIMIT = int(os.environ.get("NEXO_LOCAL_INDEX_LIVE_FILE_LIMIT", "1000") or "1000")
+DEFAULT_ROOT_DEPTH = int(os.environ.get("NEXO_LOCAL_INDEX_DEFAULT_DEPTH", "24") or "24")
+DEFAULT_EMAIL_ROOT_DEPTH = int(os.environ.get("NEXO_LOCAL_INDEX_EMAIL_ROOT_DEPTH", "24") or "24")
+DEFAULT_MOUNTED_ROOT_DEPTH = int(os.environ.get("NEXO_LOCAL_INDEX_MOUNTED_ROOT_DEPTH", "24") or "24")
 
 
 def ensure_ready() -> None:
@@ -89,6 +92,21 @@ def _dedupe_roots(roots: list[str]) -> list[str]:
         seen.add(normalized)
         result.append(normalized)
     return result
+
+
+def _dedupe_root_specs(specs: list[tuple[str, int]]) -> list[tuple[str, int]]:
+    ordered: list[str] = []
+    depths: dict[str, int] = {}
+    for root, depth in specs:
+        normalized = norm_path(root)
+        if not normalized:
+            continue
+        if normalized not in depths:
+            ordered.append(normalized)
+            depths[normalized] = int(depth)
+        else:
+            depths[normalized] = max(depths[normalized], int(depth))
+    return [(root, depths[root]) for root in ordered]
 
 
 def _mounted_volume_roots() -> list[str]:
@@ -156,23 +174,45 @@ def _local_email_roots() -> list[str]:
 
 
 def default_roots() -> list[str]:
+    return [root for root, _depth in default_root_specs()]
+
+
+def default_root_specs() -> list[tuple[str, int]]:
     home = Path.home()
     configured = os.environ.get("NEXO_LOCAL_INDEX_DEFAULT_ROOTS", "").strip()
     if configured:
-        return _dedupe_roots([item for item in configured.split(os.pathsep) if item.strip()])
-    return _dedupe_roots([str(home), *_local_email_roots(), *_mounted_volume_roots()])
+        return _dedupe_root_specs(
+            [(item, DEFAULT_ROOT_DEPTH) for item in configured.split(os.pathsep) if item.strip()]
+        )
+    return _dedupe_root_specs(
+        [(str(home), DEFAULT_ROOT_DEPTH)]
+        + [(root, DEFAULT_EMAIL_ROOT_DEPTH) for root in _local_email_roots()]
+        + [(root, DEFAULT_MOUNTED_ROOT_DEPTH) for root in _mounted_volume_roots()]
+    )
 
 
 def ensure_default_roots() -> dict:
-    existing_paths = {row["root_path"] for row in list_roots()}
+    existing = {row["root_path"]: row for row in list_roots()}
     created = []
-    for root in default_roots():
-        if root in existing_paths:
-            continue
+    updated = []
+    for root, depth in default_root_specs():
         candidate = Path(root).expanduser()
-        if candidate.exists() and candidate.is_dir():
-            created.append(add_root(str(candidate), mode="normal", depth=2))
-    return {"ok": True, "created": len(created), "roots": list_roots()}
+        if not candidate.exists() or not candidate.is_dir():
+            continue
+        existing_row = existing.get(norm_path(str(candidate)))
+        if existing_row:
+            current_depth = int(existing_row.get("depth") or 0)
+            if current_depth < depth:
+                conn = _conn()
+                conn.execute(
+                    "UPDATE local_index_roots SET depth=?, updated_at=? WHERE root_path=?",
+                    (depth, now(), existing_row["root_path"]),
+                )
+                conn.commit()
+                updated.append({"root_path": existing_row["root_path"], "depth": depth})
+            continue
+        created.append(add_root(str(candidate), mode="normal", depth=depth))
+    return {"ok": True, "created": len(created), "updated": len(updated), "roots": list_roots()}
 
 
 def _should_skip_mounted_root(candidate: Path) -> bool:
@@ -1348,7 +1388,7 @@ def process_jobs(*, limit: int = 100) -> dict:
             if job_type == "light_extraction":
                 text, metadata = extract_text(Path(row["path"]))
                 version_id = _latest_version_id(conn, asset_id)
-                if contains_secret(text):
+                if metadata.get("content_secret_detected") or contains_secret(text):
                     _mark_content_secret_assets(conn, [asset_id])
                     conn.execute(
                         "UPDATE local_index_jobs SET status='done', updated_at=?, last_error_code='content_secret_blocked' WHERE job_id=?",

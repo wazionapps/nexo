@@ -89,6 +89,13 @@ EMAIL_ATTACHMENT_SUFFIXES = {
 }
 
 EMAIL_EXTRACTABLE_SUFFIXES = {".eml", ".emlx", ".msg"}
+OUTLOOK_MAC_INVENTORY_SUFFIXES = {
+    ".olk15message",
+    ".olk15msgsource",
+    ".olk15msgattach",
+    ".olk15event",
+    ".olk15contact",
+}
 
 NOISY_PARTS = {
     "node_modules",
@@ -261,7 +268,7 @@ def is_allowed_local_email_file(path: str) -> bool:
             "appdata/local/packages/microsoft.windowscommunicationsapps",
         )
     ) or _is_inside_windows_mail_package(lowered) or _is_inside_outlook_mac_profile(lowered):
-        return suffix in {".eml", ".msg", ".pst", ".ost"}
+        return suffix in {".eml", ".msg", ".pst", ".ost"} | OUTLOOK_MAC_INVENTORY_SUFFIXES
     if _is_under_marker(lowered, ".thunderbird") or _is_under_marker(lowered, ".mozilla-thunderbird"):
         return suffix in {".eml", ".mbox", ""}
     return False

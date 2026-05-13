@@ -843,3 +843,53 @@ def test_sync_linux_supports_keep_alive_services(tmp_path, monkeypatch):
         args[:4] == ["systemctl", "--user", "enable", "--now"] and args[4] == "nexo-dashboard.service"
         for args in calls
     )
+
+
+def test_sync_linux_installs_crontab_fallback_when_systemd_unavailable(tmp_path, monkeypatch):
+    from crons import sync as cron_sync
+
+    home = tmp_path / "home"
+    runtime_root = tmp_path / "nexo-home"
+    source_root = tmp_path / "repo-src"
+    (source_root / "scripts").mkdir(parents=True)
+    (runtime_root / "runtime" / "logs").mkdir(parents=True)
+
+    script = source_root / "scripts" / "nexo-local-index.py"
+    script.write_text("print('index')\n")
+    wrapper = source_root / "scripts" / "nexo-cron-wrapper.sh"
+    wrapper.write_text("#!/bin/bash\nexit 0\n")
+    wrapper.chmod(0o755)
+
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
+    monkeypatch.setattr(cron_sync.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(cron_sync, "SOURCE_ROOT", source_root)
+    monkeypatch.setattr(cron_sync, "RUNTIME_ROOT", runtime_root)
+    monkeypatch.setattr(cron_sync, "NEXO_HOME", runtime_root)
+    monkeypatch.setattr(cron_sync, "LOG_DIR", runtime_root / "runtime" / "logs")
+    monkeypatch.setattr(cron_sync, "load_manifest", lambda: [
+        {"id": "local-index", "script": "scripts/nexo-local-index.py", "interval_seconds": 60}
+    ])
+    monkeypatch.setattr(cron_sync.shutil, "which", lambda command: "/usr/bin/crontab" if command == "crontab" else None)
+
+    installed_crontab: dict[str, str] = {}
+
+    def fake_run(args, **kwargs):
+        if args[:2] == ["systemctl", "--user"]:
+            return subprocess.CompletedProcess(args, 1, "", "systemd unavailable")
+        if args == ["crontab", "-l"]:
+            return subprocess.CompletedProcess(args, 1, "", "no crontab for user")
+        if args and args[0] == "crontab":
+            installed_crontab["body"] = Path(args[1]).read_text(encoding="utf-8")
+            return subprocess.CompletedProcess(args, 0, "", "")
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+    monkeypatch.setattr(cron_sync.subprocess, "run", fake_run)
+
+    cron_sync.sync_linux()
+
+    assert (home / ".config" / "systemd" / "user" / "nexo-local-index.timer").is_file()
+    assert cron_sync.CRONTAB_BEGIN in installed_crontab["body"]
+    assert "* * * * *" in installed_crontab["body"]
+    assert "nexo-local-index.py" in installed_crontab["body"]
+    assert f"NEXO_HOME={runtime_root}" in installed_crontab["body"]

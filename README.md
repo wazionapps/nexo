@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.20.8` is the current packaged-runtime line. Patch release over v7.20.7 — Local Context recognises Windows Mail package roots and Outlook Mac profile roots as bounded local-email sources instead of rejecting them as generic AppData / Group Containers.
+Version `7.20.9` is the current packaged-runtime line. Patch release over v7.20.8 — Local Context scans automatic roots at full operational depth, falls back to crontab when Linux/WSL systemd user timers fail, passes Windows AppData email roots into WSL, and blocks Google API keys before HTML cleaning.
+
+Previously in `7.20.8`: patch release over v7.20.7 — Local Context recognises Windows Mail package roots and Outlook Mac profile roots as bounded local-email sources instead of rejecting them as generic AppData / Group Containers.
 
 Previously in `7.20.7`: patch release over v7.20.6 — Local Context email-root bootstrap is deterministic across CI, WSL and migrated profiles while preserving macOS Mail.app, Windows Outlook, Thunderbird and NEXO email coverage.
 

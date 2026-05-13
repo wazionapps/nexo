@@ -20,6 +20,7 @@ import json
 import os
 import platform
 import plistlib
+import shlex
 import shutil
 import subprocess
 import sys
@@ -133,6 +134,8 @@ SCHEDULE_FILE = paths.config_dir() / "schedule.json"
 CORE_CRON_MANAGED_ENV = "NEXO_MANAGED_CORE_CRON"
 PERSONAL_CRON_MANAGED_ENV = "NEXO_MANAGED_PERSONAL_CRON"
 PERSONAL_CRON_ID_ENV = "NEXO_PERSONAL_CRON_ID"
+CRONTAB_BEGIN = "# >>> NEXO managed core crons >>>"
+CRONTAB_END = "# <<< NEXO managed core crons <<<"
 RETIRED_CORE_FILES = (
     Path("core") / "scripts" / "nexo-day-orchestrator.sh",
     Path("scripts") / "nexo-day-orchestrator.sh",
@@ -457,6 +460,106 @@ def build_plist(cron: dict) -> dict:
     return plist
 
 
+def _shell_join(args: list[str | Path]) -> str:
+    return " ".join(shlex.quote(str(arg)) for arg in args)
+
+
+def _cron_schedule(cron: dict) -> str | None:
+    if cron.get("keep_alive"):
+        return None
+    if "interval_seconds" in cron:
+        try:
+            seconds = int(cron["interval_seconds"])
+        except Exception:
+            return None
+        if seconds <= 0 or seconds % 60 != 0:
+            return None
+        minutes = max(1, seconds // 60)
+        return "* * * * *" if minutes == 1 else f"*/{minutes} * * * *"
+    if "schedule" in cron:
+        s = resolve_declared_schedule(cron)
+        hour, minute = int(s.get("hour", 0)), int(s.get("minute", 0))
+        weekday = "*"
+        if "weekday" in s:
+            raw_weekday = int(s["weekday"])
+            weekday = "0" if raw_weekday == 7 else str(raw_weekday)
+        return f"{minute} {hour} * * {weekday}"
+    return None
+
+
+def _linux_crontab_entry(cron: dict, exec_cmd: str, stdout_log: Path, stderr_log: Path) -> str | None:
+    schedule = _cron_schedule(cron)
+    if not schedule:
+        return None
+    env_prefix = " ".join(
+        f"{key}={shlex.quote(str(value))}"
+        for key, value in {
+            "HOME": Path.home(),
+            "NEXO_HOME": NEXO_HOME,
+            "NEXO_CODE": _runtime_code_dir(),
+            "PYTHONUNBUFFERED": "1",
+        }.items()
+    )
+    return f"{schedule} {env_prefix} {exec_cmd} >> {shlex.quote(str(stdout_log))} 2>> {shlex.quote(str(stderr_log))}"
+
+
+def _strip_managed_crontab_block(body: str) -> str:
+    lines = body.splitlines()
+    kept: list[str] = []
+    skipping = False
+    for line in lines:
+        if line.strip() == CRONTAB_BEGIN:
+            skipping = True
+            continue
+        if line.strip() == CRONTAB_END:
+            skipping = False
+            continue
+        if not skipping:
+            kept.append(line)
+    return "\n".join(kept).rstrip()
+
+
+def _install_linux_crontab_fallback(entries: list[str]) -> dict:
+    if not entries:
+        return {"ok": False, "error": "no_crontab_entries"}
+    if not shutil.which("crontab"):
+        return {"ok": False, "error": "crontab_missing"}
+
+    existing = subprocess.run(["crontab", "-l"], capture_output=True, text=True)
+    current_body = existing.stdout if existing.returncode == 0 else ""
+    unmanaged_body = _strip_managed_crontab_block(current_body)
+    managed_body = "\n".join([CRONTAB_BEGIN, *entries, CRONTAB_END])
+    next_body = f"{unmanaged_body}\n\n{managed_body}\n" if unmanaged_body else f"{managed_body}\n"
+
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as fh:
+            tmp_path = fh.name
+            fh.write(next_body)
+        proc = subprocess.run(["crontab", tmp_path], capture_output=True, text=True)
+    finally:
+        if tmp_path:
+            try:
+                Path(tmp_path).unlink(missing_ok=True)
+            except Exception:
+                pass
+    if proc.returncode != 0:
+        return {"ok": False, "error": proc.stderr or proc.stdout or "crontab_install_failed"}
+    return {"ok": True, "entries": len(entries)}
+
+
+def _enable_systemd_user_units(units: list[str]) -> dict:
+    errors: list[str] = []
+    daemon = subprocess.run(["systemctl", "--user", "daemon-reload"], capture_output=True, text=True)
+    if daemon.returncode != 0:
+        errors.append(daemon.stderr or daemon.stdout or "systemctl daemon-reload failed")
+    for unit in units:
+        proc = subprocess.run(["systemctl", "--user", "enable", "--now", unit], capture_output=True, text=True)
+        if proc.returncode != 0:
+            errors.append(f"{unit}: {proc.stderr or proc.stdout or 'enable failed'}")
+    return {"ok": not errors, "errors": errors}
+
+
 def get_installed_nexo_crons() -> dict[str, Path]:
     """Return dict of cron_id → plist_path for installed NEXO crons."""
     installed = {}
@@ -670,6 +773,9 @@ def sync_linux(dry_run: bool = False):
             python_bin = p
             break
 
+    enable_units: list[str] = []
+    crontab_entries: list[str] = []
+
     for cron in manifest_crons:
         cron_id = cron["id"]
         script_src = _resolve_source_artifact(cron["script"])
@@ -683,9 +789,9 @@ def sync_linux(dry_run: bool = False):
             _copy_into_runtime(subdir_src)
 
         if script_type == "shell":
-            exec_cmd = f"/bin/bash {wrapper_dest} {cron_id} /bin/bash {script_dest}"
+            exec_cmd = _shell_join(["/bin/bash", wrapper_dest, cron_id, "/bin/bash", script_dest])
         else:
-            exec_cmd = f"/bin/bash {wrapper_dest} {cron_id} {python_bin} {script_dest}"
+            exec_cmd = _shell_join(["/bin/bash", wrapper_dest, cron_id, python_bin, script_dest])
 
         service_path = unit_dir / f"nexo-{cron_id}.service"
         timer_path = unit_dir / f"nexo-{cron_id}.timer"
@@ -734,6 +840,7 @@ StandardError=append:{stderr_log}
 
         service_path.write_text(service_content)
         if cron.get("keep_alive"):
+            enable_units.append(f"nexo-{cron_id}.service")
             log(f"  Installed keep_alive service: {cron_id}")
             continue
 
@@ -748,14 +855,25 @@ Persistent=true
 WantedBy=timers.target
 """
         timer_path.write_text(timer_content)
+        enable_units.append(f"nexo-{cron_id}.timer")
+        crontab_entry = _linux_crontab_entry(cron, exec_cmd, stdout_log, stderr_log)
+        if crontab_entry:
+            crontab_entries.append(crontab_entry)
         log(f"  Installed: {cron_id}")
 
     if not dry_run:
-        subprocess.run(["systemctl", "--user", "daemon-reload"], capture_output=True)
-        for cron in manifest_crons:
-            unit = f"nexo-{cron['id']}.service" if cron.get("keep_alive") else f"nexo-{cron['id']}.timer"
-            subprocess.run(["systemctl", "--user", "enable", "--now", unit], capture_output=True)
-        log("systemd units enabled.")
+        systemd_result = _enable_systemd_user_units(enable_units)
+        if systemd_result.get("ok"):
+            log("systemd units enabled.")
+        else:
+            log(f"WARNING: systemd user timers failed; installing crontab fallback: {systemd_result.get('errors')}")
+            fallback = _install_linux_crontab_fallback(crontab_entries)
+            if not fallback.get("ok"):
+                raise RuntimeError(
+                    "Linux cron activation failed: "
+                    f"systemd={systemd_result.get('errors')} crontab={fallback.get('error')}"
+                )
+            log(f"crontab fallback installed ({fallback.get('entries')} entries).")
 
     log("Sync complete.")
 

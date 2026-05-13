@@ -30,7 +30,9 @@ const payload = helper.buildWslExecSpec({{
     NEXO_WSL_HOME: "/home/franciscoc/.nexo",
     NEXO_DESKTOP_MANAGED: "1",
     NEXO_SKIP_SHELL_PROFILE: "1",
-    NEXO_SKIP_MODEL_WARMUP: "1"
+    NEXO_SKIP_MODEL_WARMUP: "1",
+    LOCALAPPDATA: "C:\\\\Users\\\\franciscoc\\\\AppData\\\\Local",
+    APPDATA: "C:\\\\Users\\\\franciscoc\\\\AppData\\\\Roaming"
   }},
   platform: "win32"
 }});
@@ -75,6 +77,12 @@ console.log(JSON.stringify(payload));
     assert "NEXO_DESKTOP_MANAGED=1" in payload["args"]
     assert "NEXO_SKIP_SHELL_PROFILE=1" in payload["args"]
     assert "NEXO_SKIP_MODEL_WARMUP=1" in payload["args"]
+    assert payload["windowsHostPathEnv"] == {
+        "LOCALAPPDATA": "/mnt/c/Users/franciscoc/AppData/Local",
+        "APPDATA": "/mnt/c/Users/franciscoc/AppData/Roaming",
+    }
+    assert "LOCALAPPDATA=/mnt/c/Users/franciscoc/AppData/Local" in payload["args"]
+    assert "APPDATA=/mnt/c/Users/franciscoc/AppData/Roaming" in payload["args"]
     # Last two args: /bin/dash <path-to-staged-script>. Path is os.homedir()
     # of the host running the test (translated to Linux form when on Win/WSL,
     # left as-is on macOS test runners). Either way must end in the staged

@@ -41,6 +41,7 @@ SECRET_PATTERNS: tuple[re.Pattern, ...] = (
     re.compile(r"\bpk-(?:[a-z]+-)?[A-Za-z0-9_\-]{20,}\b"),
     re.compile(r"\b(ghp|gho|ghu|ghs|ghr|github_pat|glpat|xoxb|xoxp|shpat)_[A-Za-z0-9_]{16,}\b", re.I),
     re.compile(r"\b(AKIA|ASIA)[A-Z0-9]{16,}\b"),
+    re.compile(r"\bAIza[0-9A-Za-z_-]{30,}\b"),
     re.compile(r"\bey[A-Za-z0-9_-]{10,}\.ey[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b"),
     re.compile(r"-----BEGIN (?:RSA |DSA |EC |OPENSSH |PGP )?PRIVATE KEY-----", re.I),
     re.compile(r"\b([A-Z][A-Z0-9_]*(?:TOKEN|SECRET|KEY|PASSWORD|PASS)\s*[:=]\s*)['\"]?[A-Za-z0-9._/+=\-]{12,}", re.I),
@@ -290,6 +291,8 @@ def extract_text(path: Path) -> tuple[str, dict]:
         text = _extract_xlsx(path)
     else:
         text = ""
+    if contains_secret(text):
+        metadata["content_secret_detected"] = True
     return clean_text(text), metadata
 
 

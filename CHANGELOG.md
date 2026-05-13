@@ -1,5 +1,16 @@
 # Changelog
 
+## [7.20.9] - 2026-05-13
+
+### Fixed — local memory full-depth roots and Windows service fallback
+
+- **Default local-memory roots now cover the real user tree instead of stopping at shallow depth 2.** Existing automatic roots are upgraded on the next service cycle so Mail.app, NEXO email DBs, nested projects and external disks can be scanned beyond the first folders while privacy skip rules still block caches, dependencies and sensitive areas.
+- **Linux/WSL cron activation no longer pretends success when systemd user timers fail.** Brain now detects `systemctl --user` failures and installs a managed crontab fallback for interval jobs such as local-index, or fails loudly if neither scheduler is available.
+- **Windows/WSL receives translated host email paths.** The Windows bridge passes `LOCALAPPDATA` and `APPDATA` into WSL as `/mnt/c/...`, so Outlook/Windows Mail roots resolve to the real Windows profile instead of fake WSL home paths.
+- **Secret detection now catches Google API keys before HTML cleaning.** Files containing keys in script URLs or attributes are converted to inventory-only records with no chunks, embeddings or queryable text.
+- **Outlook Mac proprietary message files are allowed as safe inventory-only email evidence.** `.olk15*` profile artifacts are discoverable without pretending they can be parsed as normal email text.
+- **Coverage:** local-context, cron sync and Windows WSL bridge contract suites pass (`63 passed`), including default-root depth upgrade, crontab fallback, host AppData propagation, Google key blocking and Outlook Mac inventory behavior.
+
 ## [7.20.8] - 2026-05-13
 
 ### Fixed — Windows Mail and Outlook Mac local roots

@@ -168,6 +168,29 @@ def test_sensitive_files_are_not_indexed(tmp_path):
     assert chunks == 0
 
 
+def test_google_maps_key_param_is_inventory_only_not_queryable(tmp_path):
+    from local_context.extractors import contains_secret
+
+    root = tmp_path / "web"
+    root.mkdir()
+    html = root / "map.html"
+    html.write_text(
+        '<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyA1234567890123456789012345678901234"></script>',
+        encoding="utf-8",
+    )
+
+    assert contains_secret(html.read_text(encoding="utf-8")) is True
+
+    local_context.add_root(str(root))
+    local_context.run_once(limit=20, process_limit=20)
+
+    conn = db.get_db()
+    asset = conn.execute("SELECT privacy_class, phase FROM local_assets WHERE path=?", (str(html),)).fetchone()
+    chunks = conn.execute("SELECT COUNT(*) AS total FROM local_chunks WHERE asset_id IN (SELECT asset_id FROM local_assets WHERE path=?)", (str(html),)).fetchone()
+    assert asset["privacy_class"] == "content_secret_inventory_only"
+    assert chunks["total"] == 0
+
+
 def test_private_profile_and_credential_files_are_not_indexed(tmp_path, monkeypatch):
     home = tmp_path / "home"
     home.mkdir()
@@ -218,6 +241,8 @@ def test_windows_style_private_paths_are_blocked():
     assert should_extract(r"C:\Users\me\AppData\Local\Packages\microsoft.windowscommunicationsapps_8wekyb3d8bbwe\LocalState\mail.eml", 2) is True
     assert should_skip_tree("/Users/me/Library/Group Containers/UBF8T346G9.Office/Outlook/Outlook 15 Profiles/Main Profile") is False
     assert should_skip_file("/Users/me/Library/Group Containers/UBF8T346G9.Office/Outlook/Outlook 15 Profiles/Main Profile/message.msg") is False
+    assert should_skip_file("/Users/me/Library/Group Containers/UBF8T346G9.Office/Outlook/Outlook 15 Profiles/Main Profile/message.olk15Message") is False
+    assert should_extract("/Users/me/Library/Group Containers/UBF8T346G9.Office/Outlook/Outlook 15 Profiles/Main Profile/message.olk15Message", 2) is False
 
 
 def test_default_roots_include_local_email_sources_and_extract_messages(tmp_path, monkeypatch):
@@ -262,12 +287,30 @@ def test_default_roots_include_local_email_sources_and_extract_messages(tmp_path
 
     assert api.norm_path(str(home / "Library" / "Mail")) in root_paths
     assert api.norm_path(str(nexo_email_dir)) in root_paths
+    mail_root = next(row for row in roots["roots"] if row["root_path"] == api.norm_path(str(home / "Library" / "Mail")))
+    assert int(mail_root["depth"]) >= 8
 
     local_context.run_once(limit=100, process_limit=100)
     context = local_context.context_query("Maria Leebmann24 presupuesto", limit=5)
 
     assert any("1.emlx" in asset["display_path"] or "nexo-email.db" in asset["display_path"] for asset in context["assets"])
     assert any("Leebmann24" in chunk["text"] for chunk in context["chunks"])
+
+
+def test_existing_default_root_depth_is_upgraded(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    home.mkdir()
+
+    monkeypatch.delenv("NEXO_LOCAL_INDEX_DEFAULT_ROOTS", raising=False)
+    monkeypatch.setattr(api.Path, "home", staticmethod(lambda: home))
+    monkeypatch.setattr(api, "_mounted_volume_roots", lambda: [])
+
+    local_context.add_root(str(home), depth=2)
+    result = api.ensure_default_roots()
+
+    root = next(row for row in result["roots"] if row["root_path"] == api.norm_path(str(home)))
+    assert result["updated"] == 1
+    assert int(root["depth"]) >= 8
 
 
 def test_deleted_file_becomes_tombstone(tmp_path):
