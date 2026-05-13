@@ -1652,6 +1652,29 @@ def _service_cycle_observation(conn) -> dict:
     return observation
 
 
+def _index_timing(conn, *, done: int, active_jobs: int, percent: int) -> dict:
+    first_seen = conn.execute(
+        """
+        SELECT MIN(created_at) AS created_at
+        FROM local_index_logs
+        WHERE event IN ('root_added', 'scan_started', 'scan_finished', 'jobs_processed', 'service_cycle_finished')
+        """
+    ).fetchone()["created_at"] or 0
+    if not first_seen:
+        first_seen = conn.execute(
+            """
+            SELECT MIN(first_seen_at) AS first_seen_at
+            FROM local_assets
+            WHERE status!='deleted'
+            """
+        ).fetchone()["first_seen_at"] or 0
+    elapsed_seconds = max(0, int(now() - float(first_seen))) if first_seen else 0
+    eta_seconds = None
+    if elapsed_seconds > 0 and done > 0 and active_jobs > 0 and 0 < percent < 100:
+        eta_seconds = max(0, int((elapsed_seconds / max(done, 1)) * active_jobs))
+    return {"elapsed_seconds": elapsed_seconds, "eta_seconds": eta_seconds}
+
+
 def _service_scheduler_has_error(service: dict) -> bool:
     if service.get("manager") == "launchagent":
         code = str(service.get("last_exit_code") or "").strip()
@@ -1725,6 +1748,7 @@ def status() -> dict:
     active_jobs = pending + running_jobs + failed_jobs
     total_jobs = active_jobs + done
     percent = 100 if total_jobs == 0 else int((done / max(total_jobs, 1)) * 100)
+    timing = _index_timing(conn, done=done, active_jobs=active_jobs, percent=percent)
     roots = list_roots()
     volumes = []
     by_volume = conn.execute(
@@ -1770,8 +1794,8 @@ def status() -> dict:
             "jobs_pending": pending,
             "jobs_running": running_jobs,
             "jobs_failed": failed_jobs,
-            "elapsed_seconds": 0,
-            "eta_seconds": None,
+            "elapsed_seconds": timing["elapsed_seconds"],
+            "eta_seconds": timing["eta_seconds"],
         },
         "volumes": volumes,
         "roots": roots,

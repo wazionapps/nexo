@@ -42,6 +42,27 @@ def test_scan_extract_query_and_purge(tmp_path):
     assert local_context.get_asset(asset_id)["ok"] is False
 
 
+def test_status_reports_elapsed_and_eta_for_active_index(tmp_path, monkeypatch):
+    root = tmp_path / "docs"
+    root.mkdir()
+    for index in range(3):
+        (root / f"doc-{index}.txt").write_text(f"Documento {index} sobre Maria y BMW.", encoding="utf-8")
+
+    local_context.add_root(str(root))
+    local_context.run_once(limit=20, process_limit=1)
+    conn = db.get_db()
+    conn.execute("UPDATE local_index_logs SET created_at=1000")
+    conn.commit()
+    monkeypatch.setattr(api, "now", lambda: 1600)
+
+    status = local_context.status()
+
+    assert status["global"]["elapsed_seconds"] == 600
+    assert status["global"]["files_processed"] >= 1
+    assert status["global"]["changes_pending"] >= 1
+    assert status["global"]["eta_seconds"] and status["global"]["eta_seconds"] > 0
+
+
 def test_sensitive_files_are_not_indexed(tmp_path):
     root = tmp_path / "project"
     root.mkdir()

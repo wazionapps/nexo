@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.20.5] - 2026-05-13
+
+### Fixed — local memory status timing
+
+- **Local memory status now reports elapsed indexing time and approximate remaining time.** Desktop can show how long the first local-memory pass has been running and a best-effort ETA while jobs remain pending.
+- **ETA stays defensive for a live index.** When the computer is already up to date or there is not enough throughput data, Brain returns `eta_seconds=null` so Desktop can show a plain “calculating”/“up to date” state instead of inventing precision.
+- **Coverage:** targeted local-context status test covers elapsed and ETA fields.
+
 ## [7.20.4] - 2026-05-13
 
 ### Fixed — local memory privacy hardening
