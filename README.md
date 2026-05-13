@@ -18,7 +18,27 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.20.1` is the current packaged-runtime line. Patch release over v7.20.0 — the Local Context service now recovers from orphaned locks and mixed-version cycle failures instead of leaving the background index stuck.
+Version `7.20.11` is the current packaged-runtime line. Patch release over v7.20.10 — Local Context now starts from real system volume roots plus mounted/removable/network volumes, filters system/cache/app/product artifacts, and injects relevant local evidence automatically into heartbeat, task-open and pre-action context.
+
+Previously in `7.20.10`: patch release over v7.20.9 — Local Context manual refreshes now reconcile automatic roots every time, so newly mounted disks and upgraded default roots are picked up immediately from Desktop's "comprobar cambios" path.
+
+Previously in `7.20.9`: patch release over v7.20.8 — Local Context scans automatic roots at full operational depth, falls back to crontab when Linux/WSL systemd user timers fail, passes Windows AppData email roots into WSL, and blocks Google API keys before HTML cleaning.
+
+Previously in `7.20.8`: patch release over v7.20.7 — Local Context recognises Windows Mail package roots and Outlook Mac profile roots as bounded local-email sources instead of rejecting them as generic AppData / Group Containers.
+
+Previously in `7.20.7`: patch release over v7.20.6 — Local Context email-root bootstrap is deterministic across CI, WSL and migrated profiles while preserving macOS Mail.app, Windows Outlook, Thunderbird and NEXO email coverage.
+
+Previously in `7.20.6`: patch release over v7.20.5 — Local Context ranks entity matches at chunk level, keeps old entity-matched assets eligible, adds safe local email roots for macOS/Windows/Linux, extracts `.eml`, `.emlx`, `.msg` and NEXO email DB continuity, and exposes local graph relations in pre-action context.
+
+Previously in `7.20.5`: patch release over v7.20.4 — Local Context status reports elapsed indexing time and a defensive ETA while background jobs remain pending.
+
+Previously in `7.20.4`: patch release over v7.20.3 — Local Context now blocks private dotfiles, hidden project folders and secret-bearing content before chunks, embeddings, graph relations or agent context are created.
+
+Previously in `7.20.3`: patch release over v7.20.2 — installer DMG volumes are no longer added as local-memory roots, removed roots purge stale payloads, and doctor can repair removed-root residue.
+
+Previously in `7.20.2`: patch release over v7.20.1 — Local Context now requeues stalled work, reports real macOS/Windows background-service health, records scan errors and preserves Windows drive roots.
+
+Previously in `7.20.1`: patch release over v7.20.0 — the Local Context service now recovers from orphaned locks and mixed-version cycle failures instead of leaving the background index stuck.
 
 Previously in `7.20.0`: minor release over v7.19.0 — the Local Context index now reconciles known files and folders on every service cycle, so created, modified, deleted and newly excluded local files are reflected automatically between full scans.
 
