@@ -37,6 +37,153 @@ def check_db_exists() -> DoctorCheck:
     )
 
 
+def check_db_integrity(fix: bool = False) -> DoctorCheck:
+    """Detect and optionally repair a wiped/corrupt local Brain database."""
+    import sqlite3
+    import paths
+    from db_guard import (
+        CRITICAL_TABLES,
+        EMPTY_DB_SIZE_BYTES,
+        MIN_REFERENCE_ROWS,
+        db_looks_wiped,
+        db_row_counts,
+        find_latest_hourly_backup,
+    )
+
+    db_path = paths.db_path()
+    if not db_path.is_file():
+        return DoctorCheck(
+            id="boot.db_integrity",
+            tier="boot",
+            status="critical",
+            severity="error",
+            summary="Database file not found",
+            evidence=[str(db_path)],
+            repair_plan=["Run nexo-brain to initialize the database"],
+        )
+
+    try:
+        size_bytes = db_path.stat().st_size
+    except OSError:
+        size_bytes = -1
+
+    quick_ok = False
+    quick_error = ""
+    try:
+        conn = sqlite3.connect(str(db_path), timeout=2)
+        try:
+            row = conn.execute("PRAGMA quick_check").fetchone()
+            quick_ok = bool(row and str(row[0]).lower() == "ok")
+            if not quick_ok:
+                quick_error = str(row[0] if row else "quick_check returned no row")
+        finally:
+            conn.close()
+    except Exception as exc:
+        quick_error = f"{type(exc).__name__}: {exc}"
+
+    looks_wiped = db_looks_wiped(db_path, CRITICAL_TABLES)
+    reference = find_latest_hourly_backup(
+        paths.backups_dir(),
+        min_critical_rows=MIN_REFERENCE_ROWS,
+    )
+    reference_counts = db_row_counts(reference, CRITICAL_TABLES) if reference else {}
+    reference_rows = sum(v for v in reference_counts.values() if isinstance(v, int))
+    lower_error = quick_error.lower()
+    corrupt_error = any(token in lower_error for token in (
+        "database disk image is malformed",
+        "file is not a database",
+        "malformed",
+        "not a database",
+    ))
+    recoverable_wipe = bool(
+        reference
+        and looks_wiped
+        and (
+            size_bytes <= EMPTY_DB_SIZE_BYTES
+            or corrupt_error
+            or not quick_ok
+        )
+    )
+
+    if quick_ok and not recoverable_wipe:
+        if looks_wiped and not reference:
+            return DoctorCheck(
+                id="boot.db_integrity",
+                tier="boot",
+                status="healthy",
+                severity="info",
+                summary="Database is readable and looks like a fresh install",
+                evidence=[f"Size: {size_bytes} bytes", "No usable backup with user data found"],
+            )
+        return DoctorCheck(
+            id="boot.db_integrity",
+            tier="boot",
+            status="healthy",
+            severity="info",
+            summary="Database integrity OK",
+            evidence=[f"Size: {size_bytes} bytes"],
+        )
+
+    evidence = [
+        f"DB: {db_path}",
+        f"Size: {size_bytes} bytes",
+        f"quick_check: {'ok' if quick_ok else quick_error or 'not ok'}",
+        f"looks_wiped: {looks_wiped}",
+    ]
+    if reference:
+        evidence.append(f"Reference backup: {reference} ({reference_rows} critical rows)")
+
+    if fix and recoverable_wipe:
+        from plugins.recover import recover
+
+        report = recover(source=str(reference), force=True)
+        if report.get("ok"):
+            final_counts = report.get("final_row_counts") or {}
+            restored_rows = sum(v for v in final_counts.values() if isinstance(v, int))
+            return DoctorCheck(
+                id="boot.db_integrity",
+                tier="boot",
+                status="healthy",
+                severity="info",
+                summary=f"Database restored from backup ({restored_rows} critical rows)",
+                evidence=evidence + [f"Pre-recover snapshot: {report.get('pre_recover_dir', '')}"],
+                fixed=True,
+            )
+        return DoctorCheck(
+            id="boot.db_integrity",
+            tier="boot",
+            status="critical",
+            severity="error",
+            summary="Database repair failed",
+            evidence=evidence + [f"Recover errors: {report.get('errors') or []}"],
+            repair_plan=["Run nexo recover --force --yes, then restart Desktop"],
+        )
+
+    if recoverable_wipe:
+        return DoctorCheck(
+            id="boot.db_integrity",
+            tier="boot",
+            status="critical",
+            severity="error",
+            summary="Database appears wiped or corrupt but a valid backup exists",
+            evidence=evidence,
+            repair_plan=["Run nexo doctor --tier boot --plane database_real --fix"],
+            escalation_prompt="NEXO database needs automatic recovery from backup.",
+        )
+
+    status = "critical" if corrupt_error else "degraded"
+    severity = "error" if status == "critical" else "warn"
+    return DoctorCheck(
+        id="boot.db_integrity",
+        tier="boot",
+        status=status,
+        severity=severity,
+        summary="Database is not fully readable" if quick_error else "Database integrity is uncertain",
+        evidence=evidence,
+        repair_plan=["Close NEXO Desktop and run nexo doctor --tier boot --plane database_real --fix"],
+    )
+
+
 def check_required_dirs() -> DoctorCheck:
     """Check that required NEXO_HOME directories exist (post-F0.6 layout
     or pre-F0.6 fallback)."""
@@ -411,6 +558,7 @@ def run_boot_checks(fix: bool = False) -> list[DoctorCheck]:
     """Run all boot-tier checks."""
     checks = [
         safe_check(check_db_exists),
+        safe_check(check_db_integrity, fix=fix),
         safe_check(check_required_dirs),
         safe_check(check_disk_space),
         safe_check(check_wrapper_scripts),

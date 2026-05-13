@@ -65,6 +65,39 @@ def test_recover_restores_wiped_db_from_hourly_backup(recover_env):
     assert "pre_recover_dir" in report
 
 
+def test_recover_quiesces_and_resumes_db_writers(recover_env, monkeypatch):
+    primary = recover_env["data"] / "nexo.db"
+    hourly = recover_env["backups"] / "nexo-2026-04-16-1402.db"
+    _make_wiped_db(primary)
+    _make_populated_db(hourly, rows_per_table=250)
+
+    calls = {"quiesce": 0, "resume": 0}
+
+    def fake_quiesce(dry_run=False):
+        calls["quiesce"] += 1
+        return {
+            "terminated": 2,
+            "errors": [],
+            "mcp": {"terminated": 1, "scanned": 1, "errors": []},
+            "launchagents": {"stopped": ["com.nexo.local-index"], "errors": [], "unsupported": False},
+            "processes": {"terminated": 1, "scanned": 1, "errors": [], "pids": []},
+            "dry_run": dry_run,
+        }
+
+    def fake_resume(labels=None, dry_run=False):
+        calls["resume"] += 1
+        return {"started": list(labels or []), "errors": [], "dry_run": dry_run}
+
+    monkeypatch.setattr(recover_env["recover"], "quiesce_nexo_db_writers", fake_quiesce)
+    monkeypatch.setattr(recover_env["recover"], "resume_nexo_launchagents", fake_resume)
+
+    report = recover_env["recover"].recover()
+    assert report["ok"] is True, report
+    assert calls == {"quiesce": 1, "resume": 1}
+    assert report["quiesce"]["terminated"] == 2
+    assert report["resume"]["started"] == ["com.nexo.local-index"]
+
+
 def test_recover_refuses_healthy_db_without_force(recover_env):
     primary = recover_env["data"] / "nexo.db"
     hourly = recover_env["backups"] / "nexo-2026-04-16-1402.db"

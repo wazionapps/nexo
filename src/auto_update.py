@@ -1412,7 +1412,8 @@ def _self_heal_if_wiped() -> dict | None:
             db_looks_wiped,
             db_row_counts,
             find_latest_hourly_backup,
-            kill_nexo_mcp_servers,
+            quiesce_nexo_db_writers,
+            resume_nexo_launchagents,
             safe_sqlite_backup,
             validate_backup_matches_source,
         )
@@ -1467,11 +1468,29 @@ def _self_heal_if_wiped() -> dict | None:
         f"(reference={reference.name}, {ref_total} critical rows). Restoring..."
     )
 
-    # Kill any live MCP servers so they cannot overwrite the restored DB.
-    kill_report = kill_nexo_mcp_servers(dry_run=False)
-    if kill_report.get("terminated"):
-        _log(f"self-heal: terminated {kill_report['terminated']} live MCP server(s).")
-        time.sleep(0.5)
+    # Pause any live DB writers so they cannot overwrite the restored DB or
+    # keep stale handles open. Desktop installs have more writers than the MCP
+    # server: local-index, email-monitor, followup-runner, watchdog and catchup.
+    quiesce_report = quiesce_nexo_db_writers(dry_run=False)
+    stopped_launchagents = list((quiesce_report.get("launchagents") or {}).get("stopped") or [])
+    if quiesce_report.get("terminated") or stopped_launchagents:
+        _log(
+            "self-heal: quiesced DB writers "
+            f"(terminated={quiesce_report.get('terminated', 0)}, "
+            f"launchagents={len(stopped_launchagents)})."
+        )
+    if quiesce_report.get("errors"):
+        _log(f"self-heal: DB writer quiesce warnings: {quiesce_report.get('errors')}")
+
+    def _resume_quiesced() -> dict | None:
+        if not stopped_launchagents:
+            return None
+        report = resume_nexo_launchagents(stopped_launchagents)
+        if report.get("started"):
+            _log(f"self-heal: resumed {len(report['started'])} launchagent(s).")
+        if report.get("errors"):
+            _log(f"self-heal: launchagent resume warnings: {report.get('errors')}")
+        return report
 
     # Snapshot the current (wiped) state so the heal is reversible.
     pre_heal_dir = paths.backups_dir() / f"pre-heal-{time.strftime('%Y-%m-%d-%H%M%S')}"
@@ -1497,27 +1516,34 @@ def _self_heal_if_wiped() -> dict | None:
     ok, err = safe_sqlite_backup(reference, primary)
     if not ok:
         _log(f"self-heal: restore copy failed: {err}")
+        resume_report = _resume_quiesced()
         return {
             "action": "failed",
             "reason": "restore_copy_failed",
             "error": err,
             "reference": str(reference),
             "pre_heal_dir": str(pre_heal_dir),
+            "quiesce": quiesce_report,
+            "resume": resume_report,
         }
     valid, valid_err = validate_backup_matches_source(reference, primary, CRITICAL_TABLES)
     if not valid:
         _log(f"self-heal: post-restore validation failed: {valid_err}")
+        resume_report = _resume_quiesced()
         return {
             "action": "failed",
             "reason": "validation_failed",
             "error": valid_err,
             "reference": str(reference),
             "pre_heal_dir": str(pre_heal_dir),
+            "quiesce": quiesce_report,
+            "resume": resume_report,
         }
 
     final_counts = db_row_counts(primary, CRITICAL_TABLES)
     final_total = sum(v for v in final_counts.values() if isinstance(v, int))
     _log(f"self-heal: restored {final_total} critical rows from {reference.name}.")
+    resume_report = _resume_quiesced()
     try:
         SELF_HEAL_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
         SELF_HEAL_STATE_FILE.write_text(json.dumps({
@@ -1525,6 +1551,7 @@ def _self_heal_if_wiped() -> dict | None:
             "reference": str(reference),
             "critical_rows_restored": final_total,
             "pre_heal_dir": str(pre_heal_dir),
+            "quiesced_launchagents": stopped_launchagents,
         }))
     except Exception as e:
         _log(f"self-heal: state write warning: {e}")
@@ -1535,7 +1562,9 @@ def _self_heal_if_wiped() -> dict | None:
         "reference_rows": ref_total,
         "restored_rows": final_total,
         "pre_heal_dir": str(pre_heal_dir),
-        "terminated_servers": kill_report.get("terminated", 0),
+        "terminated_servers": int((quiesce_report.get("mcp") or {}).get("terminated") or 0),
+        "quiesce": quiesce_report,
+        "resume": resume_report,
     }
 
 

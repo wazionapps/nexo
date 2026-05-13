@@ -142,6 +142,60 @@ class TestBootChecks:
         check = check_db_exists()
         assert check.status == "critical"
 
+    def test_db_integrity_flags_wiped_db_with_backup(self, nexo_home):
+        from db_guard import CRITICAL_TABLES
+
+        primary = nexo_home / "data" / "nexo.db"
+        primary.write_bytes(b"")
+        (nexo_home / "backups").mkdir(parents=True, exist_ok=True)
+        backup = nexo_home / "backups" / "nexo-2026-05-13-1400.db"
+        conn = sqlite3.connect(str(backup))
+        for table in CRITICAL_TABLES:
+            conn.execute(f"CREATE TABLE {table} (id INTEGER PRIMARY KEY, payload TEXT)")
+        for i in range(60):
+            conn.execute("INSERT INTO protocol_tasks (payload) VALUES (?)", (f"row-{i}",))
+        conn.commit()
+        conn.close()
+
+        from doctor.providers.boot import check_db_integrity
+        check = check_db_integrity()
+        assert check.status == "critical"
+        assert "valid backup" in check.summary
+
+    def test_db_integrity_fix_restores_wiped_db(self, nexo_home, monkeypatch):
+        from db_guard import CRITICAL_TABLES, db_row_counts
+
+        primary = nexo_home / "data" / "nexo.db"
+        primary.write_bytes(b"")
+        (nexo_home / "backups").mkdir(parents=True, exist_ok=True)
+        backup = nexo_home / "backups" / "nexo-2026-05-13-1400.db"
+        conn = sqlite3.connect(str(backup))
+        for table in CRITICAL_TABLES:
+            conn.execute(f"CREATE TABLE {table} (id INTEGER PRIMARY KEY, payload TEXT)")
+        for i in range(75):
+            conn.execute("INSERT INTO protocol_tasks (payload) VALUES (?)", (f"row-{i}",))
+        conn.commit()
+        conn.close()
+
+        import db_guard
+        monkeypatch.setattr(
+            db_guard,
+            "quiesce_nexo_db_writers",
+            lambda dry_run=False: {
+                "terminated": 0,
+                "errors": [],
+                "mcp": {"terminated": 0, "errors": [], "scanned": 0},
+                "launchagents": {"stopped": [], "errors": [], "unsupported": False},
+                "processes": {"terminated": 0, "errors": [], "scanned": 0, "pids": []},
+            },
+        )
+
+        from doctor.providers.boot import check_db_integrity
+        check = check_db_integrity(fix=True)
+        assert check.status == "healthy"
+        assert check.fixed is True
+        assert db_row_counts(primary)["protocol_tasks"] == 75
+
     def test_missing_dirs_fix(self, nexo_home):
         import shutil
         shutil.rmtree(str(nexo_home / "runtime" / "coordination"), ignore_errors=True); shutil.rmtree(str(nexo_home / "coordination"), ignore_errors=True)

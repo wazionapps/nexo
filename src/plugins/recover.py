@@ -41,7 +41,8 @@ from db_guard import (
     db_row_counts,
     diff_row_counts,
     find_latest_hourly_backup,
-    kill_nexo_mcp_servers,
+    quiesce_nexo_db_writers,
+    resume_nexo_launchagents,
     safe_sqlite_backup,
     validate_backup_matches_source,
 )
@@ -257,15 +258,20 @@ def recover(
         result["steps"].append("dry-run: stopping before any write")
         return result
 
-    # Step 3: kill live MCP servers
+    stopped_launchagents: list[str] = []
+
+    # Step 3: quiesce live DB writers
     if not skip_kill:
-        kill_report = kill_nexo_mcp_servers(dry_run=False)
-        result["steps"].append(f"kill_mcp: terminated={kill_report['terminated']} scanned={kill_report['scanned']}")
-        if kill_report.get("errors"):
-            result["warnings"].extend(kill_report["errors"])
-        # Tiny settle so the ex-server releases file locks.
-        if kill_report["terminated"]:
-            time.sleep(0.5)
+        quiesce_report = quiesce_nexo_db_writers(dry_run=False)
+        result["quiesce"] = quiesce_report
+        stopped_launchagents = list((quiesce_report.get("launchagents") or {}).get("stopped") or [])
+        result["steps"].append(
+            "quiesce_db_writers: "
+            f"terminated={quiesce_report.get('terminated', 0)} "
+            f"launchagents={len(stopped_launchagents)}"
+        )
+        if quiesce_report.get("errors"):
+            result["warnings"].extend(quiesce_report["errors"])
 
     # Step 4: snapshot current state to pre-recover/
     pre_recover_dir = _backup_base() / f"pre-recover-{time.strftime('%Y-%m-%d-%H%M%S')}"
@@ -297,17 +303,24 @@ def recover(
     ok, copy_err = safe_sqlite_backup(chosen, target_path)
     if not ok:
         result["errors"].append(f"restore copy failed: {copy_err}")
+        if stopped_launchagents:
+            result["resume"] = resume_nexo_launchagents(stopped_launchagents)
         return result
     result["steps"].append(f"restored {chosen.name} -> {target_path}")
 
     valid, valid_err = validate_backup_matches_source(chosen, target_path)
     if not valid:
         result["errors"].append(f"post-restore validation failed: {valid_err}")
+        if stopped_launchagents:
+            result["resume"] = resume_nexo_launchagents(stopped_launchagents)
         return result
     result["steps"].append("validated post-restore row counts")
 
     final_counts = db_row_counts(target_path)
     result["final_row_counts"] = {k: v for k, v in final_counts.items() if v is not None}
+    if stopped_launchagents:
+        result["resume"] = resume_nexo_launchagents(stopped_launchagents)
+        result["steps"].append(f"resumed {len((result['resume'] or {}).get('started') or [])} launchagent(s)")
     result["ok"] = True
     return result
 

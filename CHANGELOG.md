@@ -1,5 +1,14 @@
 # Changelog
 
+## [7.20.13] - 2026-05-13
+
+### Fixed — database recovery and Doctor repair for local memory
+
+- **Brain now pauses every known DB writer before recovery.** `nexo recover` and startup self-heal stop local-index, email-monitor, followup-runner, watchdog, catchup and MCP writers before replacing `nexo.db`, then restart stopped LaunchAgents after validation.
+- **Doctor detects and repairs the zero-byte/locked DB failure.** `nexo doctor --tier boot --plane database_real --fix` now identifies a wiped or corrupt `nexo.db` when a valid backup exists, restores it through the validated recovery path and reports the pre-recover snapshot.
+- **Desktop Local Memory no longer stays at zero after a recoverable Brain DB wipe.** The status source remains Brain, but Brain now restores the DB state that Desktop needs instead of leaving the UI with `0` files and “unknown” status.
+- **Coverage:** DB guard, recover, auto-update self-heal and Doctor suites pass (`143 passed`), plus live verification on the affected Mac restored `45,387` local assets, `91,987` chunks, `91,987` embeddings and `156,292` relations from backup.
+
 ## [7.20.12] - 2026-05-13
 
 ### Fixed — local memory first-pass stability and compact Brain evidence

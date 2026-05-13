@@ -20,6 +20,7 @@ from db_guard import (
     db_row_counts,
     diff_row_counts,
     find_latest_hourly_backup,
+    quiesce_nexo_db_writers,
     safe_sqlite_backup,
     validate_backup_matches_source,
 )
@@ -216,3 +217,28 @@ def test_safe_sqlite_backup_missing_source(tmp_path):
     ok, err = safe_sqlite_backup(tmp_path / "nope.db", tmp_path / "dst.db")
     assert ok is False
     assert "source missing" in (err or "")
+
+
+def test_quiesce_nexo_db_writers_combines_known_writers(monkeypatch):
+    import db_guard
+
+    monkeypatch.setattr(
+        db_guard,
+        "kill_nexo_mcp_servers",
+        lambda dry_run=False: {"terminated": 1, "errors": [], "pids": [], "scanned": 1, "dry_run": dry_run},
+    )
+    monkeypatch.setattr(
+        db_guard,
+        "_stop_nexo_launchagents",
+        lambda dry_run=False: {"stopped": ["com.nexo.local-index"], "errors": [], "unsupported": False},
+    )
+    monkeypatch.setattr(
+        db_guard,
+        "_terminate_nexo_db_writer_processes",
+        lambda dry_run=False: {"terminated": 2, "errors": [], "pids": [], "scanned": 2, "dry_run": dry_run},
+    )
+
+    report = quiesce_nexo_db_writers(settle_seconds=0)
+    assert report["terminated"] == 3
+    assert report["launchagents"]["stopped"] == ["com.nexo.local-index"]
+    assert report["errors"] == []

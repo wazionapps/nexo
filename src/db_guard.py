@@ -27,6 +27,8 @@ auto_update.py):
     safe_sqlite_backup(source, dest) -> tuple[bool, str | None]
     validate_backup_matches_source(source, dest, tables) -> tuple[bool, str | None]
     kill_nexo_mcp_servers(dry_run) -> dict
+    quiesce_nexo_db_writers(dry_run) -> dict
+    resume_nexo_launchagents(labels, dry_run) -> dict
 """
 
 from __future__ import annotations
@@ -79,6 +81,27 @@ HOURLY_BACKUP_GLOB = "nexo-*.db"
 # Hourly backups older than this (seconds) are considered too stale to use
 # as an automatic self-heal source. 48h matches nexo-backup.sh retention.
 HOURLY_BACKUP_MAX_AGE = 48 * 3600
+
+# Long-lived NEXO services that can keep ``nexo.db`` open while recovery tries
+# to replace it. Keep this list conservative: only product-owned background
+# processes that are safe to stop and restart.
+NEXO_DB_WRITER_LAUNCHAGENTS: tuple[str, ...] = (
+    "com.nexo.local-index",
+    "com.nexo.email-monitor",
+    "com.nexo.followup-runner",
+    "com.nexo.watchdog",
+    "com.nexo.catchup",
+    "com.nexo.immune",
+)
+
+NEXO_DB_WRITER_MARKERS: tuple[str, ...] = (
+    "nexo-local-index.py",
+    "nexo-email-monitor.py",
+    "nexo-followup-runner.py",
+    "nexo-catchup.py",
+    "nexo-watchdog.sh",
+    "nexo-immune.py",
+)
 
 
 # ── Types ───────────────────────────────────────────────────────────────
@@ -447,3 +470,252 @@ def _looks_like_nexo_mcp(cmd: str) -> bool:
     if "nexo_sdk" in lowered or "nexo-mcp" in lowered:
         return True
     return False
+
+
+# ── DB writer quiescence ────────────────────────────────────────────────
+
+def quiesce_nexo_db_writers(
+    dry_run: bool = False,
+    *,
+    stop_launchagents: bool = True,
+    settle_seconds: float = 0.75,
+) -> dict:
+    """Stop known NEXO background writers before replacing ``nexo.db``.
+
+    ``kill_nexo_mcp_servers`` is not enough for Desktop installs: local-index,
+    email monitor, followup-runner and catchup can keep a stale DB handle open
+    even after the MCP server exits. This helper is intentionally narrow and
+    only targets product-owned long-lived writers.
+    """
+    result: dict = {
+        "dry_run": dry_run,
+        "mcp": {},
+        "launchagents": {"stopped": [], "errors": [], "unsupported": False},
+        "processes": {"scanned": 0, "terminated": 0, "pids": [], "errors": []},
+        "terminated": 0,
+        "errors": [],
+    }
+
+    mcp_report = kill_nexo_mcp_servers(dry_run=dry_run)
+    result["mcp"] = mcp_report
+    result["terminated"] += int(mcp_report.get("terminated") or 0)
+    result["errors"].extend(mcp_report.get("errors") or [])
+
+    if stop_launchagents:
+        la_report = _stop_nexo_launchagents(dry_run=dry_run)
+        result["launchagents"] = la_report
+        result["errors"].extend(la_report.get("errors") or [])
+
+    process_report = _terminate_nexo_db_writer_processes(dry_run=dry_run)
+    result["processes"] = process_report
+    result["terminated"] += int(process_report.get("terminated") or 0)
+    result["errors"].extend(process_report.get("errors") or [])
+
+    if not dry_run and (result["terminated"] or result["launchagents"].get("stopped")):
+        time.sleep(max(settle_seconds, 0.0))
+    return result
+
+
+def resume_nexo_launchagents(labels: list[str] | tuple[str, ...] | None = None, dry_run: bool = False) -> dict:
+    """Best-effort restart of LaunchAgents stopped by DB recovery."""
+    result: dict = {"dry_run": dry_run, "started": [], "errors": [], "unsupported": False}
+    if os.name != "posix" or sys_platform() != "darwin":
+        result["unsupported"] = True
+        return result
+    uid = os.getuid()
+    launch_agents_dir = Path.home() / "Library" / "LaunchAgents"
+    chosen = tuple(labels or NEXO_DB_WRITER_LAUNCHAGENTS)
+    for label in chosen:
+        plist = launch_agents_dir / f"{label}.plist"
+        if not plist.is_file():
+            continue
+        target = f"gui/{uid}/{label}"
+        if dry_run:
+            result["started"].append(label)
+            continue
+        try:
+            subprocess.run(
+                ["launchctl", "bootstrap", f"gui/{uid}", str(plist)],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            subprocess.run(
+                ["launchctl", "kickstart", "-k", target],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            result["started"].append(label)
+        except Exception as exc:
+            result["errors"].append(f"{label}: {exc}")
+    return result
+
+
+def sys_platform() -> str:
+    # Small indirection makes tests easy to monkeypatch without importing sys at
+    # module import time in older runtimes.
+    import sys
+    return sys.platform
+
+
+def _stop_nexo_launchagents(dry_run: bool = False) -> dict:
+    result: dict = {"stopped": [], "errors": [], "unsupported": False}
+    if os.name != "posix" or sys_platform() != "darwin":
+        result["unsupported"] = True
+        return result
+    uid = os.getuid()
+    launch_agents_dir = Path.home() / "Library" / "LaunchAgents"
+    for label in NEXO_DB_WRITER_LAUNCHAGENTS:
+        plist = launch_agents_dir / f"{label}.plist"
+        if not plist.is_file():
+            continue
+        if dry_run:
+            result["stopped"].append(label)
+            continue
+        try:
+            proc = subprocess.run(
+                ["launchctl", "bootout", f"gui/{uid}", str(plist)],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+        except Exception as exc:
+            result["errors"].append(f"{label}: {exc}")
+            continue
+        if proc.returncode == 0:
+            result["stopped"].append(label)
+        else:
+            stderr = (proc.stderr or "").strip()
+            # launchctl returns non-zero when an agent is already unloaded. That
+            # is not a recovery blocker, so keep it as quiet evidence.
+            if stderr and "No such process" not in stderr and "not found" not in stderr:
+                result["errors"].append(f"{label}: {stderr[:200]}")
+    return result
+
+
+def _terminate_nexo_db_writer_processes(dry_run: bool = False) -> dict:
+    result: dict = {"scanned": 0, "terminated": 0, "pids": [], "errors": [], "dry_run": dry_run}
+    if os.name == "posix":
+        return _terminate_posix_db_writer_processes(dry_run=dry_run)
+    if os.name == "nt":
+        return _terminate_windows_db_writer_processes(dry_run=dry_run)
+    result["errors"].append("unsupported platform")
+    return result
+
+
+def _terminate_posix_db_writer_processes(dry_run: bool = False) -> dict:
+    result: dict = {"scanned": 0, "terminated": 0, "pids": [], "errors": [], "dry_run": dry_run}
+    try:
+        proc = subprocess.run(
+            ["ps", "-axo", "pid=,command="],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except Exception as exc:
+        result["errors"].append(f"ps failed: {exc}")
+        return result
+    if proc.returncode != 0:
+        result["errors"].append(f"ps exit {proc.returncode}: {proc.stderr.strip()[:200]}")
+        return result
+
+    my_pid = os.getpid()
+    for raw in proc.stdout.splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        head, _, rest = line.partition(" ")
+        if not head.isdigit():
+            continue
+        pid = int(head)
+        if pid == my_pid:
+            continue
+        cmd = rest.strip()
+        if not _looks_like_nexo_db_writer(cmd):
+            continue
+        result["scanned"] += 1
+        result["pids"].append({"pid": pid, "command": cmd[:180]})
+        if dry_run:
+            continue
+        try:
+            os.kill(pid, signal.SIGTERM)
+            result["terminated"] += 1
+        except ProcessLookupError:
+            pass
+        except Exception as exc:
+            result["errors"].append(f"kill {pid} failed: {exc}")
+    return result
+
+
+def _terminate_windows_db_writer_processes(dry_run: bool = False) -> dict:
+    result: dict = {"scanned": 0, "terminated": 0, "pids": [], "errors": [], "dry_run": dry_run}
+    ps_script = (
+        "Get-CimInstance Win32_Process | "
+        "Select-Object ProcessId,CommandLine | ConvertTo-Json -Compress"
+    )
+    try:
+        proc = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", ps_script],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except Exception as exc:
+        result["errors"].append(f"powershell process scan failed: {exc}")
+        return result
+    if proc.returncode != 0:
+        result["errors"].append(f"powershell exit {proc.returncode}: {proc.stderr.strip()[:200]}")
+        return result
+    try:
+        import json
+        rows = json.loads(proc.stdout or "[]")
+    except Exception as exc:
+        result["errors"].append(f"process json parse failed: {exc}")
+        return result
+    if isinstance(rows, dict):
+        rows = [rows]
+    my_pid = os.getpid()
+    for row in rows if isinstance(rows, list) else []:
+        try:
+            pid = int(row.get("ProcessId"))
+        except Exception:
+            continue
+        if pid == my_pid:
+            continue
+        cmd = str(row.get("CommandLine") or "")
+        if not _looks_like_nexo_db_writer(cmd):
+            continue
+        result["scanned"] += 1
+        result["pids"].append({"pid": pid, "command": cmd[:180]})
+        if dry_run:
+            continue
+        try:
+            subprocess.run(
+                ["taskkill", "/PID", str(pid), "/T", "/F"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            result["terminated"] += 1
+        except Exception as exc:
+            result["errors"].append(f"taskkill {pid} failed: {exc}")
+    return result
+
+
+def _looks_like_nexo_db_writer(cmd: str) -> bool:
+    if not cmd:
+        return False
+    lowered = cmd.lower()
+    if _looks_like_nexo_mcp(cmd):
+        return True
+    if "nexo-cron-wrapper.sh" in lowered and any(label in lowered for label in (
+        "local-index",
+        "email-monitor",
+        "followup-runner",
+        "watchdog",
+        "catchup",
+        "immune",
+    )):
+        return True
+    return any(marker in lowered for marker in NEXO_DB_WRITER_MARKERS)

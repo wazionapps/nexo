@@ -45,12 +45,24 @@ def auto_update_env(tmp_path, monkeypatch):
     monkeypatch.delenv("NEXO_DISABLE_AUTO_HEAL", raising=False)
     import auto_update as au
     importlib.reload(au)
-    # Neutralise kill_nexo_mcp_servers so tests never touch real processes.
+    # Neutralise DB-writer quiescence so tests never touch real processes.
     import db_guard
     monkeypatch.setattr(
         db_guard,
-        "kill_nexo_mcp_servers",
-        lambda dry_run=False: {"scanned": 0, "terminated": 0, "errors": [], "pids": [], "dry_run": dry_run},
+        "quiesce_nexo_db_writers",
+        lambda dry_run=False: {
+            "terminated": 0,
+            "errors": [],
+            "mcp": {"scanned": 0, "terminated": 0, "errors": [], "pids": [], "dry_run": dry_run},
+            "launchagents": {"stopped": [], "errors": [], "unsupported": False},
+            "processes": {"scanned": 0, "terminated": 0, "errors": [], "pids": [], "dry_run": dry_run},
+            "dry_run": dry_run,
+        },
+    )
+    monkeypatch.setattr(
+        db_guard,
+        "resume_nexo_launchagents",
+        lambda labels=None, dry_run=False: {"started": list(labels or []), "errors": [], "dry_run": dry_run},
     )
     return {
         "home": nexo_home,
