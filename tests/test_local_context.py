@@ -213,6 +213,11 @@ def test_windows_style_private_paths_are_blocked():
     assert should_extract(r"C:\Users\me\AppData\Roaming\Microsoft\Outlook\client.msg", 2) is True
     assert should_skip_file(r"C:\Users\me\Documents\Outlook Files\archive.pst") is False
     assert should_extract(r"C:\Users\me\Documents\Outlook Files\archive.pst", 2) is False
+    assert should_skip_tree(r"C:\Users\me\AppData\Local\Packages\microsoft.windowscommunicationsapps_8wekyb3d8bbwe\LocalState") is False
+    assert should_skip_file(r"C:\Users\me\AppData\Local\Packages\microsoft.windowscommunicationsapps_8wekyb3d8bbwe\LocalState\mail.eml") is False
+    assert should_extract(r"C:\Users\me\AppData\Local\Packages\microsoft.windowscommunicationsapps_8wekyb3d8bbwe\LocalState\mail.eml", 2) is True
+    assert should_skip_tree("/Users/me/Library/Group Containers/UBF8T346G9.Office/Outlook/Outlook 15 Profiles/Main Profile") is False
+    assert should_skip_file("/Users/me/Library/Group Containers/UBF8T346G9.Office/Outlook/Outlook 15 Profiles/Main Profile/message.msg") is False
 
 
 def test_default_roots_include_local_email_sources_and_extract_messages(tmp_path, monkeypatch):

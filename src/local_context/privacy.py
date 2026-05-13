@@ -203,8 +203,18 @@ def _is_under_marker(lowered: str, marker: str) -> bool:
     return lowered.endswith("/" + marker) or f"/{marker}/" in lowered
 
 
+def _is_inside_windows_mail_package(lowered: str) -> bool:
+    return "/appdata/local/packages/microsoft.windowscommunicationsapps" in lowered
+
+
+def _is_inside_outlook_mac_profile(lowered: str) -> bool:
+    return "/library/group containers/ubf8t346g9.office/outlook" in lowered
+
+
 def is_local_email_tree(path: str) -> bool:
     lowered = _normalized(path)
+    if _is_inside_windows_mail_package(lowered) or _is_inside_outlook_mac_profile(lowered):
+        return True
     return any(
         _is_under_marker(lowered, marker)
         for marker in (
@@ -244,12 +254,13 @@ def is_allowed_local_email_file(path: str) -> bool:
     if any(
         _is_under_marker(lowered, marker)
         for marker in (
+            "library/group containers/ubf8t346g9.office/outlook",
             "documents/outlook files",
             "appdata/local/microsoft/outlook",
             "appdata/roaming/microsoft/outlook",
             "appdata/local/packages/microsoft.windowscommunicationsapps",
         )
-    ):
+    ) or _is_inside_windows_mail_package(lowered) or _is_inside_outlook_mac_profile(lowered):
         return suffix in {".eml", ".msg", ".pst", ".ost"}
     if _is_under_marker(lowered, ".thunderbird") or _is_under_marker(lowered, ".mozilla-thunderbird"):
         return suffix in {".eml", ".mbox", ""}

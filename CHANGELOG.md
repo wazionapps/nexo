@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.20.8] - 2026-05-13
+
+### Fixed — Windows Mail and Outlook Mac local roots
+
+- **Windows Mail package roots are no longer rejected as generic AppData.** Brain recognises `microsoft.windowscommunicationsapps_*` LocalState trees as bounded local-email sources, so `.eml` files inside the Windows Mail app can be indexed safely.
+- **Outlook Mac profile roots are no longer rejected as generic Group Containers.** Existing Outlook profile stores under `Library/Group Containers/UBF8T346G9.Office/Outlook` are treated as local-email trees while preserving the same file allowlist.
+- **Coverage:** Windows-style AppData mail roots, Windows Outlook `.msg` paths, Outlook `.pst` inventory-only behavior and Outlook Mac profile paths are covered in local-context privacy tests.
+
 ## [7.20.7] - 2026-05-13
 
 ### Fixed — CI-safe local email root bootstrap

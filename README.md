@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.20.7` is the current packaged-runtime line. Patch release over v7.20.6 — Local Context email-root bootstrap is now deterministic across CI, WSL and migrated profiles while preserving macOS Mail.app, Windows Outlook, Thunderbird and NEXO email coverage.
+Version `7.20.8` is the current packaged-runtime line. Patch release over v7.20.7 — Local Context recognises Windows Mail package roots and Outlook Mac profile roots as bounded local-email sources instead of rejecting them as generic AppData / Group Containers.
+
+Previously in `7.20.7`: patch release over v7.20.6 — Local Context email-root bootstrap is deterministic across CI, WSL and migrated profiles while preserving macOS Mail.app, Windows Outlook, Thunderbird and NEXO email coverage.
 
 Previously in `7.20.6`: patch release over v7.20.5 — Local Context ranks entity matches at chunk level, keeps old entity-matched assets eligible, adds safe local email roots for macOS/Windows/Linux, extracts `.eml`, `.emlx`, `.msg` and NEXO email DB continuity, and exposes local graph relations in pre-action context.
 
