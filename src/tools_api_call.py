@@ -1,0 +1,196 @@
+"""HTTP API calls to the nexo-desktop-web backend using the user's session bearer.
+
+Exposes two MCP tools registered in server.py:
+  - nexo_api_call(method, path, body_json, idempotency_key, headers_json, base_url)
+  - nexo_create_app_token(name, abilities, allowed_platforms, expires_at)
+
+The session bearer (Sanctum personal access token) is stored by NEXO Desktop in
+the OS keychain at:
+  service = "com.nexo.shared-auth"
+  account = "sanctum-token"
+
+Cross-platform via the `keyring` library (macOS Keychain, Windows Credential
+Manager, secret-service on Linux). The bearer is never echoed back to the
+agent — it only flows in the Authorization header to the backend.
+
+These tools let the agent (Nero) call any /api/* endpoint on the user's behalf
+without the agent having to manage tokens. Use them from fichas that need
+backend-driven NEXO Credits flows, or to mint persistent AppTokens for
+embeddable resources (chatbot snippets, widgets) that the user pastes on
+their own website.
+"""
+
+from __future__ import annotations
+
+import json
+from typing import Any
+
+import keyring
+import requests
+
+KEYCHAIN_SERVICE = "com.nexo.shared-auth"
+KEYCHAIN_ACCOUNT = "sanctum-token"
+DEFAULT_BASE_URL = "https://nexo-desktop.com"
+ALLOWED_METHODS = {"GET", "POST", "PUT", "DELETE", "PATCH"}
+REQUEST_TIMEOUT_SECONDS = 60
+MAX_BODY_PREVIEW_CHARS = 6000
+
+# Allowed abilities for AppToken creation. Keep in sync with
+# AppTokenService::ABILITY_* constants in the Laravel backend.
+ALLOWED_ABILITIES = {
+    "provider-proxy:call",
+    "provider-proxy:estimate",
+    "credits:read",
+}
+
+
+def _read_session_bearer() -> str | None:
+    try:
+        return keyring.get_password(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT)
+    except Exception:
+        return None
+
+
+def _parse_json_arg(raw: str, label: str) -> tuple[Any, str | None]:
+    text = (raw or "").strip()
+    if not text:
+        return None, None
+    try:
+        return json.loads(text), None
+    except json.JSONDecodeError as exc:
+        return None, f"ERROR: {label} is not valid JSON: {exc}"
+
+
+def _format_response(method: str, path: str, status: int, body_text: str) -> str:
+    return f"HTTP {status} {method} {path}\n{body_text}"
+
+
+def handle_api_call(
+    method: str,
+    path: str,
+    body_json: str = "",
+    idempotency_key: str = "",
+    headers_json: str = "",
+    base_url: str = "",
+) -> str:
+    """Make an authenticated request to the NEXO Desktop backend.
+
+    The session bearer is auto-loaded from the OS keychain. It is never
+    returned to the caller. Use this for any /api/* endpoint the user has
+    permission for (provider-proxy/*, credits/*, cards/*, etc).
+    """
+    bearer = _read_session_bearer()
+    if not bearer:
+        return (
+            "ERROR: no NEXO Desktop session token found in the system keychain. "
+            "The user must be logged in to NEXO Desktop before this tool can be used."
+        )
+
+    method_upper = (method or "").strip().upper()
+    if method_upper not in ALLOWED_METHODS:
+        return f"ERROR: method '{method}' is not allowed. Use one of {sorted(ALLOWED_METHODS)}."
+
+    cleaned_path = (path or "").strip()
+    if not cleaned_path.startswith("/"):
+        return "ERROR: path must start with '/' (e.g. /api/provider-proxy/call)."
+
+    base = (base_url or "").strip() or DEFAULT_BASE_URL
+    url = base.rstrip("/") + cleaned_path
+
+    headers = {
+        "Authorization": f"Bearer {bearer}",
+        "Accept": "application/json",
+    }
+
+    extra_headers, err = _parse_json_arg(headers_json, "headers_json")
+    if err:
+        return err
+    if extra_headers is not None:
+        if not isinstance(extra_headers, dict):
+            return "ERROR: headers_json must be a JSON object."
+        for k, v in extra_headers.items():
+            # Never let caller override Authorization.
+            if str(k).lower() == "authorization":
+                continue
+            headers[str(k)] = str(v)
+
+    if idempotency_key.strip():
+        headers["Idempotency-Key"] = idempotency_key.strip()
+
+    body, err = _parse_json_arg(body_json, "body_json")
+    if err:
+        return err
+    if body is not None:
+        headers["Content-Type"] = "application/json"
+
+    try:
+        resp = requests.request(
+            method_upper,
+            url,
+            headers=headers,
+            json=body,
+            timeout=REQUEST_TIMEOUT_SECONDS,
+        )
+    except requests.exceptions.Timeout:
+        return f"ERROR: request to {cleaned_path} timed out after {REQUEST_TIMEOUT_SECONDS}s."
+    except requests.exceptions.RequestException as exc:
+        return f"ERROR: network error calling {cleaned_path}: {exc}"
+
+    try:
+        parsed = resp.json()
+        body_text = json.dumps(parsed, indent=2, ensure_ascii=False)
+    except ValueError:
+        body_text = (resp.text or "")[:MAX_BODY_PREVIEW_CHARS]
+
+    if len(body_text) > MAX_BODY_PREVIEW_CHARS:
+        body_text = body_text[:MAX_BODY_PREVIEW_CHARS] + "\n... [truncated]"
+
+    return _format_response(method_upper, cleaned_path, resp.status_code, body_text)
+
+
+def handle_create_app_token(
+    name: str,
+    abilities: str = "",
+    allowed_platforms: str = "",
+    expires_at: str = "",
+) -> str:
+    """Create a persistent AppToken for the current user via POST /api/auth/app-tokens.
+
+    Use this when a card needs to mint a token that will live inside a snippet
+    the user pastes on their own website (chatbot widget, embed, public API
+    autoresponder). The plain-text token is returned ONCE — the agent must
+    embed it in the snippet immediately and never store it elsewhere.
+    """
+    label = (name or "").strip()
+    if not label:
+        return "ERROR: name is required (human label for the token, e.g. 'chatbot-mitienda-com')."
+
+    requested_abilities = [a.strip() for a in (abilities or "").split(",") if a.strip()]
+    if not requested_abilities:
+        requested_abilities = ["provider-proxy:call"]
+
+    invalid = [a for a in requested_abilities if a not in ALLOWED_ABILITIES]
+    if invalid:
+        return (
+            f"ERROR: invalid abilities {invalid}. "
+            f"Allowed: {sorted(ALLOWED_ABILITIES)}."
+        )
+
+    payload: dict[str, Any] = {
+        "name": label,
+        "abilities": requested_abilities,
+    }
+
+    platforms = [p.strip() for p in (allowed_platforms or "").split(",") if p.strip()]
+    if platforms:
+        payload["allowed_platforms"] = platforms
+
+    expires_clean = (expires_at or "").strip()
+    if expires_clean:
+        payload["expires_at"] = expires_clean
+
+    return handle_api_call(
+        method="POST",
+        path="/api/auth/app-tokens",
+        body_json=json.dumps(payload),
+    )

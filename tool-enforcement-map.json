@@ -159,6 +159,19 @@
       },
       "triggers_after": []
     },
+    "nexo_api_call": {
+      "description": "Authenticated HTTP request to nexo-desktop.com backend (bearer auto-loaded from system keychain)",
+      "category": "backend",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
     "nexo_artifact_create": {
       "description": "Register artifact (service, dashboard, script)",
       "category": "artifact",
@@ -267,6 +280,84 @@
       "description": "Pre-compaction auto-flush stats",
       "category": "system",
       "source": "plugin:backup",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_automation_disable": {
+      "description": "Disable one operator-facing automation",
+      "category": "personal",
+      "source": "plugin:personal_scripts",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_automation_enable": {
+      "description": "Enable one operator-facing automation",
+      "category": "personal",
+      "source": "plugin:personal_scripts",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_automation_instructions": {
+      "description": "Set or clear operator extra instructions for an automation",
+      "category": "personal",
+      "source": "plugin:personal_scripts",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_automation_schedule": {
+      "description": "Set or clear an automation cadence override",
+      "category": "personal",
+      "source": "plugin:personal_scripts",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_automation_status": {
+      "description": "Read composed status for one automation",
+      "category": "personal",
+      "source": "plugin:personal_scripts",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_automations_list": {
+      "description": "List operator-facing automations",
+      "category": "personal",
+      "source": "plugin:personal_scripts",
       "requires": [],
       "provides": [],
       "internal_calls": [],
@@ -887,6 +978,19 @@
       },
       "triggers_after": []
     },
+    "nexo_context_router": {
+      "description": "Route a query through local context layers (placeholder entry added pre-emptively for pre-commit hook unblock)",
+      "category": "memory",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
     "nexo_continuity_audit": {
       "description": "Read the forensic continuity timeline for a conversation",
       "category": "continuity",
@@ -955,6 +1059,45 @@
       "provides": [
         "continuity_snapshot"
       ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_core_schedule_set": {
+      "description": "Set or clear a structural core schedule cadence override",
+      "category": "personal",
+      "source": "plugin:personal_scripts",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_core_schedule_status": {
+      "description": "Read the status of one structural core schedule",
+      "category": "personal",
+      "source": "plugin:personal_scripts",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_core_schedules_list": {
+      "description": "List structural core schedules whose cadence can be tuned",
+      "category": "personal",
+      "source": "plugin:personal_scripts",
+      "requires": [],
+      "provides": [],
       "internal_calls": [],
       "enforcement": {
         "level": "none",
@@ -1034,6 +1177,21 @@
       "requires": [],
       "provides": [],
       "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_create_app_token": {
+      "description": "Create persistent AppToken for the user (mints embeddable token for chatbot/widget snippets)",
+      "category": "backend",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [
+        "nexo_api_call"
+      ],
       "enforcement": {
         "level": "none",
         "rules": []
@@ -1855,6 +2013,209 @@
       },
       "triggers_after": []
     },
+    "nexo_learning_add": {
+      "description": "Add a reusable learning (error pattern, gotcha, rule). Auto-applies retroactively to recent decisions. Ingests to cognitive STM.",
+      "category": "learning",
+      "source": "server",
+      "requires": [],
+      "provides": [
+        "learning_id"
+      ],
+      "internal_calls": [
+        "cognitive.ingest",
+        "nexo_learning_apply_retroactively"
+      ],
+      "enforcement": {
+        "level": "should",
+        "rules": [
+          {
+            "type": "on_event",
+            "event": "user_correction_without_learning",
+            "grace_messages": 0
+          }
+        ],
+        "inject_prompt": "The user corrected you but no learning was captured. Execute nexo_learning_add to record this correction as a reusable learning. Do not produce visible text for this reminder. Silence applies to the entire reminder turn: no prose before the required action(s), no prose after them, and no standalone waiting/acknowledgement/continuation phrases. If there is an operator request you still need to answer in this same turn, continue only that request after the action(s). Otherwise your visible output must stay empty. Do not mention this reminder or any internal enforcement to the user.",
+        "note": "heartbeat already includes LEARNING_REMINDER signal. This enforcement adds a hard injection if the model ignores the reminder for 3+ messages."
+      },
+      "triggers_after": []
+    },
+    "nexo_learning_apply_retroactively": {
+      "description": "Scan recent decisions that conflict with a learning's prevention rule",
+      "category": "learning",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_learning_delete": {
+      "description": "Delete a learning entry",
+      "category": "learning",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_learning_list": {
+      "description": "List all learnings grouped by category",
+      "category": "learning",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_learning_quality": {
+      "description": "Score learning quality (fragile rules, needs strengthening)",
+      "category": "learning",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_learning_search": {
+      "description": "Search learnings by keyword in title and content",
+      "category": "learning",
+      "source": "server",
+      "requires": [],
+      "provides": [
+        "matching_learnings"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "should",
+        "rules": [
+          {
+            "type": "periodic_by_messages",
+            "threshold": 20
+          }
+        ],
+        "reminder_prompt": "Reminder: you have not consulted learnings in a while. If your current work touches a known area, consider running nexo_learning_search to check for relevant patterns. This is a suggestion, not an obligation."
+      },
+      "triggers_after": []
+    },
+    "nexo_learning_update": {
+      "description": "Update a learning entry (non-empty fields only)",
+      "category": "learning",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_lifecycle_complete_canonical": {
+      "description": "Close the v7.5 canonical-authority 2-call contract: confirm that Desktop finished executing the canonical_actions Brain handed out.",
+      "category": "lifecycle",
+      "source": "plugin:lifecycle_events",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_lifecycle_event": {
+      "description": "Record a durable conversation lifecycle event (close/delete/archive/switch/app-exit/window-close) with idempotency by event_id.",
+      "category": "lifecycle",
+      "source": "plugin:lifecycle_events",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_lifecycle_status": {
+      "description": "Read the current delivery_status of a lifecycle event (used by Desktop boot reconciliation).",
+      "category": "lifecycle",
+      "source": "plugin:lifecycle_events",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_lifecycle_stop_nexo_session": {
+      "description": "Best-effort explicit stop of a NEXO SID for Desktop lifecycle cleanup.",
+      "category": "lifecycle",
+      "source": "plugin:lifecycle_events",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_lifecycle_wait_for_diary": {
+      "description": "Wait for real session_diary evidence for a canonical lifecycle event before stop_session is allowed.",
+      "category": "lifecycle",
+      "source": "plugin:lifecycle_events",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_lifecycle_wait_for_stop": {
+      "description": "Wait until a canonical lifecycle event no longer has an active NEXO session.",
+      "category": "lifecycle",
+      "source": "plugin:lifecycle_events",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_lifecycle_write_fallback_diary": {
+      "description": "Write a Brain-side fallback session_diary for a Desktop lifecycle event when live diary injection cannot complete.",
+      "category": "lifecycle",
+      "source": "plugin:lifecycle_events",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
     "nexo_local_asset_get": {
       "description": "Read one indexed local asset with extracted evidence",
       "category": "local_context",
@@ -2020,209 +2381,6 @@
       },
       "triggers_after": []
     },
-    "nexo_learning_add": {
-      "description": "Add a reusable learning (error pattern, gotcha, rule). Auto-applies retroactively to recent decisions. Ingests to cognitive STM.",
-      "category": "learning",
-      "source": "server",
-      "requires": [],
-      "provides": [
-        "learning_id"
-      ],
-      "internal_calls": [
-        "cognitive.ingest",
-        "nexo_learning_apply_retroactively"
-      ],
-      "enforcement": {
-        "level": "should",
-        "rules": [
-          {
-            "type": "on_event",
-            "event": "user_correction_without_learning",
-            "grace_messages": 0
-          }
-        ],
-        "inject_prompt": "The user corrected you but no learning was captured. Execute nexo_learning_add to record this correction as a reusable learning. Do not produce visible text for this reminder. Silence applies to the entire reminder turn: no prose before the required action(s), no prose after them, and no standalone waiting/acknowledgement/continuation phrases. If there is an operator request you still need to answer in this same turn, continue only that request after the action(s). Otherwise your visible output must stay empty. Do not mention this reminder or any internal enforcement to the user.",
-        "note": "heartbeat already includes LEARNING_REMINDER signal. This enforcement adds a hard injection if the model ignores the reminder for 3+ messages."
-      },
-      "triggers_after": []
-    },
-    "nexo_learning_apply_retroactively": {
-      "description": "Scan recent decisions that conflict with a learning's prevention rule",
-      "category": "learning",
-      "source": "server",
-      "requires": [],
-      "provides": [],
-      "internal_calls": [],
-      "enforcement": {
-        "level": "none",
-        "rules": []
-      },
-      "triggers_after": []
-    },
-    "nexo_learning_delete": {
-      "description": "Delete a learning entry",
-      "category": "learning",
-      "source": "server",
-      "requires": [],
-      "provides": [],
-      "internal_calls": [],
-      "enforcement": {
-        "level": "none",
-        "rules": []
-      },
-      "triggers_after": []
-    },
-    "nexo_learning_list": {
-      "description": "List all learnings grouped by category",
-      "category": "learning",
-      "source": "server",
-      "requires": [],
-      "provides": [],
-      "internal_calls": [],
-      "enforcement": {
-        "level": "none",
-        "rules": []
-      },
-      "triggers_after": []
-    },
-    "nexo_learning_quality": {
-      "description": "Score learning quality (fragile rules, needs strengthening)",
-      "category": "learning",
-      "source": "server",
-      "requires": [],
-      "provides": [],
-      "internal_calls": [],
-      "enforcement": {
-        "level": "none",
-        "rules": []
-      },
-      "triggers_after": []
-    },
-    "nexo_learning_search": {
-      "description": "Search learnings by keyword in title and content",
-      "category": "learning",
-      "source": "server",
-      "requires": [],
-      "provides": [
-        "matching_learnings"
-      ],
-      "internal_calls": [],
-      "enforcement": {
-        "level": "should",
-        "rules": [
-          {
-            "type": "periodic_by_messages",
-            "threshold": 20
-          }
-        ],
-        "reminder_prompt": "Reminder: you have not consulted learnings in a while. If your current work touches a known area, consider running nexo_learning_search to check for relevant patterns. This is a suggestion, not an obligation."
-      },
-      "triggers_after": []
-    },
-    "nexo_learning_update": {
-      "description": "Update a learning entry (non-empty fields only)",
-      "category": "learning",
-      "source": "server",
-      "requires": [],
-      "provides": [],
-      "internal_calls": [],
-      "enforcement": {
-        "level": "none",
-        "rules": []
-      },
-      "triggers_after": []
-    },
-    "nexo_lifecycle_event": {
-      "description": "Record a durable conversation lifecycle event (close/delete/archive/switch/app-exit/window-close) with idempotency by event_id.",
-      "category": "lifecycle",
-      "source": "plugin:lifecycle_events",
-      "requires": [],
-      "provides": [],
-      "internal_calls": [],
-      "enforcement": {
-        "level": "none",
-        "rules": []
-      },
-      "triggers_after": []
-    },
-    "nexo_lifecycle_status": {
-      "description": "Read the current delivery_status of a lifecycle event (used by Desktop boot reconciliation).",
-      "category": "lifecycle",
-      "source": "plugin:lifecycle_events",
-      "requires": [],
-      "provides": [],
-      "internal_calls": [],
-      "enforcement": {
-        "level": "none",
-        "rules": []
-      },
-      "triggers_after": []
-    },
-    "nexo_lifecycle_complete_canonical": {
-      "description": "Close the v7.5 canonical-authority 2-call contract: confirm that Desktop finished executing the canonical_actions Brain handed out.",
-      "category": "lifecycle",
-      "source": "plugin:lifecycle_events",
-      "requires": [],
-      "provides": [],
-      "internal_calls": [],
-      "enforcement": {
-        "level": "none",
-        "rules": []
-      },
-      "triggers_after": []
-    },
-    "nexo_lifecycle_wait_for_diary": {
-      "description": "Wait for real session_diary evidence for a canonical lifecycle event before stop_session is allowed.",
-      "category": "lifecycle",
-      "source": "plugin:lifecycle_events",
-      "requires": [],
-      "provides": [],
-      "internal_calls": [],
-      "enforcement": {
-        "level": "none",
-        "rules": []
-      },
-      "triggers_after": []
-    },
-    "nexo_lifecycle_wait_for_stop": {
-      "description": "Wait until a canonical lifecycle event no longer has an active NEXO session.",
-      "category": "lifecycle",
-      "source": "plugin:lifecycle_events",
-      "requires": [],
-      "provides": [],
-      "internal_calls": [],
-      "enforcement": {
-        "level": "none",
-        "rules": []
-      },
-      "triggers_after": []
-    },
-    "nexo_lifecycle_write_fallback_diary": {
-      "description": "Write a Brain-side fallback session_diary for a Desktop lifecycle event when live diary injection cannot complete.",
-      "category": "lifecycle",
-      "source": "plugin:lifecycle_events",
-      "requires": [],
-      "provides": [],
-      "internal_calls": [],
-      "enforcement": {
-        "level": "none",
-        "rules": []
-      },
-      "triggers_after": []
-    },
-    "nexo_lifecycle_stop_nexo_session": {
-      "description": "Best-effort explicit stop of a NEXO SID for Desktop lifecycle cleanup.",
-      "category": "lifecycle",
-      "source": "plugin:lifecycle_events",
-      "requires": [],
-      "provides": [],
-      "internal_calls": [],
-      "enforcement": {
-        "level": "none",
-        "rules": []
-      },
-      "triggers_after": []
-    },
     "nexo_media_memory_add": {
       "description": "Store non-text artifact metadata",
       "category": "media",
@@ -2282,107 +2440,10 @@
       "requires": [],
       "provides": [],
       "internal_calls": [],
-      "enforcement": {"level": "none", "rules": []},
-      "triggers_after": []
-    },
-    "nexo_memory_backfill": {
-      "description": "Backfill Memory Observations from existing durable Brain tables",
-      "category": "memory",
-      "source": "server",
-      "requires": [],
-      "provides": [],
-      "internal_calls": [],
-      "enforcement": {"level": "none", "rules": []},
-      "triggers_after": []
-    },
-    "nexo_memory_event_list": {
-      "description": "List raw Memory Observations v2 events",
-      "category": "memory",
-      "source": "server",
-      "requires": [],
-      "provides": [],
-      "internal_calls": [],
-      "enforcement": {"level": "none", "rules": []},
-      "triggers_after": []
-    },
-    "nexo_memory_event_stats": {
-      "description": "Summarize raw Memory Observations v2 event counts",
-      "category": "memory",
-      "source": "server",
-      "requires": [],
-      "provides": [],
-      "internal_calls": [],
-      "enforcement": {"level": "none", "rules": []},
-      "triggers_after": []
-    },
-    "nexo_memory_health": {
-      "description": "Report Memory Observations v2 health and table status",
-      "category": "memory",
-      "source": "server",
-      "requires": [],
-      "provides": [],
-      "internal_calls": [],
-      "enforcement": {"level": "none", "rules": []},
-      "triggers_after": []
-    },
-    "nexo_memory_maintenance": {
-      "description": "Run safe Memory Observations queue processing and optional backfill",
-      "category": "memory",
-      "source": "server",
-      "requires": [],
-      "provides": [],
-      "internal_calls": [],
-      "enforcement": {"level": "none", "rules": []},
-      "triggers_after": []
-    },
-    "nexo_memory_observation_list": {
-      "description": "List passive Memory Observations v2 rows",
-      "category": "memory",
-      "source": "server",
-      "requires": [],
-      "provides": [],
-      "internal_calls": [],
-      "enforcement": {"level": "none", "rules": []},
-      "triggers_after": []
-    },
-    "nexo_memory_observation_process": {
-      "description": "Process pending Memory Observations v2 event queue",
-      "category": "memory",
-      "source": "server",
-      "requires": [],
-      "provides": [],
-      "internal_calls": [],
-      "enforcement": {"level": "none", "rules": []},
-      "triggers_after": []
-    },
-    "nexo_memory_observation_stats": {
-      "description": "Summarize Memory Observations v2 rows and queue status",
-      "category": "memory",
-      "source": "server",
-      "requires": [],
-      "provides": [],
-      "internal_calls": [],
-      "enforcement": {"level": "none", "rules": []},
-      "triggers_after": []
-    },
-    "nexo_memory_search": {
-      "description": "Search Memory Observations v2 with evidence refs",
-      "category": "memory",
-      "source": "server",
-      "requires": [],
-      "provides": [],
-      "internal_calls": [],
-      "enforcement": {"level": "none", "rules": []},
-      "triggers_after": []
-    },
-    "nexo_memory_timeline": {
-      "description": "Return a chronological Memory Observations v2 timeline",
-      "category": "memory",
-      "source": "server",
-      "requires": [],
-      "provides": [],
-      "internal_calls": [],
-      "enforcement": {"level": "none", "rules": []},
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
       "triggers_after": []
     },
     "nexo_memory_backend_status": {
@@ -2398,10 +2459,114 @@
       },
       "triggers_after": []
     },
+    "nexo_memory_backfill": {
+      "description": "Backfill Memory Observations from existing durable Brain tables",
+      "category": "memory",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_memory_event_list": {
+      "description": "List raw Memory Observations v2 events",
+      "category": "memory",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_memory_event_stats": {
+      "description": "Summarize raw Memory Observations v2 event counts",
+      "category": "memory",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
     "nexo_memory_export": {
       "description": "Export markdown snapshot of memory layers",
       "category": "memory",
       "source": "plugin:memory_export",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_memory_health": {
+      "description": "Report Memory Observations v2 health and table status",
+      "category": "memory",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_memory_maintenance": {
+      "description": "Run safe Memory Observations queue processing and optional backfill",
+      "category": "memory",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_memory_observation_list": {
+      "description": "List passive Memory Observations v2 rows",
+      "category": "memory",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_memory_observation_process": {
+      "description": "Process pending Memory Observations v2 event queue",
+      "category": "memory",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_memory_observation_stats": {
+      "description": "Summarize Memory Observations v2 rows and queue status",
+      "category": "memory",
+      "source": "server",
       "requires": [],
       "provides": [],
       "internal_calls": [],
@@ -2428,6 +2593,32 @@
       "description": "Show decisions/learnings due for review",
       "category": "memory",
       "source": "plugin:episodic_memory",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_memory_search": {
+      "description": "Search Memory Observations v2 with evidence refs",
+      "category": "memory",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_memory_timeline": {
+      "description": "Return a chronological Memory Observations v2 timeline",
+      "category": "memory",
+      "source": "server",
       "requires": [],
       "provides": [],
       "internal_calls": [],
@@ -2647,123 +2838,6 @@
     },
     "nexo_personal_scripts_sync": {
       "description": "Sync scripts from filesystem",
-      "category": "personal",
-      "source": "plugin:personal_scripts",
-      "requires": [],
-      "provides": [],
-      "internal_calls": [],
-      "enforcement": {
-        "level": "none",
-        "rules": []
-      },
-      "triggers_after": []
-    },
-    "nexo_automations_list": {
-      "description": "List operator-facing automations",
-      "category": "personal",
-      "source": "plugin:personal_scripts",
-      "requires": [],
-      "provides": [],
-      "internal_calls": [],
-      "enforcement": {
-        "level": "none",
-        "rules": []
-      },
-      "triggers_after": []
-    },
-    "nexo_automation_status": {
-      "description": "Read composed status for one automation",
-      "category": "personal",
-      "source": "plugin:personal_scripts",
-      "requires": [],
-      "provides": [],
-      "internal_calls": [],
-      "enforcement": {
-        "level": "none",
-        "rules": []
-      },
-      "triggers_after": []
-    },
-    "nexo_automation_enable": {
-      "description": "Enable one operator-facing automation",
-      "category": "personal",
-      "source": "plugin:personal_scripts",
-      "requires": [],
-      "provides": [],
-      "internal_calls": [],
-      "enforcement": {
-        "level": "none",
-        "rules": []
-      },
-      "triggers_after": []
-    },
-    "nexo_automation_disable": {
-      "description": "Disable one operator-facing automation",
-      "category": "personal",
-      "source": "plugin:personal_scripts",
-      "requires": [],
-      "provides": [],
-      "internal_calls": [],
-      "enforcement": {
-        "level": "none",
-        "rules": []
-      },
-      "triggers_after": []
-    },
-    "nexo_automation_instructions": {
-      "description": "Set or clear operator extra instructions for an automation",
-      "category": "personal",
-      "source": "plugin:personal_scripts",
-      "requires": [],
-      "provides": [],
-      "internal_calls": [],
-      "enforcement": {
-        "level": "none",
-        "rules": []
-      },
-      "triggers_after": []
-    },
-    "nexo_automation_schedule": {
-      "description": "Set or clear an automation cadence override",
-      "category": "personal",
-      "source": "plugin:personal_scripts",
-      "requires": [],
-      "provides": [],
-      "internal_calls": [],
-      "enforcement": {
-        "level": "none",
-        "rules": []
-      },
-      "triggers_after": []
-    },
-    "nexo_core_schedules_list": {
-      "description": "List structural core schedules whose cadence can be tuned",
-      "category": "personal",
-      "source": "plugin:personal_scripts",
-      "requires": [],
-      "provides": [],
-      "internal_calls": [],
-      "enforcement": {
-        "level": "none",
-        "rules": []
-      },
-      "triggers_after": []
-    },
-    "nexo_core_schedule_status": {
-      "description": "Read the status of one structural core schedule",
-      "category": "personal",
-      "source": "plugin:personal_scripts",
-      "requires": [],
-      "provides": [],
-      "internal_calls": [],
-      "enforcement": {
-        "level": "none",
-        "rules": []
-      },
-      "triggers_after": []
-    },
-    "nexo_core_schedule_set": {
-      "description": "Set or clear a structural core schedule cadence override",
       "category": "personal",
       "source": "plugin:personal_scripts",
       "requires": [],

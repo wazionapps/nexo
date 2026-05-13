@@ -104,6 +104,7 @@ from plugins.workflow import (
 )
 from plugin_loader import load_all_plugins, load_plugin, remove_plugin, list_plugins
 from tools_guardian import handle_guardian_rule_override
+from tools_api_call import handle_api_call, handle_create_app_token
 from runtime_versioning import (
     RestartRequiredMiddleware,
     build_mcp_status,
@@ -2056,6 +2057,62 @@ def nexo_session_log_close(
         error=error,
     )
     return _json.dumps(result, ensure_ascii=False)
+
+
+@mcp.tool
+def nexo_api_call(
+    method: str,
+    path: str,
+    body_json: str = "",
+    idempotency_key: str = "",
+    headers_json: str = "",
+    base_url: str = "",
+) -> str:
+    """Make an authenticated HTTP request to the NEXO Desktop backend (nexo-desktop.com).
+
+    The session bearer is auto-loaded from the OS keychain — the agent never
+    sees or handles tokens. Use this for any /api/* endpoint the user has
+    permission for: provider-proxy/*, credits/*, cards/*, auth/app-tokens, etc.
+
+    Args:
+        method: HTTP method (GET / POST / PUT / DELETE / PATCH).
+        path: path starting with '/' (e.g. '/api/provider-proxy/call').
+        body_json: JSON string of the request body. Empty for GET.
+        idempotency_key: UUID v4 to dedupe POST/PUT retries (avoids double-charge).
+        headers_json: optional extra headers as a JSON object. Authorization is ignored.
+        base_url: override default base (default: https://nexo-desktop.com).
+
+    Returns formatted text with HTTP status + parsed JSON body. Bearer is never echoed.
+    """
+    return handle_api_call(method, path, body_json, idempotency_key, headers_json, base_url)
+
+
+@mcp.tool
+def nexo_create_app_token(
+    name: str,
+    abilities: str = "",
+    allowed_platforms: str = "",
+    expires_at: str = "",
+) -> str:
+    """Create a persistent AppToken for the current user via POST /api/auth/app-tokens.
+
+    Use this when a card needs to mint a token that will live inside a snippet
+    the user pastes on their own website (chatbot widget, embed, public API
+    autoresponder). The plain-text token is returned ONCE — embed it in the
+    generated snippet and never store it elsewhere.
+
+    Args:
+        name: human label for the token (e.g. 'chatbot-mitienda-com').
+        abilities: comma-separated abilities. Allowed:
+                   provider-proxy:call, provider-proxy:estimate, credits:read.
+                   Defaults to 'provider-proxy:call' if empty.
+        allowed_platforms: comma-separated platform keys (openai, anthropic, gemini, ...).
+                           Empty = all platforms the user has access to.
+        expires_at: ISO 8601 future date, empty for non-expiring token.
+
+    Returns the created token summary + plain_text_token (one-time disclosure).
+    """
+    return handle_create_app_token(name, abilities, allowed_platforms, expires_at)
 
 
 if __name__ == "__main__":
