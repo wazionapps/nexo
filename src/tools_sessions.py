@@ -21,6 +21,11 @@ from db import (
 )
 
 try:
+    from tools_hot_context import append_local_context_evidence
+except Exception:  # pragma: no cover - local context is optional during bootstrap
+    append_local_context_evidence = None
+
+try:
     from r14_correction_learning import detect_correction as _detect_correction_semantic
 except Exception:  # pragma: no cover - optional runtime dependency
     _detect_correction_semantic = None
@@ -707,6 +712,11 @@ def _handle_heartbeat_inner(sid: str, task: str, context_hint: str = '') -> str:
             if bundle.get("has_matches"):
                 parts.append("")
                 parts.append(format_pre_action_context_bundle(bundle, compact=True))
+            if append_local_context_evidence is not None:
+                local_rendered = append_local_context_evidence("", recent_query, limit=4).strip()
+                if local_rendered:
+                    parts.append("")
+                    parts.append(local_rendered)
         except Exception:
             pass
 

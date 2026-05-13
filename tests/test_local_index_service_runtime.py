@@ -239,6 +239,7 @@ def test_run_once_creates_default_roots_for_mcp_and_cli_paths(tmp_path, monkeypa
     monkeypatch.setenv("NEXO_SKIP_FS_INDEX", "0")
     monkeypatch.delenv("NEXO_LOCAL_INDEX_DEFAULT_ROOTS", raising=False)
     monkeypatch.setattr(api.Path, "home", staticmethod(lambda: home))
+    monkeypatch.setattr(api, "_system_volume_roots", lambda: [])
     monkeypatch.setattr(api, "_mounted_volume_roots", lambda: [])
 
     result = api.run_once(limit=0, process_limit=0, live_asset_limit=0, live_dir_limit=0, live_file_limit=0)
@@ -255,6 +256,7 @@ def test_run_once_refreshes_new_default_roots_after_initial_setup(tmp_path, monk
     monkeypatch.setenv("NEXO_SKIP_FS_INDEX", "0")
     monkeypatch.delenv("NEXO_LOCAL_INDEX_DEFAULT_ROOTS", raising=False)
     monkeypatch.setattr(api.Path, "home", staticmethod(lambda: home))
+    monkeypatch.setattr(api, "_system_volume_roots", lambda: [])
     monkeypatch.setattr(api, "_mounted_volume_roots", lambda: [str(mounted)])
 
     local_context.add_root(str(home), depth=api.DEFAULT_ROOT_DEPTH)

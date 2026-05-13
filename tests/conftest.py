@@ -77,6 +77,7 @@ def isolated_db(tmp_path, monkeypatch):
     monkeypatch.setenv("NEXO_TEST_DB", test_db)
     monkeypatch.setenv("NEXO_COGNITIVE_DB", test_cog_db)
     monkeypatch.setenv("NEXO_SKIP_FS_INDEX", "1")
+    monkeypatch.setenv("NEXO_LOCAL_INDEX_ALLOW_BLOCKED_ROOTS", "1")
     monkeypatch.setenv("NEXO_SKIP_LEARNING_COGNITIVE_INGEST", "1")
     monkeypatch.setenv("NEXO_SKIP_SEMANTIC_SIMILARITY", "1")
     monkeypatch.setenv("NEXO_SKIP_COGNITIVE_MODEL_DOWNLOAD", "1")

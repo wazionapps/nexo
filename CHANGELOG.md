@@ -1,5 +1,15 @@
 # Changelog
 
+## [7.20.11] - 2026-05-13
+
+### Fixed — local memory whole-device coverage and automatic evidence injection
+
+- **Default local-memory discovery now starts from real system volume roots and mounted drives.** Brain covers `/` on macOS/Linux plus mounted/removable/network volumes and Windows drive roots, while privacy rules skip system folders, caches, app bundles, dependency trees, secrets and product artifacts.
+- **Configured local-memory roots are additive, not a replacement.** Advanced/root overrides no longer disable automatic disk, mounted-volume or local-email discovery unless the explicit default-root disable flag is used.
+- **NEXO Desktop/QA product bundles are filtered out of local evidence.** Packaged `brain-bundle` and NEXO Desktop app artifacts are skipped so queries like project/client names do not return installer internals.
+- **Local context is injected automatically before work, not only when an agent remembers to search.** `nexo_heartbeat`, `nexo_task_open` and `nexo_pre_action_context` now include local-memory evidence and relevant excerpts when the current user/task text matches indexed files.
+- **Coverage:** local-context, pre-action, heartbeat/task-open context, local-index runtime, cron and Windows WSL suites pass (`98 passed`) plus targeted checks for system/root exclusions, additive roots and automatic excerpt injection.
+
 ## [7.20.10] - 2026-05-13
 
 ### Fixed — local memory manual refresh keeps automatic roots current

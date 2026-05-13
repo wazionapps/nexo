@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 SENSITIVE_FILE_NAMES = {
@@ -124,6 +125,15 @@ NOISY_PARTS = {
     "target",
 }
 
+PRODUCT_ARTIFACT_PARTS = {
+    "brain-bundle",
+    "nexo desktop qa backups",
+    "nexo desktop qa.app",
+    "nexo desktop.app",
+    "nexo desktop beta.app",
+    "nexo desktop support.app",
+}
+
 TRANSIENT_PARTS = {"tmp", "temp"}
 
 PRIVATE_PROFILE_PARTS = {
@@ -184,10 +194,47 @@ SYSTEM_PARTS = {
     "windows",
     "program files",
     "program files (x86)",
-    "library/caches",
-    "system/library",
+}
+
+SYSTEM_PATH_MARKERS = {
+    "/bin",
+    "/cores",
+    "/dev",
+    "/library/caches",
+    "/library/logs",
+    "/private/tmp",
+    "/private/var/db",
+    "/private/var/folders",
+    "/private/var/log",
+    "/private/var/vm",
     "/proc",
+    "/run",
+    "/sbin",
     "/sys",
+    "/system",
+    "/tmp",
+    "/usr",
+    "/var/folders",
+    "/var/tmp",
+}
+
+TEMP_SYSTEM_PATH_MARKERS = {
+    "/private/var/folders",
+    "/tmp",
+    "/var/folders",
+    "/var/tmp",
+}
+
+HOME_PRIVATE_PROFILE_MARKERS = {
+    "library/application support",
+    "library/containers",
+    "library/group containers",
+    "library/keychains",
+    "library/logs",
+    "library/mail",
+    "library/messages",
+    "library/safari",
+    "library/saved application state",
 }
 
 
@@ -208,6 +255,33 @@ def _is_under_marker(lowered: str, marker: str) -> bool:
     if not marker:
         return False
     return lowered.endswith("/" + marker) or f"/{marker}/" in lowered
+
+
+def _has_absolute_marker(lowered: str, marker: str) -> bool:
+    marker = "/" + marker.strip("/").lower()
+    return lowered == marker or lowered.endswith(marker) or f"{marker}/" in lowered
+
+
+def _is_system_path(path: str) -> bool:
+    lowered = _normalized(path)
+    parts = _parts(path)
+    if parts & SYSTEM_PARTS:
+        return True
+    matched_markers = {marker for marker in SYSTEM_PATH_MARKERS if _has_absolute_marker(lowered, marker)}
+    if not matched_markers:
+        return False
+    if (
+        matched_markers <= TEMP_SYSTEM_PATH_MARKERS
+        and os.environ.get("NEXO_LOCAL_INDEX_ALLOW_BLOCKED_ROOTS", "").strip().lower() in {"1", "true", "yes"}
+        and "pytest-" in lowered
+    ):
+        return False
+    return True
+
+
+def _is_app_bundle_path(path: str) -> bool:
+    lowered = _normalized(path)
+    return lowered.endswith(".app") or ".app/" in lowered
 
 
 def _is_inside_windows_mail_package(lowered: str) -> bool:
@@ -323,9 +397,12 @@ def is_sensitive_path(path: str) -> bool:
 def is_private_profile_path(path: str) -> bool:
     lowered = _normalized(path)
     parts = _parts(path)
-    if parts & PRIVATE_PROFILE_PARTS:
+    global_parts = PRIVATE_PROFILE_PARTS - HOME_PRIVATE_PROFILE_MARKERS
+    if parts & global_parts:
         return True
-    if _contains_path_marker(lowered, PRIVATE_PROFILE_PARTS):
+    if _contains_path_marker(lowered, global_parts):
+        return True
+    if (_is_home_hidden_path(path) or "/users/" in lowered) and _contains_path_marker(lowered, HOME_PRIVATE_PROFILE_MARKERS):
         return True
     name = Path(path).name.lower()
     if name in PROFILE_HIDDEN_FILE_NAMES:
@@ -346,8 +423,12 @@ def classify_path(path: str) -> tuple[int, str, str]:
         return 1, "sensitive_inventory_only", "sensitive_path"
     if is_private_profile_path(path):
         return 0, "private_profile_blocked", "private_profile_path"
-    if any(item in lowered for item in SYSTEM_PARTS):
+    if _is_system_path(path):
         return 0, "system_blocked", "system_path"
+    if parts & PRODUCT_ARTIFACT_PARTS:
+        return 1, "inventory_only", "product_artifact"
+    if _is_app_bundle_path(path):
+        return 1, "inventory_only", "app_bundle"
     if parts & NOISY_PARTS or _has_transient_project_part(path) or _has_hidden_dir_part(path):
         return 1, "inventory_only", "noisy_tree"
     return 2, "normal", "default"
@@ -358,11 +439,17 @@ def should_skip_tree(path: str) -> bool:
     parts = _parts(path)
     if is_local_email_tree(path):
         return False
-    if any(item in lowered for item in SYSTEM_PARTS):
+    if _is_system_path(path):
         return True
     if is_sensitive_path(path) or is_private_profile_path(path):
         return True
-    return bool(parts & NOISY_PARTS or _has_transient_project_part(path) or _has_hidden_dir_part(path))
+    return bool(
+        parts & PRODUCT_ARTIFACT_PARTS
+        or _is_app_bundle_path(path)
+        or parts & NOISY_PARTS
+        or _has_transient_project_part(path)
+        or _has_hidden_dir_part(path)
+    )
 
 
 def should_skip_file(path: str) -> bool:
@@ -370,11 +457,17 @@ def should_skip_file(path: str) -> bool:
     parts = _parts(path)
     if is_local_email_tree(path):
         return not is_allowed_local_email_file(path)
-    if any(item in lowered for item in SYSTEM_PARTS):
+    if _is_system_path(path):
         return True
     if is_sensitive_path(path) or is_private_profile_path(path):
         return True
-    return bool(parts & NOISY_PARTS or _has_transient_project_part(path) or _has_hidden_dir_part(path))
+    return bool(
+        parts & PRODUCT_ARTIFACT_PARTS
+        or _is_app_bundle_path(path)
+        or parts & NOISY_PARTS
+        or _has_transient_project_part(path)
+        or _has_hidden_dir_part(path)
+    )
 
 
 def is_queryable_path(path: str, privacy_class: str = "") -> bool:

@@ -42,6 +42,11 @@ from plugins.guard import handle_guard_check
 from protocol_settings import get_protocol_strictness
 from tools_sessions import handle_heartbeat
 
+try:
+    from tools_hot_context import append_local_context_evidence
+except Exception:  # pragma: no cover - local context is optional in early boot
+    append_local_context_evidence = None
+
 
 # ── R03 (Fase 2 Protocol Enforcer) evidence quality thresholds ────────
 # "evidence" supplied to nexo_task_close must be substantive when an
@@ -1320,6 +1325,14 @@ def handle_task_open(
         response_contract = dict(response_contract)
         response_contract["next_action"] = next_action
 
+    recent_excerpt = format_pre_action_context_bundle(recent_bundle, compact=True) if recent_bundle.get("has_matches") else ""
+    if append_local_context_evidence is not None:
+        recent_excerpt = append_local_context_evidence(
+            recent_excerpt,
+            " | ".join(part for part in [clean_goal, context_hint.strip()] if part),
+            limit=4,
+        )
+
     response = {
         "ok": True,
         "task_id": task["task_id"],
@@ -1351,8 +1364,8 @@ def handle_task_open(
         "response_contract": response_contract,
         "decision_support": decision_support,
         "recent_context": {
-            "has_matches": bool(recent_bundle.get("has_matches")),
-            "excerpt": format_pre_action_context_bundle(recent_bundle, compact=True) if recent_bundle.get("has_matches") else "",
+            "has_matches": bool(recent_bundle.get("has_matches") or recent_excerpt.strip()),
+            "excerpt": recent_excerpt,
         },
         "area_context": area_context if area_context.get("has_context") else None,
         "contract": {

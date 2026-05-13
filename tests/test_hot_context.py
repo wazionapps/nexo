@@ -6,6 +6,8 @@ import importlib
 import json
 import time
 
+import local_context
+
 
 def _register_session(sid: str):
     from db import register_session
@@ -58,6 +60,28 @@ def test_heartbeat_surfaces_recent_context_from_last_hours(isolated_db):
     )
     assert "RECENT CONTEXT (24h)" in second
     assert "recambiosbmw" in second.lower()
+
+
+def test_heartbeat_includes_local_context_evidence_automatically(tmp_path):
+    import tools_sessions
+
+    root = tmp_path / "docs"
+    root.mkdir()
+    note = root / "maria-local.txt"
+    note.write_text("Maria Riera tiene una factura pagada y presupuesto aceptado.", encoding="utf-8")
+    local_context.add_root(str(root))
+    local_context.run_once(limit=20, process_limit=20)
+
+    sid = _register_session("nexo-1002-7001")
+    output = tools_sessions.handle_heartbeat(
+        sid,
+        "responder sobre Maria",
+        "que sabes sobre Maria Riera factura presupuesto",
+    )
+
+    assert "LOCAL CONTEXT EVIDENCE" in output
+    assert "maria-local.txt" in output
+    assert "Relevant excerpts:" in output
 
 
 def test_heartbeat_latches_execute_until_blocker_on_explicit_go(
@@ -114,6 +138,34 @@ def test_task_open_includes_recent_context_excerpt(isolated_db):
     assert payload["ok"] is True
     assert payload["recent_context"]["has_matches"] is True
     assert "holidays2thecanaries" in payload["recent_context"]["excerpt"].lower()
+
+
+def test_task_open_includes_local_context_evidence_automatically(tmp_path):
+    from plugins.protocol import handle_task_open
+
+    root = tmp_path / "docs"
+    root.mkdir()
+    note = root / "sendwa-context.txt"
+    note.write_text("SendWA conecta con WhatsApp, base de datos y cola de soporte.", encoding="utf-8")
+    local_context.add_root(str(root))
+    local_context.run_once(limit=20, process_limit=20)
+
+    sid = _register_session("nexo-2001-7001")
+    payload = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Actualizar funcion SendWA",
+            task_type="analyze",
+            area="code",
+            context_hint="necesito saber que afecta SendWA",
+            verification_step="revisar contexto local",
+        )
+    )
+
+    assert payload["ok"] is True
+    assert payload["recent_context"]["has_matches"] is True
+    assert "LOCAL CONTEXT EVIDENCE" in payload["recent_context"]["excerpt"]
+    assert "sendwa-context.txt" in payload["recent_context"]["excerpt"]
 
 
 def test_followup_and_reminder_changes_feed_hot_context(isolated_db):

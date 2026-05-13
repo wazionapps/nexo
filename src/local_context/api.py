@@ -16,7 +16,7 @@ from db._schema import run_migrations
 from . import embeddings
 from .extractors import chunk_text, contains_secret, entities, extract_text, summarize
 from .logging import log_event, tail
-from .privacy import classify_path, is_queryable_path, should_extract, should_skip_file, should_skip_tree
+from .privacy import classify_path, is_local_email_tree, is_queryable_path, should_extract, should_skip_file, should_skip_tree
 from .util import content_hash, json_dumps, json_loads, norm_path, now, quick_fingerprint, redact_path, stable_id, system_label, tokenize
 
 LOCAL_INDEX_SERVICE_LABEL = "com.nexo.local-index"
@@ -29,6 +29,7 @@ DEFAULT_LIVE_FILE_LIMIT = int(os.environ.get("NEXO_LOCAL_INDEX_LIVE_FILE_LIMIT",
 DEFAULT_ROOT_DEPTH = int(os.environ.get("NEXO_LOCAL_INDEX_DEFAULT_DEPTH", "24") or "24")
 DEFAULT_EMAIL_ROOT_DEPTH = int(os.environ.get("NEXO_LOCAL_INDEX_EMAIL_ROOT_DEPTH", "24") or "24")
 DEFAULT_MOUNTED_ROOT_DEPTH = int(os.environ.get("NEXO_LOCAL_INDEX_MOUNTED_ROOT_DEPTH", "24") or "24")
+DEFAULT_SYSTEM_ROOT_DEPTH = int(os.environ.get("NEXO_LOCAL_INDEX_SYSTEM_ROOT_DEPTH", "24") or "24")
 
 
 def ensure_ready() -> None:
@@ -44,7 +45,7 @@ def _conn():
 def add_root(path: str, *, mode: str = "normal", depth: int | None = None) -> dict:
     conn = _conn()
     root_path = norm_path(path)
-    if should_skip_tree(root_path):
+    if should_skip_tree(root_path) and not _allow_explicit_blocked_root(root_path):
         log_event("warn", "root_rejected_private", "Root rejected by local memory privacy rules", path=redact_path(root_path))
         return {"ok": False, "error": "root_blocked_by_privacy", "root_path": root_path}
     depth_value = 2 if depth is None else int(depth)
@@ -141,6 +142,18 @@ def _mounted_volume_roots() -> list[str]:
     return roots
 
 
+def _system_volume_roots() -> list[str]:
+    if os.environ.get("NEXO_LOCAL_INDEX_DISABLE_SYSTEM_ROOTS", "").strip() in {"1", "true", "yes"}:
+        return []
+    if sys.platform == "darwin":
+        return ["/"]
+    if sys.platform.startswith("win"):
+        # Windows roots are discovered as mounted drive roots so mapped drives
+        # and removable disks share the same code path.
+        return []
+    return ["/"]
+
+
 def _local_email_roots() -> list[str]:
     home = Path.home()
     roots: list[Path] = [home / ".nexo" / "runtime" / "nexo-email"]
@@ -180,14 +193,15 @@ def default_roots() -> list[str]:
 def default_root_specs() -> list[tuple[str, int]]:
     home = Path.home()
     configured = os.environ.get("NEXO_LOCAL_INDEX_DEFAULT_ROOTS", "").strip()
-    if configured:
-        return _dedupe_root_specs(
-            [(item, DEFAULT_ROOT_DEPTH) for item in configured.split(os.pathsep) if item.strip()]
-        )
+    system_specs = [(root, DEFAULT_SYSTEM_ROOT_DEPTH) for root in _system_volume_roots()]
+    mounted_specs = [(root, DEFAULT_MOUNTED_ROOT_DEPTH) for root in _mounted_volume_roots()]
+    configured_specs = [(item, DEFAULT_ROOT_DEPTH) for item in configured.split(os.pathsep) if item.strip()]
+    base_specs = system_specs + mounted_specs + configured_specs
+    if not base_specs:
+        base_specs = [(str(home), DEFAULT_ROOT_DEPTH)]
     return _dedupe_root_specs(
-        [(str(home), DEFAULT_ROOT_DEPTH)]
+        base_specs
         + [(root, DEFAULT_EMAIL_ROOT_DEPTH) for root in _local_email_roots()]
-        + [(root, DEFAULT_MOUNTED_ROOT_DEPTH) for root in _mounted_volume_roots()]
     )
 
 
@@ -525,6 +539,15 @@ def _is_paused() -> bool:
     return _get_state("paused", "0") == "1"
 
 
+def _allow_explicit_blocked_root(path: str) -> bool:
+    # Test and controlled diagnostics may explicitly index a temporary fixture
+    # root while production root discovery still skips temp/system trees.
+    if os.environ.get("NEXO_LOCAL_INDEX_ALLOW_BLOCKED_ROOTS", "").strip().lower() not in {"1", "true", "yes"}:
+        return False
+    normalized = norm_path(path).replace("\\", "/").lower()
+    return any(marker in normalized for marker in ("/tmp/", "/var/folders/", "/private/var/folders/"))
+
+
 def _is_excluded(path: str, exclusions: list[str]) -> bool:
     value = norm_path(path)
     return any(value == item or value.startswith(item + os.sep) for item in exclusions)
@@ -533,6 +556,47 @@ def _is_excluded(path: str, exclusions: list[str]) -> bool:
 def _path_prefix(path: str) -> str:
     normalized = norm_path(path)
     return normalized + os.sep if normalized else os.sep
+
+
+def _is_nested_path(path: str, parent: str) -> bool:
+    value = norm_path(path)
+    base = norm_path(parent)
+    if not value or not base or value == base:
+        return False
+    if base == os.sep:
+        return value.startswith(os.sep)
+    return value.startswith(_path_prefix(base))
+
+
+def _is_discovered_mount_path(path: str) -> bool:
+    value = norm_path(path).replace("\\", "/").lower()
+    if not value:
+        return False
+    return (
+        value.startswith("/volumes/")
+        or value.startswith("/mnt/")
+        or value.startswith("/media/")
+        or value.startswith("/run/media/")
+        or (len(value) == 3 and value[1:] == ":/")
+        or (len(value) == 3 and value[1:] == ":\\")
+    )
+
+
+def _effective_scan_roots(roots: list[dict]) -> list[dict]:
+    active_roots = [root for root in roots if str(root.get("status") or "active") != "removed"]
+    parent_paths = [str(root.get("root_path") or "") for root in active_roots]
+    effective: list[dict] = []
+    for root in active_roots:
+        root_path = str(root.get("root_path") or "")
+        if _is_discovered_mount_path(root_path):
+            effective.append(root)
+            continue
+        if root_path and not is_local_email_tree(root_path) and any(
+            _is_nested_path(root_path, parent) for parent in parent_paths
+        ):
+            continue
+        effective.append(root)
+    return effective
 
 
 def _file_type(path: Path) -> str:
@@ -1188,14 +1252,14 @@ def scan_once(*, limit: int | None = None) -> dict:
         log_event("info", "scan_skipped_paused", "Local memory scan skipped because indexing is paused")
         return {"ok": True, "paused": True, "roots": 0, "seen": 0, "changed": 0, "errors": 0, "partial": False}
     started = now()
-    roots = list_roots()
+    roots = _effective_scan_roots(list_roots())
     exclusions = [row["path"] for row in list_exclusions()]
     totals = {"roots": len(roots), "seen": 0, "changed": 0, "errors": 0, "partial": False}
     log_event("info", "scan_started", "Local memory scan started", roots=len(roots))
     for root in roots:
         root_path = Path(root["root_path"]).expanduser()
         root_id = int(root["id"])
-        if should_skip_tree(str(root_path)):
+        if should_skip_tree(str(root_path)) and not _allow_explicit_blocked_root(str(root_path)):
             conn.execute(
                 "UPDATE local_index_roots SET status='removed', last_scan_at=?, updated_at=? WHERE id=?",
                 (now(), now(), root_id),

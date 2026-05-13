@@ -281,6 +281,8 @@ def test_default_roots_include_local_email_sources_and_extract_messages(tmp_path
     monkeypatch.delenv("NEXO_LOCAL_INDEX_DEFAULT_ROOTS", raising=False)
     monkeypatch.setattr(api.Path, "home", staticmethod(lambda: home))
     monkeypatch.setattr("local_context.privacy.Path.home", staticmethod(lambda: home))
+    monkeypatch.setattr(api, "_system_volume_roots", lambda: [])
+    monkeypatch.setattr(api, "_mounted_volume_roots", lambda: [])
 
     roots = api.ensure_default_roots()
     root_paths = {row["root_path"] for row in roots["roots"]}
@@ -303,6 +305,7 @@ def test_existing_default_root_depth_is_upgraded(tmp_path, monkeypatch):
 
     monkeypatch.delenv("NEXO_LOCAL_INDEX_DEFAULT_ROOTS", raising=False)
     monkeypatch.setattr(api.Path, "home", staticmethod(lambda: home))
+    monkeypatch.setattr(api, "_system_volume_roots", lambda: [])
     monkeypatch.setattr(api, "_mounted_volume_roots", lambda: [])
 
     local_context.add_root(str(home), depth=2)
@@ -363,6 +366,24 @@ def test_noisy_dependency_trees_are_skipped_by_default(tmp_path):
     assert indexed["total"] == 1
 
 
+def test_nexo_product_artifacts_are_skipped_by_default(tmp_path):
+    root = tmp_path / "Applications"
+    product_artifact = root / "NEXO Desktop QA backups" / "qa-20260509" / "NEXO Desktop QA.app" / "Contents" / "Resources" / "brain-bundle" / "bin" / "postinstall.js"
+    normal_doc = root / "client-note.md"
+    product_artifact.parent.mkdir(parents=True)
+    product_artifact.write_text("internal NEXO bundled artifact Leebmann24", encoding="utf-8")
+    normal_doc.write_text("real user note Leebmann24", encoding="utf-8")
+
+    local_context.add_root(str(root))
+    local_context.run_once(limit=50, process_limit=50)
+
+    conn = db.get_db()
+    skipped = conn.execute("SELECT COUNT(*) AS total FROM local_assets WHERE path=?", (str(product_artifact),)).fetchone()
+    indexed = conn.execute("SELECT COUNT(*) AS total FROM local_assets WHERE path=?", (str(normal_doc),)).fetchone()
+    assert skipped["total"] == 0
+    assert indexed["total"] == 1
+
+
 def test_default_roots_add_new_mounted_volumes_incrementally(tmp_path, monkeypatch):
     home = tmp_path / "home"
     external = tmp_path / "ExternalDrive"
@@ -371,6 +392,7 @@ def test_default_roots_add_new_mounted_volumes_incrementally(tmp_path, monkeypat
 
     monkeypatch.delenv("NEXO_LOCAL_INDEX_DEFAULT_ROOTS", raising=False)
     monkeypatch.setattr(api.Path, "home", staticmethod(lambda: home))
+    monkeypatch.setattr(api, "_system_volume_roots", lambda: [])
     monkeypatch.setattr(api, "_mounted_volume_roots", lambda: [])
 
     first = api.ensure_default_roots()
@@ -383,6 +405,119 @@ def test_default_roots_add_new_mounted_volumes_incrementally(tmp_path, monkeypat
     assert second["created"] == 1
     assert api.norm_path(str(home)) in roots
     assert api.norm_path(str(external)) in roots
+
+
+def test_default_roots_start_from_system_volume_and_keep_special_email_roots(tmp_path, monkeypatch):
+    startup = tmp_path / "startup"
+    home = startup / "Users" / "me"
+    mail = home / "Library" / "Mail"
+    nexo_email = home / ".nexo" / "runtime" / "nexo-email"
+    mounted = tmp_path / "NetworkShare"
+    for path in (startup, home, mail, nexo_email, mounted):
+        path.mkdir(parents=True)
+
+    monkeypatch.delenv("NEXO_LOCAL_INDEX_DEFAULT_ROOTS", raising=False)
+    monkeypatch.setattr(api.Path, "home", staticmethod(lambda: home))
+    monkeypatch.setattr("local_context.privacy.Path.home", staticmethod(lambda: home))
+    monkeypatch.setattr(api, "_system_volume_roots", lambda: [str(startup)])
+    monkeypatch.setattr(api, "_mounted_volume_roots", lambda: [str(mounted)])
+
+    result = api.ensure_default_roots()
+    roots = {row["root_path"] for row in result["roots"]}
+
+    assert api.norm_path(str(startup)) in roots
+    assert api.norm_path(str(mounted)) in roots
+    assert api.norm_path(str(nexo_email)) in roots
+    assert api.norm_path(str(mail)) in roots
+
+
+def test_configured_default_roots_are_additive_not_global_override(tmp_path, monkeypatch):
+    startup = tmp_path / "startup"
+    configured = tmp_path / "selected"
+    mounted = tmp_path / "ExternalDisk"
+    home = startup / "Users" / "me"
+    mail = home / "Library" / "Mail"
+    for path in (startup, configured, mounted, home, mail):
+        path.mkdir(parents=True)
+
+    monkeypatch.setenv("NEXO_LOCAL_INDEX_DEFAULT_ROOTS", str(configured))
+    monkeypatch.setattr(api.Path, "home", staticmethod(lambda: home))
+    monkeypatch.setattr("local_context.privacy.Path.home", staticmethod(lambda: home))
+    monkeypatch.setattr(api, "_system_volume_roots", lambda: [str(startup)])
+    monkeypatch.setattr(api, "_mounted_volume_roots", lambda: [str(mounted)])
+
+    roots = {row["root_path"] for row in api.ensure_default_roots()["roots"]}
+
+    assert api.norm_path(str(startup)) in roots
+    assert api.norm_path(str(mounted)) in roots
+    assert api.norm_path(str(configured)) in roots
+    assert api.norm_path(str(mail)) in roots
+
+
+def test_system_volume_scan_excludes_system_but_reads_shared_app_data(tmp_path):
+    startup = tmp_path / "startup"
+    system_file = startup / "System" / "Library" / "internal.txt"
+    cache_file = startup / "Library" / "Caches" / "noise.txt"
+    app_bundle_file = startup / "Applications" / "Accounting.app" / "Contents" / "Resources" / "manual.txt"
+    shared_data = startup / "Library" / "Application Support" / "Accounting" / "clientes.txt"
+    user_doc = startup / "Users" / "Shared" / "factura.txt"
+    for path in (system_file, cache_file, app_bundle_file, shared_data, user_doc):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("Maria Riera factura contabilidad", encoding="utf-8")
+
+    local_context.add_root(str(startup), depth=api.DEFAULT_SYSTEM_ROOT_DEPTH)
+    local_context.run_once(limit=200, process_limit=200)
+
+    conn = db.get_db()
+    for skipped in (system_file, cache_file, app_bundle_file):
+        row = conn.execute("SELECT COUNT(*) AS total FROM local_assets WHERE path=?", (str(skipped),)).fetchone()
+        assert row["total"] == 0
+    for indexed in (shared_data, user_doc):
+        row = conn.execute("SELECT COUNT(*) AS total FROM local_assets WHERE path=?", (str(indexed),)).fetchone()
+        assert row["total"] == 1
+
+
+def test_nested_home_root_is_not_scanned_twice_when_volume_root_exists(tmp_path):
+    startup = tmp_path / "startup"
+    home = startup / "Users" / "me"
+    home.mkdir(parents=True)
+    doc = home / "Documents" / "factura.txt"
+    doc.parent.mkdir()
+    doc.write_text("Factura Maria", encoding="utf-8")
+
+    local_context.add_root(str(startup), depth=api.DEFAULT_SYSTEM_ROOT_DEPTH)
+    local_context.add_root(str(home), depth=api.DEFAULT_ROOT_DEPTH)
+    local_context.run_once(limit=200, process_limit=0)
+
+    conn = db.get_db()
+    row = conn.execute("SELECT root_id FROM local_assets WHERE path=?", (str(doc),)).fetchone()
+    startup_root = conn.execute("SELECT id FROM local_index_roots WHERE root_path=?", (api.norm_path(str(startup)),)).fetchone()
+    assert row["root_id"] == startup_root["id"]
+
+
+def test_effective_scan_roots_keep_mounted_volumes_with_system_root():
+    roots = [
+        {"root_path": "/", "status": "active"},
+        {"root_path": "/Users/me", "status": "active"},
+        {"root_path": "/Volumes/SharedDisk", "status": "active"},
+        {"root_path": "/Users/me/Library/Mail", "status": "active"},
+    ]
+
+    effective = [row["root_path"] for row in api._effective_scan_roots(roots)]
+
+    assert "/" in effective
+    assert "/Volumes/SharedDisk" in effective
+    assert "/Users/me/Library/Mail" in effective
+    assert "/Users/me" not in effective
+
+
+def test_system_temporary_paths_are_skipped_from_root_scan(monkeypatch):
+    from local_context.privacy import should_skip_tree
+
+    monkeypatch.delenv("NEXO_LOCAL_INDEX_ALLOW_BLOCKED_ROOTS", raising=False)
+    assert should_skip_tree("/tmp/nexo-cache") is True
+    assert should_skip_tree("/var/folders/zz/cache") is True
+    assert should_skip_tree("/private/var/folders/zz/cache") is True
 
 
 def test_installer_volume_is_not_a_default_mounted_root(tmp_path):

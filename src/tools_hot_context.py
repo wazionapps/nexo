@@ -15,6 +15,11 @@ from db import (
 )
 
 
+def append_local_context_evidence(rendered: str, query: str, *, limit: int = 4) -> str:
+    local_context = _format_local_context_evidence(query, limit=min(limit or 4, 4))
+    return f"{rendered}{local_context}" if local_context else rendered
+
+
 def _format_local_context_evidence(query: str, *, limit: int = 4) -> str:
     clean_query = (query or "").strip()
     if not clean_query:
@@ -40,6 +45,14 @@ def _format_local_context_evidence(query: str, *, limit: int = 4) -> str:
         summary = str(asset.get("summary") or "").strip()
         suffix = f" — {summary[:180]}" if summary else ""
         lines.append(f"- {display_path} ({asset.get('file_type', 'file')}, score={score}){suffix}")
+    chunks = result.get("chunks") or []
+    if chunks:
+        lines.append("Relevant excerpts:")
+        for chunk in chunks[:limit]:
+            text = " ".join(str(chunk.get("text") or "").split())
+            if not text:
+                continue
+            lines.append(f"- {text[:360]}")
     refs = result.get("evidence_refs") or []
     if refs:
         lines.append(f"Evidence refs: {', '.join(str(ref) for ref in refs[:limit])}")
@@ -160,8 +173,7 @@ def handle_pre_action_context(
         limit=limit,
     )
     rendered = format_pre_action_context_bundle(bundle)
-    local_context = _format_local_context_evidence(" | ".join(query_bits), limit=min(limit or 4, 4))
-    return f"{rendered}{local_context}" if local_context else rendered
+    return append_local_context_evidence(rendered, " | ".join(query_bits), limit=limit)
 
 
 def handle_recent_context_resolve(

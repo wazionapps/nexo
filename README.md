@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.20.10` is the current packaged-runtime line. Patch release over v7.20.9 — Local Context manual refreshes now reconcile automatic roots every time, so newly mounted disks and upgraded default roots are picked up immediately from Desktop's "comprobar cambios" path.
+Version `7.20.11` is the current packaged-runtime line. Patch release over v7.20.10 — Local Context now starts from real system volume roots plus mounted/removable/network volumes, filters system/cache/app/product artifacts, and injects relevant local evidence automatically into heartbeat, task-open and pre-action context.
+
+Previously in `7.20.10`: patch release over v7.20.9 — Local Context manual refreshes now reconcile automatic roots every time, so newly mounted disks and upgraded default roots are picked up immediately from Desktop's "comprobar cambios" path.
 
 Previously in `7.20.9`: patch release over v7.20.8 — Local Context scans automatic roots at full operational depth, falls back to crontab when Linux/WSL systemd user timers fail, passes Windows AppData email roots into WSL, and blocks Google API keys before HTML cleaning.
 
