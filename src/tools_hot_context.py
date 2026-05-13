@@ -43,6 +43,15 @@ def _format_local_context_evidence(query: str, *, limit: int = 4) -> str:
     refs = result.get("evidence_refs") or []
     if refs:
         lines.append(f"Evidence refs: {', '.join(str(ref) for ref in refs[:limit])}")
+    relations = result.get("relations") or []
+    if relations:
+        lines.append("Local relations:")
+        for relation in relations[:limit]:
+            relation_type = str(relation.get("relation_type") or "related")
+            target = str(relation.get("target_ref") or relation.get("target_asset_id") or "").strip()
+            evidence = str(relation.get("evidence") or "").strip()
+            suffix = f" — {evidence[:120]}" if evidence else ""
+            lines.append(f"- {relation_type}: {target}{suffix}")
     return "\n".join(lines)
 
 

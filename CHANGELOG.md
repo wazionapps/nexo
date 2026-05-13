@@ -1,5 +1,16 @@
 # Changelog
 
+## [7.20.6] - 2026-05-13
+
+### Fixed — local memory evidence quality and email coverage
+
+- **Local Context now ranks entity matches at chunk level.** Entity hits such as project, client, person, SKU or function names bring the matching asset into the candidate window, but chunks with direct co-occurrence in text/path/summary rank above unrelated chunks from the same long document.
+- **Entity-matched assets are no longer lost behind the recent-chunk window.** `context_query()` adds chunks from matched entity assets even when newer unrelated chunks exceed the base 5000-row scoring window.
+- **Local email sources are added automatically.** Default roots now include safe Mail.app / Outlook / NEXO email locations on macOS, Windows and Linux/Thunderbird instead of relying only on the shallow home root.
+- **Email extraction is broader but bounded.** Brain extracts `.eml`, Apple Mail `.emlx`, Outlook `.msg` best-effort, and NEXO's own `nexo-email.db` sent/received continuity tables; `.pst`/`.ost` archives are inventory-only until a safe dedicated parser is added.
+- **Pre-action context shows graph relations.** `nexo_pre_action_context` includes local relation lines alongside assets and evidence refs so agents can see why a file/email/project is connected before acting.
+- **Coverage:** local-context and pre-action suites cover entity-vs-chunk ranking, old entity assets outside the 5000-row window, local email roots/extraction, elapsed/ETA status and pre-action relation evidence.
+
 ## [7.20.5] - 2026-05-13
 
 ### Fixed — local memory status timing

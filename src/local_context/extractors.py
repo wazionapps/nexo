@@ -4,11 +4,14 @@ import csv
 import html
 import json
 import re
+import sqlite3
 import zipfile
 from email import policy
 from email.parser import BytesParser
 from pathlib import Path
 from xml.etree import ElementTree
+
+from .privacy import is_local_email_db
 
 MAX_TEXT_BYTES = 512 * 1024
 MAX_CHARS = 120_000
@@ -73,8 +76,8 @@ def _extract_csv(path: Path) -> str:
     return "\n".join(rows)[:MAX_CHARS]
 
 
-def _extract_eml(path: Path) -> tuple[str, dict]:
-    msg = BytesParser(policy=policy.default).parsebytes(path.read_bytes()[:MAX_TEXT_BYTES])
+def _extract_email_bytes(data: bytes) -> tuple[str, dict]:
+    msg = BytesParser(policy=policy.default).parsebytes(data[:MAX_TEXT_BYTES])
     meta = {
         "subject": str(msg.get("subject") or ""),
         "from": str(msg.get("from") or ""),
@@ -90,6 +93,99 @@ def _extract_eml(path: Path) -> tuple[str, dict]:
         if payload:
             text = payload.decode("utf-8", errors="replace")
     return "\n".join([meta["subject"], meta["from"], meta["to"], text])[:MAX_CHARS], meta
+
+
+def _extract_eml(path: Path) -> tuple[str, dict]:
+    return _extract_email_bytes(path.read_bytes()[:MAX_TEXT_BYTES])
+
+
+def _extract_emlx(path: Path) -> tuple[str, dict]:
+    data = path.read_bytes()[:MAX_TEXT_BYTES]
+    first_line, separator, rest = data.partition(b"\n")
+    if separator and first_line.strip().isdigit():
+        declared = int(first_line.strip() or b"0")
+        payload = rest[:declared] if declared > 0 else rest
+    else:
+        payload = data
+    if b"\n<?xml" in payload:
+        payload = payload.split(b"\n<?xml", 1)[0]
+    text, meta = _extract_email_bytes(payload)
+    meta["apple_mail_message"] = True
+    return text, meta
+
+
+def _printable_binary_text(path: Path) -> str:
+    data = path.read_bytes()[:MAX_TEXT_BYTES]
+    decoded = data.decode("utf-16", errors="ignore") if b"\x00" in data[:2000] else data.decode("latin-1", errors="ignore")
+    pieces = re.findall(r"[\wÀ-ÿ@./:=+\- ,;()\\[\\]{}]{4,}", decoded)
+    return "\n".join(piece.strip() for piece in pieces if piece.strip())[:MAX_CHARS]
+
+
+def _extract_msg(path: Path) -> tuple[str, dict]:
+    try:
+        import extract_msg  # type: ignore
+        message = extract_msg.Message(str(path))
+        meta = {
+            "subject": str(getattr(message, "subject", "") or ""),
+            "from": str(getattr(message, "sender", "") or ""),
+            "to": str(getattr(message, "to", "") or ""),
+            "date": str(getattr(message, "date", "") or ""),
+            "extractor": "msg",
+        }
+        body = str(getattr(message, "body", "") or "")
+        close = getattr(message, "close", None)
+        if callable(close):
+            close()
+        return "\n".join([meta["subject"], meta["from"], meta["to"], body])[:MAX_CHARS], meta
+    except Exception:
+        return _printable_binary_text(path), {"extractor": "msg_fallback"}
+
+
+def _table_names(conn: sqlite3.Connection) -> set[str]:
+    rows = conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+    return {str(row[0]) for row in rows}
+
+
+def _select_existing_columns(conn: sqlite3.Connection, table: str, columns: list[str]) -> list[str]:
+    found = {str(row[1]) for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+    return [column for column in columns if column in found]
+
+
+def _extract_nexo_email_db(path: Path) -> tuple[str, dict]:
+    if not is_local_email_db(str(path)):
+        return "", {"extractor": "sqlite_blocked"}
+    uri = f"file:{path}?mode=ro"
+    parts: list[str] = []
+    try:
+        conn = sqlite3.connect(uri, uri=True, timeout=1)
+    except Exception:
+        return "", {"extractor": "nexo_email_db", "state": "locked_or_unavailable"}
+    try:
+        tables = _table_names(conn)
+        if "emails" in tables:
+            cols = _select_existing_columns(
+                conn,
+                "emails",
+                ["from_addr", "from_name", "subject", "received_at", "status", "body", "response"],
+            )
+            if not cols:
+                return "", {"extractor": "nexo_email_db", "tables": sorted(tables)}
+            order = "received_at" if "received_at" in cols else "rowid"
+            for row in conn.execute(f"SELECT {', '.join(cols)} FROM emails ORDER BY {order} DESC LIMIT 1000").fetchall():
+                parts.append(" | ".join(str(value or "")[:4000] for value in row))
+        if "sent_email_events" in tables:
+            cols = _select_existing_columns(
+                conn,
+                "sent_email_events",
+                ["sender", "to_addrs", "cc_addrs", "subject", "sent_at", "status", "body_text"],
+            )
+            if cols:
+                order = "sent_at" if "sent_at" in cols else "rowid"
+                for row in conn.execute(f"SELECT {', '.join(cols)} FROM sent_email_events ORDER BY {order} DESC LIMIT 1000").fetchall():
+                    parts.append(" | ".join(str(value or "")[:4000] for value in row))
+    finally:
+        conn.close()
+    return "\n".join(parts)[:MAX_CHARS], {"extractor": "nexo_email_db", "tables": sorted(tables) if "tables" in locals() else []}
 
 
 def _zip_xml_text(path: Path, members: list[str]) -> str:
@@ -176,6 +272,14 @@ def extract_text(path: Path) -> tuple[str, dict]:
     elif suffix == ".eml":
         text, metadata = _extract_eml(path)
         metadata["extractor"] = "eml"
+    elif suffix == ".emlx":
+        text, metadata = _extract_emlx(path)
+        metadata["extractor"] = "emlx"
+    elif suffix == ".msg":
+        text, metadata = _extract_msg(path)
+        metadata["extractor"] = metadata.get("extractor") or "msg"
+    elif suffix == ".db" and is_local_email_db(str(path)):
+        text, metadata = _extract_nexo_email_db(path)
     elif suffix == ".pdf":
         text = _extract_pdf(path)
     elif suffix == ".docx":

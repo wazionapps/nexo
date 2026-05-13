@@ -42,6 +42,96 @@ def test_scan_extract_query_and_purge(tmp_path):
     assert local_context.get_asset(asset_id)["ok"] is False
 
 
+def test_context_query_uses_entity_match_when_chunk_text_does_not_repeat_entity(tmp_path):
+    root = tmp_path / "project"
+    root.mkdir()
+    note = root / "operation.txt"
+    note.write_text("SKU scraper productupload queue with ScrapingBee credit guard.", encoding="utf-8")
+
+    local_context.add_root(str(root))
+    local_context.run_once(limit=20, process_limit=20)
+    conn = db.get_db()
+    asset = conn.execute("SELECT asset_id FROM local_assets WHERE path=?", (str(note),)).fetchone()
+    version = conn.execute("SELECT version_id FROM local_asset_versions WHERE asset_id=?", (asset["asset_id"],)).fetchone()
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO local_entities(entity_id, asset_id, version_id, name, entity_type, confidence, evidence, created_at)
+        VALUES (?, ?, ?, 'Leebmann24', 'entity', 0.95, 'project alias', 1)
+        """,
+        (api.stable_id("entity", "leebmann24"), asset["asset_id"], version["version_id"]),
+    )
+    conn.commit()
+
+    context = local_context.context_query("Leebmann24", limit=5)
+
+    assert context["assets"]
+    assert context["assets"][0]["asset_id"] == asset["asset_id"]
+    assert context["chunks"][0]["asset_id"] == asset["asset_id"]
+    assert context["entities"][0]["name"] == "Leebmann24"
+
+
+def test_context_query_entity_boost_prefers_matching_chunk_inside_long_asset(tmp_path):
+    root = tmp_path / "project"
+    root.mkdir()
+    long_doc = root / "long.txt"
+    long_doc.write_text(
+        "\n".join([f"Chunk irrelevante {index} sobre calendario y reglas internas." for index in range(40)])
+        + "\nLeebmann24 productupload usa ScrapingBee credit guard y cola de SKUs.",
+        encoding="utf-8",
+    )
+
+    local_context.add_root(str(root))
+    local_context.run_once(limit=20, process_limit=20)
+
+    context = local_context.context_query("Leebmann24 productupload", limit=5)
+
+    assert context["chunks"]
+    assert "Leebmann24" in context["chunks"][0]["text"]
+    assert "productupload" in context["chunks"][0]["text"]
+
+
+def test_context_query_entity_assets_are_not_lost_behind_recent_chunk_window(tmp_path):
+    root = tmp_path / "project"
+    root.mkdir()
+    old = root / "leebmann-old.txt"
+    old.write_text("Leebmann24 SKU scraper productupload con cola pendiente.", encoding="utf-8")
+
+    local_context.add_root(str(root))
+    local_context.run_once(limit=20, process_limit=20)
+    conn = db.get_db()
+    asset = conn.execute("SELECT asset_id, root_id FROM local_assets WHERE path=?", (str(old),)).fetchone()
+    conn.execute("UPDATE local_chunks SET created_at=1 WHERE asset_id=?", (asset["asset_id"],))
+
+    noise_asset_id = "asset_noise_recent"
+    noise_version_id = "ver_noise_recent"
+    noise_path = str(root / "noise.txt")
+    conn.execute(
+        """
+        INSERT INTO local_assets(asset_id, root_id, path, display_path, parent_path, volume_id, file_type, extension,
+          size_bytes, quick_fingerprint, depth, depth_reason, phase, status, privacy_class, permission_state,
+          first_seen_at, last_seen_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, '/', 'document', '.txt', 1, 'noise', 2, 'default', 'embeddings', 'active', 'normal', 'granted', 1, 1, 1)
+        """,
+        (noise_asset_id, asset["root_id"], noise_path, noise_path, str(root)),
+    )
+    conn.execute(
+        "INSERT INTO local_asset_versions(version_id, asset_id, quick_fingerprint, content_hash, size_bytes, modified_at_fs, summary, created_at) VALUES (?, ?, 'noise', '', 1, 1, '', 1)",
+        (noise_version_id, noise_asset_id),
+    )
+    for index in range(5005):
+        conn.execute(
+            "INSERT INTO local_chunks(chunk_id, asset_id, version_id, chunk_index, text, token_count, created_at) VALUES (?, ?, ?, ?, 'rules calendar evolution generic noise', 5, ?)",
+            (f"noise_chunk_{index}", noise_asset_id, noise_version_id, index, 10_000 + index),
+        )
+    conn.commit()
+
+    context = local_context.context_query("Leebmann24 productupload", limit=5)
+
+    assert context["assets"]
+    assert context["assets"][0]["asset_id"] == asset["asset_id"]
+    assert "Leebmann24" in context["chunks"][0]["text"]
+
+
 def test_status_reports_elapsed_and_eta_for_active_index(tmp_path, monkeypatch):
     root = tmp_path / "docs"
     root.mkdir()
@@ -114,11 +204,65 @@ def test_private_profile_and_credential_files_are_not_indexed(tmp_path, monkeypa
 
 
 def test_windows_style_private_paths_are_blocked():
-    from local_context.privacy import should_skip_file, should_skip_tree
+    from local_context.privacy import should_extract, should_skip_file, should_skip_tree
 
     assert should_skip_file(r"C:\Users\me\.boto\credentials") is True
     assert should_skip_file(r"C:\Users\me\AppData\Roaming\npm\.npmrc") is True
     assert should_skip_tree(r"C:\Users\me\.nexo\data") is True
+    assert should_skip_file(r"C:\Users\me\AppData\Roaming\Microsoft\Outlook\client.msg") is False
+    assert should_extract(r"C:\Users\me\AppData\Roaming\Microsoft\Outlook\client.msg", 2) is True
+    assert should_skip_file(r"C:\Users\me\Documents\Outlook Files\archive.pst") is False
+    assert should_extract(r"C:\Users\me\Documents\Outlook Files\archive.pst", 2) is False
+
+
+def test_default_roots_include_local_email_sources_and_extract_messages(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    mail_messages = home / "Library" / "Mail" / "V10" / "Account" / "INBOX.mbox" / "Data" / "Messages"
+    nexo_email_dir = home / ".nexo" / "runtime" / "nexo-email"
+    mail_messages.mkdir(parents=True)
+    nexo_email_dir.mkdir(parents=True)
+
+    raw_message = (
+        b"Subject: Pedido Leebmann24\r\n"
+        b"From: Maria Riera <maria@example.test>\r\n"
+        b"To: francisco@example.test\r\n"
+        b"\r\n"
+        b"El pedido Leebmann24 quedo aceptado y pagado."
+    )
+    (mail_messages / "1.emlx").write_bytes(str(len(raw_message)).encode("ascii") + b"\n" + raw_message + b"\n<?xml version=\"1.0\"?>")
+
+    email_db = nexo_email_dir / "nexo-email.db"
+    import sqlite3
+
+    conn = sqlite3.connect(email_db)
+    conn.execute(
+        """
+        CREATE TABLE sent_email_events(
+          sender TEXT, to_addrs TEXT, cc_addrs TEXT, subject TEXT, sent_at TEXT, status TEXT, body_text TEXT
+        )
+        """
+    )
+    conn.execute(
+        "INSERT INTO sent_email_events VALUES ('nexo@example.test', 'maria@example.test', '', 'Presupuesto Leebmann24', '2026-05-12', 'sent', 'Adjunto presupuesto aceptado de Leebmann24')"
+    )
+    conn.commit()
+    conn.close()
+
+    monkeypatch.delenv("NEXO_LOCAL_INDEX_DEFAULT_ROOTS", raising=False)
+    monkeypatch.setattr(api.Path, "home", staticmethod(lambda: home))
+    monkeypatch.setattr("local_context.privacy.Path.home", staticmethod(lambda: home))
+
+    roots = api.ensure_default_roots()
+    root_paths = {row["root_path"] for row in roots["roots"]}
+
+    assert api.norm_path(str(home / "Library" / "Mail")) in root_paths
+    assert api.norm_path(str(nexo_email_dir)) in root_paths
+
+    local_context.run_once(limit=100, process_limit=100)
+    context = local_context.context_query("Maria Leebmann24 presupuesto", limit=5)
+
+    assert any("1.emlx" in asset["display_path"] or "nexo-email.db" in asset["display_path"] for asset in context["assets"])
+    assert any("Leebmann24" in chunk["text"] for chunk in context["chunks"])
 
 
 def test_deleted_file_becomes_tombstone(tmp_path):

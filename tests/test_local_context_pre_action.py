@@ -17,3 +17,4 @@ def test_pre_action_context_includes_local_evidence(tmp_path):
 
     assert "LOCAL CONTEXT EVIDENCE" in rendered
     assert "maria-seguro.txt" in rendered
+    assert "Local relations:" in rendered

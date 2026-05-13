@@ -67,6 +67,29 @@ SENSITIVE_PARTS = {
     "browser profile",
 }
 
+EMAIL_RUNTIME_DB_NAMES = {
+    "email.db",
+    "email-tracker.db",
+    "emails.db",
+    "monitor.db",
+    "nexo-email.db",
+}
+
+EMAIL_ATTACHMENT_SUFFIXES = {
+    ".csv",
+    ".docx",
+    ".eml",
+    ".emlx",
+    ".html",
+    ".md",
+    ".pdf",
+    ".pptx",
+    ".txt",
+    ".xlsx",
+}
+
+EMAIL_EXTRACTABLE_SUFFIXES = {".eml", ".emlx", ".msg"}
+
 NOISY_PARTS = {
     "node_modules",
     "vendor",
@@ -173,6 +196,66 @@ def _contains_path_marker(lowered: str, markers: set[str]) -> bool:
     return any(marker in lowered for marker in markers)
 
 
+def _is_under_marker(lowered: str, marker: str) -> bool:
+    marker = marker.strip("/").lower()
+    if not marker:
+        return False
+    return lowered.endswith("/" + marker) or f"/{marker}/" in lowered
+
+
+def is_local_email_tree(path: str) -> bool:
+    lowered = _normalized(path)
+    return any(
+        _is_under_marker(lowered, marker)
+        for marker in (
+            "library/mail",
+            ".nexo/runtime/nexo-email",
+            "documents/outlook files",
+            "appdata/local/microsoft/outlook",
+            "appdata/roaming/microsoft/outlook",
+            "appdata/local/packages/microsoft.windowscommunicationsapps",
+            ".thunderbird",
+            ".mozilla-thunderbird",
+        )
+    )
+
+
+def is_local_email_db(path: str) -> bool:
+    p = Path(path)
+    return is_local_email_tree(path) and p.name.lower() in EMAIL_RUNTIME_DB_NAMES
+
+
+def is_allowed_local_email_file(path: str) -> bool:
+    if not is_local_email_tree(path):
+        return False
+    p = Path(path)
+    lowered = _normalized(path)
+    suffix = p.suffix.lower()
+    if is_sensitive_path(path):
+        return False
+    if _is_under_marker(lowered, ".nexo/runtime/nexo-email"):
+        if is_local_email_db(path):
+            return True
+        if _is_under_marker(lowered, ".nexo/runtime/nexo-email/attachments"):
+            return suffix in EMAIL_ATTACHMENT_SUFFIXES
+        return suffix in {".eml", ".emlx"}
+    if _is_under_marker(lowered, "library/mail"):
+        return suffix in {".eml", ".emlx"}
+    if any(
+        _is_under_marker(lowered, marker)
+        for marker in (
+            "documents/outlook files",
+            "appdata/local/microsoft/outlook",
+            "appdata/roaming/microsoft/outlook",
+            "appdata/local/packages/microsoft.windowscommunicationsapps",
+        )
+    ):
+        return suffix in {".eml", ".msg", ".pst", ".ost"}
+    if _is_under_marker(lowered, ".thunderbird") or _is_under_marker(lowered, ".mozilla-thunderbird"):
+        return suffix in {".eml", ".mbox", ""}
+    return False
+
+
 def _has_transient_project_part(path: str) -> bool:
     parts = list(_normalized(path).replace(":", "/").split("/"))
     for index, part in enumerate(parts):
@@ -239,6 +322,8 @@ def classify_path(path: str) -> tuple[int, str, str]:
     lowered = _normalized(path)
     parts = _parts(path)
 
+    if is_local_email_tree(path) and (Path(path).suffix == "" or is_allowed_local_email_file(path)):
+        return 2, "normal", "local_email_path"
     if is_sensitive_path(path):
         return 1, "sensitive_inventory_only", "sensitive_path"
     if is_private_profile_path(path):
@@ -253,6 +338,8 @@ def classify_path(path: str) -> tuple[int, str, str]:
 def should_skip_tree(path: str) -> bool:
     lowered = _normalized(path)
     parts = _parts(path)
+    if is_local_email_tree(path):
+        return False
     if any(item in lowered for item in SYSTEM_PARTS):
         return True
     if is_sensitive_path(path) or is_private_profile_path(path):
@@ -263,6 +350,8 @@ def should_skip_tree(path: str) -> bool:
 def should_skip_file(path: str) -> bool:
     lowered = _normalized(path)
     parts = _parts(path)
+    if is_local_email_tree(path):
+        return not is_allowed_local_email_file(path)
     if any(item in lowered for item in SYSTEM_PARTS):
         return True
     if is_sensitive_path(path) or is_private_profile_path(path):
@@ -282,6 +371,8 @@ def should_extract(path: str, depth: int) -> bool:
     if should_skip_file(path):
         return False
     suffix = Path(path).suffix.lower()
+    if is_local_email_db(path):
+        return True
     if suffix in {
         ".txt",
         ".md",
@@ -302,6 +393,8 @@ def should_extract(path: str, depth: int) -> bool:
         ".csv",
         ".tsv",
         ".eml",
+        ".emlx",
+        ".msg",
         ".pdf",
         ".docx",
         ".pptx",

@@ -123,12 +123,34 @@ def _mounted_volume_roots() -> list[str]:
     return roots
 
 
+def _local_email_roots() -> list[str]:
+    home = Path.home()
+    roots: list[Path] = [home / ".nexo" / "runtime" / "nexo-email"]
+    if sys.platform == "darwin":
+        roots.extend([
+            home / "Library" / "Mail",
+            home / "Library" / "Group Containers" / "UBF8T346G9.Office" / "Outlook" / "Outlook 15 Profiles",
+        ])
+    elif sys.platform.startswith("win"):
+        local_app_data = Path(os.environ.get("LOCALAPPDATA") or home / "AppData" / "Local")
+        roaming_app_data = Path(os.environ.get("APPDATA") or home / "AppData" / "Roaming")
+        roots.extend([
+            home / "Documents" / "Outlook Files",
+            local_app_data / "Microsoft" / "Outlook",
+            roaming_app_data / "Microsoft" / "Outlook",
+            local_app_data / "Packages" / "microsoft.windowscommunicationsapps_8wekyb3d8bbwe" / "LocalState",
+        ])
+    else:
+        roots.extend([home / ".thunderbird", home / ".mozilla-thunderbird"])
+    return [str(root) for root in roots]
+
+
 def default_roots() -> list[str]:
     home = Path.home()
     configured = os.environ.get("NEXO_LOCAL_INDEX_DEFAULT_ROOTS", "").strip()
     if configured:
         return _dedupe_roots([item for item in configured.split(os.pathsep) if item.strip()])
-    return _dedupe_roots([str(home), *_mounted_volume_roots()])
+    return _dedupe_roots([str(home), *_local_email_roots(), *_mounted_volume_roots()])
 
 
 def ensure_default_roots() -> dict:
@@ -471,7 +493,7 @@ def _file_type(path: Path) -> str:
         return "photo"
     if suffix in {".py", ".js", ".ts", ".tsx", ".jsx", ".php", ".sql", ".css", ".html"}:
         return "code"
-    if suffix in {".eml"}:
+    if suffix in {".eml", ".emlx", ".msg", ".pst", ".ost"}:
         return "email"
     if suffix in {".pdf", ".docx", ".pptx", ".xlsx", ".md", ".txt", ".csv", ".tsv"}:
         return "document"
@@ -1880,10 +1902,112 @@ def _search_text_score(query: str, text: str) -> float:
     return len(q & tokens) / max(len(q), 1)
 
 
-def context_query(query: str, *, intent: str = "answer", limit: int = 12, evidence_required: bool = True, current_context: str = "") -> dict:
-    conn = _conn()
-    qvec = embeddings.embed_text(query)
+_QUERY_STOPWORDS = {
+    "about",
+    "archivos",
+    "con",
+    "context",
+    "contexto",
+    "cuanto",
+    "dame",
+    "del",
+    "desde",
+    "documentos",
+    "donde",
+    "esta",
+    "está",
+    "file",
+    "files",
+    "hay",
+    "los",
+    "para",
+    "que",
+    "qué",
+    "related",
+    "relacionado",
+    "sabes",
+    "sobre",
+    "todo",
+    "what",
+    "where",
+}
+
+
+def _query_terms(query: str) -> list[str]:
+    terms = []
+    for token in tokenize(query):
+        if len(token) < 3 or token in _QUERY_STOPWORDS:
+            continue
+        if token not in terms:
+            terms.append(token)
+    return terms[:10]
+
+
+def _entity_match_score(query_lower: str, terms: list[str], name: str) -> float:
+    entity = (name or "").strip().lower()
+    if not entity:
+        return 0.0
+    entity_terms = set(tokenize(entity))
+    if entity and entity in query_lower:
+        return 1.0
+    if not terms:
+        return 0.0
+    term_set = set(terms)
+    overlap = term_set & entity_terms
+    if overlap:
+        return min(0.95, 0.45 + (len(overlap) / max(len(entity_terms), 1)) * 0.5)
+    if any(term in entity for term in terms):
+        return 0.6
+    return 0.0
+
+
+def _entity_matches_for_query(conn, query: str, *, limit: int) -> tuple[list[dict], dict[str, float]]:
+    query_lower = (query or "").strip().lower()
+    terms = _query_terms(query)
+    if not query_lower or not terms:
+        return [], {}
+
+    clauses = " OR ".join("lower(e.name) LIKE ?" for _ in terms)
+    params = [f"%{term}%" for term in terms]
     rows = conn.execute(
+        f"""
+        SELECT DISTINCT e.name, e.entity_type, e.asset_id, a.path, a.privacy_class
+        FROM local_entities e
+        JOIN local_assets a ON a.asset_id = e.asset_id
+        WHERE a.status='active'
+          AND a.privacy_class='normal'
+          AND ({clauses})
+        LIMIT ?
+        """,
+        [*params, max(int(limit) * 20, 40)],
+    ).fetchall()
+
+    matches = []
+    boosts: dict[str, float] = {}
+    seen = set()
+    for row in rows:
+        if not is_queryable_path(str(row["path"] or ""), str(row["privacy_class"] or "")):
+            continue
+        score = _entity_match_score(query_lower, terms, str(row["name"] or ""))
+        if score <= 0:
+            continue
+        key = (row["name"], row["entity_type"], row["asset_id"])
+        if key not in seen:
+            matches.append({
+                "name": row["name"],
+                "entity_type": row["entity_type"],
+                "asset_id": row["asset_id"],
+                "score": round(float(score), 4),
+            })
+            seen.add(key)
+        boosts[row["asset_id"]] = max(boosts.get(row["asset_id"], 0.0), float(score))
+
+    matches.sort(key=lambda item: item.get("score", 0), reverse=True)
+    return matches[: int(limit)], boosts
+
+
+def _context_candidate_rows(conn, entity_asset_ids: list[str], *, base_limit: int = 5000) -> list:
+    base_rows = conn.execute(
         """
         SELECT c.chunk_id, c.asset_id, c.text, a.path, a.file_type, a.privacy_class, v.summary, e.vector_json
         FROM local_chunks c
@@ -1893,17 +2017,68 @@ def context_query(query: str, *, intent: str = "answer", limit: int = 12, eviden
         WHERE a.status='active'
           AND a.privacy_class='normal'
         ORDER BY c.created_at DESC
-        LIMIT 5000
-        """
+        LIMIT ?
+        """,
+        (int(base_limit),),
     ).fetchall()
+    if not entity_asset_ids:
+        return base_rows
+
+    placeholders = ",".join("?" for _ in entity_asset_ids)
+    entity_rows = conn.execute(
+        f"""
+        SELECT c.chunk_id, c.asset_id, c.text, a.path, a.file_type, a.privacy_class, v.summary, e.vector_json
+        FROM local_chunks c
+        JOIN local_assets a ON a.asset_id = c.asset_id
+        LEFT JOIN local_asset_versions v ON v.version_id = c.version_id
+        LEFT JOIN local_embeddings e ON e.chunk_id = c.chunk_id
+        WHERE a.status='active'
+          AND a.privacy_class='normal'
+          AND c.asset_id IN ({placeholders})
+        ORDER BY c.chunk_index ASC
+        LIMIT ?
+        """,
+        [*entity_asset_ids, max(1000, len(entity_asset_ids) * 80)],
+    ).fetchall()
+
+    rows = []
+    seen_chunks = set()
+    for row in [*entity_rows, *base_rows]:
+        chunk_id = row["chunk_id"]
+        if chunk_id in seen_chunks:
+            continue
+        seen_chunks.add(chunk_id)
+        rows.append(row)
+    return rows
+
+
+def context_query(query: str, *, intent: str = "answer", limit: int = 12, evidence_required: bool = True, current_context: str = "") -> dict:
+    conn = _conn()
+    qvec = embeddings.embed_text(query)
+    entities_payload, entity_boosts = _entity_matches_for_query(conn, query, limit=max(int(limit), 1))
+    rows = _context_candidate_rows(conn, list(entity_boosts.keys()), base_limit=5000)
     scored = []
     for row in rows:
         if not is_queryable_path(str(row["path"] or ""), str(row["privacy_class"] or "")):
             continue
         vector = json_loads(row["vector_json"], [])
-        score = max(_search_text_score(query, row["text"]), embeddings.cosine(qvec, vector))
+        text_score = _search_text_score(query, row["text"])
+        path_score = _search_text_score(query, row["path"] or "")
+        summary_score = _search_text_score(query, row["summary"] or "")
+        entity_score = entity_boosts.get(row["asset_id"], 0.0)
+        vector_score = embeddings.cosine(qvec, vector)
+        score = max(text_score, path_score, summary_score, vector_score)
+        if entity_score > 0:
+            direct_score = max(text_score, path_score, summary_score)
+            if direct_score > 0:
+                entity_rank = 0.82 + (0.42 * text_score) + (0.18 * path_score) + (0.12 * summary_score)
+                score = max(score, entity_rank + min(0.2, entity_score * 0.2))
+            else:
+                # Entity-level matches keep older assets eligible, but do not let
+                # unrelated chunks from a long document outrank direct evidence.
+                score = max(score, min(0.48, 0.28 + entity_score * 0.2))
         if score > 0:
-            scored.append((score, row))
+            scored.append((min(float(score), 1.6), row))
     scored.sort(key=lambda item: item[0], reverse=True)
     assets = []
     chunks = []
@@ -1926,14 +2101,10 @@ def context_query(query: str, *, intent: str = "answer", limit: int = 12, eviden
             "score": round(float(score), 4),
         })
         evidence_refs.append(f"local_asset:{row['asset_id']}#chunk:{row['chunk_id']}")
-    entity_rows = conn.execute(
-        "SELECT DISTINCT name, entity_type, asset_id FROM local_entities WHERE lower(name) LIKE ? LIMIT ?",
-        (f"%{query.lower()}%", int(limit)),
-    ).fetchall()
-    entities_payload = [dict(row) for row in entity_rows]
     relations_payload: list[dict] = []
-    if seen_assets:
-        asset_ids = list(seen_assets)[: int(limit)]
+    relation_asset_ids = list(dict.fromkeys([*seen_assets, *entity_boosts.keys()]))[: int(limit)]
+    if relation_asset_ids:
+        asset_ids = relation_asset_ids
         placeholders = ",".join("?" for _ in asset_ids)
         relation_rows = conn.execute(
             f"""
