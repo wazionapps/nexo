@@ -1,9 +1,10 @@
 # NEXO Brain
 
-> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v7.20.11). NEXO Desktop is a separate closed-source companion app distributed at nexo-desktop.com; its source does not ship in this repo. Mentions of "NEXO Desktop" in changelog entries describe coordinated client releases that consume the Brain CLI / MCP contract. For the commercial Desktop product, contact info@wazion.com.
+> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v7.20.12). NEXO Desktop is a separate closed-source companion app distributed at nexo-desktop.com; its source does not ship in this repo. Mentions of "NEXO Desktop" in changelog entries describe coordinated client releases that consume the Brain CLI / MCP contract. For the commercial Desktop product, contact info@wazion.com.
 
 NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. It adds a local shared brain across supported clients, configurable terminal and automation backends, recovery-aware background jobs, startup preflight, runtime self-healing, smarter retrieval defaults, long-horizon overnight analysis, and 150+ MCP tools.
 
+v7.20.12: patch release. Local Context keeps the first index pass separate from live change tracking, persists the current indexing start time, returns compact bounded local evidence for agents, and installs the Windows host scheduler for WSL indexing after reboot.
 v7.20.11: patch release. Local Context now starts from real system volume roots plus mounted/removable/network volumes, skips system/cache/app/product artifacts, and injects local evidence excerpts automatically into heartbeat, task-open and pre-action context.
 v7.20.10: patch release. Local Context manual refreshes now reconcile automatic roots every time, so mounted disks and upgraded default roots are picked up immediately from Desktop's check-now path.
 v7.20.9: patch release. Local Context now scans automatic roots at full operational depth, falls back to managed crontab when Linux/WSL systemd user timers fail, passes Windows AppData email roots into WSL, blocks Google API keys before HTML cleaning, and keeps Outlook Mac proprietary files inventory-only.
