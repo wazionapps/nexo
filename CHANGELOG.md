@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.20.7] - 2026-05-13
+
+### Fixed — CI-safe local email root bootstrap
+
+- **Local email roots are now deterministic across test and packaged environments.** Brain still adds platform-native Mail.app / Outlook / Thunderbird roots, and now also includes platform-specific mail stores that actually exist when running under CI, WSL or migrated profiles.
+- **The 7.20.6 email coverage contract now passes the full Linux CI suite.** The failing local email root regression test is covered without weakening macOS/Windows behavior.
+- **Coverage:** targeted local-context, pre-action, service runtime, CLI and email suites pass (`53 passed`), including `.emlx`, NEXO email DB and Windows Outlook path behavior.
+
 ## [7.20.6] - 2026-05-13
 
 ### Fixed — local memory evidence quality and email coverage

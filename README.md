@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.20.6` is the current packaged-runtime line. Patch release over v7.20.5 — Local Context now ranks entity matches at chunk level, keeps old entity-matched assets eligible, adds safe local email roots for macOS/Windows/Linux, extracts `.eml`, `.emlx`, `.msg` and NEXO email DB continuity, and exposes local graph relations in pre-action context.
+Version `7.20.7` is the current packaged-runtime line. Patch release over v7.20.6 — Local Context email-root bootstrap is now deterministic across CI, WSL and migrated profiles while preserving macOS Mail.app, Windows Outlook, Thunderbird and NEXO email coverage.
+
+Previously in `7.20.6`: patch release over v7.20.5 — Local Context ranks entity matches at chunk level, keeps old entity-matched assets eligible, adds safe local email roots for macOS/Windows/Linux, extracts `.eml`, `.emlx`, `.msg` and NEXO email DB continuity, and exposes local graph relations in pre-action context.
 
 Previously in `7.20.5`: patch release over v7.20.4 — Local Context status reports elapsed indexing time and a defensive ETA while background jobs remain pending.
 

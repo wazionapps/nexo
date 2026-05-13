@@ -126,22 +126,32 @@ def _mounted_volume_roots() -> list[str]:
 def _local_email_roots() -> list[str]:
     home = Path.home()
     roots: list[Path] = [home / ".nexo" / "runtime" / "nexo-email"]
+    mac_roots = [
+        home / "Library" / "Mail",
+        home / "Library" / "Group Containers" / "UBF8T346G9.Office" / "Outlook" / "Outlook 15 Profiles",
+    ]
+    local_app_data = Path(os.environ.get("LOCALAPPDATA") or home / "AppData" / "Local")
+    roaming_app_data = Path(os.environ.get("APPDATA") or home / "AppData" / "Roaming")
+    windows_roots = [
+        home / "Documents" / "Outlook Files",
+        local_app_data / "Microsoft" / "Outlook",
+        roaming_app_data / "Microsoft" / "Outlook",
+        local_app_data / "Packages" / "microsoft.windowscommunicationsapps_8wekyb3d8bbwe" / "LocalState",
+    ]
+    linux_roots = [home / ".thunderbird", home / ".mozilla-thunderbird"]
+
     if sys.platform == "darwin":
-        roots.extend([
-            home / "Library" / "Mail",
-            home / "Library" / "Group Containers" / "UBF8T346G9.Office" / "Outlook" / "Outlook 15 Profiles",
-        ])
+        roots.extend(mac_roots)
     elif sys.platform.startswith("win"):
-        local_app_data = Path(os.environ.get("LOCALAPPDATA") or home / "AppData" / "Local")
-        roaming_app_data = Path(os.environ.get("APPDATA") or home / "AppData" / "Roaming")
-        roots.extend([
-            home / "Documents" / "Outlook Files",
-            local_app_data / "Microsoft" / "Outlook",
-            roaming_app_data / "Microsoft" / "Outlook",
-            local_app_data / "Packages" / "microsoft.windowscommunicationsapps_8wekyb3d8bbwe" / "LocalState",
-        ])
+        roots.extend(windows_roots)
     else:
-        roots.extend([home / ".thunderbird", home / ".mozilla-thunderbird"])
+        roots.extend(linux_roots)
+
+    # CI and migrated profiles can expose platform-specific mail stores while
+    # running on another OS. Include only the stores that actually exist.
+    for optional_root in [*mac_roots, *windows_roots, *linux_roots]:
+        if optional_root.exists() and optional_root not in roots:
+            roots.append(optional_root)
     return [str(root) for root in roots]
 
 
