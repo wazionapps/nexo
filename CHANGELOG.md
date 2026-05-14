@@ -1,5 +1,12 @@
 # Changelog
 
+## [7.20.17] - 2026-05-14
+
+### Fixed — packaged update backup validation tolerates live indexing
+
+- **Validated DB backups no longer false-abort when Local Memory writes during the copy.** `sqlite3.backup()` still creates a consistent snapshot, and Brain still rejects missing/zero/large protected-table loss, but tiny row drift from the background indexer no longer blocks `nexo update`.
+- **Coverage:** update wipe-guard regression tests now cover both small live growth and real backup truncation.
+
 ## [7.20.16] - 2026-05-14
 
 ### Fixed — packaged update layout keeps Local Memory importable

@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.20.16` is the current packaged-runtime line. Patch release over v7.20.15 — packaged updates now keep the `local_context` runtime shim importable and rollback code-tree snapshots safely when compatibility directories are symlinks.
+Version `7.20.17` is the current packaged-runtime line. Patch release over v7.20.16 — validated DB backups now tolerate tiny live-write growth from the Local Memory indexer while still rejecting real protected-table loss.
+
+Previously in `7.20.16`: patch release over v7.20.15 — packaged updates keep the `local_context` runtime shim importable and rollback code-tree snapshots safely when compatibility directories are symlinks.
 
 Previously in `7.20.15`: patch release over v7.20.14 — Brain update/recovery paths now fail closed when the DB guard is missing or stale, and backup validation rejects any replacement that loses Local Memory tables.
 

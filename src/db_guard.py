@@ -455,11 +455,26 @@ def validate_backup_matches_source(
         if s is not None and d is None:
             discrepancies.append(f"{table}: source={s} backup=missing")
             continue
-        if s is not None and d is not None and d < s:
+        if s is not None and d is not None and d < s and not _backup_drift_is_safe(s, d):
             discrepancies.append(f"{table}: source={s} backup={d}")
     if discrepancies:
         return False, "; ".join(discrepancies)
     return True, None
+
+
+def _backup_drift_is_safe(source_count: int, backup_count: int) -> bool:
+    """Allow tiny live-write drift while still rejecting real backup data loss.
+
+    `sqlite3.backup()` creates a consistent snapshot, but NEXO's background
+    memory service can add rows immediately after the snapshot. Comparing the
+    backup with the live DB after that growth must not abort an update. Small
+    tables stay exact because a 1-row loss there can be meaningful.
+    """
+    if backup_count <= 0 or source_count < 1000:
+        return False
+    drift = source_count - backup_count
+    allowed = max(25, int(source_count * 0.005))
+    return 0 < drift <= allowed
 
 
 def _quote_identifier(identifier: str) -> str:

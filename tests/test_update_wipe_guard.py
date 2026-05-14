@@ -162,6 +162,68 @@ def test_backup_databases_validates_row_counts(update_env):
     assert Path(backup_dir).is_dir()
 
 
+def test_backup_databases_allows_small_live_growth_during_validation(update_env, monkeypatch):
+    """A live indexer can add rows after sqlite3.backup() snapshots the DB."""
+    primary = update_env["data"] / "nexo.db"
+    _make_populated_db(primary)
+    _add_local_rows(
+        primary,
+        {
+            "local_chunks": 5000,
+            "local_entities": 5000,
+            "local_relations": 5000,
+            "local_embeddings": 5000,
+        },
+    )
+    original_backup = update_env["upd"].safe_sqlite_backup
+
+    def backup_then_grow(source, dest):
+        result = original_backup(source, dest)
+        _add_local_rows(
+            primary,
+            {
+                "local_chunks": 10,
+                "local_entities": 10,
+                "local_relations": 10,
+                "local_embeddings": 10,
+            },
+        )
+        return result
+
+    monkeypatch.setattr(update_env["upd"], "safe_sqlite_backup", backup_then_grow)
+
+    backup_dir, err = update_env["upd"]._backup_databases()
+
+    assert err is None
+    assert Path(backup_dir).is_dir()
+
+
+def test_backup_databases_rejects_large_backup_loss(update_env, monkeypatch):
+    primary = update_env["data"] / "nexo.db"
+    _make_populated_db(primary)
+    _add_local_rows(primary, {"local_chunks": 5000, "local_embeddings": 5000})
+    original_backup = update_env["upd"].safe_sqlite_backup
+
+    def backup_then_truncate(source, dest):
+        ok, err = original_backup(source, dest)
+        if ok:
+            conn = sqlite3.connect(str(dest))
+            try:
+                conn.execute("DELETE FROM local_chunks WHERE id > 100")
+                conn.execute("DELETE FROM local_embeddings WHERE id > 100")
+                conn.commit()
+            finally:
+                conn.close()
+        return ok, err
+
+    monkeypatch.setattr(update_env["upd"], "safe_sqlite_backup", backup_then_truncate)
+
+    _, err = update_env["upd"]._backup_databases()
+
+    assert err is not None
+    assert "local_chunks" in err
+
+
 def test_row_count_regression_detects_wipe(update_env):
     """_row_count_regression fires on 2+ regressed critical tables."""
     pre = {"protocol_tasks": 600, "followups": 400, "learnings": 380, "reminders": 40}
