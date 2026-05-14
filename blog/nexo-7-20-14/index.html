@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.20.14: local memory update protection</title>
+<meta name="description" content="NEXO Brain v7.20.14 protects Local Memory during updates and recovery, rotates runtime backups and stabilizes first-indexing status.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-20-14/">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.20.14: local memory update protection","datePublished":"2026-05-14","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head><body><main><article style="max-width:760px;margin:80px auto;padding:0 24px;line-height:1.75;">
+<h1>NEXO 7.20.14 &mdash; local memory update protection</h1>
+<p><em>Published 2026-05-14. Patch release over v7.20.13.</em></p>
+
+<h2>Why this release exists</h2>
+<p>Local Memory can take many hours or days to build on a real workstation. v7.20.14 hardens the update and recovery paths so that a Desktop or Brain update cannot silently replace a rich local index with an empty or partially reset database.</p>
+
+<h2>What changed</h2>
+<ul>
+<li><strong>Protected Local Memory.</strong> Update and recovery checks now treat local assets, chunks, embeddings, jobs, roots and graph tables as protected user state.</li>
+<li><strong>Bounded backups.</strong> Runtime backup families for pre-update, code tree, auto-update and task-owner backfill keep the latest 5 snapshots by default.</li>
+<li><strong>Stable first-indexing status.</strong> While the first pass is incomplete, Brain reports that state clearly instead of letting service-attention status hide it.</li>
+<li><strong>Desktop speed profiles.</strong> Brain exposes bounded indexing profiles so Desktop can offer safer speed choices without direct config edits.</li>
+</ul>
+
+<h2>Validation</h2>
+<pre><code>pytest -q tests/test_backup_rotation.py tests/test_local_context.py tests/test_local_index_service_runtime.py tests/test_db_guard.py tests/test_update_wipe_guard.py tests/test_auto_update_selfheal.py tests/test_recover.py tests/test_doctor.py
+# passed
+
+python3 -m py_compile src/auto_update.py src/local_context/api.py src/plugins/update.py src/scripts/backfill_task_owner.py src/scripts/prune_runtime_backups.py</code></pre>
+
+<p><a href="/changelog/#v72014">Full changelog entry &rarr;</a> &middot; <a href="/blog/nexo-7-20-13/">Previous database recovery note</a></p>
+</article></main></body></html>
