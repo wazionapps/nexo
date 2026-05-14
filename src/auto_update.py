@@ -82,6 +82,23 @@ TEMPLATE_FILE = _RESOLVED_REPO_DIR / "templates" / "CLAUDE.md.template"
 CHECK_COOLDOWN_SECONDS = 3600  # 1 hour
 GIT_TIMEOUT_SECONDS = 4  # stay well under the 5s total budget
 CRITICAL_BACKUP_TABLES = ("learnings", "session_diary", "guard_checks", "protocol_debt")
+LOCAL_CONTEXT_BACKUP_TABLES = (
+    "local_index_roots",
+    "local_index_exclusions",
+    "local_index_jobs",
+    "local_index_checkpoints",
+    "local_index_state",
+    "local_index_errors",
+    "local_assets",
+    "local_asset_versions",
+    "local_chunks",
+    "local_entities",
+    "local_relations",
+    "local_embeddings",
+    "local_context_queries",
+    "local_index_dirs",
+)
+PROTECTED_BACKUP_TABLES = CRITICAL_BACKUP_TABLES + LOCAL_CONTEXT_BACKUP_TABLES
 CLASSIFIER_INSTALL_TIMEOUT_SECONDS = 1800
 CLASSIFIER_INSTALL_JOIN_SECONDS = 1500
 CLASSIFIER_INSTALL_LOG = paths.logs_dir() / "classifier-install.log"
@@ -321,7 +338,7 @@ def _validate_db_backup(source_db: Path, backup_db: Path) -> dict:
         report["errors"].append(f"backup db missing: {backup_db}")
         return report
 
-    for table in CRITICAL_BACKUP_TABLES:
+    for table in PROTECTED_BACKUP_TABLES:
         source_count = _critical_table_count(source_db, table)
         backup_count = _critical_table_count(backup_db, table)
         report["source_counts"][table] = source_count

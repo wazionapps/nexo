@@ -100,6 +100,32 @@ def test_preflight_blocks_local_memory_regression_even_when_core_tables_are_heal
     assert "local_assets" in err
 
 
+def test_preflight_aborts_when_db_guard_is_missing(update_env, monkeypatch):
+    primary = update_env["data"] / "nexo.db"
+    _make_populated_db(primary)
+    monkeypatch.setattr(update_env["upd"], "_DB_GUARD_AVAILABLE", False)
+    monkeypatch.setattr(update_env["upd"], "_DB_GUARD_IMPORT_ERROR", "No module named db_guard")
+    monkeypatch.setattr(update_env["upd"], "PROTECTED_TABLES", ())
+
+    err = update_env["upd"]._preflight_wipe_check()
+
+    assert err is not None
+    assert "protection module is not available" in err
+
+
+def test_preflight_aborts_when_db_guard_does_not_protect_local_memory(update_env, monkeypatch):
+    primary = update_env["data"] / "nexo.db"
+    _make_populated_db(primary)
+    monkeypatch.setattr(update_env["upd"], "_DB_GUARD_AVAILABLE", True)
+    monkeypatch.setattr(update_env["upd"], "PROTECTED_TABLES", CRITICAL_TABLES)
+
+    err = update_env["upd"]._preflight_wipe_check()
+
+    assert err is not None
+    assert "local memory tables are not protected" in err
+    assert "local_assets" in err
+
+
 def test_preflight_allows_healthy_db(update_env):
     primary = update_env["data"] / "nexo.db"
     _make_populated_db(primary)

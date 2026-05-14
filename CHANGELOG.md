@@ -1,5 +1,14 @@
 # Changelog
 
+## [7.20.15] - 2026-05-14
+
+### Fixed — local memory update guard is now fail-closed
+
+- **Brain refuses update/recovery paths when DB protection is incomplete.** If `db_guard.py` is missing, stale, or does not protect `local_*` memory tables, the updater now aborts before touching `nexo.db` instead of falling back to an empty table list.
+- **Desktop-managed updates sync the Brain updater and DB guard as a pair.** This prevents mixed-version installs where Desktop sends the new updater but leaves the old guard behind.
+- **Backup validation now checks local-memory tables directly.** A backup that drops `local_assets`, `local_chunks` or `local_embeddings` is rejected before it can replace the active database.
+- **Coverage:** update wipe guard, backup validation and Python compilation of the touched updater modules.
+
 ## [7.20.14] - 2026-05-14
 
 ### Fixed — local memory survives updates and backup growth is bounded

@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.20.14` is the current packaged-runtime line. Patch release over v7.20.13 — Brain protects Local Memory during update/recovery paths, rotates runtime backup families to the latest 5 entries, keeps first-indexing status stable, and exposes bounded indexing speed profiles for Desktop.
+Version `7.20.15` is the current packaged-runtime line. Patch release over v7.20.14 — Brain update/recovery paths now fail closed when the DB guard is missing or stale, and backup validation rejects any replacement that loses Local Memory tables.
+
+Previously in `7.20.14`: patch release over v7.20.13 — Brain protects Local Memory during update/recovery paths, rotates runtime backup families to the latest 5 entries, keeps first-indexing status stable, and exposes bounded indexing speed profiles for Desktop.
 
 Previously in `7.20.13`: patch release over v7.20.12 — Brain recovery now pauses all known DB writers before restoring `nexo.db`, and Doctor can repair the zero-byte/locked database state that made Desktop Local Memory show zero files.
 

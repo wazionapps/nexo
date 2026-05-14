@@ -32,10 +32,9 @@ except ModuleNotFoundError as exc:
     def is_duplicate_artifact_name(_path) -> bool:
         return False
 
-# db_guard landed in v5.5.5. When plugins/update.py is imported from a runtime
-# that still ships the v5.5.4 tree (e.g. mid-upgrade), the import will fail —
-# we fall back to no-op guards so the update can still complete and bring in
-# the fixed module on its own.
+# db_guard must be available before any DB-touching update runs. Desktop syncs
+# this file plus db_guard.py as a pair; if a stale runtime imports update.py
+# without a current guard, we abort instead of risking a local-memory wipe.
 try:
     from db_guard import (
         CRITICAL_TABLES,
@@ -52,8 +51,10 @@ try:
         validate_backup_matches_source,
     )
     _DB_GUARD_AVAILABLE = True
-except Exception:  # pragma: no cover - exercised only during mid-upgrade installs
+    _DB_GUARD_IMPORT_ERROR = ""
+except Exception as exc:  # pragma: no cover - exercised only during stale installs
     _DB_GUARD_AVAILABLE = False
+    _DB_GUARD_IMPORT_ERROR = str(exc)
     CRITICAL_TABLES = ()
     PROTECTED_TABLES = ()
     HOURLY_BACKUP_MAX_AGE = 48 * 3600
@@ -89,6 +90,13 @@ except Exception:  # pragma: no cover - exercised only during mid-upgrade instal
 
     def validate_backup_matches_source(*_args, **_kwargs):  # type: ignore[misc]
         return True, None
+
+REQUIRED_LOCAL_MEMORY_TABLES: tuple[str, ...] = (
+    "local_assets",
+    "local_chunks",
+    "local_embeddings",
+    "local_index_dirs",
+)
 
 # Code root is the parent of plugins/:
 # - source checkout: <repo>/src
@@ -383,6 +391,30 @@ def _check_dirty() -> str | None:
     return None
 
 
+def _db_guard_integrity_error() -> str | None:
+    """Return why DB protection is unsafe, or None when current guard is usable."""
+    if os.environ.get("NEXO_SKIP_WIPE_GUARD") == "1":
+        return None
+    primary_db = DATA_DIR / "nexo.db"
+    if not primary_db.is_file():
+        return None
+    if not _DB_GUARD_AVAILABLE:
+        return (
+            "DB protection module is not available; refusing to update while local memory may exist.\n"
+            f"  import error: {_DB_GUARD_IMPORT_ERROR or 'unknown'}\n"
+            "Restart Desktop so it can sync the bundled Brain guard, then retry the update."
+        )
+    protected = set(PROTECTED_TABLES)
+    missing = [table for table in REQUIRED_LOCAL_MEMORY_TABLES if table not in protected]
+    if missing:
+        return (
+            "DB protection module is stale; refusing to update because local memory tables are not protected.\n"
+            f"  missing tables: {', '.join(missing)}\n"
+            "Restart Desktop so it can sync the bundled Brain guard, then retry the update."
+        )
+    return None
+
+
 def _preflight_wipe_check() -> str | None:
     """Abort the update early if the primary DB already looks wiped.
 
@@ -399,6 +431,9 @@ def _preflight_wipe_check() -> str | None:
     """
     if os.environ.get("NEXO_SKIP_WIPE_GUARD") == "1":
         return None
+    guard_err = _db_guard_integrity_error()
+    if guard_err:
+        return guard_err
     primary_db = DATA_DIR / "nexo.db"
     if not primary_db.is_file():
         return None  # Nothing to protect; fresh install path.

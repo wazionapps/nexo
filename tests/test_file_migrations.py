@@ -239,6 +239,37 @@ def test_validate_db_backup_detects_critical_table_regression(tmp_path):
     assert {"learnings", "session_diary", "guard_checks", "protocol_debt"} <= tables
 
 
+def test_validate_db_backup_detects_local_memory_regression(tmp_path):
+    """Local memory tables are protected data, not disposable update cache."""
+    import auto_update
+
+    source_db = tmp_path / "source.db"
+    backup_db = tmp_path / "backup.db"
+
+    src = sqlite3.connect(str(source_db))
+    src.execute("CREATE TABLE local_assets (id INTEGER)")
+    src.execute("CREATE TABLE local_chunks (id INTEGER)")
+    src.execute("CREATE TABLE local_embeddings (id INTEGER)")
+    src.execute("INSERT INTO local_assets VALUES (1)")
+    src.execute("INSERT INTO local_chunks VALUES (1)")
+    src.execute("INSERT INTO local_embeddings VALUES (1)")
+    src.commit()
+    src.close()
+
+    dst = sqlite3.connect(str(backup_db))
+    dst.execute("CREATE TABLE local_assets (id INTEGER)")
+    dst.execute("CREATE TABLE local_chunks (id INTEGER)")
+    dst.execute("CREATE TABLE local_embeddings (id INTEGER)")
+    dst.commit()
+    dst.close()
+
+    report = auto_update._validate_db_backup(source_db, backup_db)
+
+    assert report["ok"] is False
+    tables = {item["table"] for item in report["regressions"]}
+    assert {"local_assets", "local_chunks", "local_embeddings"} <= tables
+
+
 def test_validate_db_backup_accepts_non_empty_critical_tables(tmp_path):
     """A valid backup must preserve non-empty critical tables."""
     import auto_update
