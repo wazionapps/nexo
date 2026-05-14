@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.20.15` is the current packaged-runtime line. Patch release over v7.20.14 — Brain update/recovery paths now fail closed when the DB guard is missing or stale, and backup validation rejects any replacement that loses Local Memory tables.
+Version `7.20.16` is the current packaged-runtime line. Patch release over v7.20.15 — packaged updates now keep the `local_context` runtime shim importable and rollback code-tree snapshots safely when compatibility directories are symlinks.
+
+Previously in `7.20.15`: patch release over v7.20.14 — Brain update/recovery paths now fail closed when the DB guard is missing or stale, and backup validation rejects any replacement that loses Local Memory tables.
 
 Previously in `7.20.14`: patch release over v7.20.13 — Brain protects Local Memory during update/recovery paths, rotates runtime backup families to the latest 5 entries, keeps first-indexing status stable, and exposes bounded indexing speed profiles for Desktop.
 

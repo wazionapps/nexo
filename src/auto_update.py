@@ -2440,6 +2440,7 @@ def _f06_legacy_shim_map() -> list[tuple[str, Path]]:
         ("plugins", core_root / "plugins"),
         ("hooks", core_root / "hooks"),
         ("rules", core_root / "rules"),
+        ("local_context", core_root / "local_context"),
         ("data", NEXO_HOME / "runtime" / "data"),
         ("logs", NEXO_HOME / "runtime" / "logs"),
         ("operations", NEXO_HOME / "runtime" / "operations"),
@@ -2508,6 +2509,7 @@ def _f06_live_legacy_paths() -> list[Path]:
             "plugins",
             "hooks",
             "rules",
+            "local_context",
             "db",
             "dashboard",
             "skills-core",
@@ -2593,6 +2595,7 @@ def _promote_packaged_runtime_code_to_core() -> None:
         ("cognitive", core_root / "cognitive"),
         ("doctor", core_root / "doctor"),
         ("dashboard", core_root / "dashboard"),
+        ("local_context", core_root / "local_context"),
         ("skills-core", core_root / "skills"),
     ]
 
@@ -4325,6 +4328,7 @@ def _backup_runtime_tree(dest: Path = NEXO_HOME) -> str:
         "db",
         "cognitive",
         "dashboard",
+        "local_context",
         "rules",
         "crons",
         "scripts",

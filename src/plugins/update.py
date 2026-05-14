@@ -908,6 +908,7 @@ def _backup_code_tree() -> tuple[str | None, str | None]:
         "db",
         "cognitive",
         "dashboard",
+        "local_context",
         "rules",
         "crons",
         "scripts",
@@ -952,7 +953,9 @@ def _restore_code_tree(backup_dir: str) -> str | None:
         for item in bdir.iterdir():
             dest = NEXO_HOME / item.name
             if item.is_dir():
-                if dest.is_dir():
+                if dest.is_symlink():
+                    dest.unlink()
+                elif dest.is_dir():
                     shutil.rmtree(dest)
                 shutil.copytree(item, dest)
             elif item.is_file():

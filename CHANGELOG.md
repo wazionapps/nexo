@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.20.16] - 2026-05-14
+
+### Fixed — packaged update layout keeps Local Memory importable
+
+- **Packaged updates now recreate the `local_context` runtime shim.** Brain keeps the Local Memory package under `core/local_context` and exposes the root compatibility link required by `import server`, so `nexo update` no longer fails with `ModuleNotFoundError: local_context`.
+- **Code-tree rollback handles directory symlinks.** If verification fails, restoring a previous code snapshot now unlinks compatibility symlinks before copying directories back, avoiding partial rollback errors on `cognitive`, `local_context` and similar packages.
+- **Coverage:** F0.6 runtime-layout and packaged-update rollback contract tests, plus Python compilation of the touched updater modules.
+
 ## [7.20.15] - 2026-05-14
 
 ### Fixed — local memory update guard is now fail-closed

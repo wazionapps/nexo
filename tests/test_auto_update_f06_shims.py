@@ -43,6 +43,8 @@ def test_maybe_migrate_f06_promotes_packaged_code_into_core(monkeypatch, tmp_pat
     (home / ".structure-version").write_text("F0.6\n")
     (home / "db").mkdir(parents=True)
     (home / "db" / "__init__.py").write_text("# db package\n")
+    (home / "local_context").mkdir(parents=True)
+    (home / "local_context" / "__init__.py").write_text("# local context package\n")
     (home / "skills-core" / "demo-skill").mkdir(parents=True)
     (home / "skills-core" / "demo-skill" / "skill.json").write_text("{}\n")
     (home / "server.py").write_text("print('runtime')\n")
@@ -53,6 +55,10 @@ def test_maybe_migrate_f06_promotes_packaged_code_into_core(monkeypatch, tmp_pat
     assert (home / "core" / "db" / "__init__.py").is_file()
     assert (home / "db").is_symlink()
     assert (home / "db").resolve() == (home / "core" / "db").resolve()
+
+    assert (home / "core" / "local_context" / "__init__.py").is_file()
+    assert (home / "local_context").is_symlink()
+    assert (home / "local_context").resolve() == (home / "core" / "local_context").resolve()
 
     assert (home / "core" / "skills" / "demo-skill" / "skill.json").is_file()
     assert (home / "skills-core").is_symlink()

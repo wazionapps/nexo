@@ -33,12 +33,14 @@ def test_backup_code_tree_includes_skills_runtime_and_templates(tmp_path, monkey
     (runtime_home / "skills-runtime" / "sk-runner").mkdir(parents=True)
     (runtime_home / "templates").mkdir()
     (runtime_home / "bin").mkdir()
+    (runtime_home / "local_context").mkdir()
 
     (runtime_home / "skills" / "personal-skill" / "skill.json").write_text("{}\n")
     (runtime_home / "skills-core" / "core-skill" / "skill.json").write_text("{}\n")
     (runtime_home / "skills-runtime" / "sk-runner" / "script.py").write_text("print('ok')\n")
     (runtime_home / "templates" / "skill-template.md").write_text("# template\n")
     (runtime_home / "bin" / "nexo").write_text("#!/bin/bash\n")
+    (runtime_home / "local_context" / "__init__.py").write_text("# local context\n")
 
     monkeypatch.setenv("NEXO_HOME", str(runtime_home))
 
@@ -74,6 +76,30 @@ def test_backup_code_tree_includes_skills_runtime_and_templates(tmp_path, monkey
     assert (backup_path / "skills-runtime" / "sk-runner" / "script.py").is_file()
     assert (backup_path / "templates" / "skill-template.md").is_file()
     assert (backup_path / "bin" / "nexo").is_file()
+    assert (backup_path / "local_context" / "__init__.py").is_file()
+
+
+def test_restore_code_tree_replaces_directory_symlink(tmp_path, monkeypatch):
+    from plugins import update
+
+    runtime_home = tmp_path / "runtime"
+    backup_base = tmp_path / "backups"
+    backup_dir = backup_base / "code-tree-demo"
+    runtime_home.mkdir()
+    backup_dir.mkdir(parents=True)
+
+    (runtime_home / "core" / "cognitive").mkdir(parents=True)
+    (runtime_home / "cognitive").symlink_to("core/cognitive", target_is_directory=True)
+    (backup_dir / "cognitive").mkdir()
+    (backup_dir / "cognitive" / "__init__.py").write_text("# restored\n")
+
+    monkeypatch.setattr(update, "NEXO_HOME", runtime_home)
+
+    err = update._restore_code_tree(str(backup_dir))
+
+    assert err is None
+    assert not (runtime_home / "cognitive").is_symlink()
+    assert (runtime_home / "cognitive" / "__init__.py").read_text() == "# restored\n"
 
 
 def test_sync_packaged_clients_normalizes_preferences_and_targets_runtime_home(tmp_path, monkeypatch):
