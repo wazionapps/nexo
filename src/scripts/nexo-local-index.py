@@ -37,11 +37,18 @@ LOG_DIR.mkdir(parents=True, exist_ok=True)
 LOG_FILE = LOG_DIR / "local-index.log"
 LOCK_FILE = LOG_DIR / "local-index.lock"
 LOCK_STALE_SECONDS = int(os.environ.get("NEXO_LOCAL_INDEX_LOCK_STALE_SECONDS", "1800") or "1800")
-SCAN_LIMIT = int(os.environ.get("NEXO_LOCAL_INDEX_SCAN_LIMIT", "1000") or "1000")
-PROCESS_LIMIT = int(os.environ.get("NEXO_LOCAL_INDEX_PROCESS_LIMIT", "200") or "200")
-LIVE_ASSET_LIMIT = int(os.environ.get("NEXO_LOCAL_INDEX_LIVE_ASSET_LIMIT", "2000") or "2000")
-LIVE_DIR_LIMIT = int(os.environ.get("NEXO_LOCAL_INDEX_LIVE_DIR_LIMIT", "300") or "300")
-LIVE_FILE_LIMIT = int(os.environ.get("NEXO_LOCAL_INDEX_LIVE_FILE_LIMIT", "1000") or "1000")
+
+
+def _optional_env_int(name: str) -> int | None:
+    value = os.environ.get(name, "").strip()
+    if not value:
+        return None
+    try:
+        parsed = int(value)
+    except ValueError:
+        log(f"Ignoring invalid integer env {name}={value!r}.")
+        return None
+    return parsed if parsed > 0 else None
 
 
 def log(message: str) -> None:
@@ -114,14 +121,19 @@ def release_lock() -> None:
         pass
 
 
-def _run_index_cycle() -> dict:
+def _run_single_index_cycle(config: dict) -> dict:
+    scan_limit = _optional_env_int("NEXO_LOCAL_INDEX_SCAN_LIMIT") or int(config["scan_limit"])
+    process_limit = _optional_env_int("NEXO_LOCAL_INDEX_PROCESS_LIMIT") or int(config["process_limit"])
+    live_asset_limit = _optional_env_int("NEXO_LOCAL_INDEX_LIVE_ASSET_LIMIT") or int(config["live_asset_limit"])
+    live_dir_limit = _optional_env_int("NEXO_LOCAL_INDEX_LIVE_DIR_LIMIT") or int(config["live_dir_limit"])
+    live_file_limit = _optional_env_int("NEXO_LOCAL_INDEX_LIVE_FILE_LIMIT") or int(config["live_file_limit"])
     try:
         return api.run_once(
-            limit=SCAN_LIMIT,
-            process_limit=PROCESS_LIMIT,
-            live_asset_limit=LIVE_ASSET_LIMIT,
-            live_dir_limit=LIVE_DIR_LIMIT,
-            live_file_limit=LIVE_FILE_LIMIT,
+            limit=scan_limit,
+            process_limit=process_limit,
+            live_asset_limit=live_asset_limit,
+            live_dir_limit=live_dir_limit,
+            live_file_limit=live_file_limit,
         )
     except TypeError as exc:
         message = str(exc)
@@ -135,7 +147,28 @@ def _run_index_cycle() -> dict:
             error=message,
         )
         log(f"Compatibility fallback: api.run_once does not accept live reconcile limits ({message}).")
-        return api.run_once(limit=SCAN_LIMIT, process_limit=PROCESS_LIMIT)
+        return api.run_once(limit=scan_limit, process_limit=process_limit)
+
+
+def _run_index_cycle() -> dict:
+    config = api.performance_config()
+    cycles = _optional_env_int("NEXO_LOCAL_INDEX_CYCLES_PER_RUN") or int(config.get("cycles_per_run") or 1)
+    results = []
+    ok = True
+    for _index in range(max(1, cycles)):
+        result = _run_single_index_cycle(config)
+        results.append(result)
+        ok = ok and bool(result.get("ok"))
+        paused = bool(result.get("paused") or result.get("scan", {}).get("paused") or result.get("jobs", {}).get("paused"))
+        if paused or not result.get("ok"):
+            break
+    return {
+        "ok": ok,
+        "profile": config["profile"],
+        "cycles": len(results),
+        "result": results[-1] if results else {},
+        "results": results,
+    }
 
 
 def main() -> int:

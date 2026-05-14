@@ -36,6 +36,7 @@ from db_guard import (
     EMPTY_DB_SIZE_BYTES,
     HOURLY_BACKUP_GLOB,
     MIN_REFERENCE_ROWS,
+    PROTECTED_TABLES,
     WIPE_THRESHOLD_PCT,
     db_looks_wiped,
     db_row_counts,
@@ -138,7 +139,7 @@ def _describe_backup(path: Path, kind: str) -> dict:
     counts: dict[str, int | None] = {}
     critical_rows = 0
     if size > EMPTY_DB_SIZE_BYTES:
-        counts = db_row_counts(path, CRITICAL_TABLES)
+        counts = db_row_counts(path, PROTECTED_TABLES)
         critical_rows = sum(v for v in counts.values() if isinstance(v, int))
     return {
         "path": str(path),
@@ -147,6 +148,7 @@ def _describe_backup(path: Path, kind: str) -> dict:
         "mtime": mtime,
         "size_bytes": size,
         "critical_rows": critical_rows,
+        "protected_rows": critical_rows,
         "row_counts": {k: v for k, v in counts.items() if v is not None},
         "is_usable": size > EMPTY_DB_SIZE_BYTES and critical_rows >= MIN_REFERENCE_ROWS,
     }
@@ -167,9 +169,16 @@ def _pick_source(entries: list[dict], explicit: str | None) -> tuple[Path | None
 
     if not entries:
         return None, "no backups found under NEXO_HOME/backups/"
-    for entry in entries:
-        if entry["is_usable"]:
-            return Path(entry["path"]), None
+    usable = [entry for entry in entries if entry["is_usable"]]
+    if usable:
+        best = max(
+            usable,
+            key=lambda entry: (
+                int(entry.get("protected_rows") or entry.get("critical_rows") or 0),
+                float(entry.get("mtime") or 0),
+            ),
+        )
+        return Path(best["path"]), None
     return None, "no usable backup with critical rows found"
 
 
@@ -206,8 +215,8 @@ def recover(
         "steps": [],
         "warnings": [],
         "errors": [],
-        "current_looks_wiped": db_looks_wiped(target_path),
-        "current_row_counts": {k: v for k, v in db_row_counts(target_path).items() if v is not None},
+        "current_looks_wiped": db_looks_wiped(target_path, PROTECTED_TABLES),
+        "current_row_counts": {k: v for k, v in db_row_counts(target_path, PROTECTED_TABLES).items() if v is not None},
     }
 
     # Step 1: pick source
@@ -231,7 +240,7 @@ def recover(
     result["source"] = str(chosen)
     result["steps"].append(f"chose source: {chosen}")
 
-    source_counts = db_row_counts(chosen)
+    source_counts = db_row_counts(chosen, PROTECTED_TABLES)
     result["source_row_counts"] = {k: v for k, v in source_counts.items() if v is not None}
     source_total = sum(v for v in source_counts.values() if isinstance(v, int))
     if source_total < MIN_REFERENCE_ROWS:
@@ -308,7 +317,7 @@ def recover(
         return result
     result["steps"].append(f"restored {chosen.name} -> {target_path}")
 
-    valid, valid_err = validate_backup_matches_source(chosen, target_path)
+    valid, valid_err = validate_backup_matches_source(chosen, target_path, PROTECTED_TABLES)
     if not valid:
         result["errors"].append(f"post-restore validation failed: {valid_err}")
         if stopped_launchagents:
@@ -316,7 +325,7 @@ def recover(
         return result
     result["steps"].append("validated post-restore row counts")
 
-    final_counts = db_row_counts(target_path)
+    final_counts = db_row_counts(target_path, PROTECTED_TABLES)
     result["final_row_counts"] = {k: v for k, v in final_counts.items() if v is not None}
     if stopped_launchagents:
         result["resume"] = resume_nexo_launchagents(stopped_launchagents)

@@ -5,11 +5,19 @@ import sys
 from pathlib import Path
 from unittest import mock
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 REPO_SRC = REPO_ROOT / "src"
 
 if str(REPO_SRC) not in sys.path:
     sys.path.insert(0, str(REPO_SRC))
+
+
+@pytest.fixture(autouse=True)
+def _disable_live_db_wipe_guard(monkeypatch):
+    """This file validates packaged-update flow, not live DB wipe detection."""
+    monkeypatch.setenv("NEXO_SKIP_WIPE_GUARD", "1")
 
 
 def test_backup_code_tree_includes_skills_runtime_and_templates(tmp_path, monkeypatch):

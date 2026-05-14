@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from db_guard import CRITICAL_TABLES
+from db_guard import CRITICAL_TABLES, LOCAL_CONTEXT_TABLES
 
 
 def _make_populated_db(path: Path) -> None:
@@ -31,6 +31,19 @@ def _make_wiped_db(path: Path) -> None:
     try:
         for table in CRITICAL_TABLES:
             conn.execute(f"CREATE TABLE {table} (id INTEGER PRIMARY KEY, payload TEXT)")
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _add_local_rows(path: Path, rows_by_table: dict[str, int]) -> None:
+    conn = sqlite3.connect(str(path))
+    try:
+        for table in LOCAL_CONTEXT_TABLES:
+            conn.execute(f"CREATE TABLE IF NOT EXISTS {table} (id INTEGER PRIMARY KEY, payload TEXT)")
+        for table, count in rows_by_table.items():
+            for i in range(count):
+                conn.execute(f"INSERT INTO {table} (payload) VALUES (?)", (f"local-{i}",))
         conn.commit()
     finally:
         conn.close()
@@ -71,6 +84,20 @@ def test_preflight_blocks_wiped_db_with_healthy_backup(update_env):
     assert err is not None
     assert "wiped" in err.lower()
     assert "nexo recover" in err
+
+
+def test_preflight_blocks_local_memory_regression_even_when_core_tables_are_healthy(update_env):
+    primary = update_env["data"] / "nexo.db"
+    hourly = update_env["backups"] / "nexo-2026-05-13-2350.db"
+    _make_populated_db(primary)
+    _make_populated_db(hourly)
+    _add_local_rows(hourly, {"local_assets": 2000, "local_chunks": 4000, "local_embeddings": 4000})
+
+    err = update_env["upd"]._preflight_wipe_check()
+
+    assert err is not None
+    assert "protected data" in err
+    assert "local_assets" in err
 
 
 def test_preflight_allows_healthy_db(update_env):

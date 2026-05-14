@@ -41,10 +41,12 @@ try:
         CRITICAL_TABLES,
         HOURLY_BACKUP_MAX_AGE,
         MIN_REFERENCE_ROWS,
+        PROTECTED_TABLES,
         WIPE_THRESHOLD_PCT,
         db_looks_wiped,
         db_row_counts,
         diff_row_counts,
+        find_best_hourly_backup,
         find_latest_hourly_backup,
         safe_sqlite_backup,
         validate_backup_matches_source,
@@ -53,6 +55,7 @@ try:
 except Exception:  # pragma: no cover - exercised only during mid-upgrade installs
     _DB_GUARD_AVAILABLE = False
     CRITICAL_TABLES = ()
+    PROTECTED_TABLES = ()
     HOURLY_BACKUP_MAX_AGE = 48 * 3600
     MIN_REFERENCE_ROWS = 50
     WIPE_THRESHOLD_PCT = 80
@@ -64,6 +67,9 @@ except Exception:  # pragma: no cover - exercised only during mid-upgrade instal
         return {}
 
     def diff_row_counts(*_args, **_kwargs):  # type: ignore[misc]
+        return None
+
+    def find_best_hourly_backup(*_args, **_kwargs):  # type: ignore[misc]
         return None
 
     def find_latest_hourly_backup(*_args, **_kwargs):  # type: ignore[misc]
@@ -121,12 +127,45 @@ def _is_packaged_install() -> bool:
 NEXO_HOME = export_resolved_nexo_home()
 DATA_DIR = paths.data_dir()
 BACKUP_BASE = paths.backups_dir()
+TECHNICAL_BACKUP_KEEP = 5
 
 # In packaged installs, update.py lives at <NEXO_HOME>/plugins/update.py.
 _PACKAGED_INSTALL = _is_packaged_install()
 REPO_DIR = CODE_ROOT if _PACKAGED_INSTALL else _REPO_CANDIDATE
 SRC_DIR = CODE_ROOT
 PACKAGE_JSON = REPO_DIR / "package.json"
+
+
+def _rotate_backup_family(prefix: str, keep: int = TECHNICAL_BACKUP_KEEP) -> int:
+    """Rotate technical rollback directories for one backup prefix.
+
+    Cleanup is best-effort: update/rollback safety must never depend on
+    deleting old snapshots successfully.
+    """
+    if keep <= 0:
+        return 0
+    base = BACKUP_BASE
+    if not base.is_dir():
+        return 0
+    try:
+        candidates = [p for p in base.iterdir() if p.is_dir() and p.name.startswith(prefix)]
+    except Exception:
+        return 0
+    if len(candidates) <= keep:
+        return 0
+    try:
+        candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    except Exception:
+        return 0
+
+    removed = 0
+    for old in candidates[keep:]:
+        try:
+            shutil.rmtree(old)
+            removed += 1
+        except Exception:
+            continue
+    return removed
 
 
 def _venv_python_path(runtime_root: Path | None = None) -> Path:
@@ -363,22 +402,34 @@ def _preflight_wipe_check() -> str | None:
     primary_db = DATA_DIR / "nexo.db"
     if not primary_db.is_file():
         return None  # Nothing to protect; fresh install path.
-    if not db_looks_wiped(primary_db):
-        return None  # Populated DB — proceed.
-    reference = find_latest_hourly_backup(BACKUP_BASE)
+    reference = find_best_hourly_backup(
+        BACKUP_BASE,
+        tables=PROTECTED_TABLES,
+    ) or find_latest_hourly_backup(BACKUP_BASE, tables=PROTECTED_TABLES)
     if reference is None:
         return None  # No reference to compare against; cannot distinguish wipe from fresh install.
-    reference_counts = db_row_counts(reference)
+    reference_counts = db_row_counts(reference, PROTECTED_TABLES)
     reference_total = sum(v for v in reference_counts.values() if isinstance(v, int))
     if reference_total < MIN_REFERENCE_ROWS:
         return None  # Reference itself is near-empty; likely fresh install.
-    return (
-        "Primary DB appears wiped while a recent hourly backup still has real data.\n"
-        f"  nexo.db: {primary_db} (empty)\n"
-        f"  hourly backup: {reference} ({reference_total} critical rows)\n"
-        "Run `nexo recover` to restore from backup, then retry the update.\n"
-        "Set NEXO_SKIP_WIPE_GUARD=1 to override (only recommended during a deliberate reinstall)."
-    )
+    if db_looks_wiped(primary_db, PROTECTED_TABLES):
+        return (
+            "Primary DB appears wiped while a recent hourly backup still has real data.\n"
+            f"  nexo.db: {primary_db} (empty)\n"
+            f"  hourly backup: {reference} ({reference_total} protected rows)\n"
+            "Run `nexo recover` to restore from backup, then retry the update.\n"
+            "Set NEXO_SKIP_WIPE_GUARD=1 to override (only recommended during a deliberate reinstall)."
+        )
+    report = diff_row_counts(primary_db, reference, PROTECTED_TABLES)
+    if report.is_wipe():
+        return (
+            "Primary DB has lost protected data compared with the latest usable backup.\n"
+            f"  nexo.db: {primary_db}\n"
+            f"  backup: {reference} ({reference_total} protected rows)\n"
+            + "\n".join(report.summary_lines())
+            + "\nRun `nexo doctor --tier boot --plane database_real --fix` before updating."
+        )
+    return None
 
 
 def _row_count_regression(pre: dict[str, int | None], post: dict[str, int | None]) -> str | None:
@@ -391,7 +442,7 @@ def _row_count_regression(pre: dict[str, int | None], post: dict[str, int | None
     regressions: list[str] = []
     pre_total = sum(v for v in pre.values() if isinstance(v, int))
     post_total = sum(v for v in post.values() if isinstance(v, int))
-    for table in CRITICAL_TABLES:
+    for table in PROTECTED_TABLES:
         pre_v = pre.get(table)
         post_v = post.get(table)
         if pre_v is None or pre_v < 10:
@@ -439,12 +490,16 @@ def _backup_databases() -> tuple[str, str | None]:
         # Only validate row counts for the primary DB — the other sidecar DBs
         # (cognitive.db, cron-runs.db) do not share CRITICAL_TABLES.
         if db_file.name == "nexo.db":
-            valid, valid_err = validate_backup_matches_source(db_file, dest, CRITICAL_TABLES)
+            valid, valid_err = validate_backup_matches_source(db_file, dest, PROTECTED_TABLES)
             if not valid:
                 return str(backup_dir), (
                     f"Backup of {db_file.name} did not preserve critical tables: {valid_err}"
                 )
 
+    try:
+        _rotate_backup_family("pre-update-")
+    except Exception:
+        pass
     return str(backup_dir), None
 
 
@@ -846,6 +901,10 @@ def _backup_code_tree() -> tuple[str | None, str | None]:
             shutil.copy2(vf, backup_dir / "version.json")
     except Exception as e:
         return None, f"Code tree backup failed: {e}"
+    try:
+        _rotate_backup_family("code-tree-")
+    except Exception:
+        pass
     return str(backup_dir), None
 
 

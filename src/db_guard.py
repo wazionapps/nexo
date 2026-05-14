@@ -17,15 +17,19 @@ Public surface (stable for use by plugins/update.py, plugins/recover.py,
 auto_update.py):
 
     CRITICAL_TABLES
+    LOCAL_CONTEXT_TABLES
+    PROTECTED_TABLES
     WIPE_THRESHOLD_PCT
     MIN_REFERENCE_ROWS
 
     db_row_counts(path, tables) -> dict[str, int | None]
     db_looks_wiped(path, tables, min_reference_rows) -> bool
     find_latest_hourly_backup(backups_dir, max_age_seconds) -> Path | None
+    find_best_hourly_backup(backups_dir, max_age_seconds) -> Path | None
     diff_row_counts(current, reference, tables) -> WipeReport
     safe_sqlite_backup(source, dest) -> tuple[bool, str | None]
     validate_backup_matches_source(source, dest, tables) -> tuple[bool, str | None]
+    restore_tables_from_backup(source, target, tables) -> dict
     kill_nexo_mcp_servers(dry_run) -> dict
     quiesce_nexo_db_writers(dry_run) -> dict
     resume_nexo_launchagents(labels, dry_run) -> dict
@@ -60,6 +64,31 @@ CRITICAL_TABLES: tuple[str, ...] = (
     "change_log",
     "decisions",
 )
+
+# The local memory index is not a disposable cache. A full-disk first pass can
+# take days, and losing these tables silently makes NEXO look "healthy" while
+# the user's local memory has actually been reset.
+LOCAL_CONTEXT_TABLES: tuple[str, ...] = (
+    "local_index_roots",
+    "local_index_exclusions",
+    "local_index_jobs",
+    "local_index_checkpoints",
+    "local_index_state",
+    "local_index_errors",
+    "local_assets",
+    "local_asset_versions",
+    "local_chunks",
+    "local_entities",
+    "local_relations",
+    "local_embeddings",
+    "local_context_queries",
+    "local_index_dirs",
+)
+
+# Everything an updater/recovery path must preserve. Keep CRITICAL_TABLES as a
+# public legacy name for older callers, but new guards should use
+# PROTECTED_TABLES so local indexing cannot regress unnoticed.
+PROTECTED_TABLES: tuple[str, ...] = CRITICAL_TABLES + LOCAL_CONTEXT_TABLES
 
 # A reference backup must contain at least this many rows (summed across
 # CRITICAL_TABLES) before we will treat it as "proof the user has real data".
@@ -180,7 +209,7 @@ def _table_count(conn: sqlite3.Connection, table: str) -> int | None:
     return int(result[0]) if result is not None else 0
 
 
-def db_row_counts(path: str | Path, tables: tuple[str, ...] = CRITICAL_TABLES) -> dict[str, int | None]:
+def db_row_counts(path: str | Path, tables: tuple[str, ...] = PROTECTED_TABLES) -> dict[str, int | None]:
     """Return {table: count} for a SQLite DB. Missing DB / missing tables map to None."""
     p = Path(path)
     counts: dict[str, int | None] = {t: None for t in tables}
@@ -206,7 +235,7 @@ def db_row_counts(path: str | Path, tables: tuple[str, ...] = CRITICAL_TABLES) -
 
 def db_looks_wiped(
     path: str | Path,
-    tables: tuple[str, ...] = CRITICAL_TABLES,
+    tables: tuple[str, ...] = PROTECTED_TABLES,
     min_reference_rows: int = MIN_REFERENCE_ROWS,
 ) -> bool:
     """Heuristic: the file exists AND either all critical tables exist with 0 rows,
@@ -247,6 +276,7 @@ def find_latest_hourly_backup(
     max_age_seconds: int = HOURLY_BACKUP_MAX_AGE,
     glob: str = HOURLY_BACKUP_GLOB,
     min_critical_rows: int = 1,
+    tables: tuple[str, ...] = PROTECTED_TABLES,
 ) -> Path | None:
     """Return the newest hourly backup that contains at least ``min_critical_rows``
     across CRITICAL_TABLES and is not older than ``max_age_seconds``.
@@ -281,11 +311,50 @@ def find_latest_hourly_backup(
     # the row-count floor. A production NEXO_HOME can accumulate 40+ hourly
     # backups, so opening every file would add seconds to the CLI startup.
     for _, candidate in stat_candidates:
-        counts = db_row_counts(candidate)
+        counts = db_row_counts(candidate, tables)
         total = sum(v for v in counts.values() if isinstance(v, int))
         if total >= min_critical_rows:
             return candidate
     return None
+
+
+def find_best_hourly_backup(
+    backups_dir: str | Path,
+    max_age_seconds: int = HOURLY_BACKUP_MAX_AGE,
+    glob: str = HOURLY_BACKUP_GLOB,
+    min_critical_rows: int = 1,
+    tables: tuple[str, ...] = PROTECTED_TABLES,
+) -> Path | None:
+    """Return the usable hourly backup with the most protected rows.
+
+    Newest is not always safest: if an update/reset starts reindexing from
+    scratch, the next hourly backups are recent but degraded. For local memory
+    recovery we prefer the richest backup and use mtime only as a tie-breaker.
+    """
+    base = Path(backups_dir)
+    if not base.is_dir():
+        return None
+    now = time.time()
+    best: tuple[int, float, Path] | None = None
+    for entry in base.glob(glob):
+        if not entry.is_file():
+            continue
+        try:
+            stat = entry.stat()
+        except OSError:
+            continue
+        if now - stat.st_mtime > max_age_seconds:
+            continue
+        if stat.st_size <= EMPTY_DB_SIZE_BYTES:
+            continue
+        counts = db_row_counts(entry, tables)
+        total = sum(v for v in counts.values() if isinstance(v, int))
+        if total < min_critical_rows:
+            continue
+        candidate = (int(total), float(stat.st_mtime), entry)
+        if best is None or candidate[:2] > best[:2]:
+            best = candidate
+    return best[2] if best else None
 
 
 # ── Diff & wipe detection ───────────────────────────────────────────────
@@ -293,7 +362,7 @@ def find_latest_hourly_backup(
 def diff_row_counts(
     current: str | Path,
     reference: str | Path,
-    tables: tuple[str, ...] = CRITICAL_TABLES,
+    tables: tuple[str, ...] = PROTECTED_TABLES,
 ) -> WipeReport:
     """Compare row counts between two SQLite DBs and return a WipeReport."""
     source_counts = db_row_counts(current, tables)
@@ -363,7 +432,7 @@ def safe_sqlite_backup(source: str | Path, dest: str | Path) -> tuple[bool, str 
 def validate_backup_matches_source(
     source: str | Path,
     dest: str | Path,
-    tables: tuple[str, ...] = CRITICAL_TABLES,
+    tables: tuple[str, ...] = PROTECTED_TABLES,
 ) -> tuple[bool, str | None]:
     """After a backup, verify that every critical table in the copy has at
     least as many rows as the source — i.e. we did not lose data in transit.
@@ -391,6 +460,94 @@ def validate_backup_matches_source(
     if discrepancies:
         return False, "; ".join(discrepancies)
     return True, None
+
+
+def _quote_identifier(identifier: str) -> str:
+    if identifier not in PROTECTED_TABLES:
+        raise ValueError(f"refusing unsafe table identifier: {identifier!r}")
+    return '"' + identifier.replace('"', '""') + '"'
+
+
+def restore_tables_from_backup(
+    source: str | Path,
+    target: str | Path,
+    tables: tuple[str, ...] = LOCAL_CONTEXT_TABLES,
+) -> dict:
+    """Replace selected tables in ``target`` with the copy from ``source``.
+
+    This is intentionally table-scoped. It lets Doctor/repair recover days of
+    local indexing from a backup without rolling back newer conversations,
+    credentials, followups, or other Brain state created after that backup.
+    """
+    src = Path(source)
+    dst = Path(target)
+    result: dict = {
+        "ok": False,
+        "source": str(src),
+        "target": str(dst),
+        "tables": {},
+        "errors": [],
+    }
+    if not src.is_file():
+        result["errors"].append(f"source missing: {src}")
+        return result
+    if not dst.is_file():
+        result["errors"].append(f"target missing: {dst}")
+        return result
+
+    conn = None
+    try:
+        conn = sqlite3.connect(str(dst), timeout=30)
+        conn.execute("PRAGMA foreign_keys=OFF")
+        conn.execute("ATTACH DATABASE ? AS backup_db", (str(src),))
+        for table in tables:
+            quoted = _quote_identifier(table)
+            src_exists = conn.execute(
+                "SELECT sql FROM backup_db.sqlite_master WHERE type='table' AND name=?",
+                (table,),
+            ).fetchone()
+            if src_exists is None:
+                result["tables"][table] = {"status": "missing_in_source"}
+                continue
+            dst_exists = conn.execute(
+                "SELECT name FROM main.sqlite_master WHERE type='table' AND name=?",
+                (table,),
+            ).fetchone()
+            if dst_exists is None:
+                create_sql = str(src_exists[0] or "").strip()
+                if not create_sql:
+                    result["tables"][table] = {"status": "schema_missing_in_source"}
+                    continue
+                conn.execute(create_sql)
+            before = _table_count(conn, table) or 0
+            conn.execute(f"DELETE FROM main.{quoted}")
+            conn.execute(f"INSERT INTO main.{quoted} SELECT * FROM backup_db.{quoted}")
+            after = _table_count(conn, table) or 0
+            result["tables"][table] = {
+                "status": "restored",
+                "before": int(before),
+                "after": int(after),
+            }
+        conn.commit()
+        result["ok"] = not result["errors"]
+    except Exception as exc:
+        result["errors"].append(f"{type(exc).__name__}: {exc}")
+        try:
+            if conn is not None:
+                conn.rollback()
+        except Exception:
+            pass
+    finally:
+        if conn is not None:
+            try:
+                conn.execute("DETACH DATABASE backup_db")
+            except Exception:
+                pass
+            try:
+                conn.close()
+            except Exception:
+                pass
+    return result
 
 
 # ── MCP server discovery / kill ─────────────────────────────────────────

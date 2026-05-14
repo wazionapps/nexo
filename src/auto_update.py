@@ -1336,7 +1336,7 @@ def _reload_launch_agents_after_bump() -> dict:
     return result
 
 
-AUTO_UPDATE_BACKUP_KEEP = 10
+AUTO_UPDATE_BACKUP_KEEP = 5
 """Maximum number of auto-update backups to keep per prefix.
 
 Both `pre-autoupdate-*/` (DB snapshots) and `runtime-tree-*/` (code mirrors)
@@ -1409,8 +1409,10 @@ def _self_heal_if_wiped() -> dict | None:
             CRITICAL_TABLES,
             HOURLY_BACKUP_MAX_AGE,
             MIN_REFERENCE_ROWS,
+            PROTECTED_TABLES,
             db_looks_wiped,
             db_row_counts,
+            find_best_hourly_backup,
             find_latest_hourly_backup,
             quiesce_nexo_db_writers,
             resume_nexo_launchagents,
@@ -1424,11 +1426,16 @@ def _self_heal_if_wiped() -> dict | None:
     primary = DATA_DIR / "nexo.db"
     if not primary.is_file():
         return None
-    if not db_looks_wiped(primary, CRITICAL_TABLES):
+    if not db_looks_wiped(primary, PROTECTED_TABLES):
         return None
-    reference = find_latest_hourly_backup(
+    reference = find_best_hourly_backup(
         paths.backups_dir(),
         max_age_seconds=HOURLY_BACKUP_MAX_AGE,
+        tables=PROTECTED_TABLES,
+    ) or find_latest_hourly_backup(
+        paths.backups_dir(),
+        max_age_seconds=HOURLY_BACKUP_MAX_AGE,
+        tables=PROTECTED_TABLES,
     )
     if reference is None:
         _log("self-heal: nexo.db looks wiped but no usable hourly backup found — skipping.")
@@ -1437,7 +1444,7 @@ def _self_heal_if_wiped() -> dict | None:
             "reason": "no_usable_hourly_backup",
             "primary_db": str(primary),
         }
-    ref_counts = db_row_counts(reference, CRITICAL_TABLES)
+    ref_counts = db_row_counts(reference, PROTECTED_TABLES)
     ref_total = sum(v for v in ref_counts.values() if isinstance(v, int))
     if ref_total < MIN_REFERENCE_ROWS:
         _log(f"self-heal: reference backup {reference.name} has {ref_total} rows, below floor {MIN_REFERENCE_ROWS}")
@@ -1526,7 +1533,7 @@ def _self_heal_if_wiped() -> dict | None:
             "quiesce": quiesce_report,
             "resume": resume_report,
         }
-    valid, valid_err = validate_backup_matches_source(reference, primary, CRITICAL_TABLES)
+    valid, valid_err = validate_backup_matches_source(reference, primary, PROTECTED_TABLES)
     if not valid:
         _log(f"self-heal: post-restore validation failed: {valid_err}")
         resume_report = _resume_quiesced()
@@ -1540,7 +1547,7 @@ def _self_heal_if_wiped() -> dict | None:
             "resume": resume_report,
         }
 
-    final_counts = db_row_counts(primary, CRITICAL_TABLES)
+    final_counts = db_row_counts(primary, PROTECTED_TABLES)
     final_total = sum(v for v in final_counts.values() if isinstance(v, int))
     _log(f"self-heal: restored {final_total} critical rows from {reference.name}.")
     resume_report = _resume_quiesced()

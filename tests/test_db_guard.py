@@ -12,15 +12,19 @@ from db_guard import (
     CRITICAL_TABLES,
     EMPTY_DB_SIZE_BYTES,
     HOURLY_BACKUP_MAX_AGE,
+    LOCAL_CONTEXT_TABLES,
     MIN_REFERENCE_ROWS,
+    PROTECTED_TABLES,
     WIPE_THRESHOLD_PCT,
     TableDiff,
     WipeReport,
     db_looks_wiped,
     db_row_counts,
     diff_row_counts,
+    find_best_hourly_backup,
     find_latest_hourly_backup,
     quiesce_nexo_db_writers,
+    restore_tables_from_backup,
     safe_sqlite_backup,
     validate_backup_matches_source,
 )
@@ -49,6 +53,19 @@ def _make_empty_db(path: Path) -> None:
     try:
         for table in CRITICAL_TABLES:
             conn.execute(f"CREATE TABLE {table} (id INTEGER PRIMARY KEY, payload TEXT)")
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _add_local_rows(path: Path, rows_by_table: dict[str, int]) -> None:
+    conn = sqlite3.connect(str(path))
+    try:
+        for table in LOCAL_CONTEXT_TABLES:
+            conn.execute(f"CREATE TABLE IF NOT EXISTS {table} (id INTEGER PRIMARY KEY, payload TEXT)")
+        for table, count in rows_by_table.items():
+            for i in range(count):
+                conn.execute(f"INSERT INTO {table} (payload) VALUES (?)", (f"local-{i}",))
         conn.commit()
     finally:
         conn.close()
@@ -137,6 +154,24 @@ def test_find_latest_hourly_backup_respects_max_age(tmp_path):
     assert find_latest_hourly_backup(backups, max_age_seconds=HOURLY_BACKUP_MAX_AGE) is None
 
 
+def test_find_best_hourly_backup_prefers_rich_local_memory_over_newer_regressed_backup(tmp_path):
+    backups = tmp_path / "backups"
+    backups.mkdir()
+    rich = backups / "nexo-2026-05-13-2350.db"
+    regressed = backups / "nexo-2026-05-14-0046.db"
+    _make_db(rich, {"protocol_tasks": 100})
+    _add_local_rows(rich, {"local_assets": 2000, "local_chunks": 4000, "local_embeddings": 4000})
+    _make_db(regressed, {"protocol_tasks": 500})
+    import os
+    older = time.time() - 100
+    newer = time.time()
+    os.utime(str(rich), (older, older))
+    os.utime(str(regressed), (newer, newer))
+
+    assert find_latest_hourly_backup(backups) == regressed
+    assert find_best_hourly_backup(backups) == rich
+
+
 # ── diff_row_counts + WipeReport ───────────────────────────────────────
 
 def test_wipe_report_flags_incident(tmp_path):
@@ -190,6 +225,18 @@ def test_wipe_report_fires_on_two_table_regressions(tmp_path):
     assert report.is_wipe() is True
 
 
+def test_wipe_report_detects_local_memory_regression_even_when_core_tables_are_healthy(tmp_path):
+    current = tmp_path / "current.db"
+    reference = tmp_path / "reference.db"
+    _make_db(current, {"protocol_tasks": 600, "followups": 400, "learnings": 380})
+    _make_db(reference, {"protocol_tasks": 600, "followups": 400, "learnings": 380})
+    _add_local_rows(reference, {"local_assets": 2000, "local_chunks": 4000, "local_embeddings": 4000})
+
+    report = diff_row_counts(current, reference, PROTECTED_TABLES)
+    assert report.is_wipe() is True
+    assert any(d.table == "local_assets" and d.is_regression() for d in report.table_diffs)
+
+
 # ── safe_sqlite_backup + validate_backup_matches_source ────────────────
 
 def test_safe_sqlite_backup_preserves_rows(tmp_path):
@@ -217,6 +264,23 @@ def test_safe_sqlite_backup_missing_source(tmp_path):
     ok, err = safe_sqlite_backup(tmp_path / "nope.db", tmp_path / "dst.db")
     assert ok is False
     assert "source missing" in (err or "")
+
+
+def test_restore_tables_from_backup_restores_only_local_memory_tables(tmp_path):
+    source = tmp_path / "source.db"
+    target = tmp_path / "target.db"
+    _make_db(source, {"protocol_tasks": 10})
+    _make_db(target, {"protocol_tasks": 99})
+    _add_local_rows(source, {"local_assets": 3, "local_chunks": 7})
+    _add_local_rows(target, {"local_assets": 1, "local_chunks": 1})
+
+    report = restore_tables_from_backup(source, target)
+
+    assert report["ok"] is True, report
+    counts = db_row_counts(target, PROTECTED_TABLES)
+    assert counts["protocol_tasks"] == 99
+    assert counts["local_assets"] == 3
+    assert counts["local_chunks"] == 7
 
 
 def test_quiesce_nexo_db_writers_combines_known_writers(monkeypatch):

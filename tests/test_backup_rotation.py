@@ -1,10 +1,9 @@
 """Tests for auto-update backup rotation.
 
-Covers NEXO-AUDIT-2026-04-11 post-fase1 finding: both `pre-autoupdate-*/`
-and `runtime-tree-*/` backup directories were accumulating forever under
-`$NEXO_HOME/backups/` with no rotation. The fix keeps the N most recent
-entries per prefix and silently swallows housekeeping failures so the
-auto-update flow can never be interrupted by cleanup problems.
+Covers technical rollback snapshots that can grow quickly under
+`$NEXO_HOME/runtime/backups/`. The fix keeps the N most recent entries per
+prefix and silently swallows housekeeping failures so update/backfill flows
+can never be interrupted by cleanup problems.
 """
 
 from __future__ import annotations
@@ -46,22 +45,20 @@ def _make_backup_dir(base: Path, name: str, mtime_offset: int = 0) -> Path:
 def test_rotate_keeps_newest_n_pre_autoupdate(isolated_nexo_home):
     auto_update, backups_dir = isolated_nexo_home
 
-    # Create 15 pre-autoupdate dirs with increasing (more recent) mtimes
-    created = []
+    # Create 15 pre-autoupdate dirs with increasing (more recent) mtimes.
     for i in range(15):
         # Offset ranges from -1400 to 0 seconds so index 14 is the newest
-        d = _make_backup_dir(backups_dir, f"pre-autoupdate-{i:02d}", mtime_offset=-1400 + i * 100)
-        created.append(d)
+        _make_backup_dir(backups_dir, f"pre-autoupdate-{i:02d}", mtime_offset=-1400 + i * 100)
 
-    removed = auto_update._rotate_auto_update_backups("pre-autoupdate-", keep=10)
-    assert removed == 5
+    removed = auto_update._rotate_auto_update_backups("pre-autoupdate-", keep=5)
+    assert removed == 10
 
     remaining = sorted(
         p.name for p in backups_dir.iterdir()
         if p.is_dir() and p.name.startswith("pre-autoupdate-")
     )
-    # Oldest 5 (00..04) should be gone, newest 10 (05..14) should remain
-    assert remaining == [f"pre-autoupdate-{i:02d}" for i in range(5, 15)]
+    # Oldest 10 (00..09) should be gone, newest 5 (10..14) should remain.
+    assert remaining == [f"pre-autoupdate-{i:02d}" for i in range(10, 15)]
 
 
 def test_rotate_keeps_newest_n_runtime_tree(isolated_nexo_home):
@@ -70,13 +67,13 @@ def test_rotate_keeps_newest_n_runtime_tree(isolated_nexo_home):
     for i in range(12):
         _make_backup_dir(backups_dir, f"runtime-tree-{i:02d}", mtime_offset=-1200 + i * 100)
 
-    removed = auto_update._rotate_auto_update_backups("runtime-tree-", keep=10)
-    assert removed == 2
+    removed = auto_update._rotate_auto_update_backups("runtime-tree-", keep=5)
+    assert removed == 7
 
     remaining = sorted(
         p.name for p in backups_dir.iterdir() if p.name.startswith("runtime-tree-")
     )
-    assert remaining == [f"runtime-tree-{i:02d}" for i in range(2, 12)]
+    assert remaining == [f"runtime-tree-{i:02d}" for i in range(7, 12)]
 
 
 def test_rotate_noop_when_fewer_than_keep(isolated_nexo_home):
@@ -85,7 +82,7 @@ def test_rotate_noop_when_fewer_than_keep(isolated_nexo_home):
     for i in range(3):
         _make_backup_dir(backups_dir, f"pre-autoupdate-{i:02d}")
 
-    removed = auto_update._rotate_auto_update_backups("pre-autoupdate-", keep=10)
+    removed = auto_update._rotate_auto_update_backups("pre-autoupdate-", keep=5)
     assert removed == 0
 
     remaining = sorted(p.name for p in backups_dir.iterdir())
@@ -103,8 +100,8 @@ def test_rotate_only_touches_matching_prefix(isolated_nexo_home):
     for i in range(3):
         _make_backup_dir(backups_dir, f"something-else-{i:02d}")
 
-    removed = auto_update._rotate_auto_update_backups("pre-autoupdate-", keep=10)
-    assert removed == 2
+    removed = auto_update._rotate_auto_update_backups("pre-autoupdate-", keep=5)
+    assert removed == 7
 
     # runtime-tree-* and something-else-* must be untouched
     assert sum(1 for p in backups_dir.iterdir() if p.name.startswith("runtime-tree-")) == 5
@@ -119,7 +116,7 @@ def test_rotate_is_silent_when_base_missing(isolated_nexo_home, tmp_path):
     shutil.rmtree(str(backups_dir))
     assert not backups_dir.exists()
 
-    removed = auto_update._rotate_auto_update_backups("pre-autoupdate-", keep=10)
+    removed = auto_update._rotate_auto_update_backups("pre-autoupdate-", keep=5)
     assert removed == 0
 
 
@@ -134,3 +131,53 @@ def test_rotate_zero_keep_is_noop(isolated_nexo_home):
     removed = auto_update._rotate_auto_update_backups("pre-autoupdate-", keep=0)
     assert removed == 0
     assert len(list(backups_dir.iterdir())) == 5
+
+
+def test_manual_update_rotates_pre_update_backups(tmp_path, monkeypatch):
+    from plugins import update
+
+    backup_base = tmp_path / "backups"
+    backup_base.mkdir()
+    monkeypatch.setattr(update, "BACKUP_BASE", backup_base)
+
+    for i in range(9):
+        _make_backup_dir(backup_base, f"pre-update-{i:02d}", mtime_offset=-900 + i * 100)
+    _make_backup_dir(backup_base, "shopify-backups")
+
+    removed = update._rotate_backup_family("pre-update-")
+    assert removed == 4
+    remaining = sorted(p.name for p in backup_base.iterdir() if p.name.startswith("pre-update-"))
+    assert remaining == [f"pre-update-{i:02d}" for i in range(4, 9)]
+    assert (backup_base / "shopify-backups").is_dir()
+
+
+def test_manual_update_rotates_code_tree_backups(tmp_path, monkeypatch):
+    from plugins import update
+
+    backup_base = tmp_path / "backups"
+    backup_base.mkdir()
+    monkeypatch.setattr(update, "BACKUP_BASE", backup_base)
+
+    for i in range(8):
+        _make_backup_dir(backup_base, f"code-tree-{i:02d}", mtime_offset=-800 + i * 100)
+
+    removed = update._rotate_backup_family("code-tree-")
+    assert removed == 3
+    remaining = sorted(p.name for p in backup_base.iterdir() if p.name.startswith("code-tree-"))
+    assert remaining == [f"code-tree-{i:02d}" for i in range(3, 8)]
+
+
+def test_backfill_owner_rotates_own_backup_family(tmp_path):
+    from scripts import backfill_task_owner
+
+    backup_base = tmp_path / "backups"
+    backup_base.mkdir()
+    for i in range(11):
+        _make_backup_dir(backup_base, f"pre-backfill-owner-{i:02d}", mtime_offset=-1100 + i * 100)
+    _make_backup_dir(backup_base, "pre-update-untouched")
+
+    removed = backfill_task_owner._rotate_backup_family(backup_base)
+    assert removed == 6
+    remaining = sorted(p.name for p in backup_base.iterdir() if p.name.startswith("pre-backfill-owner-"))
+    assert remaining == [f"pre-backfill-owner-{i:02d}" for i in range(6, 11)]
+    assert (backup_base / "pre-update-untouched").is_dir()

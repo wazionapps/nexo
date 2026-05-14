@@ -57,7 +57,8 @@ def test_local_index_run_cycle_falls_back_for_mixed_runtime_versions(tmp_path, m
 
     assert result["ok"] is True
     assert "live_asset_limit" in calls[0]
-    assert calls[1] == {"limit": module.SCAN_LIMIT, "process_limit": module.PROCESS_LIMIT}
+    config = module.api.performance_config()
+    assert calls[1] == {"limit": config["scan_limit"], "process_limit": config["process_limit"]}
     assert any(args[1] == "service_cycle_compat_fallback" for args, _ in events)
 
 

@@ -629,14 +629,21 @@ def nexo_local_index_status() -> str:
 
 
 @mcp.tool
-def nexo_local_index_control(action: str = "run_once", root: str = "", limit: int = 0, process_limit: int = 100) -> str:
+def nexo_local_index_control(
+    action: str = "run_once",
+    root: str = "",
+    limit: int = 0,
+    process_limit: int = 0,
+    performance_profile: str = "",
+) -> str:
     """Control the local memory index.
 
     Args:
-        action: one of run_once, pause, resume, clear_index.
+        action: one of run_once, pause, resume, clear_index, set_performance.
         root: optional folder to add and scan when action=run_once.
         limit: optional per-root scan limit for cooperative background cycles.
         process_limit: max pending jobs to process in this cycle.
+        performance_profile: low, medium, high or extreme when action=set_performance.
     """
     normalized = str(action or "run_once").strip().lower()
     if normalized == "pause":
@@ -645,10 +652,12 @@ def nexo_local_index_control(action: str = "run_once", root: str = "", limit: in
         result = local_context_api.resume()
     elif normalized == "clear_index":
         result = local_context_api.clear_index()
+    elif normalized == "set_performance":
+        result = local_context_api.set_performance_profile(performance_profile)
     elif normalized == "run_once":
-        result = local_context_api.run_once(root=root or None, limit=limit or None, process_limit=process_limit)
+        result = local_context_api.run_once(root=root or None, limit=limit or None, process_limit=process_limit or None)
     else:
-        result = {"ok": False, "error": "unknown_action", "allowed": ["run_once", "pause", "resume", "clear_index"]}
+        result = {"ok": False, "error": "unknown_action", "allowed": ["run_once", "pause", "resume", "clear_index", "set_performance"]}
     return json.dumps(result, ensure_ascii=False)
 
 

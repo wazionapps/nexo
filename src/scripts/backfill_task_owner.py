@@ -43,6 +43,7 @@ from pathlib import Path
 
 DEFAULT_DB_PATH = Path.home() / ".nexo" / "runtime" / "data" / "nexo.db"
 DEFAULT_CALIBRATION = Path.home() / ".nexo" / "brain" / "calibration.json"
+BACKFILL_OWNER_BACKUP_KEEP = 5
 
 _WAITING_PHRASES = (
     r"esperando (?:respuesta|a\s+\w+|confirmaci[oó]n)",
@@ -256,7 +257,40 @@ def _backup_db(db_path: Path) -> Path:
     backup = db_path.parent.parent / "backups" / f"pre-backfill-owner-{ts}" / db_path.name
     backup.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(db_path, backup)
+    _rotate_backup_family(backup.parent.parent)
     return backup
+
+
+def _rotate_backup_family(
+    backups_dir: Path,
+    prefix: str = "pre-backfill-owner-",
+    keep: int = BACKFILL_OWNER_BACKUP_KEEP,
+) -> int:
+    """Keep the newest technical backfill backups and prune older ones."""
+    if keep <= 0:
+        return 0
+    backups_dir = Path(backups_dir)
+    if not backups_dir.is_dir():
+        return 0
+    try:
+        candidates = [p for p in backups_dir.iterdir() if p.is_dir() and p.name.startswith(prefix)]
+    except Exception:
+        return 0
+    if len(candidates) <= keep:
+        return 0
+    try:
+        candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    except Exception:
+        return 0
+
+    removed = 0
+    for old in candidates[keep:]:
+        try:
+            shutil.rmtree(old)
+            removed += 1
+        except Exception:
+            continue
+    return removed
 
 
 def run(

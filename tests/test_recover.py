@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from db_guard import CRITICAL_TABLES
+from db_guard import CRITICAL_TABLES, LOCAL_CONTEXT_TABLES, db_row_counts
 
 
 def _make_populated_db(path: Path, rows_per_table: int = 200) -> None:
@@ -30,6 +30,19 @@ def _make_wiped_db(path: Path) -> None:
     try:
         for table in CRITICAL_TABLES:
             conn.execute(f"CREATE TABLE {table} (id INTEGER PRIMARY KEY, payload TEXT)")
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _add_local_rows(path: Path, rows_by_table: dict[str, int]) -> None:
+    conn = sqlite3.connect(str(path))
+    try:
+        for table in LOCAL_CONTEXT_TABLES:
+            conn.execute(f"CREATE TABLE IF NOT EXISTS {table} (id INTEGER PRIMARY KEY, payload TEXT)")
+        for table, count in rows_by_table.items():
+            for i in range(count):
+                conn.execute(f"INSERT INTO {table} (payload) VALUES (?)", (f"local-{i}",))
         conn.commit()
     finally:
         conn.close()
@@ -63,6 +76,27 @@ def test_recover_restores_wiped_db_from_hourly_backup(recover_env):
     assert report["final_row_counts"]["protocol_tasks"] == 250
     # pre-heal / pre-recover snapshot was made
     assert "pre_recover_dir" in report
+
+
+def test_recover_prefers_richest_local_memory_backup_over_newest_regressed_backup(recover_env):
+    primary = recover_env["data"] / "nexo.db"
+    rich = recover_env["backups"] / "nexo-2026-05-13-2350.db"
+    regressed = recover_env["backups"] / "nexo-2026-05-14-0046.db"
+    _make_wiped_db(primary)
+    _make_populated_db(rich, rows_per_table=250)
+    _add_local_rows(rich, {"local_assets": 2000, "local_chunks": 4000, "local_embeddings": 4000})
+    _make_populated_db(regressed, rows_per_table=500)
+    import os
+    older = 1000.0
+    newer = 2000.0
+    os.utime(str(rich), (older, older))
+    os.utime(str(regressed), (newer, newer))
+
+    report = recover_env["recover"].recover(skip_kill=True)
+
+    assert report["ok"] is True, report
+    assert report["source"] == str(rich)
+    assert db_row_counts(primary)["local_assets"] == 2000
 
 
 def test_recover_quiesces_and_resumes_db_writers(recover_env, monkeypatch):

@@ -129,6 +129,27 @@ def _create_learnings_table(db_path: Path):
     conn.close()
 
 
+def _add_rows(conn: sqlite3.Connection, table: str, count: int, prefix: str = "row") -> None:
+    conn.execute(f"CREATE TABLE IF NOT EXISTS {table} (id INTEGER PRIMARY KEY, payload TEXT)")
+    for i in range(count):
+        conn.execute(f"INSERT INTO {table} (payload) VALUES (?)", (f"{prefix}-{i}",))
+
+
+def _add_local_rows(db_path: Path, rows_by_table: dict[str, int]) -> None:
+    from db_guard import LOCAL_CONTEXT_TABLES
+
+    conn = sqlite3.connect(str(db_path))
+    try:
+        for table in LOCAL_CONTEXT_TABLES:
+            conn.execute(f"CREATE TABLE IF NOT EXISTS {table} (id INTEGER PRIMARY KEY, payload TEXT)")
+        for table, count in rows_by_table.items():
+            for i in range(count):
+                conn.execute(f"INSERT INTO {table} (payload) VALUES (?)", (f"local-{i}",))
+        conn.commit()
+    finally:
+        conn.close()
+
+
 class TestBootChecks:
     def test_healthy_system(self, nexo_home):
         from doctor.providers.boot import run_boot_checks
@@ -195,6 +216,37 @@ class TestBootChecks:
         assert check.status == "healthy"
         assert check.fixed is True
         assert db_row_counts(primary)["protocol_tasks"] == 75
+
+    def test_db_integrity_fix_restores_degraded_local_memory_without_rolling_back_core(self, nexo_home):
+        from db_guard import CRITICAL_TABLES, PROTECTED_TABLES, db_row_counts
+
+        primary = nexo_home / "data" / "nexo.db"
+        backup = nexo_home / "backups" / "nexo-2026-05-13-2350.db"
+        backup.parent.mkdir(parents=True, exist_ok=True)
+
+        conn = sqlite3.connect(str(primary))
+        for table in CRITICAL_TABLES:
+            conn.execute(f"CREATE TABLE IF NOT EXISTS {table} (id INTEGER PRIMARY KEY, payload TEXT)")
+        _add_rows(conn, "protocol_tasks", 999, "current")
+        conn.commit()
+        conn.close()
+
+        conn = sqlite3.connect(str(backup))
+        for table in CRITICAL_TABLES:
+            conn.execute(f"CREATE TABLE IF NOT EXISTS {table} (id INTEGER PRIMARY KEY, payload TEXT)")
+        _add_rows(conn, "protocol_tasks", 100, "backup")
+        conn.commit()
+        conn.close()
+        _add_local_rows(backup, {"local_assets": 2000, "local_chunks": 4000, "local_embeddings": 4000})
+
+        from doctor.providers.boot import check_db_integrity
+        check = check_db_integrity(fix=True)
+
+        counts = db_row_counts(primary, PROTECTED_TABLES)
+        assert check.status == "healthy"
+        assert check.fixed is True
+        assert counts["protocol_tasks"] == 999
+        assert counts["local_assets"] == 2000
 
     def test_missing_dirs_fix(self, nexo_home):
         import shutil

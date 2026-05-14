@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from db_guard import CRITICAL_TABLES
+from db_guard import CRITICAL_TABLES, LOCAL_CONTEXT_TABLES, db_row_counts
 
 
 def _make_populated_db(path: Path, rows_per_table: int = 200) -> None:
@@ -30,6 +30,19 @@ def _make_wiped_db(path: Path) -> None:
     try:
         for table in CRITICAL_TABLES:
             conn.execute(f"CREATE TABLE {table} (id INTEGER PRIMARY KEY, payload TEXT)")
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _add_local_rows(path: Path, rows_by_table: dict[str, int]) -> None:
+    conn = sqlite3.connect(str(path))
+    try:
+        for table in LOCAL_CONTEXT_TABLES:
+            conn.execute(f"CREATE TABLE IF NOT EXISTS {table} (id INTEGER PRIMARY KEY, payload TEXT)")
+        for table, count in rows_by_table.items():
+            for i in range(count):
+                conn.execute(f"INSERT INTO {table} (payload) VALUES (?)", (f"local-{i}",))
         conn.commit()
     finally:
         conn.close()
@@ -83,8 +96,28 @@ def test_self_heal_restores_wiped_db(auto_update_env):
     assert report is not None, "self-heal must fire when wiped DB + good backup"
     assert report["action"] == "restored"
     assert report["restored_rows"] >= 250
-    from db_guard import db_row_counts
     assert db_row_counts(primary)["protocol_tasks"] == 250
+
+
+def test_self_heal_uses_richest_backup_not_newest_regressed_backup(auto_update_env):
+    primary = auto_update_env["data"] / "nexo.db"
+    rich = auto_update_env["backups"] / "nexo-2026-05-13-2350.db"
+    regressed = auto_update_env["backups"] / "nexo-2026-05-14-0046.db"
+    _make_wiped_db(primary)
+    _make_populated_db(rich, rows_per_table=250)
+    _add_local_rows(rich, {"local_assets": 2000, "local_chunks": 4000, "local_embeddings": 4000})
+    _make_populated_db(regressed, rows_per_table=500)
+    import os
+    older = time.time() - 100
+    newer = time.time()
+    os.utime(str(rich), (older, older))
+    os.utime(str(regressed), (newer, newer))
+
+    report = auto_update_env["au"]._self_heal_if_wiped()
+
+    assert report["action"] == "restored"
+    assert report["reference"] == str(rich)
+    assert db_row_counts(primary)["local_assets"] == 2000
 
 
 def test_self_heal_noop_on_healthy_db(auto_update_env):

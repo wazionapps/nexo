@@ -884,6 +884,46 @@ def test_pause_stops_scan_until_resume(tmp_path):
     assert resumed["scan"]["seen"] == 1
 
 
+def test_performance_profile_is_persisted_and_reported():
+    default_status = local_context.status()
+    assert default_status["performance"]["profile"] == "medium"
+    assert default_status["global"]["performance_profile"] == "medium"
+
+    updated = local_context.set_performance_profile("alto")
+    assert updated["ok"] is True
+    assert updated["profile"] == "high"
+    assert updated["performance"]["warning"] is True
+
+    status = local_context.status()
+    assert status["performance"]["profile"] == "high"
+    assert status["global"]["performance_profile"] == "high"
+
+
+def test_run_once_uses_persisted_performance_limits_by_default(monkeypatch):
+    calls = {}
+
+    def fake_scan_once(*, limit=None):
+        calls["scan_limit"] = limit
+        return {"ok": True, "seen": 0, "changed": 0, "errors": 0, "partial": False}
+
+    def fake_process_jobs(*, limit=100):
+        calls["process_limit"] = limit
+        return {"ok": True, "processed": 0, "failed": 0}
+
+    monkeypatch.setenv("NEXO_LOCAL_INDEX_DISABLE_DEFAULT_ROOTS", "1")
+    monkeypatch.setattr(api, "local_index_privacy_hygiene", lambda *, fix=False: {"ok": True})
+    monkeypatch.setattr(api, "ensure_default_roots", lambda: None)
+    monkeypatch.setattr(api, "scan_once", fake_scan_once)
+    monkeypatch.setattr(api, "process_jobs", fake_process_jobs)
+
+    local_context.set_performance_profile("low")
+    result = local_context.run_once()
+
+    assert result["performance"]["profile"] == "low"
+    assert calls["scan_limit"] == 250
+    assert calls["process_limit"] == 50
+
+
 def test_checkpoint_advances_partial_scans(tmp_path):
     root = tmp_path / "docs"
     root.mkdir()

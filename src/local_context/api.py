@@ -36,7 +36,55 @@ DEFAULT_ROUTER_MAX_CHARS = int(os.environ.get("NEXO_LOCAL_CONTEXT_ROUTER_MAX_CHA
 DEFAULT_MAX_JOB_ATTEMPTS = int(os.environ.get("NEXO_LOCAL_INDEX_MAX_JOB_ATTEMPTS", "3") or "3")
 INITIAL_INDEX_COMPLETE_KEY = "initial_index_complete"
 INITIAL_INDEX_STARTED_AT_KEY = "initial_index_started_at"
+PERFORMANCE_PROFILE_KEY = "performance_profile"
+DEFAULT_PERFORMANCE_PROFILE = os.environ.get("NEXO_LOCAL_INDEX_PERFORMANCE_PROFILE", "medium").strip().lower() or "medium"
 VALID_CONTEXT_MODES = {"compact", "full"}
+PERFORMANCE_PROFILES: dict[str, dict[str, Any]] = {
+    "low": {
+        "profile": "low",
+        "label": "Bajo",
+        "scan_limit": 250,
+        "process_limit": 50,
+        "live_asset_limit": 500,
+        "live_dir_limit": 100,
+        "live_file_limit": 250,
+        "cycles_per_run": 1,
+        "warning": False,
+    },
+    "medium": {
+        "profile": "medium",
+        "label": "Medio",
+        "scan_limit": 1000,
+        "process_limit": 200,
+        "live_asset_limit": DEFAULT_LIVE_ASSET_LIMIT,
+        "live_dir_limit": DEFAULT_LIVE_DIR_LIMIT,
+        "live_file_limit": DEFAULT_LIVE_FILE_LIMIT,
+        "cycles_per_run": 1,
+        "warning": False,
+    },
+    "high": {
+        "profile": "high",
+        "label": "Alto",
+        "scan_limit": 3000,
+        "process_limit": 600,
+        "live_asset_limit": 5000,
+        "live_dir_limit": 800,
+        "live_file_limit": 2500,
+        "cycles_per_run": 2,
+        "warning": True,
+    },
+    "extreme": {
+        "profile": "extreme",
+        "label": "Extremo",
+        "scan_limit": 8000,
+        "process_limit": 1500,
+        "live_asset_limit": 10000,
+        "live_dir_limit": 2000,
+        "live_file_limit": 6000,
+        "cycles_per_run": 3,
+        "warning": True,
+    },
+}
 
 
 def ensure_ready() -> None:
@@ -543,6 +591,53 @@ def _get_state_conn(conn, key: str, default: str = "") -> str:
 def _get_state(key: str, default: str = "") -> str:
     conn = _conn()
     return _get_state_conn(conn, key, default)
+
+
+def _normalize_performance_profile(profile: str | None) -> str:
+    value = str(profile or "").strip().lower()
+    aliases = {
+        "slow": "low",
+        "bajo": "low",
+        "normal": "medium",
+        "balanced": "medium",
+        "medio": "medium",
+        "fast": "high",
+        "alto": "high",
+        "max": "extreme",
+        "maximum": "extreme",
+        "extremo": "extreme",
+    }
+    value = aliases.get(value, value)
+    return value if value in PERFORMANCE_PROFILES else "medium"
+
+
+def performance_config(profile: str | None = None, *, conn=None) -> dict:
+    active_profile = profile
+    if active_profile is None:
+        if conn is None:
+            active_profile = _get_state(PERFORMANCE_PROFILE_KEY, DEFAULT_PERFORMANCE_PROFILE)
+        else:
+            active_profile = _get_state_conn(conn, PERFORMANCE_PROFILE_KEY, DEFAULT_PERFORMANCE_PROFILE)
+    normalized = _normalize_performance_profile(active_profile)
+    config = dict(PERFORMANCE_PROFILES[normalized])
+    config["available_profiles"] = [dict(PERFORMANCE_PROFILES[key]) for key in ("low", "medium", "high", "extreme")]
+    config["interval_seconds"] = 60
+    return config
+
+
+def set_performance_profile(profile: str) -> dict:
+    normalized = _normalize_performance_profile(profile)
+    _set_state(PERFORMANCE_PROFILE_KEY, normalized)
+    config = performance_config(normalized)
+    log_event(
+        "info",
+        "performance_profile_updated",
+        "Local memory performance profile updated",
+        profile=normalized,
+        scan_limit=config["scan_limit"],
+        process_limit=config["process_limit"],
+    )
+    return {"ok": True, "profile": normalized, "performance": config}
 
 
 def _root_initial_scan_key(root_id: int) -> str:
@@ -1679,10 +1774,10 @@ def run_once(
     *,
     root: str | None = None,
     limit: int | None = None,
-    process_limit: int = 100,
-    live_asset_limit: int = DEFAULT_LIVE_ASSET_LIMIT,
-    live_dir_limit: int = DEFAULT_LIVE_DIR_LIMIT,
-    live_file_limit: int = DEFAULT_LIVE_FILE_LIMIT,
+    process_limit: int | None = None,
+    live_asset_limit: int | None = None,
+    live_dir_limit: int | None = None,
+    live_file_limit: int | None = None,
 ) -> dict:
     if _get_state("privacy_hygiene_v2", "0") != "1":
         local_index_privacy_hygiene(fix=True)
@@ -1694,14 +1789,20 @@ def run_once(
         ensure_default_roots()
     if root:
         add_root(root)
+    config = performance_config()
+    effective_scan_limit = int(limit if limit is not None else config["scan_limit"])
+    effective_process_limit = int(process_limit if process_limit is not None else config["process_limit"])
+    effective_live_asset_limit = int(live_asset_limit if live_asset_limit is not None else config["live_asset_limit"])
+    effective_live_dir_limit = int(live_dir_limit if live_dir_limit is not None else config["live_dir_limit"])
+    effective_live_file_limit = int(live_file_limit if live_file_limit is not None else config["live_file_limit"])
     conn = _conn()
     initial_before = _initial_scan_status(conn, list_roots())
     initial_index_before = _refresh_initial_index_complete(conn, initial_before)
     if initial_index_before:
         live_result = reconcile_live_changes(
-            asset_limit=live_asset_limit,
-            dir_limit=live_dir_limit,
-            file_limit=live_file_limit,
+            asset_limit=effective_live_asset_limit,
+            dir_limit=effective_live_dir_limit,
+            file_limit=effective_live_file_limit,
         )
     else:
         live_result = {
@@ -1711,8 +1812,8 @@ def run_once(
             "assets": {},
             "dirs": {},
         }
-    scan_result = scan_once(limit=limit)
-    job_result = process_jobs(limit=process_limit)
+    scan_result = scan_once(limit=effective_scan_limit)
+    job_result = process_jobs(limit=effective_process_limit)
     conn_after = _conn()
     initial_after = _initial_scan_status(conn_after, list_roots())
     active_after = _active_job_count(conn_after)
@@ -1724,6 +1825,14 @@ def run_once(
         "live": live_result,
         "scan": scan_result,
         "jobs": job_result,
+        "performance": {
+            "profile": config["profile"],
+            "scan_limit": effective_scan_limit,
+            "process_limit": effective_process_limit,
+            "live_asset_limit": effective_live_asset_limit,
+            "live_dir_limit": effective_live_dir_limit,
+            "live_file_limit": effective_live_file_limit,
+        },
     }
 
 
@@ -2083,6 +2192,7 @@ def status() -> dict:
     problem = _service_problem(service)
     service["healthy"] = problem is None
     service["state"] = "paused" if paused else ("attention" if problem else ("idle" if active_jobs == 0 and initial_index_complete else "indexing"))
+    performance = performance_config(conn=conn)
     problems = _problem_rows(conn)
     if problem:
         problems.insert(0, {
@@ -2098,10 +2208,10 @@ def status() -> dict:
         })
     if paused:
         phase = "paused"
-    elif problem:
-        phase = "service_attention"
     elif not initial_index_complete:
         phase = "initial_indexing"
+    elif problem:
+        phase = "service_attention"
     elif active_jobs == 0:
         phase = "idle"
     else:
@@ -2125,7 +2235,9 @@ def status() -> dict:
             "initial_discovery_complete": bool(initial_scan["complete"]),
             "initial_index_complete": bool(initial_index_complete),
             "index_mode": "watching_changes" if initial_index_complete else "initial_indexing",
+            "performance_profile": performance["profile"],
         },
+        "performance": performance,
         "initial_scan": initial_scan,
         "initial_index_complete": bool(initial_index_complete),
         "volumes": volumes,

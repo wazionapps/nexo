@@ -45,9 +45,13 @@ def check_db_integrity(fix: bool = False) -> DoctorCheck:
         CRITICAL_TABLES,
         EMPTY_DB_SIZE_BYTES,
         MIN_REFERENCE_ROWS,
+        PROTECTED_TABLES,
         db_looks_wiped,
         db_row_counts,
+        diff_row_counts,
+        find_best_hourly_backup,
         find_latest_hourly_backup,
+        restore_tables_from_backup,
     )
 
     db_path = paths.db_path()
@@ -81,13 +85,25 @@ def check_db_integrity(fix: bool = False) -> DoctorCheck:
     except Exception as exc:
         quick_error = f"{type(exc).__name__}: {exc}"
 
-    looks_wiped = db_looks_wiped(db_path, CRITICAL_TABLES)
-    reference = find_latest_hourly_backup(
+    looks_wiped = db_looks_wiped(db_path, PROTECTED_TABLES)
+    reference = find_best_hourly_backup(
         paths.backups_dir(),
         min_critical_rows=MIN_REFERENCE_ROWS,
+        tables=PROTECTED_TABLES,
+    ) or find_latest_hourly_backup(
+        paths.backups_dir(),
+        min_critical_rows=MIN_REFERENCE_ROWS,
+        tables=PROTECTED_TABLES,
     )
-    reference_counts = db_row_counts(reference, CRITICAL_TABLES) if reference else {}
+    reference_counts = db_row_counts(reference, PROTECTED_TABLES) if reference else {}
     reference_rows = sum(v for v in reference_counts.values() if isinstance(v, int))
+    protected_regression = diff_row_counts(db_path, reference, PROTECTED_TABLES) if reference else None
+    recoverable_regression = bool(
+        reference
+        and protected_regression
+        and protected_regression.is_wipe()
+        and not looks_wiped
+    )
     lower_error = quick_error.lower()
     corrupt_error = any(token in lower_error for token in (
         "database disk image is malformed",
@@ -105,7 +121,7 @@ def check_db_integrity(fix: bool = False) -> DoctorCheck:
         )
     )
 
-    if quick_ok and not recoverable_wipe:
+    if quick_ok and not recoverable_wipe and not recoverable_regression:
         if looks_wiped and not reference:
             return DoctorCheck(
                 id="boot.db_integrity",
@@ -131,7 +147,37 @@ def check_db_integrity(fix: bool = False) -> DoctorCheck:
         f"looks_wiped: {looks_wiped}",
     ]
     if reference:
-        evidence.append(f"Reference backup: {reference} ({reference_rows} critical rows)")
+        evidence.append(f"Reference backup: {reference} ({reference_rows} protected rows)")
+    if protected_regression:
+        evidence.extend(protected_regression.summary_lines())
+
+    if fix and recoverable_regression:
+        report = restore_tables_from_backup(reference, db_path)
+        if report.get("ok"):
+            restored = {
+                table: payload
+                for table, payload in (report.get("tables") or {}).items()
+                if isinstance(payload, dict) and payload.get("status") == "restored"
+            }
+            restored_rows = sum(int(payload.get("after") or 0) for payload in restored.values())
+            return DoctorCheck(
+                id="boot.db_integrity",
+                tier="boot",
+                status="healthy",
+                severity="info",
+                summary=f"Local memory restored from backup ({restored_rows} protected rows)",
+                evidence=evidence + [f"Restored local-memory tables: {len(restored)}"],
+                fixed=True,
+            )
+        return DoctorCheck(
+            id="boot.db_integrity",
+            tier="boot",
+            status="critical",
+            severity="error",
+            summary="Local memory repair failed",
+            evidence=evidence + [f"Restore errors: {report.get('errors') or []}"],
+            repair_plan=["Close NEXO Desktop and run nexo doctor --tier boot --plane database_real --fix"],
+        )
 
     if fix and recoverable_wipe:
         from plugins.recover import recover
@@ -145,7 +191,7 @@ def check_db_integrity(fix: bool = False) -> DoctorCheck:
                 tier="boot",
                 status="healthy",
                 severity="info",
-                summary=f"Database restored from backup ({restored_rows} critical rows)",
+                summary=f"Database restored from backup ({restored_rows} protected rows)",
                 evidence=evidence + [f"Pre-recover snapshot: {report.get('pre_recover_dir', '')}"],
                 fixed=True,
             )
@@ -159,13 +205,13 @@ def check_db_integrity(fix: bool = False) -> DoctorCheck:
             repair_plan=["Run nexo recover --force --yes, then restart Desktop"],
         )
 
-    if recoverable_wipe:
+    if recoverable_wipe or recoverable_regression:
         return DoctorCheck(
             id="boot.db_integrity",
             tier="boot",
             status="critical",
             severity="error",
-            summary="Database appears wiped or corrupt but a valid backup exists",
+            summary="Database or local memory appears degraded but a valid backup exists",
             evidence=evidence,
             repair_plan=["Run nexo doctor --tier boot --plane database_real --fix"],
             escalation_prompt="NEXO database needs automatic recovery from backup.",

@@ -1,5 +1,15 @@
 # Changelog
 
+## [7.20.14] - 2026-05-14
+
+### Fixed — local memory survives updates and backup growth is bounded
+
+- **Local Memory state is protected during update/recovery paths.** Brain now preserves and restores local-memory tables when recovering `nexo.db`, so a Desktop update cannot silently wipe days of indexing progress.
+- **Runtime backups now rotate automatically.** `pre-update`, code-tree, auto-update and `pre-backfill-owner` backup families keep the latest 5 entries by default instead of growing without limit.
+- **Initial indexing status wins while the first pass is incomplete.** Desktop now receives a stable “first indexing in progress” status instead of switching to a misleading service-attention state during the first scan.
+- **Indexing speed profiles are available to Desktop.** Brain exposes bounded low/medium/high/extreme profiles so Desktop can let users trade speed for CPU usage without editing internal config.
+- **Coverage:** local-context, local-index runtime, backup rotation, DB guard, update wipe guard, recover, Doctor and auto-update self-heal suites pass, plus Python compilation of the touched Brain modules.
+
 ## [7.20.13] - 2026-05-13
 
 ### Fixed — database recovery and Doctor repair for local memory

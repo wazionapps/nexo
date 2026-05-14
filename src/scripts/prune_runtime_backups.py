@@ -33,7 +33,7 @@ Class taxonomy (prefix-based) and retention policy:
       retired-personal-scripts-*, retired-personal-skills-*,
       runtime-core-sync-*, pre-freshinstall-*
     Retention (per prefix family): keep last N_RECENT + 1 per month for
-    MONTHLY_WINDOW_DAYS. Older than that and outside the 10 most recent
+    MONTHLY_WINDOW_DAYS. Older than that and outside the recent window
     are eligible for deletion.
 
   HOURLY_DB (sqlite dumps, managed by nexo-backup.sh):
@@ -51,7 +51,7 @@ Usage:
   prune_runtime_backups.py                 # dry-run summary
   prune_runtime_backups.py --apply         # actually delete
   prune_runtime_backups.py --json          # machine-readable report
-  prune_runtime_backups.py --recent 10     # override N_RECENT
+  prune_runtime_backups.py --recent 5      # override N_RECENT
   prune_runtime_backups.py --window-days 90
   prune_runtime_backups.py --only pre-backfill-owner  # restrict family
 
@@ -361,7 +361,7 @@ def main() -> int:
     ap.add_argument("--root", help="override runtime/backups path")
     ap.add_argument("--apply", action="store_true", help="actually delete (default is dry-run)")
     ap.add_argument("--json", action="store_true", help="machine-readable report")
-    ap.add_argument("--recent", type=int, default=10, help="N most recent per family to always keep (default: 10)")
+    ap.add_argument("--recent", type=int, default=5, help="N most recent per family to always keep (default: 5)")
     ap.add_argument("--window-days", type=int, default=90, help="month-spaced retention window (default: 90)")
     ap.add_argument("--only", help="restrict to one technical family (e.g. 'pre-backfill-owner')")
     args = ap.parse_args()
