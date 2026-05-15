@@ -259,8 +259,56 @@ def _run_startup_preflight_sync() -> None:
         print(f"[NEXO auto-update] error: {e}", file=sys.stderr)
 
 
+_ESSENTIAL_MCP_STARTUP_PLUGINS = (
+    "cards.py",
+    "doctor.py",
+    "episodic_memory.py",
+    "evolution.py",
+    "lifecycle_events.py",
+    "outcomes.py",
+    "preferences.py",
+    "protocol.py",
+    "recover.py",
+    "skills.py",
+    "user_state_tools.py",
+    "workflow.py",
+)
+
+
+def _env_flag(name: str, *, default: bool = False) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return str(value).strip().lower() in {"1", "true", "yes", "on", "y", "si"}
+
+
+def _mcp_startup_plugin_mode() -> str:
+    return str(os.environ.get("NEXO_MCP_PLUGIN_MODE", "none") or "none").strip().lower()
+
+
+def _load_startup_plugins() -> None:
+    mode = _mcp_startup_plugin_mode()
+    if mode in {"none", "off", "0", "false"}:
+        print("[NEXO] MCP dynamic plugin loading skipped.", file=sys.stderr)
+        return
+    if mode in {"full", "all", "legacy"}:
+        load_all_plugins(mcp)
+        return
+
+    if mode not in {"essential", "fast", "default"}:
+        print(f"[NEXO] Unknown NEXO_MCP_PLUGIN_MODE={mode!r}; using essential plugins.", file=sys.stderr)
+
+    loaded = 0
+    for filename in _ESSENTIAL_MCP_STARTUP_PLUGINS:
+        try:
+            loaded += int(load_plugin(mcp, filename) or 0)
+        except Exception as exc:
+            print(f"[PLUGIN ERROR] {filename}: {exc}", file=sys.stderr)
+    print(f"[NEXO] MCP essential plugins ready: {loaded} tools.", file=sys.stderr)
+
+
 def _server_init():
-    """Run all side effects: signals, PID, DB, auto-update, plugins.
+    """Run side effects needed by the MCP server.
 
     Called only when the server is actually started (not on import).
     """
@@ -268,20 +316,26 @@ def _server_init():
     signal.signal(signal.SIGINT, _shutdown_handler)
 
     # ── Write PID file for stale process detection ─────────────────
-    data_dir = _data_dir()
-    os.makedirs(data_dir, exist_ok=True)
-    _pid_file = os.path.join(data_dir, "nexo.pid")
-    with open(_pid_file, "w") as f:
-        f.write(str(os.getpid()))
+    if not _env_flag("NEXO_MCP_PROBE"):
+        data_dir = _data_dir()
+        os.makedirs(data_dir, exist_ok=True)
+        _pid_file = os.path.join(data_dir, "nexo.pid")
+        with open(_pid_file, "w") as f:
+            f.write(str(os.getpid()))
 
     # ── Database initialization with recovery ─────────────────────
     _init_db_or_exit()
 
-    # ── Auto-update / startup preflight (synchronous) ─────────────
-    _run_startup_preflight_sync()
+    # ── Auto-update / startup preflight ───────────────────────────
+    # The MCP client waits for an immediate JSON-RPC handshake. Running update
+    # checks here can block the transport and make clients start without NEXO.
+    if _env_flag("NEXO_MCP_RUN_STARTUP_PREFLIGHT"):
+        _run_startup_preflight_sync()
+    else:
+        print("[NEXO] MCP startup preflight deferred.", file=sys.stderr)
 
     # ── Load plugins ───────────────────────────────────────────────
-    load_all_plugins(mcp)
+    _load_startup_plugins()
 
 
 mcp = FastMCP(

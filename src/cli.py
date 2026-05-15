@@ -140,6 +140,166 @@ def _mcp_status(args) -> int:
     )
 
 
+def _mcp_write_message(stdin, payload: dict) -> None:
+    raw = json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    stdin.write(raw + b"\n")
+    stdin.flush()
+
+
+def _mcp_reader(stdout, queue) -> None:
+    while True:
+        try:
+            line = stdout.readline()
+            if not line:
+                return
+            text = line.decode("utf-8", errors="replace").strip()
+            if not text:
+                continue
+            queue.put(json.loads(text))
+        except Exception as exc:
+            queue.put({"_reader_error": str(exc)})
+            return
+
+
+def _stderr_reader(stderr, lines: list[str]) -> None:
+    while True:
+        chunk = stderr.readline()
+        if not chunk:
+            return
+        try:
+            lines.append(chunk.decode("utf-8", errors="replace").rstrip())
+        except Exception:
+            lines.append(repr(chunk))
+        del lines[:-80]
+
+
+def _mcp_wait_for_response(queue, request_id: int, timeout_seconds: float) -> dict:
+    import queue as queue_module
+
+    deadline = time.monotonic() + max(timeout_seconds, 0.1)
+    while time.monotonic() < deadline:
+        remaining = max(deadline - time.monotonic(), 0.05)
+        try:
+            message = queue.get(timeout=remaining)
+        except queue_module.Empty:
+            break
+        if message.get("_reader_error"):
+            raise RuntimeError(message["_reader_error"])
+        if message.get("id") == request_id:
+            return message
+    raise TimeoutError(f"MCP response {request_id} timed out")
+
+
+def _mcp_probe(args) -> int:
+    import queue as queue_module
+    import threading
+
+    timeout_ms = int(getattr(args, "timeout_ms", 8000) or 8000)
+    timeout_seconds = max(timeout_ms / 1000.0, 1.0)
+    started_at = time.monotonic()
+    server_path = NEXO_CODE / "server.py"
+    env = os.environ.copy()
+    env["NEXO_MCP_PROBE"] = "1"
+    env.setdefault("NEXO_MCP_PLUGIN_MODE", getattr(args, "plugin_mode", None) or "none")
+    env.setdefault("NEXO_MCP_RUN_STARTUP_PREFLIGHT", "0")
+    client = str(getattr(args, "client", "") or "").strip()
+    if client:
+        env["NEXO_MCP_CLIENT"] = client
+
+    proc = None
+    stderr_lines: list[str] = []
+    try:
+        proc = subprocess.Popen(
+            [sys.executable, str(server_path)],
+            cwd=str(NEXO_CODE),
+            env=env,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=False,
+        )
+        responses = queue_module.Queue()
+        threading.Thread(target=_mcp_reader, args=(proc.stdout, responses), daemon=True).start()
+        threading.Thread(target=_stderr_reader, args=(proc.stderr, stderr_lines), daemon=True).start()
+
+        _mcp_write_message(proc.stdin, {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {"name": "nexo-mcp-probe", "version": _get_version()},
+            },
+        })
+        init_response = _mcp_wait_for_response(responses, 1, timeout_seconds)
+        if init_response.get("error"):
+            raise RuntimeError(f"MCP initialize failed: {init_response['error']}")
+
+        _mcp_write_message(proc.stdin, {
+            "jsonrpc": "2.0",
+            "method": "notifications/initialized",
+            "params": {},
+        })
+        _mcp_write_message(proc.stdin, {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/list",
+            "params": {},
+        })
+        tools_response = _mcp_wait_for_response(responses, 2, timeout_seconds)
+        if tools_response.get("error"):
+            raise RuntimeError(f"MCP tools/list failed: {tools_response['error']}")
+        tools = ((tools_response.get("result") or {}).get("tools") or [])
+        tool_names = [
+            str(tool.get("name") or "")
+            for tool in tools
+            if isinstance(tool, dict) and tool.get("name")
+        ]
+        required = ["nexo_startup", "nexo_heartbeat", "nexo_task_open", "nexo_guard_check"]
+        missing = [name for name in required if name not in tool_names]
+        ok = not missing and len(tool_names) > 0
+        payload = {
+            "ok": ok,
+            "mcp_ready": ok,
+            "probe_ok": ok,
+            "tools_available": len(tool_names) > 0,
+            "tool_count": len(tool_names),
+            "required_tools_present": not missing,
+            "missing_required_tools": missing,
+            "client": client,
+            "plugin_mode": env.get("NEXO_MCP_PLUGIN_MODE"),
+            "elapsed_ms": int((time.monotonic() - started_at) * 1000),
+            "stderr_tail": "\n".join(stderr_lines[-12:]),
+        }
+        return _print_json_or_text(payload, as_json=bool(getattr(args, "json", False)))
+    except Exception as exc:
+        payload = {
+            "ok": False,
+            "mcp_ready": False,
+            "probe_ok": False,
+            "error": "mcp_probe_failed",
+            "message": str(exc),
+            "client": client,
+            "elapsed_ms": int((time.monotonic() - started_at) * 1000),
+            "stderr_tail": "\n".join(stderr_lines[-20:]),
+        }
+        return _print_json_or_text(payload, as_json=bool(getattr(args, "json", False)))
+    finally:
+        if proc is not None:
+            try:
+                proc.terminate()
+            except Exception:
+                pass
+            try:
+                proc.wait(timeout=2)
+            except Exception:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+
+
 def _mcp_clear_restart(args) -> int:
     return _print_json_or_text(
         clear_restart_required_marker(
@@ -3562,6 +3722,11 @@ def main():
     mcp_status_p = mcp_sub.add_parser("status", help="Read the current runtime/MCP alignment state")
     mcp_status_p.add_argument("--client", default="", help="Optional client label such as claude_desktop or codex")
     mcp_status_p.add_argument("--json", action="store_true", help="JSON output")
+    mcp_probe_p = mcp_sub.add_parser("probe", help="Launch the MCP server and verify initialize + tools/list")
+    mcp_probe_p.add_argument("--client", default="", help="Optional client label such as claude_desktop or codex")
+    mcp_probe_p.add_argument("--timeout-ms", type=int, default=8000)
+    mcp_probe_p.add_argument("--plugin-mode", default="none", choices=["essential", "none", "full"])
+    mcp_probe_p.add_argument("--json", action="store_true", help="JSON output")
     mcp_clear_p = mcp_sub.add_parser("clear-restart", help="Acknowledge that a client/session reloaded the new runtime")
     mcp_clear_p.add_argument("--client", default="", help="Client label such as claude_desktop or codex")
     mcp_clear_p.add_argument("--installed-version", default="")
@@ -3865,6 +4030,8 @@ def main():
     elif args.command == "mcp":
         if args.mcp_command == "status":
             return _mcp_status(args)
+        if args.mcp_command == "probe":
+            return _mcp_probe(args)
         if args.mcp_command == "clear-restart":
             return _mcp_clear_restart(args)
         mcp_parser.print_help()
