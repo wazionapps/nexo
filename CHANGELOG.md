@@ -1,5 +1,12 @@
 # Changelog
 
+## [7.20.18] - 2026-05-15
+
+### Fixed — Desktop onboarding stays completed after packaged bootstrap
+
+- **Desktop-managed setup no longer gets undone by Brain's non-interactive bootstrap.** If Desktop already completed onboarding and wrote `calibration.meta.onboarding_completed=true`, a later `nexo-brain --skip` preserves that value instead of resetting it to false.
+- **Coverage:** onboarding CLI regression tests cover existing completed calibration, new skipped setup, and normal metadata preservation.
+
 ## [7.20.17] - 2026-05-14
 
 ### Fixed — packaged update backup validation tolerates live indexing
