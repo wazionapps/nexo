@@ -197,6 +197,49 @@ def test_skip_mode_preserves_existing_identity_defaults_from_profile(tmp_path: P
     assert cal["user"]["language"] == "es"
     assert cal["user"]["assistant_name"] == "Nora"
 
+
+@pytest.mark.skipif(not _node_available(), reason="node not available")
+def test_skip_mode_does_not_downgrade_completed_desktop_onboarding(tmp_path: Path) -> None:
+    home = tmp_path / "nexo-home"
+    calibration = home / "personal" / "brain" / "calibration.json"
+    completed_at = "2026-05-15T05:00:00.000Z"
+    _write_calibration(
+        calibration,
+        {
+            "version": 2,
+            "user": {
+                "name": "Smoke User",
+                "language": "es",
+                "assistant_name": "Nero",
+            },
+            "meta": {
+                "role": "QA smoke",
+                "technical_level": "beginner",
+                "onboarding_completed": True,
+                "onboarding_completed_at": completed_at,
+            },
+        },
+    )
+
+    env = _env(tmp_path, home)
+    env["NEXO_TESTING_SMOKE"] = "1"
+    proc = subprocess.run(
+        ["node", str(INSTALLER), "--skip"],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    assert proc.returncode == 0, proc.stderr
+    cal = json.loads(calibration.read_text(encoding="utf-8"))
+    assert cal["user"]["name"] == "Smoke User"
+    assert cal["user"]["language"] == "es"
+    assert cal["user"]["assistant_name"] == "Nero"
+    assert cal["meta"]["onboarding_completed"] is True
+    assert cal["meta"]["onboarding_completed_at"] == completed_at
+
+
 def test_postinstall_runs_warmup_for_fresh_installs_and_honors_skip() -> None:
     text = (REPO_ROOT / "bin" / "postinstall.js").read_text(encoding="utf-8")
     assert '"warmup-models", "--postinstall"' in text

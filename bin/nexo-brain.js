@@ -3551,6 +3551,13 @@ async function runSetup() {
     },
   };
 
+  const existingCalibrationRecord = readRuntimeCalibration(NEXO_HOME);
+  const existingCalibrationPayload = existingCalibrationRecord.payload || {};
+  const existingCalibrationMeta = existingCalibrationPayload.meta && typeof existingCalibrationPayload.meta === "object"
+    ? existingCalibrationPayload.meta
+    : {};
+  const preserveExistingOnboardingCompletion = useDefaults && isOnboardingComplete(existingCalibrationPayload);
+  const onboardingCompletedAt = new Date().toISOString();
   const existingIdentity = resolveExistingIdentityDefaults(NEXO_HOME);
 
   // Detect language from input or use default
@@ -3695,8 +3702,10 @@ async function runSetup() {
       // lives in the renderer. Marking it complete here used to short-
       // circuit that wizard and leave new users staring at an empty chat
       // (Inma 2026-05-03 smoke install).
-      onboarding_completed: !useDefaults,
-      onboarding_completed_at: !useDefaults ? new Date().toISOString() : null,
+      onboarding_completed: preserveExistingOnboardingCompletion ? true : !useDefaults,
+      onboarding_completed_at: preserveExistingOnboardingCompletion
+        ? (existingCalibrationMeta.onboarding_completed_at || onboardingCompletedAt)
+        : (!useDefaults ? onboardingCompletedAt : null),
     },
     auto_install: "ask", // updated later if user answers P11
     calibrated_at: new Date().toISOString(),
