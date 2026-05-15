@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import paths
+import sqlite3
 import time
 import secrets
 import threading
@@ -79,6 +80,45 @@ def _env_flag(name: str, default: bool = False) -> bool:
     if raw is None:
         return default
     return raw.strip().lower() not in {"", "0", "false", "no", "off"}
+
+
+def _interactive_db_timeout_ms() -> int:
+    """Short DB wait for interactive MCP tools.
+
+    Long waits make Desktop look frozen when a background cron briefly owns
+    the SQLite writer lock. Interactive tools should degrade and let the chat
+    continue instead of waiting 30s per query.
+    """
+    try:
+        return max(50, min(int(os.environ.get("NEXO_MCP_DB_BUSY_TIMEOUT_MS", "250")), 10000))
+    except Exception:
+        return 250
+
+
+def _set_interactive_db_timeout() -> None:
+    try:
+        conn = get_db()
+        conn.execute(f"PRAGMA busy_timeout={_interactive_db_timeout_ms()}")
+    except Exception:
+        pass
+
+
+def _is_db_busy(exc: BaseException) -> bool:
+    if isinstance(exc, sqlite3.OperationalError) and "database is locked" in str(exc).lower():
+        return True
+    return "database is locked" in str(exc).lower()
+
+
+def _safe_interactive(label: str, fn, default=None, warnings: list[str] | None = None):
+    try:
+        return fn()
+    except Exception as exc:
+        if warnings is not None:
+            if _is_db_busy(exc):
+                warnings.append(f"{label}: skipped because the local brain database is busy")
+            else:
+                warnings.append(f"{label}: skipped ({type(exc).__name__})")
+        return default
 
 
 def _keepalive_loop(sid: str, stop_event: threading.Event) -> None:
@@ -381,8 +421,21 @@ def handle_startup(
                       Enables automatic inbox detection when hook-backed clients provide one.
         session_client: Optional client label such as `claude_code` or `codex`.
     """
+    _set_interactive_db_timeout()
     sid = _generate_sid()
-    cleaned = clean_stale_sessions()
+    startup_warnings: list[str] = []
+    cleaned = _safe_interactive("stale-session cleanup", clean_stale_sessions, 0, startup_warnings)
+    if startup_warnings:
+        lines = [f"SID: {sid}"]
+        conversation = str(conversation_id or "").strip()
+        if conversation:
+            lines.append(f"CONVERSATION_ID: {conversation}")
+        lines.append("")
+        lines.append("STARTUP DEGRADED:")
+        for warning in startup_warnings[:4]:
+            lines.append(f"  {warning}")
+        lines.append("  Continue responding; retry nexo_heartbeat shortly for full context.")
+        return "\n".join(lines)
     linked_session_id = (session_token or claude_session_id or "").strip()
     # v6.0.7 hotfix: when the caller did not pass an explicit UUID, fall back to
     # the Claude Code SessionStart UUID written by the SessionStart hook to
@@ -403,36 +456,47 @@ def handle_startup(
     conversation = str(conversation_id or "").strip()
     conflicts = []
     if conversation:
-        cutoff = now_epoch() - SESSION_STALE_SECONDS
-        conn = get_db()
-        rows = conn.execute(
-            """
-            SELECT sid, task, last_update_epoch, external_session_id, session_client
-            FROM sessions
-            WHERE conversation_id = ? AND last_update_epoch > ?
-            ORDER BY last_update_epoch DESC
-            """,
-            (conversation, cutoff),
-        ).fetchall()
-        conflicts = [dict(row) for row in rows if row["sid"] != sid]
-    register_session(
-        sid,
-        task,
-        claude_session_id=linked_session_id,
-        external_session_id=linked_session_id,
-        session_client=inferred_client,
-        conversation_id=conversation,
+        def _load_conflicts():
+            cutoff = now_epoch() - SESSION_STALE_SECONDS
+            conn = get_db()
+            rows = conn.execute(
+                """
+                SELECT sid, task, last_update_epoch, external_session_id, session_client
+                FROM sessions
+                WHERE conversation_id = ? AND last_update_epoch > ?
+                ORDER BY last_update_epoch DESC
+                """,
+                (conversation, cutoff),
+            ).fetchall()
+            return [dict(row) for row in rows if row["sid"] != sid]
+
+        conflicts = _safe_interactive("conversation conflict lookup", _load_conflicts, [], startup_warnings)
+    registered = _safe_interactive(
+        "session registration",
+        lambda: register_session(
+            sid,
+            task,
+            claude_session_id=linked_session_id,
+            external_session_id=linked_session_id,
+            session_client=inferred_client,
+            conversation_id=conversation,
+        ),
+        None,
+        startup_warnings,
     )
     memory_maintenance = None
-    try:
-        backfill_limit = int(os.environ.get("NEXO_MEMORY_STARTUP_BACKFILL_LIMIT", "250") or "250")
-        memory_maintenance = maintain_memory_observations(
-            process_limit=100,
-            retry_failed=True,
-            backfill_limit=backfill_limit,
-        )
-    except Exception as exc:
-        memory_maintenance = {"ok": False, "error": str(exc)}
+    if _env_flag("NEXO_MEMORY_MAINTENANCE_IN_STARTUP", default=False):
+        try:
+            backfill_limit = int(os.environ.get("NEXO_MEMORY_STARTUP_BACKFILL_LIMIT", "0") or "0")
+            memory_maintenance = maintain_memory_observations(
+                process_limit=int(os.environ.get("NEXO_MEMORY_STARTUP_PROCESS_LIMIT", "20") or "20"),
+                retry_failed=True,
+                backfill_limit=backfill_limit,
+            )
+        except Exception as exc:
+            memory_maintenance = {"ok": False, "error": str(exc)}
+    else:
+        memory_maintenance = {"ok": True, "skipped": True}
     # v43 hotfix: also register in session_claude_aliases so multi-
     # conversation NEXO Desktop spawns (each with its own claude UUID)
     # resolve to the same NEXO sid on every PreToolUse hook lookup.
@@ -447,10 +511,11 @@ def handle_startup(
         except Exception:
             # Never let alias registration failures block startup.
             pass
-    _start_keepalive(sid)
-    active = get_active_sessions()
+    if registered:
+        _start_keepalive(sid)
+    active = _safe_interactive("active-session lookup", get_active_sessions, [], startup_warnings)
     other_sessions = [s for s in active if s["sid"] != sid]
-    inbox = get_inbox(sid)
+    inbox = _safe_interactive("inbox lookup", lambda: get_inbox(sid), [], startup_warnings)
 
     lines = [f"SID: {sid}"]
     if conversation:
@@ -458,6 +523,13 @@ def handle_startup(
 
     if cleaned > 0:
         lines.append(f"Cleaned {cleaned} stale sessions.")
+
+    if startup_warnings:
+        lines.append("")
+        lines.append("STARTUP DEGRADED:")
+        for warning in startup_warnings[:4]:
+            lines.append(f"  {warning}")
+        lines.append("  Continue responding; retry nexo_heartbeat shortly for full context.")
 
     if other_sessions:
         lines.append("")
@@ -649,6 +721,8 @@ def _handle_heartbeat_inner(sid: str, task: str, context_hint: str = '') -> str:
     """Inner body of handle_heartbeat — wrapped by tool_span above."""
     from db import get_db, update_last_heartbeat_ts
 
+    _set_interactive_db_timeout()
+    heartbeat_warnings: list[str] = []
     mandate_state = None
     if context_hint:
         try:
@@ -658,6 +732,7 @@ def _handle_heartbeat_inner(sid: str, task: str, context_hint: str = '') -> str:
                 context_hint,
                 session_id=sid,
                 source="heartbeat",
+                classifier=(lambda **_: False),
             )
         except Exception:
             mandate_state = None
@@ -669,7 +744,7 @@ def _handle_heartbeat_inner(sid: str, task: str, context_hint: str = '') -> str:
         except Exception:
             mandate_state = None
 
-    update_session(sid, task)
+    _safe_interactive("session heartbeat update", lambda: update_session(sid, task), None, heartbeat_warnings)
     # v6.0.1 — stamp last_heartbeat_ts so the PostToolUse hook can
     # decide whether to surface a pending-inbox reminder on autopilot
     # sessions. Best-effort: never break the heartbeat on failure.
@@ -683,8 +758,15 @@ def _handle_heartbeat_inner(sid: str, task: str, context_hint: str = '') -> str:
     # no timezone assumption: clients format per operator preferences.
     _now_iso = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
     parts = [f"NOW_UTC: {_now_iso}", f"OK: {sid} — {task}"]
+    if heartbeat_warnings:
+        parts.append("")
+        parts.append("HEARTBEAT DEGRADED:")
+        for warning in heartbeat_warnings[:3]:
+            parts.append(f"  {warning}")
+        parts.append("  Continue with the user request; context will catch up on a later heartbeat.")
+        return "\n".join(parts)
 
-    inbox = get_inbox(sid)
+    inbox = _safe_interactive("inbox lookup", lambda: get_inbox(sid), [], heartbeat_warnings)
     if inbox:
         parts.append("")
         parts.append("MESSAGES:")
@@ -692,7 +774,7 @@ def _handle_heartbeat_inner(sid: str, task: str, context_hint: str = '') -> str:
             age = _format_age(m["created_epoch"])
             parts.append(f"  [{m['from_sid']}] ({age}): {m['text']}")
 
-    questions = get_pending_questions(sid)
+    questions = _safe_interactive("pending-question lookup", lambda: get_pending_questions(sid), [], heartbeat_warnings)
     if questions:
         parts.append("")
         parts.append("PENDING QUESTIONS (respond with nexo_answer):")
@@ -712,7 +794,7 @@ def _handle_heartbeat_inner(sid: str, task: str, context_hint: str = '') -> str:
             if bundle.get("has_matches"):
                 parts.append("")
                 parts.append(format_pre_action_context_bundle(bundle, compact=True))
-            if append_local_context_evidence is not None:
+            if _env_flag("NEXO_HEARTBEAT_LOCAL_CONTEXT", default=False) and append_local_context_evidence is not None:
                 local_rendered = append_local_context_evidence("", recent_query, limit=4).strip()
                 if local_rendered:
                     parts.append("")
@@ -813,7 +895,7 @@ def _handle_heartbeat_inner(sid: str, task: str, context_hint: str = '') -> str:
 
     # ── Drive/Curiosity: detect signals from context_hint (best-effort) ──
     try:
-        if context_hint and len(context_hint.strip()) >= 15:
+        if _env_flag("NEXO_DRIVE_IN_HEARTBEAT", default=False) and context_hint and len(context_hint.strip()) >= 15:
             from tools_drive import detect_drive_signal as _detect_drive
             _drive_allow_llm = _env_flag("NEXO_DRIVE_LLM_IN_HEARTBEAT", default=False)
             _drive_result = _detect_drive(
@@ -835,11 +917,16 @@ def _handle_heartbeat_inner(sid: str, task: str, context_hint: str = '') -> str:
         pass  # Drive detection is best-effort, never block heartbeat
 
     # ── Layer 3: DIARY_OVERDUE signal based on heartbeat count + time ──
-    conn = get_db()
-    row = conn.execute("SELECT started_epoch FROM sessions WHERE sid = ?", (sid,)).fetchone()
+    conn = None
+    row = _safe_interactive(
+        "session age lookup",
+        lambda: get_db().execute("SELECT started_epoch FROM sessions WHERE sid = ?", (sid,)).fetchone(),
+        None,
+        None,
+    )
     if row:
         age_seconds = now_epoch() - row["started_epoch"]
-        has_diary = check_session_has_diary(sid)
+        has_diary = _safe_interactive("diary lookup", lambda: check_session_has_diary(sid), True, None)
 
         # DIARY_OVERDUE: >10 heartbeats OR >30 minutes, without a diary
         if not has_diary and (_hb_count > 10 or age_seconds >= 1800):
@@ -855,6 +942,7 @@ def _handle_heartbeat_inner(sid: str, task: str, context_hint: str = '') -> str:
     # Guard check reminder: if context_hint mentions code editing and no guard_check this session
     if context_hint and _hint_suggests_code_edit(context_hint):
         try:
+            conn = conn or get_db()
             guard_used = conn.execute(
                 "SELECT COUNT(*) FROM guard_log WHERE session_id = ?", (sid,)
             ).fetchone()[0]
@@ -913,7 +1001,7 @@ def _handle_heartbeat_inner(sid: str, task: str, context_hint: str = '') -> str:
     # adaptive_log row per heartbeat. Wrapped in best-effort try/except so
     # a failure here cannot block the heartbeat itself.
     try:
-        if context_hint and len(context_hint.strip()) >= 5:
+        if _env_flag("NEXO_HEARTBEAT_ADAPTIVE_MODE", default=False) and context_hint and len(context_hint.strip()) >= 5:
             from plugins.adaptive_mode import compute_mode
             from cognitive._trust import detect_sentiment
             sentiment = detect_sentiment(context_hint)
@@ -1257,7 +1345,9 @@ def _hint_suggests_correction(hint: str, *, correction_detector=None) -> bool:
     text = (hint or "").strip()
     if not text:
         return False
-    detector = correction_detector if correction_detector is not None else _detect_correction_semantic
+    detector = correction_detector if correction_detector is not None else (
+        _detect_correction_semantic if _env_flag("NEXO_HEARTBEAT_SEMANTIC_DETECTORS", default=False) else None
+    )
     if detector is not None:
         try:
             if bool(detector(text)):
