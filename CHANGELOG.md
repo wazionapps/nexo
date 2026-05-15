@@ -1,5 +1,15 @@
 # Changelog
 
+## [7.20.19] - 2026-05-15
+
+### Fixed — Local Memory stays alive during long indexing
+
+- **The Local Memory watchdog no longer kills the first large indexing pass after 15 minutes.** The `local-index` runtime now declares a long indexing budget so big macOS/Windows machines can keep progressing instead of restarting visible state.
+- **Desktop can read Local Memory through the fast direct CLI path.** Brain exposes bounded performance profile commands for Desktop without going through the slower plugin registry path.
+- **SQLite backups tolerate live writers.** Runtime backups now use a busy timeout and write through a temporary file before replacing the final backup.
+- **Full Disk Access guidance stops looping after access is granted.** macOS stale denial logs are ignored once a live probe confirms the runtime can read protected locations.
+- **Coverage:** targeted Local Memory runtime and Full Disk Access tests pass.
+
 ## [7.20.18] - 2026-05-15
 
 ### Fixed — Desktop onboarding stays completed after packaged bootstrap

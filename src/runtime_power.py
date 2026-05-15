@@ -566,6 +566,14 @@ def detect_full_disk_access_reasons(*, system: str | None = None) -> list[str]:
     if system != "Darwin":
         return []
 
+    try:
+        probe = probe_full_disk_access()
+        if probe.get("granted") is True:
+            clear_full_disk_access_required_state()
+            return []
+    except Exception:
+        pass
+
     reasons: list[str] = []
     if _is_protected_macos_path(NEXO_HOME):
         reasons.append(

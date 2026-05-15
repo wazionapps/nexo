@@ -3,7 +3,7 @@
 # nexo: description=Cooperative local memory indexing cycle for Brain/Desktop.
 # nexo: category=memory
 # nexo: runtime=python
-# nexo: timeout=900
+# nexo: timeout=21600
 # nexo: cron_id=local-index
 # nexo: interval_seconds=60
 # nexo: schedule_required=true
@@ -12,6 +12,7 @@
 # nexo: run_on_wake=true
 # nexo: idempotent=true
 # nexo: max_catchup_age=600
+# nexo: stuck_after_seconds=21600
 # nexo: doctor_allow_db=true
 
 from __future__ import annotations

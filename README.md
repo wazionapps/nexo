@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.20.18` is the current packaged-runtime line. Patch release over v7.20.17 — Desktop-managed setup now preserves a completed onboarding flag when Brain is later invoked with the non-interactive `--skip` bootstrap path.
+Version `7.20.19` is the current packaged-runtime line. Patch release over v7.20.18 — Local Memory status and long first-indexing runs stay stable during Desktop-managed updates; stale macOS Full Disk Access denials are cleared after a live access probe succeeds.
+
+Previously in `7.20.18`: patch release over v7.20.17 — Desktop-managed setup now preserves a completed onboarding flag when Brain is later invoked with the non-interactive `--skip` bootstrap path.
 
 Previously in `7.20.17`: patch release over v7.20.16 — validated DB backups now tolerate tiny live-write growth from the Local Memory indexer while still rejecting real protected-table loss.
 

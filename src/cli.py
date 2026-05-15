@@ -1389,6 +1389,17 @@ def _local_context_models(args) -> int:
     return _local_context_emit(local_context.model_status(), args)
 
 
+def _local_context_performance(args) -> int:
+    import local_context
+    command = str(getattr(args, "local_context_performance_command", "") or "status")
+    if command == "set":
+        return _local_context_emit(
+            local_context.set_performance_profile(getattr(args, "profile", "") or "medium"),
+            args,
+        )
+    return _local_context_emit({"ok": True, "performance": local_context.performance_config()}, args)
+
+
 def _local_context_service_config(args) -> int:
     from local_context import api as local_context_api
     return _local_context_emit(
@@ -3238,6 +3249,14 @@ def main():
     local_context_models_warmup_p.add_argument("--allow-download", action="store_true", help="Allow model downloads")
     local_context_models_warmup_p.add_argument("--json", action="store_true", help="JSON output")
 
+    local_context_performance_p = local_context_sub.add_parser("performance", help="Show or change local memory indexing speed")
+    local_context_performance_sub = local_context_performance_p.add_subparsers(dest="local_context_performance_command")
+    local_context_performance_status_p = local_context_performance_sub.add_parser("status", help="Show active indexing speed")
+    local_context_performance_status_p.add_argument("--json", action="store_true", help="JSON output")
+    local_context_performance_set_p = local_context_performance_sub.add_parser("set", help="Set indexing speed")
+    local_context_performance_set_p.add_argument("profile", choices=["low", "medium", "high", "extreme"], help="Indexing speed profile")
+    local_context_performance_set_p.add_argument("--json", action="store_true", help="JSON output")
+
     local_context_asset_p = local_context_sub.add_parser("asset", help="Inspect or purge one indexed asset")
     local_context_asset_sub = local_context_asset_p.add_subparsers(dest="local_context_asset_command")
     local_context_asset_get_p = local_context_asset_sub.add_parser("get", help="Get indexed asset details")
@@ -3784,6 +3803,10 @@ def main():
             if not args.local_context_models_command:
                 args.local_context_models_command = "status"
             return _local_context_models(args)
+        if args.local_context_command == "performance":
+            if not args.local_context_performance_command:
+                args.local_context_performance_command = "status"
+            return _local_context_performance(args)
         if args.local_context_command == "asset":
             if not args.local_context_asset_command:
                 local_context_asset_p.print_help()

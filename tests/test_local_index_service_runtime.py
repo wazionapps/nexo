@@ -15,6 +15,15 @@ from local_context.util import norm_path, now
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "src" / "scripts" / "nexo-local-index.py"
+MANIFEST = ROOT / "src" / "crons" / "manifest.json"
+
+
+def test_local_index_watchdog_allows_long_initial_indexing():
+    manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    local_index = next(item for item in manifest["crons"] if item["id"] == "local-index")
+
+    assert int(local_index["stuck_after_seconds"]) >= 21600
+    assert "# nexo: timeout=21600" in SCRIPT.read_text(encoding="utf-8")
 
 
 def _load_script(tmp_path, monkeypatch):
