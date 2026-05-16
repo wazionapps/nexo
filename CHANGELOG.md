@@ -1,6 +1,6 @@
 # Changelog
 
-## [7.20.21] - 2026-05-16
+## [7.20.22] - 2026-05-16
 
 ### Fixed — MCP stable with Local Memory sidecar
 
