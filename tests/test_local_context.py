@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 from pathlib import Path
 
 import local_context
@@ -987,6 +988,27 @@ def test_performance_profile_is_persisted_and_reported():
     status = local_context.status()
     assert status["performance"]["profile"] == "high"
     assert status["global"]["performance_profile"] == "high"
+
+
+def test_set_performance_profile_retries_when_db_is_locked(monkeypatch):
+    api.ensure_ready()
+    real_conn = api._conn
+    calls = {"conn": 0, "sleep": 0}
+
+    def flaky_conn():
+        calls["conn"] += 1
+        if calls["conn"] == 1:
+            raise sqlite3.OperationalError("database is locked")
+        return real_conn()
+
+    monkeypatch.setattr(api, "_conn", flaky_conn)
+    monkeypatch.setattr(api.time, "sleep", lambda _seconds: calls.__setitem__("sleep", calls["sleep"] + 1))
+
+    updated = local_context.set_performance_profile("medio")
+
+    assert updated["ok"] is True
+    assert updated["profile"] == "medium"
+    assert calls == {"conn": 2, "sleep": 1}
 
 
 def test_run_once_uses_persisted_performance_limits_by_default(monkeypatch):

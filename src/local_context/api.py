@@ -9,11 +9,12 @@ import stat
 import hashlib
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
 from . import embeddings
-from .db import LOCAL_CONTEXT_TABLES, connect_local_context_db_readonly, ensure_local_context_db, get_local_context_db
+from .db import LOCAL_CONTEXT_TABLES, close_local_context_db, connect_local_context_db_readonly, ensure_local_context_db, get_local_context_db
 from .extractors import chunk_text, contains_secret, entities, extract_text, summarize
 from .logging import log_event, tail
 from .privacy import classify_path, is_local_email_tree, is_queryable_path, should_extract, should_skip_file, should_skip_tree
@@ -33,6 +34,8 @@ DEFAULT_SYSTEM_ROOT_DEPTH = int(os.environ.get("NEXO_LOCAL_INDEX_SYSTEM_ROOT_DEP
 DEFAULT_CONTEXT_MAX_CHARS = int(os.environ.get("NEXO_LOCAL_CONTEXT_MAX_CHARS", "20000") or "20000")
 DEFAULT_ROUTER_MAX_CHARS = int(os.environ.get("NEXO_LOCAL_CONTEXT_ROUTER_MAX_CHARS", "6000") or "6000")
 DEFAULT_MAX_JOB_ATTEMPTS = int(os.environ.get("NEXO_LOCAL_INDEX_MAX_JOB_ATTEMPTS", "3") or "3")
+DEFAULT_SQLITE_BUSY_RETRY_ATTEMPTS = int(os.environ.get("NEXO_LOCAL_CONTEXT_BUSY_RETRY_ATTEMPTS", "5") or "5")
+DEFAULT_SQLITE_BUSY_RETRY_DELAY_SECONDS = float(os.environ.get("NEXO_LOCAL_CONTEXT_BUSY_RETRY_DELAY_SECONDS", "0.35") or "0.35")
 INITIAL_INDEX_COMPLETE_KEY = "initial_index_complete"
 INITIAL_INDEX_STARTED_AT_KEY = "initial_index_started_at"
 PERFORMANCE_PROFILE_KEY = "performance_profile"
@@ -106,6 +109,27 @@ def _close_read_conn(conn) -> None:
         conn.close()
     except Exception:
         pass
+
+
+def _sqlite_is_busy(exc: BaseException) -> bool:
+    return isinstance(exc, sqlite3.OperationalError) and "locked" in str(exc).lower()
+
+
+def _with_sqlite_busy_retry(callback, *, attempts: int | None = None):
+    max_attempts = max(1, int(attempts or DEFAULT_SQLITE_BUSY_RETRY_ATTEMPTS))
+    last_exc = None
+    for attempt in range(max_attempts):
+        try:
+            return callback()
+        except sqlite3.OperationalError as exc:
+            if not _sqlite_is_busy(exc) or attempt >= max_attempts - 1:
+                raise
+            last_exc = exc
+            close_local_context_db()
+            time.sleep(DEFAULT_SQLITE_BUSY_RETRY_DELAY_SECONDS * (attempt + 1))
+    if last_exc:
+        raise last_exc
+    return None
 
 
 def add_root(path: str, *, mode: str = "normal", depth: int | None = None) -> dict:
@@ -609,9 +633,12 @@ def _set_state_conn(conn, key: str, value: str) -> None:
 
 
 def _set_state(key: str, value: str) -> None:
-    conn = _conn()
-    _set_state_conn(conn, key, value)
-    conn.commit()
+    def write_state() -> None:
+        conn = _conn()
+        _set_state_conn(conn, key, value)
+        conn.commit()
+
+    _with_sqlite_busy_retry(write_state)
 
 
 def _get_state_conn(conn, key: str, default: str = "") -> str:
@@ -1745,6 +1772,7 @@ def process_jobs(*, limit: int = 100) -> dict:
             "UPDATE local_index_jobs SET status='running', claimed_by='local-process', lease_expires_at=?, updated_at=? WHERE job_id=?",
             (now() + 300, now(), job_id),
         )
+        conn.commit()
         try:
             if row["asset_status"] != "active":
                 raise FileNotFoundError(row["path"])
@@ -1754,6 +1782,7 @@ def process_jobs(*, limit: int = 100) -> dict:
                     (now(), job_id),
                 )
                 processed += 1
+                conn.commit()
                 continue
             if job_type == "light_extraction":
                 text, metadata = extract_text(Path(row["path"]))
@@ -1765,6 +1794,7 @@ def process_jobs(*, limit: int = 100) -> dict:
                         (now(), job_id),
                     )
                     processed += 1
+                    conn.commit()
                     continue
                 summary = summarize(text)
                 conn.execute(
@@ -1787,6 +1817,7 @@ def process_jobs(*, limit: int = 100) -> dict:
                 (now(), job_id),
             )
             processed += 1
+            conn.commit()
         except Exception as exc:
             failed += 1
             attempts = int(row["attempt_count"] or 0) + 1
@@ -1809,6 +1840,7 @@ def process_jobs(*, limit: int = 100) -> dict:
                 technical_detail=str(exc),
                 retryable=not terminal,
             )
+            conn.commit()
     conn.commit()
     if processed or failed:
         log_event("info", "jobs_processed", "Local memory jobs processed", processed=processed, failed=failed)
