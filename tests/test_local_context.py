@@ -114,8 +114,8 @@ def test_local_memory_read_paths_use_readonly_sidecar_without_prepare_or_audit_w
     monkeypatch.setattr(api, "ensure_ready", fail_if_write_prepare_runs)
 
     context = local_context.context_query("sidecar BMW Maria", limit=5)
-    roots = local_context.list_roots(readonly=True)
-    exclusions = local_context.list_exclusions(readonly=True)
+    roots = local_context.list_roots()
+    exclusions = local_context.list_exclusions()
     asset = local_context.get_asset(context["assets"][0]["asset_id"])
     neighbors = local_context.get_neighbors(context["assets"][0]["asset_id"])
     after_queries = conn.execute("SELECT COUNT(*) AS total FROM local_context_queries").fetchone()["total"]
@@ -975,6 +975,9 @@ def test_performance_profile_is_persisted_and_reported():
     default_status = local_context.status()
     assert default_status["performance"]["profile"] == "medium"
     assert default_status["global"]["performance_profile"] == "medium"
+    assert "label" not in default_status["performance"]
+    assert default_status["performance"]["label_key"] == "local_context.performance.medium"
+    assert all("label" not in item for item in default_status["performance"]["available_profiles"])
 
     updated = local_context.set_performance_profile("alto")
     assert updated["ok"] is True

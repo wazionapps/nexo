@@ -218,7 +218,7 @@ class TestBootChecks:
         assert db_row_counts(primary)["protocol_tasks"] == 75
 
     def test_db_integrity_fix_restores_degraded_local_memory_without_rolling_back_core(self, nexo_home):
-        from db_guard import CRITICAL_TABLES, LOCAL_CONTEXT_TABLES, PROTECTED_TABLES, db_row_counts
+        from db_guard import CRITICAL_TABLES, EMPTY_DB_SIZE_BYTES, LOCAL_CONTEXT_TABLES, PROTECTED_TABLES, db_row_counts
 
         primary = nexo_home / "data" / "nexo.db"
         local_context = nexo_home / "runtime" / "memory" / "local-context.db"
@@ -231,6 +231,9 @@ class TestBootChecks:
         _add_rows(conn, "protocol_tasks", 999, "current")
         conn.commit()
         conn.close()
+        local_context.parent.mkdir(parents=True, exist_ok=True)
+        _add_local_rows(local_context, {})
+        assert local_context.stat().st_size > EMPTY_DB_SIZE_BYTES
 
         conn = sqlite3.connect(str(backup))
         for table in CRITICAL_TABLES:

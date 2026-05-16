@@ -100,11 +100,10 @@ def check_db_integrity(fix: bool = False) -> DoctorCheck:
     reference_rows = sum(v for v in reference_counts.values() if isinstance(v, int))
     protected_regression = diff_row_counts(db_path, reference, PROTECTED_TABLES) if reference else None
     local_context_db = paths.memory_dir() / "local-context.db"
-    try:
-        local_context_size = local_context_db.stat().st_size if local_context_db.is_file() else -1
-    except OSError:
-        local_context_size = -1
-    local_needs_reference = local_context_size <= EMPTY_DB_SIZE_BYTES
+    local_needs_reference = (
+        not local_context_db.is_file()
+        or db_looks_wiped(local_context_db, LOCAL_CONTEXT_TABLES)
+    )
     local_reference = None
     if local_needs_reference:
         local_reference = (

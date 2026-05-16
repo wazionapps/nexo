@@ -41,7 +41,7 @@ VALID_CONTEXT_MODES = {"compact", "full"}
 PERFORMANCE_PROFILES: dict[str, dict[str, Any]] = {
     "low": {
         "profile": "low",
-        "label": "Bajo",
+        "label_key": "local_context.performance.low",
         "scan_limit": 250,
         "process_limit": 50,
         "live_asset_limit": 500,
@@ -52,7 +52,7 @@ PERFORMANCE_PROFILES: dict[str, dict[str, Any]] = {
     },
     "medium": {
         "profile": "medium",
-        "label": "Medio",
+        "label_key": "local_context.performance.medium",
         "scan_limit": 1000,
         "process_limit": 200,
         "live_asset_limit": DEFAULT_LIVE_ASSET_LIMIT,
@@ -63,7 +63,7 @@ PERFORMANCE_PROFILES: dict[str, dict[str, Any]] = {
     },
     "high": {
         "profile": "high",
-        "label": "Alto",
+        "label_key": "local_context.performance.high",
         "scan_limit": 3000,
         "process_limit": 600,
         "live_asset_limit": 5000,
@@ -74,7 +74,7 @@ PERFORMANCE_PROFILES: dict[str, dict[str, Any]] = {
     },
     "extreme": {
         "profile": "extreme",
-        "label": "Extremo",
+        "label_key": "local_context.performance.extreme",
         "scan_limit": 8000,
         "process_limit": 1500,
         "live_asset_limit": 10000,
@@ -150,7 +150,7 @@ def remove_root(path: str) -> dict:
     return {"ok": True, "root_path": root_path, "cleanup": cleanup}
 
 
-def list_roots(*, readonly: bool = False) -> list[dict]:
+def list_roots(*, readonly: bool = True) -> list[dict]:
     if not readonly:
         conn = _conn()
         return _list_roots_conn(conn)
@@ -289,7 +289,7 @@ def default_root_specs() -> list[tuple[str, int]]:
 
 
 def ensure_default_roots() -> dict:
-    existing = {row["root_path"]: row for row in list_roots()}
+    existing = {row["root_path"]: row for row in list_roots(readonly=False)}
     created = []
     updated = []
     for root, depth in default_root_specs():
@@ -309,7 +309,7 @@ def ensure_default_roots() -> dict:
                 updated.append({"root_path": existing_row["root_path"], "depth": depth})
             continue
         created.append(add_root(str(candidate), mode="normal", depth=depth))
-    return {"ok": True, "created": len(created), "updated": len(updated), "roots": list_roots()}
+    return {"ok": True, "created": len(created), "updated": len(updated), "roots": list_roots(readonly=False)}
 
 
 def _should_skip_mounted_root(candidate: Path) -> bool:
@@ -581,7 +581,7 @@ def remove_exclusion(path: str) -> dict:
     return {"ok": True, "path": excluded_path}
 
 
-def list_exclusions(*, readonly: bool = False) -> list[dict]:
+def list_exclusions(*, readonly: bool = True) -> list[dict]:
     if not readonly:
         conn = _conn()
         return _list_exclusions_conn(conn)
@@ -767,7 +767,7 @@ def _refresh_initial_index_complete(conn, initial_scan: dict | None = None, acti
 
 
 def _initial_scan_status(conn, roots: list[dict] | None = None) -> dict:
-    rows = roots if roots is not None else list_roots()
+    rows = roots if roots is not None else _list_roots_conn(conn)
     tracked = _effective_scan_roots([dict(row) for row in rows if str(row.get("status") or "active") not in {"removed", "offline"}])
     pending = [row for row in tracked if not _root_initial_scan_complete(conn, row)]
     checkpoints = conn.execute(
@@ -1513,7 +1513,7 @@ def reconcile_live_changes(
     conn = _conn()
     if _is_paused():
         return {"ok": True, "paused": True, "assets": {}, "dirs": {}}
-    exclusions = [row["path"] for row in list_exclusions()]
+    exclusions = [row["path"] for row in list_exclusions(readonly=False)]
     asset_stats = _reconcile_known_assets(conn, exclusions, limit=int(asset_limit or 0))
     dir_stats = _reconcile_known_dirs(conn, exclusions, dir_limit=int(dir_limit or 0), file_limit=int(file_limit or 0))
     conn.commit()
@@ -1546,8 +1546,8 @@ def scan_once(*, limit: int | None = None) -> dict:
         log_event("info", "scan_skipped_paused", "Local memory scan skipped because indexing is paused")
         return {"ok": True, "paused": True, "roots": 0, "seen": 0, "changed": 0, "errors": 0, "partial": False}
     started = now()
-    roots = _effective_scan_roots(list_roots())
-    exclusions = [row["path"] for row in list_exclusions()]
+    roots = _effective_scan_roots(list_roots(readonly=False))
+    exclusions = [row["path"] for row in list_exclusions(readonly=False)]
     totals = {"roots": len(roots), "seen": 0, "changed": 0, "errors": 0, "partial": False}
     log_event("info", "scan_started", "Local memory scan started", roots=len(roots))
     for root in roots:
@@ -1841,7 +1841,7 @@ def run_once(
     effective_live_dir_limit = int(live_dir_limit if live_dir_limit is not None else config["live_dir_limit"])
     effective_live_file_limit = int(live_file_limit if live_file_limit is not None else config["live_file_limit"])
     conn = _conn()
-    initial_before = _initial_scan_status(conn, list_roots())
+    initial_before = _initial_scan_status(conn, list_roots(readonly=False))
     initial_index_before = _refresh_initial_index_complete(conn, initial_before)
     if initial_index_before:
         live_result = reconcile_live_changes(
@@ -1860,7 +1860,7 @@ def run_once(
     scan_result = scan_once(limit=effective_scan_limit)
     job_result = process_jobs(limit=effective_process_limit)
     conn_after = _conn()
-    initial_after = _initial_scan_status(conn_after, list_roots())
+    initial_after = _initial_scan_status(conn_after, list_roots(readonly=False))
     active_after = _active_job_count(conn_after)
     initial_index_after = _refresh_initial_index_complete(conn_after, initial_after, active_after)
     return {
