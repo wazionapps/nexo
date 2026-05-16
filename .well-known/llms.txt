@@ -1,9 +1,10 @@
 # NEXO Brain
 
-> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v7.20.23). NEXO Desktop is a separate closed-source companion app distributed at nexo-desktop.com; its source does not ship in this repo. Mentions of "NEXO Desktop" in changelog entries describe coordinated client releases that consume the Brain CLI / MCP contract. For the commercial Desktop product, contact info@wazion.com.
+> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v7.20.24). NEXO Desktop is a separate closed-source companion app distributed at nexo-desktop.com; its source does not ship in this repo. Mentions of "NEXO Desktop" in changelog entries describe coordinated client releases that consume the Brain CLI / MCP contract. For the commercial Desktop product, contact info@wazion.com.
 
 NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. It adds a local shared brain across supported clients, configurable terminal and automation backends, recovery-aware background jobs, startup preflight, runtime self-healing, smarter retrieval defaults, long-horizon overnight analysis, and 150+ MCP tools.
 
+v7.20.24: patch release. Local Memory performance profile writes now retry transient SQLite busy states, close stale connections between attempts, and shorten indexer write locks so Desktop can save indexing speed while indexing is active.
 v7.20.23: patch release. Local Memory status reads the real split sidecar database read-only, returns retryable keyed errors without false zeroes when the sidecar is busy or invalid, and keeps Desktop recovery copy localizable in Spanish and English.
 v7.20.22: patch release. Brain moves Local Memory out of the main database, verifies required MCP tools before chat startup, validates split-aware Desktop backups, and degrades interactive startup while SQLite writers are active.
 v7.20.19: patch release. Brain keeps long Local Memory indexing runs alive, clears stale macOS Full Disk Access prompts after live verification, uses safer SQLite backups while the runtime is active, and exposes direct Local Context CLI controls for Desktop.

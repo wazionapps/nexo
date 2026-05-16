@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.20.23` is the current packaged-runtime line. Patch release over v7.20.22 — Local Memory status reads the real split sidecar database read-only, reports retryable keyed failures without false zeroes, and keeps Desktop Spanish/English copy localized.
+Version `7.20.24` is the current packaged-runtime line. Patch release over v7.20.23 — Local Memory performance profile writes now tolerate active indexing, retry transient SQLite busy states, and shorten indexer write locks between processed files.
+
+Previously in `7.20.23`: patch release over v7.20.22 — Local Memory status reads the real split sidecar database read-only, reports retryable keyed failures without false zeroes, and keeps Desktop Spanish/English copy localized.
 
 Previously in `7.20.22`: patch release over v7.20.19 — Local Memory moved out of the main Brain database, MCP readiness verifies required tools, and split-aware Desktop backups validate the main DB and Local Memory sidecar separately.
 
