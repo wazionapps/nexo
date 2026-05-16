@@ -73,9 +73,11 @@ def isolated_db(tmp_path, monkeypatch):
     """Redirect both nexo.db and cognitive.db to temp files per test."""
     test_db = str(tmp_path / "test_nexo.db")
     test_cog_db = str(tmp_path / "test_cognitive.db")
+    test_local_context_db = str(tmp_path / "test_local_context.db")
 
     monkeypatch.setenv("NEXO_TEST_DB", test_db)
     monkeypatch.setenv("NEXO_COGNITIVE_DB", test_cog_db)
+    monkeypatch.setenv("NEXO_LOCAL_CONTEXT_DB", test_local_context_db)
     monkeypatch.setenv("NEXO_SKIP_FS_INDEX", "1")
     monkeypatch.setenv("NEXO_LOCAL_INDEX_ALLOW_BLOCKED_ROOTS", "1")
     monkeypatch.setenv("NEXO_SKIP_LEARNING_COGNITIVE_INGEST", "1")
@@ -84,9 +86,15 @@ def isolated_db(tmp_path, monkeypatch):
 
     import db._core as db_core
     import cognitive._core as cog_core
+    try:
+        import local_context.db as local_context_db
+    except Exception:
+        local_context_db = None
 
     # Close existing connections
     db_core.close_db()
+    if local_context_db is not None:
+        local_context_db.close_local_context_db()
     if cog_core._conn is not None:
         try:
             cog_core._conn.close()
@@ -118,10 +126,13 @@ def isolated_db(tmp_path, monkeypatch):
     yield {
         "nexo_db": test_db,
         "cognitive_db": test_cog_db,
+        "local_context_db": test_local_context_db,
     }
 
     # Cleanup
     db_core.close_db()
+    if local_context_db is not None:
+        local_context_db.close_local_context_db()
     if cog_core._conn is not None:
         try:
             cog_core._conn.close()

@@ -425,17 +425,6 @@ def handle_startup(
     sid = _generate_sid()
     startup_warnings: list[str] = []
     cleaned = _safe_interactive("stale-session cleanup", clean_stale_sessions, 0, startup_warnings)
-    if startup_warnings:
-        lines = [f"SID: {sid}"]
-        conversation = str(conversation_id or "").strip()
-        if conversation:
-            lines.append(f"CONVERSATION_ID: {conversation}")
-        lines.append("")
-        lines.append("STARTUP DEGRADED:")
-        for warning in startup_warnings[:4]:
-            lines.append(f"  {warning}")
-        lines.append("  Continue responding; retry nexo_heartbeat shortly for full context.")
-        return "\n".join(lines)
     linked_session_id = (session_token or claude_session_id or "").strip()
     # v6.0.7 hotfix: when the caller did not pass an explicit UUID, fall back to
     # the Claude Code SessionStart UUID written by the SessionStart hook to

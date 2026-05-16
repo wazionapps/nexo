@@ -7,7 +7,7 @@ import time
 import uuid
 from pathlib import Path
 
-import db
+from local_context.db import get_local_context_db
 import local_context
 from local_context import api
 from local_context.util import norm_path, now
@@ -97,7 +97,7 @@ def test_local_index_file_log_survives_db_logging_failure(tmp_path, monkeypatch)
 
 
 def test_status_surfaces_unrecovered_service_cycle_failure():
-    conn = db.get_db()
+    conn = get_local_context_db()
     conn.execute(
         """
         INSERT INTO local_index_logs(created_at, level, event, message, metadata_json)
@@ -113,7 +113,7 @@ def test_status_surfaces_unrecovered_service_cycle_failure():
 
 
 def test_status_hides_service_cycle_failure_after_success():
-    conn = db.get_db()
+    conn = get_local_context_db()
     failure_at = now()
     conn.execute(
         """
@@ -143,7 +143,7 @@ def test_process_jobs_retries_due_failed_jobs(tmp_path):
     note.write_text("retry this document", encoding="utf-8")
     local_context.add_root(str(root))
     local_context.run_once(limit=20, process_limit=0)
-    conn = db.get_db()
+    conn = get_local_context_db()
     job = conn.execute("SELECT job_id FROM local_index_jobs WHERE status='pending' LIMIT 1").fetchone()
     assert job is not None
     conn.execute(
@@ -166,7 +166,7 @@ def test_process_jobs_recovers_expired_running_lease(tmp_path):
     note.write_text("expired running lease", encoding="utf-8")
     local_context.add_root(str(root))
     local_context.run_once(limit=20, process_limit=0)
-    conn = db.get_db()
+    conn = get_local_context_db()
     job = conn.execute("SELECT job_id FROM local_index_jobs WHERE status='pending' LIMIT 1").fetchone()
     assert job is not None
     conn.execute(
@@ -189,7 +189,7 @@ def test_status_counts_failed_and_running_jobs_as_pending_work(tmp_path, monkeyp
     note.write_text("pending work", encoding="utf-8")
     local_context.add_root(str(root))
     local_context.run_once(limit=20, process_limit=0)
-    conn = db.get_db()
+    conn = get_local_context_db()
     jobs = conn.execute("SELECT job_id FROM local_index_jobs WHERE status='pending' LIMIT 2").fetchall()
     assert len(jobs) >= 2
     conn.execute("UPDATE local_index_jobs SET status='failed', next_attempt_at=? WHERE job_id=?", (now() + 3600, jobs[0]["job_id"]))

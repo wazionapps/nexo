@@ -154,7 +154,7 @@ def test_find_latest_hourly_backup_respects_max_age(tmp_path):
     assert find_latest_hourly_backup(backups, max_age_seconds=HOURLY_BACKUP_MAX_AGE) is None
 
 
-def test_find_best_hourly_backup_prefers_rich_local_memory_over_newer_regressed_backup(tmp_path):
+def test_find_best_hourly_backup_uses_core_rows_after_local_memory_split(tmp_path):
     backups = tmp_path / "backups"
     backups.mkdir()
     rich = backups / "nexo-2026-05-13-2350.db"
@@ -169,7 +169,7 @@ def test_find_best_hourly_backup_prefers_rich_local_memory_over_newer_regressed_
     os.utime(str(regressed), (newer, newer))
 
     assert find_latest_hourly_backup(backups) == regressed
-    assert find_best_hourly_backup(backups) == rich
+    assert find_best_hourly_backup(backups) == regressed
 
 
 # ── diff_row_counts + WipeReport ───────────────────────────────────────
@@ -225,16 +225,20 @@ def test_wipe_report_fires_on_two_table_regressions(tmp_path):
     assert report.is_wipe() is True
 
 
-def test_wipe_report_detects_local_memory_regression_even_when_core_tables_are_healthy(tmp_path):
+def test_wipe_report_checks_local_memory_only_when_requested(tmp_path):
     current = tmp_path / "current.db"
     reference = tmp_path / "reference.db"
     _make_db(current, {"protocol_tasks": 600, "followups": 400, "learnings": 380})
     _make_db(reference, {"protocol_tasks": 600, "followups": 400, "learnings": 380})
     _add_local_rows(reference, {"local_assets": 2000, "local_chunks": 4000, "local_embeddings": 4000})
 
-    report = diff_row_counts(current, reference, PROTECTED_TABLES)
-    assert report.is_wipe() is True
-    assert any(d.table == "local_assets" and d.is_regression() for d in report.table_diffs)
+    core_report = diff_row_counts(current, reference, PROTECTED_TABLES)
+    assert core_report.is_wipe() is False
+    assert not any(d.table == "local_assets" for d in core_report.table_diffs)
+
+    local_report = diff_row_counts(current, reference, LOCAL_CONTEXT_TABLES)
+    assert local_report.is_wipe() is True
+    assert any(d.table == "local_assets" and d.is_regression() for d in local_report.table_diffs)
 
 
 # ── safe_sqlite_backup + validate_backup_matches_source ────────────────
@@ -277,10 +281,11 @@ def test_restore_tables_from_backup_restores_only_local_memory_tables(tmp_path):
     report = restore_tables_from_backup(source, target)
 
     assert report["ok"] is True, report
-    counts = db_row_counts(target, PROTECTED_TABLES)
-    assert counts["protocol_tasks"] == 99
-    assert counts["local_assets"] == 3
-    assert counts["local_chunks"] == 7
+    core_counts = db_row_counts(target, PROTECTED_TABLES)
+    local_counts = db_row_counts(target, LOCAL_CONTEXT_TABLES)
+    assert core_counts["protocol_tasks"] == 99
+    assert local_counts["local_assets"] == 3
+    assert local_counts["local_chunks"] == 7
 
 
 def test_quiesce_nexo_db_writers_combines_known_writers(monkeypatch):

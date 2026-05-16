@@ -11,10 +11,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from db import get_db, init_db
-from db._schema import run_migrations
-
 from . import embeddings
+from .db import ensure_local_context_db, get_local_context_db
 from .extractors import chunk_text, contains_secret, entities, extract_text, summarize
 from .logging import log_event, tail
 from .privacy import classify_path, is_local_email_tree, is_queryable_path, should_extract, should_skip_file, should_skip_tree
@@ -88,13 +86,12 @@ PERFORMANCE_PROFILES: dict[str, dict[str, Any]] = {
 
 
 def ensure_ready() -> None:
-    init_db()
-    run_migrations()
+    ensure_local_context_db()
 
 
 def _conn():
     ensure_ready()
-    return get_db()
+    return get_local_context_db()
 
 
 def add_root(path: str, *, mode: str = "normal", depth: int | None = None) -> dict:

@@ -89,6 +89,7 @@ LOCAL_CONTEXT_BACKUP_TABLES = (
     "local_index_checkpoints",
     "local_index_state",
     "local_index_errors",
+    "local_index_logs",
     "local_assets",
     "local_asset_versions",
     "local_chunks",
@@ -98,7 +99,17 @@ LOCAL_CONTEXT_BACKUP_TABLES = (
     "local_context_queries",
     "local_index_dirs",
 )
-PROTECTED_BACKUP_TABLES = CRITICAL_BACKUP_TABLES + LOCAL_CONTEXT_BACKUP_TABLES
+PROTECTED_BACKUP_TABLES = CRITICAL_BACKUP_TABLES
+
+
+def _backup_validation_tables(db_file: Path) -> tuple[str, ...]:
+    if db_file.name == "nexo.db":
+        return PROTECTED_BACKUP_TABLES
+    if db_file.name == "local-context.db":
+        return LOCAL_CONTEXT_BACKUP_TABLES
+    return ()
+
+
 CLASSIFIER_INSTALL_TIMEOUT_SECONDS = 1800
 CLASSIFIER_INSTALL_JOIN_SECONDS = 1500
 CLASSIFIER_INSTALL_LOG = paths.logs_dir() / "classifier-install.log"
@@ -338,7 +349,7 @@ def _validate_db_backup(source_db: Path, backup_db: Path) -> dict:
         report["errors"].append(f"backup db missing: {backup_db}")
         return report
 
-    for table in PROTECTED_BACKUP_TABLES:
+    for table in _backup_validation_tables(source_db):
         source_count = _critical_table_count(source_db, table)
         backup_count = _critical_table_count(backup_db, table)
         report["source_counts"][table] = source_count
@@ -373,18 +384,29 @@ def _create_validated_db_backup() -> tuple[str | None, dict | None]:
     if not backup_dir:
         return None, None
 
-    source_db = _find_primary_db_path()
-    if source_db is None:
+    source_dbs: list[Path] = []
+    primary_db = _find_primary_db_path()
+    if primary_db is not None:
+        source_dbs.append(primary_db)
+    local_context_db = paths.memory_dir() / "local-context.db"
+    if local_context_db.is_file():
+        source_dbs.append(local_context_db)
+    if not source_dbs:
         return backup_dir, None
 
-    report = _validate_db_backup(source_db, Path(backup_dir) / source_db.name)
-    if not report["ok"]:
-        details = ", ".join(
-            f"{item['table']} {item['source']}->{item['backup']}"
-            for item in report["regressions"]
-        ) or "; ".join(report["errors"])
-        _log(f"DB backup validation failed: {details}")
-    return backup_dir, report
+    reports = []
+    ok = True
+    for source_db in source_dbs:
+        report = _validate_db_backup(source_db, Path(backup_dir) / source_db.name)
+        reports.append(report)
+        if not report["ok"]:
+            ok = False
+            details = ", ".join(
+                f"{item['table']} {item['source']}->{item['backup']}"
+                for item in report["regressions"]
+            ) or "; ".join(report["errors"])
+            _log(f"DB backup validation failed ({source_db.name}): {details}")
+    return backup_dir, {"ok": ok, "reports": reports}
 
 
 def _read_last_check() -> dict:
@@ -2047,6 +2069,9 @@ def _backup_dbs() -> str | None:
     backup_dir = paths.backups_dir() / f"pre-autoupdate-{timestamp}"
 
     db_files = list(DATA_DIR.glob("*.db")) if DATA_DIR.is_dir() else []
+    local_context_db = paths.memory_dir() / "local-context.db"
+    if local_context_db.is_file():
+        db_files.append(local_context_db)
     db_files += [f for f in NEXO_HOME.glob("*.db") if f.is_file()]
     src_db = SRC_DIR / "nexo.db"
     if src_db.is_file() and src_db not in db_files:
@@ -2090,11 +2115,16 @@ def _restore_dbs(backup_dir: str):
     if not bdir.is_dir():
         return
     for db_backup in bdir.glob("*.db"):
-        for candidate in [DATA_DIR / db_backup.name, NEXO_HOME / db_backup.name, SRC_DIR / db_backup.name]:
-            if candidate.is_file():
+        if db_backup.name == "local-context.db":
+            candidates = [paths.memory_dir() / db_backup.name]
+        else:
+            candidates = [DATA_DIR / db_backup.name, NEXO_HOME / db_backup.name, SRC_DIR / db_backup.name]
+        for candidate in candidates:
+            if candidate.is_file() or db_backup.name == "local-context.db":
                 src_conn = None
                 dst_conn = None
                 try:
+                    candidate.parent.mkdir(parents=True, exist_ok=True)
                     src_conn = sqlite3.connect(str(db_backup))
                     dst_conn = sqlite3.connect(str(candidate))
                     src_conn.backup(dst_conn)

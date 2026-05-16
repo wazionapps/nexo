@@ -3,17 +3,71 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import db
 import local_context
+from db import get_db
 from db._schema import get_schema_version
 from local_context import api
+from local_context.db import (
+    MAIN_CLEANUP_STATE_KEY,
+    MIGRATION_STATE_KEY,
+    close_local_context_db,
+    get_local_context_db,
+)
 
 
 def test_local_context_migration_tables_exist():
-    conn = db.get_db()
+    conn = get_local_context_db()
     assert get_schema_version() >= 63
     row = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='local_assets'").fetchone()
     assert row is not None
+
+
+def test_local_context_migrates_legacy_rows_out_of_main_db():
+    main = get_db()
+    main.execute(
+        """
+        INSERT OR REPLACE INTO local_index_state(key, value, updated_at)
+        VALUES ('legacy_probe', 'yes', 1)
+        """
+    )
+    main.commit()
+
+    local = get_local_context_db()
+
+    migrated = local.execute("SELECT value FROM local_index_state WHERE key='legacy_probe'").fetchone()
+    assert migrated is not None
+    assert migrated["value"] == "yes"
+    assert main.execute("SELECT COUNT(*) AS total FROM local_index_state WHERE key='legacy_probe'").fetchone()["total"] == 0
+    assert local.execute("SELECT value FROM local_index_state WHERE key=?", (MAIN_CLEANUP_STATE_KEY,)).fetchone()
+
+
+def test_local_context_retries_main_drain_when_marker_already_exists():
+    local = get_local_context_db()
+    local.execute(
+        """
+        INSERT OR REPLACE INTO local_index_state(key, value, updated_at)
+        VALUES (?, 'old-marker', 1)
+        """,
+        (MIGRATION_STATE_KEY,),
+    )
+    local.commit()
+    close_local_context_db()
+
+    main = get_db()
+    main.execute(
+        """
+        INSERT OR REPLACE INTO local_index_state(key, value, updated_at)
+        VALUES ('legacy_after_marker', 'pending', 1)
+        """
+    )
+    main.commit()
+
+    local = get_local_context_db()
+
+    migrated = local.execute("SELECT value FROM local_index_state WHERE key='legacy_after_marker'").fetchone()
+    assert migrated is not None
+    assert migrated["value"] == "pending"
+    assert main.execute("SELECT COUNT(*) AS total FROM local_index_state WHERE key='legacy_after_marker'").fetchone()["total"] == 0
 
 
 def test_scan_extract_query_and_purge(tmp_path):
@@ -51,7 +105,7 @@ def test_context_query_uses_entity_match_when_chunk_text_does_not_repeat_entity(
 
     local_context.add_root(str(root))
     local_context.run_once(limit=20, process_limit=20)
-    conn = db.get_db()
+    conn = get_local_context_db()
     asset = conn.execute("SELECT asset_id FROM local_assets WHERE path=?", (str(note),)).fetchone()
     version = conn.execute("SELECT version_id FROM local_asset_versions WHERE asset_id=?", (asset["asset_id"],)).fetchone()
     conn.execute(
@@ -99,7 +153,7 @@ def test_context_query_entity_assets_are_not_lost_behind_recent_chunk_window(tmp
 
     local_context.add_root(str(root))
     local_context.run_once(limit=20, process_limit=20)
-    conn = db.get_db()
+    conn = get_local_context_db()
     asset = conn.execute("SELECT asset_id, root_id FROM local_assets WHERE path=?", (str(old),)).fetchone()
     conn.execute("UPDATE local_chunks SET created_at=1 WHERE asset_id=?", (asset["asset_id"],))
 
@@ -141,7 +195,7 @@ def test_status_reports_elapsed_and_eta_for_active_index(tmp_path, monkeypatch):
 
     local_context.add_root(str(root))
     local_context.run_once(limit=20, process_limit=1)
-    conn = db.get_db()
+    conn = get_local_context_db()
     conn.execute(
         "INSERT OR REPLACE INTO local_index_state(key, value, updated_at) VALUES (?, ?, ?)",
         (api.INITIAL_INDEX_STARTED_AT_KEY, "1000", 1000),
@@ -235,7 +289,7 @@ def test_clear_index_removes_stale_checkpoints(tmp_path):
 
     local_context.add_root(str(root))
     local_context.run_once(limit=1, process_limit=0)
-    conn = db.get_db()
+    conn = get_local_context_db()
     assert conn.execute("SELECT COUNT(*) AS total FROM local_index_checkpoints").fetchone()["total"] >= 1
 
     local_context.clear_index()
@@ -251,7 +305,7 @@ def test_index_elapsed_time_uses_persistent_start_state(tmp_path):
     (root / "note.txt").write_text("Documento con tiempo estable.", encoding="utf-8")
 
     local_context.add_root(str(root))
-    conn = db.get_db()
+    conn = get_local_context_db()
     conn.execute(
         "UPDATE local_index_state SET value=? WHERE key=?",
         ("1000", api.INITIAL_INDEX_STARTED_AT_KEY),
@@ -360,7 +414,7 @@ def test_sensitive_files_are_not_indexed(tmp_path):
 
     local_context.add_root(str(root))
     local_context.run_once(limit=20, process_limit=20)
-    conn = db.get_db()
+    conn = get_local_context_db()
     row = conn.execute("SELECT COUNT(*) AS total FROM local_assets WHERE path=?", (str(secret),)).fetchone()
     assert row["total"] == 0
     chunks = conn.execute("SELECT COUNT(*) AS total FROM local_chunks").fetchone()["total"]
@@ -383,7 +437,7 @@ def test_google_maps_key_param_is_inventory_only_not_queryable(tmp_path):
     local_context.add_root(str(root))
     local_context.run_once(limit=20, process_limit=20)
 
-    conn = db.get_db()
+    conn = get_local_context_db()
     asset = conn.execute("SELECT privacy_class, phase FROM local_assets WHERE path=?", (str(html),)).fetchone()
     chunks = conn.execute("SELECT COUNT(*) AS total FROM local_chunks WHERE asset_id IN (SELECT asset_id FROM local_assets WHERE path=?)", (str(html),)).fetchone()
     assert asset["privacy_class"] == "content_secret_inventory_only"
@@ -417,7 +471,7 @@ def test_private_profile_and_credential_files_are_not_indexed(tmp_path, monkeypa
     local_context.add_root(str(home))
     local_context.run_once(limit=100, process_limit=100)
 
-    conn = db.get_db()
+    conn = get_local_context_db()
     for path in files:
         row = conn.execute("SELECT COUNT(*) AS total FROM local_assets WHERE path=?", (str(path),)).fetchone()
         assert row["total"] == 0
@@ -524,7 +578,7 @@ def test_deleted_file_becomes_tombstone(tmp_path):
     local_context.run_once(limit=20, process_limit=20)
     path.unlink()
     local_context.run_once(limit=20, process_limit=20)
-    conn = db.get_db()
+    conn = get_local_context_db()
     row = conn.execute("SELECT status FROM local_assets WHERE display_path=?", (str(path),)).fetchone()
     assert row["status"] == "deleted"
 
@@ -540,7 +594,7 @@ def test_exclusion_prevents_indexing(tmp_path):
     local_context.add_root(str(root))
     local_context.add_exclusion(str(ignored))
     local_context.run_once(limit=20, process_limit=20)
-    conn = db.get_db()
+    conn = get_local_context_db()
     row = conn.execute("SELECT COUNT(*) AS total FROM local_assets WHERE path=?", (str(path),)).fetchone()
     assert row["total"] == 0
 
@@ -558,7 +612,7 @@ def test_noisy_dependency_trees_are_skipped_by_default(tmp_path):
     local_context.add_root(str(root))
     local_context.run_once(limit=20, process_limit=20)
 
-    conn = db.get_db()
+    conn = get_local_context_db()
     skipped = conn.execute("SELECT COUNT(*) AS total FROM local_assets WHERE path=?", (str(dependency),)).fetchone()
     indexed = conn.execute("SELECT COUNT(*) AS total FROM local_assets WHERE path=?", (str(source),)).fetchone()
     assert skipped["total"] == 0
@@ -576,7 +630,7 @@ def test_nexo_product_artifacts_are_skipped_by_default(tmp_path):
     local_context.add_root(str(root))
     local_context.run_once(limit=50, process_limit=50)
 
-    conn = db.get_db()
+    conn = get_local_context_db()
     skipped = conn.execute("SELECT COUNT(*) AS total FROM local_assets WHERE path=?", (str(product_artifact),)).fetchone()
     indexed = conn.execute("SELECT COUNT(*) AS total FROM local_assets WHERE path=?", (str(normal_doc),)).fetchone()
     assert skipped["total"] == 0
@@ -667,7 +721,7 @@ def test_system_volume_scan_excludes_system_but_reads_shared_app_data(tmp_path):
     local_context.add_root(str(startup), depth=api.DEFAULT_SYSTEM_ROOT_DEPTH)
     local_context.run_once(limit=200, process_limit=200)
 
-    conn = db.get_db()
+    conn = get_local_context_db()
     for skipped in (system_file, cache_file, app_bundle_file):
         row = conn.execute("SELECT COUNT(*) AS total FROM local_assets WHERE path=?", (str(skipped),)).fetchone()
         assert row["total"] == 0
@@ -688,7 +742,7 @@ def test_nested_home_root_is_not_scanned_twice_when_volume_root_exists(tmp_path)
     local_context.add_root(str(home), depth=api.DEFAULT_ROOT_DEPTH)
     local_context.run_once(limit=200, process_limit=0)
 
-    conn = db.get_db()
+    conn = get_local_context_db()
     row = conn.execute("SELECT root_id FROM local_assets WHERE path=?", (str(doc),)).fetchone()
     startup_root = conn.execute("SELECT id FROM local_index_roots WHERE root_path=?", (api.norm_path(str(startup)),)).fetchone()
     assert row["root_id"] == startup_root["id"]
@@ -727,7 +781,7 @@ def test_reactivated_offline_root_resets_initial_index_state(tmp_path):
     local_context.run_once(limit=20, process_limit=20)
     assert local_context.status()["global"]["initial_scan_complete"] is True
 
-    conn = db.get_db()
+    conn = get_local_context_db()
     conn.execute("UPDATE local_index_roots SET status='offline' WHERE root_path=?", (api.norm_path(str(root)),))
     conn.commit()
     (root / "second.txt").write_text("Segundo archivo", encoding="utf-8")
@@ -766,7 +820,7 @@ def test_remove_root_purges_stale_assets_jobs_and_errors(tmp_path):
 
     local_context.add_root(str(root))
     local_context.run_once(limit=20, process_limit=0)
-    conn = db.get_db()
+    conn = get_local_context_db()
     asset = conn.execute("SELECT asset_id FROM local_assets WHERE path=?", (str(note),)).fetchone()
     assert asset is not None
     conn.execute(
@@ -794,7 +848,7 @@ def test_status_ignores_removed_root_residue(tmp_path):
 
     local_context.add_root(str(active_root))
     local_context.add_root(str(removed_root))
-    conn = db.get_db()
+    conn = get_local_context_db()
     removed = conn.execute("SELECT id FROM local_index_roots WHERE root_path=?", (api.norm_path(str(removed_root)),)).fetchone()
     conn.execute("UPDATE local_index_roots SET status='removed' WHERE id=?", (removed["id"],))
     conn.execute(
@@ -828,7 +882,7 @@ def test_doctor_local_index_hygiene_repairs_removed_root_residue(tmp_path):
 
     removed_root = tmp_path / "NEXO Desktop"
     removed_root.mkdir()
-    conn = db.get_db()
+    conn = get_local_context_db()
     conn.execute(
         """
         INSERT INTO local_index_roots(root_path, display_path, mode, depth, status, created_at, updated_at)
@@ -938,7 +992,7 @@ def test_checkpoint_advances_partial_scans(tmp_path):
     assert first["scan"]["partial"] is True
     assert second["scan"]["partial"] is True
     assert third["scan"]["partial"] is False
-    conn = db.get_db()
+    conn = get_local_context_db()
     row = conn.execute("SELECT COUNT(*) AS total FROM local_assets WHERE status='active'").fetchone()
     assert row["total"] == 3
 
@@ -956,7 +1010,7 @@ def test_live_reconcile_marks_deleted_file_without_full_rescan(tmp_path):
     result = local_context.reconcile_live_changes(asset_limit=20, dir_limit=0, file_limit=0)
 
     assert result["assets"]["deleted"] == 1
-    conn = db.get_db()
+    conn = get_local_context_db()
     row = conn.execute("SELECT status FROM local_assets WHERE display_path=?", (str(path),)).fetchone()
     assert row["status"] == "deleted"
 
@@ -969,7 +1023,7 @@ def test_full_scan_marks_deleted_file_and_closes_jobs(tmp_path):
 
     local_context.add_root(str(root))
     local_context.run_once(limit=20, process_limit=0)
-    conn = db.get_db()
+    conn = get_local_context_db()
     asset = conn.execute("SELECT asset_id FROM local_assets WHERE path=?", (str(path),)).fetchone()
     assert asset is not None
     assert conn.execute("SELECT COUNT(*) AS total FROM local_index_jobs WHERE asset_id=? AND status='pending'", (asset["asset_id"],)).fetchone()["total"] >= 1
@@ -991,7 +1045,7 @@ def test_live_reconcile_reindexes_modified_file(tmp_path):
 
     local_context.add_root(str(root))
     local_context.run_once(limit=20, process_limit=20)
-    conn = db.get_db()
+    conn = get_local_context_db()
     before = conn.execute("SELECT COUNT(*) AS total FROM local_asset_versions").fetchone()["total"]
 
     path.write_text("second version with more content", encoding="utf-8")
@@ -1018,7 +1072,7 @@ def test_live_reconcile_discovers_new_file_in_known_directory(tmp_path):
     result = local_context.reconcile_live_changes(asset_limit=0, dir_limit=20, file_limit=20)
 
     assert result["dirs"]["files_changed"] >= 1
-    conn = db.get_db()
+    conn = get_local_context_db()
     row = conn.execute("SELECT status FROM local_assets WHERE display_path=?", (str(created),)).fetchone()
     assert row["status"] == "active"
 
@@ -1036,7 +1090,7 @@ def test_live_reconcile_marks_existing_files_deleted_after_exclusion(tmp_path):
     result = local_context.reconcile_live_changes(asset_limit=20, dir_limit=20, file_limit=20)
 
     assert result["assets"]["excluded"] + result["dirs"]["excluded_dirs"] >= 1
-    conn = db.get_db()
+    conn = get_local_context_db()
     row = conn.execute("SELECT COUNT(*) AS total FROM local_assets WHERE display_path=?", (str(path),)).fetchone()
     assert row["total"] == 0
 
@@ -1053,7 +1107,7 @@ def test_privacy_hygiene_purges_existing_private_payloads(tmp_path, monkeypatch)
     normal.write_text("normal note", encoding="utf-8")
 
     local_context.add_root(str(home))
-    conn = db.get_db()
+    conn = get_local_context_db()
     root_id = conn.execute("SELECT id FROM local_index_roots WHERE root_path=?", (api.norm_path(str(home)),)).fetchone()["id"]
     asset_id = api.stable_id("asset", api.norm_path(str(private)))
     version_id = api.stable_id("ver", asset_id)
@@ -1110,7 +1164,7 @@ def test_privacy_hygiene_blocks_secrets_in_late_chunks(tmp_path):
     path.write_text("safe file", encoding="utf-8")
 
     local_context.add_root(str(root))
-    conn = db.get_db()
+    conn = get_local_context_db()
     root_id = conn.execute("SELECT id FROM local_index_roots WHERE root_path=?", (api.norm_path(str(root)),)).fetchone()["id"]
     asset_id = api.stable_id("asset", api.norm_path(str(path)))
     version_id = api.stable_id("ver", asset_id)
@@ -1168,7 +1222,7 @@ def test_secret_bearing_content_is_inventory_only_not_queryable(tmp_path):
     local_context.add_root(str(root))
     local_context.run_once(limit=20, process_limit=20)
 
-    conn = db.get_db()
+    conn = get_local_context_db()
     row = conn.execute("SELECT privacy_class, phase FROM local_assets WHERE path=?", (str(token_file),)).fetchone()
     assert row["privacy_class"] == "content_secret_inventory_only"
     assert row["phase"] == "privacy_blocked"

@@ -2,6 +2,7 @@
 
 from db import get_reminders, get_followups
 from datetime import date
+from interactive_db import interactive_db_timeout, is_db_busy
 
 
 def _is_due(date_str: str) -> bool:
@@ -22,19 +23,47 @@ def handle_reminders(filter_type: str = "due") -> str:
         filter_type: 'due', 'all', 'followups', 'completed', 'deleted', 'history', 'any'
     """
     parts = []
+    warnings: list[str] = []
 
-    if filter_type in ("due", "all", "completed", "deleted", "history", "any"):
-        r = _format_reminders(filter_type)
-        if r:
-            parts.append(r)
+    with interactive_db_timeout():
+        if filter_type in ("due", "all", "completed", "deleted", "history", "any"):
+            r = _format_reminders_safe(filter_type, warnings)
+            if r:
+                parts.append(r)
 
-    if filter_type in ("due", "all", "followups", "completed", "deleted", "history", "any"):
-        f = _format_followups(filter_type)
-        if f:
-            parts.append(f)
+        if filter_type in ("due", "all", "followups", "completed", "deleted", "history", "any"):
+            f = _format_followups_safe(filter_type, warnings)
+            if f:
+                parts.append(f)
 
     result = "\n\n".join(parts)
+    if warnings:
+        prefix = "REMINDERS DEGRADED:\n  " + "\n  ".join(warnings)
+        prefix += "\n  Continue with the user request; reminders will catch up shortly."
+        return f"{prefix}\n\n{result}" if result else prefix
     return result if result else "No pending reminders."
+
+
+def _format_reminders_safe(filter_type: str, warnings: list[str]) -> str:
+    try:
+        return _format_reminders(filter_type)
+    except Exception as exc:
+        if is_db_busy(exc):
+            warnings.append("reminders skipped because the local brain database is busy")
+        else:
+            warnings.append(f"reminders skipped ({type(exc).__name__})")
+        return ""
+
+
+def _format_followups_safe(filter_type: str, warnings: list[str]) -> str:
+    try:
+        return _format_followups(filter_type)
+    except Exception as exc:
+        if is_db_busy(exc):
+            warnings.append("followups skipped because the local brain database is busy")
+        else:
+            warnings.append(f"followups skipped ({type(exc).__name__})")
+        return ""
 
 
 def _format_reminders(filter_type: str) -> str:

@@ -10,6 +10,7 @@ from db import (
     log_change, search_changes, update_change_commit,
     recall, get_db, set_linked_outcomes_met,
 )
+from interactive_db import interactive_db_timeout, is_db_busy
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 _REPO_ABS_PREFIX = str(REPO_ROOT) + "/"
@@ -377,6 +378,23 @@ def handle_session_diary_read(session_id: str = '', last_n: int = 3, last_day: b
         brief: If true, returns ONLY the last diary entry with summary + mental_state + context_next.
                Use this at startup for fast context loading (~1K chars instead of full dump).
     """
+    with interactive_db_timeout():
+        try:
+            return _handle_session_diary_read_inner(session_id, last_n, last_day, domain, brief)
+        except Exception as exc:
+            if is_db_busy(exc):
+                return (
+                    "SESSION DIARY DEGRADED:\n"
+                    "  local brain database is busy; continue with the user request and retry shortly."
+                )
+            return (
+                "SESSION DIARY DEGRADED:\n"
+                f"  skipped ({type(exc).__name__}); continue with the user request and retry shortly."
+            )
+
+
+def _handle_session_diary_read_inner(session_id: str = '', last_n: int = 3, last_day: bool = False,
+                                     domain: str = '', brief: bool = False) -> str:
     if brief:
         # Fast path: only the most recent diary entry, compact format
         results = read_session_diary(session_id, 1, last_day=False, domain=domain)

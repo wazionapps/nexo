@@ -39,6 +39,7 @@ try:
     from db_guard import (
         CRITICAL_TABLES,
         HOURLY_BACKUP_MAX_AGE,
+        LOCAL_CONTEXT_TABLES,
         MIN_REFERENCE_ROWS,
         PROTECTED_TABLES,
         WIPE_THRESHOLD_PCT,
@@ -56,6 +57,7 @@ except Exception as exc:  # pragma: no cover - exercised only during stale insta
     _DB_GUARD_AVAILABLE = False
     _DB_GUARD_IMPORT_ERROR = str(exc)
     CRITICAL_TABLES = ()
+    LOCAL_CONTEXT_TABLES = ()
     PROTECTED_TABLES = ()
     HOURLY_BACKUP_MAX_AGE = 48 * 3600
     MIN_REFERENCE_ROWS = 50
@@ -97,6 +99,14 @@ REQUIRED_LOCAL_MEMORY_TABLES: tuple[str, ...] = (
     "local_embeddings",
     "local_index_dirs",
 )
+
+
+def _backup_validation_tables(db_file: Path) -> tuple[str, ...]:
+    if db_file.name == "nexo.db":
+        return tuple(PROTECTED_TABLES)
+    if db_file.name == "local-context.db":
+        return tuple(LOCAL_CONTEXT_TABLES)
+    return ()
 
 # Code root is the parent of plugins/:
 # - source checkout: <repo>/src
@@ -404,11 +414,11 @@ def _db_guard_integrity_error() -> str | None:
             f"  import error: {_DB_GUARD_IMPORT_ERROR or 'unknown'}\n"
             "Restart Desktop so it can sync the bundled Brain guard, then retry the update."
         )
-    protected = set(PROTECTED_TABLES)
-    missing = [table for table in REQUIRED_LOCAL_MEMORY_TABLES if table not in protected]
+    local_tables = set(LOCAL_CONTEXT_TABLES)
+    missing = [table for table in REQUIRED_LOCAL_MEMORY_TABLES if table not in local_tables]
     if missing:
         return (
-            "DB protection module is stale; refusing to update because local memory tables are not protected.\n"
+            "DB protection module is stale; refusing to update because local memory tables are not known.\n"
             f"  missing tables: {', '.join(missing)}\n"
             "Restart Desktop so it can sync the bundled Brain guard, then retry the update."
         )
@@ -505,6 +515,9 @@ def _backup_databases() -> tuple[str, str | None]:
     backup_dir = BACKUP_BASE / f"pre-update-{timestamp}"
 
     db_files = list(DATA_DIR.glob("*.db")) if DATA_DIR.is_dir() else []
+    local_context_db = paths.memory_dir() / "local-context.db"
+    if local_context_db.is_file():
+        db_files.append(local_context_db)
     # Also check NEXO_HOME root for legacy db location
     db_files += [f for f in NEXO_HOME.glob("*.db") if f.is_file()]
     # And check src/ dir for nexo.db (dev mode)
@@ -522,10 +535,9 @@ def _backup_databases() -> tuple[str, str | None]:
         ok, err = safe_sqlite_backup(db_file, dest)
         if not ok:
             return str(backup_dir), f"Failed to backup {db_file.name}: {err}"
-        # Only validate row counts for the primary DB — the other sidecar DBs
-        # (cognitive.db, cron-runs.db) do not share CRITICAL_TABLES.
-        if db_file.name == "nexo.db":
-            valid, valid_err = validate_backup_matches_source(db_file, dest, PROTECTED_TABLES)
+        tables = _backup_validation_tables(db_file)
+        if tables:
+            valid, valid_err = validate_backup_matches_source(db_file, dest, tables)
             if not valid:
                 return str(backup_dir), (
                     f"Backup of {db_file.name} did not preserve critical tables: {valid_err}"
@@ -544,12 +556,19 @@ def _restore_databases(backup_dir: str):
     if not bdir.is_dir():
         return
     for db_backup in bdir.glob("*.db"):
-        # Try to find original location
-        for candidate in [DATA_DIR / db_backup.name, NEXO_HOME / db_backup.name, SRC_DIR / db_backup.name]:
-            if candidate.is_file():
+        # Try to find original location. local-context.db lives outside the
+        # operational DB directory and must be restored even if the target was
+        # missing after a failed update.
+        if db_backup.name == "local-context.db":
+            candidates = [paths.memory_dir() / db_backup.name]
+        else:
+            candidates = [DATA_DIR / db_backup.name, NEXO_HOME / db_backup.name, SRC_DIR / db_backup.name]
+        for candidate in candidates:
+            if candidate.is_file() or db_backup.name == "local-context.db":
                 src_conn = None
                 dst_conn = None
                 try:
+                    candidate.parent.mkdir(parents=True, exist_ok=True)
                     src_conn = sqlite3.connect(str(db_backup))
                     dst_conn = sqlite3.connect(str(candidate))
                     src_conn.backup(dst_conn)

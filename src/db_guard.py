@@ -75,6 +75,7 @@ LOCAL_CONTEXT_TABLES: tuple[str, ...] = (
     "local_index_checkpoints",
     "local_index_state",
     "local_index_errors",
+    "local_index_logs",
     "local_assets",
     "local_asset_versions",
     "local_chunks",
@@ -85,10 +86,11 @@ LOCAL_CONTEXT_TABLES: tuple[str, ...] = (
     "local_index_dirs",
 )
 
-# Everything an updater/recovery path must preserve. Keep CRITICAL_TABLES as a
-# public legacy name for older callers, but new guards should use
-# PROTECTED_TABLES so local indexing cannot regress unnoticed.
-PROTECTED_TABLES: tuple[str, ...] = CRITICAL_TABLES + LOCAL_CONTEXT_TABLES
+# Tables protected inside the operational Brain DB. Local memory now lives in
+# runtime/memory/local-context.db and is validated with LOCAL_CONTEXT_TABLES
+# separately; mixing both here makes old local-index backups look like the
+# source of truth for nexo.db and can block every update.
+PROTECTED_TABLES: tuple[str, ...] = CRITICAL_TABLES
 
 # A reference backup must contain at least this many rows (summed across
 # CRITICAL_TABLES) before we will treat it as "proof the user has real data".
@@ -478,7 +480,7 @@ def _backup_drift_is_safe(source_count: int, backup_count: int) -> bool:
 
 
 def _quote_identifier(identifier: str) -> str:
-    if identifier not in PROTECTED_TABLES:
+    if identifier not in PROTECTED_TABLES and identifier not in LOCAL_CONTEXT_TABLES:
         raise ValueError(f"refusing unsafe table identifier: {identifier!r}")
     return '"' + identifier.replace('"', '""') + '"'
 

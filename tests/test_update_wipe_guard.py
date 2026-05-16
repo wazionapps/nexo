@@ -86,7 +86,7 @@ def test_preflight_blocks_wiped_db_with_healthy_backup(update_env):
     assert "nexo recover" in err
 
 
-def test_preflight_blocks_local_memory_regression_even_when_core_tables_are_healthy(update_env):
+def test_preflight_ignores_legacy_local_memory_rows_in_main_db_after_split(update_env):
     primary = update_env["data"] / "nexo.db"
     hourly = update_env["backups"] / "nexo-2026-05-13-2350.db"
     _make_populated_db(primary)
@@ -95,9 +95,7 @@ def test_preflight_blocks_local_memory_regression_even_when_core_tables_are_heal
 
     err = update_env["upd"]._preflight_wipe_check()
 
-    assert err is not None
-    assert "protected data" in err
-    assert "local_assets" in err
+    assert err is None
 
 
 def test_preflight_aborts_when_db_guard_is_missing(update_env, monkeypatch):
@@ -117,12 +115,12 @@ def test_preflight_aborts_when_db_guard_does_not_protect_local_memory(update_env
     primary = update_env["data"] / "nexo.db"
     _make_populated_db(primary)
     monkeypatch.setattr(update_env["upd"], "_DB_GUARD_AVAILABLE", True)
-    monkeypatch.setattr(update_env["upd"], "PROTECTED_TABLES", CRITICAL_TABLES)
+    monkeypatch.setattr(update_env["upd"], "LOCAL_CONTEXT_TABLES", tuple(t for t in LOCAL_CONTEXT_TABLES if t != "local_assets"))
 
     err = update_env["upd"]._preflight_wipe_check()
 
     assert err is not None
-    assert "local memory tables are not protected" in err
+    assert "local memory tables are not known" in err
     assert "local_assets" in err
 
 
@@ -165,9 +163,11 @@ def test_backup_databases_validates_row_counts(update_env):
 def test_backup_databases_allows_small_live_growth_during_validation(update_env, monkeypatch):
     """A live indexer can add rows after sqlite3.backup() snapshots the DB."""
     primary = update_env["data"] / "nexo.db"
+    local_db = update_env["home"] / "runtime" / "memory" / "local-context.db"
     _make_populated_db(primary)
+    local_db.parent.mkdir(parents=True)
     _add_local_rows(
-        primary,
+        local_db,
         {
             "local_chunks": 5000,
             "local_entities": 5000,
@@ -179,15 +179,16 @@ def test_backup_databases_allows_small_live_growth_during_validation(update_env,
 
     def backup_then_grow(source, dest):
         result = original_backup(source, dest)
-        _add_local_rows(
-            primary,
-            {
-                "local_chunks": 10,
-                "local_entities": 10,
-                "local_relations": 10,
-                "local_embeddings": 10,
-            },
-        )
+        if Path(source).name == "local-context.db":
+            _add_local_rows(
+                local_db,
+                {
+                    "local_chunks": 10,
+                    "local_entities": 10,
+                    "local_relations": 10,
+                    "local_embeddings": 10,
+                },
+            )
         return result
 
     monkeypatch.setattr(update_env["upd"], "safe_sqlite_backup", backup_then_grow)
@@ -200,13 +201,15 @@ def test_backup_databases_allows_small_live_growth_during_validation(update_env,
 
 def test_backup_databases_rejects_large_backup_loss(update_env, monkeypatch):
     primary = update_env["data"] / "nexo.db"
+    local_db = update_env["home"] / "runtime" / "memory" / "local-context.db"
     _make_populated_db(primary)
-    _add_local_rows(primary, {"local_chunks": 5000, "local_embeddings": 5000})
+    local_db.parent.mkdir(parents=True)
+    _add_local_rows(local_db, {"local_chunks": 5000, "local_embeddings": 5000})
     original_backup = update_env["upd"].safe_sqlite_backup
 
     def backup_then_truncate(source, dest):
         ok, err = original_backup(source, dest)
-        if ok:
+        if ok and Path(source).name == "local-context.db":
             conn = sqlite3.connect(str(dest))
             try:
                 conn.execute("DELETE FROM local_chunks WHERE id > 100")

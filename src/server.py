@@ -5,6 +5,7 @@ import os
 import signal
 import sys
 import json
+import time
 
 from fastmcp import FastMCP
 from core_prompts import render_core_prompt
@@ -94,10 +95,15 @@ from tools_automation_sessions import (
 from plugins.cortex import handle_cortex_check
 from plugins.guard import handle_guard_check
 from plugins.protocol import (
+    handle_confidence_check,
+    handle_protocol_debt_resolve,
     handle_task_acknowledge_guard,
     handle_task_close,
     handle_task_open,
 )
+from plugins.episodic_memory import handle_session_diary_read
+from plugins.cards import handle_card_match
+from plugins.skills import handle_skill_match
 from plugins.workflow import (
     handle_workflow_open,
     handle_workflow_update,
@@ -112,10 +118,12 @@ from runtime_versioning import (
     prime_process_version,
 )
 from local_context import api as local_context_api
+from local_context.db import close_local_context_db
 
 
 # ── Graceful shutdown: close DB on any termination signal ──────────
 def _shutdown_handler(signum, frame):
+    close_local_context_db()
     close_db()
     sys.exit(0)
 
@@ -184,11 +192,23 @@ def _restore_valid_db_backup() -> bool:
 def _init_db_or_exit() -> None:
     import sqlite3
 
-    try:
-        init_db()
-        return
-    except sqlite3.DatabaseError as exc:
-        print(f"[NEXO] DB init failed: {exc}", file=sys.stderr)
+    for attempt in range(3):
+        try:
+            init_db()
+            return
+        except sqlite3.OperationalError as exc:
+            message = str(exc).lower()
+            if "locked" in message or "busy" in message:
+                if attempt < 2:
+                    time.sleep(0.25 * (attempt + 1))
+                    continue
+                print(f"[NEXO] DB init temporarily busy: {exc}", file=sys.stderr)
+                raise SystemExit(75)
+            print(f"[NEXO] DB init failed: {exc}", file=sys.stderr)
+            break
+        except sqlite3.DatabaseError as exc:
+            print(f"[NEXO] DB init failed: {exc}", file=sys.stderr)
+            break
 
     restored = False
     try:
@@ -437,6 +457,76 @@ def nexo_heartbeat(sid: str, task: str, context_hint: str = '') -> str:
         context_hint: Last 2-3 sentences from the user or current topic. Used for sentiment detection, trust auto-scoring, and mid-session RAG. ALWAYS provide this for best results.
     """
     return handle_heartbeat(sid, task, context_hint)
+
+
+@mcp.tool
+def nexo_session_diary_read(
+    session_id: str = "",
+    last_n: int = 3,
+    last_day: bool = False,
+    domain: str = "",
+    brief: bool = False,
+) -> str:
+    """Read recent session diaries for context continuity."""
+    return handle_session_diary_read(session_id, last_n, last_day, domain, brief)
+
+
+@mcp.tool
+def nexo_confidence_check(
+    goal: str,
+    task_type: str = "answer",
+    area: str = "",
+    context_hint: str = "",
+    constraints: str = "[]",
+    evidence_refs: str = "[]",
+    unknowns: str = "[]",
+    verification_step: str = "",
+    stakes: str = "",
+) -> str:
+    """Decide whether an answer should proceed directly or be verified first."""
+    return handle_confidence_check(
+        goal,
+        task_type,
+        area,
+        context_hint,
+        constraints,
+        evidence_refs,
+        unknowns,
+        verification_step,
+        stakes,
+    )
+
+
+@mcp.tool
+def nexo_protocol_debt_resolve(
+    debt_ids: str = "",
+    task_id: str = "",
+    session_id: str = "",
+    debt_types: str = "",
+    resolution: str = "",
+    debt_id: str = "",
+) -> str:
+    """Resolve protocol debt records by id or filters."""
+    return handle_protocol_debt_resolve(debt_ids, task_id, session_id, debt_types, resolution, debt_id)
+
+
+@mcp.tool
+def nexo_card_match(
+    query: str,
+    limit: int = 5,
+    include_protocol: bool = True,
+    locale: str = "es",
+    category: str = "",
+    business_type: str = "",
+) -> str:
+    """Find official NEXO protocol cards for a user request."""
+    return handle_card_match(query, limit, include_protocol, locale, category, business_type)
+
+
+@mcp.tool
+def nexo_skill_match(task: str, level: str = "") -> str:
+    """Find reusable NEXO skills for the current task."""
+    return handle_skill_match(task, level)
 
 
 @mcp.tool

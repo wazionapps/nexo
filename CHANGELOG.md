@@ -1,5 +1,15 @@
 # Changelog
 
+## [7.20.21] - 2026-05-16
+
+### Fixed — MCP stable with Local Memory sidecar
+
+- **Local Memory moves out of the main Brain database.** `local_*` tables now live in `runtime/memory/local-context.db`, with migration and drain retry from the legacy `nexo.db` layout so large indexes no longer block the shared MCP database.
+- **MCP readiness has a required-tools contract.** `nexo mcp probe` now verifies the full bootstrap tool set instead of treating any server handshake as ready.
+- **Desktop/update backups are split-aware.** Main Brain backups and Local Memory backups are validated and rotated separately, avoiding both data-loss false positives and unbounded backup growth.
+- **Interactive startup degrades instead of hanging on busy SQLite.** Critical startup/session tools now return usable partial context when maintenance or indexing is holding the database.
+- **Coverage:** focused DB split, update guard, Local Memory runtime, compile checks and live MCP probe.
+
 ## [7.20.19] - 2026-05-15
 
 ### Fixed — Local Memory stays alive during long indexing

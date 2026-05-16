@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-from db import get_db
-
+from .db import get_local_context_db
 from .util import json_dumps, now
 
 
 def log_event(level: str, event: str, message: str, **metadata) -> None:
-    conn = get_db()
+    conn = get_local_context_db()
     conn.execute(
         """
         INSERT INTO local_index_logs(created_at, level, event, message, metadata_json)
@@ -18,7 +17,7 @@ def log_event(level: str, event: str, message: str, **metadata) -> None:
 
 
 def tail(limit: int = 100) -> list[dict]:
-    conn = get_db()
+    conn = get_local_context_db()
     rows = conn.execute(
         """
         SELECT created_at, level, event, message, metadata_json

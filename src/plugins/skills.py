@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 
+from interactive_db import interactive_db_timeout, is_db_busy
 from db import (
     create_skill,
     delete_skill,
@@ -85,12 +86,22 @@ def handle_skill_create(
 
 
 def handle_skill_match(task: str, level: str = "") -> str:
-    sync_skills()
-    matches = match_skills(task, level=level)
+    sync_warning = ""
+    with interactive_db_timeout():
+        try:
+            sync_skills()
+        except Exception as exc:
+            if is_db_busy(exc):
+                sync_warning = "SKILL SYNC DEGRADED: local brain database is busy; using existing skill index."
+            else:
+                raise
+        matches = match_skills(task, level=level)
     if not matches:
-        return f"No skills found for: '{task}'"
+        return f"{sync_warning + chr(10) if sync_warning else ''}No skills found for: '{task}'"
 
     lines = [f"SKILLS MATCHED ({len(matches)}) for '{task}':"]
+    if sync_warning:
+        lines.insert(0, sync_warning)
     for match in matches:
         match_method = match.pop("_match", "unknown")
         lines.append(

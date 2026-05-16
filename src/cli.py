@@ -52,6 +52,7 @@ from pathlib import Path
 
 from runtime_home import export_resolved_nexo_home
 from runtime_versioning import build_mcp_status, clear_restart_required_marker
+from mcp_required_tools import BOOTSTRAP_REQUIRED_MCP_TOOLS, missing_required_tools
 
 NEXO_HOME = export_resolved_nexo_home()
 NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(Path(__file__).resolve().parent)))
@@ -200,8 +201,11 @@ def _mcp_probe(args) -> int:
     server_path = NEXO_CODE / "server.py"
     env = os.environ.copy()
     env["NEXO_MCP_PROBE"] = "1"
-    env.setdefault("NEXO_MCP_PLUGIN_MODE", getattr(args, "plugin_mode", None) or "none")
-    env.setdefault("NEXO_MCP_RUN_STARTUP_PREFLIGHT", "0")
+    # Probe must be deterministic: inherited env from an older Desktop/runtime
+    # must not force plugin loading or startup preflight and turn this into a
+    # slow/false-negative health check.
+    env["NEXO_MCP_PLUGIN_MODE"] = getattr(args, "plugin_mode", None) or "none"
+    env["NEXO_MCP_RUN_STARTUP_PREFLIGHT"] = "0"
     client = str(getattr(args, "client", "") or "").strip()
     if client:
         env["NEXO_MCP_CLIENT"] = client
@@ -256,8 +260,8 @@ def _mcp_probe(args) -> int:
             for tool in tools
             if isinstance(tool, dict) and tool.get("name")
         ]
-        required = ["nexo_startup", "nexo_heartbeat", "nexo_task_open", "nexo_guard_check"]
-        missing = [name for name in required if name not in tool_names]
+        required = list(BOOTSTRAP_REQUIRED_MCP_TOOLS)
+        missing = missing_required_tools(tool_names)
         ok = not missing and len(tool_names) > 0
         payload = {
             "ok": ok,
@@ -265,6 +269,8 @@ def _mcp_probe(args) -> int:
             "probe_ok": ok,
             "tools_available": len(tool_names) > 0,
             "tool_count": len(tool_names),
+            "required_tools": required,
+            "required_tool_count": len(required),
             "required_tools_present": not missing,
             "missing_required_tools": missing,
             "client": client,
