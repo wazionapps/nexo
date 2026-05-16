@@ -52,7 +52,17 @@ from pathlib import Path
 
 from runtime_home import export_resolved_nexo_home
 from runtime_versioning import build_mcp_status, clear_restart_required_marker
-from mcp_required_tools import BOOTSTRAP_REQUIRED_MCP_TOOLS, missing_required_tools
+try:
+    from mcp_required_tools import BOOTSTRAP_REQUIRED_MCP_TOOLS, missing_required_tools
+except ModuleNotFoundError as exc:
+    if getattr(exc, "name", "") != "mcp_required_tools":
+        raise
+    # Older installed runtimes can be missing modules added after their CLI was
+    # copied. Keep `nexo update` bootable so the sync can repair the runtime.
+    BOOTSTRAP_REQUIRED_MCP_TOOLS: tuple[str, ...] = ()
+
+    def missing_required_tools(_tool_names):
+        return []
 
 NEXO_HOME = export_resolved_nexo_home()
 NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(Path(__file__).resolve().parent)))

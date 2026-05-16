@@ -474,9 +474,12 @@ def handle_startup(
         startup_warnings,
     )
     memory_maintenance = None
-    if _env_flag("NEXO_MEMORY_MAINTENANCE_IN_STARTUP", default=False):
+    try:
+        backfill_limit = int(os.environ.get("NEXO_MEMORY_STARTUP_BACKFILL_LIMIT", "0") or "0")
+    except Exception:
+        backfill_limit = 0
+    if _env_flag("NEXO_MEMORY_MAINTENANCE_IN_STARTUP", default=False) or backfill_limit > 0:
         try:
-            backfill_limit = int(os.environ.get("NEXO_MEMORY_STARTUP_BACKFILL_LIMIT", "0") or "0")
             memory_maintenance = maintain_memory_observations(
                 process_limit=int(os.environ.get("NEXO_MEMORY_STARTUP_PROCESS_LIMIT", "20") or "20"),
                 retry_failed=True,
@@ -783,7 +786,7 @@ def _handle_heartbeat_inner(sid: str, task: str, context_hint: str = '') -> str:
             if bundle.get("has_matches"):
                 parts.append("")
                 parts.append(format_pre_action_context_bundle(bundle, compact=True))
-            if _env_flag("NEXO_HEARTBEAT_LOCAL_CONTEXT", default=False) and append_local_context_evidence is not None:
+            if _env_flag("NEXO_HEARTBEAT_LOCAL_CONTEXT", default=True) and append_local_context_evidence is not None:
                 local_rendered = append_local_context_evidence("", recent_query, limit=4).strip()
                 if local_rendered:
                     parts.append("")
@@ -884,7 +887,7 @@ def _handle_heartbeat_inner(sid: str, task: str, context_hint: str = '') -> str:
 
     # ── Drive/Curiosity: detect signals from context_hint (best-effort) ──
     try:
-        if _env_flag("NEXO_DRIVE_IN_HEARTBEAT", default=False) and context_hint and len(context_hint.strip()) >= 15:
+        if _env_flag("NEXO_DRIVE_IN_HEARTBEAT", default=True) and context_hint and len(context_hint.strip()) >= 15:
             from tools_drive import detect_drive_signal as _detect_drive
             _drive_allow_llm = _env_flag("NEXO_DRIVE_LLM_IN_HEARTBEAT", default=False)
             _drive_result = _detect_drive(
@@ -990,7 +993,7 @@ def _handle_heartbeat_inner(sid: str, task: str, context_hint: str = '') -> str:
     # adaptive_log row per heartbeat. Wrapped in best-effort try/except so
     # a failure here cannot block the heartbeat itself.
     try:
-        if _env_flag("NEXO_HEARTBEAT_ADAPTIVE_MODE", default=False) and context_hint and len(context_hint.strip()) >= 5:
+        if _env_flag("NEXO_HEARTBEAT_ADAPTIVE_MODE", default=True) and context_hint and len(context_hint.strip()) >= 5:
             from plugins.adaptive_mode import compute_mode
             from cognitive._trust import detect_sentiment
             sentiment = detect_sentiment(context_hint)
@@ -1334,9 +1337,7 @@ def _hint_suggests_correction(hint: str, *, correction_detector=None) -> bool:
     text = (hint or "").strip()
     if not text:
         return False
-    detector = correction_detector if correction_detector is not None else (
-        _detect_correction_semantic if _env_flag("NEXO_HEARTBEAT_SEMANTIC_DETECTORS", default=False) else None
-    )
+    detector = correction_detector if correction_detector is not None else _detect_correction_semantic
     if detector is not None:
         try:
             if bool(detector(text)):
@@ -1375,6 +1376,8 @@ def _hint_suggests_correction(hint: str, *, correction_detector=None) -> bool:
 
 def _recent_learning_capture_exists(conn, sid: str, window_seconds: int = 300) -> bool:
     """Check whether a recent learning was captured manually or via protocol task close."""
+    if conn is None:
+        conn = get_db()
     cutoff_epoch = time.time() - window_seconds
 
     row = conn.execute(

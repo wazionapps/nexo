@@ -86,11 +86,16 @@ LOCAL_CONTEXT_TABLES: tuple[str, ...] = (
     "local_index_dirs",
 )
 
-# Tables protected inside the operational Brain DB. Local memory now lives in
-# runtime/memory/local-context.db and is validated with LOCAL_CONTEXT_TABLES
-# separately; mixing both here makes old local-index backups look like the
-# source of truth for nexo.db and can block every update.
+# Tables protected inside the operational Brain DB. Keep this core-only:
+# callers that need local memory checks must request LOCAL_CONTEXT_TABLES or
+# RECOVERY_TABLES explicitly so normal Brain wipe detection is not skewed by
+# split local-memory databases.
 PROTECTED_TABLES: tuple[str, ...] = CRITICAL_TABLES
+
+# Recovery must still inspect legacy backups that carried local memory tables
+# inside nexo.db. This wider set is safe for row counts and restore validation,
+# but should not replace PROTECTED_TABLES in core wipe-diff callers.
+RECOVERY_TABLES: tuple[str, ...] = CRITICAL_TABLES + LOCAL_CONTEXT_TABLES
 
 # A reference backup must contain at least this many rows (summed across
 # CRITICAL_TABLES) before we will treat it as "proof the user has real data".
@@ -211,7 +216,7 @@ def _table_count(conn: sqlite3.Connection, table: str) -> int | None:
     return int(result[0]) if result is not None else 0
 
 
-def db_row_counts(path: str | Path, tables: tuple[str, ...] = PROTECTED_TABLES) -> dict[str, int | None]:
+def db_row_counts(path: str | Path, tables: tuple[str, ...] = RECOVERY_TABLES) -> dict[str, int | None]:
     """Return {table: count} for a SQLite DB. Missing DB / missing tables map to None."""
     p = Path(path)
     counts: dict[str, int | None] = {t: None for t in tables}
@@ -253,11 +258,22 @@ def db_looks_wiped(
         size = p.stat().st_size
     except OSError:
         return False
+    counts = db_row_counts(p, tables)
     if size <= EMPTY_DB_SIZE_BYTES:
         # Small but not necessarily wiped — confirm via row counts.
-        counts = db_row_counts(p, tables)
-        return _all_tables_empty_or_missing(counts)
-    counts = db_row_counts(p, tables)
+        return _counts_look_wiped(counts)
+    return _counts_look_wiped(counts)
+
+
+def _counts_look_wiped(counts: dict[str, int | None]) -> bool:
+    """Treat Brain table loss as a wipe even if legacy local tables remain."""
+    critical_present = {
+        table: counts.get(table)
+        for table in CRITICAL_TABLES
+        if counts.get(table) is not None
+    }
+    if critical_present:
+        return _all_tables_empty_or_missing(critical_present)
     return _all_tables_empty_or_missing(counts)
 
 

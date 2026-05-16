@@ -99,15 +99,13 @@ LOCAL_CONTEXT_BACKUP_TABLES = (
     "local_context_queries",
     "local_index_dirs",
 )
-PROTECTED_BACKUP_TABLES = CRITICAL_BACKUP_TABLES
+PROTECTED_BACKUP_TABLES = CRITICAL_BACKUP_TABLES + LOCAL_CONTEXT_BACKUP_TABLES
 
 
 def _backup_validation_tables(db_file: Path) -> tuple[str, ...]:
-    if db_file.name == "nexo.db":
-        return PROTECTED_BACKUP_TABLES
     if db_file.name == "local-context.db":
         return LOCAL_CONTEXT_BACKUP_TABLES
-    return ()
+    return PROTECTED_BACKUP_TABLES
 
 
 CLASSIFIER_INSTALL_TIMEOUT_SECONDS = 1800
@@ -1447,6 +1445,7 @@ def _self_heal_if_wiped() -> dict | None:
         from db_guard import (
             CRITICAL_TABLES,
             HOURLY_BACKUP_MAX_AGE,
+            LOCAL_CONTEXT_TABLES,
             MIN_REFERENCE_ROWS,
             PROTECTED_TABLES,
             db_looks_wiped,
@@ -1467,14 +1466,15 @@ def _self_heal_if_wiped() -> dict | None:
         return None
     if not db_looks_wiped(primary, PROTECTED_TABLES):
         return None
+    recovery_tables = PROTECTED_TABLES + LOCAL_CONTEXT_TABLES
     reference = find_best_hourly_backup(
         paths.backups_dir(),
         max_age_seconds=HOURLY_BACKUP_MAX_AGE,
-        tables=PROTECTED_TABLES,
+        tables=recovery_tables,
     ) or find_latest_hourly_backup(
         paths.backups_dir(),
         max_age_seconds=HOURLY_BACKUP_MAX_AGE,
-        tables=PROTECTED_TABLES,
+        tables=recovery_tables,
     )
     if reference is None:
         _log("self-heal: nexo.db looks wiped but no usable hourly backup found — skipping.")
@@ -1483,7 +1483,7 @@ def _self_heal_if_wiped() -> dict | None:
             "reason": "no_usable_hourly_backup",
             "primary_db": str(primary),
         }
-    ref_counts = db_row_counts(reference, PROTECTED_TABLES)
+    ref_counts = db_row_counts(reference, recovery_tables)
     ref_total = sum(v for v in ref_counts.values() if isinstance(v, int))
     if ref_total < MIN_REFERENCE_ROWS:
         _log(f"self-heal: reference backup {reference.name} has {ref_total} rows, below floor {MIN_REFERENCE_ROWS}")
@@ -1572,7 +1572,7 @@ def _self_heal_if_wiped() -> dict | None:
             "quiesce": quiesce_report,
             "resume": resume_report,
         }
-    valid, valid_err = validate_backup_matches_source(reference, primary, PROTECTED_TABLES)
+    valid, valid_err = validate_backup_matches_source(reference, primary, recovery_tables)
     if not valid:
         _log(f"self-heal: post-restore validation failed: {valid_err}")
         resume_report = _resume_quiesced()
@@ -1586,7 +1586,7 @@ def _self_heal_if_wiped() -> dict | None:
             "resume": resume_report,
         }
 
-    final_counts = db_row_counts(primary, PROTECTED_TABLES)
+    final_counts = db_row_counts(primary, recovery_tables)
     final_total = sum(v for v in final_counts.values() if isinstance(v, int))
     _log(f"self-heal: restored {final_total} critical rows from {reference.name}.")
     resume_report = _resume_quiesced()
@@ -3988,7 +3988,7 @@ def _auto_update_check_locked() -> dict:
 
     # Backfill runtime CLI modules for existing installs
     try:
-        for fname in ("cli.py", "script_registry.py", "skills_runtime.py", "cron_recovery.py", "client_preferences.py", "claude_cli.py", "agent_runner.py", "bootstrap_docs.py"):
+        for fname in ("cli.py", "script_registry.py", "skills_runtime.py", "cron_recovery.py", "client_preferences.py", "claude_cli.py", "agent_runner.py", "bootstrap_docs.py", "mcp_required_tools.py"):
             src_file = SRC_DIR / fname
             dest_file = NEXO_HOME / fname
             if src_file.is_file() and (not dest_file.exists() or src_file.stat().st_mtime > dest_file.stat().st_mtime):

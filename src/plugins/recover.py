@@ -35,6 +35,7 @@ from db_guard import (
     CRITICAL_TABLES,
     EMPTY_DB_SIZE_BYTES,
     HOURLY_BACKUP_GLOB,
+    LOCAL_CONTEXT_TABLES,
     MIN_REFERENCE_ROWS,
     PROTECTED_TABLES,
     WIPE_THRESHOLD_PCT,
@@ -47,6 +48,8 @@ from db_guard import (
     safe_sqlite_backup,
     validate_backup_matches_source,
 )
+
+RECOVERY_TABLES = PROTECTED_TABLES + LOCAL_CONTEXT_TABLES
 
 # Path resolution moved to lazy helpers (AUDITOR-V700-PASS2 §11, B10 item 3)
 # to keep monkeypatched NEXO_HOME / paths.* fixtures honoured. PEP 562
@@ -139,7 +142,7 @@ def _describe_backup(path: Path, kind: str) -> dict:
     counts: dict[str, int | None] = {}
     critical_rows = 0
     if size > EMPTY_DB_SIZE_BYTES:
-        counts = db_row_counts(path, PROTECTED_TABLES)
+        counts = db_row_counts(path, RECOVERY_TABLES)
         critical_rows = sum(v for v in counts.values() if isinstance(v, int))
     return {
         "path": str(path),
@@ -240,7 +243,7 @@ def recover(
     result["source"] = str(chosen)
     result["steps"].append(f"chose source: {chosen}")
 
-    source_counts = db_row_counts(chosen, PROTECTED_TABLES)
+    source_counts = db_row_counts(chosen, RECOVERY_TABLES)
     result["source_row_counts"] = {k: v for k, v in source_counts.items() if v is not None}
     source_total = sum(v for v in source_counts.values() if isinstance(v, int))
     if source_total < MIN_REFERENCE_ROWS:
@@ -317,7 +320,7 @@ def recover(
         return result
     result["steps"].append(f"restored {chosen.name} -> {target_path}")
 
-    valid, valid_err = validate_backup_matches_source(chosen, target_path, PROTECTED_TABLES)
+    valid, valid_err = validate_backup_matches_source(chosen, target_path, RECOVERY_TABLES)
     if not valid:
         result["errors"].append(f"post-restore validation failed: {valid_err}")
         if stopped_launchagents:
@@ -325,7 +328,7 @@ def recover(
         return result
     result["steps"].append("validated post-restore row counts")
 
-    final_counts = db_row_counts(target_path, PROTECTED_TABLES)
+    final_counts = db_row_counts(target_path, RECOVERY_TABLES)
     result["final_row_counts"] = {k: v for k, v in final_counts.items() if v is not None}
     if stopped_launchagents:
         result["resume"] = resume_nexo_launchagents(stopped_launchagents)

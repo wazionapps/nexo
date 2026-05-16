@@ -485,8 +485,14 @@ def _row_count_regression(pre: dict[str, int | None], post: dict[str, int | None
     drop >= WIPE_THRESHOLD_PCT across CRITICAL_TABLES, is treated as a wipe.
     """
     regressions: list[str] = []
-    pre_total = sum(v for v in pre.values() if isinstance(v, int))
-    post_total = sum(v for v in post.values() if isinstance(v, int))
+    pre_total = sum(
+        pre.get(table) for table in PROTECTED_TABLES
+        if isinstance(pre.get(table), int)
+    )
+    post_total = sum(
+        post.get(table) for table in PROTECTED_TABLES
+        if isinstance(post.get(table), int)
+    )
     for table in PROTECTED_TABLES:
         pre_v = pre.get(table)
         post_v = post.get(table)
