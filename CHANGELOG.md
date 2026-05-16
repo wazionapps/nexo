@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.20.24] - 2026-05-16
+
+### Fixed — Local Memory profile writes tolerate active indexing
+
+- **Performance profile changes retry busy SQLite writes.** `local-context performance set` now closes stale connections and retries transient `database is locked` errors, so Desktop can save Low/Medium/High/Extreme while the local indexer is active.
+- **The local indexer stops holding a long write transaction during extraction.** Job state commits after claiming and after each processed/failed job, reducing contention with settings writes and status updates.
+- **Coverage:** focused Local Memory profile tests cover retrying locked writes and keeping persisted profile limits active.
+
 ## [7.20.23] - 2026-05-16
 
 ### Fixed — Local Memory status reads the split database safely
