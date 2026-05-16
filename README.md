@@ -18,7 +18,27 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.20.11` is the current packaged-runtime line. Patch release over v7.20.10 — Local Context now starts from real system volume roots plus mounted/removable/network volumes, filters system/cache/app/product artifacts, and injects relevant local evidence automatically into heartbeat, task-open and pre-action context.
+Version `7.20.24` is the current packaged-runtime line. Patch release over v7.20.23 — Local Memory performance profile writes now tolerate active indexing, retry transient SQLite busy states, and shorten indexer write locks between processed files.
+
+Previously in `7.20.23`: patch release over v7.20.22 — Local Memory status reads the real split sidecar database read-only, reports retryable keyed failures without false zeroes, and keeps Desktop Spanish/English copy localized.
+
+Previously in `7.20.22`: patch release over v7.20.19 — Local Memory moved out of the main Brain database, MCP readiness verifies required tools, and split-aware Desktop backups validate the main DB and Local Memory sidecar separately.
+
+Previously in `7.20.18`: patch release over v7.20.17 — Desktop-managed setup now preserves a completed onboarding flag when Brain is later invoked with the non-interactive `--skip` bootstrap path.
+
+Previously in `7.20.17`: patch release over v7.20.16 — validated DB backups now tolerate tiny live-write growth from the Local Memory indexer while still rejecting real protected-table loss.
+
+Previously in `7.20.16`: patch release over v7.20.15 — packaged updates keep the `local_context` runtime shim importable and rollback code-tree snapshots safely when compatibility directories are symlinks.
+
+Previously in `7.20.15`: patch release over v7.20.14 — Brain update/recovery paths now fail closed when the DB guard is missing or stale, and backup validation rejects any replacement that loses Local Memory tables.
+
+Previously in `7.20.14`: patch release over v7.20.13 — Brain protects Local Memory during update/recovery paths, rotates runtime backup families to the latest 5 entries, keeps first-indexing status stable, and exposes bounded indexing speed profiles for Desktop.
+
+Previously in `7.20.13`: patch release over v7.20.12 — Brain recovery now pauses all known DB writers before restoring `nexo.db`, and Doctor can repair the zero-byte/locked database state that made Desktop Local Memory show zero files.
+
+Previously in `7.20.12`: patch release over v7.20.11 — Local Context now keeps the first index pass separate from live change tracking, persists the current indexing start time, caps compact context payloads for agents, and installs the Windows host scheduler needed to keep WSL indexing alive after reboots.
+
+Previously in `7.20.11`: patch release over v7.20.10 — Local Context now starts from real system volume roots plus mounted/removable/network volumes, filters system/cache/app/product artifacts, and injects relevant local evidence automatically into heartbeat, task-open and pre-action context.
 
 Previously in `7.20.10`: patch release over v7.20.9 — Local Context manual refreshes now reconcile automatic roots every time, so newly mounted disks and upgraded default roots are picked up immediately from Desktop's "comprobar cambios" path.
 
