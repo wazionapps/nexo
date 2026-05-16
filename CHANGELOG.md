@@ -1,5 +1,14 @@
 # Changelog
 
+## [7.20.23] - 2026-05-16
+
+### Fixed — Local Memory status reads the split database safely
+
+- **Local Memory status now reads the real sidecar database read-only.** `local-context status` uses `runtime/memory/local-context.db` without running migrations or writes, so Desktop no longer falls back to the empty legacy `nexo.db` view while indexing is active.
+- **Read failures no longer paint false zeroes.** Locked, missing-schema, invalid and unreadable sidecar states return retryable keyed errors with `global=null`, preserving the previous good Desktop snapshot instead of showing `0` files.
+- **Status problems are i18n-safe.** Backend problem payloads now use message/action keys so Desktop can render Spanish or English consistently without monolingual copy leaking from Brain.
+- **Coverage:** read-only Local Memory status, invalid/schema/busy SQLite errors, service problem metadata, runtime service status and Python compilation.
+
 ## [7.20.22] - 2026-05-16
 
 ### Fixed — MCP stable with Local Memory sidecar

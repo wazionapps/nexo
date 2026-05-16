@@ -5,6 +5,7 @@ import sqlite3
 import time
 from pathlib import Path
 from typing import Iterable
+from urllib.parse import quote
 
 import paths
 from db._schema import _m63_local_context_layer, _m64_local_context_live_dirs
@@ -76,6 +77,23 @@ def _connect(db_path: Path) -> sqlite3.Connection:
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")
     conn.execute("PRAGMA temp_store=MEMORY")
+    return conn
+
+
+def connect_local_context_db_readonly(*, timeout_ms: int = 1200) -> sqlite3.Connection:
+    db_path = local_context_db_path()
+    if not db_path.is_file():
+        raise FileNotFoundError(str(db_path))
+    timeout = max(float(timeout_ms) / 1000.0, 0.1)
+    uri_path = quote(db_path.resolve().as_posix(), safe="/:")
+    uri_params = "mode=ro"
+    if not db_path.with_name(db_path.name + "-wal").exists() and not db_path.with_name(db_path.name + "-shm").exists():
+        uri_params += "&immutable=1"
+    uri = f"file:{uri_path}?{uri_params}"
+    conn = sqlite3.connect(uri, uri=True, timeout=timeout, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    conn.execute(f"PRAGMA busy_timeout={max(100, int(timeout_ms))}")
+    conn.execute("PRAGMA query_only=ON")
     return conn
 
 

@@ -810,7 +810,7 @@ def nexo_local_index_roots(action: str = "list", path: str = "", mode: str = "no
     """List, add or remove local memory roots."""
     normalized = str(action or "list").strip().lower()
     if normalized == "list":
-        result = {"ok": True, "roots": local_context_api.list_roots()}
+        result = {"ok": True, "roots": local_context_api.list_roots(readonly=True)}
     elif normalized == "add":
         result = local_context_api.add_root(path, mode=mode, depth=depth)
     elif normalized == "remove":
@@ -825,7 +825,7 @@ def nexo_local_index_exclusions(action: str = "list", path: str = "", reason: st
     """List, add or remove local memory exclusions."""
     normalized = str(action or "list").strip().lower()
     if normalized == "list":
-        result = {"ok": True, "exclusions": local_context_api.list_exclusions()}
+        result = {"ok": True, "exclusions": local_context_api.list_exclusions(readonly=True)}
     elif normalized == "add":
         result = local_context_api.add_exclusion(path, reason=reason)
     elif normalized == "remove":

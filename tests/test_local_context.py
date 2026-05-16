@@ -97,6 +97,38 @@ def test_scan_extract_query_and_purge(tmp_path):
     assert local_context.get_asset(asset_id)["ok"] is False
 
 
+def test_local_memory_read_paths_use_readonly_sidecar_without_prepare_or_audit_write(tmp_path, monkeypatch):
+    root = tmp_path / "docs"
+    root.mkdir()
+    note = root / "sidecar-memory.txt"
+    note.write_text("Memoria local sidecar conectada con evidencia BMW Maria.", encoding="utf-8")
+
+    local_context.add_root(str(root))
+    local_context.run_once(limit=20, process_limit=20)
+    conn = get_local_context_db()
+    before_queries = conn.execute("SELECT COUNT(*) AS total FROM local_context_queries").fetchone()["total"]
+
+    def fail_if_write_prepare_runs():
+        raise AssertionError("read-only local memory path must not prepare or migrate the database")
+
+    monkeypatch.setattr(api, "ensure_ready", fail_if_write_prepare_runs)
+
+    context = local_context.context_query("sidecar BMW Maria", limit=5)
+    roots = local_context.list_roots(readonly=True)
+    exclusions = local_context.list_exclusions(readonly=True)
+    asset = local_context.get_asset(context["assets"][0]["asset_id"])
+    neighbors = local_context.get_neighbors(context["assets"][0]["asset_id"])
+    after_queries = conn.execute("SELECT COUNT(*) AS total FROM local_context_queries").fetchone()["total"]
+
+    assert context["ok"] is True
+    assert context["evidence_refs"]
+    assert any(row["root_path"] == api.norm_path(str(root)) for row in roots)
+    assert exclusions == []
+    assert asset["ok"] is True
+    assert neighbors["ok"] is True
+    assert after_queries == before_queries
+
+
 def test_context_query_uses_entity_match_when_chunk_text_does_not_repeat_entity(tmp_path):
     root = tmp_path / "project"
     root.mkdir()
@@ -939,6 +971,7 @@ def test_pause_stops_scan_until_resume(tmp_path):
 
 
 def test_performance_profile_is_persisted_and_reported():
+    api.ensure_ready()
     default_status = local_context.status()
     assert default_status["performance"]["profile"] == "medium"
     assert default_status["global"]["performance_profile"] == "medium"
@@ -1246,6 +1279,7 @@ def test_service_config_renders_macos_and_windows():
 
 
 def test_status_reports_macos_launchagent_running(tmp_path, monkeypatch):
+    api.ensure_ready()
     home = tmp_path / "home"
     launch_agents = home / "Library" / "LaunchAgents"
     launch_agents.mkdir(parents=True)
@@ -1272,6 +1306,7 @@ def test_status_reports_macos_launchagent_running(tmp_path, monkeypatch):
 
 
 def test_status_reports_loaded_macos_launchagent_as_operational(tmp_path, monkeypatch):
+    api.ensure_ready()
     home = tmp_path / "home"
     launch_agents = home / "Library" / "LaunchAgents"
     launch_agents.mkdir(parents=True)
@@ -1298,6 +1333,7 @@ def test_status_reports_loaded_macos_launchagent_as_operational(tmp_path, monkey
 
 
 def test_status_reports_windows_scheduled_task_running(monkeypatch):
+    api.ensure_ready()
     monkeypatch.setattr(api, "system_label", lambda: "windows")
     monkeypatch.setattr(api, "_command_output", lambda args, **kwargs: (0, "Running\n", ""))
 
@@ -1311,6 +1347,7 @@ def test_status_reports_windows_scheduled_task_running(monkeypatch):
 
 
 def test_status_reports_ready_windows_scheduled_task_as_operational(monkeypatch):
+    api.ensure_ready()
     monkeypatch.setattr(api, "system_label", lambda: "windows")
     monkeypatch.setattr(api, "_command_output", lambda args, **kwargs: (0, "Ready\n", ""))
     monkeypatch.setattr(api, "_process_running", lambda pattern: False)
@@ -1320,6 +1357,115 @@ def test_status_reports_ready_windows_scheduled_task_as_operational(monkeypatch)
     assert result["service"]["installed"] is True
     assert result["service"]["running"] is True
     assert result["service"]["active_process"] is False
+
+
+def test_status_uses_readonly_local_context_db(monkeypatch):
+    api.ensure_ready()
+    monkeypatch.setattr(api, "ensure_local_context_db", lambda: (_ for _ in ()).throw(AssertionError("status must not migrate/write")))
+
+    result = api.status()
+
+    assert result["ok"] is True
+    assert "global" in result
+
+
+def test_status_readonly_does_not_create_wal_sidecars(tmp_path, monkeypatch):
+    db_path = tmp_path / "clean-wal-local-context.db"
+    monkeypatch.setenv("NEXO_LOCAL_CONTEXT_DB", str(db_path))
+    api.ensure_ready()
+    conn = api.get_local_context_db()
+    conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    close_local_context_db()
+    for suffix in ("-wal", "-shm"):
+        sidecar = db_path.with_name(db_path.name + suffix)
+        if sidecar.exists():
+            sidecar.unlink()
+    assert not db_path.with_name(db_path.name + "-wal").exists()
+    assert not db_path.with_name(db_path.name + "-shm").exists()
+
+    result = api.status()
+
+    assert result["ok"] is True
+    assert not db_path.with_name(db_path.name + "-wal").exists()
+    assert not db_path.with_name(db_path.name + "-shm").exists()
+
+
+def test_status_read_error_is_keyed_not_spanish_copy(monkeypatch):
+    monkeypatch.setattr(api, "_local_index_service_status", lambda: {"installed": True, "running": True})
+    result = api._status_read_error(RuntimeError("locked"), code="local_context_db_busy")
+
+    assert result["ok"] is False
+    problem = result["problems"][0]
+    assert problem["user_message"] == ""
+    assert problem["message_key"] == "local_context.status_unavailable"
+    assert problem["recommended_action"] == ""
+    assert problem["recommended_action_key"] == "local_context.retry_automatic"
+    assert "healthy" in result["service"]
+    assert "state" in result["service"]
+
+
+def test_status_service_problems_are_keyed_not_language_specific(monkeypatch):
+    api.ensure_ready()
+    monkeypatch.setattr(api, "_local_index_service_status", lambda: {
+        "installed": False,
+        "manager": "launchagent",
+        "platform": "macos",
+    })
+
+    result = api.status()
+
+    problem = result["problems"][0]
+    assert problem["support_code"] == "local_index_service_not_installed"
+    assert problem["user_message"] == ""
+    assert problem["message_key"] == "local_context.problem.service_not_installed"
+    assert problem["recommended_action"] == ""
+    assert problem["recommended_action_key"] == "local_context.reopen_or_update_desktop"
+
+
+def test_status_handles_invalid_local_context_db_without_raising(tmp_path, monkeypatch):
+    broken = tmp_path / "broken-local-context.db"
+    broken.write_text("not sqlite", encoding="utf-8")
+    monkeypatch.setenv("NEXO_LOCAL_CONTEXT_DB", str(broken))
+    monkeypatch.setattr(api, "_local_index_service_status", lambda: {"installed": True, "running": True})
+
+    result = api.status()
+
+    assert result["ok"] is False
+    assert result["error"] == "local_context_db_invalid"
+    assert result["global"] is None
+    assert result["service"]["healthy"] is True
+
+
+def test_status_distinguishes_missing_schema_from_busy(tmp_path, monkeypatch):
+    import sqlite3 as _sqlite3
+
+    partial = tmp_path / "partial-local-context.db"
+    conn = _sqlite3.connect(partial)
+    conn.execute("CREATE TABLE unrelated(id INTEGER)")
+    conn.commit()
+    conn.close()
+    monkeypatch.setenv("NEXO_LOCAL_CONTEXT_DB", str(partial))
+    monkeypatch.setattr(api, "_local_index_service_status", lambda: {"installed": True, "running": True})
+
+    result = api.status()
+
+    assert result["ok"] is False
+    assert result["error"] == "local_context_db_schema_missing"
+
+
+def test_status_rejects_partially_migrated_schema(monkeypatch):
+    api.ensure_ready()
+    conn = api.get_local_context_db()
+    conn.execute("DROP TABLE local_chunks")
+    conn.commit()
+    close_local_context_db()
+    monkeypatch.setattr(api, "_local_index_service_status", lambda: {"installed": True, "running": True})
+
+    result = api.status()
+
+    assert result["ok"] is False
+    assert result["error"] == "local_context_db_schema_missing"
+    assert result["global"] is None
 
 
 def test_model_status_has_local_fallback():

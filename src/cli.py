@@ -3389,7 +3389,7 @@ def main():
 
     local_context_query_p = local_context_sub.add_parser("query", help="Query local memory evidence")
     local_context_query_p.add_argument("query", help="Question or search phrase")
-    local_context_query_p.add_argument("--intent", default="answer", help="Intent label stored with the query audit row")
+    local_context_query_p.add_argument("--intent", default="answer", help="Intent label included with the query result")
     local_context_query_p.add_argument("--limit", type=int, default=12, help="Maximum evidence rows")
     local_context_query_p.add_argument("--current-context", default="", help="Optional current conversation/task context")
     local_context_query_p.add_argument("--mode", choices=["compact", "full"], default="compact", help="Payload shape. Compact is safe for chat clients; full is for debugging.")

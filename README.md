@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.20.19` is the current packaged-runtime line. Patch release over v7.20.18 — Local Memory status and long first-indexing runs stay stable during Desktop-managed updates; stale macOS Full Disk Access denials are cleared after a live access probe succeeds.
+Version `7.20.23` is the current packaged-runtime line. Patch release over v7.20.22 — Local Memory status reads the real split sidecar database read-only, reports retryable keyed failures without false zeroes, and keeps Desktop Spanish/English copy localized.
+
+Previously in `7.20.22`: patch release over v7.20.19 — Local Memory moved out of the main Brain database, MCP readiness verifies required tools, and split-aware Desktop backups validate the main DB and Local Memory sidecar separately.
 
 Previously in `7.20.18`: patch release over v7.20.17 — Desktop-managed setup now preserves a completed onboarding flag when Brain is later invoked with the non-interactive `--skip` bootstrap path.
 

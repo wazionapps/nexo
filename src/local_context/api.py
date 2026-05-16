@@ -4,6 +4,7 @@ import json
 import os
 import re
 import shutil
+import sqlite3
 import stat
 import hashlib
 import subprocess
@@ -12,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from . import embeddings
-from .db import ensure_local_context_db, get_local_context_db
+from .db import LOCAL_CONTEXT_TABLES, connect_local_context_db_readonly, ensure_local_context_db, get_local_context_db
 from .extractors import chunk_text, contains_secret, entities, extract_text, summarize
 from .logging import log_event, tail
 from .privacy import classify_path, is_local_email_tree, is_queryable_path, should_extract, should_skip_file, should_skip_tree
@@ -94,6 +95,19 @@ def _conn():
     return get_local_context_db()
 
 
+def _read_conn():
+    conn = connect_local_context_db_readonly(timeout_ms=1200)
+    _validate_status_schema(conn)
+    return conn
+
+
+def _close_read_conn(conn) -> None:
+    try:
+        conn.close()
+    except Exception:
+        pass
+
+
 def add_root(path: str, *, mode: str = "normal", depth: int | None = None) -> dict:
     conn = _conn()
     root_path = norm_path(path)
@@ -136,8 +150,18 @@ def remove_root(path: str) -> dict:
     return {"ok": True, "root_path": root_path, "cleanup": cleanup}
 
 
-def list_roots() -> list[dict]:
-    conn = _conn()
+def list_roots(*, readonly: bool = False) -> list[dict]:
+    if not readonly:
+        conn = _conn()
+        return _list_roots_conn(conn)
+    conn = _read_conn()
+    try:
+        return _list_roots_conn(conn)
+    finally:
+        _close_read_conn(conn)
+
+
+def _list_roots_conn(conn) -> list[dict]:
     rows = conn.execute("SELECT * FROM local_index_roots WHERE status != 'removed' ORDER BY root_path").fetchall()
     return [dict(row) for row in rows]
 
@@ -557,8 +581,18 @@ def remove_exclusion(path: str) -> dict:
     return {"ok": True, "path": excluded_path}
 
 
-def list_exclusions() -> list[dict]:
-    conn = _conn()
+def list_exclusions(*, readonly: bool = False) -> list[dict]:
+    if not readonly:
+        conn = _conn()
+        return _list_exclusions_conn(conn)
+    conn = _read_conn()
+    try:
+        return _list_exclusions_conn(conn)
+    finally:
+        _close_read_conn(conn)
+
+
+def _list_exclusions_conn(conn) -> list[dict]:
     rows = conn.execute("SELECT * FROM local_index_exclusions ORDER BY path").fetchall()
     return [dict(row) for row in rows]
 
@@ -700,6 +734,15 @@ def _ensure_initial_index_started_at(conn) -> float:
     return value
 
 
+def _initial_index_started_at_readonly(conn) -> float:
+    raw = _get_state_conn(conn, INITIAL_INDEX_STARTED_AT_KEY, "")
+    try:
+        value = float(raw or 0)
+    except Exception:
+        value = 0.0
+    return value if value > 0 else (_earliest_index_activity(conn) or 0.0)
+
+
 def _active_job_count(conn) -> int:
     row = conn.execute(
         """
@@ -711,13 +754,13 @@ def _active_job_count(conn) -> int:
     return int(row["total"] or 0)
 
 
-def _refresh_initial_index_complete(conn, initial_scan: dict | None = None, active_jobs: int | None = None) -> bool:
+def _refresh_initial_index_complete(conn, initial_scan: dict | None = None, active_jobs: int | None = None, *, readonly: bool = False) -> bool:
     if _initial_index_complete(conn):
         return True
     scan_state = initial_scan if initial_scan is not None else _initial_scan_status(conn)
     remaining = _active_job_count(conn) if active_jobs is None else int(active_jobs or 0)
     complete = bool(scan_state.get("complete")) and remaining == 0
-    if complete:
+    if complete and not readonly:
         _set_initial_index_complete(conn, True)
         conn.commit()
     return complete
@@ -753,7 +796,12 @@ def resume() -> dict:
 
 
 def _is_paused() -> bool:
-    return _get_state("paused", "0") == "1"
+    conn = _conn()
+    return _is_paused_conn(conn)
+
+
+def _is_paused_conn(conn) -> bool:
+    return _get_state_conn(conn, "paused", "0") == "1"
 
 
 def _allow_explicit_blocked_root(path: str) -> bool:
@@ -1854,8 +1902,10 @@ def _problem_rows(conn) -> list[dict]:
     ).fetchall()
     problems = [
         {
-            "user_message": row["user_message"],
-            "recommended_action": "NEXO lo volvera a intentar mas tarde" if row["retryable"] else "Revisa permisos o archivo",
+            "user_message": "",
+            "message_key": "local_context.problem.file_read_failed",
+            "recommended_action": "",
+            "recommended_action_key": "local_context.retry_later" if row["retryable"] else "local_context.review_permissions_or_file",
             "technical_detail": row["technical_detail"],
             "support_code": row["error_code"],
             "severity": "warning",
@@ -1882,8 +1932,10 @@ def _problem_rows(conn) -> list[dict]:
     ).fetchall()
     problems.extend(
         {
-            "user_message": "La memoria local tuvo un problema temporal y NEXO la reintentara automaticamente",
-            "recommended_action": "No tienes que hacer nada. Si se repite, abre soporte y diagnostico para ver el detalle.",
+            "user_message": "",
+            "message_key": "local_context.problem.service_temporary",
+            "recommended_action": "",
+            "recommended_action_key": "local_context.retry_automatic",
             "technical_detail": f"{row['event']}: {row['message']} {row['metadata_json']}",
             "support_code": row["event"],
             "severity": "warning" if row["level"] == "warn" else "error",
@@ -2084,13 +2136,13 @@ def _service_cycle_observation(conn) -> dict:
     return observation
 
 
-def _index_timing(conn, *, done: int, active_jobs: int, percent: int) -> dict:
-    first_seen = _ensure_initial_index_started_at(conn)
+def _index_timing(conn, *, done: int, active_jobs: int, percent: int, readonly: bool = False) -> dict:
+    first_seen = _initial_index_started_at_readonly(conn) if readonly else _ensure_initial_index_started_at(conn)
     elapsed_seconds = max(0, int(now() - float(first_seen))) if first_seen else 0
     eta_seconds = None
     if elapsed_seconds > 0 and done > 0 and active_jobs > 0 and 0 < percent < 100:
         eta_seconds = max(0, int((elapsed_seconds / max(done, 1)) * active_jobs))
-    return {"elapsed_seconds": elapsed_seconds, "eta_seconds": eta_seconds}
+    return {"started_at": first_seen, "elapsed_seconds": elapsed_seconds, "eta_seconds": eta_seconds}
 
 
 def _service_scheduler_has_error(service: dict) -> bool:
@@ -2107,38 +2159,118 @@ def _service_problem(service: dict) -> dict | None:
     if not service.get("installed"):
         return {
             "support_code": "local_index_service_not_installed",
-            "user_message": "La memoria local aun no tiene activo el servicio en segundo plano",
-            "recommended_action": "Reabre NEXO Desktop o actualiza a la ultima version para instalarlo automaticamente.",
+            "user_message": "",
+            "message_key": "local_context.problem.service_not_installed",
+            "recommended_action": "",
+            "recommended_action_key": "local_context.reopen_or_update_desktop",
             "technical_detail": f"manager={service.get('manager')} platform={service.get('platform')}",
         }
     if not service.get("running"):
         return {
             "support_code": "local_index_service_not_running",
-            "user_message": "La memoria local no se esta actualizando en segundo plano",
-            "recommended_action": "NEXO intentara recuperarlo automaticamente. Si se repite, abre soporte y diagnostico.",
+            "user_message": "",
+            "message_key": "local_context.problem.service_not_running",
+            "recommended_action": "",
+            "recommended_action_key": "local_context.retry_automatic",
             "technical_detail": f"manager={service.get('manager')} platform={service.get('platform')}",
         }
     if _service_scheduler_has_error(service):
         code = service.get("last_exit_code") or service.get("last_task_result") or ""
         return {
             "support_code": "local_index_service_last_run_failed",
-            "user_message": "La ultima comprobacion de memoria local no termino correctamente",
-            "recommended_action": "NEXO lo volvera a intentar automaticamente.",
+            "user_message": "",
+            "message_key": "local_context.problem.service_last_run_failed",
+            "recommended_action": "",
+            "recommended_action_key": "local_context.retry_automatic",
             "technical_detail": f"last_result={code}",
         }
     if not service.get("healthy", True):
         return {
             "support_code": service.get("last_error_code") or "local_index_service_failed",
-            "user_message": "La memoria local tuvo un problema temporal y NEXO la reintentara automaticamente",
-            "recommended_action": "No tienes que hacer nada. Si se repite, abre soporte y diagnostico para ver el detalle.",
+            "user_message": "",
+            "message_key": "local_context.problem.service_temporary",
+            "recommended_action": "",
+            "recommended_action_key": "local_context.retry_automatic",
             "technical_detail": service.get("last_error_detail") or "",
         }
     return None
 
 
+def _status_read_error(exc: Exception, *, code: str = "local_context_status_unavailable") -> dict:
+    service = _local_index_service_status()
+    service_problem = _service_problem(service)
+    service["healthy"] = service_problem is None
+    service["state"] = "attention" if service_problem else "unavailable"
+    problems = []
+    if service_problem:
+        problems.append({
+            "user_message": service_problem["user_message"],
+            "message_key": service_problem.get("message_key", ""),
+            "recommended_action": service_problem["recommended_action"],
+            "recommended_action_key": service_problem.get("recommended_action_key", ""),
+            "technical_detail": service_problem["technical_detail"],
+            "support_code": service_problem["support_code"],
+            "severity": "warning",
+            "retryable": True,
+            "path": "",
+            "phase": "service",
+            "created_at": now(),
+        })
+    problems.append({
+        "user_message": "",
+        "message_key": "local_context.status_unavailable",
+        "recommended_action": "",
+        "recommended_action_key": "local_context.retry_automatic",
+        "technical_detail": str(exc),
+        "support_code": code,
+        "severity": "warning",
+        "retryable": True,
+        "path": "",
+        "phase": "status",
+        "created_at": now(),
+    })
+    return {
+        "ok": False,
+        "error": code,
+        "retryable": True,
+        "global": None,
+        "service": service,
+        "problems": problems,
+    }
+
+
+def _status_db_error_code(exc: Exception) -> str:
+    text = str(exc).lower()
+    if "locked" in text or "busy" in text:
+        return "local_context_db_busy"
+    if "no such table" in text or "no such column" in text or "schema missing" in text or "missing tables" in text:
+        return "local_context_db_schema_missing"
+    if "file is not a database" in text or "database disk image is malformed" in text:
+        return "local_context_db_invalid"
+    return "local_context_db_unreadable"
+
+
 def status() -> dict:
-    conn = _conn()
-    paused = _is_paused()
+    try:
+        conn = connect_local_context_db_readonly(timeout_ms=1200)
+    except FileNotFoundError as exc:
+        return _status_read_error(exc, code="local_context_db_missing")
+    except sqlite3.DatabaseError as exc:
+        return _status_read_error(exc, code=_status_db_error_code(exc))
+    try:
+        return _status_from_conn(conn, readonly=True)
+    except sqlite3.DatabaseError as exc:
+        return _status_read_error(exc, code=_status_db_error_code(exc))
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+def _status_from_conn(conn, *, readonly: bool = False) -> dict:
+    _validate_status_schema(conn)
+    paused = _is_paused_conn(conn)
     assets = conn.execute(
         """
         SELECT COUNT(*) AS total, SUM(CASE WHEN a.status='active' THEN 1 ELSE 0 END) AS active
@@ -2166,10 +2298,10 @@ def status() -> dict:
     active_jobs = pending + running_jobs + failed_jobs
     total_jobs = active_jobs + done
     percent = 100 if total_jobs == 0 else int((done / max(total_jobs, 1)) * 100)
-    timing = _index_timing(conn, done=done, active_jobs=active_jobs, percent=percent)
-    roots = list_roots()
+    timing = _index_timing(conn, done=done, active_jobs=active_jobs, percent=percent, readonly=readonly)
+    roots = _list_roots_conn(conn)
     initial_scan = _initial_scan_status(conn, roots)
-    initial_index_complete = _refresh_initial_index_complete(conn, initial_scan, active_jobs)
+    initial_index_complete = _refresh_initial_index_complete(conn, initial_scan, active_jobs, readonly=readonly)
     volumes = []
     by_volume = conn.execute(
         """
@@ -2194,7 +2326,9 @@ def status() -> dict:
     if problem:
         problems.insert(0, {
             "user_message": problem["user_message"],
+            "message_key": problem.get("message_key", ""),
             "recommended_action": problem["recommended_action"],
+            "recommended_action_key": problem.get("recommended_action_key", ""),
             "technical_detail": problem["technical_detail"],
             "support_code": problem["support_code"],
             "severity": "warning",
@@ -2213,6 +2347,9 @@ def status() -> dict:
         phase = "idle"
     else:
         phase = "updating_changes"
+    index_started_at = _get_state_conn(conn, INITIAL_INDEX_STARTED_AT_KEY, "")
+    if not index_started_at and timing["started_at"]:
+        index_started_at = str(float(timing["started_at"]))
     return {
         "ok": True,
         "service": service,
@@ -2227,7 +2364,7 @@ def status() -> dict:
             "jobs_failed": failed_jobs,
             "elapsed_seconds": timing["elapsed_seconds"],
             "eta_seconds": timing["eta_seconds"],
-            "index_started_at": _get_state_conn(conn, INITIAL_INDEX_STARTED_AT_KEY, ""),
+            "index_started_at": index_started_at,
             "initial_scan_complete": bool(initial_index_complete),
             "initial_discovery_complete": bool(initial_scan["complete"]),
             "initial_index_complete": bool(initial_index_complete),
@@ -2239,12 +2376,24 @@ def status() -> dict:
         "initial_index_complete": bool(initial_index_complete),
         "volumes": volumes,
         "roots": roots,
-        "exclusions": list_exclusions(),
+        "exclusions": _list_exclusions_conn(conn),
         "problems": problems,
         "permissions": [],
         "models": model_status()["models"],
         "support_log_available": True,
     }
+
+
+def _validate_status_schema(conn) -> None:
+    placeholders = ",".join("?" for _ in LOCAL_CONTEXT_TABLES)
+    rows = conn.execute(
+        f"SELECT name FROM sqlite_master WHERE type='table' AND name IN ({placeholders})",
+        tuple(LOCAL_CONTEXT_TABLES),
+    ).fetchall()
+    found = {str(row["name"] if isinstance(row, sqlite3.Row) else row[0]) for row in rows}
+    missing = [table for table in LOCAL_CONTEXT_TABLES if table not in found]
+    if missing:
+        raise sqlite3.OperationalError("local context schema missing tables: " + ", ".join(missing[:8]))
 
 
 def diagnostics_tail(limit: int = 100) -> dict:
@@ -2768,8 +2917,46 @@ def context_query(
     include_entities: bool = True,
     include_relations: bool = True,
     snippet_chars: int = 1200,
+    readonly: bool = True,
+    record_query: bool = False,
 ) -> dict:
-    conn = _conn()
+    conn = _read_conn() if readonly else _conn()
+    close_conn = bool(readonly)
+    try:
+        return _context_query_conn(
+            conn,
+            query,
+            intent=intent,
+            limit=limit,
+            evidence_required=evidence_required,
+            current_context=current_context,
+            mode=mode,
+            max_chars=max_chars,
+            include_entities=include_entities,
+            include_relations=include_relations,
+            snippet_chars=snippet_chars,
+            record_query=bool(record_query and not readonly),
+        )
+    finally:
+        if close_conn:
+            _close_read_conn(conn)
+
+
+def _context_query_conn(
+    conn,
+    query: str,
+    *,
+    intent: str,
+    limit: int,
+    evidence_required: bool,
+    current_context: str,
+    mode: str,
+    max_chars: int,
+    include_entities: bool,
+    include_relations: bool,
+    snippet_chars: int,
+    record_query: bool,
+) -> dict:
     clean_query = str(query or "").strip()
     normalized_mode, mode_warnings = _normalize_context_mode(mode)
     context_tail = _compact_text(current_context or "", max_chars=1000)
@@ -2843,21 +3030,22 @@ def context_query(
     summary = ""
     if assets:
         summary = f"Found {len(assets)} local asset(s) related to '{clean_query}'."
-    conn.execute(
-        """
-        INSERT INTO local_context_queries(query_hash, intent, result_count, confidence, warnings_json, created_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-        """,
-        (
-            hashlib.sha256(clean_query.encode("utf-8", errors="ignore")).hexdigest(),
-            intent,
-            len(assets),
-            0.75 if evidence_refs else 0.0,
-            json_dumps(warnings),
-            now(),
-        ),
-    )
-    conn.commit()
+    if record_query:
+        conn.execute(
+            """
+            INSERT INTO local_context_queries(query_hash, intent, result_count, confidence, warnings_json, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                hashlib.sha256(clean_query.encode("utf-8", errors="ignore")).hexdigest(),
+                intent,
+                len(assets),
+                0.75 if evidence_refs else 0.0,
+                json_dumps(warnings),
+                now(),
+            ),
+        )
+        conn.commit()
     payload = {
         "ok": True,
         "query": clean_query,
@@ -2881,26 +3069,34 @@ def context_query(
     )
 
 
-def get_asset(asset_id: str) -> dict:
-    conn = _conn()
-    row = conn.execute("SELECT * FROM local_assets WHERE asset_id=?", (asset_id,)).fetchone()
-    if not row:
-        return {"ok": False, "error": "asset_not_found"}
-    return {"ok": True, "asset": dict(row)}
+def get_asset(asset_id: str, *, readonly: bool = True) -> dict:
+    conn = _read_conn() if readonly else _conn()
+    try:
+        row = conn.execute("SELECT * FROM local_assets WHERE asset_id=?", (asset_id,)).fetchone()
+        if not row:
+            return {"ok": False, "error": "asset_not_found"}
+        return {"ok": True, "asset": dict(row)}
+    finally:
+        if readonly:
+            _close_read_conn(conn)
 
 
-def get_neighbors(asset_id: str, *, limit: int = 30) -> dict:
-    conn = _conn()
-    rows = conn.execute(
-        """
-        SELECT * FROM local_relations
-        WHERE source_asset_id=? AND active=1
-        ORDER BY confidence DESC
-        LIMIT ?
-        """,
-        (asset_id, int(limit)),
-    ).fetchall()
-    return {"ok": True, "relations": [dict(row) for row in rows]}
+def get_neighbors(asset_id: str, *, limit: int = 30, readonly: bool = True) -> dict:
+    conn = _read_conn() if readonly else _conn()
+    try:
+        rows = conn.execute(
+            """
+            SELECT * FROM local_relations
+            WHERE source_asset_id=? AND active=1
+            ORDER BY confidence DESC
+            LIMIT ?
+            """,
+            (asset_id, int(limit)),
+        ).fetchall()
+        return {"ok": True, "relations": [dict(row) for row in rows]}
+    finally:
+        if readonly:
+            _close_read_conn(conn)
 
 
 def purge_asset(asset_id: str) -> dict:

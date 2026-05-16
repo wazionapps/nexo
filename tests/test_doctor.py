@@ -218,9 +218,10 @@ class TestBootChecks:
         assert db_row_counts(primary)["protocol_tasks"] == 75
 
     def test_db_integrity_fix_restores_degraded_local_memory_without_rolling_back_core(self, nexo_home):
-        from db_guard import CRITICAL_TABLES, PROTECTED_TABLES, db_row_counts
+        from db_guard import CRITICAL_TABLES, LOCAL_CONTEXT_TABLES, PROTECTED_TABLES, db_row_counts
 
         primary = nexo_home / "data" / "nexo.db"
+        local_context = nexo_home / "runtime" / "memory" / "local-context.db"
         backup = nexo_home / "backups" / "nexo-2026-05-13-2350.db"
         backup.parent.mkdir(parents=True, exist_ok=True)
 
@@ -243,10 +244,11 @@ class TestBootChecks:
         check = check_db_integrity(fix=True)
 
         counts = db_row_counts(primary, PROTECTED_TABLES)
+        local_counts = db_row_counts(local_context, LOCAL_CONTEXT_TABLES)
         assert check.status == "healthy"
         assert check.fixed is True
         assert counts["protocol_tasks"] == 999
-        assert counts["local_assets"] == 2000
+        assert local_counts["local_assets"] == 2000
 
     def test_missing_dirs_fix(self, nexo_home):
         import shutil

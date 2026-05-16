@@ -44,6 +44,7 @@ def check_db_integrity(fix: bool = False) -> DoctorCheck:
     from db_guard import (
         CRITICAL_TABLES,
         EMPTY_DB_SIZE_BYTES,
+        LOCAL_CONTEXT_TABLES,
         MIN_REFERENCE_ROWS,
         PROTECTED_TABLES,
         db_looks_wiped,
@@ -98,6 +99,48 @@ def check_db_integrity(fix: bool = False) -> DoctorCheck:
     reference_counts = db_row_counts(reference, PROTECTED_TABLES) if reference else {}
     reference_rows = sum(v for v in reference_counts.values() if isinstance(v, int))
     protected_regression = diff_row_counts(db_path, reference, PROTECTED_TABLES) if reference else None
+    local_context_db = paths.memory_dir() / "local-context.db"
+    try:
+        local_context_size = local_context_db.stat().st_size if local_context_db.is_file() else -1
+    except OSError:
+        local_context_size = -1
+    local_needs_reference = local_context_size <= EMPTY_DB_SIZE_BYTES
+    local_reference = None
+    if local_needs_reference:
+        local_reference = (
+            find_best_hourly_backup(
+                paths.backups_dir(),
+                glob="local-context-*.db",
+                min_critical_rows=MIN_REFERENCE_ROWS,
+                tables=LOCAL_CONTEXT_TABLES,
+            )
+            or find_latest_hourly_backup(
+                paths.backups_dir(),
+                glob="local-context-*.db",
+                min_critical_rows=MIN_REFERENCE_ROWS,
+                tables=LOCAL_CONTEXT_TABLES,
+            )
+            or find_best_hourly_backup(
+                paths.backups_dir(),
+                glob="nexo-*.db",
+                min_critical_rows=MIN_REFERENCE_ROWS,
+                tables=LOCAL_CONTEXT_TABLES,
+            )
+            or find_latest_hourly_backup(
+                paths.backups_dir(),
+                glob="nexo-*.db",
+                min_critical_rows=MIN_REFERENCE_ROWS,
+                tables=LOCAL_CONTEXT_TABLES,
+            )
+        )
+    local_reference_counts = db_row_counts(local_reference, LOCAL_CONTEXT_TABLES) if local_reference else {}
+    local_reference_rows = sum(v for v in local_reference_counts.values() if isinstance(v, int))
+    local_regression = diff_row_counts(local_context_db, local_reference, LOCAL_CONTEXT_TABLES) if local_reference else None
+    recoverable_local_regression = bool(
+        local_reference
+        and local_regression
+        and local_regression.is_wipe()
+    )
     recoverable_regression = bool(
         reference
         and protected_regression
@@ -121,7 +164,7 @@ def check_db_integrity(fix: bool = False) -> DoctorCheck:
         )
     )
 
-    if quick_ok and not recoverable_wipe and not recoverable_regression:
+    if quick_ok and not recoverable_wipe and not recoverable_regression and not recoverable_local_regression:
         if looks_wiped and not reference:
             return DoctorCheck(
                 id="boot.db_integrity",
@@ -150,6 +193,11 @@ def check_db_integrity(fix: bool = False) -> DoctorCheck:
         evidence.append(f"Reference backup: {reference} ({reference_rows} protected rows)")
     if protected_regression:
         evidence.extend(protected_regression.summary_lines())
+    if local_reference:
+        evidence.append(f"Local memory DB: {local_context_db}")
+        evidence.append(f"Local memory reference: {local_reference} ({local_reference_rows} rows)")
+    if local_regression:
+        evidence.extend(["Local memory regression:", *local_regression.summary_lines()])
 
     if fix and recoverable_regression:
         report = restore_tables_from_backup(reference, db_path)
@@ -205,7 +253,49 @@ def check_db_integrity(fix: bool = False) -> DoctorCheck:
             repair_plan=["Run nexo recover --force --yes, then restart Desktop"],
         )
 
-    if recoverable_wipe or recoverable_regression:
+    if fix and recoverable_local_regression:
+        try:
+            local_context_db.parent.mkdir(parents=True, exist_ok=True)
+            if not local_context_db.exists():
+                sqlite3.connect(str(local_context_db)).close()
+        except Exception as exc:
+            return DoctorCheck(
+                id="boot.db_integrity",
+                tier="boot",
+                status="critical",
+                severity="error",
+                summary="Local memory sidecar repair failed",
+                evidence=evidence + [f"Cannot create local memory DB: {type(exc).__name__}: {exc}"],
+                repair_plan=["Close NEXO Desktop and run nexo doctor --tier boot --plane database_real --fix"],
+            )
+        report = restore_tables_from_backup(local_reference, local_context_db, tables=LOCAL_CONTEXT_TABLES)
+        if report.get("ok"):
+            restored = {
+                table: payload
+                for table, payload in (report.get("tables") or {}).items()
+                if isinstance(payload, dict) and payload.get("status") == "restored"
+            }
+            restored_rows = sum(int(payload.get("after") or 0) for payload in restored.values())
+            return DoctorCheck(
+                id="boot.db_integrity",
+                tier="boot",
+                status="healthy",
+                severity="info",
+                summary=f"Local memory sidecar restored from backup ({restored_rows} rows)",
+                evidence=evidence + [f"Restored local-memory sidecar tables: {len(restored)}"],
+                fixed=True,
+            )
+        return DoctorCheck(
+            id="boot.db_integrity",
+            tier="boot",
+            status="critical",
+            severity="error",
+            summary="Local memory sidecar repair failed",
+            evidence=evidence + [f"Restore errors: {report.get('errors') or []}"],
+            repair_plan=["Close NEXO Desktop and run nexo doctor --tier boot --plane database_real --fix"],
+        )
+
+    if recoverable_wipe or recoverable_regression or recoverable_local_regression:
         return DoctorCheck(
             id="boot.db_integrity",
             tier="boot",
