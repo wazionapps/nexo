@@ -5,6 +5,7 @@ import html
 import json
 import re
 import sqlite3
+import unicodedata
 import zipfile
 from email import policy
 from email.parser import BytesParser
@@ -304,14 +305,73 @@ def summarize(text: str) -> str:
 
 
 def entities(text: str) -> list[str]:
-    found = set()
-    for match in re.finditer(r"\b[A-ZÁÉÍÓÚÑ][\wÁÉÍÓÚÑáéíóúñ.-]{2,}(?:\s+[A-ZÁÉÍÓÚÑ][\wÁÉÍÓÚÑáéíóúñ.-]{2,}){0,3}", text):
-        value = match.group(0).strip()
-        if len(value) <= 80:
-            found.add(value)
-    for match in re.finditer(r"[\w.-]+@[\w.-]+\.[A-Za-z]{2,}", text):
-        found.add(match.group(0))
-    return sorted(found)[:50]
+    return [item["name"] for item in entity_mentions(text)[:50]]
+
+
+def _ascii_fold(value: str) -> str:
+    return "".join(
+        char for char in unicodedata.normalize("NFKD", value or "")
+        if not unicodedata.combining(char)
+    )
+
+
+def normalize_entity_alias(value: str) -> str:
+    folded = _ascii_fold(value).lower()
+    folded = re.sub(r"[^\w@.+-]+", " ", folded, flags=re.UNICODE)
+    folded = re.sub(r"\s+", " ", folded).strip(" .-_")
+    return folded
+
+
+def canonical_entity_key(value: str) -> str:
+    normalized = normalize_entity_alias(value)
+    if not normalized:
+        return ""
+    if re.fullmatch(r"[\w.+-]+@[\w.-]+\.[a-z]{2,}", normalized):
+        return f"email:{normalized}"
+    words = [part for part in normalized.split() if part]
+    if len(words) >= 2:
+        return f"name:{words[-1]}:{words[0][:1]}"
+    return f"alias:{normalized}"
+
+
+def entity_mentions(text: str) -> list[dict]:
+    found: dict[str, dict] = {}
+    if not text:
+        return []
+    for match in re.finditer(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}", text):
+        value = match.group(0).strip(".,;:()[]{}<>")
+        canonical = canonical_entity_key(value)
+        if canonical:
+            found[canonical] = {
+                "name": value,
+                "alias": value,
+                "canonical_key": canonical,
+                "entity_type": "email",
+                "confidence": 0.92,
+                "evidence": value[:240],
+            }
+    name_pattern = re.compile(
+        r"\b[A-ZÁÉÍÓÚÑ][\wÁÉÍÓÚÑáéíóúñ.-]{2,}(?:\s+[A-ZÁÉÍÓÚÑ][\wÁÉÍÓÚÑáéíóúñ.-]{2,}){0,3}"
+    )
+    for match in name_pattern.finditer(text):
+        value = match.group(0).strip(".,;:()[]{}<>")
+        if len(value) > 80:
+            continue
+        canonical = canonical_entity_key(value)
+        if not canonical:
+            continue
+        existing = found.get(canonical)
+        item = {
+            "name": value,
+            "alias": value,
+            "canonical_key": canonical,
+            "entity_type": "entity",
+            "confidence": 0.68 if " " in value else 0.55,
+            "evidence": value[:240],
+        }
+        if not existing or len(value) > len(str(existing.get("name") or "")):
+            found[canonical] = item
+    return sorted(found.values(), key=lambda item: (-float(item.get("confidence") or 0), str(item.get("name") or "").lower()))[:80]
 
 
 def chunk_text(text: str, chunk_size: int = 900, overlap: int = 120) -> list[str]:

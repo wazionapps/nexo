@@ -1,5 +1,16 @@
 # Changelog
 
+## [7.22.0] - 2026-05-17
+
+### Added — MCP latency hardening and Entity Dossier
+
+- **Heartbeat stays on the fast path.** Desktop-managed sessions no longer load Local Context, drive/adaptive analysis or semantic correction classifiers from `nexo_heartbeat` unless explicitly forced; an isolated Desktop-mode heartbeat now completes in single-digit milliseconds.
+- **Interactive writes have a durable queue outside SQLite.** Critical MCP writes can be accepted as `queued`, drained by a single runtime writer, and end as `committed`, `retrying` or `dead_letter` without pretending a queued write is already saved.
+- **Brain exposes compliance state for Desktop gates.** `nexo_session_compliance_state` reports heartbeat, diary, learning and clean-close obligations; `nexo_session_diary_write` is now available even when dynamic plugins are disabled.
+- **Local Context adds Entity Dossier.** `nexo_entity_dossier` resolves canonical entity aliases, extracts open-domain facts on-device, aggregates all linked evidence and keeps the existing semantic top-K search path unchanged.
+- **Local Memory remains product-safe under load.** Desired index speed persists even when the sidecar DB is busy, and Desktop foreground state can throttle indexing while a visible conversation is active.
+- **Coverage:** focused Local Context, MCP degradation, durable queue, heartbeat/compliance, privacy, discoverability and domain-agnostic dossier tests pass (`23` focused tests), plus a direct Desktop-mode heartbeat latency probe.
+
 ## [7.21.0] - 2026-05-17
 
 ### Added — Resident Runtime Service for MCP stability

@@ -1421,6 +1421,22 @@
       },
       "triggers_after": []
     },
+    "nexo_entity_dossier": {
+      "description": "Build a full local entity dossier with aggregates and evidence references",
+      "category": "local_context",
+      "source": "server",
+      "requires": [],
+      "provides": [
+        "entity_dossier",
+        "local_context_evidence"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
     "nexo_entity_list": {
       "description": "List entities by type",
       "category": "entity",
@@ -1836,7 +1852,7 @@
       "triggers_after": []
     },
     "nexo_heartbeat": {
-      "description": "Update session task, check inbox, detect trust events. Internally checks: DIARY_OVERDUE (>10 HBs or >30min), GUARD_REMINDER (code edit without guard), LEARNING_REMINDER (user correction without learning), PROTOCOL_DEBT (open debts). Also fires adaptive_mode compute and diary draft accumulation.",
+      "description": "Update session task, stamp heartbeat, check inbox/questions, and surface lightweight recent context. Heavy Local Context, adaptive, drive and semantic correction analysis are opt-in for Desktop-managed sessions.",
       "category": "session",
       "source": "server",
       "requires": [
@@ -1853,12 +1869,11 @@
         "protocol_debt_signal"
       ],
       "internal_calls": [
-        "adaptive_mode.compute_mode",
-        "cognitive._trust.detect_sentiment",
         "build_pre_action_context",
         "upsert_diary_draft",
         "save_checkpoint",
-        "capture_context_event"
+        "capture_context_event",
+        "mcp_write_queue.enqueue_write"
       ],
       "enforcement": {
         "level": "must",
@@ -2383,13 +2398,13 @@
       },
       "triggers_after": []
     },
-    "nexo_runtime_service_status": {
-      "description": "Return resident Runtime Service health, PID, version, fingerprint and state paths",
+    "nexo_mcp_write_queue_status": {
+      "description": "Read durable MCP write queue counts and recent queued/committed/dead-letter records",
       "category": "system",
       "source": "server",
       "requires": [],
       "provides": [
-        "runtime_service_status"
+        "mcp_write_queue_status"
       ],
       "internal_calls": [],
       "enforcement": {
@@ -3256,6 +3271,21 @@
       },
       "triggers_after": []
     },
+    "nexo_runtime_service_status": {
+      "description": "Return resident Runtime Service health, PID, version, fingerprint and state paths",
+      "category": "system",
+      "source": "server",
+      "requires": [],
+      "provides": [
+        "runtime_service_status"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
     "nexo_schedule_add": {
       "description": "Add personal cron job",
       "category": "schedule",
@@ -3288,6 +3318,21 @@
       "source": "server",
       "requires": [],
       "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_session_compliance_state": {
+      "description": "Return Brain-verifiable heartbeat, diary, learning and clean-close obligations for Desktop gates",
+      "category": "session",
+      "source": "server",
+      "requires": [],
+      "provides": [
+        "session_compliance_state"
+      ],
       "internal_calls": [],
       "enforcement": {
         "level": "none",

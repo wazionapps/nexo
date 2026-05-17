@@ -68,6 +68,8 @@ RESTART_ALLOWLIST = {
     # que el cliente se cerraba/reabría.
     "nexo_smart_startup",
     "nexo_session_diary_read",
+    "nexo_session_diary_write",
+    "nexo_session_compliance_state",
     "nexo_reminders",
     "nexo_followups",
     "nexo_recent_context",

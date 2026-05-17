@@ -27,6 +27,8 @@ LOCAL_CONTEXT_TABLES: tuple[str, ...] = (
     "local_asset_versions",
     "local_chunks",
     "local_entities",
+    "local_entity_aliases",
+    "entity_facts",
     "local_relations",
     "local_embeddings",
     "local_context_queries",
@@ -100,8 +102,57 @@ def connect_local_context_db_readonly(*, timeout_ms: int = 1200) -> sqlite3.Conn
 def _ensure_schema(conn: sqlite3.Connection) -> None:
     _m63_local_context_layer(conn)
     _m64_local_context_live_dirs(conn)
+    _ensure_entity_dossier_schema(conn)
     conn.execute("PRAGMA user_version=64")
     conn.commit()
+
+
+def _ensure_entity_dossier_schema(conn: sqlite3.Connection) -> None:
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS local_entity_aliases (
+            alias_id TEXT PRIMARY KEY,
+            entity_id TEXT NOT NULL,
+            alias TEXT NOT NULL,
+            normalized_alias TEXT NOT NULL,
+            entity_type TEXT NOT NULL DEFAULT 'entity',
+            confidence REAL NOT NULL DEFAULT 0.5,
+            source_asset_id TEXT NOT NULL DEFAULT '',
+            source_chunk_id TEXT NOT NULL DEFAULT '',
+            evidence TEXT NOT NULL DEFAULT '',
+            created_at REAL NOT NULL,
+            updated_at REAL NOT NULL,
+            UNIQUE(entity_id, normalized_alias, source_asset_id, source_chunk_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS entity_facts (
+            fact_id TEXT PRIMARY KEY,
+            entity_id TEXT NOT NULL,
+            predicate TEXT NOT NULL,
+            value TEXT NOT NULL,
+            value_number REAL,
+            value_date TEXT,
+            source_asset_id TEXT NOT NULL,
+            source_chunk_id TEXT NOT NULL DEFAULT '',
+            confidence REAL NOT NULL DEFAULT 0.5,
+            created_at REAL NOT NULL,
+            UNIQUE(entity_id, predicate, value, source_asset_id, source_chunk_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_local_entity_aliases_entity
+            ON local_entity_aliases(entity_id);
+        CREATE INDEX IF NOT EXISTS idx_local_entity_aliases_normalized
+            ON local_entity_aliases(normalized_alias);
+        CREATE INDEX IF NOT EXISTS idx_local_entity_aliases_source
+            ON local_entity_aliases(source_asset_id, source_chunk_id);
+        CREATE INDEX IF NOT EXISTS idx_entity_facts_entity
+            ON entity_facts(entity_id);
+        CREATE INDEX IF NOT EXISTS idx_entity_facts_source
+            ON entity_facts(source_asset_id, source_chunk_id);
+        CREATE INDEX IF NOT EXISTS idx_entity_facts_predicate
+            ON entity_facts(predicate);
+        """
+    )
 
 
 def _table_exists(conn: sqlite3.Connection, table: str, *, schema: str = "main") -> bool:

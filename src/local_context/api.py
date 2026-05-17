@@ -10,13 +10,15 @@ import hashlib
 import subprocess
 import sys
 import time
+import datetime
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+import paths
 from . import embeddings
 from .db import LOCAL_CONTEXT_TABLES, close_local_context_db, connect_local_context_db_readonly, ensure_local_context_db, get_local_context_db
-from .extractors import chunk_text, contains_secret, entities, extract_text, summarize
+from .extractors import canonical_entity_key, chunk_text, contains_secret, entities, entity_mentions, extract_text, normalize_entity_alias, summarize
 from .logging import log_event, tail
 from .privacy import classify_path, is_local_email_tree, is_queryable_path, should_extract, should_skip_file, should_skip_tree
 from .util import content_hash, json_dumps, json_loads, norm_path, now, quick_fingerprint, redact_path, stable_id, system_label, tokenize
@@ -43,6 +45,16 @@ PERFORMANCE_PROFILE_KEY = "performance_profile"
 DEFAULT_PERFORMANCE_PROFILE = os.environ.get("NEXO_LOCAL_INDEX_PERFORMANCE_PROFILE", "medium").strip().lower() or "medium"
 VALID_CONTEXT_MODES = {"compact", "full"}
 EMBEDDING_REFRESH_JOB = "embedding_refresh"
+ENTITY_FACTS_JOB = "entity_facts"
+ENTITY_DOSSIER_MAX_ASSETS = int(os.environ.get("NEXO_ENTITY_DOSSIER_MAX_ASSETS", "500") or "500")
+ENTITY_DOSSIER_MAX_CHUNKS = int(os.environ.get("NEXO_ENTITY_DOSSIER_MAX_CHUNKS", "1200") or "1200")
+ENTITY_DOSSIER_MAX_FACTS = int(os.environ.get("NEXO_ENTITY_DOSSIER_MAX_FACTS", "3000") or "3000")
+ENTITY_FACT_MIN_CONFIDENCE = float(os.environ.get("NEXO_ENTITY_FACT_MIN_CONFIDENCE", "0.45") or "0.45")
+ENTITY_FACTS_LLM_ENABLED = os.environ.get("NEXO_ENTITY_FACTS_LLM_ENABLED", "1").strip().lower() not in {"0", "false", "no", "off"}
+LOCAL_PRESENCE_MODEL_SPEC = "qwen3-0.6b-q4-local-presence"
+FOREGROUND_GOVERNOR_ENABLED = os.environ.get("NEXO_LOCAL_INDEX_FOREGROUND_GOVERNOR", "1").strip().lower() not in {"0", "false", "no", "off"}
+FOREGROUND_GOVERNOR_CAP_PROFILE = os.environ.get("NEXO_LOCAL_INDEX_FOREGROUND_CAP_PROFILE", "medium").strip().lower() or "medium"
+FOREGROUND_STATE_MAX_AGE_SECONDS = float(os.environ.get("NEXO_LOCAL_INDEX_FOREGROUND_MAX_AGE_SECONDS", "180") or "180")
 HIGH_VALUE_DOCUMENT_SUFFIXES = {
     ".pdf",
     ".doc",
@@ -85,10 +97,6 @@ HIGH_VALUE_DIRECTORY_NAMES = {
     "google drive",
     "dropbox",
     "creative cloud files",
-    "clientes",
-    "clients",
-    "facturas",
-    "invoices",
     "contratos",
     "contracts",
     "projects",
@@ -487,6 +495,8 @@ def _purge_removed_root_payloads(conn, *, root_paths: list[str] | None = None) -
 
     for table in ("local_embeddings", "local_chunks", "local_entities", "local_asset_versions"):
         conn.execute(f"DELETE FROM {table} WHERE asset_id IN ({asset_subquery})", tuple(params))
+    for table in ("local_entity_aliases", "entity_facts"):
+        conn.execute(f"DELETE FROM {table} WHERE source_asset_id IN ({asset_subquery})", tuple(params))
     conn.execute(f"DELETE FROM local_relations WHERE source_asset_id IN ({asset_subquery})", tuple(params))
     conn.execute(f"DELETE FROM local_relations WHERE target_asset_id IN ({asset_subquery})", tuple(params))
     conn.execute(f"DELETE FROM local_relations WHERE target_ref IN ({asset_subquery})", tuple(params))
@@ -506,7 +516,7 @@ def _purge_removed_root_payloads(conn, *, root_paths: list[str] | None = None) -
 
 def _purge_asset_ids(conn, asset_ids: list[str]) -> dict:
     unique_ids = [asset_id for asset_id in dict.fromkeys(asset_ids) if asset_id]
-    counts = {"assets": len(unique_ids), "jobs": 0, "errors": 0, "chunks": 0, "embeddings": 0, "entities": 0, "relations": 0, "versions": 0}
+    counts = {"assets": len(unique_ids), "jobs": 0, "errors": 0, "chunks": 0, "embeddings": 0, "entities": 0, "aliases": 0, "facts": 0, "relations": 0, "versions": 0}
     if not unique_ids:
         return counts
     for start in range(0, len(unique_ids), 500):
@@ -521,6 +531,8 @@ def _purge_asset_ids(conn, asset_ids: list[str]) -> dict:
             ("errors", "local_index_errors"),
         ):
             counts[key] += int(conn.execute(f"DELETE FROM {table} WHERE asset_id IN ({placeholders})", tuple(batch)).rowcount or 0)
+        counts["aliases"] += int(conn.execute(f"DELETE FROM local_entity_aliases WHERE source_asset_id IN ({placeholders})", tuple(batch)).rowcount or 0)
+        counts["facts"] += int(conn.execute(f"DELETE FROM entity_facts WHERE source_asset_id IN ({placeholders})", tuple(batch)).rowcount or 0)
         counts["relations"] += int(conn.execute(f"DELETE FROM local_relations WHERE source_asset_id IN ({placeholders})", tuple(batch)).rowcount or 0)
         counts["relations"] += int(conn.execute(f"DELETE FROM local_relations WHERE target_asset_id IN ({placeholders})", tuple(batch)).rowcount or 0)
         counts["relations"] += int(conn.execute(f"DELETE FROM local_relations WHERE target_ref IN ({placeholders})", tuple(batch)).rowcount or 0)
@@ -573,6 +585,8 @@ def _mark_content_secret_assets(conn, asset_ids: list[str]) -> int:
         placeholders = ",".join("?" for _ in batch)
         for table in ("local_embeddings", "local_chunks", "local_entities"):
             conn.execute(f"DELETE FROM {table} WHERE asset_id IN ({placeholders})", tuple(batch))
+        conn.execute(f"DELETE FROM local_entity_aliases WHERE source_asset_id IN ({placeholders})", tuple(batch))
+        conn.execute(f"DELETE FROM entity_facts WHERE source_asset_id IN ({placeholders})", tuple(batch))
         conn.execute(f"DELETE FROM local_relations WHERE source_asset_id IN ({placeholders})", tuple(batch))
         conn.execute(f"DELETE FROM local_relations WHERE target_asset_id IN ({placeholders})", tuple(batch))
         conn.execute(f"DELETE FROM local_relations WHERE target_ref IN ({placeholders})", tuple(batch))
@@ -741,15 +755,90 @@ def _normalize_performance_profile(profile: str | None) -> str:
     return value if value in PERFORMANCE_PROFILES else "medium"
 
 
+def _desired_performance_profile_path() -> Path:
+    test_db = os.environ.get("NEXO_TEST_DB", "").strip()
+    if test_db:
+        return Path(test_db).expanduser().with_name("local-index-performance-profile.json")
+    override = os.environ.get("NEXO_LOCAL_INDEX_PERFORMANCE_STATE", "").strip()
+    if override:
+        return Path(override).expanduser()
+    return paths.runtime_state_dir() / "local-index-performance-profile.json"
+
+
+def _write_desired_performance_profile(profile: str) -> None:
+    target = _desired_performance_profile_path()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    payload = {"profile": _normalize_performance_profile(profile), "updated_at": now()}
+    tmp = target.with_suffix(target.suffix + ".tmp")
+    tmp.write_text(json_dumps(payload), encoding="utf-8")
+    tmp.replace(target)
+
+
+def _read_desired_performance_profile() -> str:
+    try:
+        target = _desired_performance_profile_path()
+        if not target.is_file():
+            return ""
+        payload = json_loads(target.read_text(encoding="utf-8"), {})
+        return _normalize_performance_profile(str(payload.get("profile") or ""))
+    except Exception:
+        return ""
+
+
+def _desktop_foreground_state_path() -> Path:
+    override = os.environ.get("NEXO_DESKTOP_FOREGROUND_STATE", "").strip()
+    if override:
+        return Path(override).expanduser()
+    test_db = os.environ.get("NEXO_TEST_DB", "").strip()
+    if test_db:
+        return Path(test_db).expanduser().with_name("desktop-foreground.json")
+    return paths.runtime_state_dir() / "desktop-foreground.json"
+
+
+def _foreground_governor_state() -> dict:
+    if not FOREGROUND_GOVERNOR_ENABLED:
+        return {"active": False, "reason": "disabled"}
+    try:
+        target = _desktop_foreground_state_path()
+        if not target.is_file():
+            return {"active": False, "reason": "missing"}
+        payload = json_loads(target.read_text(encoding="utf-8"), {})
+        updated_at = float(payload.get("updated_at") or 0)
+        age = max(0.0, now() - updated_at) if updated_at else 999999.0
+        active = bool(payload.get("active")) and age <= FOREGROUND_STATE_MAX_AGE_SECONDS
+        return {
+            "active": active,
+            "reason": str(payload.get("reason") or ("foreground" if active else "stale")),
+            "age_seconds": round(age, 3),
+            "conversation_id": str(payload.get("conversation_id") or ""),
+        }
+    except Exception as exc:
+        return {"active": False, "reason": "error", "error": type(exc).__name__}
+
+
 def performance_config(profile: str | None = None, *, conn=None) -> dict:
     active_profile = profile
     if active_profile is None:
-        if conn is None:
-            active_profile = _get_state(PERFORMANCE_PROFILE_KEY, DEFAULT_PERFORMANCE_PROFILE)
-        else:
-            active_profile = _get_state_conn(conn, PERFORMANCE_PROFILE_KEY, DEFAULT_PERFORMANCE_PROFILE)
+        active_profile = _read_desired_performance_profile()
+        if not active_profile:
+            if conn is None:
+                active_profile = _get_state(PERFORMANCE_PROFILE_KEY, DEFAULT_PERFORMANCE_PROFILE)
+            else:
+                active_profile = _get_state_conn(conn, PERFORMANCE_PROFILE_KEY, DEFAULT_PERFORMANCE_PROFILE)
     normalized = _normalize_performance_profile(active_profile)
     config = dict(PERFORMANCE_PROFILES[normalized])
+    config["requested_profile"] = normalized
+    config["effective_profile"] = normalized
+    governor = _foreground_governor_state()
+    if governor.get("active"):
+        cap = _normalize_performance_profile(FOREGROUND_GOVERNOR_CAP_PROFILE)
+        order = {"low": 0, "medium": 1, "high": 2, "extreme": 3}
+        if order.get(normalized, 1) > order.get(cap, 1):
+            limited = PERFORMANCE_PROFILES[cap]
+            for key in ("scan_limit", "process_limit", "live_asset_limit", "live_dir_limit", "live_file_limit", "cycles_per_run", "warning"):
+                config[key] = limited[key]
+            config["effective_profile"] = cap
+            config["governor"] = governor
     config["available_profiles"] = [dict(PERFORMANCE_PROFILES[key]) for key in ("low", "medium", "high", "extreme")]
     config["interval_seconds"] = 60
     return config
@@ -757,17 +846,25 @@ def performance_config(profile: str | None = None, *, conn=None) -> dict:
 
 def set_performance_profile(profile: str) -> dict:
     normalized = _normalize_performance_profile(profile)
-    _set_state(PERFORMANCE_PROFILE_KEY, normalized)
+    _write_desired_performance_profile(normalized)
+    pending_commit = False
+    try:
+        _set_state(PERFORMANCE_PROFILE_KEY, normalized)
+    except sqlite3.OperationalError as exc:
+        if not _sqlite_is_busy(exc):
+            raise
+        pending_commit = True
     config = performance_config(normalized)
     log_event(
-        "info",
+        "warn" if pending_commit else "info",
         "performance_profile_updated",
         "Local memory performance profile updated",
         profile=normalized,
+        pending_commit=pending_commit,
         scan_limit=config["scan_limit"],
         process_limit=config["process_limit"],
     )
-    return {"ok": True, "profile": normalized, "performance": config}
+    return {"ok": True, "profile": normalized, "performance": config, "pending_commit": pending_commit}
 
 
 def _root_initial_scan_key(root_id: int) -> str:
@@ -1865,24 +1962,299 @@ def _enqueue_stale_embedding_refresh_jobs(conn, *, limit: int) -> int:
     return len(rows)
 
 
-def _replace_entities(conn, asset_id: str, version_id: str, values: list[str]) -> None:
-    conn.execute("DELETE FROM local_entities WHERE asset_id=?", (asset_id,))
+def _entity_mentions_from_values(values: list[str]) -> list[dict]:
+    mentions = []
     for value in values:
-        entity_id = stable_id("entity", value.lower())
+        canonical = canonical_entity_key(value)
+        if not canonical:
+            continue
+        mentions.append({
+            "name": value,
+            "alias": value,
+            "canonical_key": canonical,
+            "entity_type": "entity",
+            "confidence": 0.55,
+            "evidence": value[:240],
+        })
+    return mentions
+
+
+def _replace_entities(conn, asset_id: str, version_id: str, values: list[str], *, text: str = "") -> list[dict]:
+    conn.execute("DELETE FROM local_entities WHERE asset_id=?", (asset_id,))
+    conn.execute("DELETE FROM local_entity_aliases WHERE source_asset_id=?", (asset_id,))
+    mentions = entity_mentions(text) if text else _entity_mentions_from_values(values)
+    written: dict[str, dict] = {}
+    for item in mentions:
+        value = str(item.get("name") or item.get("alias") or "").strip()
+        alias = str(item.get("alias") or value).strip()
+        canonical_key = str(item.get("canonical_key") or canonical_entity_key(value))
+        if not value or not canonical_key:
+            continue
+        entity_id = stable_id("entity", canonical_key)
+        normalized_alias = normalize_entity_alias(alias)
+        entity_type = str(item.get("entity_type") or "entity")[:80]
+        confidence = max(0.0, min(float(item.get("confidence") or 0.55), 1.0))
+        evidence = str(item.get("evidence") or alias)[:500]
+        previous = written.get(entity_id)
+        if previous is None or len(value) > len(str(previous.get("name") or "")):
+            written[entity_id] = {
+                "entity_id": entity_id,
+                "name": value,
+                "entity_type": entity_type,
+                "confidence": confidence,
+                "evidence": evidence,
+            }
         conn.execute(
             """
             INSERT OR IGNORE INTO local_entities(entity_id, asset_id, version_id, name, entity_type, confidence, evidence, created_at)
-            VALUES (?, ?, ?, ?, 'entity', 0.55, '', ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (entity_id, asset_id, version_id, value, now()),
+            (entity_id, asset_id, version_id, value, entity_type, confidence, evidence, now()),
         )
+        if normalized_alias:
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO local_entity_aliases(
+                  alias_id, entity_id, alias, normalized_alias, entity_type, confidence,
+                  source_asset_id, source_chunk_id, evidence, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, '', ?, ?, ?)
+                """,
+                (
+                    stable_id("alias", f"{entity_id}:{normalized_alias}:{asset_id}"),
+                    entity_id,
+                    alias,
+                    normalized_alias,
+                    entity_type,
+                    confidence,
+                    asset_id,
+                    evidence,
+                    now(),
+                    now(),
+                ),
+            )
         conn.execute(
             """
             INSERT OR IGNORE INTO local_relations(relation_id, source_asset_id, target_ref, relation_type, confidence, evidence, active, created_at)
-            VALUES (?, ?, ?, 'asset_mentions_entity', 0.55, ?, 1, ?)
+            VALUES (?, ?, ?, 'asset_mentions_entity', ?, ?, 1, ?)
             """,
-            (stable_id("rel", f"{asset_id}:mentions:{entity_id}"), asset_id, entity_id, value, now()),
+            (stable_id("rel", f"{asset_id}:mentions:{entity_id}"), asset_id, entity_id, confidence, alias, now()),
         )
+    return list(written.values())
+
+
+_FIELD_LINE_RE = re.compile(r"^\s*([^:\n=]{2,90})\s*(?::|=|->|-)\s*(.{1,700})\s*$")
+_FIELD_SPAN_RE = re.compile(r"([A-Za-zÁÉÍÓÚÑáéíóúñ][^:=\n]{1,90})\s*(?::|=|->)\s*(.{1,700}?)(?=\s+[A-Za-zÁÉÍÓÚÑáéíóúñ][^:=\n]{1,90}\s*(?::|=|->)|$)")
+_DATE_PATTERNS: tuple[re.Pattern, ...] = (
+    re.compile(r"\b(\d{4})-(\d{1,2})-(\d{1,2})\b"),
+    re.compile(r"\b(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})\b"),
+)
+_NUMBER_RE = re.compile(r"(?<![\w@])[-+]?(?:\d{1,3}(?:[.\s]\d{3})+|\d+)(?:[,.]\d+)?(?![\w@])")
+
+
+def _clean_predicate(value: str) -> str:
+    text = " ".join(str(value or "").strip().strip(" .:-=_").split())
+    text = re.sub(r"^[#*\-\d.)\s]+", "", text).strip()
+    if not text:
+        return "dato observado"
+    parts = tokenize(text)
+    if parts:
+        return " ".join(parts[:8])[:90]
+    return text.lower()[:90]
+
+
+def _parse_number(value: str) -> float | None:
+    match = _NUMBER_RE.search(str(value or ""))
+    if not match:
+        return None
+    raw = match.group(0).replace(" ", "")
+    if "," in raw and "." in raw:
+        raw = raw.replace(".", "").replace(",", ".")
+    elif "," in raw:
+        raw = raw.replace(",", ".")
+    elif raw.count(".") > 1:
+        raw = raw.replace(".", "")
+    try:
+        return float(raw)
+    except Exception:
+        return None
+
+
+def _parse_date(value: str) -> str:
+    text = str(value or "")
+    iso = _DATE_PATTERNS[0].search(text)
+    if iso:
+        year, month, day = (int(iso.group(1)), int(iso.group(2)), int(iso.group(3)))
+        if 1 <= month <= 12 and 1 <= day <= 31:
+            return f"{year:04d}-{month:02d}-{day:02d}"
+    local = _DATE_PATTERNS[1].search(text)
+    if local:
+        day, month, year = (int(local.group(1)), int(local.group(2)), int(local.group(3)))
+        if year < 100:
+            year += 2000 if year < 70 else 1900
+        if 1 <= month <= 12 and 1 <= day <= 31:
+            return f"{year:04d}-{month:02d}-{day:02d}"
+    return ""
+
+
+def _fact_candidate_lines(text: str) -> list[tuple[str, str, float]]:
+    lines: list[tuple[str, str, float]] = []
+    seen: set[tuple[str, str]] = set()
+    for raw_line in re.split(r"[\r\n]+", text or ""):
+        line = " ".join(raw_line.split())
+        if not line or len(line) > 900:
+            continue
+        span_matches = list(_FIELD_SPAN_RE.finditer(line))
+        if span_matches and (len(span_matches) > 1 or line.count(":") > 1):
+            for span in span_matches:
+                predicate = _clean_predicate(span.group(1))
+                value = span.group(2).strip(" .;")
+                key = (predicate, value)
+                if value and key not in seen:
+                    seen.add(key)
+                    lines.append((predicate, value, 0.72))
+            continue
+        match = _FIELD_LINE_RE.match(line)
+        if match:
+            predicate = _clean_predicate(match.group(1))
+            value = match.group(2).strip()
+            key = (predicate, value)
+            if value and key not in seen:
+                seen.add(key)
+                lines.append((predicate, value, 0.72))
+            continue
+        for span in span_matches:
+            predicate = _clean_predicate(span.group(1))
+            value = span.group(2).strip(" .;")
+            key = (predicate, value)
+            if value and key not in seen:
+                seen.add(key)
+                lines.append((predicate, value, 0.72))
+        if _parse_number(line) is not None or _parse_date(line):
+            predicate = _clean_predicate(line[:80])
+            key = (predicate, line)
+            if key not in seen:
+                seen.add(key)
+                lines.append((predicate, line, 0.54))
+    return lines[:80]
+
+
+def _strip_entity_aliases_from_predicate(predicate: str, aliases: list[str]) -> str:
+    normalized = normalize_entity_alias(predicate)
+    for alias in sorted((alias for alias in aliases if alias), key=len, reverse=True):
+        if normalized.startswith(alias + " "):
+            normalized = normalized[len(alias):].strip()
+    return _clean_predicate(normalized or predicate)
+
+
+def _chunk_mentions_entity(chunk_text_value: str, aliases: list[str]) -> bool:
+    normalized_chunk = normalize_entity_alias(chunk_text_value)
+    return any(alias and alias in normalized_chunk for alias in aliases)
+
+
+def _insert_entity_fact(
+    conn,
+    *,
+    entity_id: str,
+    predicate: str,
+    value: str,
+    source_asset_id: str,
+    source_chunk_id: str,
+    confidence: float,
+) -> bool:
+    clean_value = " ".join(str(value or "").split())
+    clean_predicate = _clean_predicate(predicate)
+    if not entity_id or not clean_predicate or not clean_value:
+        return False
+    if contains_secret(clean_value) or contains_secret(clean_predicate):
+        return False
+    value_number = _parse_number(clean_value)
+    value_date = _parse_date(clean_value)
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO entity_facts(
+          fact_id, entity_id, predicate, value, value_number, value_date,
+          source_asset_id, source_chunk_id, confidence, created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            stable_id("fact", f"{entity_id}:{clean_predicate}:{clean_value}:{source_asset_id}:{source_chunk_id}"),
+            entity_id,
+            clean_predicate,
+            clean_value[:1000],
+            value_number,
+            value_date,
+            source_asset_id,
+            source_chunk_id,
+            max(0.0, min(float(confidence), 1.0)),
+            now(),
+        ),
+    )
+    return True
+
+
+def _replace_entity_facts(conn, asset_id: str) -> int:
+    conn.execute("DELETE FROM entity_facts WHERE source_asset_id=?", (asset_id,))
+    entity_rows = conn.execute(
+        """
+        SELECT e.entity_id, e.name, a.normalized_alias
+        FROM local_entities e
+        LEFT JOIN local_entity_aliases a
+          ON a.entity_id=e.entity_id AND a.source_asset_id=e.asset_id
+        WHERE e.asset_id=?
+        ORDER BY e.confidence DESC
+        """,
+        (asset_id,),
+    ).fetchall()
+    entities_by_id: dict[str, dict] = {}
+    for row in entity_rows:
+        entity_id = str(row["entity_id"] or "")
+        if not entity_id:
+            continue
+        item = entities_by_id.setdefault(entity_id, {"entity_id": entity_id, "aliases": set()})
+        if row["name"]:
+            item["aliases"].add(normalize_entity_alias(str(row["name"])))
+        if row["normalized_alias"]:
+            item["aliases"].add(str(row["normalized_alias"]))
+    if not entities_by_id:
+        return 0
+    chunks = conn.execute(
+        """
+        SELECT chunk_id, text
+        FROM local_chunks
+        WHERE asset_id=?
+        ORDER BY chunk_index ASC
+        """,
+        (asset_id,),
+    ).fetchall()
+    inserted = 0
+    for chunk in chunks:
+        text = str(chunk["text"] or "")
+        if not text or contains_secret(text):
+            continue
+        candidates = _fact_candidate_lines(text)
+        if not candidates:
+            candidates = [("mencion", sentence.strip(), 0.48) for sentence in re.split(r"(?<=[.!?])\s+", text) if sentence.strip()][:4]
+        for entity in entities_by_id.values():
+            aliases = sorted(alias for alias in entity["aliases"] if alias)
+            direct = _chunk_mentions_entity(text, aliases)
+            for predicate, value, base_confidence in candidates:
+                predicate = _strip_entity_aliases_from_predicate(predicate, aliases)
+                confidence = base_confidence if direct else min(base_confidence, 0.56)
+                if confidence < ENTITY_FACT_MIN_CONFIDENCE:
+                    continue
+                if _insert_entity_fact(
+                    conn,
+                    entity_id=entity["entity_id"],
+                    predicate=predicate,
+                    value=value,
+                    source_asset_id=asset_id,
+                    source_chunk_id=str(chunk["chunk_id"] or ""),
+                    confidence=confidence,
+                ):
+                    inserted += 1
+    return inserted
 
 
 def _requeue_due_jobs(conn) -> dict:
@@ -1978,10 +2350,15 @@ def process_jobs(*, limit: int = 100) -> dict:
                     (summary, json_dumps(metadata), version_id),
                 )
                 _replace_chunks(conn, asset_id, version_id, text)
-                _replace_entities(conn, asset_id, version_id, entities(text))
+                _replace_entities(conn, asset_id, version_id, entities(text), text=text)
+                enqueue_job(conn, asset_id, ENTITY_FACTS_JOB, priority=max(20, _extraction_priority(Path(row["path"])) - 20))
                 conn.execute("UPDATE local_assets SET phase='embeddings', updated_at=? WHERE asset_id=?", (now(), asset_id))
             elif job_type == EMBEDDING_REFRESH_JOB:
                 _refresh_asset_embeddings(conn, asset_id)
+            elif job_type == ENTITY_FACTS_JOB:
+                inserted = _replace_entity_facts(conn, asset_id)
+                if inserted:
+                    conn.execute("UPDATE local_assets SET phase='facts', updated_at=? WHERE asset_id=?", (now(), asset_id))
             elif job_type == "graph":
                 conn.execute(
                     """
@@ -3355,6 +3732,395 @@ def _context_query_conn(
     )
 
 
+def _llm_presence_state() -> dict:
+    if not ENTITY_FACTS_LLM_ENABLED:
+        return {"enabled": False, "available": False, "state": "disabled"}
+    try:
+        import local_models
+        spec = local_models.get_local_model_spec(LOCAL_PRESENCE_MODEL_SPEC)
+        verification = local_models.verify_local_model_dir(spec)
+        return {
+            "enabled": True,
+            "available": bool(verification.get("ok")),
+            "state": "available" if verification.get("ok") else "unavailable",
+            "path": verification.get("path", ""),
+            "problems": verification.get("problems", []),
+        }
+    except Exception as exc:
+        return {"enabled": True, "available": False, "state": "error", "problems": [str(exc)]}
+
+
+def _entity_candidate_score(query: str, normalized_query: str, canonical_query: str, alias: str, entity_id: str) -> float:
+    normalized_alias = normalize_entity_alias(alias)
+    if not normalized_alias:
+        return 0.0
+    if canonical_query and entity_id == stable_id("entity", canonical_query):
+        return 1.0
+    if normalized_alias == normalized_query:
+        return 0.98
+    if normalized_query and normalized_query in normalized_alias:
+        return 0.9
+    query_terms = set(_query_terms(query))
+    alias_terms = set(tokenize(normalized_alias))
+    if not query_terms or not alias_terms:
+        return 0.0
+    overlap = query_terms & alias_terms
+    if not overlap:
+        return 0.0
+    return min(0.86, 0.35 + (len(overlap) / max(len(alias_terms), 1)) * 0.5)
+
+
+def _resolve_dossier_entities(conn, query: str, *, limit: int = 8) -> list[dict]:
+    clean_query = str(query or "").strip()
+    normalized_query = normalize_entity_alias(clean_query)
+    canonical_query = canonical_entity_key(clean_query)
+    terms = _query_terms(clean_query)
+    clauses = []
+    params: list[Any] = []
+    if normalized_query:
+        clauses.append("normalized_alias = ?")
+        params.append(normalized_query)
+        clauses.append("normalized_alias LIKE ?")
+        params.append(f"%{normalized_query}%")
+    for term in terms[:5]:
+        clauses.append("normalized_alias LIKE ?")
+        params.append(f"%{term}%")
+    if not clauses:
+        return []
+    rows = conn.execute(
+        f"""
+        SELECT entity_id, alias, normalized_alias, entity_type, confidence, source_asset_id
+        FROM local_entity_aliases
+        WHERE {" OR ".join(clauses)}
+        LIMIT ?
+        """,
+        [*params, 400],
+    ).fetchall()
+    if not rows:
+        rows = conn.execute(
+            f"""
+            SELECT entity_id, name AS alias, lower(name) AS normalized_alias, entity_type, confidence, asset_id AS source_asset_id
+            FROM local_entities
+            WHERE {" OR ".join("lower(name) LIKE ?" for _ in terms[:5])}
+            LIMIT ?
+            """,
+            [*(f"%{term}%" for term in terms[:5]), 400],
+        ).fetchall() if terms else []
+    grouped: dict[str, dict] = {}
+    for row in rows:
+        entity_id = str(row["entity_id"] or "")
+        alias = str(row["alias"] or "")
+        score = _entity_candidate_score(clean_query, normalized_query, canonical_query, alias, entity_id)
+        if score <= 0:
+            continue
+        item = grouped.setdefault(entity_id, {
+            "entity_id": entity_id,
+            "display_name": alias,
+            "entity_type": str(row["entity_type"] or "entity"),
+            "score": 0.0,
+            "aliases": set(),
+            "asset_ids": set(),
+            "confidence": 0.0,
+        })
+        item["score"] = max(float(item["score"]), score)
+        item["confidence"] = max(float(item["confidence"]), float(row["confidence"] or 0.0))
+        if alias:
+            item["aliases"].add(alias)
+            if len(alias) > len(str(item["display_name"] or "")):
+                item["display_name"] = alias
+        if row["source_asset_id"]:
+            item["asset_ids"].add(str(row["source_asset_id"]))
+    candidates = []
+    for item in grouped.values():
+        candidates.append({
+            "entity_id": item["entity_id"],
+            "display_name": item["display_name"],
+            "entity_type": item["entity_type"],
+            "score": round(float(item["score"]), 4),
+            "confidence": round(float(item["confidence"]), 4),
+            "aliases": sorted(item["aliases"])[:12],
+            "asset_count": len(item["asset_ids"]),
+        })
+    candidates.sort(key=lambda value: (value["score"], value["confidence"], value["asset_count"]), reverse=True)
+    return candidates[: max(1, int(limit))]
+
+
+def _timestamp_date(value: Any) -> str:
+    try:
+        number = float(value)
+    except Exception:
+        return ""
+    if number <= 0:
+        return ""
+    try:
+        return datetime.datetime.fromtimestamp(number, tz=datetime.timezone.utc).date().isoformat()
+    except Exception:
+        return ""
+
+
+def _aggregate_dossier(assets: list[dict], facts: list[dict]) -> dict:
+    by_type: dict[str, int] = {}
+    by_extension: dict[str, int] = {}
+    asset_dates = []
+    for asset in assets:
+        file_type = str(asset.get("file_type") or "file")
+        extension = str(asset.get("extension") or "").lower() or "(none)"
+        by_type[file_type] = by_type.get(file_type, 0) + 1
+        by_extension[extension] = by_extension.get(extension, 0) + 1
+        for key in ("created_at_fs", "modified_at_fs", "first_seen_at", "last_seen_at"):
+            date_value = _timestamp_date(asset.get(key))
+            if date_value:
+                asset_dates.append(date_value)
+    numeric: dict[str, dict] = {}
+    predicate_counts: dict[str, int] = {}
+    fact_dates = []
+    for fact in facts:
+        predicate = str(fact.get("predicate") or "dato observado")
+        predicate_counts[predicate] = predicate_counts.get(predicate, 0) + 1
+        if fact.get("value_date"):
+            fact_dates.append(str(fact["value_date"]))
+        if fact.get("value_number") is None:
+            continue
+        try:
+            number = float(fact["value_number"])
+        except Exception:
+            continue
+        bucket = numeric.setdefault(predicate, {"count": 0, "sum": 0.0, "min": number, "max": number})
+        bucket["count"] += 1
+        bucket["sum"] += number
+        bucket["min"] = min(bucket["min"], number)
+        bucket["max"] = max(bucket["max"], number)
+    for bucket in numeric.values():
+        bucket["sum"] = round(float(bucket["sum"]), 4)
+        bucket["min"] = round(float(bucket["min"]), 4)
+        bucket["max"] = round(float(bucket["max"]), 4)
+    all_dates = sorted(set([*asset_dates, *fact_dates]))
+    frequent_predicates = [
+        {"predicate": predicate, "count": count}
+        for predicate, count in sorted(predicate_counts.items(), key=lambda item: (-item[1], item[0]))[:20]
+    ]
+    atypical_assets = [
+        asset for asset in assets
+        if (asset.get("extension") or "").lower() not in {".pdf", ".doc", ".docx", ".xls", ".xlsx", ".csv", ".txt", ".md", ".rtf", ".eml", ".emlx", ".msg"}
+    ][:20]
+    return {
+        "documents_total": len(assets),
+        "by_file_type": dict(sorted(by_type.items())),
+        "by_extension": dict(sorted(by_extension.items())),
+        "numeric_by_predicate": numeric,
+        "date_range": {
+            "min": all_dates[0] if all_dates else "",
+            "max": all_dates[-1] if all_dates else "",
+            "fact_min": min(fact_dates) if fact_dates else "",
+            "fact_max": max(fact_dates) if fact_dates else "",
+            "asset_min": min(asset_dates) if asset_dates else "",
+            "asset_max": max(asset_dates) if asset_dates else "",
+        },
+        "frequent_predicates": frequent_predicates,
+        "atypical_documents": [
+            {
+                "asset_id": asset.get("asset_id"),
+                "display_path": asset.get("display_path"),
+                "extension": asset.get("extension"),
+                "file_type": asset.get("file_type"),
+            }
+            for asset in atypical_assets
+        ],
+    }
+
+
+def _dossier_entity_asset_ids(conn, entity_id: str, *, max_assets: int) -> list[str]:
+    rows = conn.execute(
+        """
+        SELECT DISTINCT asset_id
+        FROM (
+          SELECT asset_id FROM local_entities WHERE entity_id=?
+          UNION
+          SELECT source_asset_id AS asset_id FROM local_entity_aliases WHERE entity_id=?
+          UNION
+          SELECT source_asset_id AS asset_id FROM entity_facts WHERE entity_id=?
+        )
+        WHERE asset_id != ''
+        LIMIT ?
+        """,
+        (entity_id, entity_id, entity_id, max(1, int(max_assets) + 1)),
+    ).fetchall()
+    return [str(row["asset_id"]) for row in rows]
+
+
+def entity_dossier(
+    query: str,
+    *,
+    max_assets: int = ENTITY_DOSSIER_MAX_ASSETS,
+    max_chunks: int = ENTITY_DOSSIER_MAX_CHUNKS,
+    max_facts: int = ENTITY_DOSSIER_MAX_FACTS,
+    max_chars: int = DEFAULT_CONTEXT_MAX_CHARS,
+    readonly: bool = True,
+) -> dict:
+    conn = _read_conn() if readonly else _conn()
+    close_conn = bool(readonly)
+    try:
+        clean_query = str(query or "").strip()
+        candidates = _resolve_dossier_entities(conn, clean_query, limit=8)
+        if not candidates:
+            return {
+                "ok": True,
+                "mode": "entity_dossier",
+                "query": clean_query,
+                "confidence": 0.0,
+                "needs_disambiguation": False,
+                "candidates": [],
+                "warnings": ["No local entity matched this dossier query."],
+                "assets": [],
+                "facts": [],
+                "chunks": [],
+                "aggregates": _aggregate_dossier([], []),
+                "evidence_refs": [],
+                "llm_presence": _llm_presence_state(),
+            }
+        if len(candidates) > 1 and candidates[0]["score"] < 0.98 and candidates[1]["score"] >= candidates[0]["score"] - 0.08:
+            return {
+                "ok": True,
+                "mode": "entity_dossier",
+                "query": clean_query,
+                "confidence": candidates[0]["score"],
+                "needs_disambiguation": True,
+                "candidates": candidates,
+                "warnings": ["Several local entities match this query. Pick one candidate before generating a dossier."],
+                "assets": [],
+                "facts": [],
+                "chunks": [],
+                "aggregates": _aggregate_dossier([], []),
+                "evidence_refs": [],
+                "llm_presence": _llm_presence_state(),
+            }
+        entity = candidates[0]
+        entity_id = str(entity["entity_id"])
+        raw_asset_ids = _dossier_entity_asset_ids(conn, entity_id, max_assets=max_assets)
+        asset_overflow = len(raw_asset_ids) > int(max_assets)
+        asset_ids = raw_asset_ids[: int(max_assets)]
+        assets: list[dict] = []
+        chunks: list[dict] = []
+        facts: list[dict] = []
+        evidence_refs: list[str] = []
+        if asset_ids:
+            placeholders = ",".join("?" for _ in asset_ids)
+            asset_rows = conn.execute(
+                f"""
+                SELECT asset_id, path, display_path, file_type, extension, size_bytes,
+                       created_at_fs, modified_at_fs, first_seen_at, last_seen_at, privacy_class, status
+                FROM local_assets
+                WHERE asset_id IN ({placeholders})
+                  AND status='active'
+                  AND privacy_class='normal'
+                ORDER BY COALESCE(modified_at_fs, first_seen_at, 0) DESC
+                """,
+                tuple(asset_ids),
+            ).fetchall()
+            for row in asset_rows:
+                if not is_queryable_path(str(row["path"] or ""), str(row["privacy_class"] or "")):
+                    continue
+                assets.append({
+                    "asset_id": row["asset_id"],
+                    "display_path": redact_path(row["path"]),
+                    "file_type": row["file_type"],
+                    "extension": row["extension"],
+                    "size_bytes": row["size_bytes"],
+                    "created_at_fs": row["created_at_fs"],
+                    "modified_at_fs": row["modified_at_fs"],
+                    "first_seen_at": row["first_seen_at"],
+                    "last_seen_at": row["last_seen_at"],
+                })
+            safe_asset_ids = [asset["asset_id"] for asset in assets]
+            if safe_asset_ids:
+                safe_placeholders = ",".join("?" for _ in safe_asset_ids)
+                fact_rows = conn.execute(
+                    f"""
+                    SELECT fact_id, entity_id, predicate, value, value_number, value_date,
+                           source_asset_id, source_chunk_id, confidence, created_at
+                    FROM entity_facts
+                    WHERE entity_id=?
+                      AND source_asset_id IN ({safe_placeholders})
+                    ORDER BY confidence DESC, created_at DESC
+                    LIMIT ?
+                    """,
+                    [entity_id, *safe_asset_ids, int(max_facts) + 1],
+                ).fetchall()
+                for row in fact_rows[: int(max_facts)]:
+                    if contains_secret(str(row["value"] or "")):
+                        continue
+                    fact = dict(row)
+                    facts.append(fact)
+                    if row["source_chunk_id"]:
+                        evidence_refs.append(f"local_asset:{row['source_asset_id']}#chunk:{row['source_chunk_id']}")
+                chunk_rows = conn.execute(
+                    f"""
+                    SELECT chunk_id, asset_id, chunk_index, text
+                    FROM local_chunks
+                    WHERE asset_id IN ({safe_placeholders})
+                    ORDER BY asset_id, chunk_index ASC
+                    LIMIT ?
+                    """,
+                    [*safe_asset_ids, int(max_chunks) + 1],
+                ).fetchall()
+                for row in chunk_rows[: int(max_chunks)]:
+                    if contains_secret(str(row["text"] or "")):
+                        continue
+                    chunks.append({
+                        "chunk_id": row["chunk_id"],
+                        "asset_id": row["asset_id"],
+                        "chunk_index": row["chunk_index"],
+                        "text": _compact_text(row["text"], max_chars=900),
+                    })
+                    evidence_refs.append(f"local_asset:{row['asset_id']}#chunk:{row['chunk_id']}")
+        unique_refs = list(dict.fromkeys(evidence_refs))
+        warnings = []
+        llm_presence = _llm_presence_state()
+        if llm_presence.get("enabled") and not llm_presence.get("available"):
+            warnings.append("Local presence LLM unavailable; dossier facts use deterministic on-device extraction.")
+        if asset_overflow:
+            warnings.append("Entity dossier hit the hard asset safety cap; refine the entity if needed.")
+        if len(facts) >= int(max_facts):
+            warnings.append("Entity dossier hit the hard fact safety cap; refine the entity or raise the configured cap.")
+        if len(chunks) >= int(max_chunks):
+            warnings.append("Entity dossier hit the hard chunk safety cap; refine the entity or raise the configured cap.")
+        payload = {
+            "ok": True,
+            "mode": "entity_dossier",
+            "query": clean_query,
+            "confidence": entity["score"],
+            "needs_disambiguation": False,
+            "entity": entity,
+            "candidates": candidates,
+            "recall": {
+                "assets_total": len(assets),
+                "assets_returned": len(assets),
+                "facts_returned": len(facts),
+                "chunks_returned": len(chunks),
+                "hard_caps": {
+                    "assets": int(max_assets),
+                    "facts": int(max_facts),
+                    "chunks": int(max_chunks),
+                },
+            },
+            "aggregates": _aggregate_dossier(assets, facts),
+            "assets": assets,
+            "facts": facts,
+            "chunks": chunks,
+            "evidence_refs": unique_refs,
+            "warnings": warnings,
+            "llm_presence": llm_presence,
+            "synthesis_contract": {
+                "instruction": "Use only aggregates, facts and evidence_refs in this payload. Do not infer domain-specific fields.",
+                "evidence_required": True,
+            },
+        }
+        return _truncate_context_payload(payload, max_chars=int(max_chars or 0))
+    finally:
+        if close_conn:
+            _close_read_conn(conn)
+
+
 def get_asset(asset_id: str, *, readonly: bool = True) -> dict:
     conn = _read_conn() if readonly else _conn()
     try:
@@ -3399,6 +4165,8 @@ def clear_index() -> dict:
         "local_embeddings",
         "local_chunks",
         "local_entities",
+        "local_entity_aliases",
+        "entity_facts",
         "local_relations",
         "local_index_dirs",
         "local_index_errors",

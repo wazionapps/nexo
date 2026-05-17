@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import sys
 import time
+import json
 from pathlib import Path
 
 import pytest
@@ -62,3 +63,61 @@ def test_update_last_heartbeat_ts_noop_on_missing_session(isolated_home):
     # Must not raise, even for an unknown SID.
     db_pkg.update_last_heartbeat_ts(f"nexo-{int(time.time())}-9999")
     assert db_pkg.get_last_heartbeat_ts(f"nexo-{int(time.time())}-9999") is None
+
+
+def test_session_compliance_state_reports_missing_and_satisfied_obligations(isolated_home):
+    import db as db_pkg
+    from tools_sessions import handle_session_compliance_state
+
+    sid = f"nexo-{int(time.time())}-7010"
+    db_pkg.register_session(sid, "compliance")
+    missing = json.loads(handle_session_compliance_state(sid, diary_window_minutes=15))
+
+    assert missing["ok"] is True
+    assert missing["obligations"]["heartbeat_missing"] is True
+    assert missing["obligations"]["clean_close_blocked"] is True
+
+    db_pkg.update_last_heartbeat_ts(sid)
+    db_pkg.write_session_diary(
+        sid,
+        decisions="[]",
+        summary="Emergency close diary",
+        discarded="",
+        pending="",
+        context_next="",
+        mental_state="",
+        source="desktop-lifecycle-fallback",
+    )
+    satisfied = json.loads(handle_session_compliance_state(sid, diary_window_minutes=15))
+
+    assert satisfied["heartbeat"]["recorded"] is True
+    assert satisfied["diary"]["close_ok"] is True
+    assert satisfied["obligations"]["clean_close_blocked"] is False
+
+
+def test_session_compliance_state_blocks_learning_when_correction_open(isolated_home):
+    import db as db_pkg
+    from tools_sessions import handle_session_compliance_state
+
+    sid = f"nexo-{int(time.time())}-7011"
+    db_pkg.register_session(sid, "correction")
+    db_pkg.update_last_heartbeat_ts(sid)
+    db_pkg.write_session_diary(
+        sid,
+        decisions="[]",
+        summary="Diary exists",
+        discarded="",
+        pending="",
+        context_next="",
+        mental_state="",
+    )
+    db_pkg.record_session_correction_requirement(
+        sid,
+        "eso esta mal, hay que corregir la regla",
+        source="test",
+    )
+
+    state = json.loads(handle_session_compliance_state(sid, diary_window_minutes=15))
+    assert state["learning"]["open_correction_requirements"] == 1
+    assert state["obligations"]["learning_required"] is True
+    assert state["obligations"]["clean_close_blocked"] is True

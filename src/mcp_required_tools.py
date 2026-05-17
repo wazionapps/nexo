@@ -11,6 +11,8 @@ BOOTSTRAP_REQUIRED_MCP_TOOLS: tuple[str, ...] = (
     "nexo_startup",
     "nexo_heartbeat",
     "nexo_session_diary_read",
+    "nexo_session_diary_write",
+    "nexo_session_compliance_state",
     "nexo_reminders",
     "nexo_smart_startup",
     "nexo_task_open",

@@ -62,13 +62,14 @@ def test_heartbeat_surfaces_recent_context_from_last_hours(isolated_db):
     assert "recambiosbmw" in second.lower()
 
 
-def test_heartbeat_includes_local_context_evidence_automatically(tmp_path):
+def test_heartbeat_includes_local_context_evidence_when_enabled(tmp_path, monkeypatch):
     import tools_sessions
 
+    monkeypatch.setenv("NEXO_HEARTBEAT_LOCAL_CONTEXT", "force")
     root = tmp_path / "docs"
     root.mkdir()
     note = root / "maria-local.txt"
-    note.write_text("Maria Riera tiene una factura pagada y presupuesto aceptado.", encoding="utf-8")
+    note.write_text("Maria Riera tiene una planta lavanda y paseo aceptado.", encoding="utf-8")
     local_context.add_root(str(root))
     local_context.run_once(limit=20, process_limit=20)
 
@@ -76,12 +77,34 @@ def test_heartbeat_includes_local_context_evidence_automatically(tmp_path):
     output = tools_sessions.handle_heartbeat(
         sid,
         "responder sobre Maria",
-        "que sabes sobre Maria Riera factura presupuesto",
+        "que sabes sobre Maria Riera planta lavanda paseo",
     )
 
     assert "LOCAL CONTEXT EVIDENCE" in output
     assert "maria-local.txt" in output
     assert "excerpt:" in output
+
+
+def test_heartbeat_desktop_product_suppresses_heavy_local_context(isolated_db, monkeypatch):
+    import tools_sessions
+
+    importlib.reload(tools_sessions)
+    monkeypatch.setenv("NEXO_DESKTOP_MANAGED", "1")
+    monkeypatch.setenv("NEXO_HEARTBEAT_LOCAL_CONTEXT", "1")
+    monkeypatch.setattr(
+        tools_sessions,
+        "append_local_context_evidence",
+        lambda *_args, **_kwargs: "LOCAL CONTEXT EVIDENCE:\n- should not appear",
+    )
+
+    sid = _register_session("nexo-1002-8001")
+    output = tools_sessions.handle_heartbeat(
+        sid,
+        "responder rapido",
+        "consulta visible que no debe cargar contexto local pesado",
+    )
+
+    assert "LOCAL CONTEXT EVIDENCE" not in output
 
 
 def test_heartbeat_latches_execute_until_blocker_on_explicit_go(
@@ -210,6 +233,7 @@ def test_correction_hint_prefers_semantic_detector_before_legacy_phrases(isolate
     import tools_sessions
 
     importlib.reload(tools_sessions)
+    monkeypatch.setenv("NEXO_HEARTBEAT_SEMANTIC_CORRECTION", "force")
     monkeypatch.setattr(
         tools_sessions,
         "_detect_correction_semantic",
@@ -227,6 +251,7 @@ def test_correction_hint_falls_back_to_legacy_signals_when_detector_fails(isolat
     def _boom(_text):
         raise RuntimeError("classifier unavailable")
 
+    monkeypatch.setenv("NEXO_HEARTBEAT_SEMANTIC_CORRECTION", "force")
     monkeypatch.setattr(tools_sessions, "_detect_correction_semantic", _boom)
 
     assert tools_sessions._hint_suggests_correction("Eso está mal, corrige esto.") is True
@@ -245,6 +270,7 @@ def test_heartbeat_drive_detection_disables_llm_by_default(isolated_db, monkeypa
         return None
 
     monkeypatch.delenv("NEXO_DRIVE_LLM_IN_HEARTBEAT", raising=False)
+    monkeypatch.setenv("NEXO_DRIVE_IN_HEARTBEAT", "force")
     monkeypatch.setattr(tools_drive, "detect_drive_signal", _fake_detect)
 
     sid = _register_session("nexo-3003-4003")
@@ -270,6 +296,7 @@ def test_heartbeat_drive_detection_can_enable_llm_via_env(isolated_db, monkeypat
         return None
 
     monkeypatch.setenv("NEXO_DRIVE_LLM_IN_HEARTBEAT", "1")
+    monkeypatch.setenv("NEXO_DRIVE_IN_HEARTBEAT", "force")
     monkeypatch.setattr(tools_drive, "detect_drive_signal", _fake_detect)
 
     sid = _register_session("nexo-3004-4004")

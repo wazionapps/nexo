@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import paths
+import queue
 import sqlite3
 import time
 import secrets
@@ -82,6 +83,26 @@ def _env_flag(name: str, default: bool = False) -> bool:
     return raw.strip().lower() not in {"", "0", "false", "no", "off"}
 
 
+def _heartbeat_heavy_feature_enabled(name: str, default: bool = False) -> bool:
+    """Gate expensive heartbeat add-ons out of the visible chat path.
+
+    Heartbeat is the liveness/obligation primitive; it must not load local
+    classifiers, Local Context, or analysis models on Desktop unless explicitly
+    forced. Operators can still opt in with ``force`` / ``always`` for diagnosis.
+    """
+    raw = str(os.environ.get(name, "") or "").strip().lower()
+    if raw in {"force", "always", "required"}:
+        return True
+    try:
+        from product_mode import desktop_product_requested
+
+        if desktop_product_requested():
+            return False
+    except Exception:
+        pass
+    return _env_flag(name, default=default)
+
+
 def _interactive_db_timeout_ms() -> int:
     """Short DB wait for interactive MCP tools.
 
@@ -119,6 +140,42 @@ def _safe_interactive(label: str, fn, default=None, warnings: list[str] | None =
             else:
                 warnings.append(f"{label}: skipped ({type(exc).__name__})")
         return default
+
+
+def _interactive_timeout_seconds(name: str, default_ms: int) -> float:
+    try:
+        raw = os.environ.get(name, str(default_ms))
+        value = int(raw)
+    except Exception:
+        value = default_ms
+    return max(0.05, min(value, 10000) / 1000.0)
+
+
+def _safe_interactive_timed(label: str, fn, default=None, warnings: list[str] | None = None, timeout_ms: int = 1200):
+    result_queue: queue.Queue = queue.Queue(maxsize=1)
+
+    def runner() -> None:
+        try:
+            result_queue.put((True, fn()))
+        except Exception as exc:
+            result_queue.put((False, exc))
+
+    worker = threading.Thread(target=runner, name=f"nexo-{label[:24]}", daemon=True)
+    worker.start()
+    try:
+        ok, value = result_queue.get(timeout=_interactive_timeout_seconds("NEXO_MCP_INTERACTIVE_CONTEXT_TIMEOUT_MS", timeout_ms))
+    except queue.Empty:
+        if warnings is not None:
+            warnings.append(f"{label}: skipped because it exceeded the interactive time budget")
+        return default
+    if ok:
+        return value
+    if warnings is not None:
+        if _is_db_busy(value):
+            warnings.append(f"{label}: skipped because the local brain database is busy")
+        else:
+            warnings.append(f"{label}: skipped ({type(value).__name__})")
+    return default
 
 
 def _keepalive_loop(sid: str, stop_event: threading.Event) -> None:
@@ -256,6 +313,117 @@ def _session_portability_bundle(sid: str = "") -> dict:
         "open_workflow_goals": workflow_goals,
         "open_workflow_runs": workflow_runs,
     }
+
+
+def _timestamp_to_epoch(value) -> float:
+    if value is None:
+        return 0.0
+    if isinstance(value, (int, float)):
+        return float(value)
+    raw = str(value or "").strip()
+    if not raw:
+        return 0.0
+    try:
+        return float(raw)
+    except ValueError:
+        pass
+    try:
+        normalized = raw.replace("Z", "+00:00")
+        dt = datetime.fromisoformat(normalized)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return float(dt.timestamp())
+    except Exception:
+        return 0.0
+
+
+def handle_session_compliance_state(sid: str = "", diary_window_minutes: int = 15) -> str:
+    """Return Brain-verifiable session compliance state for Desktop gates."""
+    from db import get_last_heartbeat_ts, list_session_correction_requirements
+
+    conn = get_db()
+    session_row = _resolve_session_row(conn, sid)
+    if not session_row:
+        return json.dumps({"ok": False, "error": "session not found"}, ensure_ascii=False, indent=2)
+
+    session_id = str(session_row["sid"])
+    now = time.time()
+    try:
+        clean_diary_window = int(diary_window_minutes or 15)
+    except Exception:
+        clean_diary_window = 15
+    window_seconds = max(60, clean_diary_window * 60)
+    last_heartbeat = get_last_heartbeat_ts(session_id) or 0.0
+    latest_diary = conn.execute(
+        """SELECT id, session_id, created_at, summary, source
+           FROM session_diary
+           WHERE session_id = ?
+           ORDER BY created_at DESC, id DESC
+           LIMIT 1""",
+        (session_id,),
+    ).fetchone()
+    diary_draft = conn.execute(
+        """SELECT sid, summary_draft, last_context_hint, heartbeat_count, updated_at
+           FROM session_diary_draft
+           WHERE sid = ?
+           ORDER BY updated_at DESC
+           LIMIT 1""",
+        (session_id,),
+    ).fetchone()
+    diary_epoch = _timestamp_to_epoch(latest_diary["created_at"] if latest_diary else 0)
+    draft_epoch = _timestamp_to_epoch(diary_draft["updated_at"] if diary_draft else 0)
+    last_diaryish = max(diary_epoch, draft_epoch)
+    session_started = float(session_row["started_epoch"] or 0)
+    session_last_update = float(session_row["last_update_epoch"] or session_started or 0)
+    active_age_seconds = max(0.0, now - (session_started or now))
+    open_corrections = list_session_correction_requirements(
+        session_id=session_id,
+        status="open",
+        limit=20,
+    )
+    diary_recent_ok = bool(last_diaryish and (now - last_diaryish) <= window_seconds)
+    diary_due = active_age_seconds >= window_seconds and not diary_recent_ok
+    close_diary_ok = bool(latest_diary)
+
+    result = {
+        "ok": True,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "sid": session_id,
+        "session": {
+            "task": session_row["task"],
+            "client": session_row["session_client"],
+            "conversation_id": session_row["conversation_id"],
+            "external_session_id": session_row["external_session_id"],
+            "started_epoch": session_started,
+            "last_update_epoch": session_last_update,
+        },
+        "heartbeat": {
+            "last_heartbeat_ts": last_heartbeat,
+            "age_seconds": (now - last_heartbeat) if last_heartbeat else None,
+            "recorded": bool(last_heartbeat),
+        },
+        "diary": {
+            "window_seconds": window_seconds,
+            "latest": dict(latest_diary) if latest_diary else {},
+            "draft": dict(diary_draft) if diary_draft else {},
+            "last_diary_or_draft_epoch": last_diaryish,
+            "recent_ok": diary_recent_ok,
+            "due": diary_due,
+            "close_ok": close_diary_ok,
+        },
+        "learning": {
+            "open_correction_requirements": len(open_corrections),
+            "pending": bool(open_corrections),
+            "requirements": open_corrections,
+        },
+        "obligations": {
+            "heartbeat_missing": not bool(last_heartbeat),
+            "diary_required": diary_due,
+            "learning_required": bool(open_corrections),
+            "clean_close_blocked": (not close_diary_ok) or bool(open_corrections),
+        },
+    }
+    return json.dumps(result, ensure_ascii=False, indent=2)
 
 
 def handle_session_portable_context(sid: str = "") -> str:
@@ -712,9 +880,11 @@ def handle_heartbeat(sid: str, task: str, context_hint: str = '') -> str:
 def _handle_heartbeat_inner(sid: str, task: str, context_hint: str = '') -> str:
     """Inner body of handle_heartbeat — wrapped by tool_span above."""
     from db import get_db, update_last_heartbeat_ts
+    from mcp_write_queue import drain_write_queue, enqueue_write
 
     _set_interactive_db_timeout()
     heartbeat_warnings: list[str] = []
+    _safe_interactive("mcp write queue drain", lambda: drain_write_queue(limit=10), None, None)
     mandate_state = None
     if context_hint:
         try:
@@ -736,14 +906,26 @@ def _handle_heartbeat_inner(sid: str, task: str, context_hint: str = '') -> str:
         except Exception:
             mandate_state = None
 
-    _safe_interactive("session heartbeat update", lambda: update_session(sid, task), None, heartbeat_warnings)
-    # v6.0.1 — stamp last_heartbeat_ts so the PostToolUse hook can
-    # decide whether to surface a pending-inbox reminder on autopilot
-    # sessions. Best-effort: never break the heartbeat on failure.
-    try:
+    def _commit_core_heartbeat() -> bool:
+        update_session(sid, task)
+        # v6.0.1 — stamp last_heartbeat_ts so downstream gates can verify
+        # that this user turn had a real heartbeat.
         update_last_heartbeat_ts(sid)
-    except Exception:
-        pass
+        return True
+
+    heartbeat_committed = bool(
+        _safe_interactive("session heartbeat update", _commit_core_heartbeat, False, heartbeat_warnings)
+    )
+    if not heartbeat_committed:
+        queued = enqueue_write(
+            "heartbeat_update",
+            {"sid": sid, "task": task, "heartbeat_ts": time.time()},
+            priority="high",
+        )
+        if queued.get("accepted"):
+            heartbeat_warnings.append(
+                f"session heartbeat update: accepted in durable queue ({queued.get('writeId')})"
+            )
 
     # Temporal anchor — surface authoritative UTC time so clients never drift
     # on date/day-of-week across long sessions. Neutral ISO-8601, no locale,
@@ -776,23 +958,32 @@ def _handle_heartbeat_inner(sid: str, task: str, context_hint: str = '') -> str:
 
     recent_query = (context_hint or task or "").strip()
     if recent_query:
-        try:
-            bundle = build_pre_action_context(
+        bundle = _safe_interactive_timed(
+            "recent context lookup",
+            lambda: build_pre_action_context(
                 query=recent_query,
                 session_id=sid,
                 hours=24,
                 limit=4,
+            ),
+            {},
+            heartbeat_warnings,
+            timeout_ms=900,
+        )
+        if bundle.get("has_matches"):
+            parts.append("")
+            parts.append(format_pre_action_context_bundle(bundle, compact=True))
+        if _heartbeat_heavy_feature_enabled("NEXO_HEARTBEAT_LOCAL_CONTEXT", default=False) and append_local_context_evidence is not None:
+            local_rendered = _safe_interactive_timed(
+                "local context lookup",
+                lambda: append_local_context_evidence("", recent_query, limit=4).strip(),
+                "",
+                heartbeat_warnings,
+                timeout_ms=500,
             )
-            if bundle.get("has_matches"):
+            if local_rendered:
                 parts.append("")
-                parts.append(format_pre_action_context_bundle(bundle, compact=True))
-            if _env_flag("NEXO_HEARTBEAT_LOCAL_CONTEXT", default=True) and append_local_context_evidence is not None:
-                local_rendered = append_local_context_evidence("", recent_query, limit=4).strip()
-                if local_rendered:
-                    parts.append("")
-                    parts.append(local_rendered)
-        except Exception:
-            pass
+                parts.append(local_rendered)
 
     try:
         from autonomy_mandate import format_execution_latch_notice
@@ -851,7 +1042,22 @@ def _handle_heartbeat_inner(sid: str, task: str, context_hint: str = '') -> str:
                 summary_draft=draft["summary_draft"] if draft else f"Session task: {task}",
             )
     except Exception:
-        pass  # Draft accumulation is best-effort, never block heartbeat
+        try:
+            enqueue_write(
+                "diary_draft_upsert",
+                {
+                    "sid": sid,
+                    "tasks_seen": json.dumps([task] if task else []),
+                    "change_ids": "[]",
+                    "decision_ids": "[]",
+                    "last_context_hint": context_hint[:300] if context_hint else "",
+                    "heartbeat_count": max(1, int(_hb_count or 1)),
+                    "summary_draft": f"Session task: {task}",
+                },
+                priority="normal",
+            )
+        except Exception:
+            pass  # Draft accumulation is best-effort, never block heartbeat
 
     # Update session checkpoint with current goal (lightweight, every heartbeat)
     try:
@@ -861,40 +1067,61 @@ def _handle_heartbeat_inner(sid: str, task: str, context_hint: str = '') -> str:
             current_goal=context_hint[:300] if context_hint else task,
         )
     except Exception:
-        pass  # Checkpoint update is best-effort
+        try:
+            enqueue_write(
+                "session_checkpoint",
+                {
+                    "sid": sid,
+                    "task": task,
+                    "current_goal": context_hint[:300] if context_hint else task,
+                },
+                priority="normal",
+            )
+        except Exception:
+            pass  # Checkpoint update is best-effort
 
     try:
-        capture_context_event(
-            event_type="heartbeat",
-            title=task[:160],
-            summary=(context_hint or task)[:600],
-            body=context_hint[:1600] if context_hint else "",
-            context_key=f"session:{sid}",
-            context_title=task[:160],
-            context_summary=(context_hint or task)[:600],
-            context_type="session_topic",
-            state="active",
-            owner="session",
-            actor=sid,
-            source_type="heartbeat",
-            source_id=sid,
-            session_id=sid,
-            metadata={"task": task[:160]},
-            ttl_hours=24,
-        )
+        context_payload = {
+            "event_type": "heartbeat",
+            "title": task[:160],
+            "summary": (context_hint or task)[:600],
+            "body": context_hint[:1600] if context_hint else "",
+            "context_key": f"session:{sid}",
+            "context_title": task[:160],
+            "context_summary": (context_hint or task)[:600],
+            "context_type": "session_topic",
+            "state": "active",
+            "owner": "session",
+            "actor": sid,
+            "source_type": "heartbeat",
+            "source_id": sid,
+            "session_id": sid,
+            "metadata": {"task": task[:160]},
+            "ttl_hours": 24,
+        }
+        capture_context_event(**context_payload)
     except Exception:
-        pass
+        try:
+            enqueue_write("context_event_capture", context_payload, priority="low")
+        except Exception:
+            pass
 
     # ── Drive/Curiosity: detect signals from context_hint (best-effort) ──
     try:
-        if _env_flag("NEXO_DRIVE_IN_HEARTBEAT", default=True) and context_hint and len(context_hint.strip()) >= 15:
+        if _heartbeat_heavy_feature_enabled("NEXO_DRIVE_IN_HEARTBEAT", default=False) and context_hint and len(context_hint.strip()) >= 15:
             from tools_drive import detect_drive_signal as _detect_drive
             _drive_allow_llm = _env_flag("NEXO_DRIVE_LLM_IN_HEARTBEAT", default=False)
-            _drive_result = _detect_drive(
-                context_hint,
-                source="heartbeat",
-                source_id=sid,
-                allow_llm=_drive_allow_llm,
+            _drive_result = _safe_interactive_timed(
+                "drive detection",
+                lambda: _detect_drive(
+                    context_hint,
+                    source="heartbeat",
+                    source_id=sid,
+                    allow_llm=_drive_allow_llm,
+                ),
+                None,
+                None,
+                timeout_ms=350,
             )
             if _drive_result:
                 # Check for READY signals relevant to current area
@@ -993,21 +1220,31 @@ def _handle_heartbeat_inner(sid: str, task: str, context_hint: str = '') -> str:
     # adaptive_log row per heartbeat. Wrapped in best-effort try/except so
     # a failure here cannot block the heartbeat itself.
     try:
-        if _env_flag("NEXO_HEARTBEAT_ADAPTIVE_MODE", default=True) and context_hint and len(context_hint.strip()) >= 5:
-            from plugins.adaptive_mode import compute_mode
-            from cognitive._trust import detect_sentiment
-            sentiment = detect_sentiment(context_hint)
-            vibe_label = sentiment.get("sentiment", "neutral")
-            vibe_intensity = float(sentiment.get("intensity", 0.5) or 0.5)
-            # Heuristic signal derivation — same fields the manual tool
-            # would feed compute_mode with, just synthesized from context.
-            compute_mode(
-                vibe=vibe_label,
-                vibe_intensity=vibe_intensity,
-                recent_corrections=0,  # heartbeat does not see explicit corrections
-                user_msg_length=len(context_hint),
-                context_hint=context_hint[:300],
-                tool_had_error=False,  # heartbeat is post-tool, not pre-tool
+        if _heartbeat_heavy_feature_enabled("NEXO_HEARTBEAT_ADAPTIVE_MODE", default=False) and context_hint and len(context_hint.strip()) >= 5:
+            def _compute_adaptive_mode():
+                from plugins.adaptive_mode import compute_mode
+                from cognitive._trust import detect_sentiment
+
+                sentiment = detect_sentiment(context_hint)
+                vibe_label = sentiment.get("sentiment", "neutral")
+                vibe_intensity = float(sentiment.get("intensity", 0.5) or 0.5)
+                # Heuristic signal derivation — same fields the manual tool
+                # would feed compute_mode with, just synthesized from context.
+                return compute_mode(
+                    vibe=vibe_label,
+                    vibe_intensity=vibe_intensity,
+                    recent_corrections=0,  # heartbeat does not see explicit corrections
+                    user_msg_length=len(context_hint),
+                    context_hint=context_hint[:300],
+                    tool_had_error=False,  # heartbeat is post-tool, not pre-tool
+                )
+
+            _safe_interactive_timed(
+                "adaptive mode",
+                _compute_adaptive_mode,
+                None,
+                None,
+                timeout_ms=350,
             )
     except Exception:
         pass  # Best-effort, never block heartbeat
@@ -1330,20 +1567,13 @@ def _hint_suggests_code_edit(hint: str) -> bool:
 def _hint_suggests_correction(hint: str, *, correction_detector=None) -> bool:
     """Detect user-correction intent in a heartbeat context hint.
 
-    Prefer the same semantic detector used by R14 so heartbeat reminders do
-    not depend primarily on literal ES/EN phrase lists. Keep the old keyword
-    fallback as a conservative safety net when the classifier is unavailable.
+    Heartbeat is on the visible-turn critical path. Use cheap textual signals
+    first and only call the semantic detector when explicitly enabled; Desktop
+    has its own enforcement loop for richer correction tracking.
     """
     text = (hint or "").strip()
     if not text:
         return False
-    detector = correction_detector if correction_detector is not None else _detect_correction_semantic
-    if detector is not None:
-        try:
-            if bool(detector(text)):
-                return True
-        except Exception:
-            pass
     hint_lower = text.lower()
     correction_signals = [
         "that's wrong",
@@ -1371,7 +1601,20 @@ def _hint_suggests_correction(hint: str, *, correction_detector=None) -> bool:
         "shouldn't have",
         "should not have",
     ]
-    return any(signal in hint_lower for signal in correction_signals)
+    if any(signal in hint_lower for signal in correction_signals):
+        return True
+
+    detector = correction_detector if correction_detector is not None else _detect_correction_semantic
+    semantic_allowed = correction_detector is not None or _heartbeat_heavy_feature_enabled(
+        "NEXO_HEARTBEAT_SEMANTIC_CORRECTION",
+        default=False,
+    )
+    if detector is not None and semantic_allowed:
+        try:
+            return bool(detector(text))
+        except Exception:
+            return False
+    return False
 
 
 def _recent_learning_capture_exists(conn, sid: str, window_seconds: int = 300) -> bool:

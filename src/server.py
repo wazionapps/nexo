@@ -17,6 +17,7 @@ from tools_sessions import (
     handle_context_packet,
     handle_smart_startup_query,
     handle_session_portable_context,
+    handle_session_compliance_state,
     handle_session_export_bundle,
 )
 from continuity import (
@@ -101,7 +102,7 @@ from plugins.protocol import (
     handle_task_close,
     handle_task_open,
 )
-from plugins.episodic_memory import handle_session_diary_read
+from plugins.episodic_memory import handle_session_diary_read, handle_session_diary_write
 from plugins.cards import handle_card_match
 from plugins.skills import handle_skill_match
 from plugins.workflow import (
@@ -124,6 +125,7 @@ from runtime_service import (
     should_use_mcp_adapter,
     write_service_state,
 )
+from mcp_write_queue import queue_status as mcp_write_queue_status, start_write_queue_worker
 from local_context import api as local_context_api
 from local_context.db import close_local_context_db
 
@@ -353,6 +355,9 @@ def _server_init():
     # ── Database initialization with recovery ─────────────────────
     _init_db_or_exit()
 
+    # ── Durable MCP write queue ───────────────────────────────────
+    start_write_queue_worker()
+
     # ── Auto-update / startup preflight ───────────────────────────
     # The MCP client waits for an immediate JSON-RPC handshake. Running update
     # checks here can block the transport and make clients start without NEXO.
@@ -476,6 +481,48 @@ def nexo_session_diary_read(
 ) -> str:
     """Read recent session diaries for context continuity."""
     return handle_session_diary_read(session_id, last_n, last_day, domain, brief)
+
+
+@mcp.tool
+def nexo_session_diary_write(
+    decisions: str = "",
+    summary: str = "",
+    discarded: str = "",
+    pending: str = "",
+    context_next: str = "",
+    mental_state: str = "",
+    user_signals: str = "",
+    domain: str = "",
+    session_id: str = "",
+    self_critique: str = "",
+    source: str = "claude",
+    payload_json: str = "",
+) -> str:
+    """Write end-of-session diary with decisions, pending context, and self-critique.
+
+    Exposed as an essential MCP tool because Desktop close/archive/app-exit
+    enforcement depends on it even when dynamic plugin loading is disabled.
+    """
+    return handle_session_diary_write(
+        decisions=decisions,
+        summary=summary,
+        discarded=discarded,
+        pending=pending,
+        context_next=context_next,
+        mental_state=mental_state,
+        user_signals=user_signals,
+        domain=domain,
+        session_id=session_id,
+        self_critique=self_critique,
+        source=source,
+        payload_json=payload_json,
+    )
+
+
+@mcp.tool
+def nexo_session_compliance_state(sid: str = "", diary_window_minutes: int = 15) -> str:
+    """Return Brain-verifiable heartbeat, diary, learning, and close compliance state."""
+    return handle_session_compliance_state(sid, diary_window_minutes)
 
 
 @mcp.tool
@@ -780,6 +827,16 @@ def nexo_runtime_service_status() -> str:
 
 
 @mcp.tool
+def nexo_mcp_write_queue_status(limit: int = 20) -> str:
+    """Return durable MCP write queue counts and recent records."""
+    try:
+        clean_limit = max(1, min(int(limit or 20), 100))
+    except Exception:
+        clean_limit = 20
+    return json.dumps(mcp_write_queue_status(limit=clean_limit), indent=2, ensure_ascii=False)
+
+
+@mcp.tool
 def nexo_local_index_status() -> str:
     """Return local memory index status for Desktop settings and support diagnostics."""
     return json.dumps(local_context_api.status(), ensure_ascii=False)
@@ -875,6 +932,25 @@ def nexo_local_context(
         max_chars=max_chars,
         include_entities=include_entities,
         include_relations=include_relations,
+    )
+    return json.dumps(result, ensure_ascii=False)
+
+
+@mcp.tool
+def nexo_entity_dossier(
+    query: str,
+    max_assets: int = 500,
+    max_chunks: int = 1200,
+    max_facts: int = 3000,
+    max_chars: int = 20000,
+) -> str:
+    """Build a full local dossier for one entity with aggregates and evidence."""
+    result = local_context_api.entity_dossier(
+        query,
+        max_assets=max_assets,
+        max_chunks=max_chunks,
+        max_facts=max_facts,
+        max_chars=max_chars,
     )
     return json.dumps(result, ensure_ascii=False)
 
