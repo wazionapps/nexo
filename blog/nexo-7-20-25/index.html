@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.20.25: local semantic models for Local Memory</title>
+<meta name="description" content="NEXO Brain v7.20.25 wires Local Context to the pinned local BGE embedding model, refreshes old hash embeddings, prioritizes known documents, and treats the Desktop-owned Qwen model as optional.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-20-25/">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.20.25: local semantic models for Local Memory","datePublished":"2026-05-17","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head><body><main><article style="max-width:760px;margin:80px auto;padding:0 24px;line-height:1.75;">
+<h1>NEXO 7.20.25 &mdash; local semantic models for Local Memory</h1>
+<p><em>Published 2026-05-17. Patch release over v7.20.24.</em></p>
+
+<h2>Why this release exists</h2>
+<p>Local Memory was warming the right local models, but Local Context search was still persisting and querying deterministic hash vectors. v7.20.25 connects the real local BGE embedding model to chunk indexing and query retrieval while keeping the hash path as a safe offline fallback.</p>
+
+<h2>What changed</h2>
+<ul>
+<li><strong>Real local embeddings.</strong> Chunks and queries now use the pinned local FastEmbed/BGE profile when installed, storing model id, revision and dimension with each vector.</li>
+<li><strong>Automatic vector refresh.</strong> Existing hash embeddings are re-queued for lightweight refresh when the BGE profile is available, without re-reading the source files.</li>
+<li><strong>Document-first indexing.</strong> PDF, Word/Office/OpenDocument/iWork-style files are discovered and extracted before lower-value text, email, code and unknown files.</li>
+<li><strong>Local reranking.</strong> If the cross-encoder reranker is present locally, Local Context reranks the top candidate chunks without network downloads.</li>
+<li><strong>Optional Qwen status.</strong> The Desktop-owned local-presence Qwen GGUF is reported as optional when absent from standalone Brain installs.</li>
+</ul>
+
+<h2>Validation</h2>
+<pre><code>python3 -m pytest tests/test_local_context.py tests/test_local_models.py tests/test_model_warmup.py tests/test_local_context_cli.py tests/test_nexo_brain_onboarding_cli.py -q
+# 88 passed</code></pre>
+
+<p><a href="/changelog/#v72025">Full changelog entry &rarr;</a> &middot; <a href="/blog/nexo-7-20-24/">Previous Local Memory profile write note</a></p>
+</article></main></body></html>
