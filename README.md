@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.20.25` is the current packaged-runtime line. Patch release over v7.20.24 — Local Context now uses the pinned local BGE embedding model when available, automatically refreshes old hash embeddings, prioritizes known documents before lower-value files, and treats the Desktop-owned Qwen local-presence model as optional in standalone Brain installs.
+Version `7.21.0` is the current packaged-runtime line. Minor release over v7.20.25 - MCP now starts through a thin compatibility adapter backed by one resident local Runtime Service, reducing duplicate Brain processes and SQLite contention across Claude Code, Codex, Claude Desktop, and NEXO Desktop. The release also fingerprints Runtime Service state for safe update cutover, keeps document-first Local Memory scanning, and verifies bundled local LLM files before marking them installed.
+
+Previously in `7.20.25`: patch release over v7.20.24 — Local Context now uses the pinned local BGE embedding model when available, automatically refreshes old hash embeddings, prioritizes known documents before lower-value files, and treats the Desktop-owned Qwen local-presence model as optional in standalone Brain installs.
 
 Previously in `7.20.24`: patch release over v7.20.23 — Local Memory performance profile writes now tolerate active indexing, retry transient SQLite busy states, and shorten indexer write locks between processed files.
 
