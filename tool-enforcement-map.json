@@ -1852,7 +1852,7 @@
       "triggers_after": []
     },
     "nexo_heartbeat": {
-      "description": "Update session task, stamp heartbeat, check inbox/questions, and surface lightweight recent context. Heavy Local Context, adaptive, drive and semantic correction analysis are opt-in for Desktop-managed sessions.",
+      "description": "Update session task, stamp heartbeat, check inbox/questions, and surface lightweight recent context. May surface silent runtime signals DIARY_OVERDUE, GUARD_REMINDER, LEARNING_REMINDER, and PROTOCOL_DEBT; clients must treat those as internal obligations, not user-visible content. Heavy Local Context, adaptive, drive and semantic correction analysis are opt-in for Desktop-managed sessions.",
       "category": "session",
       "source": "server",
       "requires": [

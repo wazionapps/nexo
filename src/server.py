@@ -460,6 +460,9 @@ def nexo_heartbeat(sid: str, task: str, context_hint: str = '') -> str:
     """Update session task, check inbox and pending questions. Auto-detects trust events.
 
     Call this at the START of every user interaction (before doing work).
+    May surface silent runtime signals DIARY_OVERDUE, GUARD_REMINDER,
+    LEARNING_REMINDER, and PROTOCOL_DEBT; clients must treat those as
+    internal obligations, not user-visible content.
     Output always begins with a NOW_UTC line (ISO-8601, UTC) — use it as the
     authoritative wall-clock time for any artifact (emails, diaries, followups)
     to avoid date/day-of-week drift across long sessions.
