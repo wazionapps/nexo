@@ -10,6 +10,7 @@ import hashlib
 import subprocess
 import sys
 import time
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -41,6 +42,36 @@ INITIAL_INDEX_STARTED_AT_KEY = "initial_index_started_at"
 PERFORMANCE_PROFILE_KEY = "performance_profile"
 DEFAULT_PERFORMANCE_PROFILE = os.environ.get("NEXO_LOCAL_INDEX_PERFORMANCE_PROFILE", "medium").strip().lower() or "medium"
 VALID_CONTEXT_MODES = {"compact", "full"}
+EMBEDDING_REFRESH_JOB = "embedding_refresh"
+HIGH_VALUE_DOCUMENT_SUFFIXES = {
+    ".pdf",
+    ".doc",
+    ".docx",
+    ".xls",
+    ".xlsx",
+    ".ppt",
+    ".pptx",
+    ".pages",
+    ".numbers",
+    ".key",
+    ".rtf",
+    ".odt",
+    ".ods",
+    ".odp",
+}
+KNOWN_TEXT_SUFFIXES = {
+    ".md",
+    ".markdown",
+    ".txt",
+    ".csv",
+    ".tsv",
+}
+EMAIL_DOCUMENT_SUFFIXES = {
+    ".eml",
+    ".emlx",
+    ".msg",
+}
+RERANKER_MODEL_SPEC = "cross-encoder-reranker"
 PERFORMANCE_PROFILES: dict[str, dict[str, Any]] = {
     "low": {
         "profile": "low",
@@ -1092,7 +1123,7 @@ def _upsert_asset(conn, root_id: int, path: Path, seen_at: float, root_depth: in
             (version_id, asset_id, fingerprint, int(st.st_size), float(st.st_mtime), now()),
         )
         if should_extract(normalized, depth):
-            enqueue_job(conn, asset_id, "light_extraction", priority=60)
+            enqueue_job(conn, asset_id, "light_extraction", priority=_extraction_priority(path))
         enqueue_job(conn, asset_id, "graph", priority=40)
     return asset_id, changed, "ok"
 
@@ -1203,6 +1234,27 @@ def enqueue_job(conn, asset_id: str, job_type: str, *, priority: int = 50) -> st
     return job_id
 
 
+def _extraction_priority(path: Path) -> int:
+    suffix = path.suffix.lower()
+    if suffix in HIGH_VALUE_DOCUMENT_SUFFIXES:
+        return 90
+    if suffix in KNOWN_TEXT_SUFFIXES:
+        return 82
+    if suffix in EMAIL_DOCUMENT_SUFFIXES or is_local_email_tree(str(path)):
+        return 70
+    if suffix in {".py", ".js", ".ts", ".tsx", ".jsx", ".php", ".sql", ".json", ".yaml", ".yml", ".toml", ".html", ".css"}:
+        return 55
+    return 45
+
+
+def _scan_entry_sort_key(item: Path) -> tuple[int, int, str]:
+    try:
+        is_file = item.is_file()
+    except Exception:
+        is_file = False
+    return (0 if not is_file else 1, -_extraction_priority(item) if is_file else 0, str(item).lower())
+
+
 def _iter_files(
     conn,
     root_id: int,
@@ -1236,7 +1288,7 @@ def _iter_files(
         seen_dirs.add(key)
         _upsert_dir(conn, root_id, current, seen_at, st)
         try:
-            entries = sorted(current.iterdir(), key=lambda item: str(item).lower())
+            entries = sorted(current.iterdir(), key=_scan_entry_sort_key)
         except Exception as exc:
             _record_scan_error(conn, stats, str(current), "quick_index", exc)
             continue
@@ -1420,7 +1472,7 @@ def _scan_known_directory(
             st = current.stat()
             if not current.is_dir():
                 continue
-            entries = sorted(current.iterdir(), key=lambda item: str(item).lower())
+            entries = sorted(current.iterdir(), key=_scan_entry_sort_key)
         except Exception as exc:
             _record_scan_error(conn, stats, str(current), "live_reconcile", exc)
             continue
@@ -1661,6 +1713,29 @@ def _latest_version_id(conn, asset_id: str) -> str:
     return row["version_id"] if row else stable_id("ver", asset_id)
 
 
+def _insert_chunk_embedding(conn, asset_id: str, chunk_id: str, text: str) -> None:
+    record = embeddings.embed_record(text)
+    model_id = str(record["model_id"])
+    model_revision = str(record["model_revision"])
+    dimension = int(record["dimension"])
+    conn.execute(
+        """
+        INSERT INTO local_embeddings(embedding_id, asset_id, chunk_id, model_id, model_revision, dimension, vector_json, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            stable_id("emb", f"{chunk_id}:{model_id}:{model_revision}:{dimension}"),
+            asset_id,
+            chunk_id,
+            model_id,
+            model_revision,
+            dimension,
+            json_dumps(record["vector"]),
+            now(),
+        ),
+    )
+
+
 def _replace_chunks(conn, asset_id: str, version_id: str, text: str) -> None:
     conn.execute("DELETE FROM local_chunks WHERE asset_id=?", (asset_id,))
     conn.execute("DELETE FROM local_embeddings WHERE asset_id=?", (asset_id,))
@@ -1673,23 +1748,63 @@ def _replace_chunks(conn, asset_id: str, version_id: str, text: str) -> None:
             """,
             (chunk_id, asset_id, version_id, index, chunk, len(tokenize(chunk)), now()),
         )
-        vector = embeddings.embed_text(chunk)
-        conn.execute(
-            """
-            INSERT INTO local_embeddings(embedding_id, asset_id, chunk_id, model_id, model_revision, dimension, vector_json, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                stable_id("emb", f"{chunk_id}:{embeddings.MODEL_ID}:{embeddings.MODEL_REVISION}"),
-                asset_id,
-                chunk_id,
-                embeddings.MODEL_ID,
-                embeddings.MODEL_REVISION,
-                embeddings.DIMENSION,
-                json_dumps(vector),
-                now(),
-            ),
-        )
+        _insert_chunk_embedding(conn, asset_id, chunk_id, chunk)
+
+
+def _refresh_asset_embeddings(conn, asset_id: str) -> int:
+    rows = conn.execute(
+        """
+        SELECT chunk_id, text
+        FROM local_chunks
+        WHERE asset_id=?
+        ORDER BY chunk_index ASC
+        """,
+        (asset_id,),
+    ).fetchall()
+    conn.execute("DELETE FROM local_embeddings WHERE asset_id=?", (asset_id,))
+    for row in rows:
+        _insert_chunk_embedding(conn, asset_id, row["chunk_id"], row["text"])
+    if rows:
+        conn.execute("UPDATE local_assets SET phase='embeddings', updated_at=? WHERE asset_id=?", (now(), asset_id))
+    return len(rows)
+
+
+def _embedding_matches_profile(row, profile: embeddings.EmbeddingProfile) -> bool:
+    if row is None:
+        return False
+    return (
+        str(row["model_id"] or "") == profile.model_id
+        and str(row["model_revision"] or "") == profile.model_revision
+        and int(row["dimension"] or 0) == int(profile.dimension)
+    )
+
+
+def _enqueue_stale_embedding_refresh_jobs(conn, *, limit: int) -> int:
+    profile = embeddings.active_profile()
+    if profile.kind == "deterministic_embedding":
+        return 0
+    rows = conn.execute(
+        """
+        SELECT DISTINCT c.asset_id
+        FROM local_chunks c
+        JOIN local_assets a ON a.asset_id=c.asset_id
+        LEFT JOIN local_embeddings e ON e.chunk_id=c.chunk_id
+        WHERE a.status='active'
+          AND a.privacy_class='normal'
+          AND (
+            e.embedding_id IS NULL
+            OR e.model_id != ?
+            OR e.model_revision != ?
+            OR e.dimension != ?
+          )
+        ORDER BY a.updated_at ASC
+        LIMIT ?
+        """,
+        (profile.model_id, profile.model_revision, int(profile.dimension), max(1, int(limit))),
+    ).fetchall()
+    for row in rows:
+        enqueue_job(conn, row["asset_id"], EMBEDDING_REFRESH_JOB, priority=58)
+    return len(rows)
 
 
 def _replace_entities(conn, asset_id: str, version_id: str, values: list[str]) -> None:
@@ -1751,6 +1866,9 @@ def process_jobs(*, limit: int = 100) -> dict:
         log_event("info", "jobs_skipped_paused", "Local memory jobs skipped because indexing is paused")
         return {"ok": True, "paused": True, "processed": 0, "failed": 0}
     recovered = _requeue_due_jobs(conn)
+    refresh_queued = _enqueue_stale_embedding_refresh_jobs(conn, limit=max(1, min(int(limit or 1), 100)))
+    if refresh_queued:
+        conn.commit()
     rows = conn.execute(
         """
         SELECT j.*, a.path, a.depth, a.privacy_class, a.status AS asset_status
@@ -1804,6 +1922,8 @@ def process_jobs(*, limit: int = 100) -> dict:
                 _replace_chunks(conn, asset_id, version_id, text)
                 _replace_entities(conn, asset_id, version_id, entities(text))
                 conn.execute("UPDATE local_assets SET phase='embeddings', updated_at=? WHERE asset_id=?", (now(), asset_id))
+            elif job_type == EMBEDDING_REFRESH_JOB:
+                _refresh_asset_embeddings(conn, asset_id)
             elif job_type == "graph":
                 conn.execute(
                     """
@@ -1843,8 +1963,8 @@ def process_jobs(*, limit: int = 100) -> dict:
             conn.commit()
     conn.commit()
     if processed or failed:
-        log_event("info", "jobs_processed", "Local memory jobs processed", processed=processed, failed=failed)
-    return {"ok": True, "processed": processed, "failed": failed, "recovered": recovered}
+        log_event("info", "jobs_processed", "Local memory jobs processed", processed=processed, failed=failed, refresh_queued=refresh_queued)
+    return {"ok": True, "processed": processed, "failed": failed, "recovered": recovered, "embedding_refresh_queued": refresh_queued}
 
 
 def run_once(
@@ -2433,27 +2553,36 @@ def diagnostics_tail(limit: int = 100) -> dict:
 
 
 def model_status() -> dict:
-    models = [{
-        "profile": "local_context_embedding_fallback",
-        "name": embeddings.MODEL_ID,
-        "kind": "deterministic_embedding",
-        "revision": embeddings.MODEL_REVISION,
-        "dimension": embeddings.DIMENSION,
-        "state": "available",
+    active_embedding = embeddings.active_profile()
+    active_entry = {
+        "profile": active_embedding.profile,
+        "name": active_embedding.model_id,
+        "kind": active_embedding.kind,
+        "revision": active_embedding.model_revision,
+        "dimension": active_embedding.dimension,
+        "state": active_embedding.state,
         "required": True,
-    }]
+        "active": True,
+        "problems": list(active_embedding.problems),
+    }
+    models = []
+    active_in_manifest = False
     try:
         import local_models
         for spec in local_models.list_local_model_specs():
             verification = local_models.verify_local_model_dir(spec)
+            state = "available" if verification["ok"] else ("optional_missing" if not spec.required else "not_warmed")
+            is_active = spec.model_id == active_embedding.model_id and spec.revision == active_embedding.model_revision
+            active_in_manifest = bool(active_in_manifest or is_active)
             models.append({
                 "profile": spec.name,
                 "name": spec.model_id,
                 "kind": spec.kind,
                 "revision": spec.revision,
                 "dimension": spec.dimension,
-                "state": "available" if verification["ok"] else "not_warmed",
+                "state": state,
                 "required": spec.required,
+                "active": is_active,
                 "path": verification["path"],
                 "problems": verification["problems"],
             })
@@ -2466,6 +2595,8 @@ def model_status() -> dict:
             "required": False,
             "problems": [str(exc)],
         })
+    if not active_in_manifest:
+        models.insert(0, active_entry)
     return {"ok": True, "models": models}
 
 
@@ -2608,7 +2739,8 @@ def _entity_matches_for_query(conn, query: str, *, limit: int) -> tuple[list[dic
 def _context_candidate_rows(conn, entity_asset_ids: list[str], *, base_limit: int = 5000) -> list:
     base_rows = conn.execute(
         """
-        SELECT c.chunk_id, c.asset_id, c.text, a.path, a.file_type, a.privacy_class, v.summary, e.vector_json
+        SELECT c.chunk_id, c.asset_id, c.text, a.path, a.file_type, a.privacy_class, v.summary,
+               e.vector_json, e.model_id, e.model_revision, e.dimension
         FROM local_chunks c
         JOIN local_assets a ON a.asset_id = c.asset_id
         LEFT JOIN local_asset_versions v ON v.version_id = c.version_id
@@ -2626,7 +2758,8 @@ def _context_candidate_rows(conn, entity_asset_ids: list[str], *, base_limit: in
     placeholders = ",".join("?" for _ in entity_asset_ids)
     entity_rows = conn.execute(
         f"""
-        SELECT c.chunk_id, c.asset_id, c.text, a.path, a.file_type, a.privacy_class, v.summary, e.vector_json
+        SELECT c.chunk_id, c.asset_id, c.text, a.path, a.file_type, a.privacy_class, v.summary,
+               e.vector_json, e.model_id, e.model_revision, e.dimension
         FROM local_chunks c
         JOIN local_assets a ON a.asset_id = c.asset_id
         LEFT JOIN local_asset_versions v ON v.version_id = c.version_id
@@ -2656,6 +2789,54 @@ def _compact_text(value: str, *, max_chars: int) -> str:
     if max_chars <= 0 or len(text) <= max_chars:
         return text
     return text[: max(0, max_chars - 1)].rstrip() + "…"
+
+
+def _reranker_disabled() -> bool:
+    value = os.environ.get("NEXO_LOCAL_CONTEXT_DISABLE_RERANKER", "").strip().lower()
+    if value in {"1", "true", "yes", "on"}:
+        return True
+    if os.environ.get("NEXO_TEST_DB") and os.environ.get("NEXO_LOCAL_CONTEXT_RERANKER_IN_TESTS") != "1":
+        return True
+    return False
+
+
+@lru_cache(maxsize=1)
+def _context_reranker():
+    if _reranker_disabled():
+        return None
+    try:
+        import local_models
+        from fastembed.rerank.cross_encoder import TextCrossEncoder
+
+        spec = local_models.get_local_model_spec(RERANKER_MODEL_SPEC)
+        target_dir = local_models.ensure_local_model(spec.name, local_files_only=True)
+        return TextCrossEncoder(spec.model_id, specific_model_path=str(target_dir))
+    except Exception:  # pragma: no cover - host/cache dependent
+        return None
+
+
+def _rerank_scored_candidates(search_query: str, scored: list[tuple[float, Any]], *, limit: int) -> list[tuple[float, Any]]:
+    if len(scored) <= 1:
+        return scored
+    reranker = _context_reranker()
+    if not reranker:
+        return scored
+    head_count = min(len(scored), max(int(limit) * 4, 20), 60)
+    head = scored[:head_count]
+    tail = scored[head_count:]
+    docs = [_compact_text(row["text"], max_chars=1400) for _score, row in head]
+    try:
+        scores = [float(score) for score in reranker.rerank(search_query, docs)]
+    except Exception:  # pragma: no cover - runtime fallback only
+        return scored
+    if len(scores) != len(head):
+        return scored
+    reranked = sorted(
+        ((base_score, rerank_score, row) for (base_score, row), rerank_score in zip(head, scores)),
+        key=lambda item: item[1],
+        reverse=True,
+    )
+    return [(base_score, row) for base_score, _rerank_score, row in reranked] + tail
 
 
 def _payload_size(payload: dict) -> int:
@@ -2993,10 +3174,12 @@ def _context_query_conn(
     normalized_mode, mode_warnings = _normalize_context_mode(mode)
     context_tail = _compact_text(current_context or "", max_chars=1000)
     search_query = clean_query if not context_tail else f"{clean_query}\n{context_tail}"
-    qvec = embeddings.embed_text(search_query)
+    query_embedding = embeddings.embed_record(search_query)
+    qvec = query_embedding["vector"]
     entities_payload, entity_boosts = _entity_matches_for_query(conn, search_query, limit=max(int(limit), 1))
     rows = _context_candidate_rows(conn, list(entity_boosts.keys()), base_limit=5000)
     scored = []
+    stale_embedding_seen = False
     for row in rows:
         if not is_queryable_path(str(row["path"] or ""), str(row["privacy_class"] or "")):
             continue
@@ -3005,7 +3188,15 @@ def _context_query_conn(
         path_score = _search_text_score(search_query, row["path"] or "")
         summary_score = _search_text_score(search_query, row["summary"] or "")
         entity_score = entity_boosts.get(row["asset_id"], 0.0)
-        vector_score = embeddings.cosine(qvec, vector)
+        vector_score = 0.0
+        if (
+            str(row["model_id"] or "") == str(query_embedding["model_id"])
+            and str(row["model_revision"] or "") == str(query_embedding["model_revision"])
+            and int(row["dimension"] or 0) == int(query_embedding["dimension"])
+        ):
+            vector_score = embeddings.cosine(qvec, vector)
+        elif vector:
+            stale_embedding_seen = True
         score = max(text_score, path_score, summary_score, vector_score)
         if entity_score > 0:
             direct_score = max(text_score, path_score, summary_score)
@@ -3019,6 +3210,7 @@ def _context_query_conn(
         if score > 0:
             scored.append((min(float(score), 1.6), row))
     scored.sort(key=lambda item: item[0], reverse=True)
+    scored = _rerank_scored_candidates(search_query, scored, limit=int(limit))
     assets = []
     chunks = []
     evidence_refs = []
@@ -3057,6 +3249,10 @@ def _context_query_conn(
         ).fetchall()
         relations_payload = [dict(row) for row in relation_rows]
     warnings = list(mode_warnings)
+    if query_embedding.get("kind") == "deterministic_embedding":
+        warnings.append("Local semantic model unavailable; using deterministic fallback until models are installed.")
+    elif stale_embedding_seen:
+        warnings.append("Some local chunks still use an older embedding profile and will be refreshed automatically.")
     if evidence_required and not evidence_refs:
         warnings.append("No local evidence found for this query.")
     summary = ""

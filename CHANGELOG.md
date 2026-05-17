@@ -1,5 +1,16 @@
 # Changelog
 
+## [7.20.25] - 2026-05-17
+
+### Fixed — Local Memory uses real local semantic models
+
+- **Local Context now embeds chunks and queries with the pinned local FastEmbed model when it is installed.** The deterministic hash embedding remains as an offline fallback, but new rows store the active model id, revision and dimension so searches do not mix incompatible vector spaces.
+- **Existing hash embeddings are upgraded automatically.** When the BGE profile is available, the indexer queues lightweight embedding refresh jobs for old chunks without re-reading the original files.
+- **Known document formats are prioritized before lower-value files.** Initial scans and extraction jobs now put PDF, Word/Office/OpenDocument/iWork-style documents ahead of plain text, email, code and unknown files while still processing the rest later.
+- **Local search can use the bundled cross-encoder reranker.** If the required reranker is present locally, top candidates are reranked without downloading anything; otherwise the previous scoring order is preserved.
+- **Optional Qwen local-presence status is no longer shown as a required model failure.** Brain reports it as optional when absent from standalone installs, matching Desktop's bundled-model ownership.
+- **Coverage:** Local Context, local model, model warmup, CLI and onboarding suites pass (`88` focused tests), plus a live smoke confirmed `bge-base-embeddings` as the active profile and local query retrieval from a temporary index.
+
 ## [7.20.24] - 2026-05-16
 
 ### Fixed — Local Memory profile writes tolerate active indexing

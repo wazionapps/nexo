@@ -98,6 +98,60 @@ def test_scan_extract_query_and_purge(tmp_path):
     assert local_context.get_asset(asset_id)["ok"] is False
 
 
+def test_initial_scan_discovers_known_documents_before_unknown_files(tmp_path):
+    root = tmp_path / "docs"
+    root.mkdir()
+    unknown = root / "aaa-cache.bin"
+    document = root / "zzz-contrato.pdf"
+    unknown.write_bytes(b"binary cache")
+    document.write_bytes(b"%PDF-1.4 fake contract")
+
+    local_context.add_root(str(root))
+    result = local_context.run_once(limit=1, process_limit=0)
+
+    assert result["scan"]["seen"] == 1
+    conn = get_local_context_db()
+    rows = conn.execute("SELECT path FROM local_assets").fetchall()
+    assert [Path(row["path"]).name for row in rows] == [document.name]
+
+
+def test_extraction_jobs_prioritize_known_document_formats(tmp_path):
+    root = tmp_path / "docs"
+    root.mkdir()
+    files = {
+        "contract.pdf": b"%PDF-1.4 fake contract",
+        "brief.docx": b"fake docx",
+        "sheet.xlsx": b"fake xlsx",
+        "note.txt": b"plain note",
+        "message.eml": b"Subject: Hello\n\nBody",
+        "script.py": b"print('noise')",
+    }
+    for name, body in files.items():
+        (root / name).write_bytes(body)
+
+    local_context.add_root(str(root))
+    local_context.run_once(limit=20, process_limit=0)
+    conn = get_local_context_db()
+    rows = conn.execute(
+        """
+        SELECT a.path, j.priority
+        FROM local_index_jobs j
+        JOIN local_assets a ON a.asset_id=j.asset_id
+        WHERE j.job_type='light_extraction'
+        ORDER BY j.priority DESC, a.path ASC
+        """
+    ).fetchall()
+
+    priorities = {Path(row["path"]).suffix: int(row["priority"]) for row in rows}
+    assert priorities[".pdf"] == 90
+    assert priorities[".docx"] == 90
+    assert priorities[".xlsx"] == 90
+    assert priorities[".txt"] == 82
+    assert priorities[".eml"] == 70
+    assert priorities[".py"] == 55
+    assert [Path(row["path"]).suffix for row in rows[:3]] == [".docx", ".pdf", ".xlsx"]
+
+
 def test_local_memory_read_paths_use_readonly_sidecar_without_prepare_or_audit_write(tmp_path, monkeypatch):
     root = tmp_path / "docs"
     root.mkdir()
@@ -1491,6 +1545,109 @@ def test_status_rejects_partially_migrated_schema(monkeypatch):
     assert result["ok"] is False
     assert result["error"] == "local_context_db_schema_missing"
     assert result["global"] is None
+
+
+def test_replace_chunks_persists_active_embedding_profile(monkeypatch):
+    conn = get_local_context_db()
+
+    def fake_embed_record(text: str) -> dict:
+        return {
+            "vector": [0.25, 0.75],
+            "model_id": "test-semantic-model",
+            "model_revision": "rev-1",
+            "dimension": 2,
+            "profile": "test-profile",
+            "kind": "fastembed_embedding",
+        }
+
+    monkeypatch.setattr(api.embeddings, "embed_record", fake_embed_record)
+
+    api._replace_chunks(conn, "asset_profile", "version_profile", "Texto de prueba para embedding real.")
+    row = conn.execute("SELECT model_id, model_revision, dimension, vector_json FROM local_embeddings").fetchone()
+
+    assert row["model_id"] == "test-semantic-model"
+    assert row["model_revision"] == "rev-1"
+    assert row["dimension"] == 2
+    assert json.loads(row["vector_json"]) == [0.25, 0.75]
+
+
+def test_process_jobs_refreshes_stale_hash_embeddings(monkeypatch):
+    conn = get_local_context_db()
+    profile = api.embeddings.EmbeddingProfile(
+        model_id="test-semantic-model",
+        model_revision="rev-2",
+        dimension=2,
+        kind="fastembed_embedding",
+        state="available",
+        profile="test-profile",
+    )
+    monkeypatch.setattr(api.embeddings, "active_profile", lambda: profile)
+    monkeypatch.setattr(
+        api.embeddings,
+        "embed_record",
+        lambda text: {
+            "vector": [1.0, 0.0],
+            "model_id": profile.model_id,
+            "model_revision": profile.model_revision,
+            "dimension": profile.dimension,
+            "profile": profile.profile,
+            "kind": profile.kind,
+        },
+    )
+    asset_id = "asset_stale_embedding"
+    version_id = "version_stale_embedding"
+    chunk_id = "chunk_stale_embedding"
+    conn.execute(
+        """
+        INSERT INTO local_assets(asset_id, root_id, path, display_path, parent_path, volume_id, file_type, extension,
+          size_bytes, quick_fingerprint, depth, depth_reason, phase, status, privacy_class, permission_state,
+          first_seen_at, last_seen_at, updated_at)
+        VALUES (?, 1, '/tmp/stale.txt', '/tmp/stale.txt', '/tmp', '/', 'document', '.txt', 1, 'old', 2, 'default',
+          'embeddings', 'active', 'normal', 'granted', 1, 1, 1)
+        """,
+        (asset_id,),
+    )
+    conn.execute(
+        "INSERT INTO local_asset_versions(version_id, asset_id, quick_fingerprint, content_hash, size_bytes, modified_at_fs, summary, created_at) VALUES (?, ?, 'old', '', 1, 1, '', 1)",
+        (version_id, asset_id),
+    )
+    conn.execute(
+        "INSERT INTO local_chunks(chunk_id, asset_id, version_id, chunk_index, text, token_count, created_at) VALUES (?, ?, ?, 0, 'semantic text', 2, 1)",
+        (chunk_id, asset_id, version_id),
+    )
+    conn.execute(
+        "INSERT INTO local_embeddings(embedding_id, asset_id, chunk_id, model_id, model_revision, dimension, vector_json, created_at) VALUES ('old_embedding', ?, ?, 'nexo-local-hash-embedding', '1', 128, '[0]', 1)",
+        (asset_id, chunk_id),
+    )
+    conn.commit()
+
+    result = api.process_jobs(limit=5)
+    row = conn.execute("SELECT model_id, model_revision, dimension, vector_json FROM local_embeddings WHERE asset_id=?", (asset_id,)).fetchone()
+
+    assert result["embedding_refresh_queued"] == 1
+    assert result["processed"] == 1
+    assert row["model_id"] == profile.model_id
+    assert row["model_revision"] == profile.model_revision
+    assert row["dimension"] == profile.dimension
+    assert json.loads(row["vector_json"]) == [1.0, 0.0]
+
+
+def test_local_context_reranker_can_reorder_top_candidates(monkeypatch):
+    class FakeReranker:
+        def rerank(self, query: str, docs: list[str]) -> list[float]:
+            assert query == "factura bmw"
+            assert docs == ["weak candidate", "strong candidate"]
+            return [-3.0, 8.0]
+
+    monkeypatch.setattr(api, "_context_reranker", lambda: FakeReranker())
+    scored = [
+        (0.9, {"chunk_id": "weak", "text": "weak candidate"}),
+        (0.7, {"chunk_id": "strong", "text": "strong candidate"}),
+    ]
+
+    result = api._rerank_scored_candidates("factura bmw", scored, limit=2)
+
+    assert [row["chunk_id"] for _score, row in result] == ["strong", "weak"]
 
 
 def test_model_status_has_local_fallback():
