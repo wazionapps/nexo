@@ -46,6 +46,7 @@ DEFAULT_PERFORMANCE_PROFILE = os.environ.get("NEXO_LOCAL_INDEX_PERFORMANCE_PROFI
 VALID_CONTEXT_MODES = {"compact", "full"}
 EMBEDDING_REFRESH_JOB = "embedding_refresh"
 ENTITY_FACTS_JOB = "entity_facts"
+BACKGROUND_INDEX_JOB_TYPES = {ENTITY_FACTS_JOB}
 ENTITY_DOSSIER_MAX_ASSETS = int(os.environ.get("NEXO_ENTITY_DOSSIER_MAX_ASSETS", "500") or "500")
 ENTITY_DOSSIER_MAX_CHUNKS = int(os.environ.get("NEXO_ENTITY_DOSSIER_MAX_CHUNKS", "1200") or "1200")
 ENTITY_DOSSIER_MAX_FACTS = int(os.environ.get("NEXO_ENTITY_DOSSIER_MAX_FACTS", "3000") or "3000")
@@ -939,14 +940,18 @@ def _initial_index_started_at_readonly(conn) -> float:
     return value if value > 0 else (_earliest_index_activity(conn) or 0.0)
 
 
-def _active_job_count(conn) -> int:
-    row = conn.execute(
-        """
+def _active_job_count(conn, *, blocking_only: bool = False) -> int:
+    sql = """
         SELECT COUNT(*) AS total
         FROM local_index_jobs
         WHERE status IN ('pending', 'running', 'failed')
-        """
-    ).fetchone()
+    """
+    params: tuple = ()
+    if blocking_only and BACKGROUND_INDEX_JOB_TYPES:
+        placeholders = ",".join("?" for _ in BACKGROUND_INDEX_JOB_TYPES)
+        sql += f" AND job_type NOT IN ({placeholders})"
+        params = tuple(sorted(BACKGROUND_INDEX_JOB_TYPES))
+    row = conn.execute(sql, params).fetchone()
     return int(row["total"] or 0)
 
 
@@ -954,7 +959,7 @@ def _refresh_initial_index_complete(conn, initial_scan: dict | None = None, acti
     if _initial_index_complete(conn):
         return True
     scan_state = initial_scan if initial_scan is not None else _initial_scan_status(conn)
-    remaining = _active_job_count(conn) if active_jobs is None else int(active_jobs or 0)
+    remaining = _active_job_count(conn, blocking_only=True) if active_jobs is None else int(active_jobs or 0)
     complete = bool(scan_state.get("complete")) and remaining == 0
     if complete and not readonly:
         _set_initial_index_complete(conn, True)
@@ -2448,8 +2453,8 @@ def run_once(
     job_result = process_jobs(limit=effective_process_limit)
     conn_after = _conn()
     initial_after = _initial_scan_status(conn_after, list_roots(readonly=False))
-    active_after = _active_job_count(conn_after)
-    initial_index_after = _refresh_initial_index_complete(conn_after, initial_after, active_after)
+    blocking_active_after = _active_job_count(conn_after, blocking_only=True)
+    initial_index_after = _refresh_initial_index_complete(conn_after, initial_after, blocking_active_after)
     return {
         "ok": True,
         "initial_scan": initial_after,
@@ -2883,12 +2888,13 @@ def _status_from_conn(conn, *, readonly: bool = False) -> dict:
     failed_jobs = int(job_counts.get("failed", 0) or 0)
     done = int(job_counts.get("done", 0) or 0)
     active_jobs = pending + running_jobs + failed_jobs
+    blocking_active_jobs = _active_job_count(conn, blocking_only=True)
     total_jobs = active_jobs + done
     percent = 100 if total_jobs == 0 else int((done / max(total_jobs, 1)) * 100)
     timing = _index_timing(conn, done=done, active_jobs=active_jobs, percent=percent, readonly=readonly)
     roots = _list_roots_conn(conn)
     initial_scan = _initial_scan_status(conn, roots)
-    initial_index_complete = _refresh_initial_index_complete(conn, initial_scan, active_jobs, readonly=readonly)
+    initial_index_complete = _refresh_initial_index_complete(conn, initial_scan, blocking_active_jobs, readonly=readonly)
     volumes = []
     by_volume = conn.execute(
         """

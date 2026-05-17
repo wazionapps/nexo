@@ -93,13 +93,18 @@ def _heartbeat_heavy_feature_enabled(name: str, default: bool = False) -> bool:
     raw = str(os.environ.get(name, "") or "").strip().lower()
     if raw in {"force", "always", "required"}:
         return True
-    try:
-        from product_mode import desktop_product_requested
-
-        if desktop_product_requested():
-            return False
-    except Exception:
-        pass
+    client = str(os.environ.get("NEXO_MCP_CLIENT", "") or "").strip().lower()
+    desktop_env = any(
+        str(os.environ.get(key, "") or "").strip()
+        for key in (
+            "NEXO_DESKTOP_PRODUCT_SMOKE",
+            "NEXO_DESKTOP_USER_DATA_DIR",
+            "NEXO_DESKTOP_MANAGED",
+            "NEXO_DESKTOP_MANAGED_SESSION",
+        )
+    )
+    if desktop_env or client in {"desktop", "nexo_desktop", "claude_desktop", "claude_code"}:
+        return False
     return _env_flag(name, default=default)
 
 
@@ -1220,14 +1225,22 @@ def _handle_heartbeat_inner(sid: str, task: str, context_hint: str = '') -> str:
     # adaptive_log row per heartbeat. Wrapped in best-effort try/except so
     # a failure here cannot block the heartbeat itself.
     try:
-        if _heartbeat_heavy_feature_enabled("NEXO_HEARTBEAT_ADAPTIVE_MODE", default=False) and context_hint and len(context_hint.strip()) >= 5:
+        if _heartbeat_heavy_feature_enabled("NEXO_HEARTBEAT_ADAPTIVE_MODE", default=True) and context_hint and len(context_hint.strip()) >= 5:
             def _compute_adaptive_mode():
                 from plugins.adaptive_mode import compute_mode
-                from cognitive._trust import detect_sentiment
 
-                sentiment = detect_sentiment(context_hint)
-                vibe_label = sentiment.get("sentiment", "neutral")
-                vibe_intensity = float(sentiment.get("intensity", 0.5) or 0.5)
+                lowered = context_hint.lower()
+                negative_markers = ("error", "fallo", "mal", "bloque", "lento", "problema", "broken", "failed")
+                positive_markers = ("ok", "bien", "gracias", "resuelto", "success")
+                if any(marker in lowered for marker in negative_markers):
+                    vibe_label = "negative"
+                    vibe_intensity = 0.7
+                elif any(marker in lowered for marker in positive_markers):
+                    vibe_label = "positive"
+                    vibe_intensity = 0.6
+                else:
+                    vibe_label = "neutral"
+                    vibe_intensity = 0.5
                 # Heuristic signal derivation — same fields the manual tool
                 # would feed compute_mode with, just synthesized from context.
                 return compute_mode(
@@ -1239,12 +1252,11 @@ def _handle_heartbeat_inner(sid: str, task: str, context_hint: str = '') -> str:
                     tool_had_error=False,  # heartbeat is post-tool, not pre-tool
                 )
 
-            _safe_interactive_timed(
+            _safe_interactive(
                 "adaptive mode",
                 _compute_adaptive_mode,
                 None,
                 None,
-                timeout_ms=350,
             )
     except Exception:
         pass  # Best-effort, never block heartbeat
