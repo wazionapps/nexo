@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.22.0: MCP latency hardening and Entity Dossier</title>
+<meta name="description" content="NEXO Brain v7.22.0 keeps Desktop heartbeat fast, adds durable queued writes, exposes compliance state for Desktop gates and ships Entity Dossier over local evidence.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-22-0/">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.22.0: MCP latency hardening and Entity Dossier","datePublished":"2026-05-17","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head><body><main><article style="max-width:760px;margin:80px auto;padding:0 24px;line-height:1.75;">
+<h1>NEXO 7.22.0 &mdash; MCP latency hardening and Entity Dossier</h1>
+<p><em>Published 2026-05-17. Release over v7.21.0.</em></p>
+
+<h2>Why this release exists</h2>
+<p>Desktop conversations must not wait on heavy Brain work before the first useful reply. v7.22.0 keeps routine MCP calls fast, moves critical writes into an honest queued/committed path, and exposes the compliance state Desktop needs to block only at the right boundaries.</p>
+
+<h2>What changed</h2>
+<ul>
+<li><strong>Fast Desktop heartbeat.</strong> Desktop-managed heartbeat no longer loads Local Context, drive analysis or semantic correction classifiers unless explicitly forced.</li>
+<li><strong>Durable write queue.</strong> Critical writes can be accepted as <code>queued</code>, drained by one runtime writer, and resolved as <code>committed</code>, <code>retrying</code> or <code>dead_letter</code>.</li>
+<li><strong>Compliance state for Desktop.</strong> Brain exposes heartbeat, diary, learning and close obligations so Desktop can enforce them before the next visible turn or clean close.</li>
+<li><strong>Entity Dossier.</strong> Local Context can aggregate all evidence linked to an entity, canonicalize aliases, extract open-domain facts and return quantified summaries without changing the existing semantic top-K search route.</li>
+<li><strong>Load-safe Local Memory.</strong> Desired index speed persists under sidecar DB contention and Desktop foreground state can throttle indexing while a conversation is active.</li>
+</ul>
+
+<h2>Validation</h2>
+<pre><code>python3 -m pytest tests/test_local_context_entity_dossier.py tests/test_runtime_write_queue.py tests/test_session_compliance_state.py -q
+# focused MCP, durable queue, compliance, privacy and dossier coverage passed</code></pre>
+
+<p><a href="/changelog/#v7220">Full changelog entry &rarr;</a> &middot; <a href="/blog/nexo-7-20-25/">Previous Local Memory semantic model note</a></p>
+</article></main></body></html>
