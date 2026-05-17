@@ -1,5 +1,18 @@
 # Changelog
 
+## [7.21.0] - 2026-05-17
+
+### Added — Resident Runtime Service for MCP stability
+
+- **MCP now starts as a thin compatibility adapter by default.** Existing clients keep the same stdio MCP entrypoint, tool names and schemas, but requests are proxied to one resident local NEXO Runtime Service over loopback HTTP.
+- **The resident service owns Brain initialization and tool execution.** This avoids every MCP client opening its own full Brain process and reduces SQLite contention from parallel Claude/Codex/Desktop sessions.
+- **Runtime identity is versioned and fingerprinted.** The adapter records the service PID, URL, version, fingerprint and server path, then rejects and replaces stale services after an update instead of reusing old code silently.
+- **Runtime service startup is locked cross-platform.** Concurrent MCP clients cannot race into launching multiple resident services on macOS or Windows.
+- **Desktop and support diagnostics can see service health.** `nexo mcp status --json` now exposes Runtime Service readiness, PID, stale state, fingerprint and log/state paths, plus the new `nexo_runtime_service_status` tool.
+- **Local Memory scans user documents before system noise.** Initial discovery prioritizes user folders and known documents (PDF, Office/OpenDocument/iWork, RTF, CSV/text) ahead of Applications/Library/AppData/system trees and unknown files while still indexing everything eligible later.
+- **Bundled local LLM installation is fail-closed.** The installer now verifies size and SHA256 for every bundled model file before writing `.nexo-model-lock.json`, so Qwen local presence cannot be reported as installed when a file is missing or corrupt.
+- **Coverage:** Runtime Service contracts, MCP status, Local Memory priority, bundled-model lock verification, local model warmup and live isolated MCP probe.
+
 ## [7.20.25] - 2026-05-17
 
 ### Fixed — Local Memory uses real local semantic models

@@ -3988,7 +3988,7 @@ def _auto_update_check_locked() -> dict:
 
     # Backfill runtime CLI modules for existing installs
     try:
-        for fname in ("cli.py", "script_registry.py", "skills_runtime.py", "cron_recovery.py", "client_preferences.py", "claude_cli.py", "agent_runner.py", "bootstrap_docs.py", "mcp_required_tools.py"):
+        for fname in ("cli.py", "script_registry.py", "skills_runtime.py", "cron_recovery.py", "client_preferences.py", "claude_cli.py", "agent_runner.py", "bootstrap_docs.py", "mcp_required_tools.py", "runtime_service.py"):
             src_file = SRC_DIR / fname
             dest_file = NEXO_HOME / fname
             if src_file.is_file() and (not dest_file.exists() or src_file.stat().st_mtime > dest_file.stat().st_mtime):

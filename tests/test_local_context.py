@@ -1654,3 +1654,41 @@ def test_model_status_has_local_fallback():
     result = api.model_status()
     assert result["ok"] is True
     assert any(model["kind"] == "deterministic_embedding" and model["state"] == "available" for model in result["models"])
+
+
+def test_scan_sort_prioritizes_user_documents_before_system_dirs(tmp_path):
+    users = tmp_path / "Users"
+    applications = tmp_path / "Applications"
+    documents = users / "francisco" / "Documents"
+    library = users / "francisco" / "Library"
+    for directory in (applications, documents, library):
+        directory.mkdir(parents=True)
+    pdf = documents / "contrato.pdf"
+    blob = documents / "z-unknown.bin"
+    pdf.write_text("contrato importante", encoding="utf-8")
+    blob.write_text("binary-ish", encoding="utf-8")
+
+    root_entries = sorted([applications, users], key=api._scan_entry_sort_key)
+    doc_entries = sorted([blob, pdf], key=api._scan_entry_sort_key)
+
+    assert root_entries == [users, applications]
+    assert doc_entries == [pdf, blob]
+
+
+def test_initial_scan_limit_reaches_known_documents_before_system_noise(tmp_path):
+    root = tmp_path / "disk"
+    contract = root / "Users" / "francisco" / "Documents" / "contrato.pdf"
+    noise = root / "Applications" / "RandomApp" / "cache.bin"
+    contract.parent.mkdir(parents=True)
+    noise.parent.mkdir(parents=True)
+    contract.write_text("contrato prioritario", encoding="utf-8")
+    noise.write_text("ruido", encoding="utf-8")
+
+    local_context.add_root(str(root))
+    result = local_context.run_once(limit=1, process_limit=0)
+    conn = get_local_context_db()
+    rows = conn.execute("SELECT path FROM local_assets ORDER BY first_seen_at ASC").fetchall()
+
+    assert result["scan"]["seen"] == 1
+    assert rows
+    assert rows[0]["path"].endswith("contrato.pdf")

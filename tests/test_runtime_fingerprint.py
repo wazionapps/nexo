@@ -233,6 +233,7 @@ def test_build_mcp_status_exposes_fingerprint_fields(
     assert "installed_fingerprint" in status
     assert "process_fingerprint" in status
     assert "fingerprint_match" in status
+    assert "runtime_service" in status
     assert status["fingerprint_match"] is True
 
 

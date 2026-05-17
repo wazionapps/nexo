@@ -678,6 +678,19 @@ def test_packaged_installer_repairs_same_version_runtime_when_core_current_lags(
     assert 'log(`  Runtime activation: core/current -> versions/${currentVersion}`);' in text
 
 
+def test_packaged_installer_verifies_bundled_local_models_before_locking():
+    installer = REPO_ROOT / "bin" / "nexo-brain.js"
+    text = installer.read_text(encoding="utf-8")
+
+    assert 'const missingFiles = [];' in text
+    assert 'missingFiles.push(f.path);' in text
+    assert 'missingFiles.push(`${f.path}:size`);' in text
+    assert 'crypto.createHash("sha256").update(fs.readFileSync(dst)).digest("hex")' in text
+    assert 'bundled LLM model ${spec.name} incomplete' in text
+    assert 'if (missingFiles.length)' in text
+    assert 'fs.writeFileSync(path.join(targetDir, ".nexo-model-lock.json")' in text
+
+
 def test_managed_runtime_wrapper_repairs_stale_core_current_before_exec():
     installer = REPO_ROOT / "bin" / "nexo-brain.js"
     source = REPO_ROOT / "src" / "auto_update.py"

@@ -732,6 +732,16 @@ def build_mcp_status(*, client: str = "") -> dict:
     marker = state["marker"]
     installed_fp = state.get("installed_fingerprint", "")
     process_fp = state.get("process_fingerprint", "")
+    try:
+        from runtime_service import runtime_service_status
+
+        service_status = runtime_service_status()
+    except Exception as exc:
+        service_status = {
+            "ok": False,
+            "error": "runtime_service_status_unavailable",
+            "message": str(exc)[:300],
+        }
     return {
         "ok": True,
         "schema_version": MCP_STATUS_SCHEMA_VERSION,
@@ -755,6 +765,7 @@ def build_mcp_status(*, client: str = "") -> dict:
         "marker_exists": bool(marker.get("exists")),
         "marker_corrupt": bool(marker.get("corrupt")),
         "continuity_api_level": CONTINUITY_API_LEVEL,
+        "runtime_service": service_status,
         "version_match": (
             bool(state["installed_version"])
             and bool(state["process_version"])

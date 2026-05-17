@@ -2383,6 +2383,21 @@
       },
       "triggers_after": []
     },
+    "nexo_runtime_service_status": {
+      "description": "Return resident Runtime Service health, PID, version, fingerprint and state paths",
+      "category": "system",
+      "source": "server",
+      "requires": [],
+      "provides": [
+        "runtime_service_status"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
     "nexo_media_memory_add": {
       "description": "Store non-text artifact metadata",
       "category": "media",

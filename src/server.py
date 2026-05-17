@@ -117,6 +117,13 @@ from runtime_versioning import (
     prime_process_fingerprint,
     prime_process_version,
 )
+from runtime_service import (
+    is_runtime_service_process,
+    run_mcp_proxy_adapter,
+    runtime_service_status,
+    should_use_mcp_adapter,
+    write_service_state,
+)
 from local_context import api as local_context_api
 from local_context.db import close_local_context_db
 
@@ -764,6 +771,12 @@ def nexo_workflow_update(
 def nexo_status(keyword: str = "") -> str:
     """List active sessions. Filter by keyword if provided."""
     return handle_status(keyword if keyword else None)
+
+
+@mcp.tool
+def nexo_runtime_service_status() -> str:
+    """Return the resident NEXO Runtime Service status for diagnostics."""
+    return json.dumps(runtime_service_status(), indent=2, ensure_ascii=False)
 
 
 @mcp.tool
@@ -2300,5 +2313,32 @@ def nexo_create_app_token(
 
 
 if __name__ == "__main__":
-    _server_init()
-    mcp.run(**_run_kwargs_from_env())
+    if should_use_mcp_adapter():
+        run_mcp_proxy_adapter(
+            name="nexo",
+            instructions=render_core_prompt(
+                "server-mcp-instructions",
+                assistant_name=_get_ctx().assistant_name,
+            ),
+            run_kwargs=_run_kwargs_from_env(),
+        )
+    else:
+        _server_init()
+        run_kwargs = _run_kwargs_from_env()
+        if is_runtime_service_process():
+            host = str(run_kwargs.get("host") or os.environ.get("NEXO_MCP_HOST", "127.0.0.1"))
+            port = int(run_kwargs.get("port") or os.environ.get("NEXO_MCP_PORT", "0") or 0)
+            path = str(run_kwargs.get("path") or os.environ.get("NEXO_MCP_PATH", "/mcp"))
+            write_service_state(
+                {
+                    "pid": os.getpid(),
+                    "port": port,
+                    "host": host,
+                    "path": path,
+                    "url": f"http://{host}:{port}{path}",
+                    "server_path": str(os.path.abspath(__file__)),
+                    "started_at": time.time(),
+                    "mode": "runtime-service",
+                }
+            )
+        mcp.run(**run_kwargs)

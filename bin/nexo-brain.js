@@ -3879,12 +3879,32 @@ async function runSetup() {
         const slug = (spec.name || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
         const targetDir = path.join(runtimeModelsDir, slug, spec.revision);
         fs.mkdirSync(targetDir, { recursive: true });
+        const missingFiles = [];
         for (const f of (spec.required_files || [])) {
           const src = path.join(sourceDir, f.path);
           const dst = path.join(targetDir, f.path);
-          if (fs.existsSync(src) && !fs.existsSync(dst)) {
+          if (!fs.existsSync(src)) {
+            missingFiles.push(f.path);
+            continue;
+          }
+          fs.mkdirSync(path.dirname(dst), { recursive: true });
+          if (!fs.existsSync(dst) || (f.size && fs.statSync(dst).size !== f.size)) {
             fs.copyFileSync(src, dst);
           }
+          if (f.size && fs.statSync(dst).size !== f.size) {
+            missingFiles.push(`${f.path}:size`);
+            continue;
+          }
+          if (f.sha256) {
+            const actual = crypto.createHash("sha256").update(fs.readFileSync(dst)).digest("hex");
+            if (actual !== f.sha256) {
+              missingFiles.push(`${f.path}:sha256`);
+            }
+          }
+        }
+        if (missingFiles.length) {
+          log(`  WARN: bundled LLM model ${spec.name} incomplete (${missingFiles.join(", ")})`);
+          continue;
         }
         // Write the lock file to match revision (avoids re-download).
         fs.writeFileSync(path.join(targetDir, ".nexo-model-lock.json"), JSON.stringify({

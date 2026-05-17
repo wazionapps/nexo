@@ -71,6 +71,47 @@ EMAIL_DOCUMENT_SUFFIXES = {
     ".emlx",
     ".msg",
 }
+HIGH_VALUE_DIRECTORY_NAMES = {
+    "users",
+    "home",
+    "desktop",
+    "documents",
+    "downloads",
+    "documentos",
+    "escritorio",
+    "descargas",
+    "icloud drive",
+    "onedrive",
+    "google drive",
+    "dropbox",
+    "creative cloud files",
+    "clientes",
+    "clients",
+    "facturas",
+    "invoices",
+    "contratos",
+    "contracts",
+    "projects",
+    "proyectos",
+    "work",
+    "trabajo",
+}
+LOW_VALUE_DIRECTORY_NAMES = {
+    "applications",
+    "library",
+    "system",
+    "private",
+    "usr",
+    "var",
+    "opt",
+    "windows",
+    "program files",
+    "program files (x86)",
+    "programdata",
+    "appdata",
+    ".cache",
+    "caches",
+}
 RERANKER_MODEL_SPEC = "cross-encoder-reranker"
 PERFORMANCE_PROFILES: dict[str, dict[str, Any]] = {
     "low": {
@@ -1247,12 +1288,29 @@ def _extraction_priority(path: Path) -> int:
     return 45
 
 
+def _directory_scan_priority(path: Path) -> int:
+    name = path.name.strip().lower()
+    if name in {"users", "home"}:
+        return 0
+    if name in HIGH_VALUE_DIRECTORY_NAMES:
+        return 10
+    if "icloud" in name or "onedrive" in name or "google drive" in name:
+        return 10
+    if is_local_email_tree(str(path)):
+        return 65
+    if name in LOW_VALUE_DIRECTORY_NAMES:
+        return 90
+    return 40
+
+
 def _scan_entry_sort_key(item: Path) -> tuple[int, int, str]:
     try:
         is_file = item.is_file()
     except Exception:
         is_file = False
-    return (0 if not is_file else 1, -_extraction_priority(item) if is_file else 0, str(item).lower())
+    if is_file:
+        return (1, -_extraction_priority(item), str(item).lower())
+    return (0, _directory_scan_priority(item), str(item).lower())
 
 
 def _iter_files(
