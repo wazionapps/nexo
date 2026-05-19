@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.23.2 refreshes stale Desktop-facing latest-version cache entries during Brain update checks.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.23.3 keeps followup runner batches from reselecting DONE items.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.23.2 refreshes stale Desktop-facing latest-version cache entries during Brain update checks.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.23.3 keeps followup runner batches from reselecting DONE items.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.23.2 refreshes stale Desktop-facing latest-version cache entries during Brain update checks.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.23.3 keeps followup runner batches from reselecting DONE items.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.23.2 refreshes stale Desktop-facing latest-version cache entries during Brain update checks.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.23.3 keeps followup runner batches from reselecting DONE items.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -87,13 +87,13 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v7.23.2 live</span>
+                    <span class="page-chip">v7.23.3 live</span>
                     <span class="page-chip">Local Context Layer</span>
                     <span class="page-chip">Background memory index</span>
                     <span class="page-chip">Desktop 0.33.0 companion</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v7232" class="btn btn-primary">Start with v7.23.2</a>
+                    <a href="#v7233" class="btn btn-primary">Start with v7.23.3</a>
                     <a href="#v7122" class="btn btn-secondary">See v7.12.2</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -101,8 +101,8 @@
             <div class="page-visual">
                 <div class="page-stack">
                     <div class="page-stack-card">
-                        <strong>v7.23.2</strong>
-                        <span>Patch - Desktop-facing version checks refresh stale latest cache entries so new Brain updates remain visible.</span>
+                        <strong>v7.23.3</strong>
+                        <span>Patch - Followup runner executable batches skip DONE terminal statuses.</span>
                     </div>
                     <div class="page-stack-card">
                         <strong>v7.17.8</strong>
@@ -347,11 +347,11 @@
     </div>
 </section>
 
-<section id="v7232" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#0ea5e9 100%);">
+<section id="v7233" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#0ea5e9 100%);">
     <div class="container">
-        <div class="section-label">New in v7.23.2 <span style="opacity:.5;font-weight:400;">&mdash; May 19, 2026 &mdash; <strong>PATCH</strong></span></div>
-        <h2 class="section-title">Fresh Desktop Brain update detection</h2>
-        <p class="section-subtitle">Desktop-facing version checks refresh stale latest-version cache entries when the cached latest version is missing, equal, or older than the installed Brain version, so a just-published update remains visible inside NEXO Desktop.</p>
+        <div class="section-label">New in v7.23.3 <span style="opacity:.5;font-weight:400;">&mdash; May 19, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">Followup runner DONE filtering</h2>
+        <p class="section-subtitle">Followup runner executable batches now treat DONE as terminal alongside BLOCKED, ARCHIVED, DELETED and WAITING, so already-finished followups do not re-enter automation queues.</p>
     </div>
 </section>
 

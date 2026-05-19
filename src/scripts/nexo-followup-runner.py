@@ -301,7 +301,7 @@ def get_all_active_followups(state: dict) -> dict:
         rows = conn.execute(
             "SELECT id, description, date, reasoning, verification, priority, recurrence, status, owner, updated_at "
             "FROM followups WHERE status NOT LIKE 'COMPLETED%' "
-            "AND UPPER(COALESCE(status, '')) NOT IN ('BLOCKED', 'ARCHIVED', 'DELETED', 'WAITING') "
+            "AND UPPER(COALESCE(status, '')) NOT IN ('BLOCKED', 'ARCHIVED', 'DELETED', 'WAITING', 'DONE') "
             "AND description NOT LIKE '[Abandoned]%' "
             "ORDER BY "
             "  CASE priority "
