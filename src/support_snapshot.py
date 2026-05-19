@@ -111,6 +111,30 @@ def _recent_logs(lines: int = 80) -> dict[str, Any]:
     }
 
 
+def _backup_retention_status(lines: int = 20) -> dict[str, Any]:
+    root = paths.backups_dir()
+    status: dict[str, Any] = {
+        "root": str(root),
+        "exists": root.exists(),
+        "cap_bytes": paths.backup_retention_cap_bytes(backups_root=root),
+        "min_free_bytes": paths.backup_min_free_bytes(),
+        "free_bytes": paths.backup_free_bytes(backups_root=root),
+        "recent_events": [],
+    }
+    event_log = paths.operations_dir() / "backup-retention-events.jsonl"
+    if event_log.is_file():
+        try:
+            raw = event_log.read_text(encoding="utf-8", errors="ignore").splitlines()[-lines:]
+            for line in raw:
+                try:
+                    status["recent_events"].append(json.loads(line))
+                except Exception:
+                    continue
+        except Exception as exc:
+            status["recent_events"] = [{"error": str(exc)}]
+    return status
+
+
 def collect_snapshot(*, log_lines: int = 80, include_doctor: bool = False) -> dict[str, Any]:
     system = platform.system()
     release = platform.release()
@@ -130,6 +154,7 @@ def collect_snapshot(*, log_lines: int = 80, include_doctor: bool = False) -> di
         },
         "paths": _path_status(),
         "health": collect_health(),
+        "backup_retention": _backup_retention_status(),
         "logs": _recent_logs(log_lines),
     }
 

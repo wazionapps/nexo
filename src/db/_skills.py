@@ -568,9 +568,7 @@ def retire_superseded_personal_skills(*, dry_run: bool = False) -> dict:
             continue
 
         if backup_root is None:
-            timestamp = datetime.datetime.now().strftime("%Y-%m-%d-%H%M%S")
-            backup_root = paths.backups_dir() / f"retired-personal-skills-{timestamp}"
-            backup_root.mkdir(parents=True, exist_ok=True)
+            backup_root = paths.create_backup_dir("retired-personal-skills")
         target = backup_root / child.name
         suffix = 2
         while target.exists():
@@ -588,6 +586,8 @@ def retire_superseded_personal_skills(*, dry_run: bool = False) -> dict:
             })
         except Exception as exc:
             report["errors"].append({"path": str(child), "error": str(exc)})
+    if backup_root is not None:
+        paths.finalize_backup_snapshot(backup_root)
     return report
 
 

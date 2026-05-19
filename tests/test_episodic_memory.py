@@ -168,3 +168,47 @@ def test_session_diary_write_payload_json_rejects_missing_summary(monkeypatch):
     )
 
     assert result == "ERROR: summary is required. Provide it directly or inside payload_json."
+
+
+def test_session_diary_quality_marks_auto_close_minimal():
+    import db
+
+    row = db.write_session_diary(
+        session_id="sid-auto",
+        decisions="",
+        summary="[AUTO-CLOSE] Minimal diary",
+        mental_state="0 heartbeats; Minimal diary",
+        source="auto-close",
+    )
+
+    assert row["quality_tier"] == "auto_close_minimal"
+    assert row["quality_score"] < 25
+
+
+def test_session_diary_reads_prefer_agent_authored_over_minimal_fallback():
+    import db
+
+    fallback = db.write_session_diary(
+        session_id="sid-fallback",
+        decisions="",
+        summary="[AUTO-CLOSE] Minimal diary",
+        mental_state="0 heartbeats; Minimal diary",
+        source="auto-close",
+    )
+    agent = db.write_session_diary(
+        session_id="sid-agent",
+        decisions="Keep the release gate explicit",
+        summary="NEXO release scope reviewed",
+        pending="Finish transcript index",
+        context_next="Continue with N10 and N20",
+        mental_state="Context is complete",
+        self_critique="Avoid relying on raw transcript fallback first",
+        source="claude",
+    )
+
+    rows = db.read_session_diary(last_n=10, include_automated=True)
+
+    assert rows[0]["id"] == agent["id"]
+    assert rows[-1]["id"] == fallback["id"]
+    assert rows[0]["quality_tier"] == "agent_authored"
+    assert rows[0]["quality_score"] > rows[-1]["quality_score"]

@@ -30,6 +30,7 @@ if _PARENT not in sys.path:
     sys.path.insert(0, _PARENT)
 
 from agent_runner import AgentRunnerError, build_followup_terminal_shell_command
+from cognitive_paths import resolve_cognitive_db
 import paths
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
@@ -200,7 +201,7 @@ class ChatMessage(BaseModel):
 
 def _cognitive_db():
     """Direct connection to cognitive.db."""
-    db_path = Path(os.environ.get("NEXO_COGNITIVE_DB") or str(paths.data_dir() / "cognitive.db"))
+    db_path = resolve_cognitive_db(for_write=True)
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
     return conn

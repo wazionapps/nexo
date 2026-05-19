@@ -389,12 +389,11 @@ def import_user_bundle(bundle_path: str) -> dict:
     if not inspection.get("ok"):
         return inspection
 
-    backups_dir = paths.backups_dir()
-    backups_dir.mkdir(parents=True, exist_ok=True)
-    safety_backup = backups_dir / f"pre-import-user-data-{_now_stamp()}.tar.gz"
+    safety_backup = paths.create_backup_path("pre-import-user-data", ".tar.gz")
     safety_result = export_user_bundle(str(safety_backup), enforce_rate_limit=False)
     if not safety_result.get("ok"):
         return {"ok": False, "error": "failed to create safety backup", "safety_backup": str(safety_backup)}
+    paths.finalize_backup_snapshot(safety_backup)
 
     stage_dir: Path | None = None
 

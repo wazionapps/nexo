@@ -60,6 +60,8 @@ def test_service_state_roundtrip_is_under_runtime_state(monkeypatch, tmp_path):
     assert data["server_path"].endswith("server.py")
     assert data["runtime_version"] == expected_version
     assert "runtime_fingerprint" in data
+    assert data["runtime_generation"]
+    assert data["runtime_instance_id"].startswith("rt-")
     assert runtime_service.read_service_state()["pid"] == 123
 
 
@@ -179,3 +181,6 @@ def test_runtime_service_status_reports_probe_result(monkeypatch, tmp_path):
     assert status["ok"] is True
     assert status["pid_alive"] is True
     assert status["url"] == "http://127.0.0.1:17872/mcp"
+    assert status["runtime_generation"]
+    assert status["runtime_instance_id"].startswith("rt-")
+    assert status["state_runtime_generation"]

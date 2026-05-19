@@ -13,13 +13,14 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
-import paths
+from cognitive_paths import resolve_cognitive_db
 
 NEXO_HOME = os.environ.get("NEXO_HOME", os.path.expanduser("~/.nexo"))
-_cognitive_dir = paths.cognitive_dir()
+_cognitive_db_path = resolve_cognitive_db(for_write=True)
+_cognitive_dir = _cognitive_db_path.parent
 _cognitive_dir.mkdir(parents=True, exist_ok=True)
 
-COGNITIVE_DB = str(_cognitive_dir / "cognitive.db")
+COGNITIVE_DB = str(_cognitive_db_path)
 def _configured_embedding_dim() -> int:
     try:
         from local_models import get_local_model_spec

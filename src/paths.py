@@ -55,6 +55,11 @@ that hardcoded the old paths keeps resolving via symlink during the
 from __future__ import annotations
 
 import os
+import json
+import shutil
+import subprocess
+import sys
+import time
 from pathlib import Path
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
@@ -320,6 +325,321 @@ def backups_dir() -> Path:
     return new
 
 
+_GiB = 1024 ** 3
+BACKUP_DEFAULT_MAX_BYTES = 50 * _GiB
+BACKUP_MIN_CAP_BYTES = 10 * _GiB
+BACKUP_MAX_CAP_BYTES = 50 * _GiB
+BACKUP_DEFAULT_MIN_FREE_BYTES = 5 * _GiB
+
+
+class BackupSnapshotPath:
+    """Path returned by backup helpers; usable as a post-pruning context."""
+
+    def __init__(self, value: str | Path, *, backups_root: Path | None = None):
+        self._path = Path(value)
+        self._nexo_backups_root = Path(backups_root) if backups_root is not None else None
+        self._nexo_finalized = False
+
+    def __fspath__(self) -> str:
+        return os.fspath(self._path)
+
+    def __str__(self) -> str:
+        return str(self._path)
+
+    def __repr__(self) -> str:
+        return f"BackupSnapshotPath({self._path!r})"
+
+    def __truediv__(self, key):
+        return self._path / key
+
+    def __eq__(self, other) -> bool:
+        return self._path == Path(other)
+
+    def __getattr__(self, name: str):
+        return getattr(self._path, name)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, _exc_type, _exc, _tb):
+        self.finalize()
+        return False
+
+    def finalize(self) -> dict:
+        if self._nexo_finalized:
+            return {"ok": True, "skipped": True, "reason": "already_finalized"}
+        self._nexo_finalized = True
+        return finalize_backup_snapshot(self, backups_root=self._nexo_backups_root)
+
+
+def parse_size_bytes(value: str | int | None, *, default: int = BACKUP_DEFAULT_MAX_BYTES) -> int:
+    """Parse size strings like ``10G`` / ``512M`` into bytes."""
+    if value is None or value == "":
+        return default
+    if isinstance(value, int):
+        return max(0, value)
+    raw = str(value).strip().lower()
+    if not raw:
+        return default
+    multiplier = 1
+    if raw[-1:] in {"k", "m", "g", "t"}:
+        unit = raw[-1]
+        raw = raw[:-1].strip()
+        multiplier = {"k": 1024, "m": 1024 ** 2, "g": _GiB, "t": 1024 ** 4}[unit]
+    try:
+        return max(0, int(float(raw) * multiplier))
+    except ValueError:
+        return default
+
+
+def backup_min_free_bytes() -> int:
+    return parse_size_bytes(os.environ.get("NEXO_BACKUP_MIN_FREE_BYTES"), default=BACKUP_DEFAULT_MIN_FREE_BYTES)
+
+
+def backup_retention_cap_bytes(*, backups_root: Path | None = None, configured: str | int | None = None) -> int:
+    """Return the effective technical-backup cap for this install.
+
+    The default adapts to the user's disk: 5% of total capacity, floored at
+    10 GiB and capped at 50 GiB. ``NEXO_BACKUP_MAX_BYTES`` remains an upper
+    bound, and explicit lower caps are allowed for emergency prune steps.
+    """
+    raw = parse_size_bytes(
+        configured if configured is not None else os.environ.get("NEXO_BACKUP_MAX_BYTES"),
+        default=BACKUP_DEFAULT_MAX_BYTES,
+    )
+    if raw < BACKUP_MIN_CAP_BYTES:
+        return raw
+    root = Path(backups_root or backups_dir())
+    probe = root if root.exists() else root.parent
+    try:
+        usage = shutil.disk_usage(str(probe))
+        adaptive = int(usage.total * 0.05)
+    except Exception:
+        adaptive = BACKUP_DEFAULT_MAX_BYTES
+    adaptive = max(BACKUP_MIN_CAP_BYTES, min(BACKUP_MAX_CAP_BYTES, adaptive))
+    return min(raw, adaptive)
+
+
+def backup_free_bytes(*, backups_root: Path | None = None) -> int | None:
+    root = Path(backups_root or backups_dir())
+    probe = root if root.exists() else root.parent
+    try:
+        return int(shutil.disk_usage(str(probe)).free)
+    except Exception:
+        return None
+
+
+def _backup_pruner_script() -> Path | None:
+    candidates = [
+        Path(__file__).resolve().parent / "scripts" / "prune_runtime_backups.py",
+        core_scripts_dir() / "prune_runtime_backups.py",
+    ]
+    seen: set[str] = set()
+    for candidate in candidates:
+        key = str(candidate)
+        if key in seen:
+            continue
+        seen.add(key)
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _append_backup_retention_event(event: dict) -> None:
+    try:
+        log_path = operations_dir() / "backup-retention-events.jsonl"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            **event,
+            "os": sys.platform,
+        }
+        with log_path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(payload, sort_keys=True) + "\n")
+    except Exception:
+        pass
+
+
+def run_runtime_backup_prune(
+    *,
+    max_bytes: str | int | None = None,
+    backups_root: Path | None = None,
+    delete_all_technical: bool = False,
+    timeout: int = 120,
+) -> dict:
+    """Run the technical-backup pruner. Safe no-op when the script is absent."""
+    script = _backup_pruner_script()
+    root = Path(backups_root or backups_dir())
+    cap = parse_size_bytes(max_bytes, default=backup_retention_cap_bytes(backups_root=root))
+    if max_bytes is None:
+        cap = backup_retention_cap_bytes(backups_root=root)
+    if script is None:
+        return {"ok": False, "skipped": True, "reason": "pruner_missing", "root": str(root)}
+    args = [
+        sys.executable,
+        str(script),
+        "--root",
+        str(root),
+        "--apply",
+        "--json",
+        "--max-bytes",
+        str(cap),
+    ]
+    if delete_all_technical:
+        args.append("--delete-all-technical")
+    try:
+        proc = subprocess.run(args, capture_output=True, text=True, timeout=timeout)
+        report = json.loads(proc.stdout or "{}") if proc.stdout.strip().startswith("{") else {}
+        return {
+            "ok": proc.returncode == 0,
+            "returncode": proc.returncode,
+            "max_bytes": cap,
+            "root": str(root),
+            "stdout": proc.stdout[-4000:],
+            "stderr": proc.stderr[-4000:],
+            "report": report,
+        }
+    except Exception as exc:
+        return {"ok": False, "error": str(exc), "max_bytes": cap, "root": str(root)}
+
+
+def aggressive_runtime_backup_prune(
+    *,
+    min_free_bytes: int | None = None,
+    backups_root: Path | None = None,
+    reason: str = "",
+) -> dict:
+    """Escalate NEXO-owned backup pruning before any user-facing disk alert.
+
+    Escalation never targets protected business/hourly backup classes; the
+    pruner enforces that policy.
+    """
+    root = Path(backups_root or backups_dir())
+    floor = int(min_free_bytes if min_free_bytes is not None else backup_min_free_bytes())
+    steps: list[dict] = []
+    escalated = False
+    plan = [
+        ("standard", None, False),
+        ("cap-10gb", 10 * _GiB, False),
+        ("cap-5gb", 5 * _GiB, False),
+        ("delete-all-technical", 0, True),
+    ]
+    for label, cap, delete_all in plan:
+        before = backup_free_bytes(backups_root=root)
+        if before is not None and before >= floor and steps:
+            break
+        if label != "standard":
+            escalated = True
+        result = run_runtime_backup_prune(max_bytes=cap, backups_root=root, delete_all_technical=delete_all)
+        after = backup_free_bytes(backups_root=root)
+        steps.append({
+            "step": label,
+            "before_free_bytes": before,
+            "after_free_bytes": after,
+            "ok": result.get("ok") is True,
+            "delete_count": (((result.get("report") or {}).get("totals") or {}).get("delete_count")),
+            "delete_bytes": (((result.get("report") or {}).get("totals") or {}).get("delete_bytes")),
+        })
+        if after is not None and after >= floor:
+            break
+    final_free = backup_free_bytes(backups_root=root)
+    if escalated:
+        dominant = ""
+        try:
+            deletes = []
+            for step in steps:
+                # Detailed family data is emitted by the script report; keep
+                # this anonymous and compact for product telemetry.
+                if step.get("delete_bytes"):
+                    deletes.append((int(step.get("delete_bytes") or 0), step.get("step") or ""))
+            dominant = max(deletes)[1] if deletes else ""
+        except Exception:
+            dominant = ""
+        _append_backup_retention_event({
+            "event": "backup_prune_escalated",
+            "reason": reason,
+            "steps": len(steps),
+            "dominant_prefix": dominant,
+            "final_free_bytes": final_free,
+        })
+    return {
+        "ok": final_free is None or final_free >= floor,
+        "root": str(root),
+        "min_free_bytes": floor,
+        "final_free_bytes": final_free,
+        "steps": steps,
+    }
+
+
+def backup_space_error(
+    *,
+    reason: str = "",
+    min_free_bytes: int | None = None,
+    backups_root: Path | None = None,
+) -> str | None:
+    report = aggressive_runtime_backup_prune(
+        min_free_bytes=min_free_bytes,
+        backups_root=backups_root,
+        reason=reason,
+    )
+    free = report.get("final_free_bytes")
+    floor = int(report.get("min_free_bytes") or backup_min_free_bytes())
+    if free is not None and free < floor:
+        return (
+            "free disk below NEXO backup safety floor after NEXO self-cleanup "
+            f"({free}B < {floor}B)"
+        )
+    return None
+
+
+def create_backup_dir(prefix: str, *, backups_root: Path | None = None) -> Path:
+    """Create a technical backup directory through the universal guard."""
+    clean = str(prefix or "").strip().strip("-")
+    if not clean or any(sep in clean for sep in ("/", "\\")):
+        raise ValueError("backup prefix must be a single path segment")
+    err = backup_space_error(reason=f"create_backup_dir:{clean}", backups_root=backups_root)
+    if err:
+        raise RuntimeError(err)
+    root = Path(backups_root or backups_dir())
+    root.mkdir(parents=True, exist_ok=True)
+    stamp = time.strftime("%Y-%m-%d-%H%M%S", time.gmtime())
+    candidate = root / f"{clean}-{stamp}"
+    suffix = 2
+    while candidate.exists():
+        candidate = root / f"{clean}-{stamp}-{suffix}"
+        suffix += 1
+    candidate.mkdir(parents=True, exist_ok=False)
+    return BackupSnapshotPath(candidate, backups_root=root)
+
+
+def create_backup_path(prefix: str, suffix: str = "", *, backups_root: Path | None = None) -> Path:
+    """Reserve a backup file path under runtime/backups via the same guard."""
+    clean = str(prefix or "").strip().strip("-")
+    if not clean or any(sep in clean for sep in ("/", "\\")):
+        raise ValueError("backup prefix must be a single path segment")
+    err = backup_space_error(reason=f"create_backup_path:{clean}", backups_root=backups_root)
+    if err:
+        raise RuntimeError(err)
+    root = Path(backups_root or backups_dir())
+    root.mkdir(parents=True, exist_ok=True)
+    stamp = time.strftime("%Y-%m-%d-%H%M%S", time.gmtime())
+    candidate = root / f"{clean}-{stamp}{suffix}"
+    index = 2
+    while candidate.exists():
+        candidate = root / f"{clean}-{stamp}-{index}{suffix}"
+        index += 1
+    return BackupSnapshotPath(candidate, backups_root=root)
+
+
+def finalize_backup_snapshot(_path: Path | str | None = None, *, backups_root: Path | None = None) -> dict:
+    """Post-snapshot cleanup; callers invoke after writing large artifacts."""
+    root = Path(backups_root) if backups_root is not None else None
+    if root is None and _path is not None:
+        snapshot = Path(_path)
+        root = snapshot.parent
+    return run_runtime_backup_prune(backups_root=root)
+
+
 def memory_dir() -> Path:
     new = runtime_dir() / "memory"
     legacy = home() / "memory"
@@ -329,11 +649,7 @@ def memory_dir() -> Path:
 
 
 def cognitive_dir() -> Path:
-    new = runtime_dir() / "cognitive"
-    legacy = home() / "cognitive"
-    if not new.exists() and legacy.exists():
-        return legacy
-    return new
+    return runtime_dir() / "cognitive"
 
 
 def models_dir() -> Path:

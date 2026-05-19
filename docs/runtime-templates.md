@@ -189,3 +189,74 @@ contract is simpler:
 If a new starting point should be shipped to everyone, add it to
 `templates/` in the repo and list it in this document, same as any other
 contract change.
+
+## Backup Retention Policy
+
+NEXO manages its own disk usage. The product must not alert the user about
+space consumed by NEXO technical backups: first it silently prunes NEXO-owned
+backup artifacts, and only if free space remains below
+`NEXO_BACKUP_MIN_FREE_BYTES` should it surface a user-visible low-disk warning
+attributable to the user's own files.
+
+### Environment Variables
+
+| Variable | Default | Use |
+|---|---:|---|
+| `NEXO_BACKUP_MAX_BYTES` | `50G` | Configured upper bound for technical backups. |
+| `NEXO_BACKUP_MIN_FREE_BYTES` | `5G` | Free-space floor before blocking or alerting. |
+| `NEXO_BACKUP_TMP_TTL_MINUTES` | `30` | Minimum age before orphan temporary files are removed. |
+| `NEXO_LOCAL_CONTEXT_BACKUP_KEEP_LAST` | `1` | `local-context-*.db` backups kept under the cap. |
+
+The effective default cap is adaptive:
+`min(NEXO_BACKUP_MAX_BYTES, 5% of total disk size)`, floored at `10G` and capped
+at `50G`. Emergency prune steps may use lower caps (`10G`, `5G`, `0`) to
+recover space.
+
+### Universal Backup Wrapper
+
+Every technical snapshot creator under `runtime/backups/` must use:
+
+- `paths.create_backup_dir(prefix)` for directories.
+- `paths.create_backup_path(prefix, suffix)` for files.
+- `paths.finalize_backup_snapshot(path)` after writing the snapshot, or
+  `with paths.create_backup_dir(prefix) as backup_dir:` so post-prune runs when
+  the context exits.
+
+Do not build direct paths with `paths.backups_dir() / f"prefix-..."`. If a new
+technical prefix is added, register it in `TECHNICAL_PREFIXES` in
+`scripts/prune_runtime_backups.py`.
+
+### Escalating Self-Prune
+
+When free space falls below the floor, `paths.backup_space_error()` and
+`doctor.providers.boot.check_disk_space()` run:
+
+1. normal prune with the adaptive cap;
+2. prune with `--max-bytes 10G`;
+3. prune with `--max-bytes 5G`;
+4. emergency `--delete-all-technical`.
+
+Emergency mode removes only technical classes (`pre-*`, `code-tree-*`,
+`runtime-tree-*`, temporary files). It never touches `shopify-backups/`,
+`weekly/`, hourly `nexo-*.db`, root DBs, or unknown entries. Each escalation
+step records anonymous telemetry in
+`runtime/operations/backup-retention-events.jsonl`.
+
+### Cross-Platform Recovery Sweep
+
+When a low-disk to OK-disk transition is detected,
+`scripts/post_disk_recovery_sweep.py` runs. Core uses an extensible registry in
+`disk_recovery/registry.py`; platform commands live in separate handlers:
+
+- `disk_recovery/handlers/macos.py`: CalendarAgent, Calendar, Mail, iCloud
+  Drive/CloudKit (`cloudd`, `bird`) when running.
+- `disk_recovery/handlers/windows.py`: OneSyncSvc, classic Outlook through COM,
+  and OneDrive.
+- `disk_recovery/handlers/common.py`: Dropbox, Google Drive, and Slack when
+  running, with platform-specific commands.
+
+The sweep is silent and does not touch UI. It records touched apps and an
+anonymous network-activity delta in
+`runtime/operations/post-disk-recovery-sweep.jsonl`. To add apps, register a
+new handler in the registry; do not hardcode macOS/Windows commands in shared
+core.

@@ -155,8 +155,8 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
-BACKUP_MAX_BYTES = _env_int("NEXO_BACKUP_MAX_BYTES", 50 * 1024 * 1024 * 1024)
-BACKUP_MIN_FREE_BYTES = _env_int("NEXO_BACKUP_MIN_FREE_BYTES", 5 * 1024 * 1024 * 1024)
+BACKUP_MAX_BYTES = paths.backup_retention_cap_bytes(backups_root=BACKUP_BASE)
+BACKUP_MIN_FREE_BYTES = paths.backup_min_free_bytes()
 LOCAL_CONTEXT_MAX_BACKUP_BYTES = _env_int("NEXO_LOCAL_CONTEXT_MAX_BACKUP_BYTES", 2 * 1024 * 1024 * 1024)
 
 # In packaged installs, update.py lives at <NEXO_HOME>/plugins/update.py.
@@ -199,26 +199,7 @@ def _rotate_backup_family(prefix: str, keep: int = TECHNICAL_BACKUP_KEEP) -> int
 
 
 def _run_runtime_backup_prune() -> None:
-    script = SRC_DIR / "scripts" / "prune_runtime_backups.py"
-    if not script.is_file():
-        return
-    try:
-        subprocess.run(
-            [
-                sys.executable,
-                str(script),
-                "--root",
-                str(BACKUP_BASE),
-                "--apply",
-                "--max-bytes",
-                str(BACKUP_MAX_BYTES),
-            ],
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
-    except Exception:
-        pass
+    paths.run_runtime_backup_prune(max_bytes=BACKUP_MAX_BYTES, backups_root=BACKUP_BASE)
 
 
 def _backup_free_bytes() -> int | None:
@@ -230,14 +211,11 @@ def _backup_free_bytes() -> int | None:
 
 
 def _backup_space_error() -> str | None:
-    _run_runtime_backup_prune()
-    free = _backup_free_bytes()
-    if free is not None and free < BACKUP_MIN_FREE_BYTES:
-        return (
-            "free disk below NEXO backup safety floor after automatic cleanup "
-            f"({free}B < {BACKUP_MIN_FREE_BYTES}B)"
-        )
-    return None
+    return paths.backup_space_error(
+        reason="manual_update",
+        min_free_bytes=BACKUP_MIN_FREE_BYTES,
+        backups_root=BACKUP_BASE,
+    )
 
 
 def _should_include_local_context_backup(path: Path) -> bool:
@@ -578,8 +556,7 @@ def _backup_databases() -> tuple[str, str | None]:
     a backup that silently loses data returns an error instead of a green
     "backup_dir" string that the rollback logic would then restore from.
     """
-    timestamp = time.strftime("%Y-%m-%d-%H%M")
-    backup_dir = BACKUP_BASE / f"pre-update-{timestamp}"
+    backup_dir: Path | None = None
 
     db_files = list(DATA_DIR.glob("*.db")) if DATA_DIR.is_dir() else []
     local_context_db = paths.memory_dir() / "local-context.db"
@@ -593,13 +570,14 @@ def _backup_databases() -> tuple[str, str | None]:
         db_files.append(src_db)
 
     if not db_files:
+        backup_dir = paths.create_backup_dir("pre-update", backups_root=BACKUP_BASE)
         return str(backup_dir), None  # No DBs to backup, not an error
 
     space_err = _backup_space_error()
     if space_err:
         return str(backup_dir), space_err
 
-    backup_dir.mkdir(parents=True, exist_ok=True)
+    backup_dir = paths.create_backup_dir("pre-update", backups_root=BACKUP_BASE)
 
     for db_file in db_files:
         dest = backup_dir / db_file.name
@@ -618,6 +596,7 @@ def _backup_databases() -> tuple[str, str | None]:
         _rotate_backup_family("pre-update-")
     except Exception:
         pass
+    paths.finalize_backup_snapshot(backup_dir)
     return str(backup_dir), None
 
 
@@ -988,8 +967,7 @@ def _sync_hooks_to_home():
 
 def _backup_code_tree() -> tuple[str | None, str | None]:
     """Snapshot NEXO_HOME code dirs before npm update. Returns (backup_dir, error)."""
-    timestamp = time.strftime("%Y-%m-%d-%H%M%S")
-    backup_dir = BACKUP_BASE / f"code-tree-{timestamp}"
+    backup_dir = paths.create_backup_dir("code-tree", backups_root=BACKUP_BASE)
     # Directories and flat files that postinstall copies into NEXO_HOME
     code_dirs = [
         "bin",
@@ -1010,7 +988,6 @@ def _backup_code_tree() -> tuple[str | None, str | None]:
     ]
     code_files_glob = ["*.py", "requirements.txt", "package.json"]
     try:
-        backup_dir.mkdir(parents=True, exist_ok=True)
         # Backup directories
         for d in code_dirs:
             src = NEXO_HOME / d
@@ -1031,6 +1008,7 @@ def _backup_code_tree() -> tuple[str | None, str | None]:
         _rotate_backup_family("code-tree-")
     except Exception:
         pass
+    paths.finalize_backup_snapshot(backup_dir)
     return str(backup_dir), None
 
 

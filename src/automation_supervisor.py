@@ -83,6 +83,15 @@ class CronSpoolClassification:
     reason: str
 
 
+@dataclass(frozen=True)
+class EvolutionPolicyClassification:
+    status: str
+    severity: str
+    reason: str
+    launchagent_label: str = "com.nexo.evolution"
+    desktop_managed: bool = False
+
+
 def default_config() -> AutomationSupervisorConfig:
     home = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
     if paths is not None:
@@ -120,7 +129,8 @@ def audit_automation(config: AutomationSupervisorConfig | None = None) -> dict[s
         now=now,
         warn_threshold=cfg.spool_warn_threshold,
     )
-    findings = _collect_findings(open_runs, launchagents, cron_spool)
+    evolution = classify_evolution_policy(cfg.manifest_path, cfg.launchagent_labels)
+    findings = _collect_findings(open_runs, launchagents, cron_spool, evolution)
 
     return {
         "ok": not any(item.get("severity") in TERMINAL_SEVERITIES for item in findings),
@@ -129,6 +139,7 @@ def audit_automation(config: AutomationSupervisorConfig | None = None) -> dict[s
         "open_runs": [asdict(item) for item in open_runs],
         "launchagents": [asdict(item) for item in launchagents],
         "cron_spool": [asdict(item) for item in cron_spool],
+        "evolution": asdict(evolution),
         "findings": findings,
         "summary": {
             "jobs": len(contracts),
@@ -140,6 +151,7 @@ def audit_automation(config: AutomationSupervisorConfig | None = None) -> dict[s
             "p1": sum(1 for item in findings if item.get("severity") == "P1"),
             "p2": sum(1 for item in findings if item.get("severity") == "P2"),
             "excluded_jobs": sorted(excluded),
+            "evolution_status": evolution.status,
         },
     }
 
@@ -369,21 +381,82 @@ def classify_cron_spool(
     return sorted(results, key=lambda item: (item.severity != "P1", item.cron_id))
 
 
+def classify_evolution_policy(
+    manifest_path: Path | None,
+    launchagent_labels: frozenset[str] | set[str] | list[str] | tuple[str, ...] | None,
+) -> EvolutionPolicyClassification:
+    try:
+        from product_mode import DESKTOP_EVOLUTION_DISABLED_REASON, desktop_product_requested
+
+        desktop_managed = bool(desktop_product_requested())
+        disabled_reason = DESKTOP_EVOLUTION_DISABLED_REASON
+    except Exception:
+        desktop_managed = False
+        disabled_reason = "Disabled by product policy"
+
+    if desktop_managed:
+        return EvolutionPolicyClassification(
+            status="disabled_by_policy",
+            severity="OK",
+            reason=disabled_reason,
+            desktop_managed=True,
+        )
+
+    manifest = _load_json(manifest_path, default={"crons": []})
+    entries = manifest.get("crons") if isinstance(manifest, Mapping) else []
+    evolution_entry = None
+    if isinstance(entries, list):
+        for entry in entries:
+            if isinstance(entry, Mapping) and _is_evolution(str(entry.get("id") or "")):
+                evolution_entry = entry
+                break
+    if not evolution_entry:
+        return EvolutionPolicyClassification(
+            status="unknown",
+            severity="P2",
+            reason="Brain standalone mode has no Evolution cron entry in the manifest",
+        )
+    label = str(evolution_entry.get("launchagent_label") or "com.nexo.evolution")
+    if launchagent_labels is None:
+        return EvolutionPolicyClassification(
+            status="unknown",
+            severity="P2",
+            reason="Brain standalone Evolution is declared, but LaunchAgent inventory was not supplied",
+            launchagent_label=label,
+        )
+    labels = {str(item) for item in launchagent_labels}
+    if label in labels:
+        return EvolutionPolicyClassification(
+            status="enabled_and_loaded",
+            severity="OK",
+            reason="Brain standalone Evolution is declared and loaded in the supplied inventory",
+            launchagent_label=label,
+        )
+    return EvolutionPolicyClassification(
+        status="enabled_but_not_loaded",
+        severity="P1",
+        reason="Brain standalone Evolution is declared but absent from the supplied inventory",
+        launchagent_label=label,
+    )
+
+
 def format_markdown(report: Mapping[str, Any]) -> str:
     summary = report.get("summary") if isinstance(report, Mapping) else {}
     findings = report.get("findings") if isinstance(report, Mapping) else []
+    evolution = report.get("evolution") if isinstance(report.get("evolution"), Mapping) else {}
     lines = [
-        "### G13 Automation supervisor sin Evolution",
+        "### Automation supervisor",
         "",
-        "| Area | Resultado |",
+        "| Area | Result |",
         "|---|---|",
         f"| Jobs no Evolution | {summary.get('jobs', 0)} |",
-        f"| Open runs clasificadas | {summary.get('open_runs', 0)} |",
-        f"| Cron-spool jobs con JSON | {summary.get('cron_spool_jobs', 0)} |",
-        f"| Hallazgos P1 | {summary.get('p1', 0)} |",
-        f"| Evolution excluido | {', '.join(summary.get('excluded_jobs') or []) or 'si'} |",
+        f"| Classified open runs | {summary.get('open_runs', 0)} |",
+        f"| Cron-spool jobs with JSON | {summary.get('cron_spool_jobs', 0)} |",
+        f"| P1 findings | {summary.get('p1', 0)} |",
+        f"| Evolution excluded from cron reconciliation | {', '.join(summary.get('excluded_jobs') or []) or 'yes'} |",
+        f"| Evolution policy | {evolution.get('status', 'unknown')} |",
     ]
-    lines.extend(["", "| Hallazgo | Severidad | Razon |", "|---|---|---|"])
+    lines.extend(["", "| Finding | Severity | Reason |", "|---|---|---|"])
     for item in findings or []:
         lines.append(
             "| {kind}:{key} | {severity} | {reason} |".format(
@@ -402,6 +475,7 @@ def _collect_findings(
     open_runs: Iterable[OpenRunClassification],
     launchagents: Iterable[LaunchAgentClassification],
     cron_spool: Iterable[CronSpoolClassification],
+    evolution: EvolutionPolicyClassification | None = None,
 ) -> list[dict[str, Any]]:
     findings: list[dict[str, Any]] = []
     for item in open_runs:
@@ -413,6 +487,8 @@ def _collect_findings(
     for item in cron_spool:
         if item.severity != "OK":
             findings.append({"kind": "cron_spool", "key": item.cron_id, **asdict(item)})
+    if evolution is not None and evolution.severity != "OK":
+        findings.append({"kind": "evolution", "key": evolution.launchagent_label, **asdict(evolution)})
     severity_order = {"P0": 0, "P1": 1, "P2": 2, "OK": 3}
     return sorted(findings, key=lambda item: (severity_order.get(str(item.get("severity")), 9), str(item.get("kind")), str(item.get("key"))))
 
@@ -422,7 +498,8 @@ def _load_open_cron_rows(db_path: Path | None) -> list[dict[str, Any]]:
         return []
     conn = None
     try:
-        conn = sqlite3.connect(str(db_path), timeout=2)
+        uri = db_path.resolve().as_uri() + "?mode=ro"
+        conn = sqlite3.connect(uri, timeout=2, uri=True)
         conn.row_factory = sqlite3.Row
         table = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='cron_runs'").fetchone()
         if table is None:

@@ -1886,8 +1886,7 @@ def retire_superseded_personal_scripts(*, dry_run: bool = False) -> dict:
             report["unscheduled"].append(removed)
 
         if backup_root is None:
-            backup_root = paths.backups_dir() / f"retired-personal-scripts-{time.strftime('%Y-%m-%d-%H%M%S')}"
-            backup_root.mkdir(parents=True, exist_ok=True)
+            backup_root = paths.create_backup_dir("retired-personal-scripts")
         target = backup_root / path.name
         suffix = 2
         while target.exists():
@@ -1902,6 +1901,8 @@ def retire_superseded_personal_scripts(*, dry_run: bool = False) -> dict:
             })
         except Exception as exc:
             report["errors"].append({"path": str(path), "error": str(exc)})
+    if backup_root is not None:
+        paths.finalize_backup_snapshot(backup_root)
     return report
 
 

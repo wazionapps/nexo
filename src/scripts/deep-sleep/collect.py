@@ -27,6 +27,7 @@ if str(NEXO_CODE) not in sys.path:
 
 import transcript_utils as _transcripts
 import paths
+from cognitive_paths import resolve_cognitive_db
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 
@@ -51,11 +52,7 @@ def _resolve_nexo_db() -> Path:
 
 
 def _resolve_cognitive_db() -> Path:
-    new = paths.data_dir() / "cognitive.db"
-    legacy = paths.legacy_data_dir() / "cognitive.db"
-    if not new.is_file() and legacy.is_file():
-        return legacy
-    return new
+    return resolve_cognitive_db(for_write=False)
 
 
 def _resolve_deep_sleep_dir() -> Path:

@@ -32,6 +32,7 @@ if str(NEXO_CODE) not in sys.path:
 
 import db as nexo_db
 import paths
+from cognitive_paths import resolve_cognitive_db
 
 def _resolve_nexo_db() -> Path:
     candidates = [
@@ -53,11 +54,7 @@ def _resolve_nexo_db() -> Path:
 
 
 def _resolve_cognitive_db() -> Path:
-    new = paths.data_dir() / "cognitive.db"
-    legacy = paths.legacy_data_dir() / "cognitive.db"
-    if not new.is_file() and legacy.is_file():
-        return legacy
-    return new
+    return resolve_cognitive_db(for_write=True)
 
 
 def _resolve_operations_dir() -> Path:

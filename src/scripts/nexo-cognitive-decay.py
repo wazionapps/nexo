@@ -37,6 +37,7 @@ _repo_src = _script_dir.parent  # src/scripts/ -> src/
 NEXO_CODE = _bootstrap_nexo_code(_repo_src)
 from datetime import datetime, timedelta
 
+from cognitive_paths import resolve_cognitive_db
 from paths import data_dir, operations_dir
 import cognitive
 
@@ -87,7 +88,7 @@ def _open_correction_fatigue_followup(fatigued: list) -> str:
         lines.append(f"... and {len(fatigued) - 10} more")
     description = "\n".join(lines)
     verification = (
-        f"sqlite3 {str(data_dir() / 'cognitive.db')} \"SELECT id, content, strength, tags "
+        f"sqlite3 {str(resolve_cognitive_db(for_write=False))} \"SELECT id, content, strength, tags "
         "FROM ltm_memories WHERE tags LIKE '%under_review%' ORDER BY strength ASC LIMIT 50\""
     )
     now_epoch = datetime.now().timestamp()

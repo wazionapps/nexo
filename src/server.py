@@ -1429,13 +1429,25 @@ def nexo_saved_not_used_audit(markdown: bool = False) -> str:
 
 @mcp.tool
 def nexo_automation_supervisor(markdown: bool = False) -> str:
-    """Read-only supervisor report for automations, cron runs and cron spool, excluding Evolution."""
+    """Read-only supervisor report for automations, cron runs, cron spool and Evolution policy."""
     from automation_supervisor import audit_automation, format_markdown
 
     report = audit_automation()
     if markdown:
         return format_markdown(report)
     return json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True)
+
+
+@mcp.tool
+def nexo_automation_reconcile(apply: bool = False) -> str:
+    """Build or apply the safe automation reconciliation plan."""
+    from automation_reconciler import apply_reconciliation_plan, build_reconciliation_plan
+
+    plan = build_reconciliation_plan()
+    if apply:
+        result = apply_reconciliation_plan(plan)
+        return json.dumps({"ok": result.get("ok", False), "plan": plan, "apply": result}, ensure_ascii=False, indent=2)
+    return json.dumps(plan, ensure_ascii=False, indent=2)
 
 
 @mcp.tool

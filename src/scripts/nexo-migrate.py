@@ -103,9 +103,7 @@ def get_target_version() -> str:
 
 def backup_databases() -> str:
     """Backup all .db files before migration. Returns backup dir path."""
-    ts = datetime.now().strftime("%Y%m%d-%H%M%S")
-    backup_dir = paths.backups_dir() / f"pre-migrate-{ts}"
-    backup_dir.mkdir(parents=True, exist_ok=True)
+    backup_dir = paths.create_backup_dir("pre-migrate")
 
     data_dir = paths.data_dir()
     if data_dir.exists():
@@ -123,6 +121,7 @@ def backup_databases() -> str:
     if vfile.exists():
         shutil.copy2(vfile, backup_dir / "version.json")
 
+    paths.finalize_backup_snapshot(backup_dir)
     return str(backup_dir)
 
 

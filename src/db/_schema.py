@@ -2002,6 +2002,84 @@ def _m64_local_context_live_dirs(conn):
     )
 
 
+def _backfill_diary_quality(conn):
+    for table in ("session_diary", "diary_archive"):
+        conn.execute(f"""
+            UPDATE {table}
+            SET quality_tier = CASE
+                WHEN source = 'auto-close' THEN 'auto_close_minimal'
+                WHEN source IN ('cron', 'automation') OR COALESCE(summary, '') LIKE '[AUTO-%' THEN 'fallback_minimal'
+                ELSE 'agent_authored'
+            END
+            WHERE quality_tier IS NULL
+               OR quality_tier = ''
+               OR quality_tier = 'agent_authored'
+        """)
+        conn.execute(f"""
+            UPDATE {table}
+            SET quality_score =
+                CASE WHEN COALESCE(summary, '') != '' THEN 25 ELSE 0 END +
+                CASE WHEN COALESCE(decisions, '') != '' THEN 20 ELSE 0 END +
+                CASE WHEN COALESCE(pending, '') != '' THEN 15 ELSE 0 END +
+                CASE WHEN COALESCE(context_next, '') != '' THEN 20 ELSE 0 END +
+                CASE WHEN COALESCE(self_critique, '') != '' THEN 20 ELSE 0 END
+            WHERE quality_score IS NULL OR quality_score = 0
+        """)
+
+
+def _m65_diary_quality(conn):
+    _m4_session_diary_columns(conn)
+    _m7_diary_source_and_draft(conn)
+    _m10_diary_archive(conn)
+    _migrate_add_column(conn, "session_diary", "quality_tier", "TEXT DEFAULT 'agent_authored'")
+    _migrate_add_column(conn, "session_diary", "quality_score", "INTEGER DEFAULT 0")
+    _migrate_add_column(conn, "diary_archive", "quality_tier", "TEXT DEFAULT 'agent_authored'")
+    _migrate_add_column(conn, "diary_archive", "quality_score", "INTEGER DEFAULT 0")
+    _backfill_diary_quality(conn)
+    _migrate_add_index(conn, "idx_session_diary_quality", "session_diary", "quality_tier, quality_score, created_at")
+    _migrate_add_index(conn, "idx_diary_archive_quality", "diary_archive", "quality_tier, quality_score, created_at")
+
+
+def _m66_transcript_index(conn):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS transcript_index (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_client TEXT NOT NULL,
+            conversation_id TEXT DEFAULT '',
+            session_id TEXT DEFAULT '',
+            message_count INTEGER DEFAULT 0,
+            user_message_count INTEGER DEFAULT 0,
+            first_user_at TEXT DEFAULT '',
+            last_user_at TEXT DEFAULT '',
+            path_ref TEXT NOT NULL,
+            display_name TEXT DEFAULT '',
+            indexed_at TEXT DEFAULT (datetime('now')),
+            modified_at TEXT DEFAULT '',
+            content_hash TEXT NOT NULL,
+            sanitized_summary TEXT DEFAULT '',
+            metadata_json TEXT DEFAULT '{}',
+            UNIQUE(source_client, path_ref)
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_transcript_index_client_modified ON transcript_index(source_client, modified_at)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_transcript_index_session ON transcript_index(session_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_transcript_index_conversation ON transcript_index(conversation_id)")
+
+
+def _m67_diary_quality_backfill_repair(conn):
+    """Repair DBs that already ran the original m65 default-only backfill."""
+    _m4_session_diary_columns(conn)
+    _m7_diary_source_and_draft(conn)
+    _m10_diary_archive(conn)
+    _migrate_add_column(conn, "session_diary", "quality_tier", "TEXT DEFAULT 'agent_authored'")
+    _migrate_add_column(conn, "session_diary", "quality_score", "INTEGER DEFAULT 0")
+    _migrate_add_column(conn, "diary_archive", "quality_tier", "TEXT DEFAULT 'agent_authored'")
+    _migrate_add_column(conn, "diary_archive", "quality_score", "INTEGER DEFAULT 0")
+    _backfill_diary_quality(conn)
+    _migrate_add_index(conn, "idx_session_diary_quality", "session_diary", "quality_tier, quality_score, created_at")
+    _migrate_add_index(conn, "idx_diary_archive_quality", "diary_archive", "quality_tier, quality_score, created_at")
+
+
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
     (2, "followups_reasoning", _m2_followups_reasoning),
@@ -2067,6 +2145,9 @@ MIGRATIONS = [
     (62, "memory_observations_fts_trigger_fix", _m62_memory_observations_fts_trigger_fix),
     (63, "local_context_layer", _m63_local_context_layer),
     (64, "local_context_live_dirs", _m64_local_context_live_dirs),
+    (65, "diary_quality", _m65_diary_quality),
+    (66, "transcript_index", _m66_transcript_index),
+    (67, "diary_quality_backfill_repair", _m67_diary_quality_backfill_repair),
 ]
 
 

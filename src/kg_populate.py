@@ -5,6 +5,7 @@ import os
 import sqlite3
 from typing import Optional
 
+from cognitive_paths import resolve_cognitive_db
 import knowledge_graph as kg
 from db import get_db
 
@@ -13,11 +14,7 @@ from db import get_db
 
 def _cognitive_db():
     """Direct cognitive.db connection (for somatic_markers)."""
-    nexo_home = os.environ.get("NEXO_HOME", os.path.expanduser("~/.nexo"))
-    data_dir = os.path.join(nexo_home, "data")
-    os.makedirs(data_dir, exist_ok=True)
-    path = os.path.join(data_dir, "cognitive.db")
-    conn = sqlite3.connect(path)
+    conn = sqlite3.connect(str(resolve_cognitive_db(for_write=True)))
     conn.row_factory = sqlite3.Row
     return conn
 

@@ -318,6 +318,61 @@ def cleanup_old_diaries(retention_days: int = 180) -> int:
     return cursor.rowcount
 
 
+def _diary_quality_tier(source: str = "", summary: str = "", mental_state: str = "") -> str:
+    normalized_source = (source or "").strip().lower()
+    blob = f"{summary or ''} {mental_state or ''}".lower()
+    if normalized_source in {"human", "operator", "manual"}:
+        return "human_authored"
+    if normalized_source == "auto-close":
+        if "0 heartbeats" in blob or "minimal diary" in blob or "[auto-" in blob:
+            return "auto_close_minimal"
+        return "agent_authored"
+    if normalized_source in {"cron", "automation"} or "[auto-" in blob:
+        return "fallback_minimal"
+    return "agent_authored"
+
+
+def _diary_quality_score(
+    *,
+    summary: str = "",
+    decisions: str = "",
+    pending: str = "",
+    context_next: str = "",
+    self_critique: str = "",
+    mental_state: str = "",
+    tier: str = "",
+) -> int:
+    score = 0
+    if (summary or "").strip():
+        score += 25
+    if (decisions or "").strip():
+        score += 20
+    if (pending or "").strip():
+        score += 15
+    if (context_next or "").strip():
+        score += 20
+    if (self_critique or "").strip():
+        score += 20
+    if (mental_state or "").strip():
+        score += 5
+    if tier in {"auto_close_minimal", "fallback_minimal"}:
+        score = max(0, score - 40)
+    if tier == "human_authored":
+        score += 10
+    return min(score, 100)
+
+
+def _diary_order_sql() -> str:
+    return (
+        "CASE quality_tier "
+        "WHEN 'human_authored' THEN 0 "
+        "WHEN 'agent_authored' THEN 1 "
+        "WHEN 'auto_close_minimal' THEN 2 "
+        "WHEN 'fallback_minimal' THEN 3 "
+        "ELSE 4 END, quality_score DESC, created_at DESC"
+    )
+
+
 def write_session_diary(session_id: str, decisions: str, summary: str,
                         discarded: str = '', pending: str = '',
                         context_next: str = '', mental_state: str = '',
@@ -326,10 +381,34 @@ def write_session_diary(session_id: str, decisions: str, summary: str,
     """Write a session diary entry with mental state and self-critique for continuity."""
     conn = get_db()
     cleanup_old_diaries()
+    quality_tier = _diary_quality_tier(source=source, summary=summary, mental_state=mental_state)
+    quality_score = _diary_quality_score(
+        summary=summary,
+        decisions=decisions,
+        pending=pending,
+        context_next=context_next,
+        self_critique=self_critique,
+        mental_state=mental_state,
+        tier=quality_tier,
+    )
     cursor = conn.execute(
-        "INSERT INTO session_diary (session_id, decisions, discarded, pending, context_next, mental_state, summary, domain, user_signals, self_critique, source) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (session_id, decisions, discarded, pending, context_next, mental_state, summary, domain, user_signals, self_critique, source)
+        "INSERT INTO session_diary (session_id, decisions, discarded, pending, context_next, mental_state, summary, domain, user_signals, self_critique, source, quality_tier, quality_score) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            session_id,
+            decisions,
+            discarded,
+            pending,
+            context_next,
+            mental_state,
+            summary,
+            domain,
+            user_signals,
+            self_critique,
+            source,
+            quality_tier,
+            quality_score,
+        )
     )
     conn.commit()
     did = cursor.lastrowid
@@ -601,19 +680,19 @@ def read_session_diary(session_id: str = '', last_n: int = 3, last_day: bool = F
 
     if session_id:
         rows = conn.execute(
-            f"SELECT * FROM session_diary WHERE session_id = ?{domain_clause} ORDER BY created_at DESC",
+            f"SELECT * FROM session_diary WHERE session_id = ?{domain_clause} ORDER BY {_diary_order_sql()}",
             (session_id,) + domain_params
         ).fetchall()
     elif last_day:
         rows = conn.execute(
             f"SELECT * FROM session_diary "
             f"WHERE created_at >= datetime('now', '-36 hours'){domain_clause}{source_clause} "
-            f"ORDER BY created_at DESC",
+            f"ORDER BY {_diary_order_sql()}",
             domain_params
         ).fetchall()
     else:
         rows = conn.execute(
-            f"SELECT * FROM session_diary WHERE 1=1{domain_clause}{source_clause} ORDER BY created_at DESC LIMIT ?",
+            f"SELECT * FROM session_diary WHERE 1=1{domain_clause}{source_clause} ORDER BY {_diary_order_sql()} LIMIT ?",
             domain_params + (last_n,)
         ).fetchall()
     return [dict(r) for r in rows]
@@ -759,4 +838,3 @@ def recall(query: str, days: int = 30) -> list[dict]:
 
     results.sort(key=lambda r: r.get('created_at', ''), reverse=True)
     return results[:20]
-
