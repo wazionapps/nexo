@@ -22,7 +22,7 @@ Class taxonomy (prefix-based) and retention policy:
     Prefixes:
       pre-update-*, pre-autoupdate-*, pre-backfill-owner-*,
       pre-runtime-sync-*, pre-sleep-wrapper-*, pre-obs-clean-*,
-      pre-import-user-data-*, pre-backfill-*,
+      pre-import-user-data-*, pre-backfill-*, pre-heal-*, pre-recover-*,
       code-tree-*, runtime-tree-*,
       app-install-*, app-reinstall-*, desktop-local-install-*,
       packaged-code-f06-conflicts-*, legacy-shim-conflicts-*,
@@ -82,6 +82,8 @@ TECHNICAL_PREFIXES = (
     "pre-sleep-wrapper-",
     "pre-obs-clean-",
     "pre-import-user-data-",
+    "pre-heal-",
+    "pre-recover-",
     "pre-freshinstall-",
     "code-tree-",
     "runtime-tree-",
@@ -108,8 +110,11 @@ TECHNICAL_PREFIXES = (
 PROTECTED_NAMES = {"shopify-backups", "weekly"}
 # Hourly DB dumps at the root of runtime/backups — managed by nexo-backup.sh.
 HOURLY_DB_RE = re.compile(r"^nexo-\d{4}-\d{2}-\d{2}-\d{4}\.db$")
+LOCAL_CONTEXT_DB_RE = re.compile(r"^local-context-\d{4}-\d{2}-\d{2}-\d{4}(\d{2})?\.db$")
+TEMPORARY_RE = re.compile(r"(^|.*[.])tmp([.-].*)?$|.*\.tmp\..*|.*-journal$|.*\.db-(wal|shm)$")
 # Big ad-hoc DB files at the root — rare, include for reporting but never auto-prune.
 ROOT_DB_RE = re.compile(r"^(pre-obs-clean|pre-sleep-wrapper-apply|pre-.*)-\d{4}-\d{2}-\d{2}-\d{4}\.db$")
+DEFAULT_MAX_BYTES = 50 * 1024 * 1024 * 1024
 
 # Timestamp patterns embedded in directory names.
 TS_PATTERNS = (
@@ -147,6 +152,10 @@ def classify(name: str) -> tuple[str, str] | None:
     """Return (class, family) or None if the entry should be ignored."""
     if name in PROTECTED_NAMES:
         return ("BUSINESS", name)
+    if TEMPORARY_RE.match(name):
+        return ("TEMPORARY", "temporary")
+    if LOCAL_CONTEXT_DB_RE.match(name):
+        return ("LOCAL_CONTEXT_DB", "local-context")
     if HOURLY_DB_RE.match(name):
         return ("HOURLY_DB", "nexo-db")
     if ROOT_DB_RE.match(name):
@@ -181,6 +190,30 @@ def human_size(n: int) -> str:
     return f"{n:.1f}P"
 
 
+def parse_size_bytes(value: str | int | None, *, default: int = DEFAULT_MAX_BYTES) -> int:
+    if value is None or value == "":
+        return default
+    if isinstance(value, int):
+        return max(0, value)
+    raw = str(value).strip().lower()
+    if not raw:
+        return default
+    multiplier = 1
+    if raw[-1:] in {"k", "m", "g", "t"}:
+        unit = raw[-1]
+        raw = raw[:-1].strip()
+        multiplier = {
+            "k": 1024,
+            "m": 1024 ** 2,
+            "g": 1024 ** 3,
+            "t": 1024 ** 4,
+        }[unit]
+    try:
+        return max(0, int(float(raw) * multiplier))
+    except ValueError:
+        return default
+
+
 def gather_entries(backups_root: Path) -> list[dict]:
     items: list[dict] = []
     for entry in backups_root.iterdir():
@@ -195,7 +228,10 @@ def gather_entries(backups_root: Path) -> list[dict]:
                 ts = datetime.fromtimestamp(entry.stat().st_mtime, tz=timezone.utc)
             except OSError:
                 ts = None
-        size = dir_size_bytes(entry) if entry.is_dir() else entry.stat().st_size
+        try:
+            size = dir_size_bytes(entry) if entry.is_dir() else entry.stat().st_size
+        except OSError:
+            continue
         items.append({
             "name": name,
             "path": str(entry),
@@ -214,11 +250,16 @@ def plan_prunes(
     n_recent: int,
     window_days: int,
     only: str | None,
+    max_bytes: int,
+    tmp_ttl_seconds: int,
+    local_context_keep: int,
+    hourly_keep: int,
 ) -> tuple[list[dict], list[dict]]:
-    """Return (to_delete, to_keep) among TECHNICAL items only."""
+    """Return (to_delete, to_keep) for product-generated backup artifacts."""
     now = datetime.now(tz=timezone.utc)
     to_delete: list[dict] = []
     to_keep: list[dict] = []
+    delete_ids: set[int] = set()
     by_family: dict[str, list[dict]] = {}
     for it in items:
         if it["class"] != "TECHNICAL":
@@ -245,8 +286,75 @@ def plan_prunes(
                     seen_months.add(ym)
                     to_keep.append(it)
                     continue
-            to_delete.append(it)
+            if id(it) not in delete_ids:
+                to_delete.append(it)
+                delete_ids.add(id(it))
         to_keep.extend(keep_recent)
+
+    for it in items:
+        if it["class"] != "TEMPORARY":
+            continue
+        ts = it["ts"]
+        age_seconds = (now - ts).total_seconds() if ts else 10_000_000
+        if age_seconds >= tmp_ttl_seconds:
+            if id(it) not in delete_ids:
+                to_delete.append(it)
+                delete_ids.add(id(it))
+        else:
+            to_keep.append(it)
+
+    for klass, keep_count in (("LOCAL_CONTEXT_DB", local_context_keep), ("HOURLY_DB", hourly_keep)):
+        group = [it for it in items if it["class"] == klass]
+        group.sort(key=lambda x: (x["ts"] or datetime.min.replace(tzinfo=timezone.utc)), reverse=True)
+        for it in group[:max(0, keep_count)]:
+            to_keep.append(it)
+        for it in group[max(0, keep_count):]:
+            if id(it) not in delete_ids:
+                to_delete.append(it)
+                delete_ids.add(id(it))
+
+    if max_bytes > 0:
+        total_after_planned = sum(i["size"] for i in items if id(i) not in delete_ids)
+        if total_after_planned > max_bytes:
+            protected_keep_ids: set[int] = set()
+            by_budget_family: dict[tuple[str, str], list[dict]] = {}
+            for it in items:
+                by_budget_family.setdefault((it["class"], it["family"]), []).append(it)
+            for (klass, _family), group in by_budget_family.items():
+                if klass not in {"TECHNICAL", "LOCAL_CONTEXT_DB", "HOURLY_DB", "TEMPORARY"}:
+                    continue
+                min_keep = 0
+                if klass == "HOURLY_DB":
+                    min_keep = max(1, hourly_keep)
+                elif klass == "LOCAL_CONTEXT_DB":
+                    min_keep = max(0, local_context_keep)
+                group.sort(key=lambda x: (x["ts"] or datetime.min.replace(tzinfo=timezone.utc)), reverse=True)
+                for it in group[:min_keep]:
+                    protected_keep_ids.add(id(it))
+
+            budget_candidates = [
+                it for it in items
+                if id(it) not in delete_ids
+                and id(it) not in protected_keep_ids
+                and it["class"] in {"TECHNICAL", "LOCAL_CONTEXT_DB", "HOURLY_DB", "TEMPORARY"}
+            ]
+            budget_candidates.sort(
+                key=lambda x: (
+                    x["ts"] or datetime.min.replace(tzinfo=timezone.utc),
+                    -int(x["size"] or 0),
+                )
+            )
+            for it in budget_candidates:
+                if total_after_planned <= max_bytes:
+                    break
+                to_delete.append(it)
+                delete_ids.add(id(it))
+                total_after_planned -= int(it["size"] or 0)
+
+    keep_ids = {id(i) for i in to_keep}
+    for it in items:
+        if id(it) not in delete_ids and id(it) not in keep_ids:
+            to_keep.append(it)
     return to_delete, to_keep
 
 
@@ -260,13 +368,20 @@ def run(args: argparse.Namespace) -> int:
     biz_items = [i for i in items if i["class"] == "BUSINESS"]
     hourly_items = [i for i in items if i["class"] == "HOURLY_DB"]
     root_db_items = [i for i in items if i["class"] == "ROOT_DB"]
+    local_context_items = [i for i in items if i["class"] == "LOCAL_CONTEXT_DB"]
+    temporary_items = [i for i in items if i["class"] == "TEMPORARY"]
     unknown_items = [i for i in items if i["class"] == "UNKNOWN"]
+    max_bytes = parse_size_bytes(args.max_bytes)
 
     to_delete, to_keep = plan_prunes(
         items,
         n_recent=args.recent,
         window_days=args.window_days,
         only=args.only,
+        max_bytes=max_bytes,
+        tmp_ttl_seconds=max(0, args.tmp_ttl_minutes) * 60,
+        local_context_keep=max(0, args.local_context_keep),
+        hourly_keep=max(0, args.hourly_keep),
     )
 
     total_all = sum(i["size"] for i in items)
@@ -279,6 +394,11 @@ def run(args: argparse.Namespace) -> int:
             "n_recent": args.recent,
             "window_days": args.window_days,
             "only": args.only,
+            "max_bytes": max_bytes,
+            "max_human": human_size(max_bytes),
+            "tmp_ttl_minutes": args.tmp_ttl_minutes,
+            "local_context_keep": args.local_context_keep,
+            "hourly_keep": args.hourly_keep,
         },
         "totals": {
             "all_bytes": total_all,
@@ -291,6 +411,8 @@ def run(args: argparse.Namespace) -> int:
             "technical": len(tech_items),
             "business": len(biz_items),
             "hourly_db": len(hourly_items),
+            "local_context_db": len(local_context_items),
+            "temporary": len(temporary_items),
             "root_db": len(root_db_items),
             "unknown": len(unknown_items),
         },
@@ -315,9 +437,11 @@ def run(args: argparse.Namespace) -> int:
         print(f"    technical:     {len(tech_items)}")
         print(f"    business:      {len(biz_items)} (protected)")
         print(f"    hourly_db:     {len(hourly_items)} (managed by nexo-backup.sh)")
+        print(f"    local_context: {len(local_context_items)}")
+        print(f"    temporary:     {len(temporary_items)}")
         print(f"    root_db:       {len(root_db_items)} (never auto-pruned)")
         print(f"    unknown:       {len(unknown_items)}")
-        print(f"  policy: keep {args.recent} most-recent + 1 per month within {args.window_days}d")
+        print(f"  policy: keep {args.recent} most-recent + 1 per month within {args.window_days}d; hard-cap {human_size(max_bytes)}")
         if args.only:
             print(f"  restricted to family: {args.only}")
         print()
@@ -364,6 +488,10 @@ def main() -> int:
     ap.add_argument("--recent", type=int, default=5, help="N most recent per family to always keep (default: 5)")
     ap.add_argument("--window-days", type=int, default=90, help="month-spaced retention window (default: 90)")
     ap.add_argument("--only", help="restrict to one technical family (e.g. 'pre-backfill-owner')")
+    ap.add_argument("--max-bytes", default=os.environ.get("NEXO_BACKUP_MAX_BYTES", str(DEFAULT_MAX_BYTES)), help="global product-generated backup hard cap, bytes or K/M/G/T (default: 50G)")
+    ap.add_argument("--tmp-ttl-minutes", type=int, default=int(os.environ.get("NEXO_BACKUP_TMP_TTL_MINUTES", "30")), help="delete orphan temporary backup files older than this (default: 30)")
+    ap.add_argument("--local-context-keep", type=int, default=int(os.environ.get("NEXO_LOCAL_CONTEXT_BACKUP_KEEP_LAST", "1")), help="local-context backup files to keep under the global cap (default: 1)")
+    ap.add_argument("--hourly-keep", type=int, default=int(os.environ.get("NEXO_BACKUP_KEEP_LAST", "3")), help="hourly nexo DB backups to keep under the global cap (default: 3)")
     args = ap.parse_args()
     try:
         return run(args)

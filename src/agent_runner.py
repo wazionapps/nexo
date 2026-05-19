@@ -1052,9 +1052,10 @@ BARE_MODE_SAFE_CALLERS: frozenset[str] = frozenset({
 # Execution contracts keep background agents disciplined without polluting
 # machine-only child calls that must return strict JSON.
 AUTOMATION_CONTRACT_FULL_NEXO_AGENT = "full_nexo_agent"
+AUTOMATION_CONTRACT_SUPERVISED_CHILD = "supervised_child"
 AUTOMATION_CONTRACT_STRICT_CHILD = "strict_child_json"
 AUTOMATION_CONTRACT_PUBLIC_CHILD = "public_isolated_child"
-AUTOMATION_CONTRACT_DEFAULT = AUTOMATION_CONTRACT_FULL_NEXO_AGENT
+AUTOMATION_CONTRACT_DEFAULT = AUTOMATION_CONTRACT_SUPERVISED_CHILD
 
 FULL_NEXO_AGENT_CALLERS: frozenset[str] = frozenset({
     "catchup/morning",
@@ -1087,15 +1088,28 @@ MACHINE_ONLY_LANGUAGE_CONTRACT_CALLERS: frozenset[str] = frozenset({
 
 def _automation_contract_for_caller(caller: str) -> str:
     clean = str(caller or "").strip()
+    if clean in FULL_NEXO_AGENT_CALLERS:
+        return AUTOMATION_CONTRACT_FULL_NEXO_AGENT
     if clean in STRICT_CHILD_CALLERS:
         return AUTOMATION_CONTRACT_STRICT_CHILD
     if clean in PUBLIC_CHILD_CALLERS:
         return AUTOMATION_CONTRACT_PUBLIC_CHILD
-    return AUTOMATION_CONTRACT_FULL_NEXO_AGENT
+    return AUTOMATION_CONTRACT_DEFAULT
 
 
 def _caller_uses_global_discipline(caller: str) -> bool:
     return _automation_contract_for_caller(caller) == AUTOMATION_CONTRACT_FULL_NEXO_AGENT
+
+
+def _build_supervised_child_system_prompt() -> str:
+    return (
+        "You are running as a supervised NEXO automation child. "
+        "Return the requested result for this job only. Do not open or close "
+        "NEXO tasks, reminders, diary entries, sessions, or followups from "
+        "inside this child process; the parent NEXO runner owns lifecycle, "
+        "timeouts, evidence, retries, and durable state. If the requested "
+        "work cannot be completed safely, return a concise failure reason."
+    )
 
 
 def _should_apply_operator_language_contract(caller: str) -> bool:
@@ -1191,6 +1205,12 @@ def run_automation_prompt(
             append_system_prompt = append_system_prompt + "\n\n" + enforcement_fragment
         else:
             append_system_prompt = enforcement_fragment
+    elif automation_contract == AUTOMATION_CONTRACT_SUPERVISED_CHILD:
+        supervised_fragment = _build_supervised_child_system_prompt()
+        if append_system_prompt:
+            append_system_prompt = append_system_prompt + "\n\n" + supervised_fragment
+        else:
+            append_system_prompt = supervised_fragment
 
     prompt = _apply_operator_language_contract(prompt, caller=caller)
 

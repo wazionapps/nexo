@@ -147,6 +147,18 @@ DATA_DIR = paths.data_dir()
 BACKUP_BASE = paths.backups_dir()
 TECHNICAL_BACKUP_KEEP = 5
 
+
+def _env_int(name: str, default: int) -> int:
+    try:
+        return int(os.environ.get(name, str(default)))
+    except (TypeError, ValueError):
+        return default
+
+
+BACKUP_MAX_BYTES = _env_int("NEXO_BACKUP_MAX_BYTES", 50 * 1024 * 1024 * 1024)
+BACKUP_MIN_FREE_BYTES = _env_int("NEXO_BACKUP_MIN_FREE_BYTES", 5 * 1024 * 1024 * 1024)
+LOCAL_CONTEXT_MAX_BACKUP_BYTES = _env_int("NEXO_LOCAL_CONTEXT_MAX_BACKUP_BYTES", 2 * 1024 * 1024 * 1024)
+
 # In packaged installs, update.py lives at <NEXO_HOME>/plugins/update.py.
 _PACKAGED_INSTALL = _is_packaged_install()
 REPO_DIR = CODE_ROOT if _PACKAGED_INSTALL else _REPO_CANDIDATE
@@ -184,6 +196,55 @@ def _rotate_backup_family(prefix: str, keep: int = TECHNICAL_BACKUP_KEEP) -> int
         except Exception:
             continue
     return removed
+
+
+def _run_runtime_backup_prune() -> None:
+    script = SRC_DIR / "scripts" / "prune_runtime_backups.py"
+    if not script.is_file():
+        return
+    try:
+        subprocess.run(
+            [
+                sys.executable,
+                str(script),
+                "--root",
+                str(BACKUP_BASE),
+                "--apply",
+                "--max-bytes",
+                str(BACKUP_MAX_BYTES),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+    except Exception:
+        pass
+
+
+def _backup_free_bytes() -> int | None:
+    try:
+        usage = shutil.disk_usage(BACKUP_BASE if BACKUP_BASE.exists() else BACKUP_BASE.parent)
+        return int(usage.free)
+    except Exception:
+        return None
+
+
+def _backup_space_error() -> str | None:
+    _run_runtime_backup_prune()
+    free = _backup_free_bytes()
+    if free is not None and free < BACKUP_MIN_FREE_BYTES:
+        return (
+            "free disk below NEXO backup safety floor after automatic cleanup "
+            f"({free}B < {BACKUP_MIN_FREE_BYTES}B)"
+        )
+    return None
+
+
+def _should_include_local_context_backup(path: Path) -> bool:
+    try:
+        return path.stat().st_size <= LOCAL_CONTEXT_MAX_BACKUP_BYTES
+    except OSError:
+        return False
 
 
 def _venv_python_path(runtime_root: Path | None = None) -> Path:
@@ -522,7 +583,7 @@ def _backup_databases() -> tuple[str, str | None]:
 
     db_files = list(DATA_DIR.glob("*.db")) if DATA_DIR.is_dir() else []
     local_context_db = paths.memory_dir() / "local-context.db"
-    if local_context_db.is_file():
+    if local_context_db.is_file() and _should_include_local_context_backup(local_context_db):
         db_files.append(local_context_db)
     # Also check NEXO_HOME root for legacy db location
     db_files += [f for f in NEXO_HOME.glob("*.db") if f.is_file()]
@@ -533,6 +594,10 @@ def _backup_databases() -> tuple[str, str | None]:
 
     if not db_files:
         return str(backup_dir), None  # No DBs to backup, not an error
+
+    space_err = _backup_space_error()
+    if space_err:
+        return str(backup_dir), space_err
 
     backup_dir.mkdir(parents=True, exist_ok=True)
 

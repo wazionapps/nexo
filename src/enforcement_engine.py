@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import queue
 import subprocess
 import threading
 import time
@@ -2816,7 +2817,10 @@ def run_with_enforcement(
     # headless runtime. Without this, correction detection and project-
     # context rules only run when tests invoke on_user_message directly.
     try:
-        enforcer.on_user_message(prompt or "")
+        enforcer.on_user_message(
+            prompt or "",
+            session_end_detector=lambda _text: False,
+        )
     except Exception as _init_exc:  # noqa: BLE001 — fail-closed
         _logger.warning("on_user_message (initial prompt) failed: %s", _init_exc)
 
@@ -2831,6 +2835,16 @@ def run_with_enforcement(
     stderr_lines = []
     start_time = time.time()
     waiting_for_injection_response = False
+    timed_out = False
+    stdout_closed = False
+    stdout_lines: queue.Queue[str | None] = queue.Queue()
+
+    def _kill_proc(reason: str) -> None:
+        _logger.warning("%s after %ds", reason, timeout)
+        try:
+            proc.kill()
+        except Exception:
+            pass
 
     def _inject(text: str):
         nonlocal waiting_for_injection_response
@@ -2847,6 +2861,15 @@ def run_with_enforcement(
         except Exception as e:
             _logger.error("INJECT_FAILED: %s", e)
 
+    def _read_stdout():
+        try:
+            for line in proc.stdout:
+                stdout_lines.put(line)
+        except Exception:
+            pass
+        finally:
+            stdout_lines.put(None)
+
     def _read_stderr():
         try:
             for line in proc.stderr:
@@ -2854,92 +2877,125 @@ def run_with_enforcement(
         except Exception:
             pass
 
+    stdout_thread = threading.Thread(target=_read_stdout, daemon=True)
     stderr_thread = threading.Thread(target=_read_stderr, daemon=True)
+    stdout_thread.start()
     stderr_thread.start()
 
     last_periodic_check = time.time()
 
-    try:
-        for raw_line in proc.stdout:
-            line = raw_line.strip()
-            if not line:
-                continue
+    def _handle_stdout_line(raw_line: str) -> bool:
+        """Process one Claude stream-json line.
 
-            if time.time() - start_time > timeout:
-                _logger.warning("TIMEOUT after %ds", timeout)
-                proc.kill()
-                break
+        Return True when the stream turn is complete and the caller should
+        leave the main read loop.
+        """
+        nonlocal waiting_for_injection_response
+        line = raw_line.strip()
+        if not line:
+            return False
 
-            try:
-                event = json.loads(line)
-            except json.JSONDecodeError:
-                continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            return False
 
-            event_type = event.get("type", "")
+        event_type = event.get("type", "")
 
-            if event_type == "assistant" and event.get("message", {}).get("content"):
-                for block in event["message"]["content"]:
-                    if block.get("type") == "tool_use":
-                        # v7.7 Gap 7.3 — wire before_tool in the live
-                        # stream. Desktop already calls onBeforeToolCall
-                        # before onToolCall; Brain's stream was only
-                        # calling on_tool_call, silently skipping every
-                        # before_tool rule the map declared.
-                        enforcer.on_tool_call_before(block.get("name", ""), block.get("input"))
-                        enforcer.on_tool_call(block.get("name", ""), block.get("input"))
-            elif event_type == "content_block_start":
-                cb = event.get("content_block", {})
-                if cb.get("type") == "tool_use":
-                    enforcer.on_tool_call_before(cb.get("name", ""), cb.get("input"))
-                    enforcer.on_tool_call(cb.get("name", ""), cb.get("input"))
+        if event_type == "assistant" and event.get("message", {}).get("content"):
+            for block in event["message"]["content"]:
+                if block.get("type") == "tool_use":
+                    # v7.7 Gap 7.3 — wire before_tool in the live
+                    # stream. Desktop already calls onBeforeToolCall
+                    # before onToolCall; Brain's stream was only
+                    # calling on_tool_call, silently skipping every
+                    # before_tool rule the map declared.
+                    enforcer.on_tool_call_before(block.get("name", ""), block.get("input"))
+                    enforcer.on_tool_call(block.get("name", ""), block.get("input"))
+        elif event_type == "content_block_start":
+            cb = event.get("content_block", {})
+            if cb.get("type") == "tool_use":
+                enforcer.on_tool_call_before(cb.get("name", ""), cb.get("input"))
+                enforcer.on_tool_call(cb.get("name", ""), cb.get("input"))
 
-            if event_type == "assistant" and not waiting_for_injection_response:
-                msg = event.get("message", {})
-                for block in msg.get("content", []):
-                    if block.get("type") == "text":
-                        collected_text.append(block["text"])
-                        # R16 — probe each assistant text block as it arrives
-                        # so a declared-done line is caught on the same turn
-                        # rather than only at session end.
-                        try:
-                            enforcer.on_assistant_text(block["text"])
-                        except Exception as _r16_exc:  # noqa: BLE001
-                            _logger.warning("on_assistant_text failed: %s", _r16_exc)
-                        try:
-                            enforcer.on_assistant_text_r17(block["text"])
-                        except Exception as _r17_exc:  # noqa: BLE001
-                            _logger.warning("on_assistant_text_r17 failed: %s", _r17_exc)
+        if event_type == "assistant" and not waiting_for_injection_response:
+            msg = event.get("message", {})
+            for block in msg.get("content", []):
+                if block.get("type") == "text":
+                    collected_text.append(block["text"])
+                    # R16 — probe each assistant text block as it arrives
+                    # so a declared-done line is caught on the same turn
+                    # rather than only at session end.
+                    try:
+                        enforcer.on_assistant_text(block["text"])
+                    except Exception as _r16_exc:  # noqa: BLE001
+                        _logger.warning("on_assistant_text failed: %s", _r16_exc)
+                    try:
+                        enforcer.on_assistant_text_r17(block["text"])
+                    except Exception as _r17_exc:  # noqa: BLE001
+                        _logger.warning("on_assistant_text_r17 failed: %s", _r17_exc)
 
-            if event_type == "result":
-                if waiting_for_injection_response:
-                    waiting_for_injection_response = False
-                    _logger.info("INJECTION_RESPONSE received")
-                    item = enforcer.flush()
-                    if item:
-                        _inject(item["prompt"])
-                    continue
-
-                enforcer.check_periodic()
+        if event_type == "result":
+            if waiting_for_injection_response:
+                waiting_for_injection_response = False
+                _logger.info("INJECTION_RESPONSE received")
                 item = enforcer.flush()
                 if item:
                     _inject(item["prompt"])
-                else:
-                    _logger.info("TURN_END — no pending enforcements, done")
-                    break
+                return False
 
-            if time.time() - last_periodic_check > 30:
-                enforcer.check_periodic()
-                last_periodic_check = time.time()
+            enforcer.check_periodic()
+            item = enforcer.flush()
+            if item:
+                _inject(item["prompt"])
+            else:
+                _logger.info("TURN_END — no pending enforcements, done")
+                return True
+
+        return False
+
+    try:
+        while True:
+            if time.time() - start_time > timeout:
+                timed_out = True
+                _kill_proc("TIMEOUT")
+                break
+
+            try:
+                raw_line = stdout_lines.get(timeout=0.2)
+            except queue.Empty:
+                if stdout_closed and proc.poll() is not None:
+                    break
+                if time.time() - last_periodic_check > 30:
+                    enforcer.check_periodic()
+                    last_periodic_check = time.time()
+                continue
+
+            if raw_line is None:
+                stdout_closed = True
+                break
+
+            if _handle_stdout_line(raw_line):
+                break
 
     except Exception as e:
         _logger.error("EXCEPTION: %s", e)
     finally:
-        end_prompts = enforcer.get_end_prompts()
+        end_prompts = [] if timed_out else enforcer.get_end_prompts()
         for ep in end_prompts:
             try:
                 _inject(ep)
                 deadline = time.time() + 15
-                for raw_line in proc.stdout:
+                while time.time() <= deadline:
+                    try:
+                        raw_line = stdout_lines.get(timeout=0.2)
+                    except queue.Empty:
+                        if proc.poll() is not None:
+                            break
+                        continue
+                    if raw_line is None:
+                        stdout_closed = True
+                        break
                     if time.time() > deadline:
                         _logger.warning("END_PROMPT timeout")
                         break
@@ -2968,10 +3024,18 @@ def run_with_enforcement(
         except subprocess.TimeoutExpired:
             proc.kill()
 
+    stdout_thread.join(timeout=2)
     stderr_thread.join(timeout=2)
     final_text = "\n".join(collected_text)
     final_stderr = "".join(stderr_lines)
+    returncode = proc.returncode
+    if timed_out:
+        returncode = 124
+        timeout_msg = f"NEXO enforcement timeout after {timeout}s"
+        final_stderr = f"{final_stderr.rstrip()}\n{timeout_msg}".lstrip()
+    elif returncode is None:
+        returncode = 0
 
     return subprocess.CompletedProcess(
-        stream_cmd, proc.returncode or 0, final_text, final_stderr
+        stream_cmd, returncode, final_text, final_stderr
     )

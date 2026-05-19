@@ -11,6 +11,8 @@ import importlib
 import json
 import os
 import sys
+import threading
+import time
 from unittest import mock
 
 import pytest
@@ -202,3 +204,94 @@ def test_run_with_enforcement_forwards_initial_prompt_to_on_user_message(monkeyp
     monkeypatch.setattr(eng, "HeadlessEnforcer", lambda: fake_enforcer)
     eng.run_with_enforcement(["claude"], prompt="please deploy WAzion", cwd="/tmp", timeout=5)
     assert sent == ["please deploy WAzion"]
+
+
+def test_run_with_enforcement_timeout_does_not_depend_on_stdout(monkeypatch):
+    """A silent child must be killed by the wall-clock timeout.
+
+    This pins the 2026-05-19 deadlock: the old implementation checked
+    timeout inside ``for raw_line in proc.stdout`` and never executed that
+    check if Claude emitted no first line.
+    """
+    import enforcement_engine as eng
+
+    class _FakeEnforcer:
+        def __init__(self):
+            self.injection_queue = []
+            self._injections_done = 0
+            self.tools_called = set()
+            self.tool_call_count = 0
+            self.map = {"version": "2.1.0", "tools": {}}
+
+        def set_session_id(self, _sid):
+            pass
+
+        def on_user_message(self, *_args, **_kwargs):
+            pass
+
+        def check_periodic(self):
+            pass
+
+        def flush(self):
+            return None
+
+        def get_end_prompts(self):
+            return []
+
+        def summary(self):
+            return ""
+
+    class _FakeStdin:
+        def write(self, _):
+            pass
+
+        def flush(self):
+            pass
+
+        def close(self):
+            pass
+
+    class _SilentStdout:
+        def __init__(self, proc):
+            self.proc = proc
+
+        def __iter__(self):
+            return self
+
+        def __next__(self):
+            self.proc.killed.wait(5)
+            raise StopIteration
+
+    class _FakeStderr:
+        def __iter__(self):
+            return iter([])
+
+    class _FakeProc:
+        def __init__(self):
+            self.killed = threading.Event()
+            self.stdin = _FakeStdin()
+            self.stdout = _SilentStdout(self)
+            self.stderr = _FakeStderr()
+            self.returncode = None
+
+        def kill(self):
+            self.returncode = -9
+            self.killed.set()
+
+        def poll(self):
+            return self.returncode
+
+        def wait(self, timeout=None):
+            self.killed.wait(timeout or 0)
+            return self.returncode or 0
+
+    monkeypatch.setattr(eng.subprocess, "Popen", lambda *a, **kw: _FakeProc())
+    monkeypatch.setattr(eng, "HeadlessEnforcer", _FakeEnforcer)
+
+    started = time.perf_counter()
+    result = eng.run_with_enforcement(["claude"], prompt="silent", cwd="/tmp", timeout=1)
+    elapsed = time.perf_counter() - started
+
+    assert elapsed < 2.5
+    assert result.returncode == 124
+    assert "timeout" in result.stderr.lower()

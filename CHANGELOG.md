@@ -1,5 +1,15 @@
 # Changelog
 
+## [7.23.1] - 2026-05-19
+
+### Fixed — Express recovery for headless automation and runaway backups
+
+- **Headless global-discipline automations can no longer hang forever on a silent Claude child.** The enforcement runner now reads stdout asynchronously and kills the child on a wall-clock timeout even when no first stdout line is ever emitted.
+- **Automation prompts no longer trigger false end-of-session cleanup.** Synthetic headless prompts still feed correction/project enforcement, but skip session-end intent detection so followup jobs cannot enqueue diary/stop loops by accident.
+- **One-shot automations default to supervised children instead of full nested agents.** The parent NEXO runner owns lifecycle, timeouts, evidence and durable state; only explicitly interactive automation callers use the full global-discipline wrapper.
+- **Runtime backups now self-heal before writing new large files.** Backup/update hooks prune product-generated artifacts under a 50GB hard cap, delete orphan temp/WAL/SHM backup files, enforce a 5GB free-space floor, and skip multi-GB `local-context.db` copies instead of filling the user's disk.
+- **Coverage:** targeted runner/enforcer/backup tests, Python compile checks and shell syntax validation.
+
 ## [7.23.0] - 2026-05-19
 
 ### Added — Memory continuity router and evidence audits

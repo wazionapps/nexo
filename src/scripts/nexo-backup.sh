@@ -17,10 +17,21 @@ LOCAL_CONTEXT_RETENTION_HOURS="${NEXO_LOCAL_CONTEXT_BACKUP_RETENTION_HOURS:-24}"
 LOCAL_CONTEXT_KEEP_LAST="${NEXO_LOCAL_CONTEXT_BACKUP_KEEP_LAST:-2}"
 BUSY_TIMEOUT_MS="${NEXO_BACKUP_BUSY_TIMEOUT_MS:-5000}"
 RECENT_BACKUP_HOURS="${NEXO_BACKUP_RECENT_BACKUP_HOURS:-6}"
+BACKUP_MAX_BYTES="${NEXO_BACKUP_MAX_BYTES:-53687091200}"
+MIN_FREE_BYTES="${NEXO_BACKUP_MIN_FREE_BYTES:-5368709120}"
+LOCAL_CONTEXT_MAX_BACKUP_BYTES="${NEXO_LOCAL_CONTEXT_MAX_BACKUP_BYTES:-2147483648}"
 
 mkdir -p "$BACKUP_DIR" "$WEEKLY_DIR"
 
 cleanup_backups() {
+    PRUNER="$NEXO_HOME/core/scripts/prune_runtime_backups.py"
+    if [ ! -f "$PRUNER" ]; then
+        PRUNER="$(dirname "$0")/prune_runtime_backups.py"
+    fi
+    if [ -f "$PRUNER" ]; then
+        python3 "$PRUNER" --root "$BACKUP_DIR" --apply --max-bytes "$BACKUP_MAX_BYTES" >/dev/null 2>&1 || true
+    fi
+
     python3 - "$BACKUP_DIR" "$RETENTION_HOURS" "$KEEP_LAST" "$FAMILY_KEEP_LAST" "$LOCAL_CONTEXT_RETENTION_HOURS" "$LOCAL_CONTEXT_KEEP_LAST" <<'PY'
 from __future__ import annotations
 
@@ -110,7 +121,30 @@ has_recent_local_context_backup() {
     find "$BACKUP_DIR" -maxdepth 1 -name "local-context-*.db" -mmin "-$((RECENT_BACKUP_HOURS * 60))" -print -quit | grep -q .
 }
 
-cleanup_backups
+available_backup_bytes() {
+    df -Pk "$BACKUP_DIR" 2>/dev/null | awk 'NR==2 { printf "%.0f\n", $4 * 1024 }'
+}
+
+file_size_bytes() {
+    wc -c < "$1" 2>/dev/null | tr -d ' '
+}
+
+ensure_backup_space() {
+    cleanup_backups
+    avail="$(available_backup_bytes)"
+    if [ -n "$avail" ] && [ "$avail" -lt "$MIN_FREE_BYTES" ]; then
+        echo "NEXO backup skipped: free disk below safety floor after self-cleanup (${avail}B < ${MIN_FREE_BYTES}B)" >&2
+        return 1
+    fi
+    return 0
+}
+
+if ! ensure_backup_space; then
+    if has_recent_backup; then
+        exit 0
+    fi
+    exit 1
+fi
 
 # Hourly backup
 TIMESTAMP=$(date +%Y-%m-%d-%H%M)
@@ -148,7 +182,12 @@ if [ -f "$LOCAL_CONTEXT_DB" ]; then
     LOCAL_CONTEXT_BACKUP_FILE="$BACKUP_DIR/local-context-$TIMESTAMP.db"
     LOCAL_CONTEXT_TMP_BACKUP="$LOCAL_CONTEXT_BACKUP_FILE.tmp.$$"
     rm -f "$LOCAL_CONTEXT_TMP_BACKUP"
-    if [ -f "$LOCK_FILE" ] && find "$LOCK_FILE" -mmin -30 -print -quit | grep -q . && has_recent_local_context_backup; then
+    LOCAL_CONTEXT_SIZE="$(file_size_bytes "$LOCAL_CONTEXT_DB")"
+    if [ -n "$LOCAL_CONTEXT_SIZE" ] && [ "$LOCAL_CONTEXT_SIZE" -gt "$LOCAL_CONTEXT_MAX_BACKUP_BYTES" ]; then
+        echo "NEXO local memory backup skipped: local-context.db exceeds automatic backup cap (${LOCAL_CONTEXT_SIZE}B > ${LOCAL_CONTEXT_MAX_BACKUP_BYTES}B)"
+    elif ! ensure_backup_space; then
+        echo "NEXO local memory backup skipped: free disk below safety floor"
+    elif [ -f "$LOCK_FILE" ] && find "$LOCK_FILE" -mmin -30 -print -quit | grep -q . && has_recent_local_context_backup; then
         echo "NEXO local memory backup skipped: index is active and a recent local backup exists"
     elif sqlite3 -cmd ".timeout $BUSY_TIMEOUT_MS" "$LOCAL_CONTEXT_DB" <<SQL
 PRAGMA busy_timeout=$BUSY_TIMEOUT_MS;

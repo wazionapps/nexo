@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import importlib
 import os
+import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -181,3 +183,52 @@ def test_backfill_owner_rotates_own_backup_family(tmp_path):
     remaining = sorted(p.name for p in backup_base.iterdir() if p.name.startswith("pre-backfill-owner-"))
     assert remaining == [f"pre-backfill-owner-{i:02d}" for i in range(6, 11)]
     assert (backup_base / "pre-update-untouched").is_dir()
+
+
+def test_pruner_self_heals_local_context_artifacts_under_hard_cap(tmp_path):
+    backup_base = tmp_path / "backups"
+    backup_base.mkdir()
+    script = Path(__file__).resolve().parent.parent / "src" / "scripts" / "prune_runtime_backups.py"
+
+    protected = backup_base / "shopify-backups"
+    protected.mkdir()
+    (protected / "keep.txt").write_text("business")
+
+    old_local = backup_base / "local-context-2026-05-18-1622.db"
+    old_local.write_bytes(b"x" * 90)
+    new_local = backup_base / "local-context-2026-05-19-1829.db"
+    new_local.write_bytes(b"x" * 90)
+    orphan_tmp = backup_base / "local-context-2026-05-19-1829.db.tmp.1310"
+    orphan_tmp.write_bytes(b"x" * 90)
+    orphan_wal = backup_base / "nexo-2026-05-19-1829.db-wal"
+    orphan_wal.write_bytes(b"x" * 90)
+
+    now = time.time()
+    os.utime(old_local, (now - 3000, now - 3000))
+    os.utime(new_local, (now - 100, now - 100))
+    os.utime(orphan_tmp, (now - 3000, now - 3000))
+    os.utime(orphan_wal, (now - 3000, now - 3000))
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--root",
+            str(backup_base),
+            "--apply",
+            "--max-bytes",
+            "150",
+            "--local-context-keep",
+            "1",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    assert result.returncode == 0
+    assert protected.is_dir()
+    assert new_local.is_file()
+    assert not old_local.exists()
+    assert not orphan_tmp.exists()
+    assert not orphan_wal.exists()

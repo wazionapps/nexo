@@ -108,6 +108,69 @@ def _backup_validation_tables(db_file: Path) -> tuple[str, ...]:
     return PROTECTED_BACKUP_TABLES
 
 
+def _env_int(name: str, default: int) -> int:
+    try:
+        return int(os.environ.get(name, str(default)))
+    except (TypeError, ValueError):
+        return default
+
+
+BACKUP_MAX_BYTES = _env_int("NEXO_BACKUP_MAX_BYTES", 50 * 1024 * 1024 * 1024)
+BACKUP_MIN_FREE_BYTES = _env_int("NEXO_BACKUP_MIN_FREE_BYTES", 5 * 1024 * 1024 * 1024)
+LOCAL_CONTEXT_MAX_BACKUP_BYTES = _env_int("NEXO_LOCAL_CONTEXT_MAX_BACKUP_BYTES", 2 * 1024 * 1024 * 1024)
+_LAST_BACKUP_ERROR = ""
+
+
+def _run_runtime_backup_prune() -> None:
+    script = SRC_DIR / "scripts" / "prune_runtime_backups.py"
+    if not script.is_file():
+        return
+    try:
+        subprocess.run(
+            [
+                sys.executable,
+                str(script),
+                "--root",
+                str(paths.backups_dir()),
+                "--apply",
+                "--max-bytes",
+                str(BACKUP_MAX_BYTES),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+    except Exception as e:
+        _log(f"Backup self-clean warning: {e}")
+
+
+def _backup_free_bytes() -> int | None:
+    backup_root = paths.backups_dir()
+    try:
+        usage = shutil.disk_usage(backup_root if backup_root.exists() else backup_root.parent)
+        return int(usage.free)
+    except Exception:
+        return None
+
+
+def _backup_space_error() -> str | None:
+    _run_runtime_backup_prune()
+    free = _backup_free_bytes()
+    if free is not None and free < BACKUP_MIN_FREE_BYTES:
+        return (
+            "free disk below NEXO backup safety floor after automatic cleanup "
+            f"({free}B < {BACKUP_MIN_FREE_BYTES}B)"
+        )
+    return None
+
+
+def _should_include_local_context_backup(path: Path) -> bool:
+    try:
+        return path.stat().st_size <= LOCAL_CONTEXT_MAX_BACKUP_BYTES
+    except OSError:
+        return False
+
+
 CLASSIFIER_INSTALL_TIMEOUT_SECONDS = 1800
 CLASSIFIER_INSTALL_JOIN_SECONDS = 1500
 CLASSIFIER_INSTALL_LOG = paths.logs_dir() / "classifier-install.log"
@@ -380,6 +443,17 @@ def _create_validated_db_backup() -> tuple[str | None, dict | None]:
     """Create a DB backup and validate that critical tables still contain data."""
     backup_dir = _backup_dbs()
     if not backup_dir:
+        if _LAST_BACKUP_ERROR:
+            return None, {
+                "ok": False,
+                "reports": [{
+                    "ok": False,
+                    "source_db": "",
+                    "backup_db": "",
+                    "errors": [_LAST_BACKUP_ERROR],
+                    "regressions": [],
+                }],
+            }
         return None, None
 
     source_dbs: list[Path] = []
@@ -387,7 +461,7 @@ def _create_validated_db_backup() -> tuple[str | None, dict | None]:
     if primary_db is not None:
         source_dbs.append(primary_db)
     local_context_db = paths.memory_dir() / "local-context.db"
-    if local_context_db.is_file():
+    if local_context_db.is_file() and _should_include_local_context_backup(local_context_db):
         source_dbs.append(local_context_db)
     if not source_dbs:
         return backup_dir, None
@@ -2061,6 +2135,8 @@ def _backup_dbs() -> str | None:
     """Snapshot all .db files before migration. Returns backup dir or None."""
     import sqlite3
     import time as _time
+    global _LAST_BACKUP_ERROR
+    _LAST_BACKUP_ERROR = ""
     # Drop 0-byte .db orphans first — they mask the real DB during primary
     # path selection and turn into empty shells in the backup, breaking both
     # validation and rollback paths. Safe no-op when there are none.
@@ -2070,7 +2146,7 @@ def _backup_dbs() -> str | None:
 
     db_files = list(DATA_DIR.glob("*.db")) if DATA_DIR.is_dir() else []
     local_context_db = paths.memory_dir() / "local-context.db"
-    if local_context_db.is_file():
+    if local_context_db.is_file() and _should_include_local_context_backup(local_context_db):
         db_files.append(local_context_db)
     db_files += [f for f in NEXO_HOME.glob("*.db") if f.is_file()]
     src_db = SRC_DIR / "nexo.db"
@@ -2078,6 +2154,12 @@ def _backup_dbs() -> str | None:
         db_files.append(src_db)
 
     if not db_files:
+        return None
+
+    space_err = _backup_space_error()
+    if space_err:
+        _LAST_BACKUP_ERROR = space_err
+        _log(f"DB backup aborted: {space_err}")
         return None
 
     backup_dir.mkdir(parents=True, exist_ok=True)

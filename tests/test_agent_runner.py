@@ -194,6 +194,9 @@ def test_run_automation_prompt_uses_claude_backend_command(monkeypatch, tmp_path
     prompt = captured["cmd"][2]
     assert "Do the thing" in prompt
     assert "CRITICAL LANGUAGE CONTRACT" in prompt
+    append_value = captured["cmd"][captured["cmd"].index("--append-system-prompt") + 1]
+    assert "JSON only" in append_value
+    assert "supervised NEXO automation child" in append_value
     assert captured["cmd"] == [
         "/tmp/fake-claude",
         "-p",
@@ -206,7 +209,7 @@ def test_run_automation_prompt_uses_claude_backend_command(monkeypatch, tmp_path
         "--output-format",
         "json",
         "--append-system-prompt",
-        "JSON only",
+        append_value,
         "--allowedTools",
         "Read,Write",
     ]
@@ -323,9 +326,9 @@ def test_run_automation_prompt_uses_codex_exec_output_file(monkeypatch, tmp_path
     assert 'initial_messages=[{role="system",content="You are NEXO."}]' in config_values
     assert 'model_reasoning_effort="xhigh"' in config_values
     prompt = captured["cmd"][-1]
-    assert "NEXO PROTOCOL (MANDATORY)" in prompt
-    assert "nexo_task_open" in prompt
-    assert "conditioned learnings" in prompt
+    assert "supervised NEXO automation child" in prompt
+    assert "nexo_task_open" not in prompt
+    assert "conditioned learnings" not in prompt
     assert "SYSTEM INSTRUCTIONS" in prompt
     assert "TOOLING SCOPE" in prompt
     assert "Summarize" in prompt
