@@ -354,6 +354,21 @@
       },
       "triggers_after": []
     },
+    "nexo_automation_supervisor": {
+      "description": "Read-only supervisor report for automations, cron runs and cron spool excluding Evolution",
+      "category": "automation",
+      "source": "server",
+      "requires": [],
+      "provides": [
+        "automation_supervisor_report"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
     "nexo_automations_list": {
       "description": "List operator-facing automations",
       "category": "personal",
@@ -1469,6 +1484,38 @@
       "source": "plugin:entities",
       "requires": [],
       "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_evidence_record": {
+      "description": "Record a compact evidence pointer without storing raw command output",
+      "category": "evidence",
+      "source": "server",
+      "requires": [
+        "summary"
+      ],
+      "provides": [
+        "evidence_record"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_evidence_search": {
+      "description": "Search concrete evidence across tasks, workflows, change logs, diaries and continuity stores",
+      "category": "evidence",
+      "source": "server",
+      "requires": [],
+      "provides": [
+        "evidence_ledger"
+      ],
       "internal_calls": [],
       "enforcement": {
         "level": "none",
@@ -2933,6 +2980,25 @@
       },
       "triggers_after": []
     },
+    "nexo_pre_answer_route": {
+      "description": "Route a user turn through pre-answer continuity sources before responding",
+      "category": "context",
+      "source": "server",
+      "requires": [],
+      "provides": [
+        "pre_answer_context",
+        "continuity_evidence"
+      ],
+      "internal_calls": [
+        "nexo_recent_context",
+        "nexo_evidence_search"
+      ],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
     "nexo_preference_delete": {
       "description": "Delete preference",
       "category": "preferences",
@@ -3305,6 +3371,21 @@
       "source": "plugin:schedule",
       "requires": [],
       "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_saved_not_used_audit": {
+      "description": "Audit stores that write data without verified later consumption",
+      "category": "audit",
+      "source": "server",
+      "requires": [],
+      "provides": [
+        "saved_not_used_audit"
+      ],
       "internal_calls": [],
       "enforcement": {
         "level": "none",

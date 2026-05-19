@@ -143,18 +143,43 @@ GREP_ARGS=(
   --exclude-dir=node_modules
 )
 
+RG_ARGS=(
+  -n
+  -I
+  -g '*.py'
+  -g '*.js'
+  -g '*.ts'
+  -g '*.json'
+  -g '*.md'
+  -g '*.sh'
+  -g '*.html'
+  -g '*.yml'
+  -g '*.yaml'
+  -g '*.txt'
+  -g '!**/__pycache__/**'
+  -g '!**/node_modules/**'
+)
+
+_scan_src() {
+  local pat="$1"
+  if command -v rg >/dev/null 2>&1; then
+    rg "${RG_ARGS[@]}" -- "$pat" src/ 2>/dev/null || true
+    return 0
+  fi
+  grep "${GREP_ARGS[@]}" -- "$pat" src/ 2>/dev/null || true
+}
+
 found=0
 
 # Layer 1: historical fixed-string list. Exact matches, no allowlist —
 # if any of these show up the file is mis-placed.
 for pat in "${PATTERNS[@]}"; do
-  if matches=$(grep "${GREP_ARGS[@]}" -- "$pat" src/ 2>/dev/null); then
-    if [ -n "$matches" ]; then
-      echo "[check_no_personal_data] LEAK: fixed pattern '$pat' in src/:"
-      echo "$matches" | head -20
-      echo
-      found=1
-    fi
+  matches=$(_scan_src "$pat")
+  if [ -n "$matches" ]; then
+    echo "[check_no_personal_data] LEAK: fixed pattern '$pat' in src/:"
+    echo "$matches" | head -20
+    echo
+    found=1
   fi
 done
 
@@ -163,7 +188,7 @@ done
 # alarm. Use a while-read loop so we can drop allowlisted matches per
 # line instead of per pattern.
 for pat in "${REGEX_PATTERNS[@]}"; do
-  raw=$(grep "${GREP_ARGS[@]}" -- "$pat" src/ 2>/dev/null || true)
+  raw=$(_scan_src "$pat")
   if [ -z "$raw" ]; then
     continue
   fi

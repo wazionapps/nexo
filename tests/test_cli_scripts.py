@@ -15,6 +15,12 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 CLI_PY = os.path.join(os.path.dirname(__file__), "..", "src", "cli.py")
 
 
+def _subprocess_env():
+    env = dict(os.environ)
+    env.pop("PYTEST_CURRENT_TEST", None)
+    return env
+
+
 def _make_nexo_home(home: Path) -> Path:
     scripts = home / "scripts"
     scripts.mkdir(parents=True)
@@ -34,14 +40,20 @@ def nexo_home(tmp_path):
 def _run_cli(nexo_home, *args, timeout=10):
     """Run cli.py with isolated NEXO_HOME."""
     env = {
-        **os.environ,
+        **_subprocess_env(),
         "NEXO_HOME": str(nexo_home),
         "NEXO_CODE": os.path.join(os.path.dirname(__file__), "..", "src"),
+        "NEXO_TEST_DB": str(nexo_home / "data" / "nexo.db"),
+        "NEXO_COGNITIVE_DB": str(nexo_home / "data" / "cognitive.db"),
+        "NEXO_LOCAL_CONTEXT_DB": str(nexo_home / "data" / "local_context.db"),
         "HOME": str(nexo_home),
+        "NEXO_SKIP_COGNITIVE_MODEL_DOWNLOAD": "1",
+        "NEXO_SKIP_LEARNING_COGNITIVE_INGEST": "1",
+        "NEXO_SKIP_SEMANTIC_SIMILARITY": "1",
     }
     result = subprocess.run(
         [sys.executable, CLI_PY, *args],
-        capture_output=True, text=True, timeout=timeout, env=env,
+        capture_output=True, text=True, timeout=timeout, env=env, stdin=subprocess.DEVNULL,
     )
     return result
 
@@ -317,7 +329,7 @@ class TestRuntimeUpdate:
         (runtime_home / "version.json").write_text(json.dumps({"version": "9.9.9", "source": str(repo)}))
 
         env = {
-            **os.environ,
+            **_subprocess_env(),
             "NEXO_HOME": str(runtime_home),
             "NEXO_CODE": str(runtime_home),
             "HOME": str(tmp_path),
@@ -435,7 +447,7 @@ class TestRuntimeUpdate:
         (runtime_home / "version.json").write_text(json.dumps({"version": "9.9.8", "source": str(repo)}))
 
         env = {
-            **os.environ,
+            **_subprocess_env(),
             "NEXO_HOME": str(runtime_home),
             "NEXO_CODE": str(runtime_home),
             "HOME": str(tmp_path),
@@ -535,7 +547,7 @@ class TestRuntimeUpdate:
         (runtime_home / "version.json").write_text(json.dumps({"version": "9.9.9", "source": str(repo)}))
 
         env = {
-            **os.environ,
+            **_subprocess_env(),
             "NEXO_HOME": str(runtime_home),
             "NEXO_CODE": str(runtime_home),
             "HOME": str(tmp_path),
@@ -584,7 +596,7 @@ class TestRuntimeUpdate:
             "print(json.dumps({'repo_dir': str(m.REPO_DIR), 'packaged': m._PACKAGED_INSTALL, 'version': m._read_version()}))"
         )
         env = {
-            **os.environ,
+            **_subprocess_env(),
             "NEXO_HOME": str(runtime_home),
             "NEXO_CODE": str(runtime_home),
             "HOME": str(tmp_path),
@@ -749,7 +761,7 @@ class TestClientsCommand:
         fake_codex.chmod(0o755)
 
         env = {
-            **os.environ,
+            **_subprocess_env(),
             "NEXO_HOME": str(nexo_home),
             "NEXO_CODE": os.path.join(os.path.dirname(__file__), "..", "src"),
             "HOME": str(nexo_home),
@@ -785,7 +797,7 @@ class TestChatCommand:
         fake_claude.chmod(0o755)
 
         env = {
-            **os.environ,
+            **_subprocess_env(),
             "NEXO_HOME": str(nexo_home),
             "NEXO_CODE": os.path.join(os.path.dirname(__file__), "..", "src"),
             "HOME": str(nexo_home),
@@ -827,7 +839,7 @@ class TestChatCommand:
         (nexo_home / "version.json").write_text(json.dumps({"version": "9.9.9"}))
 
         env = {
-            **os.environ,
+            **_subprocess_env(),
             "NEXO_HOME": str(nexo_home),
             "NEXO_CODE": os.path.join(os.path.dirname(__file__), "..", "src"),
             "HOME": str(nexo_home),
@@ -860,7 +872,7 @@ class TestChatCommand:
         (nexo_home / "version.json").write_text(json.dumps({"version": "9.9.9"}))
 
         env = {
-            **os.environ,
+            **_subprocess_env(),
             "NEXO_HOME": str(nexo_home),
             "NEXO_CODE": os.path.join(os.path.dirname(__file__), "..", "src"),
             "HOME": str(nexo_home),
@@ -911,7 +923,7 @@ class TestChatCommand:
         }))
 
         env = {
-            **os.environ,
+            **_subprocess_env(),
             "NEXO_HOME": str(nexo_home),
             "NEXO_CODE": os.path.join(os.path.dirname(__file__), "..", "src"),
             "HOME": str(nexo_home),
@@ -982,7 +994,7 @@ class TestChatCommand:
         }))
 
         env = {
-            **os.environ,
+            **_subprocess_env(),
             "NEXO_HOME": str(nexo_home),
             "NEXO_CODE": os.path.join(os.path.dirname(__file__), "..", "src"),
             "HOME": str(nexo_home),
@@ -1079,6 +1091,7 @@ class TestScriptsCall:
             "--input",
             json.dumps({"tier": "boot", "output": "json"}),
             "--json-output",
+            timeout=30,
         )
         assert result.returncode == 0
         data = json.loads(result.stdout)

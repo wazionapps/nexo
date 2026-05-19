@@ -1,5 +1,16 @@
 # Changelog
 
+## [7.23.0] - 2026-05-19
+
+### Added — Memory continuity router and evidence audits
+
+- **Pre-answer routing is now a real Brain surface.** `nexo pre-answer route` and `nexo_pre_answer_route` classify visible turns, consult continuity evidence under a deadline and return an injectable context bundle without blocking normal answers.
+- **Desktop can ask Brain before sending a visible turn.** NEXO Desktop routes every non-internal message through the Brain router with `intent=auto`, a 2500ms deadline, fail-open behavior and stdin payload transport so user text and paths are not exposed in process arguments.
+- **Evidence is consumed, not just stored.** The router now reads the virtual evidence ledger for prior-work, memory and authorship questions, alongside recent context, tasks, workflows, change logs, diaries and transcripts.
+- **Memory Observations converge through a bounded processor.** `memory-observations process` and `nexo_memory_observation_process` backfill missed events, repair processed queue rows without observations, process a bounded batch and report pending SLA health.
+- **Saved-but-not-used and automation drift are auditable.** New read-only reports detect stores that write data without verified consumers, automation runs/spool drift excluding Evolution, MCP live/catalog/plugin mismatches, transcript coverage gaps and artifact locations.
+- **Coverage:** full Brain pytest, Desktop full test suite, Desktop product contracts, Desktop syntax smoke, React build, targeted router/telemetry/audit suites and lint/compile checks.
+
 ## [7.22.0] - 2026-05-17
 
 ### Added — MCP latency hardening and Entity Dossier

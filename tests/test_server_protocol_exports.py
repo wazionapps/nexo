@@ -37,6 +37,11 @@ def test_server_exposes_protocol_runtime_tools(isolated_db):
         "nexo_memory_search",
         "nexo_memory_answer",
         "nexo_memory_timeline",
+        "nexo_pre_answer_route",
+        "nexo_evidence_search",
+        "nexo_evidence_record",
+        "nexo_saved_not_used_audit",
+        "nexo_automation_supervisor",
     )
     for name in expected:
         assert hasattr(server, name), f"{name} missing from server.py"
@@ -63,3 +68,9 @@ def test_memory_tools_are_registered_with_fastmcp(isolated_db):
         "nexo_memory_timeline",
     ):
         assert name in names
+
+    assert "nexo_pre_answer_route" in names
+    assert "nexo_evidence_search" in names
+    assert "nexo_evidence_record" in names
+    assert "nexo_saved_not_used_audit" in names
+    assert "nexo_automation_supervisor" in names

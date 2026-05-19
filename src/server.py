@@ -49,7 +49,6 @@ from tools_memory_v2 import (
     handle_memory_health,
     handle_memory_maintenance,
     handle_memory_observation_list,
-    handle_memory_observation_process,
     handle_memory_observation_stats,
     handle_memory_search,
     handle_memory_timeline,
@@ -1156,6 +1155,41 @@ def nexo_pre_action_context(query: str = "", context_key: str = "", session_id: 
 
 
 @mcp.tool
+def nexo_pre_answer_route(
+    query: str = "",
+    intent: str = "auto",
+    sid: str = "",
+    conversation_id: str = "",
+    area: str = "",
+    files: str = "",
+    budget_ms: int = 2500,
+    token_budget: int = 2500,
+    current_context: str = "",
+    client: str = "mcp",
+) -> str:
+    """Route a user turn through pre-answer continuity sources before responding."""
+    from pre_answer_runtime import run_pre_answer_route
+
+    result = run_pre_answer_route(
+        {
+            "query": query,
+            "intent": intent or "auto",
+            "sid": sid,
+            "conversation_id": conversation_id,
+            "area": area,
+            "files": files,
+            "budget_ms": budget_ms,
+            "token_budget": token_budget,
+            "current_context": current_context,
+            "client": client or "mcp",
+            "source": client or "mcp",
+        }
+    )
+    result["injection_text"] = result.get("rendered") or ""
+    return json.dumps(result, ensure_ascii=False)
+
+
+@mcp.tool
 def nexo_recent_context_resolve(
     context_key: str = "",
     topic: str = "",
@@ -1217,9 +1251,20 @@ def nexo_memory_event_stats(days: int = 7) -> str:
 
 
 @mcp.tool
-def nexo_memory_observation_process(limit: int = 25) -> str:
+def nexo_memory_observation_process(limit: int = 25, backfill_limit: int = 100, pending_sla_seconds: int = 3600) -> str:
     """Process pending raw memory events into passive observations."""
-    return handle_memory_observation_process(limit)
+    from memory_observation_processor import process_incremental
+
+    return json.dumps(
+        process_incremental(
+            process_limit=limit,
+            backfill_limit=backfill_limit,
+            pending_sla_seconds=pending_sla_seconds,
+        ),
+        ensure_ascii=False,
+        indent=2,
+        sort_keys=True,
+    )
 
 
 @mcp.tool
@@ -1296,6 +1341,101 @@ def nexo_memory_timeline(
 ) -> str:
     """Return a chronological Memory Observations v2 timeline."""
     return handle_memory_timeline(query, project_hint, time_range, limit)
+
+
+@mcp.tool
+def nexo_evidence_search(
+    query: str = "",
+    artifact: str = "",
+    task_id: str = "",
+    workflow_id: str = "",
+    conversation_id: str = "",
+    file_path: str = "",
+    limit: int = 20,
+) -> str:
+    """Search concrete evidence across tasks, workflows, change logs, diaries and continuity stores."""
+    from evidence_ledger import evidence_to_dicts, search_evidence
+
+    return json.dumps(
+        {
+            "ok": True,
+            "evidence": evidence_to_dicts(
+                search_evidence(
+                    query,
+                    artifact=artifact,
+                    task_id=task_id,
+                    workflow_id=workflow_id,
+                    conversation_id=conversation_id,
+                    file_path=file_path,
+                    limit=limit,
+                )
+            ),
+        },
+        ensure_ascii=False,
+        indent=2,
+        sort_keys=True,
+    )
+
+
+@mcp.tool
+def nexo_evidence_record(
+    summary: str,
+    source_type: str = "evidence_ledger",
+    source_id: str = "",
+    object_type: str = "artifact",
+    object_ref: str = "",
+    action: str = "recorded",
+    session_id: str = "",
+    conversation_id: str = "",
+    verification: str = "",
+    idempotency_key: str = "",
+) -> str:
+    """Record a compact evidence pointer without storing raw command output."""
+    from evidence_ledger import record_evidence
+
+    try:
+        entry = record_evidence(
+            summary=summary,
+            source_type=source_type,
+            source_id=source_id,
+            object_type=object_type,
+            object_ref=object_ref,
+            action=action,
+            session_id=session_id,
+            conversation_id=conversation_id,
+            verification=verification,
+            idempotency_key=idempotency_key,
+        )
+        return json.dumps({"ok": True, "evidence": entry.to_dict()}, ensure_ascii=False, indent=2, sort_keys=True)
+    except Exception as exc:
+        return json.dumps(
+            {"ok": False, "error": "evidence_record_failed", "detail": f"{type(exc).__name__}: {exc}"},
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
+        )
+
+
+@mcp.tool
+def nexo_saved_not_used_audit(markdown: bool = False) -> str:
+    """Audit stores that write data without verified later consumption."""
+    from saved_not_used_audit import audit_saved_not_used, format_markdown
+
+    report = audit_saved_not_used()
+    if markdown:
+        return format_markdown(report)
+    return json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True)
+
+
+@mcp.tool
+def nexo_automation_supervisor(markdown: bool = False) -> str:
+    """Read-only supervisor report for automations, cron runs and cron spool, excluding Evolution."""
+    from automation_supervisor import audit_automation, format_markdown
+
+    report = audit_automation()
+    if markdown:
+        return format_markdown(report)
+    return json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True)
 
 
 @mcp.tool

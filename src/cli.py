@@ -20,6 +20,8 @@ Entry points:
   nexo scripts run NAME_OR_PATH [-- args...]
   nexo scripts doctor [NAME_OR_PATH] [--json]
   nexo scripts call TOOL --input JSON [--json-output]
+  nexo pre-answer route [--json] [--payload JSON|--payload-file PATH|--payload-stdin] [--query TEXT]
+  nexo memory-observations process [--json]
   nexo local-context status|run-once|reconcile|pause|resume|roots|exclusions|query|diagnostics|models [--json]
   nexo automations reactivate NAME [--test-run] [--json]
   nexo skills list [--level ...] [--source-kind ...] [--json]
@@ -1350,11 +1352,27 @@ def _scripts_call(args):
         print(f"Invalid JSON input: {e}", file=sys.stderr)
         return 1
 
+    if not tool_name.startswith("nexo_"):
+        print(f"Tool not found: {tool_name}", file=sys.stderr)
+        return 1
+
     # Legacy `scripts call nexo_doctor` callers predate the explicit doctor-plane
     # contract. Keep the plugin strict, but default the CLI compatibility surface
     # to the install/runtime plane that old callers implicitly meant.
     if tool_name == "nexo_doctor" and isinstance(payload, dict) and not str(payload.get("plane") or "").strip():
         payload["plane"] = "installation_live"
+
+    def _doctor_value_direct():
+        from plugins.doctor import handle_doctor
+
+        if not isinstance(payload, dict):
+            return handle_doctor()
+        return handle_doctor(
+            tier=str(payload.get("tier") or "boot"),
+            fix=bool(payload.get("fix") or False),
+            output=str(payload.get("output") or "text"),
+            plane=str(payload.get("plane") or ""),
+        )
 
     def _bootstrap_mcp():
         os.environ["NEXO_CLI_MODE"] = "1"
@@ -1391,20 +1409,23 @@ def _scripts_call(args):
         return str(result)
 
     try:
-        mcp = _bootstrap_mcp()
+        if tool_name == "nexo_doctor":
+            value = _doctor_value_direct()
+        else:
+            mcp = _bootstrap_mcp()
 
-        async def _call():
-            tool = await mcp.get_tool(tool_name)
-            if tool is None:
-                tools = await mcp.list_tools()
-                available = sorted(t.name for t in tools)
-                raise LookupError(
-                    f"Tool not found: {tool_name}\nAvailable tools: {', '.join(available)}"
-                )
-            return await mcp.call_tool(tool_name, payload)
+            async def _call():
+                tool = await mcp.get_tool(tool_name)
+                if tool is None:
+                    tools = await mcp.list_tools()
+                    available = sorted(t.name for t in tools)
+                    raise LookupError(
+                        f"Tool not found: {tool_name}\nAvailable tools: {', '.join(available)}"
+                    )
+                return await mcp.call_tool(tool_name, payload)
 
-        result = asyncio.run(_call())
-        value = _extract_tool_value(result)
+            result = asyncio.run(_call())
+            value = _extract_tool_value(result)
 
         if args.json_output:
             if (
@@ -1448,6 +1469,87 @@ def _scripts_call(args):
 
 def _local_context_emit(payload: dict, args) -> int:
     return _print_json_or_text(payload, as_json=bool(getattr(args, "json", False)))
+
+
+def _load_json_payload_arg(args, *, command_name: str) -> tuple[dict, int | None]:
+    payload_text = ""
+    payload_file = str(getattr(args, "payload_file", "") or "").strip()
+    if payload_file:
+        try:
+            payload_text = Path(payload_file).read_text(encoding="utf-8")
+        except Exception as exc:
+            return {
+                "ok": False,
+                "error": "payload_file_read_failed",
+                "detail": f"{type(exc).__name__}: {exc}",
+                "command": command_name,
+            }, 3
+    elif bool(getattr(args, "payload_stdin", False)):
+        payload_text = sys.stdin.read()
+    else:
+        payload_text = str(getattr(args, "payload", "") or "")
+
+    if not payload_text.strip():
+        return {}, None
+    try:
+        parsed = json.loads(payload_text)
+    except json.JSONDecodeError as exc:
+        return {
+            "ok": False,
+            "error": "invalid_payload_json",
+            "detail": str(exc),
+            "command": command_name,
+        }, 2
+    if not isinstance(parsed, dict):
+        return {
+            "ok": False,
+            "error": "payload_must_be_object",
+            "command": command_name,
+        }, 2
+    return parsed, None
+
+
+def _pre_answer_route(args) -> int:
+    payload, error_code = _load_json_payload_arg(args, command_name="pre-answer route")
+    if error_code is not None:
+        print(json.dumps(payload, ensure_ascii=False))
+        return error_code
+
+    for arg_key, payload_key in (
+        ("query", "query"),
+        ("sid", "sid"),
+        ("conversation_id", "conversation_id"),
+        ("intent", "intent"),
+        ("area", "area"),
+        ("files", "files"),
+        ("current_context", "current_context"),
+    ):
+        value = getattr(args, arg_key, None)
+        if value not in (None, ""):
+            payload[payload_key] = value
+    for arg_key, payload_key in (("budget_ms", "budget_ms"), ("token_budget", "token_budget")):
+        value = getattr(args, arg_key, None)
+        if value is not None:
+            payload[payload_key] = value
+
+    from pre_answer_runtime import run_pre_answer_route
+
+    result = run_pre_answer_route(payload)
+    print(json.dumps(result, ensure_ascii=False))
+    return 0 if result.get("ok") else 1
+
+
+def _memory_observations_process(args) -> int:
+    from memory_observation_processor import process_incremental
+
+    return _print_json_or_text(
+        process_incremental(
+            process_limit=int(getattr(args, "limit", 100) or 100),
+            backfill_limit=int(getattr(args, "backfill_limit", 100) or 100),
+            pending_sla_seconds=int(getattr(args, "pending_sla_seconds", 3600) or 3600),
+        ),
+        as_json=bool(getattr(args, "json", False)),
+    )
 
 
 def _local_context_status(args) -> int:
@@ -3345,6 +3447,32 @@ def main():
     call_p.add_argument("--input", default="{}", help="JSON input payload")
     call_p.add_argument("--json-output", action="store_true", help="Force JSON output")
 
+    pre_answer_parser = sub.add_parser("pre-answer", help="Route pre-answer context")
+    pre_answer_sub = pre_answer_parser.add_subparsers(dest="pre_answer_command")
+    pre_answer_route_p = pre_answer_sub.add_parser("route", help="Run the pre-answer router")
+    pre_answer_payload_group = pre_answer_route_p.add_mutually_exclusive_group()
+    pre_answer_payload_group.add_argument("--payload", default="", help="JSON payload")
+    pre_answer_payload_group.add_argument("--payload-file", default="", help="Path to a JSON payload file")
+    pre_answer_payload_group.add_argument("--payload-stdin", action="store_true", help="Read JSON payload from stdin")
+    pre_answer_route_p.add_argument("--query", default="", help="User query/text to route")
+    pre_answer_route_p.add_argument("--sid", default="", help="NEXO session id")
+    pre_answer_route_p.add_argument("--conversation-id", default="", help="Client conversation id")
+    pre_answer_route_p.add_argument("--intent", default="", help="Optional intent override or auto")
+    pre_answer_route_p.add_argument("--area", default="", help="Optional area/project hint")
+    pre_answer_route_p.add_argument("--files", default="", help="Optional comma-separated file hints")
+    pre_answer_route_p.add_argument("--budget-ms", type=int, default=None, help="Deadline budget in milliseconds")
+    pre_answer_route_p.add_argument("--token-budget", type=int, default=None, help="Approximate token budget")
+    pre_answer_route_p.add_argument("--current-context", default="", help="Current conversation/task context")
+    pre_answer_route_p.add_argument("--json", action="store_true", help="JSON output")
+
+    memory_observations_parser = sub.add_parser("memory-observations", help="Process Memory Observations v2 queue")
+    memory_observations_sub = memory_observations_parser.add_subparsers(dest="memory_observations_command")
+    memory_observations_process_p = memory_observations_sub.add_parser("process", help="Run one bounded observation processor cycle")
+    memory_observations_process_p.add_argument("--limit", type=int, default=100, help="Maximum pending rows to process")
+    memory_observations_process_p.add_argument("--backfill-limit", type=int, default=100, help="Maximum legacy events to enqueue or repair")
+    memory_observations_process_p.add_argument("--pending-sla-seconds", type=int, default=3600, help="Pending queue SLA threshold")
+    memory_observations_process_p.add_argument("--json", action="store_true", help="JSON output")
+
     local_context_parser = sub.add_parser("local-context", help="Manage the local memory index")
     local_context_sub = local_context_parser.add_subparsers(dest="local_context_command")
 
@@ -3793,6 +3921,7 @@ def main():
     lrec_p.add_argument("--session-id", default="")
     lrec_p.add_argument("--reason", default="user_action")
     lrec_p.add_argument("--payload", default="", help="JSON-encoded payload_snapshot")
+    lrec_p.add_argument("--payload-file", default="", help="Path to a JSON payload_snapshot file for large Desktop events")
     lrec_p.add_argument("--source", default="desktop")
 
     lstat_p = lifecycle_sub.add_parser("status", help="Read the current delivery_status of an event")
@@ -3955,6 +4084,16 @@ def main():
         else:
             scripts_parser.print_help()
             return 0
+    elif args.command == "pre-answer":
+        if args.pre_answer_command == "route":
+            return _pre_answer_route(args)
+        pre_answer_parser.print_help()
+        return 0
+    elif args.command == "memory-observations":
+        if args.memory_observations_command == "process":
+            return _memory_observations_process(args)
+        memory_observations_parser.print_help()
+        return 0
     elif args.command == "local-context":
         if args.local_context_command == "status":
             return _local_context_status(args)
@@ -4128,13 +4267,25 @@ def main():
         import json as _json
         import plugins.lifecycle_events as _lifecycle_plugin
         if args.lifecycle_command == "record":
+            payload_snapshot = args.payload or ""
+            payload_file = (getattr(args, "payload_file", "") or "").strip()
+            if payload_file:
+                try:
+                    payload_snapshot = Path(payload_file).read_text(encoding="utf-8")
+                except Exception as exc:
+                    print(_json.dumps({
+                        "status": "rejected",
+                        "event_id": args.event_id,
+                        "reason": f"payload-file-read-failed:{type(exc).__name__}",
+                    }, ensure_ascii=False))
+                    return 3
             out = _lifecycle_plugin.handle_nexo_lifecycle_event(
                 event_id=args.event_id,
                 action=args.action,
                 conversation_id=args.conversation_id,
                 session_id=args.session_id or "",
                 reason=args.reason or "user_action",
-                payload_snapshot=args.payload or "",
+                payload_snapshot=payload_snapshot,
                 source=args.source or "desktop",
                 schema_version=1,
             )

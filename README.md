@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.22.0` is the current packaged-runtime line. Minor release over v7.21.0 - heartbeat stays fast in Desktop-managed sessions, MCP writes can be accepted through a durable file-backed queue before SQLite commit, Brain exposes compliance state for Desktop gates, and Local Context adds Entity Dossier for open-domain local evidence aggregation.
+Version `7.23.0` is the current packaged-runtime line. Minor release over v7.22.0 - pre-answer routing now consults continuity evidence before visible replies, Memory Observations queue processing converges through a bounded processor, and audits expose saved-but-not-used stores, automation drift, MCP live/catalog gaps, artifact location and transcript coverage.
+
+Previously in `7.22.0`: minor release over v7.21.0 - heartbeat stays fast in Desktop-managed sessions, MCP writes can be accepted through a durable file-backed queue before SQLite commit, Brain exposes compliance state for Desktop gates, and Local Context adds Entity Dossier for open-domain local evidence aggregation.
 
 Previously in `7.21.0`: minor release over v7.20.25 - MCP now starts through a thin compatibility adapter backed by one resident local Runtime Service, reducing duplicate Brain processes and SQLite contention across Claude Code, Codex, Claude Desktop, and NEXO Desktop.
 

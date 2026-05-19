@@ -84,6 +84,8 @@ def isolated_db(tmp_path, monkeypatch):
     monkeypatch.setenv("NEXO_SKIP_SEMANTIC_SIMILARITY", "1")
     monkeypatch.setenv("NEXO_SKIP_COGNITIVE_MODEL_DOWNLOAD", "1")
 
+    import db as db_package
+    importlib.reload(db_package)
     import db._core as db_core
     import cognitive._core as cog_core
     try:
