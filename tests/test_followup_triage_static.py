@@ -15,6 +15,12 @@ def test_followup_runner_triages_stale_items_out_of_executable_batch():
     assert "MAX_NEEDS_OPERATOR_BRIEFING" in src
 
 
+def test_followup_runner_excludes_done_status_from_executable_batch():
+    src = (REPO_ROOT / "src" / "scripts" / "nexo-followup-runner.py").read_text(encoding="utf-8")
+
+    assert "'BLOCKED', 'ARCHIVED', 'DELETED', 'WAITING', 'DONE'" in src
+
+
 def test_followup_hygiene_escalates_stale_items_instead_of_only_logging():
     src = (REPO_ROOT / "src" / "scripts" / "nexo-followup-hygiene.py").read_text(encoding="utf-8")
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## [7.23.3] - 2026-05-19
+
+### Fixed — Followup runner status filtering
+
+- **Followup runner no longer reselects already-done followups.** The executable batch query now treats `DONE` as terminal alongside `BLOCKED`, `ARCHIVED`, `DELETED` and `WAITING`, preserving the local runtime fix found during release cleanup.
+- **Coverage:** static followup-runner regression test for the `DONE` terminal status.
+
 ## [7.23.2] - 2026-05-19
 
 ### Fixed — Desktop Brain update detection
