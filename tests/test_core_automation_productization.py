@@ -905,6 +905,7 @@ def test_immune_database_check_skips_missing_legacy_claude_mem(tmp_path, monkeyp
 
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     monkeypatch.setenv("NEXO_HOME", str(home))
+    monkeypatch.setenv("NEXO_COGNITIVE_DB", str(data_dir / "cognitive.db"))
     module = _load_script_module("nexo_immune_db_test", "nexo-immune.py")
 
     results = module.check_databases()

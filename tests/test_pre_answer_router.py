@@ -158,3 +158,41 @@ def test_pre_answer_router_prior_work_uses_operational_stores_before_transcript(
     assert calls.index("transcripts") > calls.index("diary")
     assert result.should_inject is True
     assert result.evidence_refs == ["transcript:1"]
+
+
+def test_pre_answer_router_transcripts_use_index_before_raw_fallback(monkeypatch):
+    import pre_answer_router as router
+    import tools_transcripts
+    import transcript_index
+
+    transcript_index.index_transcript_session(
+        {
+            "client": "codex",
+            "session_uid": "indexed-session",
+            "session_file": "codex:indexed.jsonl",
+            "display_name": "indexed.jsonl",
+            "session_path": "/tmp/indexed.jsonl",
+            "modified": "2026-05-19T12:00:00",
+            "message_count": 2,
+            "user_message_count": 1,
+            "messages": [
+                {"role": "user", "index": 1, "text": "needle indexed continuity request"},
+                {"role": "assistant", "index": 2, "text": "indexed continuity answer"},
+            ],
+        }
+    )
+    monkeypatch.setattr(transcript_index, "index_recent_transcripts", lambda **kwargs: [])
+
+    def raw_fallback_should_not_run(*args, **kwargs):
+        raise AssertionError("raw transcript fallback should not run when index has evidence")
+
+    monkeypatch.setattr(tools_transcripts, "handle_transcript_search", raw_fallback_should_not_run)
+
+    result = router._source_transcripts(
+        router.SourceRequest(query="needle indexed continuity", intent="prior_work")
+    )
+
+    assert result.source == "transcripts"
+    assert result.result_count == 1
+    assert "needle indexed continuity request" in result.rendered
+    assert result.evidence_refs == ["transcript_index:1"]

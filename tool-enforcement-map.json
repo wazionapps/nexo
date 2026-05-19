@@ -315,6 +315,21 @@
       },
       "triggers_after": []
     },
+    "nexo_automation_reconcile": {
+      "description": "Build or apply a reconciliation plan for operator-facing automations",
+      "category": "automation",
+      "source": "server",
+      "requires": [],
+      "provides": [
+        "automation_reconciliation_plan"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
     "nexo_automation_instructions": {
       "description": "Set or clear operator extra instructions for an automation",
       "category": "personal",

@@ -118,7 +118,15 @@ def find_codex_session_files() -> list[Path]:
     return files
 
 
-def extract_claude_session(jsonl_path: Path) -> dict | None:
+def _min_user_messages(value: int | str | None = MIN_USER_MESSAGES) -> int:
+    try:
+        parsed = int(value if value is not None else MIN_USER_MESSAGES)
+    except Exception:
+        parsed = MIN_USER_MESSAGES
+    return max(1, parsed)
+
+
+def extract_claude_session(jsonl_path: Path, *, min_user_messages: int = MIN_USER_MESSAGES) -> dict | None:
     messages = []
     tool_uses = []
     user_msg_count = 0
@@ -183,7 +191,7 @@ def extract_claude_session(jsonl_path: Path) -> dict | None:
     except Exception:
         return None
 
-    if user_msg_count < MIN_USER_MESSAGES:
+    if user_msg_count < _min_user_messages(min_user_messages):
         return None
 
     return {
@@ -200,7 +208,7 @@ def extract_claude_session(jsonl_path: Path) -> dict | None:
     }
 
 
-def extract_codex_session(jsonl_path: Path) -> dict | None:
+def extract_codex_session(jsonl_path: Path, *, min_user_messages: int = MIN_USER_MESSAGES) -> dict | None:
     messages = []
     tool_uses = []
     user_msg_count = 0
@@ -266,7 +274,7 @@ def extract_codex_session(jsonl_path: Path) -> dict | None:
     except Exception:
         return None
 
-    if user_msg_count < MIN_USER_MESSAGES:
+    if user_msg_count < _min_user_messages(min_user_messages):
         return None
 
     return {
@@ -286,7 +294,12 @@ def extract_codex_session(jsonl_path: Path) -> dict | None:
     }
 
 
-def collect_transcripts_since(since_iso: str, until_iso: str = "") -> list[dict]:
+def collect_transcripts_since(
+    since_iso: str,
+    until_iso: str = "",
+    *,
+    min_user_messages: int = MIN_USER_MESSAGES,
+) -> list[dict]:
     since_dt = datetime.fromisoformat(since_iso)
     until_dt = datetime.fromisoformat(until_iso) if until_iso else datetime.now()
     sessions = []
@@ -302,7 +315,11 @@ def collect_transcripts_since(since_iso: str, until_iso: str = "") -> list[dict]
             continue
         if not (since_dt < mtime <= until_dt):
             continue
-        session = extract_codex_session(session_file) if client == "codex" else extract_claude_session(session_file)
+        session = (
+            extract_codex_session(session_file, min_user_messages=min_user_messages)
+            if client == "codex"
+            else extract_claude_session(session_file, min_user_messages=min_user_messages)
+        )
         if session:
             session["modified"] = mtime.isoformat()
             sessions.append(session)
@@ -310,10 +327,16 @@ def collect_transcripts_since(since_iso: str, until_iso: str = "") -> list[dict]
     return sessions
 
 
-def list_recent_transcripts(hours: int = DEFAULT_TRANSCRIPT_HOURS, client: str = "", limit: int = 10) -> list[dict]:
+def list_recent_transcripts(
+    hours: int = DEFAULT_TRANSCRIPT_HOURS,
+    client: str = "",
+    limit: int = 10,
+    *,
+    min_user_messages: int = MIN_USER_MESSAGES,
+) -> list[dict]:
     window = clamp_transcript_hours(hours)
     since = datetime.now() - timedelta(hours=window)
-    sessions = collect_transcripts_since(since.isoformat())
+    sessions = collect_transcripts_since(since.isoformat(), min_user_messages=min_user_messages)
     filtered = []
     for item in sessions:
         if client and item.get("client") != client:

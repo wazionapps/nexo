@@ -73,6 +73,7 @@ from paths import (
 from agent_runner import AutomationBackendUnavailableError, run_automation_prompt
 from constants import AUTOMATION_SUBPROCESS_TIMEOUT
 from core_prompts import render_core_prompt
+from cognitive_paths import audit_cognitive_db_paths, resolve_cognitive_db
 import db as nexo_db
 from public_evolution_queue import queue_public_port_candidate
 
@@ -914,15 +915,34 @@ def check_evolution_health():
 
 
 def check_disk_space():
-    result = subprocess.run(["df", "-h", "/"], capture_output=True, text=True)
-    for line in result.stdout.strip().split("\n")[1:]:
-        parts = line.split()
-        if len(parts) >= 5:
-            usage_pct = int(parts[4].replace("%", ""))
-            if usage_pct > 90:
-                finding("ERROR", "disk", f"Root disk at {usage_pct}% capacity")
-            elif usage_pct > 80:
-                finding("WARN", "disk", f"Root disk at {usage_pct}% capacity")
+    import paths as paths_module
+
+    try:
+        floor = int(paths_module.backup_min_free_bytes())
+        usage_before = shutil.disk_usage(str(paths_module.home()))
+        if usage_before.free < floor:
+            paths_module.aggressive_runtime_backup_prune(
+                min_free_bytes=floor,
+                reason="daily_self_audit_disk_space",
+            )
+        usage = shutil.disk_usage(str(paths_module.home()))
+        if usage_before.free < floor <= usage.free:
+            script = NEXO_CODE / "scripts" / "post_disk_recovery_sweep.py"
+            if script.is_file():
+                subprocess.run(
+                    [sys.executable, str(script), "--reason", "daily_self_audit_disk_low_to_ok"],
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                )
+        usage_pct = int(((usage.total - usage.free) / usage.total) * 100)
+        free_gb = usage.free / (1024 ** 3)
+        if usage.free < floor:
+            finding("ERROR", "disk", f"Root disk at {usage_pct}% capacity after NEXO self-cleanup ({free_gb:.1f} GB free)")
+        elif usage_pct > 80:
+            finding("WARN", "disk", f"Root disk at {usage_pct}% capacity ({free_gb:.1f} GB free)")
+    except Exception as exc:
+        finding("WARN", "disk", f"Could not check disk space: {exc}")
 
 
 def check_db_size():
@@ -1735,7 +1755,13 @@ def check_watchdog_smoke():
 
 
 def check_cognitive_health():
-    cognitive_db = data_dir() / "cognitive.db"
+    path_audit = audit_cognitive_db_paths()
+    if path_audit["status"] == "error":
+        finding("ERROR", "cognitive-paths", path_audit["reason"])
+        return
+    if path_audit["status"] == "warning":
+        finding("WARN", "cognitive-paths", path_audit["reason"])
+    cognitive_db = resolve_cognitive_db(for_write=False)
     if not cognitive_db.exists():
         finding("WARN", "cognitive", "cognitive.db not found")
         return

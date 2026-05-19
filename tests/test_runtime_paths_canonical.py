@@ -45,6 +45,7 @@ def test_auto_close_sessions_logs_follow_runtime_paths(tmp_path, monkeypatch):
 def test_storage_router_default_paths_follow_runtime_layout(tmp_path, monkeypatch):
     nexo_home = tmp_path / "nexo-home"
     monkeypatch.setenv("NEXO_HOME", str(nexo_home))
+    monkeypatch.delenv("NEXO_COGNITIVE_DB", raising=False)
 
     import storage_router
     importlib.reload(storage_router)

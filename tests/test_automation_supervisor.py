@@ -7,6 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
 
+import automation_supervisor
 from automation_supervisor import AutomationSupervisorConfig, audit_automation, format_markdown
 
 
@@ -187,6 +188,76 @@ def test_markdown_fragment_summarises_required_evidence(tmp_path):
 
     md = format_markdown(audit_automation(_config(tmp_path)))
 
-    assert "G13 Automation supervisor sin Evolution" in md
-    assert "Evolution excluido" in md
+    assert "Automation supervisor" in md
+    assert "Evolution excluded from cron reconciliation" in md
     assert "open_run:custom-report" in md
+
+
+def test_evolution_policy_reports_loaded_for_standalone_inventory(tmp_path, monkeypatch):
+    monkeypatch.setenv("NEXO_HOME", str(tmp_path / "nexo-home"))
+    _write_manifest(tmp_path / "manifest.json")
+    (tmp_path / "cron-spool").mkdir()
+    conn = _create_db(tmp_path / "nexo.db")
+    conn.close()
+
+    report = audit_automation(
+        _config(tmp_path, launchagent_labels=frozenset({"com.nexo.evolution"}))
+    )
+
+    assert report["evolution"]["status"] == "enabled_and_loaded"
+    assert report["evolution"]["severity"] == "OK"
+    assert report["summary"]["evolution_status"] == "enabled_and_loaded"
+
+
+def test_evolution_policy_requires_inventory_in_standalone_mode(tmp_path, monkeypatch):
+    monkeypatch.setenv("NEXO_HOME", str(tmp_path / "nexo-home"))
+    _write_manifest(tmp_path / "manifest.json")
+    (tmp_path / "cron-spool").mkdir()
+    conn = _create_db(tmp_path / "nexo.db")
+    conn.close()
+
+    report = audit_automation(_config(tmp_path, launchagent_labels=None))
+
+    assert report["evolution"]["status"] == "unknown"
+    assert report["evolution"]["severity"] == "P2"
+    assert "inventory was not supplied" in report["evolution"]["reason"]
+    assert any(item["kind"] == "evolution" for item in report["findings"])
+
+
+def test_evolution_policy_reports_disabled_by_desktop_product(tmp_path, monkeypatch):
+    home = tmp_path / "nexo-home"
+    (home / "config").mkdir(parents=True)
+    (home / "config" / "product-mode.json").write_text(json.dumps({
+        "desktop_managed": True,
+        "product_mode": "desktop_closed_product",
+    }))
+    monkeypatch.setenv("NEXO_HOME", str(home))
+    _write_manifest(tmp_path / "manifest.json")
+    (tmp_path / "cron-spool").mkdir()
+    conn = _create_db(tmp_path / "nexo.db")
+    conn.close()
+
+    report = audit_automation(_config(tmp_path, launchagent_labels=frozenset()))
+
+    assert report["evolution"]["status"] == "disabled_by_policy"
+    assert report["evolution"]["severity"] == "OK"
+
+
+def test_open_cron_rows_use_sqlite_readonly_uri(tmp_path, monkeypatch):
+    db_path = tmp_path / "nexo.db"
+    db_path.write_text("", encoding="utf-8")
+    calls = []
+
+    def fake_connect(database, *args, **kwargs):
+        calls.append((database, kwargs))
+        raise sqlite3.Error("stop after verifying URI")
+
+    monkeypatch.setattr(automation_supervisor.sqlite3, "connect", fake_connect)
+
+    rows = automation_supervisor._load_open_cron_rows(db_path)
+
+    assert rows == []
+    assert calls
+    assert calls[0][0].startswith("file:")
+    assert calls[0][0].endswith("?mode=ro")
+    assert calls[0][1]["uri"] is True

@@ -115,6 +115,8 @@ TEMPORARY_RE = re.compile(r"(^|.*[.])tmp([.-].*)?$|.*\.tmp\..*|.*-journal$|.*\.d
 # Big ad-hoc DB files at the root — rare, include for reporting but never auto-prune.
 ROOT_DB_RE = re.compile(r"^(pre-obs-clean|pre-sleep-wrapper-apply|pre-.*)-\d{4}-\d{2}-\d{2}-\d{4}\.db$")
 DEFAULT_MAX_BYTES = 50 * 1024 * 1024 * 1024
+MIN_ADAPTIVE_MAX_BYTES = 10 * 1024 * 1024 * 1024
+MAX_ADAPTIVE_MAX_BYTES = 50 * 1024 * 1024 * 1024
 
 # Timestamp patterns embedded in directory names.
 TS_PATTERNS = (
@@ -214,6 +216,20 @@ def parse_size_bytes(value: str | int | None, *, default: int = DEFAULT_MAX_BYTE
         return default
 
 
+def effective_max_bytes(backups_root: Path, raw_max_bytes: int) -> int:
+    """Apply the adaptive default cap without blocking emergency lower caps."""
+    if raw_max_bytes < MIN_ADAPTIVE_MAX_BYTES:
+        return raw_max_bytes
+    probe = backups_root if backups_root.exists() else backups_root.parent
+    try:
+        total = int(shutil.disk_usage(str(probe)).total)
+        adaptive = int(total * 0.05)
+    except Exception:
+        adaptive = DEFAULT_MAX_BYTES
+    adaptive = max(MIN_ADAPTIVE_MAX_BYTES, min(MAX_ADAPTIVE_MAX_BYTES, adaptive))
+    return min(raw_max_bytes, adaptive)
+
+
 def gather_entries(backups_root: Path) -> list[dict]:
     items: list[dict] = []
     for entry in backups_root.iterdir():
@@ -303,7 +319,7 @@ def plan_prunes(
         else:
             to_keep.append(it)
 
-    for klass, keep_count in (("LOCAL_CONTEXT_DB", local_context_keep), ("HOURLY_DB", hourly_keep)):
+    for klass, keep_count in (("LOCAL_CONTEXT_DB", local_context_keep),):
         group = [it for it in items if it["class"] == klass]
         group.sort(key=lambda x: (x["ts"] or datetime.min.replace(tzinfo=timezone.utc)), reverse=True)
         for it in group[:max(0, keep_count)]:
@@ -321,12 +337,10 @@ def plan_prunes(
             for it in items:
                 by_budget_family.setdefault((it["class"], it["family"]), []).append(it)
             for (klass, _family), group in by_budget_family.items():
-                if klass not in {"TECHNICAL", "LOCAL_CONTEXT_DB", "HOURLY_DB", "TEMPORARY"}:
+                if klass not in {"TECHNICAL", "LOCAL_CONTEXT_DB", "TEMPORARY"}:
                     continue
                 min_keep = 0
-                if klass == "HOURLY_DB":
-                    min_keep = max(1, hourly_keep)
-                elif klass == "LOCAL_CONTEXT_DB":
+                if klass == "LOCAL_CONTEXT_DB":
                     min_keep = max(0, local_context_keep)
                 group.sort(key=lambda x: (x["ts"] or datetime.min.replace(tzinfo=timezone.utc)), reverse=True)
                 for it in group[:min_keep]:
@@ -336,7 +350,7 @@ def plan_prunes(
                 it for it in items
                 if id(it) not in delete_ids
                 and id(it) not in protected_keep_ids
-                and it["class"] in {"TECHNICAL", "LOCAL_CONTEXT_DB", "HOURLY_DB", "TEMPORARY"}
+                and it["class"] in {"TECHNICAL", "LOCAL_CONTEXT_DB", "TEMPORARY"}
             ]
             budget_candidates.sort(
                 key=lambda x: (
@@ -358,6 +372,28 @@ def plan_prunes(
     return to_delete, to_keep
 
 
+def restore_point_guard(items: list[dict], to_delete: list[dict]) -> tuple[bool, list[str], dict]:
+    """Validate that apply mode never removes protected restore classes."""
+    delete_ids = {id(item) for item in to_delete}
+    protected_classes = {"BUSINESS", "HOURLY_DB", "ROOT_DB", "UNKNOWN"}
+    protected_names = set(PROTECTED_NAMES)
+    violations: list[str] = []
+    for item in items:
+        if id(item) not in delete_ids:
+            continue
+        if item["class"] in protected_classes or item["name"] in protected_names:
+            violations.append(f"{item['name']} ({item['class']})")
+    hourly_count = sum(1 for item in items if item["class"] == "HOURLY_DB")
+    weekly_present = any(item["name"] == "weekly" for item in items)
+    business_count = sum(1 for item in items if item["class"] == "BUSINESS")
+    return not violations, violations, {
+        "hourly_db_present": hourly_count,
+        "weekly_present": weekly_present,
+        "business_protected": business_count,
+        "protected_delete_violations": violations,
+    }
+
+
 def run(args: argparse.Namespace) -> int:
     backups_root = Path(args.root or (default_nexo_home() / "runtime" / "backups"))
     if not backups_root.is_dir():
@@ -371,7 +407,7 @@ def run(args: argparse.Namespace) -> int:
     local_context_items = [i for i in items if i["class"] == "LOCAL_CONTEXT_DB"]
     temporary_items = [i for i in items if i["class"] == "TEMPORARY"]
     unknown_items = [i for i in items if i["class"] == "UNKNOWN"]
-    max_bytes = parse_size_bytes(args.max_bytes)
+    max_bytes = effective_max_bytes(backups_root, parse_size_bytes(args.max_bytes))
 
     to_delete, to_keep = plan_prunes(
         items,
@@ -383,6 +419,16 @@ def run(args: argparse.Namespace) -> int:
         local_context_keep=max(0, args.local_context_keep),
         hourly_keep=max(0, args.hourly_keep),
     )
+
+    if args.delete_all_technical:
+        delete_ids = {id(item) for item in to_delete}
+        for item in items:
+            if item["class"] in {"TECHNICAL", "TEMPORARY"} and id(item) not in delete_ids:
+                to_delete.append(item)
+                delete_ids.add(id(item))
+        to_keep = [item for item in items if id(item) not in delete_ids]
+
+    restore_guard_ok, restore_guard_violations, restore_guard = restore_point_guard(items, to_delete)
 
     total_all = sum(i["size"] for i in items)
     total_del = sum(i["size"] for i in to_delete)
@@ -396,9 +442,11 @@ def run(args: argparse.Namespace) -> int:
             "only": args.only,
             "max_bytes": max_bytes,
             "max_human": human_size(max_bytes),
+            "delete_all_technical": args.delete_all_technical,
             "tmp_ttl_minutes": args.tmp_ttl_minutes,
             "local_context_keep": args.local_context_keep,
             "hourly_keep": args.hourly_keep,
+            "restore_point_guard": restore_guard,
         },
         "totals": {
             "all_bytes": total_all,
@@ -429,9 +477,7 @@ def run(args: argparse.Namespace) -> int:
         "unknown": [i["name"] for i in unknown_items],
     }
 
-    if args.json:
-        print(json.dumps(report, indent=2))
-    else:
+    if not args.json:
         print(f"NEXO backup prune — root: {backups_root}")
         print(f"  total on disk:   {human_size(total_all)}  ({len(items)} entries)")
         print(f"    technical:     {len(tech_items)}")
@@ -457,9 +503,20 @@ def run(args: argparse.Namespace) -> int:
                 print(f"  ? {it['name']}")
 
     if not args.apply:
+        if args.json:
+            print(json.dumps(report, indent=2))
+            return 0
         if not args.json:
             print("\n(dry-run: pass --apply to delete)")
         return 0
+
+    if not restore_guard_ok:
+        print(
+            "ERROR: refusing to prune protected restore artifacts: "
+            + ", ".join(restore_guard_violations),
+            file=sys.stderr,
+        )
+        return 1
 
     deleted = 0
     failed = 0
@@ -476,7 +533,16 @@ def run(args: argparse.Namespace) -> int:
         except OSError as e:
             failed += 1
             print(f"WARN: failed to delete {p}: {e}", file=sys.stderr)
-    print(f"\nDELETED {deleted} entries, freed {human_size(freed)}, failures: {failed}")
+    report["apply"] = {
+        "deleted": deleted,
+        "freed_bytes": freed,
+        "freed_human": human_size(freed),
+        "failures": failed,
+    }
+    if args.json:
+        print(json.dumps(report, indent=2))
+    else:
+        print(f"\nDELETED {deleted} entries, freed {human_size(freed)}, failures: {failed}")
     return 0 if failed == 0 else 1
 
 
@@ -489,6 +555,7 @@ def main() -> int:
     ap.add_argument("--window-days", type=int, default=90, help="month-spaced retention window (default: 90)")
     ap.add_argument("--only", help="restrict to one technical family (e.g. 'pre-backfill-owner')")
     ap.add_argument("--max-bytes", default=os.environ.get("NEXO_BACKUP_MAX_BYTES", str(DEFAULT_MAX_BYTES)), help="global product-generated backup hard cap, bytes or K/M/G/T (default: 50G)")
+    ap.add_argument("--delete-all-technical", action="store_true", help="emergency mode: delete all technical rollback snapshots; protected business/weekly/hourly DB backups remain untouched")
     ap.add_argument("--tmp-ttl-minutes", type=int, default=int(os.environ.get("NEXO_BACKUP_TMP_TTL_MINUTES", "30")), help="delete orphan temporary backup files older than this (default: 30)")
     ap.add_argument("--local-context-keep", type=int, default=int(os.environ.get("NEXO_LOCAL_CONTEXT_BACKUP_KEEP_LAST", "1")), help="local-context backup files to keep under the global cap (default: 1)")
     ap.add_argument("--hourly-keep", type=int, default=int(os.environ.get("NEXO_BACKUP_KEEP_LAST", "3")), help="hourly nexo DB backups to keep under the global cap (default: 3)")

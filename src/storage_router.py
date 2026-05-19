@@ -3,6 +3,7 @@
 import os
 
 import paths
+from cognitive_paths import resolve_cognitive_db
 
 NEXO_HOME = os.environ.get("NEXO_HOME", os.path.expanduser("~/.nexo"))
 
@@ -20,9 +21,7 @@ class StorageRouter:
 
     def cognitive_db_path(self) -> str:
         if self.tenant_id == "default":
-            cognitive_dir = paths.cognitive_dir()
-            cognitive_dir.mkdir(parents=True, exist_ok=True)
-            return str(cognitive_dir / "cognitive.db")
+            return str(resolve_cognitive_db(for_write=True))
         return os.path.join(NEXO_HOME, "tenants", self.tenant_id, "cognitive.db")
 
 

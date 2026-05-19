@@ -8,12 +8,14 @@ import importlib
 import os
 import sqlite3
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = str(ROOT / "src")
+COLLECTION_RUNTIME = Path(tempfile.mkdtemp(prefix="nexo-pytest-collection-"))
 REPO_PREFIXES = (
     "plugins",
     "db",
@@ -23,6 +25,17 @@ REPO_PREFIXES = (
     "script_registry",
     "state_watchers_runtime",
 )
+
+# Some test modules import cognitive/db packages during collection, before
+# autouse fixtures can redirect paths. Keep those imports away from the live
+# runtime so local release checks cannot trip over a real ~/.nexo state.
+os.environ.setdefault("NEXO_TEST_DB", str(COLLECTION_RUNTIME / "collection_nexo.db"))
+os.environ.setdefault("NEXO_COGNITIVE_DB", str(COLLECTION_RUNTIME / "collection_cognitive.db"))
+os.environ.setdefault("NEXO_LOCAL_CONTEXT_DB", str(COLLECTION_RUNTIME / "collection_local_context.db"))
+os.environ.setdefault("NEXO_SKIP_FS_INDEX", "1")
+os.environ.setdefault("NEXO_SKIP_LEARNING_COGNITIVE_INGEST", "1")
+os.environ.setdefault("NEXO_SKIP_SEMANTIC_SIMILARITY", "1")
+os.environ.setdefault("NEXO_SKIP_COGNITIVE_MODEL_DOWNLOAD", "1")
 
 
 def _ensure_repo_src_first() -> None:

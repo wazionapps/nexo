@@ -115,33 +115,16 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
-BACKUP_MAX_BYTES = _env_int("NEXO_BACKUP_MAX_BYTES", 50 * 1024 * 1024 * 1024)
-BACKUP_MIN_FREE_BYTES = _env_int("NEXO_BACKUP_MIN_FREE_BYTES", 5 * 1024 * 1024 * 1024)
+BACKUP_MAX_BYTES = paths.backup_retention_cap_bytes()
+BACKUP_MIN_FREE_BYTES = paths.backup_min_free_bytes()
 LOCAL_CONTEXT_MAX_BACKUP_BYTES = _env_int("NEXO_LOCAL_CONTEXT_MAX_BACKUP_BYTES", 2 * 1024 * 1024 * 1024)
 _LAST_BACKUP_ERROR = ""
 
 
 def _run_runtime_backup_prune() -> None:
-    script = SRC_DIR / "scripts" / "prune_runtime_backups.py"
-    if not script.is_file():
-        return
-    try:
-        subprocess.run(
-            [
-                sys.executable,
-                str(script),
-                "--root",
-                str(paths.backups_dir()),
-                "--apply",
-                "--max-bytes",
-                str(BACKUP_MAX_BYTES),
-            ],
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
-    except Exception as e:
-        _log(f"Backup self-clean warning: {e}")
+    result = paths.run_runtime_backup_prune(max_bytes=BACKUP_MAX_BYTES)
+    if result.get("ok") is False and not result.get("skipped"):
+        _log(f"Backup self-clean warning: {result.get('error') or result.get('stderr') or 'unknown'}")
 
 
 def _backup_free_bytes() -> int | None:
@@ -154,14 +137,7 @@ def _backup_free_bytes() -> int | None:
 
 
 def _backup_space_error() -> str | None:
-    _run_runtime_backup_prune()
-    free = _backup_free_bytes()
-    if free is not None and free < BACKUP_MIN_FREE_BYTES:
-        return (
-            "free disk below NEXO backup safety floor after automatic cleanup "
-            f"({free}B < {BACKUP_MIN_FREE_BYTES}B)"
-        )
-    return None
+    return paths.backup_space_error(reason="auto_update")
 
 
 def _should_include_local_context_backup(path: Path) -> bool:
@@ -283,15 +259,15 @@ def _cleanup_legacy_root_db_stubs(runtime_root: Path = NEXO_HOME, *, dry_run: bo
             continue
 
         if backup_root is None:
-            timestamp = time.strftime("%Y-%m-%d-%H%M%S", time.gmtime())
-            backup_root = paths.backups_dir() / f"legacy-root-db-stubs-{timestamp}"
-            backup_root.mkdir(parents=True, exist_ok=True)
+            backup_root = paths.create_backup_dir("legacy-root-db-stubs")
         target = backup_root / candidate.name
         try:
             shutil.move(str(candidate), str(target))
             report["archived"].append({"path": str(candidate), "backup_path": str(target)})
         except Exception as exc:
             report["errors"].append({"path": str(candidate), "error": str(exc)})
+    if backup_root is not None:
+        paths.finalize_backup_snapshot(backup_root)
     return report
 
 
@@ -374,9 +350,7 @@ def _cleanup_empty_personal_brain_db_stubs(runtime_root: Path = NEXO_HOME, *, dr
             continue
 
         if backup_root is None:
-            timestamp = time.strftime("%Y-%m-%d-%H%M%S", time.gmtime())
-            backup_root = paths.backups_dir() / f"legacy-personal-brain-db-stubs-{timestamp}"
-            backup_root.mkdir(parents=True, exist_ok=True)
+            backup_root = paths.create_backup_dir("legacy-personal-brain-db-stubs")
         target = backup_root / candidate.name
         try:
             shutil.move(str(candidate), str(target))
@@ -387,6 +361,8 @@ def _cleanup_empty_personal_brain_db_stubs(runtime_root: Path = NEXO_HOME, *, dr
             })
         except Exception as exc:
             report["errors"].append({"path": str(candidate), "error": str(exc)})
+    if backup_root is not None:
+        paths.finalize_backup_snapshot(backup_root)
     return report
 
 
@@ -1613,7 +1589,7 @@ def _self_heal_if_wiped() -> dict | None:
         return report
 
     # Snapshot the current (wiped) state so the heal is reversible.
-    pre_heal_dir = paths.backups_dir() / f"pre-heal-{time.strftime('%Y-%m-%d-%H%M%S')}"
+    pre_heal_dir = paths.create_backup_dir("pre-heal")
     try:
         import shutil as _shutil
         pre_heal_dir.mkdir(parents=True, exist_ok=True)
@@ -1623,6 +1599,7 @@ def _self_heal_if_wiped() -> dict | None:
                 _shutil.copy2(str(sidecar), str(pre_heal_dir / sidecar.name))
     except Exception as e:
         _log(f"self-heal: pre-heal snapshot warning: {e}")
+    paths.finalize_backup_snapshot(pre_heal_dir)
 
     # Clear stale WAL/SHM before the restore so the new DB starts clean.
     for suffix in ("-wal", "-shm"):
@@ -2141,8 +2118,7 @@ def _backup_dbs() -> str | None:
     # path selection and turn into empty shells in the backup, breaking both
     # validation and rollback paths. Safe no-op when there are none.
     _purge_zero_byte_db_files()
-    timestamp = _time.strftime("%Y-%m-%d-%H%M%S")
-    backup_dir = paths.backups_dir() / f"pre-autoupdate-{timestamp}"
+    backup_dir: Path | None = None
 
     db_files = list(DATA_DIR.glob("*.db")) if DATA_DIR.is_dir() else []
     local_context_db = paths.memory_dir() / "local-context.db"
@@ -2162,7 +2138,7 @@ def _backup_dbs() -> str | None:
         _log(f"DB backup aborted: {space_err}")
         return None
 
-    backup_dir.mkdir(parents=True, exist_ok=True)
+    backup_dir = paths.create_backup_dir("pre-autoupdate")
     for db_file in db_files:
         src_conn = None
         dst_conn = None
@@ -2187,6 +2163,7 @@ def _backup_dbs() -> str | None:
         _rotate_auto_update_backups("pre-autoupdate-")
     except Exception as e:
         _log(f"Backup rotation warning (pre-autoupdate): {e}")
+    paths.finalize_backup_snapshot(backup_dir)
     return str(backup_dir)
 
 
@@ -2665,8 +2642,7 @@ def _promote_packaged_runtime_code_to_core() -> None:
     def _conflict_dir() -> Path:
         nonlocal conflict_root
         if conflict_root is None:
-            conflict_root = paths.backups_dir() / f"packaged-code-f06-conflicts-{timestamp}"
-            conflict_root.mkdir(parents=True, exist_ok=True)
+            conflict_root = paths.create_backup_dir("packaged-code-f06-conflicts")
         return conflict_root
 
     def _same_file(a: Path, b: Path) -> bool:
@@ -2765,6 +2741,8 @@ def _promote_packaged_runtime_code_to_core() -> None:
             shutil.move(str(source), str(canonical))
         except Exception as exc:
             _log(f"[F0.6 packaged-code] move {source} -> {canonical} failed: {exc}")
+    if conflict_root is not None:
+        paths.finalize_backup_snapshot(conflict_root)
 
 
 def _ensure_f06_legacy_shims() -> None:
@@ -2783,8 +2761,7 @@ def _ensure_f06_legacy_shims() -> None:
     def _conflict_dir() -> Path:
         nonlocal conflict_root
         if conflict_root is None:
-            conflict_root = paths.backups_dir() / f"legacy-shim-conflicts-{timestamp}"
-            conflict_root.mkdir(parents=True, exist_ok=True)
+            conflict_root = paths.create_backup_dir("legacy-shim-conflicts")
         return conflict_root
 
     def _same_file(a: Path, b: Path) -> bool:
@@ -2950,6 +2927,8 @@ def _ensure_f06_legacy_shims() -> None:
         marker.write_text("F0.6\n", encoding="utf-8")
     except Exception:
         pass
+    if conflict_root is not None:
+        paths.finalize_backup_snapshot(conflict_root)
 
 
 def _rewrite_f06_launch_agents() -> int:
@@ -4430,9 +4409,7 @@ def _installed_scripts_classification(dest: Path) -> dict[str, str]:
 
 
 def _backup_runtime_tree(dest: Path = NEXO_HOME) -> str:
-    timestamp = time.strftime("%Y-%m-%d-%H%M%S")
-    backup_dir = paths.backups_dir() / f"runtime-tree-{timestamp}"
-    backup_dir.mkdir(parents=True, exist_ok=True)
+    backup_dir = paths.create_backup_dir("runtime-tree")
 
     code_dirs = [
         "hooks",
@@ -4471,6 +4448,7 @@ def _backup_runtime_tree(dest: Path = NEXO_HOME) -> str:
         _rotate_auto_update_backups("runtime-tree-")
     except Exception as e:
         _log(f"Backup rotation warning (runtime-tree): {e}")
+    paths.finalize_backup_snapshot(backup_dir)
     return str(backup_dir)
 
 

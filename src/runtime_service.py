@@ -9,6 +9,7 @@ handlers.
 """
 
 import asyncio
+import hashlib
 import json
 import os
 import signal
@@ -135,11 +136,22 @@ def read_service_state() -> dict[str, Any]:
         return {}
 
 
+def _new_runtime_instance_id(payload: dict[str, Any]) -> str:
+    seed = "|".join(
+        str(payload.get(key) or "")
+        for key in ("server_path", "runtime_version", "runtime_fingerprint", "started_at", "pid")
+    )
+    if not seed.strip("|"):
+        seed = f"{current_server_path()}|{os.getpid()}|{time.time()}"
+    return "rt-" + hashlib.sha256(seed.encode("utf-8")).hexdigest()[:16]
+
+
 def write_service_state(state: dict[str, Any]) -> None:
     path = service_state_path()
     tmp = path.with_suffix(path.suffix + ".tmp")
     payload = dict(state)
     payload.update(current_runtime_identity())
+    payload["runtime_instance_id"] = str(payload.get("runtime_instance_id") or _new_runtime_instance_id(payload))
     payload["updated_at"] = time.time()
     tmp.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     os.replace(tmp, path)
@@ -242,17 +254,24 @@ def current_server_path() -> Path:
 
 def current_runtime_identity() -> dict[str, str]:
     try:
-        from runtime_versioning import compute_mcp_runtime_fingerprint, read_version_for_path
+        from runtime_versioning import compute_mcp_runtime_fingerprint, read_version_for_path, runtime_generation
 
         root = current_server_path().parent
         version = read_version_for_path(root) or read_version_for_path(root.parent)
+        fingerprint = compute_mcp_runtime_fingerprint(root, use_cache=True)
         return {
             "runtime_version": version,
-            "runtime_fingerprint": compute_mcp_runtime_fingerprint(root, use_cache=True),
+            "runtime_fingerprint": fingerprint,
+            "runtime_generation": runtime_generation(version, fingerprint, str(root)),
             "server_path": str(current_server_path()),
         }
     except Exception:
-        return {"runtime_version": "", "runtime_fingerprint": "", "server_path": str(current_server_path())}
+        return {
+            "runtime_version": "",
+            "runtime_fingerprint": "",
+            "runtime_generation": "unknown",
+            "server_path": str(current_server_path()),
+        }
 
 
 def state_matches_current_runtime(state: dict[str, Any]) -> bool:
@@ -266,6 +285,11 @@ def state_matches_current_runtime(state: dict[str, Any]) -> bool:
     current_fp = str(current.get("runtime_fingerprint") or "").strip()
     state_fp = str(state.get("runtime_fingerprint") or "").strip()
     if current_fp and state_fp and current_fp != state_fp:
+        return False
+
+    current_generation = str(current.get("runtime_generation") or "").strip()
+    state_generation = str(state.get("runtime_generation") or "").strip()
+    if current_generation and state_generation and current_generation != state_generation:
         return False
 
     current_version = str(current.get("runtime_version") or "").strip()
@@ -410,8 +434,11 @@ def runtime_service_status() -> dict[str, Any]:
         "stale": bool(state and not state_matches_current_runtime(state)),
         "runtime_version": current.get("runtime_version", ""),
         "runtime_fingerprint": current.get("runtime_fingerprint", ""),
+        "runtime_generation": current.get("runtime_generation", "unknown"),
+        "runtime_instance_id": str(state.get("runtime_instance_id") or ""),
         "state_runtime_version": str(state.get("runtime_version") or ""),
         "state_runtime_fingerprint": str(state.get("runtime_fingerprint") or ""),
+        "state_runtime_generation": str(state.get("runtime_generation") or ""),
         "state_path": str(service_state_path()),
         "log_path": str(service_log_path()),
         "server_path": str(current_server_path()),

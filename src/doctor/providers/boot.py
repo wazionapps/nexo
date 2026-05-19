@@ -2,8 +2,11 @@
 from __future__ import annotations
 
 import os
+import json
 import shutil
+import subprocess
 import sys
+import time
 from pathlib import Path
 
 from doctor.models import DoctorCheck, safe_check
@@ -356,33 +359,130 @@ def check_required_dirs() -> DoctorCheck:
     )
 
 
-def check_disk_space() -> DoctorCheck:
-    """Check disk free space on NEXO_HOME partition."""
+def _disk_recovery_state_file(paths_module) -> Path:
+    return paths_module.runtime_state_dir() / "disk-recovery-state.json"
+
+
+def _read_disk_recovery_state(paths_module) -> dict:
     try:
-        usage = shutil.disk_usage(str(NEXO_HOME))
+        path = _disk_recovery_state_file(paths_module)
+        if path.is_file():
+            return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    return {}
+
+
+def _write_disk_recovery_state(paths_module, payload: dict) -> None:
+    try:
+        path = _disk_recovery_state_file(paths_module)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _post_disk_recovery_sweep(paths_module, *, reason: str, free_bytes: int) -> dict:
+    candidates = [
+        Path(__file__).resolve().parents[2] / "scripts" / "post_disk_recovery_sweep.py",
+        paths_module.core_scripts_dir() / "post_disk_recovery_sweep.py",
+    ]
+    script = next((candidate for candidate in candidates if candidate.is_file()), None)
+    if script is None:
+        return {"ok": False, "skipped": True, "reason": "script_missing"}
+    try:
+        proc = subprocess.run(
+            [
+                sys.executable,
+                str(script),
+                "--reason",
+                reason,
+                "--json",
+                "--network-window-seconds",
+                "0",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        return {
+            "ok": proc.returncode == 0,
+            "returncode": proc.returncode,
+            "free_bytes": free_bytes,
+            "stdout": proc.stdout[-1000:],
+            "stderr": proc.stderr[-1000:],
+        }
+    except Exception as exc:
+        return {"ok": False, "error": str(exc), "free_bytes": free_bytes}
+
+
+def check_disk_space() -> DoctorCheck:
+    """Check disk free space after silently purging NEXO-owned backups."""
+    import paths
+
+    try:
+        state = _read_disk_recovery_state(paths)
+        floor = int(paths.backup_min_free_bytes())
+        critical_floor = 1 * 1024 ** 3
+        usage_before = shutil.disk_usage(str(paths.home()))
+        cleanup_report = None
+
+        if usage_before.free < floor:
+            cleanup_report = paths.aggressive_runtime_backup_prune(
+                min_free_bytes=floor,
+                reason="doctor_boot_disk_space",
+            )
+
+        usage = shutil.disk_usage(str(paths.home()))
         free_gb = usage.free / (1024 ** 3)
         pct_free = (usage.free / usage.total) * 100
+        evidence = [f"Total: {usage.total / (1024**3):.0f} GB, Free: {free_gb:.1f} GB"]
+        if cleanup_report:
+            evidence.append(f"NEXO backup self-cleanup: {cleanup_report.get('steps')}")
 
-        if free_gb < 1:
+        if usage.free < floor:
+            _write_disk_recovery_state(paths, {
+                "low": True,
+                "free_bytes": int(usage.free),
+                "threshold_bytes": floor,
+                "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            })
+            status = "critical" if usage.free < critical_floor else "degraded"
+            severity = "error" if status == "critical" else "warn"
             return DoctorCheck(
                 id="boot.disk_space",
                 tier="boot",
-                status="critical",
-                severity="error",
-                summary=f"Very low disk space: {free_gb:.1f} GB free ({pct_free:.0f}%)",
-                evidence=[f"Total: {usage.total / (1024**3):.0f} GB, Free: {free_gb:.1f} GB"],
-                repair_plan=["Free up disk space — NEXO needs at least 1 GB for normal operation"],
-                escalation_prompt="Disk space critically low — backups and logs may fail.",
+                status=status,
+                severity=severity,
+                summary=f"Disk almost full ({free_gb:.1f} GB free). NEXO has already cleaned up its own backups. Review personal files to free space.",
+                evidence=evidence,
+                repair_plan=["Open the user folder and review personal files to free space"],
+                escalation_prompt=f"Disk almost full ({free_gb:.1f} GB free). NEXO has already cleaned up its own backups. Review personal files to free space.",
             )
-        elif free_gb < 5:
+
+        if usage_before.free < floor or state.get("low"):
+            sweep = _post_disk_recovery_sweep(
+                paths,
+                reason="doctor_disk_low_to_ok",
+                free_bytes=int(usage.free),
+            )
+            _write_disk_recovery_state(paths, {
+                "low": False,
+                "free_bytes": int(usage.free),
+                "threshold_bytes": floor,
+                "last_recovery_sweep": sweep,
+                "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            })
             return DoctorCheck(
                 id="boot.disk_space",
                 tier="boot",
-                status="degraded",
-                severity="warn",
-                summary=f"Low disk space: {free_gb:.1f} GB free ({pct_free:.0f}%)",
-                evidence=[f"Total: {usage.total / (1024**3):.0f} GB, Free: {free_gb:.1f} GB"],
+                status="healthy",
+                severity="info",
+                summary=f"Disk space recovered after NEXO backup self-cleanup: {free_gb:.1f} GB free ({pct_free:.0f}%)",
+                evidence=evidence + [f"Post-disk recovery sweep: {sweep}"],
+                fixed=True,
             )
+
         return DoctorCheck(
             id="boot.disk_space",
             tier="boot",

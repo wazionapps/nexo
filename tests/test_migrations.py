@@ -1,6 +1,9 @@
 """Tests for database schema and migrations."""
 
+import sqlite3
+
 import db as db_mod
+from db._schema import _m65_diary_quality, _m67_diary_quality_backfill_repair
 
 
 def test_init_db_creates_core_tables():
@@ -30,6 +33,123 @@ def test_migrations_idempotent():
     db_mod.run_migrations()
     version = db_mod.get_schema_version()
     assert version >= 62
+
+
+def test_m65_diary_quality_backfills_legacy_defaults_and_archive():
+    """Legacy rows get real quality tiers after ADD COLUMN defaults are applied."""
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute("""
+        CREATE TABLE session_diary (
+            id INTEGER PRIMARY KEY,
+            session_id TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            decisions TEXT NOT NULL,
+            discarded TEXT,
+            pending TEXT,
+            context_next TEXT,
+            summary TEXT NOT NULL,
+            mental_state TEXT,
+            user_signals TEXT,
+            self_critique TEXT DEFAULT '',
+            source TEXT DEFAULT 'claude'
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE diary_archive (
+            id INTEGER PRIMARY KEY,
+            session_id TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            decisions TEXT NOT NULL,
+            discarded TEXT,
+            pending TEXT,
+            context_next TEXT,
+            summary TEXT NOT NULL,
+            mental_state TEXT,
+            domain TEXT,
+            user_signals TEXT,
+            self_critique TEXT DEFAULT '',
+            source TEXT DEFAULT 'claude',
+            archived_at TEXT DEFAULT (datetime('now'))
+        )
+    """)
+    rows = [
+        ("auto", "2026-05-19T00:00:00Z", "", "", "", "", "Auto close", "", "", "", "auto-close"),
+        ("cron", "2026-05-19T00:01:00Z", "", "", "Pending", "", "[AUTO-CRON] fallback", "", "", "", "cron"),
+        ("agent", "2026-05-19T00:02:00Z", "Decision", "", "", "Next", "Agent summary", "", "", "Critique", "claude"),
+    ]
+    conn.executemany("""
+        INSERT INTO session_diary (
+            session_id, created_at, decisions, discarded, pending, context_next,
+            summary, mental_state, user_signals, self_critique, source
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, rows)
+    conn.executemany("""
+        INSERT INTO diary_archive (
+            session_id, created_at, decisions, discarded, pending, context_next,
+            summary, mental_state, domain, user_signals, self_critique, source
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?, ?)
+    """, rows)
+
+    _m65_diary_quality(conn)
+    _m65_diary_quality(conn)
+
+    for table in ("session_diary", "diary_archive"):
+        result = {
+            row["session_id"]: (row["quality_tier"], row["quality_score"])
+            for row in conn.execute(f"SELECT session_id, quality_tier, quality_score FROM {table}")
+        }
+        assert result["auto"] == ("auto_close_minimal", 25)
+        assert result["cron"] == ("fallback_minimal", 40)
+        assert result["agent"] == ("agent_authored", 85)
+
+
+def test_m67_diary_quality_repairs_databases_that_already_ran_m65_defaults():
+    """The repair migration fixes rows left at ADD COLUMN default values."""
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    for table in ("session_diary", "diary_archive"):
+        conn.execute(f"""
+            CREATE TABLE {table} (
+                id INTEGER PRIMARY KEY,
+                session_id TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                decisions TEXT NOT NULL,
+                discarded TEXT,
+                pending TEXT,
+                context_next TEXT,
+                summary TEXT NOT NULL,
+                mental_state TEXT,
+                domain TEXT,
+                user_signals TEXT,
+                self_critique TEXT DEFAULT '',
+                source TEXT DEFAULT 'claude',
+                quality_tier TEXT DEFAULT 'agent_authored',
+                quality_score INTEGER DEFAULT 0
+            )
+        """)
+        conn.execute(f"""
+            INSERT INTO {table} (
+                session_id, created_at, decisions, discarded, pending,
+                context_next, summary, mental_state, domain, user_signals,
+                self_critique, source, quality_tier, quality_score
+            ) VALUES (
+                'auto', '2026-05-19T00:00:00Z', '', '', '', '',
+                'Auto close', '', '', '', '', 'auto-close', 'agent_authored', 0
+            )
+        """)
+
+    _m67_diary_quality_backfill_repair(conn)
+    _m67_diary_quality_backfill_repair(conn)
+
+    for table in ("session_diary", "diary_archive"):
+        row = conn.execute(f"""
+            SELECT quality_tier, quality_score
+            FROM {table}
+            WHERE session_id = 'auto'
+        """).fetchone()
+        assert row["quality_tier"] == "auto_close_minimal"
+        assert row["quality_score"] == 25
 
 
 def test_session_crud():

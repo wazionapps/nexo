@@ -52,8 +52,23 @@ import sys
 import time
 from pathlib import Path
 
+try:
+    from cognitive_paths import resolve_cognitive_db
+except ModuleNotFoundError as exc:
+    if getattr(exc, "name", "") != "cognitive_paths":
+        raise
+
+    def resolve_cognitive_db(*, for_write: bool = True, **_kwargs) -> Path:
+        """Fallback for older installed runtimes before update copies cognitive_paths.py."""
+        override = os.environ.get("NEXO_COGNITIVE_DB", "").strip()
+        if override:
+            return Path(override).expanduser()
+        target = paths.runtime_dir() / "cognitive" / "cognitive.db"
+        if for_write:
+            target.parent.mkdir(parents=True, exist_ok=True)
+        return target
 from runtime_home import export_resolved_nexo_home
-from runtime_versioning import build_mcp_status, clear_restart_required_marker
+from runtime_versioning import build_mcp_status, clear_restart_required_marker, record_mcp_client_probe
 try:
     from mcp_required_tools import BOOTSTRAP_REQUIRED_MCP_TOOLS, missing_required_tools
 except ModuleNotFoundError as exc:
@@ -290,6 +305,12 @@ def _mcp_probe(args) -> int:
             "elapsed_ms": int((time.monotonic() - started_at) * 1000),
             "stderr_tail": "\n".join(stderr_lines[-12:]),
         }
+        recorded = record_mcp_client_probe(client=client, probe=payload)
+        if recorded.get("ok"):
+            payload["client_ready"] = bool(recorded.get("last_probe_ok"))
+            payload["client_action"] = recorded.get("client_action", "ready")
+            payload["reason_code"] = recorded.get("reason_code", "ready")
+            payload["runtime_generation"] = recorded.get("last_seen_generation", "")
         return _print_json_or_text(payload, as_json=bool(getattr(args, "json", False)))
     except Exception as exc:
         payload = {
@@ -302,6 +323,12 @@ def _mcp_probe(args) -> int:
             "elapsed_ms": int((time.monotonic() - started_at) * 1000),
             "stderr_tail": "\n".join(stderr_lines[-20:]),
         }
+        recorded = record_mcp_client_probe(client=client, probe=payload)
+        if recorded.get("ok"):
+            payload["client_ready"] = False
+            payload["client_action"] = recorded.get("client_action", "reprobe")
+            payload["reason_code"] = recorded.get("reason_code", "mcp_probe_failed")
+            payload["runtime_generation"] = recorded.get("last_seen_generation", "")
         return _print_json_or_text(payload, as_json=bool(getattr(args, "json", False)))
     finally:
         if proc is not None:
@@ -324,6 +351,8 @@ def _mcp_clear_restart(args) -> int:
             client=getattr(args, "client", "") or "",
             installed_version=getattr(args, "installed_version", "") or "",
             process_version=getattr(args, "process_version", "") or "",
+            installed_fingerprint=getattr(args, "installed_fingerprint", "") or "",
+            process_fingerprint=getattr(args, "process_fingerprint", "") or "",
         ),
         as_json=bool(getattr(args, "json", False)),
     )
@@ -950,6 +979,19 @@ def _automations_status(args):
     return 0
 
 
+def _automations_reconcile(args):
+    from automation_reconciler import apply_reconciliation_plan, build_reconciliation_plan
+
+    plan = build_reconciliation_plan()
+    if bool(getattr(args, "apply", False)):
+        result = apply_reconciliation_plan(plan)
+        payload = {"ok": result.get("ok", False), "plan": plan, "apply": result}
+    else:
+        payload = plan
+    print(json.dumps(payload, indent=2, ensure_ascii=False))
+    return 0 if payload.get("ok", True) else 1
+
+
 def _automations_set_instructions(args):
     from script_registry import set_automation_instructions
 
@@ -1136,7 +1178,7 @@ def _scripts_run(args):
     # Only inject DB paths for core scripts
     if is_core:
         env["NEXO_DB"] = str(paths.db_path())
-        env["NEXO_COGNITIVE_DB"] = str(paths.data_dir() / "cognitive.db")
+        env["NEXO_COGNITIVE_DB"] = str(resolve_cognitive_db(for_write=True))
 
     # Timeout
     timeout = None
@@ -3617,6 +3659,13 @@ def main():
     automations_status_p.add_argument("name", help="Automation name or path")
     automations_status_p.add_argument("--json", action="store_true", help="JSON output")
 
+    automations_reconcile_p = automations_sub.add_parser(
+        "reconcile",
+        help="Build or apply the safe automation reconciliation plan",
+    )
+    automations_reconcile_p.add_argument("--apply", action="store_true", help="Apply only safe deterministic actions")
+    automations_reconcile_p.add_argument("--json", action="store_true", help="JSON output")
+
     automations_instructions_p = automations_sub.add_parser(
         "instructions",
         help="Set or clear operator extra instructions for an automation",
@@ -3891,6 +3940,8 @@ def main():
     mcp_clear_p.add_argument("--client", default="", help="Client label such as claude_desktop or codex")
     mcp_clear_p.add_argument("--installed-version", default="")
     mcp_clear_p.add_argument("--process-version", default="")
+    mcp_clear_p.add_argument("--installed-fingerprint", default="")
+    mcp_clear_p.add_argument("--process-fingerprint", default="")
     mcp_clear_p.add_argument("--json", action="store_true", help="JSON output")
 
     continuity_parser = sub.add_parser("continuity", help="Continuity snapshots and resume bundles")
@@ -4161,6 +4212,8 @@ def main():
             return _automations_reactivate(args)
         elif args.automations_command == "status":
             return _automations_status(args)
+        elif args.automations_command == "reconcile":
+            return _automations_reconcile(args)
         elif args.automations_command == "instructions":
             return _automations_set_instructions(args)
         elif args.automations_command == "schedule":

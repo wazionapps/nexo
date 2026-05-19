@@ -9,6 +9,7 @@ from __future__ import annotations
 import importlib
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -50,6 +51,14 @@ def _make_runtime_tree(root: Path, *, version: str = "1.0.0") -> Path:
     (src / "manifest.json").write_text('{"version":"' + version + '"}\n', encoding="utf-8")
     (src / "version.json").write_text('{"version":"' + version + '"}\n', encoding="utf-8")
     return src
+
+
+def _mock_runtime_service_ok(monkeypatch) -> None:
+    monkeypatch.setitem(
+        sys.modules,
+        "runtime_service",
+        SimpleNamespace(runtime_service_status=lambda: {"ok": True}),
+    )
 
 
 def test_fingerprint_is_deterministic(tmp_path, fingerprint_runtime):
@@ -218,9 +227,44 @@ def test_marker_required_always_wins(monkeypatch, tmp_path, fingerprint_runtime)
     assert state["reason"] == "marker_required"
 
 
+def test_clear_restart_keeps_fingerprinted_marker_without_process_fingerprint(
+    monkeypatch, tmp_path, fingerprint_runtime
+):
+    fingerprint_runtime.write_restart_required_marker(
+        from_version="1.0.0",
+        to_version="1.0.1",
+        from_fingerprint="old",
+        to_fingerprint="new",
+        client="claude_desktop",
+    )
+    fingerprint_runtime.PROCESS_FINGERPRINT = ""
+
+    missing = fingerprint_runtime.clear_restart_required_marker(
+        client="claude_desktop",
+        installed_version="1.0.1",
+        process_version="1.0.1",
+    )
+
+    assert missing["cleared"] is False
+    assert missing["pending_reason"] == "process_fingerprint_missing"
+    assert fingerprint_runtime.read_restart_required_marker()["required"] is True
+
+    cleared = fingerprint_runtime.clear_restart_required_marker(
+        client="claude_desktop",
+        installed_version="1.0.1",
+        process_version="1.0.1",
+        installed_fingerprint="new",
+        process_fingerprint="new",
+    )
+
+    assert cleared["cleared"] is True
+    assert fingerprint_runtime.read_restart_required_marker()["required"] is False
+
+
 def test_build_mcp_status_exposes_fingerprint_fields(
     monkeypatch, tmp_path, fingerprint_runtime
 ):
+    _mock_runtime_service_ok(monkeypatch)
     monkeypatch.setattr(
         fingerprint_runtime, "installed_runtime_version", lambda: "1.0.0"
     )
@@ -235,6 +279,156 @@ def test_build_mcp_status_exposes_fingerprint_fields(
     assert "fingerprint_match" in status
     assert "runtime_service" in status
     assert status["fingerprint_match"] is True
+    assert status["runtime_generation"]
+
+
+def test_mcp_client_ready_is_blocked_when_global_fingerprint_missing(
+    monkeypatch, tmp_path, fingerprint_runtime
+):
+    _mock_runtime_service_ok(monkeypatch)
+    monkeypatch.setattr(
+        fingerprint_runtime, "installed_runtime_version", lambda: "1.0.0"
+    )
+    monkeypatch.setattr(
+        fingerprint_runtime, "installed_runtime_fingerprint", lambda: "abc"
+    )
+    monkeypatch.setattr(fingerprint_runtime, "active_runtime_root", lambda: tmp_path)
+    fingerprint_runtime.PROCESS_VERSION = "1.0.0"
+    fingerprint_runtime.PROCESS_FINGERPRINT = ""
+    fingerprint_runtime.record_mcp_client_probe(
+        client="claude_desktop",
+        probe={
+            "ok": True,
+            "probe_ok": True,
+            "tool_count": 5,
+            "required_tools_present": True,
+            "missing_required_tools": [],
+        },
+    )
+
+    status = fingerprint_runtime.build_mcp_status(client="claude_desktop")
+
+    assert status["restart_required"] is False
+    assert status["global_ready"] is False
+    assert status["client_ready"] is False
+    assert status["reason_code"] == "process_fingerprint_missing"
+    assert status["client_action"] == "reprobe"
+
+
+def test_mcp_probe_without_required_tools_contract_is_not_ready(
+    monkeypatch, tmp_path, fingerprint_runtime
+):
+    _mock_runtime_service_ok(monkeypatch)
+    monkeypatch.setattr(
+        fingerprint_runtime, "installed_runtime_version", lambda: "1.0.0"
+    )
+    monkeypatch.setattr(
+        fingerprint_runtime, "installed_runtime_fingerprint", lambda: "abc"
+    )
+    monkeypatch.setattr(fingerprint_runtime, "active_runtime_root", lambda: tmp_path)
+    fingerprint_runtime.PROCESS_VERSION = "1.0.0"
+    fingerprint_runtime.PROCESS_FINGERPRINT = "abc"
+
+    recorded = fingerprint_runtime.record_mcp_client_probe(
+        client="claude_desktop",
+        probe={
+            "ok": True,
+            "probe_ok": True,
+            "tool_count": 5,
+        },
+    )
+    status = fingerprint_runtime.build_mcp_status(client="claude_desktop")
+
+    assert recorded["last_probe_ok"] is False
+    assert recorded["required_tools_present"] is False
+    assert recorded["reason_code"] == "required_tools_contract_missing"
+    assert status["client_ready"] is False
+    assert status["reason_code"] == "required_tools_contract_missing"
+
+
+def test_mcp_client_probe_registry_tracks_clients_separately(
+    monkeypatch, tmp_path, fingerprint_runtime
+):
+    _mock_runtime_service_ok(monkeypatch)
+    monkeypatch.setattr(
+        fingerprint_runtime, "installed_runtime_version", lambda: "1.0.0"
+    )
+    monkeypatch.setattr(
+        fingerprint_runtime, "installed_runtime_fingerprint", lambda: "abc"
+    )
+    monkeypatch.setattr(fingerprint_runtime, "active_runtime_root", lambda: tmp_path)
+    fingerprint_runtime.PROCESS_VERSION = "1.0.0"
+    fingerprint_runtime.PROCESS_FINGERPRINT = "abc"
+
+    ok_client = fingerprint_runtime.record_mcp_client_probe(
+        client="claude_code",
+        probe={
+            "ok": True,
+            "probe_ok": True,
+            "tool_count": 5,
+            "required_tools_present": True,
+            "missing_required_tools": [],
+        },
+    )
+    bad_client = fingerprint_runtime.record_mcp_client_probe(
+        client="codex",
+        probe={
+            "ok": False,
+            "probe_ok": False,
+            "tool_count": 0,
+            "error": "mcp_probe_failed",
+        },
+    )
+
+    assert ok_client["ok"] is True
+    assert bad_client["ok"] is True
+
+    claude_status = fingerprint_runtime.build_mcp_status(client="claude_code")
+    codex_status = fingerprint_runtime.build_mcp_status(client="codex")
+
+    assert claude_status["client_ready"] is True
+    assert claude_status["client_action"] == "ready"
+    assert claude_status["reason_code"] == "ready"
+    assert claude_status["last_tool_count"] == 5
+    assert claude_status["last_probe_ok"] is True
+    assert codex_status["client_ready"] is False
+    assert codex_status["client_action"] == "reprobe"
+    assert codex_status["reason_code"] == "mcp_probe_failed"
+    assert set(claude_status["client_states"]) == {"claude_code", "codex"}
+
+
+def test_mcp_client_status_marks_stale_generation_for_reprobe(
+    monkeypatch, tmp_path, fingerprint_runtime
+):
+    _mock_runtime_service_ok(monkeypatch)
+    monkeypatch.setattr(
+        fingerprint_runtime, "installed_runtime_version", lambda: "1.0.0"
+    )
+    monkeypatch.setattr(
+        fingerprint_runtime, "installed_runtime_fingerprint", lambda: "old"
+    )
+    monkeypatch.setattr(fingerprint_runtime, "active_runtime_root", lambda: tmp_path)
+    fingerprint_runtime.PROCESS_VERSION = "1.0.0"
+    fingerprint_runtime.PROCESS_FINGERPRINT = "new"
+    fingerprint_runtime.record_mcp_client_probe(
+        client="claude_code",
+        probe={
+            "ok": True,
+            "probe_ok": True,
+            "tool_count": 5,
+            "required_tools_present": True,
+            "missing_required_tools": [],
+        },
+    )
+
+    monkeypatch.setattr(
+        fingerprint_runtime, "installed_runtime_fingerprint", lambda: "new"
+    )
+    status = fingerprint_runtime.build_mcp_status(client="claude_code")
+
+    assert status["client_ready"] is False
+    assert status["client_action"] == "reprobe"
+    assert status["reason_code"] == "client_generation_stale"
 
 
 def test_force_restart_flag_read_from_version_file(monkeypatch, tmp_path, fingerprint_runtime):

@@ -19,7 +19,8 @@ import paths
 
 
 CONTINUITY_API_LEVEL = 1
-MCP_STATUS_SCHEMA_VERSION = 2
+MCP_STATUS_SCHEMA_VERSION = 3
+CLIENT_STATE_SCHEMA_VERSION = 1
 PROCESS_VERSION = ""
 PROCESS_FINGERPRINT = ""
 
@@ -61,11 +62,11 @@ RESTART_ALLOWLIST = {
     "nexo_continuity_snapshot_read",
     "nexo_continuity_resume_bundle",
     "nexo_continuity_audit",
-    # v0.32.5 — añadidas las read-only tools que el protocolo CORE llama
-    # justo después de `nexo_startup` (memory recall, reminders, followups,
-    # context, doctor). Antes quedaban bloqueadas por mcp_restart_required
-    # tras `nexo update` con sesión activa → Nero parecía amnésico hasta
-    # que el cliente se cerraba/reabría.
+    # v0.32.5 — read-only tools called by the CORE protocol immediately after
+    # `nexo_startup` (memory recall, reminders, followups, context, doctor).
+    # Without this allowlist they were blocked by mcp_restart_required after
+    # `nexo update` while a session was active, making continuity appear lost
+    # until the client was closed and reopened.
     "nexo_smart_startup",
     "nexo_session_diary_read",
     "nexo_session_diary_write",
@@ -176,6 +177,135 @@ def active_runtime_root() -> Path:
 
 def restart_required_marker_path() -> Path:
     return paths.operations_dir() / "mcp-restart-required.json"
+
+
+def mcp_client_state_path() -> Path:
+    return paths.runtime_state_dir() / "mcp-client-state.json"
+
+
+def runtime_generation(version: str = "", fingerprint: str = "", root: str = "") -> str:
+    seed = "|".join(part for part in (version, fingerprint, root) if str(part or "").strip())
+    if not seed:
+        return "unknown"
+    return hashlib.sha256(seed.encode("utf-8")).hexdigest()[:16]
+
+
+def _read_mcp_client_state_file() -> dict:
+    path = mcp_client_state_path()
+    if not path.is_file():
+        return {
+            "schema_version": CLIENT_STATE_SCHEMA_VERSION,
+            "clients": {},
+        }
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {
+            "schema_version": CLIENT_STATE_SCHEMA_VERSION,
+            "clients": {},
+            "corrupt": True,
+        }
+    if not isinstance(payload, dict):
+        return {
+            "schema_version": CLIENT_STATE_SCHEMA_VERSION,
+            "clients": {},
+            "corrupt": True,
+        }
+    clients = payload.get("clients")
+    if not isinstance(clients, dict):
+        payload["clients"] = {}
+    payload.setdefault("schema_version", CLIENT_STATE_SCHEMA_VERSION)
+    return payload
+
+
+def _write_mcp_client_state_file(payload: dict) -> None:
+    payload = dict(payload)
+    payload["schema_version"] = CLIENT_STATE_SCHEMA_VERSION
+    payload["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    _write_json_atomic(mcp_client_state_path(), payload)
+
+
+def read_mcp_client_states() -> dict:
+    """Return the persisted per-client MCP readiness registry."""
+    payload = _read_mcp_client_state_file()
+    clients = payload.get("clients")
+    if not isinstance(clients, dict):
+        clients = {}
+    return {
+        "schema_version": CLIENT_STATE_SCHEMA_VERSION,
+        "path": str(mcp_client_state_path()),
+        "clients": clients,
+        "corrupt": bool(payload.get("corrupt")),
+        "updated_at": str(payload.get("updated_at") or ""),
+    }
+
+
+def _probe_reason_code(probe: dict) -> str:
+    if not probe.get("probe_ok", probe.get("ok", False)):
+        return str(probe.get("error") or "mcp_probe_failed")
+    try:
+        tool_count = int(probe.get("tool_count") or 0)
+    except Exception:
+        tool_count = 0
+    if tool_count <= 0:
+        return "tools_missing"
+    missing = probe.get("missing_required_tools")
+    has_required_tools_contract = isinstance(
+        probe.get("required_tools_present"), bool
+    ) or isinstance(missing, list)
+    if not has_required_tools_contract:
+        return "required_tools_contract_missing"
+    if probe.get("required_tools_present") is False:
+        return "required_tools_missing"
+    if isinstance(missing, list) and missing:
+        return "required_tools_missing"
+    return "ready"
+
+
+def record_mcp_client_probe(*, client: str = "", probe: dict | None = None) -> dict:
+    """Persist the latest probe result for one MCP client."""
+    normalized = _normalize_restart_client(client or (probe or {}).get("client", ""))
+    if not normalized:
+        return {"ok": False, "error": "unknown_client"}
+    probe = dict(probe or {})
+    installed_version_value = str(probe.get("installed_version") or installed_runtime_version() or "").strip()
+    installed_fp = str(probe.get("installed_fingerprint") or installed_runtime_fingerprint() or "").strip()
+    root = str(active_runtime_root())
+    generation = str(probe.get("runtime_generation") or runtime_generation(installed_version_value, installed_fp, root))
+    reason_code = _probe_reason_code(probe)
+    probe_ok = reason_code == "ready"
+    try:
+        tool_count = int(probe.get("tool_count") or 0)
+    except Exception:
+        tool_count = 0
+    missing_required = probe.get("missing_required_tools")
+    if not isinstance(missing_required, list):
+        missing_required = []
+    required_tools_present_raw = probe.get("required_tools_present")
+    required_tools_present = (
+        required_tools_present_raw
+        if isinstance(required_tools_present_raw, bool)
+        else False
+    )
+
+    payload = _read_mcp_client_state_file()
+    clients = dict(payload.get("clients") or {})
+    row = {
+        "client": normalized,
+        "last_seen_generation": generation,
+        "last_tool_count": tool_count,
+        "last_probe_ok": probe_ok,
+        "last_fingerprint": installed_fp,
+        "last_probe_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "required_tools_present": required_tools_present,
+        "missing_required_tools": missing_required,
+        "reason_code": reason_code,
+        "client_action": "ready" if probe_ok else "reprobe",
+    }
+    clients[normalized] = row
+    payload["clients"] = clients
+    _write_mcp_client_state_file(payload)
+    return {"ok": True, **row}
 
 
 def fingerprint_cache_path() -> Path:
@@ -634,8 +764,9 @@ def clear_restart_required_marker(
     pending_clients = {k: v for k, v in clients.items() if v != "ok"}
     effective_installed = str(installed_version or payload.get("to_version") or "").strip()
     effective_process = str(process_version or "").strip()
+    marker_to_fingerprint = str(payload.get("to_fingerprint") or "").strip()
     effective_installed_fp = str(
-        installed_fingerprint or payload.get("to_fingerprint") or ""
+        installed_fingerprint or marker_to_fingerprint or ""
     ).strip()
     effective_process_fp = str(
         process_fingerprint or PROCESS_FINGERPRINT or ""
@@ -643,8 +774,9 @@ def clear_restart_required_marker(
     if pending_clients:
         _write_json_atomic(path, payload)
         return {"ok": True, "cleared": False, "path": str(path), "pending_clients": pending_clients}
-    # Prefer fingerprint match when both sides have it; fall back to version
-    # comparison only when one side is missing or unknown.
+    # Prefer fingerprint match when both sides have it. For markers that were
+    # created with a target fingerprint, do not fall back to version-only
+    # clearing: matching versions can still be a stale in-place source update.
     if (
         effective_installed_fp
         and effective_process_fp
@@ -658,6 +790,14 @@ def clear_restart_required_marker(
                 "path": str(path),
                 "pending_reason": "process_fingerprint_mismatch",
             }
+    elif marker_to_fingerprint:
+        _write_json_atomic(path, payload)
+        return {
+            "ok": True,
+            "cleared": False,
+            "path": str(path),
+            "pending_reason": "process_fingerprint_missing",
+        }
     elif effective_installed and effective_process and effective_installed != effective_process:
         _write_json_atomic(path, payload)
         return {
@@ -687,6 +827,7 @@ def resolve_restart_required(
     process = str(process_version or PROCESS_VERSION or installed).strip()
     installed_fp = str(installed_fingerprint or installed_runtime_fingerprint() or "").strip()
     process_fp = str(process_fingerprint or PROCESS_FINGERPRINT or "").strip()
+    marker_fp = str(marker.get("to_fingerprint") or "").strip()
     restart_required = False
     reason = ""
     client_action = ""
@@ -706,6 +847,9 @@ def resolve_restart_required(
         # fingerprint change and therefore never reach this branch.
         restart_required = True
         reason = reason or "fingerprint_mismatch"
+    elif marker.get("required") and marker_fp and (not process_fp or process_fp == "unknown"):
+        restart_required = True
+        reason = reason or "process_fingerprint_missing"
     elif not fingerprint_usable and installed and process and installed != process:
         # Fallback: when fingerprint can't be computed (missing source tree,
         # unreadable files, fresh install), fall back to the legacy version
@@ -728,6 +872,105 @@ def resolve_restart_required(
     }
 
 
+def _mcp_client_readiness(
+    *,
+    client: str,
+    state: dict,
+    installed_version_value: str,
+    installed_fp: str,
+    service_status: dict,
+) -> dict:
+    generation = runtime_generation(installed_version_value, installed_fp, str(active_runtime_root()))
+    process_fp = str(state.get("process_fingerprint") or "").strip()
+    service_ok = bool(service_status.get("ok", True))
+    fingerprint_ready = (
+        bool(installed_fp)
+        and bool(process_fp)
+        and process_fp != "unknown"
+        and installed_fp == process_fp
+    )
+    global_ready = (
+        not bool(state.get("restart_required"))
+        and fingerprint_ready
+        and service_ok
+    )
+    if not service_ok:
+        global_reason = "runtime_service_unavailable"
+    elif not installed_fp:
+        global_reason = "installed_fingerprint_missing"
+    elif not process_fp or process_fp == "unknown":
+        global_reason = "process_fingerprint_missing"
+    elif installed_fp != process_fp:
+        global_reason = "process_fingerprint_mismatch"
+    else:
+        global_reason = "ready"
+    if state.get("restart_required"):
+        return {
+            "runtime_generation": generation,
+            "global_ready": False,
+            "client_ready": False,
+            "reason_code": str(state.get("reason") or "restart_required"),
+            "client_action": str(state.get("client_action") or "restart_client"),
+            "client_state": {},
+        }
+    if not client:
+        return {
+            "runtime_generation": generation,
+            "global_ready": global_ready,
+            "client_ready": global_ready,
+            "reason_code": "ready" if global_ready else global_reason,
+            "client_action": "ready" if global_ready else "reprobe",
+            "client_state": {},
+        }
+    if not global_ready:
+        return {
+            "runtime_generation": generation,
+            "global_ready": False,
+            "client_ready": False,
+            "reason_code": global_reason,
+            "client_action": "reprobe",
+            "client_state": {},
+        }
+
+    registry = read_mcp_client_states()
+    client_state = dict((registry.get("clients") or {}).get(client) or {})
+    if not client_state:
+        return {
+            "runtime_generation": generation,
+            "global_ready": global_ready,
+            "client_ready": False,
+            "reason_code": "client_probe_missing",
+            "client_action": "reprobe",
+            "client_state": {},
+        }
+    if str(client_state.get("last_seen_generation") or "") != generation:
+        return {
+            "runtime_generation": generation,
+            "global_ready": global_ready,
+            "client_ready": False,
+            "reason_code": "client_generation_stale",
+            "client_action": "reprobe",
+            "client_state": client_state,
+        }
+    if not client_state.get("last_probe_ok"):
+        return {
+            "runtime_generation": generation,
+            "global_ready": global_ready,
+            "client_ready": False,
+            "reason_code": str(client_state.get("reason_code") or "client_probe_failed"),
+            "client_action": str(client_state.get("client_action") or "reprobe"),
+            "client_state": client_state,
+        }
+    return {
+        "runtime_generation": generation,
+        "global_ready": global_ready,
+        "client_ready": bool(global_ready),
+        "reason_code": "ready" if global_ready else global_reason,
+        "client_action": "ready" if global_ready else "reprobe",
+        "client_state": client_state,
+    }
+
+
 def build_mcp_status(*, client: str = "") -> dict:
     client = _normalize_restart_client(client)
     state = resolve_restart_required(client=client)
@@ -744,6 +987,14 @@ def build_mcp_status(*, client: str = "") -> dict:
             "error": "runtime_service_status_unavailable",
             "message": str(exc)[:300],
         }
+    readiness = _mcp_client_readiness(
+        client=client,
+        state=state,
+        installed_version_value=state["installed_version"],
+        installed_fp=installed_fp,
+        service_status=service_status,
+    )
+    client_states = read_mcp_client_states()
     return {
         "ok": True,
         "schema_version": MCP_STATUS_SCHEMA_VERSION,
@@ -762,7 +1013,18 @@ def build_mcp_status(*, client: str = "") -> dict:
         "active_runtime_version": read_version_for_path(active_runtime_root()),
         "restart_required": bool(state["restart_required"]),
         "reason": state["reason"],
-        "client_action": state["client_action"],
+        "client_action": readiness["client_action"],
+        "reason_code": readiness["reason_code"],
+        "global_ready": bool(readiness["global_ready"]),
+        "client_ready": bool(readiness["client_ready"]),
+        "runtime_generation": readiness["runtime_generation"],
+        "client_state": readiness["client_state"],
+        "last_seen_generation": readiness["client_state"].get("last_seen_generation", ""),
+        "last_tool_count": readiness["client_state"].get("last_tool_count", 0),
+        "last_probe_ok": readiness["client_state"].get("last_probe_ok", False),
+        "last_fingerprint": readiness["client_state"].get("last_fingerprint", ""),
+        "client_states": client_states.get("clients", {}),
+        "client_state_path": client_states.get("path", str(mcp_client_state_path())),
         "marker_path": marker.get("path", str(restart_required_marker_path())),
         "marker_exists": bool(marker.get("exists")),
         "marker_corrupt": bool(marker.get("corrupt")),

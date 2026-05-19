@@ -40,6 +40,7 @@ if str(NEXO_CODE) not in sys.path:
 from agent_runner import AutomationBackendUnavailableError, run_automation_prompt
 from constants import AUTOMATION_SUBPROCESS_TIMEOUT
 from core_prompts import render_core_prompt
+from cognitive_paths import resolve_cognitive_db
 import paths
 
 from urllib.request import Request, urlopen
@@ -382,7 +383,7 @@ def check_databases():
 
     dbs = [
         ("nexo.db", paths.db_path()),
-        ("cognitive.db", paths.data_dir() / "cognitive.db"),
+        ("cognitive.db", resolve_cognitive_db(for_write=False)),
     ]
     if CLAUDE_MEM_DB.exists():
         dbs.append(("claude-mem.db", CLAUDE_MEM_DB))

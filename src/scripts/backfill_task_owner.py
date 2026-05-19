@@ -40,6 +40,12 @@ import sys
 import time
 from pathlib import Path
 
+SOURCE_ROOT = Path(__file__).resolve().parents[1]
+if str(SOURCE_ROOT) not in sys.path:
+    sys.path.insert(0, str(SOURCE_ROOT))
+
+import paths
+
 
 DEFAULT_DB_PATH = Path.home() / ".nexo" / "runtime" / "data" / "nexo.db"
 DEFAULT_CALIBRATION = Path.home() / ".nexo" / "brain" / "calibration.json"
@@ -253,11 +259,11 @@ def _has_column(conn: sqlite3.Connection, table: str, col: str) -> bool:
 
 
 def _backup_db(db_path: Path) -> Path:
-    ts = time.strftime("%Y-%m-%d-%H%M%S", time.gmtime())
-    backup = db_path.parent.parent / "backups" / f"pre-backfill-owner-{ts}" / db_path.name
-    backup.parent.mkdir(parents=True, exist_ok=True)
+    backup_dir = paths.create_backup_dir("pre-backfill-owner")
+    backup = backup_dir / db_path.name
     shutil.copy2(db_path, backup)
-    _rotate_backup_family(backup.parent.parent)
+    _rotate_backup_family(backup_dir.parent)
+    paths.finalize_backup_snapshot(backup_dir)
     return backup
 
 
