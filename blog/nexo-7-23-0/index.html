@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.23.0: continuity before visible replies</title>
+<meta name="description" content="NEXO Brain v7.23.0 adds pre-answer routing, evidence-ledger lookup, bounded Memory Observations processing and read-only drift audits.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-23-0/">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.23.0: continuity before visible replies","datePublished":"2026-05-19","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head><body><main><article style="max-width:760px;margin:80px auto;padding:0 24px;line-height:1.75;">
+<h1>NEXO 7.23.0 &mdash; continuity before visible replies</h1>
+<p><em>Published 2026-05-19. Minor release over v7.22.0.</em></p>
+
+<h2>Why this release exists</h2>
+<p>When a user asks whether work already happened, where a file lives, or whether a previous change should be modified, the agent should not answer from the visible prompt alone. v7.23.0 adds a bounded pre-answer route that checks operational continuity sources before the visible reply while staying fail-open under deadline.</p>
+
+<h2>What changed</h2>
+<ul>
+<li><strong>Pre-answer router.</strong> Brain exposes CLI and MCP routes that classify the turn, consult continuity evidence and return a compact context bundle for clients.</li>
+<li><strong>Evidence ledger consumption.</strong> Prior-work, memory and authorship questions now read a virtual ledger over tasks, workflows, change logs, diaries, lifecycle events, continuity snapshots, local context and transcripts.</li>
+<li><strong>Memory Observations convergence.</strong> The queue processor can process bounded batches, backfill missed events, repair processed rows without observations and report pending SLA health.</li>
+<li><strong>Read-only audits.</strong> New reports surface saved-but-not-used stores, automation drift excluding Evolution, MCP live/catalog mismatches, transcript coverage gaps and artifact locations.</li>
+<li><strong>Desktop contract.</strong> Coordinated Desktop clients can call the router over stdin payload transport with a 2500ms deadline and fail-open behavior.</li>
+</ul>
+
+<h2>Validation</h2>
+<pre><code>python3 -m pytest tests/test_pre_answer_router.py tests/test_evidence_ledger.py -q
+# focused router and ledger tests pass
+
+scripts/pre-release-verify.sh --release v7.23.0
+# release gate for Brain 7.23.0</code></pre>
+
+<p><a href="/changelog/#v7230">Full changelog entry &rarr;</a> &middot; <a href="/blog/nexo-7-22-0/">Previous MCP latency note</a></p>
+</article></main></body></html>
