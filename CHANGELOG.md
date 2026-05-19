@@ -1,5 +1,12 @@
 # Changelog
 
+## [7.23.2] - 2026-05-19
+
+### Fixed — Desktop Brain update detection
+
+- **Desktop Brain update checks no longer get hidden by a stale local latest-version cache.** `nexo --version --json`, the path consumed by NEXO Desktop, refreshes npm when the cached `latest` is missing or equal/older than the installed Brain version, so a release published minutes after a user checked versions can still appear in Desktop.
+- **Coverage:** focused CLI version-status test for stale cache refresh.
+
 ## [7.23.1] - 2026-05-19
 
 ### Fixed — Express recovery for headless automation and runaway backups

@@ -413,13 +413,29 @@ def _version_sort_key(raw: str) -> tuple[tuple[int, ...], int, str]:
     return (tuple(parts), 1 if not suffix else 0, suffix)
 
 
-def _version_status_payload() -> dict:
+def _version_status_payload(*, force_refresh: bool = False) -> dict:
     installed = _get_version()
     latest = _load_latest_version_cache()
     latest_source = "cache" if latest else ""
-    if latest is None and _should_refresh_latest_version():
-        latest = _fetch_latest_version()
-        latest_source = "npm" if latest else ""
+    should_refresh = False
+    if force_refresh and _should_refresh_latest_version():
+        # Desktop reads `nexo --version --json` to decide whether to show the
+        # Brain update CTA. If a user checked minutes before a release, the
+        # 6-hour cache can otherwise hide the new npm dist-tag until it expires.
+        should_refresh = (
+            latest is None
+            or (
+                bool(installed)
+                and _version_sort_key(latest) <= _version_sort_key(installed)
+            )
+        )
+    elif latest is None and _should_refresh_latest_version():
+        should_refresh = True
+    if should_refresh:
+        refreshed = _fetch_latest_version()
+        if refreshed:
+            latest = refreshed
+            latest_source = "npm"
     if latest and installed and _version_sort_key(latest) < _version_sort_key(installed):
         latest = installed
         latest_source = "installed"
@@ -4030,7 +4046,7 @@ def main():
         _print_help()
         return 0
     if args.version:
-        payload = _version_status_payload()
+        payload = _version_status_payload(force_refresh=bool(args.json))
         if args.json:
             print(json.dumps(payload, ensure_ascii=False))
         else:

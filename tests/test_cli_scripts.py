@@ -37,7 +37,7 @@ def nexo_home(tmp_path):
     return _make_nexo_home(tmp_path / "nexo")
 
 
-def _run_cli(nexo_home, *args, timeout=10):
+def _run_cli(nexo_home, *args, timeout=10, env_overrides=None):
     """Run cli.py with isolated NEXO_HOME."""
     env = {
         **_subprocess_env(),
@@ -51,6 +51,8 @@ def _run_cli(nexo_home, *args, timeout=10):
         "NEXO_SKIP_LEARNING_COGNITIVE_INGEST": "1",
         "NEXO_SKIP_SEMANTIC_SIMILARITY": "1",
     }
+    if env_overrides:
+        env.update(env_overrides)
     result = subprocess.run(
         [sys.executable, CLI_PY, *args],
         capture_output=True, text=True, timeout=timeout, env=env, stdin=subprocess.DEVNULL,
@@ -150,6 +152,34 @@ def test_version_json_reports_update_status(nexo_home):
     assert payload["latest"] == "9.9.10"
     assert payload["hasUpdate"] is True
     assert payload["unknown"] is False
+
+
+def test_version_json_refreshes_equal_cache_from_npm(nexo_home, tmp_path):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    fake_npm = bin_dir / "npm"
+    fake_npm.write_text("#!/usr/bin/env bash\nprintf '9.9.10\\n'\n")
+    fake_npm.chmod(0o755)
+    (nexo_home / "config").mkdir(exist_ok=True)
+    (nexo_home / "config" / "cli-version-status.json").write_text(json.dumps({
+        "latest": "9.9.9",
+        "checked_at": 4102444800,
+    }))
+    (nexo_home / "version.json").write_text(json.dumps({"version": "9.9.9"}))
+
+    result = _run_cli(
+        nexo_home,
+        "--version",
+        "--json",
+        env_overrides={"PATH": f"{bin_dir}{os.pathsep}{os.environ.get('PATH', '')}"},
+    )
+
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    assert payload["installed"] == "9.9.9"
+    assert payload["latest"] == "9.9.10"
+    assert payload["hasUpdate"] is True
+    assert payload["latestSource"] == "npm"
 
 
 class TestScriptsList:
