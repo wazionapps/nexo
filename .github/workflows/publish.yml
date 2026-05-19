@@ -67,7 +67,21 @@ jobs:
 
       # 1. Publish nexo-brain to npm
       - name: Publish nexo-brain to npm
-        run: npm publish --access public || echo "Version already exists"
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          publish_log="$(mktemp)"
+          publish_status=0
+          npm publish --access public 2>&1 | tee "$publish_log" || publish_status=$?
+          if [ "$publish_status" -ne 0 ]; then
+            if grep -Eiq "previously published|cannot publish over the previously published versions|version already exists" "$publish_log"; then
+              echo "nexo-brain@$version already exists; continuing to registry verification."
+            else
+              exit "$publish_status"
+            fi
+          fi
+          published="$(npm view "nexo-brain@$version" version --registry=https://registry.npmjs.org/)"
+          test "$published" = "$version"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -78,7 +92,20 @@ jobs:
           npm install --legacy-peer-deps
           npm run build
           npm test
-          npm publish --access public || echo "Version already exists"
+          version="${GITHUB_REF_NAME#v}"
+          package_name="$(node -p "require('./package.json').name")"
+          publish_log="$(mktemp)"
+          publish_status=0
+          npm publish --access public 2>&1 | tee "$publish_log" || publish_status=$?
+          if [ "$publish_status" -ne 0 ]; then
+            if grep -Eiq "previously published|cannot publish over the previously published versions|version already exists" "$publish_log"; then
+              echo "$package_name@$version already exists; continuing to registry verification."
+            else
+              exit "$publish_status"
+            fi
+          fi
+          published="$(npm view "$package_name@$version" version --registry=https://registry.npmjs.org/)"
+          test "$published" = "$version"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
