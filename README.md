@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.23.3` is the current packaged-runtime line. Patch over v7.23.2 - Followup runner skips DONE terminal statuses so already-finished followups do not re-enter executable batches.
+Version `7.23.4` is the current packaged-runtime line. Patch over v7.23.3 - release tags now fail closed when npm publication fails and OpenClaw lockfile metadata stays synchronized with the release version.
+
+Previously in `7.23.3`: patch over v7.23.2 - Followup runner skips DONE terminal statuses so already-finished followups do not re-enter executable batches.
 
 Previously in `7.23.2`: patch over v7.23.1 - Desktop-facing version checks refresh stale latest-version cache entries so a just-published Brain update can still appear inside NEXO Desktop.
 
