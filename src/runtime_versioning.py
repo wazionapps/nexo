@@ -832,12 +832,15 @@ def resolve_restart_required(
     reason = ""
     client_action = ""
     marker_clients = dict(marker.get("clients") or {})
+    client_acknowledged = False
     fingerprint_usable = bool(installed_fp) and bool(process_fp) and process_fp != "unknown"
 
     if marker.get("required"):
-        restart_required = True
-        reason = "marker_required"
         client_action = str(marker_clients.get(client) or "")
+        client_acknowledged = bool(client and client_action == "ok")
+        if not client_acknowledged:
+            restart_required = True
+            reason = "marker_required"
     if marker.get("corrupt"):
         restart_required = True
         reason = "marker_corrupt"
@@ -847,7 +850,12 @@ def resolve_restart_required(
         # fingerprint change and therefore never reach this branch.
         restart_required = True
         reason = reason or "fingerprint_mismatch"
-    elif marker.get("required") and marker_fp and (not process_fp or process_fp == "unknown"):
+    elif (
+        marker.get("required")
+        and not client_acknowledged
+        and marker_fp
+        and (not process_fp or process_fp == "unknown")
+    ):
         restart_required = True
         reason = reason or "process_fingerprint_missing"
     elif not fingerprint_usable and installed and process and installed != process:
@@ -856,7 +864,7 @@ def resolve_restart_required(
         # mismatch check so we never leave a stale process running unnoticed.
         restart_required = True
         reason = reason or "version_mismatch"
-    elif client and client_action == "ok":
+    elif client_acknowledged:
         restart_required = False
         reason = ""
 

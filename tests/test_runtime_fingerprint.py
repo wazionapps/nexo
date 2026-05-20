@@ -7,6 +7,7 @@ README-only and changelog-only releases must leave the marker untouched.
 from __future__ import annotations
 
 import importlib
+import json
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -225,6 +226,42 @@ def test_marker_required_always_wins(monkeypatch, tmp_path, fingerprint_runtime)
     state = fingerprint_runtime.resolve_restart_required()
     assert state["restart_required"] is True
     assert state["reason"] == "marker_required"
+
+
+def test_acknowledged_client_not_blocked_by_other_pending_clients(
+    monkeypatch, tmp_path, fingerprint_runtime
+):
+    _mock_runtime_service_ok(monkeypatch)
+    marker = fingerprint_runtime.write_restart_required_marker(
+        from_version="1.0.0",
+        to_version="1.0.1",
+        from_fingerprint="old",
+        to_fingerprint="new",
+        client="codex",
+    )
+    marker["clients"]["claude_desktop"] = "ok"
+    marker["clients"]["codex"] = "restart_session_required"
+    Path(marker["path"]).write_text(json.dumps(marker), encoding="utf-8")
+    monkeypatch.setattr(
+        fingerprint_runtime, "installed_runtime_version", lambda: "1.0.1"
+    )
+    monkeypatch.setattr(
+        fingerprint_runtime, "installed_runtime_fingerprint", lambda: "new"
+    )
+    monkeypatch.setattr(fingerprint_runtime, "active_runtime_root", lambda: tmp_path)
+    fingerprint_runtime.PROCESS_VERSION = "1.0.1"
+    fingerprint_runtime.PROCESS_FINGERPRINT = ""
+
+    desktop_state = fingerprint_runtime.resolve_restart_required(client="claude_desktop")
+    codex_state = fingerprint_runtime.resolve_restart_required(client="codex")
+    desktop_status = fingerprint_runtime.build_mcp_status(client="claude_desktop")
+
+    assert desktop_state["restart_required"] is False
+    assert desktop_state["reason"] == ""
+    assert codex_state["restart_required"] is True
+    assert desktop_status["restart_required"] is False
+    assert desktop_status["marker_exists"] is True
+    assert desktop_status["client_action"] == "reprobe"
 
 
 def test_clear_restart_keeps_fingerprinted_marker_without_process_fingerprint(

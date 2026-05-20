@@ -1,5 +1,12 @@
 # Changelog
 
+## [7.23.8] - 2026-05-20
+
+### Fixed — Desktop MCP restart marker recovery
+
+- **Per-client restart markers no longer block ready Desktop installs.** If a global MCP restart marker still has another client pending, Brain now lets an explicitly acknowledged `claude_desktop` client report non-blocking status unless the active process actually diverges by version or fingerprint.
+- **Coverage:** focused runtime fingerprint regression tests for pending-client markers.
+
 ## [7.23.7] - 2026-05-20
 
 ### Fixed — memory contract closure
