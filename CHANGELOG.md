@@ -1,5 +1,12 @@
 # Changelog
 
+## [7.23.9] - 2026-05-20
+
+### Fixed — Desktop MCP status after successful re-probe
+
+- **Desktop no longer stays blocked after proving the new runtime is ready.** When the runtime service is already on the new fingerprint and the current Desktop client probe passes, `nexo mcp status --client claude_desktop` now reports the client as ready even if the global marker still has other clients pending.
+- **Coverage:** regression test for a marker with `restart_client_required` plus a successful Desktop probe.
+
 ## [7.23.8] - 2026-05-20
 
 ### Fixed — Desktop MCP restart marker recovery

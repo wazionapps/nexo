@@ -264,6 +264,67 @@ def test_acknowledged_client_not_blocked_by_other_pending_clients(
     assert desktop_status["client_action"] == "reprobe"
 
 
+def test_ready_probe_unblocks_current_client_from_marker(
+    monkeypatch, tmp_path, fingerprint_runtime
+):
+    marker = fingerprint_runtime.write_restart_required_marker(
+        from_version="1.0.0",
+        to_version="1.0.1",
+        from_fingerprint="old",
+        to_fingerprint="new",
+        client="claude_desktop",
+    )
+    marker["clients"]["claude_desktop"] = "restart_client_required"
+    marker["clients"]["codex"] = "restart_session_required"
+    Path(marker["path"]).write_text(json.dumps(marker), encoding="utf-8")
+    monkeypatch.setattr(
+        fingerprint_runtime, "installed_runtime_version", lambda: "1.0.1"
+    )
+    monkeypatch.setattr(
+        fingerprint_runtime, "installed_runtime_fingerprint", lambda: "new"
+    )
+    monkeypatch.setattr(fingerprint_runtime, "active_runtime_root", lambda: tmp_path)
+    generation = fingerprint_runtime.runtime_generation("1.0.1", "new", str(tmp_path))
+    monkeypatch.setitem(
+        sys.modules,
+        "runtime_service",
+        SimpleNamespace(
+            runtime_service_status=lambda: {
+                "ok": True,
+                "runtime_version": "1.0.1",
+                "runtime_fingerprint": "new",
+                "runtime_generation": generation,
+                "stale": False,
+            }
+        ),
+    )
+    fingerprint_runtime.PROCESS_VERSION = "1.0.1"
+    fingerprint_runtime.PROCESS_FINGERPRINT = ""
+    fingerprint_runtime.record_mcp_client_probe(
+        client="claude_desktop",
+        probe={
+            "ok": True,
+            "probe_ok": True,
+            "tool_count": 5,
+            "required_tools_present": True,
+            "missing_required_tools": [],
+            "runtime_generation": generation,
+        },
+    )
+
+    desktop_status = fingerprint_runtime.build_mcp_status(client="claude_desktop")
+    codex_status = fingerprint_runtime.build_mcp_status(client="codex")
+
+    assert desktop_status["restart_required"] is False
+    assert desktop_status["reason"] == ""
+    assert desktop_status["client_ready"] is True
+    assert desktop_status["client_action"] == "ready"
+    assert desktop_status["reason_code"] == "ready"
+    assert desktop_status["marker_exists"] is True
+    assert codex_status["restart_required"] is True
+    assert codex_status["reason_code"] == "client_probe_missing"
+
+
 def test_clear_restart_keeps_fingerprinted_marker_without_process_fingerprint(
     monkeypatch, tmp_path, fingerprint_runtime
 ):

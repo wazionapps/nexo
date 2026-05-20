@@ -890,15 +890,28 @@ def _mcp_client_readiness(
 ) -> dict:
     generation = runtime_generation(installed_version_value, installed_fp, str(active_runtime_root()))
     process_fp = str(state.get("process_fingerprint") or "").strip()
+    service_fp = str(service_status.get("runtime_fingerprint") or "").strip()
+    effective_process_fp = process_fp or service_fp
     service_ok = bool(service_status.get("ok", True))
     fingerprint_ready = (
         bool(installed_fp)
-        and bool(process_fp)
-        and process_fp != "unknown"
-        and installed_fp == process_fp
+        and bool(effective_process_fp)
+        and effective_process_fp != "unknown"
+        and installed_fp == effective_process_fp
+    )
+    marker_recoverable_reason = str(state.get("reason") or "") in {
+        "marker_required",
+        "process_fingerprint_missing",
+    }
+    marker_recoverable_for_client = (
+        bool(client)
+        and bool(state.get("restart_required"))
+        and marker_recoverable_reason
+        and fingerprint_ready
+        and service_ok
     )
     global_ready = (
-        not bool(state.get("restart_required"))
+        (not bool(state.get("restart_required")) or marker_recoverable_for_client)
         and fingerprint_ready
         and service_ok
     )
@@ -906,13 +919,13 @@ def _mcp_client_readiness(
         global_reason = "runtime_service_unavailable"
     elif not installed_fp:
         global_reason = "installed_fingerprint_missing"
-    elif not process_fp or process_fp == "unknown":
+    elif not effective_process_fp or effective_process_fp == "unknown":
         global_reason = "process_fingerprint_missing"
-    elif installed_fp != process_fp:
+    elif installed_fp != effective_process_fp:
         global_reason = "process_fingerprint_mismatch"
     else:
         global_reason = "ready"
-    if state.get("restart_required"):
+    if state.get("restart_required") and not marker_recoverable_for_client:
         return {
             "runtime_generation": generation,
             "global_ready": False,
@@ -1003,6 +1016,11 @@ def build_mcp_status(*, client: str = "") -> dict:
         service_status=service_status,
     )
     client_states = read_mcp_client_states()
+    service_fp = str(service_status.get("runtime_fingerprint") or "").strip()
+    effective_process_fp = process_fp or service_fp
+    restart_required = bool(state["restart_required"]) and not bool(
+        readiness["client_ready"]
+    )
     return {
         "ok": True,
         "schema_version": MCP_STATUS_SCHEMA_VERSION,
@@ -1013,14 +1031,14 @@ def build_mcp_status(*, client: str = "") -> dict:
         "process_fingerprint": process_fp,
         "fingerprint_match": (
             bool(installed_fp)
-            and bool(process_fp)
-            and process_fp != "unknown"
-            and installed_fp == process_fp
+            and bool(effective_process_fp)
+            and effective_process_fp != "unknown"
+            and installed_fp == effective_process_fp
         ),
         "active_runtime_root": str(active_runtime_root()),
         "active_runtime_version": read_version_for_path(active_runtime_root()),
-        "restart_required": bool(state["restart_required"]),
-        "reason": state["reason"],
+        "restart_required": restart_required,
+        "reason": state["reason"] if restart_required else "",
         "client_action": readiness["client_action"],
         "reason_code": readiness["reason_code"],
         "global_ready": bool(readiness["global_ready"]),
