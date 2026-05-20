@@ -12,6 +12,7 @@ ROOT_PACKAGE_JSON = ROOT / "package.json"
 CLAUDE_PLUGIN_JSON = ROOT / ".claude-plugin" / "plugin.json"
 CLAWHUB_SKILL_MD = ROOT / "clawhub-skill" / "SKILL.md"
 OPENCLAW_PACKAGE_JSON = ROOT / "openclaw-plugin" / "package.json"
+OPENCLAW_PACKAGE_LOCK = ROOT / "openclaw-plugin" / "package-lock.json"
 OPENCLAW_MCP_BRIDGE = ROOT / "openclaw-plugin" / "src" / "mcp-bridge.ts"
 
 
@@ -34,6 +35,30 @@ def sync_json_version(path: Path, expected_version: str, label: str) -> bool:
     payload["version"] = expected_version
     dump_json(path, payload)
     print(f"[sync-release-artifacts] synced {label} version -> {expected_version}")
+    return True
+
+
+def sync_openclaw_package_lock(path: Path, expected_version: str) -> bool:
+    payload = load_json(path)
+    changed = False
+
+    if payload.get("version") != expected_version:
+        payload["version"] = expected_version
+        changed = True
+
+    root_package = payload.get("packages", {}).get("")
+    if not isinstance(root_package, dict):
+        fail("OpenClaw package-lock.json is missing packages['']")
+
+    if root_package.get("version") != expected_version:
+        root_package["version"] = expected_version
+        changed = True
+
+    if not changed:
+        return False
+
+    dump_json(path, payload)
+    print(f"[sync-release-artifacts] synced OpenClaw package-lock -> {expected_version}")
     return True
 
 
@@ -99,6 +124,7 @@ def main() -> None:
         CLAUDE_PLUGIN_JSON: CLAUDE_PLUGIN_JSON.read_text(),
         CLAWHUB_SKILL_MD: CLAWHUB_SKILL_MD.read_text(),
         OPENCLAW_PACKAGE_JSON: OPENCLAW_PACKAGE_JSON.read_text(),
+        OPENCLAW_PACKAGE_LOCK: OPENCLAW_PACKAGE_LOCK.read_text(),
         OPENCLAW_MCP_BRIDGE: OPENCLAW_MCP_BRIDGE.read_text(),
     }
 
@@ -109,6 +135,8 @@ def main() -> None:
         changed.append("clawhub-skill/SKILL.md")
     if sync_json_version(OPENCLAW_PACKAGE_JSON, root_version, "OpenClaw package"):
         changed.append("openclaw-plugin/package.json")
+    if sync_openclaw_package_lock(OPENCLAW_PACKAGE_LOCK, root_version):
+        changed.append("openclaw-plugin/package-lock.json")
     if sync_openclaw_bridge(OPENCLAW_MCP_BRIDGE, root_version):
         changed.append("openclaw-plugin/src/mcp-bridge.ts")
 
