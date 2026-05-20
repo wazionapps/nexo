@@ -260,3 +260,46 @@ anonymous network-activity delta in
 `runtime/operations/post-disk-recovery-sweep.jsonl`. To add apps, register a
 new handler in the registry; do not hardcode macOS/Windows commands in shared
 core.
+
+## Memory And Runtime Contracts
+
+### Session Diary
+
+Startup continuity reads are client-neutral. Interactive diary sources such as
+`claude`, `codex`, `desktop`, `nexo-chat`, or future clients are included by
+default; automated sources such as cron, self-audit, watchdog, and minimal
+auto-close diaries are filtered unless the caller asks for `include_automated`.
+Reads by explicit `session_id` remain exact and unfiltered.
+
+### Workflow And Goals
+
+Goal and workflow runtime tools are first-class server tools, not only plugin
+registrations. New durable-goal or replay/handoff behavior must be available
+through the core MCP server surface so every client sees the same contract.
+
+### Credentials And BYOK
+
+Credential list/dashboard surfaces never expose values. DB credentials are
+reported with backend `db`; Desktop-connected BYOK files under
+`credentials/byok/` are reported as `byok_local`. Notes are operational text
+only: if notes look like a token, API key, password, or bearer value, creation
+and update are rejected; existing secret-like notes are redacted in public
+metadata views.
+
+### Email Monitor Contract
+
+Email has two separate layers:
+
+- account configuration in `nexo.db/email_accounts`;
+- monitor history in `runtime/nexo-email/nexo-email.db` (`emails`,
+  `email_events`).
+
+Dashboard and diagnostics expose this split through `/api/email/contract` so
+account setup is not confused with monitor activity.
+
+### Change Log Retention
+
+`change_log` cleanup is explicit and configurable with
+`NEXO_CHANGE_LOG_RETENTION_DAYS` (default `90`). Cleanup also deletes matching
+`unified_search` rows where `source='change'`; the dashboard exposes the active
+policy at `/api/change-log/retention`.

@@ -79,6 +79,46 @@ def test_r02_force_override_replaces_value():
     assert "old-value" not in got
 
 
+def test_r02_rejects_secret_like_notes_on_create_and_update():
+    from tools_credentials import handle_credential_create, handle_credential_update
+
+    created = handle_credential_create(
+        service="meta",
+        key="api_key",
+        value="real-secret",
+        notes="token=npm_thisShouldNotBeInNotes1234567890",
+    )
+    assert "ERROR" in created
+    assert "notes look like they contain a secret" in created
+
+    assert "ERROR" not in handle_credential_create(service="meta", key="api_key", value="real-secret")
+    updated = handle_credential_update(
+        service="meta",
+        key="api_key",
+        notes="password=not-for-notes",
+    )
+    assert "ERROR" in updated
+    assert "notes look like they contain a secret" in updated
+
+
+def test_credential_list_redacts_notes_and_labels_backend():
+    from db import create_credential
+    from tools_credentials import handle_credential_list
+
+    create_credential(
+        "meta",
+        "api_key",
+        "real-secret",
+        "token=npm_thisShouldNotBeListed1234567890",
+    )
+
+    out = handle_credential_list("meta")
+
+    assert "meta/api_key (db)" in out
+    assert "[redacted: secret-like note]" in out
+    assert "npm_thisShouldNotBeListed" not in out
+
+
 # ──────────────────────────────────────────────────────────────────────
 # R09 — artifact_create dedup
 # ──────────────────────────────────────────────────────────────────────

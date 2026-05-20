@@ -18,12 +18,73 @@ before persisting. The agent should never mint a BYOK entry on its own.
 
 import json
 import os
+import re
 from pathlib import Path
 
 from db import create_credential, update_credential, delete_credential, get_credential, list_credentials, get_db
 
 
 BYOK_SERVICE = "byok"
+REDACTED_SECRET_NOTE = "[redacted: secret-like note]"
+SECRET_NOTE_PATTERNS = (
+    re.compile(r"\b(?:npm|ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{16,}\b"),
+    re.compile(r"\bgithub_pat_[A-Za-z0-9_]{20,}\b"),
+    re.compile(r"\bsk-[A-Za-z0-9_-]{20,}\b"),
+    re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{20,}\b"),
+    re.compile(r"\b(?:api[_-]?key|secret|token|password|passwd|pwd)\s*[:=]\s*\S+", re.IGNORECASE),
+    re.compile(r"\bBearer\s+[A-Za-z0-9._~+/=-]{20,}\b", re.IGNORECASE),
+    re.compile(r"\b[A-Za-z0-9+/=_-]{40,}\b"),
+)
+
+
+def credential_note_has_secret(notes: str) -> bool:
+    """Detect notes that appear to contain a credential value."""
+    clean = (notes or "").strip()
+    if not clean:
+        return False
+    return any(pattern.search(clean) for pattern in SECRET_NOTE_PATTERNS)
+
+
+def redact_credential_notes(notes: str) -> str:
+    """Return notes safe for list/dashboard surfaces."""
+    clean = notes or ""
+    if credential_note_has_secret(clean):
+        return REDACTED_SECRET_NOTE
+    return clean
+
+
+def public_credential_records(service: str = "") -> list[dict]:
+    """List credential metadata from DB and BYOK without leaking values."""
+    requested = (service or "").strip()
+    records: list[dict] = []
+
+    if requested != BYOK_SERVICE:
+        for row in list_credentials(requested if requested else None):
+            records.append(
+                {
+                    "service": row.get("service", ""),
+                    "key": row.get("key", ""),
+                    "notes": redact_credential_notes(row.get("notes") or ""),
+                    "created_at": row.get("created_at", ""),
+                    "updated_at": row.get("updated_at", ""),
+                    "backend": "db",
+                }
+            )
+
+    if requested in ("", BYOK_SERVICE):
+        for row in _byok_get(""):
+            records.append(
+                {
+                    "service": row.get("service", BYOK_SERVICE),
+                    "key": row.get("key", ""),
+                    "notes": redact_credential_notes(row.get("notes") or ""),
+                    "created_at": "",
+                    "updated_at": "",
+                    "backend": "byok_local",
+                }
+            )
+
+    return records
 
 
 def _credential_exists(service: str, key: str) -> bool:
@@ -193,6 +254,11 @@ def handle_credential_create(service: str, key: str, value: str, notes: str = ''
             "connect the provider there (the UI validates the key with the "
             "provider before saving)."
         )
+    if credential_note_has_secret(notes):
+        return (
+            "ERROR: Credential notes look like they contain a secret. "
+            "Put the secret in value, and keep notes operational only."
+        )
     # ── R02 (Fase 2 Protocol Enforcer): reject exact (service, key) duplicates ──
     force_flag = str(force or "").strip().lower() in {"1", "true", "yes", "on"}
     if not force_flag and _credential_exists(service, key):
@@ -222,6 +288,11 @@ def handle_credential_update(service: str, key: str, value: str = '', notes: str
         return (
             "ERROR: BYOK credentials are not editable from the agent. "
             "Ask the user to update the connection in NEXO Desktop > Settings > Connections."
+        )
+    if credential_note_has_secret(notes):
+        return (
+            "ERROR: Credential notes look like they contain a secret. "
+            "Put the secret in value, and keep notes operational only."
         )
     result = update_credential(
         service,
@@ -264,17 +335,14 @@ def handle_credential_list(service: str = '') -> str:
     Listing without ``service`` only returns DB entries (the historical
     behaviour). Pass ``service='byok'`` to list the BYOK filesystem store.
     """
-    if service == BYOK_SERVICE:
-        results = _byok_get("")
-        label = "BYOK"
-    else:
-        results = list_credentials(service if service else None)
-        label = service if service else "ALL"
+    results = public_credential_records(service)
+    label = service if service else "ALL"
     if not results:
         return f"CREDENTIALS {label.upper()}: No entries."
     lines = [f"CREDENTIALS {label.upper()} ({len(results)}):"]
     for r in results:
         notes = r.get("notes") or ""
         suffix = f" — {notes}" if notes else ""
-        lines.append(f"  {r['service']}/{r['key']}{suffix}")
+        backend = r.get("backend") or "db"
+        lines.append(f"  {r['service']}/{r['key']} ({backend}){suffix}")
     return "\n".join(lines)

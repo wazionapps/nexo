@@ -31,7 +31,9 @@ if _PARENT not in sys.path:
 
 from agent_runner import AgentRunnerError, build_followup_terminal_shell_command
 from cognitive_paths import resolve_cognitive_db
+from email_contract import email_contract_snapshot
 import paths
+from tools_credentials import public_credential_records
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -1985,8 +1987,9 @@ async def api_artifacts():
 @app.get("/api/email")
 async def api_email_stats():
     conn = _email_db()
+    contract = email_contract_snapshot()
     if not conn:
-        return {"error": "Email DB not found", "stats": {}}
+        return {"error": "Email DB not found", "stats": {}, "contract": contract}
     total = conn.execute("SELECT COUNT(*) FROM emails").fetchone()[0]
     processed = conn.execute("SELECT COUNT(*) FROM emails WHERE status='processed'").fetchone()[0]
     pending = conn.execute("SELECT COUNT(*) FROM emails WHERE status='pending'").fetchone()[0]
@@ -1998,7 +2001,17 @@ async def api_email_stats():
         "FROM emails GROUP BY thread_id ORDER BY last_email DESC LIMIT 15"
     ).fetchall()]
     conn.close()
-    return {"stats": {"total": total, "processed": processed, "pending": pending}, "recent": recent, "threads": threads}
+    return {
+        "stats": {"total": total, "processed": processed, "pending": pending},
+        "recent": recent,
+        "threads": threads,
+        "contract": contract,
+    }
+
+
+@app.get("/api/email/contract")
+async def api_email_contract():
+    return email_contract_snapshot()
 
 
 # ---------------------------------------------------------------------------
@@ -2007,14 +2020,19 @@ async def api_email_stats():
 
 @app.get("/api/credentials")
 async def api_credentials():
-    db = _db()
-    conn = db.get_db()
-    rows = conn.execute("SELECT service, key, notes, created_at, updated_at FROM credentials ORDER BY service, key").fetchall()
-    creds = [dict(r) for r in rows]
+    creds = public_credential_records()
     services = {}
     for c in creds:
-        services.setdefault(c["service"], []).append({"key": c["key"], "notes": c.get("notes", "")})
+        services.setdefault(c["service"], []).append(
+            {"key": c["key"], "notes": c.get("notes", ""), "backend": c.get("backend", "db")}
+        )
     return {"credentials": creds, "services": services, "total": len(creds)}
+
+
+@app.get("/api/change-log/retention")
+async def api_change_log_retention():
+    db = _db()
+    return db.change_log_retention_policy()
 
 
 # ---------------------------------------------------------------------------

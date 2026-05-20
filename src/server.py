@@ -105,7 +105,17 @@ from plugins.episodic_memory import handle_session_diary_read, handle_session_di
 from plugins.cards import handle_card_match
 from plugins.skills import handle_skill_match
 from plugins.workflow import (
+    handle_goal_get,
+    handle_goal_list,
+    handle_goal_open,
+    handle_goal_update,
+    handle_workflow_compensation,
+    handle_workflow_get,
+    handle_workflow_handoff,
+    handle_workflow_list,
     handle_workflow_open,
+    handle_workflow_replay,
+    handle_workflow_resume,
     handle_workflow_update,
 )
 from plugin_loader import load_all_plugins, load_plugin, remove_plugin, list_plugins
@@ -814,6 +824,115 @@ def nexo_workflow_update(
         actor,
         owner,
     )
+
+
+@mcp.tool
+def nexo_goal_open(
+    sid: str,
+    title: str,
+    objective: str = "",
+    parent_goal_id: str = "",
+    priority: str = "normal",
+    next_action: str = "",
+    success_signal: str = "",
+    owner: str = "",
+    shared_state: str = "{}",
+) -> str:
+    """Open a durable goal so objectives survive sessions."""
+    return handle_goal_open(
+        sid,
+        title,
+        objective,
+        parent_goal_id,
+        priority,
+        next_action,
+        success_signal,
+        owner,
+        shared_state,
+    )
+
+
+@mcp.tool
+def nexo_goal_update(
+    goal_id: str,
+    status: str = "",
+    title: str = "",
+    objective: str = "",
+    parent_goal_id: str = "",
+    next_action: str = "",
+    success_signal: str = "",
+    blocker_reason: str = "",
+    owner: str = "",
+    shared_state: str = "",
+) -> str:
+    """Update a durable goal with active/blocked/completed state."""
+    return handle_goal_update(
+        goal_id,
+        status,
+        title,
+        objective,
+        parent_goal_id,
+        next_action,
+        success_signal,
+        blocker_reason,
+        owner,
+        shared_state,
+    )
+
+
+@mcp.tool
+def nexo_goal_get(goal_id: str, include_runs: bool = False) -> str:
+    """Read one durable goal and optionally include linked workflow runs."""
+    return handle_goal_get(goal_id, include_runs)
+
+
+@mcp.tool
+def nexo_goal_list(status: str = "", include_closed: bool = False, limit: int = 20) -> str:
+    """List durable goals."""
+    return handle_goal_list(status, include_closed, limit)
+
+
+@mcp.tool
+def nexo_workflow_get(run_id: str, include_steps: bool = True, checkpoint_limit: int = 8) -> str:
+    """Read the full durable workflow state."""
+    return handle_workflow_get(run_id, include_steps, checkpoint_limit)
+
+
+@mcp.tool
+def nexo_workflow_handoff(
+    run_id: str,
+    actor: str,
+    next_action: str = "",
+    handoff_note: str = "",
+    shared_state: str = "",
+    new_owner: str = "",
+) -> str:
+    """Record a durable workflow handoff."""
+    return handle_workflow_handoff(run_id, actor, next_action, handoff_note, shared_state, new_owner)
+
+
+@mcp.tool
+def nexo_workflow_compensation(run_id: str, checkpoint_limit: int = 10) -> str:
+    """Return the compensation plan for a partially completed workflow."""
+    return handle_workflow_compensation(run_id, checkpoint_limit)
+
+
+@mcp.tool
+def nexo_workflow_resume(run_id: str) -> str:
+    """Summarize the next actionable step for a workflow run."""
+    return handle_workflow_resume(run_id)
+
+
+@mcp.tool
+def nexo_workflow_replay(run_id: str, limit: int = 20) -> str:
+    """Replay recent checkpoints for a workflow run."""
+    return handle_workflow_replay(run_id, limit)
+
+
+@mcp.tool
+def nexo_workflow_list(status: str = "", include_closed: bool = False, limit: int = 20) -> str:
+    """List durable workflow runs."""
+    return handle_workflow_list(status, include_closed, limit)
 
 
 @mcp.tool

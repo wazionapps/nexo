@@ -1,22 +1,45 @@
 from __future__ import annotations
 """NEXO DB — Episodic module."""
-import datetime, time, json
+import datetime, time, json, os
 from db._core import get_db, now_epoch, _multi_word_like
 from db._fts import fts_upsert, fts_search
 
 # ── Change Log ───────────────────────────────────────────────────
 
-def cleanup_old_changes(retention_days: int = 90) -> int:
+DEFAULT_CHANGE_LOG_RETENTION_DAYS = 90
+
+
+def change_log_retention_days() -> int:
+    """Return the configured change-log retention window in days."""
+    raw = os.environ.get("NEXO_CHANGE_LOG_RETENTION_DAYS", str(DEFAULT_CHANGE_LOG_RETENTION_DAYS))
+    try:
+        return max(1, int(raw))
+    except (TypeError, ValueError):
+        return DEFAULT_CHANGE_LOG_RETENTION_DAYS
+
+
+def change_log_retention_policy() -> dict:
+    """Public contract for change-log cleanup and its FTS side effects."""
+    return {
+        "retention_days": change_log_retention_days(),
+        "env": "NEXO_CHANGE_LOG_RETENTION_DAYS",
+        "default_retention_days": DEFAULT_CHANGE_LOG_RETENTION_DAYS,
+        "applies_to": ["change_log", "unified_search:source=change"],
+    }
+
+
+def cleanup_old_changes(retention_days: int | None = None) -> int:
     """Delete change_log entries older than retention_days. Returns count deleted."""
     conn = get_db()
+    days = change_log_retention_days() if retention_days is None else max(1, int(retention_days))
     # Get IDs before deleting so we can clean FTS
     ids = [str(r[0]) for r in conn.execute(
         "SELECT id FROM change_log WHERE created_at < datetime('now', ?)",
-        (f"-{retention_days} days",)
+        (f"-{days} days",)
     ).fetchall()]
     cursor = conn.execute(
         "DELETE FROM change_log WHERE created_at < datetime('now', ?)",
-        (f"-{retention_days} days",)
+        (f"-{days} days",)
     )
     for cid in ids:
         conn.execute("DELETE FROM unified_search WHERE source = 'change' AND source_id = ?", (cid,))
@@ -668,15 +691,30 @@ def read_session_diary(session_id: str = '', last_n: int = 3, last_day: bool = F
     # Excludes: cron jobs, auto-closed crons (0 heartbeats or "Minimal diary").
     if include_automated:
         source_clause = ""
+        source_params = ()
     else:
+        automated_sources = (
+            "auto-close",
+            "cron",
+            "system",
+            "automation",
+            "deep-sleep",
+            "daily-self-audit",
+            "self-audit",
+            "watchdog",
+            "followup-runner",
+            "script",
+        )
+        placeholders = ",".join("?" for _ in automated_sources)
         source_clause = (
             " AND ("
-            "  (source = 'claude' AND summary NOT LIKE '[AUTO-%')"
+            f"  (COALESCE(source, '') NOT IN ({placeholders}) AND summary NOT LIKE '[AUTO-%')"
             "  OR (source = 'auto-close'"
             "      AND mental_state NOT LIKE '%0 heartbeats%'"
             "      AND mental_state NOT LIKE '%Minimal diary%')"
             ")"
         )
+        source_params = automated_sources
 
     if session_id:
         rows = conn.execute(
@@ -688,12 +726,12 @@ def read_session_diary(session_id: str = '', last_n: int = 3, last_day: bool = F
             f"SELECT * FROM session_diary "
             f"WHERE created_at >= datetime('now', '-36 hours'){domain_clause}{source_clause} "
             f"ORDER BY {_diary_order_sql()}",
-            domain_params
+            domain_params + source_params
         ).fetchall()
     else:
         rows = conn.execute(
             f"SELECT * FROM session_diary WHERE 1=1{domain_clause}{source_clause} ORDER BY {_diary_order_sql()} LIMIT ?",
-            domain_params + (last_n,)
+            domain_params + source_params + (last_n,)
         ).fetchall()
     return [dict(r) for r in rows]
 

@@ -212,3 +212,55 @@ def test_session_diary_reads_prefer_agent_authored_over_minimal_fallback():
     assert rows[-1]["id"] == fallback["id"]
     assert rows[0]["quality_tier"] == "agent_authored"
     assert rows[0]["quality_score"] > rows[-1]["quality_score"]
+
+
+def test_session_diary_default_read_is_client_neutral_and_excludes_automation():
+    import db
+
+    codex = db.write_session_diary(
+        session_id="sid-codex",
+        decisions="Continue release",
+        summary="Codex interactive session",
+        pending="Ship release",
+        context_next="Run focused checks",
+        source="codex",
+    )
+    desktop = db.write_session_diary(
+        session_id="sid-desktop",
+        decisions="Continue review",
+        summary="Desktop interactive session",
+        pending="Review map",
+        context_next="Open Preferences",
+        source="desktop",
+    )
+    db.write_session_diary(
+        session_id="sid-cron",
+        decisions="",
+        summary="Cron maintenance",
+        mental_state="scheduled automation",
+        source="cron",
+    )
+    db.write_session_diary(
+        session_id="sid-auto",
+        decisions="",
+        summary="[AUTO-CLOSE] Minimal diary",
+        mental_state="0 heartbeats; Minimal diary",
+        source="auto-close",
+    )
+
+    rows = db.read_session_diary(last_n=10)
+    session_ids = {row["session_id"] for row in rows}
+
+    assert codex["session_id"] in session_ids
+    assert desktop["session_id"] in session_ids
+    assert "sid-cron" not in session_ids
+    assert "sid-auto" not in session_ids
+
+
+def test_change_log_retention_policy_uses_env(monkeypatch):
+    import db
+
+    monkeypatch.setenv("NEXO_CHANGE_LOG_RETENTION_DAYS", "7")
+
+    assert db.change_log_retention_days() == 7
+    assert db.change_log_retention_policy()["retention_days"] == 7

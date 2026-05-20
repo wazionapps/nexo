@@ -24,8 +24,18 @@ def test_server_exposes_protocol_runtime_tools(isolated_db):
         "nexo_task_open",
         "nexo_task_acknowledge_guard",
         "nexo_task_close",
+        "nexo_goal_open",
+        "nexo_goal_update",
+        "nexo_goal_get",
+        "nexo_goal_list",
         "nexo_workflow_open",
         "nexo_workflow_update",
+        "nexo_workflow_get",
+        "nexo_workflow_handoff",
+        "nexo_workflow_compensation",
+        "nexo_workflow_resume",
+        "nexo_workflow_replay",
+        "nexo_workflow_list",
         "nexo_memory_event_list",
         "nexo_memory_event_stats",
         "nexo_memory_observation_process",
@@ -74,3 +84,16 @@ def test_memory_tools_are_registered_with_fastmcp(isolated_db):
     assert "nexo_evidence_record" in names
     assert "nexo_saved_not_used_audit" in names
     assert "nexo_automation_supervisor" in names
+    for name in (
+        "nexo_goal_open",
+        "nexo_goal_update",
+        "nexo_goal_get",
+        "nexo_goal_list",
+        "nexo_workflow_get",
+        "nexo_workflow_handoff",
+        "nexo_workflow_compensation",
+        "nexo_workflow_resume",
+        "nexo_workflow_replay",
+        "nexo_workflow_list",
+    ):
+        assert name in names

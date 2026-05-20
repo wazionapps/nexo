@@ -1,5 +1,16 @@
 # Changelog
 
+## [7.23.7] - 2026-05-20
+
+### Fixed — memory contract closure
+
+- **Session diary reads are client-neutral.** Startup continuity now includes interactive diaries from Codex, Desktop, Claude Code and future clients, while filtering automated/minimal diaries unless explicitly requested.
+- **Workflows and goals are first-class server tools.** Goal open/update/get/list and workflow get/list/handoff/compensation/resume/replay are exposed on the core MCP server surface, not only through plugin registration.
+- **Credential metadata is safe to list.** DB credentials and Desktop BYOK entries are labelled by backend; secret-like notes are rejected on write and redacted in list/dashboard metadata.
+- **Email config and monitor activity are explicit layers.** Dashboard/diagnostics expose the split between `email_accounts` in `nexo.db` and monitor events in `runtime/nexo-email/nexo-email.db`.
+- **Change-log retention is visible and configurable.** `NEXO_CHANGE_LOG_RETENTION_DAYS` controls the cleanup window and the dashboard exposes the active policy.
+- **Coverage:** focused diary/retention, credentials, email-contract and server export tests.
+
 ## [7.23.6] - 2026-05-20
 
 ### Fixed — Legacy cognitive DB cleanup
