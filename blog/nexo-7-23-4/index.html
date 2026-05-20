@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.23.4: release publish verification</title>
+<meta name="description" content="NEXO Brain v7.23.4 fail-closes npm release publishing and keeps OpenClaw lockfile metadata synchronized.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-23-4/">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.23.4: release publish verification","datePublished":"2026-05-20","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head>
+<body class="features-page">
+<main class="section-compact">
+<div class="container" style="max-width:860px;">
+<p class="section-label">Release notes</p>
+<h1>NEXO 7.23.4 - release publish verification</h1>
+<p>v7.23.4 is a Brain release-engineering patch. The publish workflow now stops on real npm publication failures instead of turning every failed publish into a misleading "Version already exists" message.</p>
+<p>The release also keeps OpenClaw package-lock metadata synchronized with the public package version, so package.json, lockfile, ClawHub metadata and the MCP bridge version move together.</p>
+<pre><code>python3 scripts/verify_release_readiness.py --ci
+npm view nexo-brain@7.23.4 version
+npm view @wazionapps/openclaw-memory-nexo-brain@7.23.4 version</code></pre>
+<p><a href="/changelog/#v7234">Read the full v7.23.4 changelog</a></p>
+</div>
+</main>
+</body>
+</html>

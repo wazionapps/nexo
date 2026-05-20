@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.23.4] - 2026-05-20
+
+### Fixed — Release publish verification
+
+- **Brain release tags now fail when npm publication fails.** The publish workflow no longer turns every `npm publish` error into "Version already exists"; it only tolerates real already-published responses and then verifies the exact version in the public npm registry.
+- **OpenClaw release metadata stays fully synchronized.** The release artifact synchronizer now updates `openclaw-plugin/package-lock.json` alongside `package.json`, `openclaw.plugin.json` and the MCP bridge version, preventing packaged OpenClaw releases from carrying stale lockfile metadata.
+- **Coverage:** GitHub PR checks for release readiness, OpenClaw packaging, ClawHub metadata, client parity, lint/security and full pytest, plus local full pytest and OpenClaw build/test/pack validation.
+
 ## [7.23.3] - 2026-05-19
 
 ### Fixed — Followup runner status filtering
