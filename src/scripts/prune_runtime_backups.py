@@ -92,6 +92,7 @@ TECHNICAL_PREFIXES = (
     "desktop-local-install-",
     "packaged-code-f06-conflicts-",
     "legacy-shim-conflicts-",
+    "legacy-cognitive-db-",
     "legacy-personal-brain-db-stubs-",
     "legacy-root-db-stubs-",
     "codex-live-sync-",

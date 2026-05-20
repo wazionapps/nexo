@@ -32,6 +32,7 @@ except ModuleNotFoundError as exc:
             sys.path.insert(0, core_path)
     from product_mode import enforce_desktop_product_contract
 from runtime_home import export_resolved_nexo_home, managed_nexo_home
+from cognitive_paths import cleanup_legacy_cognitive_db_artifacts
 
 try:
     from tree_hygiene import is_duplicate_artifact_name
@@ -4746,6 +4747,17 @@ def _run_runtime_post_sync(dest: Path = NEXO_HOME, progress_fn=None) -> tuple[bo
             actions.append(f"legacy-personal-brain-db-stubs-archived:{archived}")
     except Exception as exc:
         actions.append(f"legacy-personal-brain-db-stubs-warning:{exc.__class__.__name__}")
+
+    try:
+        cognitive_cleanup = cleanup_legacy_cognitive_db_artifacts(dry_run=False)
+        removed = len(cognitive_cleanup.get("removed", []) or [])
+        archived = len(cognitive_cleanup.get("archived", []) or [])
+        if removed:
+            actions.append(f"legacy-cognitive-db-duplicates-removed:{removed}")
+        if archived:
+            actions.append(f"legacy-cognitive-db-archived:{archived}")
+    except Exception as exc:
+        actions.append(f"legacy-cognitive-db-warning:{exc.__class__.__name__}")
 
     try:
         _emit_progress(progress_fn, "Applying Desktop product contract...")

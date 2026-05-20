@@ -42,6 +42,7 @@ def test_backup_retention_apply_delete_all_technical_keeps_business_weekly_and_h
     root = tmp_path / "backups"
     _write(root / "pre-update-old" / "marker.txt")
     _write(root / "code-tree-old" / "marker.txt")
+    _write(root / "legacy-cognitive-db-old" / "manifest.json", "{}")
     _write(root / "shopify-backups" / "order.csv", "business")
     _write(root / "weekly" / "weekly-2026-05-19.db", "weekly")
     _write(root / "nexo-2026-05-19-1829.db", "hourly")
@@ -53,9 +54,10 @@ def test_backup_retention_apply_delete_all_technical_keeps_business_weekly_and_h
     )
 
     assert result["ok"] is True
-    assert result["apply"]["deleted"] == 2
+    assert result["apply"]["deleted"] == 3
     assert not (root / "pre-update-old").exists()
     assert not (root / "code-tree-old").exists()
+    assert not (root / "legacy-cognitive-db-old").exists()
     assert (root / "shopify-backups").is_dir()
     assert (root / "weekly").is_dir()
     assert (root / "nexo-2026-05-19-1829.db").is_file()

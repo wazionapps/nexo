@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import os
 import sqlite3
 from pathlib import Path
 
@@ -37,7 +38,7 @@ def test_canonical_cognitive_db_path_uses_runtime_cognitive_dir(tmp_path, monkey
     assert cognitive_paths.audit_cognitive_db_paths()["reason"] == "canonical_only"
 
 
-def test_legacy_runtime_data_db_is_copied_to_canonical_without_deleting_source(tmp_path, monkeypatch):
+def test_legacy_runtime_data_db_is_copied_to_canonical_then_removed(tmp_path, monkeypatch):
     cognitive_paths = _reload(monkeypatch, tmp_path / "nexo-home")
     legacy = tmp_path / "nexo-home" / "runtime" / "data" / "cognitive.db"
     _sqlite_db(legacy, "legacy")
@@ -46,23 +47,47 @@ def test_legacy_runtime_data_db_is_copied_to_canonical_without_deleting_source(t
 
     assert resolved == cognitive_paths.canonical_cognitive_db_path()
     assert resolved.exists()
-    assert legacy.exists(), "legacy DB is retained for operator-verifiable rollback"
-    assert cognitive_paths.audit_cognitive_db_paths()["reason"] == "legacy_duplicate_retained"
+    assert not legacy.exists(), "legacy DB duplicate must not keep consuming disk after migration"
+    assert cognitive_paths.audit_cognitive_db_paths()["reason"] == "canonical_only"
     marker = tmp_path / "nexo-home" / "runtime" / "state" / "cognitive-db-migration.json"
     assert marker.exists()
     assert str(legacy) in marker.read_text(encoding="utf-8")
+    cleanup_marker = tmp_path / "nexo-home" / "runtime" / "state" / "cognitive-db-cleanup.jsonl"
+    assert cleanup_marker.exists()
 
 
 def test_divergent_canonical_and_legacy_db_blocks_writes(tmp_path, monkeypatch):
     cognitive_paths = _reload(monkeypatch, tmp_path / "nexo-home")
-    _sqlite_db(cognitive_paths.canonical_cognitive_db_path(), "canonical")
-    _sqlite_db(tmp_path / "nexo-home" / "runtime" / "data" / "cognitive.db", "legacy")
+    canonical = _sqlite_db(cognitive_paths.canonical_cognitive_db_path(), "canonical")
+    legacy = _sqlite_db(tmp_path / "nexo-home" / "runtime" / "data" / "cognitive.db", "legacy")
+    os.utime(canonical, (100, 100))
+    os.utime(legacy, (200, 200))
 
     audit = cognitive_paths.audit_cognitive_db_paths()
     assert audit["status"] == "error"
     assert audit["reason"] == "canonical_and_legacy_diverge"
     with pytest.raises(cognitive_paths.CognitiveDbPathConflict):
         cognitive_paths.resolve_cognitive_db(for_write=True)
+
+
+def test_superseded_divergent_legacy_db_is_archived_and_removed(tmp_path, monkeypatch):
+    cognitive_paths = _reload(monkeypatch, tmp_path / "nexo-home")
+    canonical = _sqlite_db(cognitive_paths.canonical_cognitive_db_path(), "canonical")
+    legacy = _sqlite_db(tmp_path / "nexo-home" / "runtime" / "data" / "cognitive.db", "legacy")
+    os.utime(legacy, (100, 100))
+    os.utime(canonical, (200, 200))
+
+    resolved = cognitive_paths.resolve_cognitive_db(for_write=True)
+
+    assert resolved == cognitive_paths.canonical_cognitive_db_path()
+    assert not legacy.exists()
+    audit = cognitive_paths.audit_cognitive_db_paths()
+    assert audit["status"] == "ok"
+    assert audit["reason"] == "canonical_only"
+    archives = list((tmp_path / "nexo-home" / "runtime" / "backups").glob("legacy-cognitive-db-*"))
+    assert len(archives) == 1
+    assert (archives[0] / "cognitive-legacy.tar.gz").is_file()
+    assert (archives[0] / "manifest.json").is_file()
 
 
 def test_env_override_is_respected_without_legacy_migration(tmp_path, monkeypatch):

@@ -7,6 +7,7 @@ import json
 import os
 import shutil
 import sqlite3
+import tarfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -68,10 +69,12 @@ def _sha256(path: Path) -> str:
 def _sqlite_signature(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {"exists": False}
+    stat = path.stat()
     signature: dict[str, Any] = {
         "exists": True,
         "path": str(path),
-        "size_bytes": path.stat().st_size,
+        "size_bytes": stat.st_size,
+        "mtime_epoch": stat.st_mtime,
         "sha256": _sha256(path),
     }
     try:
@@ -101,6 +104,10 @@ def _migration_marker_path() -> Path:
     return paths.runtime_state_dir() / "cognitive-db-migration.json"
 
 
+def _cleanup_marker_path() -> Path:
+    return paths.runtime_state_dir() / "cognitive-db-cleanup.jsonl"
+
+
 def _write_migration_marker(source: Path, target: Path) -> None:
     marker = {
         "at": datetime.now(timezone.utc).isoformat(),
@@ -113,6 +120,190 @@ def _write_migration_marker(source: Path, target: Path) -> None:
     marker_path = _migration_marker_path()
     marker_path.parent.mkdir(parents=True, exist_ok=True)
     marker_path.write_text(json.dumps(marker, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _append_cleanup_marker(event: dict[str, Any]) -> None:
+    marker_path = _cleanup_marker_path()
+    marker_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "at": datetime.now(timezone.utc).isoformat(),
+        **event,
+    }
+    with marker_path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(payload, sort_keys=True) + "\n")
+
+
+def _sidecar_paths(db_path: Path) -> list[Path]:
+    return [db_path, Path(f"{db_path}-wal"), Path(f"{db_path}-shm")]
+
+
+def _existing_sidecars(db_path: Path) -> list[Path]:
+    return [path for path in _sidecar_paths(db_path) if path.exists()]
+
+
+def _wal_has_uncheckpointed_data(db_path: Path) -> bool:
+    wal_path = Path(f"{db_path}-wal")
+    try:
+        return wal_path.is_file() and wal_path.stat().st_size > 0
+    except OSError:
+        return True
+
+
+def _canonical_supersedes_legacy(canonical_sig: dict[str, Any], legacy_sig: dict[str, Any]) -> bool:
+    if not canonical_sig.get("exists") or not legacy_sig.get("exists"):
+        return False
+    if not canonical_sig.get("sqlite_ok") or not legacy_sig.get("sqlite_ok"):
+        return False
+    if float(canonical_sig.get("mtime_epoch") or 0) < float(legacy_sig.get("mtime_epoch") or 0):
+        return False
+    canonical_tables = set(canonical_sig.get("tables") or [])
+    legacy_tables = set(legacy_sig.get("tables") or [])
+    if canonical_tables and legacy_tables and not legacy_tables.issubset(canonical_tables):
+        return False
+    return True
+
+
+def _remove_paths(paths_to_remove: list[Path]) -> list[str]:
+    removed: list[str] = []
+    for path in paths_to_remove:
+        try:
+            if path.exists():
+                path.unlink()
+                removed.append(str(path))
+        except FileNotFoundError:
+            continue
+    return removed
+
+
+def _archive_and_remove_legacy_db(
+    legacy_db: Path,
+    *,
+    canonical_sig: dict[str, Any],
+    legacy_sig: dict[str, Any],
+    reason: str,
+) -> dict[str, Any]:
+    files = _existing_sidecars(legacy_db)
+    backup_root = paths.create_backup_dir("legacy-cognitive-db")
+    backup_dir = Path(backup_root)
+    archive_path = backup_dir / "cognitive-legacy.tar.gz"
+    manifest_path = backup_dir / "manifest.json"
+    with tarfile.open(archive_path, "w:gz") as archive:
+        for file_path in files:
+            archive.add(file_path, arcname=file_path.name)
+    with tarfile.open(archive_path, "r:gz") as archive:
+        archived_names = sorted(archive.getnames())
+    archive_sha = _sha256(archive_path)
+    manifest = {
+        "reason": reason,
+        "source": str(legacy_db),
+        "archived_files": [str(path) for path in files],
+        "archive": str(archive_path),
+        "archive_sha256": archive_sha,
+        "archive_members": archived_names,
+        "canonical": canonical_sig,
+        "legacy": legacy_sig,
+    }
+    manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    removed = _remove_paths(files)
+    paths.finalize_backup_snapshot(backup_dir)
+    _append_cleanup_marker({
+        "action": "archive_superseded_legacy",
+        "source": str(legacy_db),
+        "archive": str(archive_path),
+        "archive_sha256": archive_sha,
+        "removed": removed,
+        "reason": reason,
+    })
+    return {
+        "path": str(legacy_db),
+        "action": "archived",
+        "archive_path": str(archive_path),
+        "manifest_path": str(manifest_path),
+        "removed": removed,
+        "reason": reason,
+    }
+
+
+def cleanup_legacy_cognitive_db_artifacts(*, dry_run: bool = False) -> dict[str, Any]:
+    """Remove or archive safe legacy cognitive DB shadows.
+
+    Identical legacy duplicates are deleted directly. Divergent legacy DBs are
+    only archived when the canonical DB is valid, newer, and has a compatible
+    schema. Ambiguous cases are left in place so write callers still block.
+    """
+    override = _configured_override()
+    report: dict[str, Any] = {
+        "ok": True,
+        "dry_run": dry_run,
+        "removed": [],
+        "archived": [],
+        "skipped": [],
+        "errors": [],
+    }
+    if override is not None:
+        report["skipped"].append({"reason": "env_override", "path": str(override)})
+        return report
+
+    canonical = canonical_cognitive_db_path()
+    canonical_sig = _sqlite_signature(canonical)
+    if not canonical_sig.get("exists"):
+        report["skipped"].append({"reason": "canonical_missing", "path": str(canonical)})
+        return report
+    if not canonical_sig.get("sqlite_ok"):
+        report["ok"] = False
+        report["skipped"].append({"reason": "canonical_not_sqlite_ok", "path": str(canonical)})
+        return report
+
+    for legacy_db in legacy_cognitive_db_paths():
+        legacy_sig = _sqlite_signature(legacy_db)
+        if not legacy_sig.get("exists"):
+            continue
+        files = _existing_sidecars(legacy_db)
+        if _wal_has_uncheckpointed_data(legacy_db):
+            report["skipped"].append({"path": str(legacy_db), "reason": "legacy_wal_has_data"})
+            continue
+        if legacy_sig.get("sha256") == canonical_sig.get("sha256"):
+            item = {
+                "path": str(legacy_db),
+                "action": "removed-identical-duplicate",
+                "files": [str(path) for path in files],
+            }
+            if not dry_run:
+                item["removed"] = _remove_paths(files)
+                _append_cleanup_marker({
+                    "action": "remove_identical_duplicate",
+                    "source": str(legacy_db),
+                    "removed": item["removed"],
+                    "legacy_sha256": legacy_sig.get("sha256"),
+                })
+            report["removed"].append(item)
+            continue
+        if _canonical_supersedes_legacy(canonical_sig, legacy_sig):
+            if dry_run:
+                report["archived"].append({
+                    "path": str(legacy_db),
+                    "action": "would-archive-superseded-legacy",
+                    "reason": "canonical_newer_schema_compatible",
+                })
+                continue
+            try:
+                report["archived"].append(_archive_and_remove_legacy_db(
+                    legacy_db,
+                    canonical_sig=canonical_sig,
+                    legacy_sig=legacy_sig,
+                    reason="canonical_newer_schema_compatible",
+                ))
+            except Exception as exc:
+                report["ok"] = False
+                report["errors"].append({"path": str(legacy_db), "error": str(exc)})
+            continue
+        report["skipped"].append({
+            "path": str(legacy_db),
+            "reason": "divergent_requires_manual_review",
+            "canonical_mtime_epoch": canonical_sig.get("mtime_epoch"),
+            "legacy_mtime_epoch": legacy_sig.get("mtime_epoch"),
+        })
+    return report
 
 
 def audit_cognitive_db_paths() -> dict[str, Any]:
@@ -173,7 +364,14 @@ def migrate_legacy_cognitive_db_if_needed() -> dict[str, Any]:
     canonical.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(source, canonical)
     _write_migration_marker(source, canonical)
-    return {"migrated": True, "reason": "legacy_copied", "source": str(source), "path": str(canonical)}
+    cleanup = cleanup_legacy_cognitive_db_artifacts()
+    return {
+        "migrated": True,
+        "reason": "legacy_copied",
+        "source": str(source),
+        "path": str(canonical),
+        "cleanup": cleanup,
+    }
 
 
 def resolve_cognitive_db(*, for_write: bool = True, migrate: bool = True, create_parent: bool = True) -> Path:
@@ -183,6 +381,7 @@ def resolve_cognitive_db(*, for_write: bool = True, migrate: bool = True, create
         target.parent.mkdir(parents=True, exist_ok=True)
     if migrate:
         migrate_legacy_cognitive_db_if_needed()
+        cleanup_legacy_cognitive_db_artifacts()
     audit = audit_cognitive_db_paths()
     if for_write and audit["status"] == "error":
         raise CognitiveDbPathConflict(
@@ -191,4 +390,3 @@ def resolve_cognitive_db(*, for_write: bool = True, migrate: bool = True, create
             + ", ".join(entry["path"] for entry in audit["legacy"] if entry["signature"].get("exists"))
         )
     return target
-

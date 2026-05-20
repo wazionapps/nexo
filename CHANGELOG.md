@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.23.6] - 2026-05-20
+
+### Fixed — Legacy cognitive DB cleanup
+
+- **`nexo update` clears safe legacy `cognitive.db` shadows.** Brain now removes identical legacy duplicates after migration and archives older divergent legacy DBs only when the canonical DB is valid, newer, and schema-compatible; ambiguous or newer legacy DBs still block writes for manual review.
+- **Legacy cognitive archives are managed technical backups.** Superseded legacy DBs are compressed under `runtime/backups/legacy-cognitive-db-*` with a manifest and are covered by runtime backup retention, so old migrations cannot silently keep filling user disks.
+- **Coverage:** focused cognitive path cleanup tests, backup retention test, packaged update tests and update wipe-guard tests.
+
 ## [7.23.5] - 2026-05-20
 
 ### Fixed — English CLI update summary
