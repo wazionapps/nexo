@@ -1,5 +1,12 @@
 # Changelog
 
+## [7.23.5] - 2026-05-20
+
+### Fixed — English CLI update summary
+
+- **`nexo update` keeps Brain CLI copy in English.** External CLI maintenance now reports restart and already-latest lines in English, matching the open-source Brain CLI language contract.
+- **Coverage:** focused external CLI update formatter test.
+
 ## [7.23.4] - 2026-05-20
 
 ### Fixed — Release publish verification

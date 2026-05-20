@@ -224,10 +224,10 @@ def test_format_results_reports_updates_and_restart_hint():
         "CLI updated: @anthropic-ai/claude-code 2.1.109 -> 2.1.115" in line
         for line in lines
     )
-    assert any("reinicia terminal" in line for line in lines)
+    assert any("restart the terminal" in line for line in lines)
     # When at least one CLI updated, we don't emit the "already in latest" line —
     # it would be misleading alongside the updated one.
-    assert not any("ya en última versión" in line for line in lines)
+    assert not any("already on latest versions" in line for line in lines)
 
 
 def test_format_results_all_latest_emits_info_line():
@@ -242,7 +242,7 @@ def test_format_results_all_latest_emits_info_line():
         },
     })
 
-    assert lines == ["  CLIs externos: ya en última versión"]
+    assert lines == ["  External CLIs: already on latest versions"]
 
 
 def test_format_results_silent_when_nothing_installed():

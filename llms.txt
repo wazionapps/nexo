@@ -1,9 +1,10 @@
 # NEXO Brain
 
-> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v7.23.4). NEXO Desktop is a separate closed-source companion app distributed at nexo-desktop.com; its source does not ship in this repo. Mentions of "NEXO Desktop" in changelog entries describe coordinated client releases that consume the Brain CLI / MCP contract. For the commercial Desktop product, contact info@wazion.com.
+> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v7.23.5). NEXO Desktop is a separate closed-source companion app distributed at nexo-desktop.com; its source does not ship in this repo. Mentions of "NEXO Desktop" in changelog entries describe coordinated client releases that consume the Brain CLI / MCP contract. For the commercial Desktop product, contact info@wazion.com.
 
 NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. It adds a local shared brain across supported clients, configurable terminal and automation backends, recovery-aware background jobs, startup preflight, runtime self-healing, smarter retrieval defaults, long-horizon overnight analysis, and 150+ MCP tools.
 
+v7.23.5: patch release. Keeps `nexo update` external-CLI maintenance summary copy in English, matching the open-source Brain CLI language contract.
 v7.23.4: patch release. Release tags now fail closed when npm publication fails, verify exact npm registry versions after publish, and keep OpenClaw package-lock metadata synchronized with release artifacts.
 v7.23.3: patch release. Followup runner executable batches now treat DONE as a terminal status alongside BLOCKED, ARCHIVED, DELETED and WAITING, so already-finished followups are not reselected.
 v7.23.2: patch release. Desktop-facing version checks refresh stale latest-version cache entries when the cached latest version is missing, equal, or older than the installed Brain version, so a just-published update is not hidden in Desktop.

@@ -3505,7 +3505,7 @@ def _format_external_clis_results(results: dict) -> list[str]:
             any_updated = True
             lines.append(
                 f"  CLI updated: {pkg} {entry.get('old')} -> {entry.get('new')} "
-                f"— reinicia terminal para activar"
+                f"— restart the terminal to activate"
             )
         elif status == "already_latest":
             any_checked_latest = True
@@ -3518,7 +3518,7 @@ def _format_external_clis_results(results: dict) -> list[str]:
         # CLIs that the operator never installed shouldn't spam the summary.
 
     if not any_updated and not any_failed and any_checked_latest:
-        lines.append("  CLIs externos: ya en última versión")
+        lines.append("  External CLIs: already on latest versions")
 
     return lines
 
