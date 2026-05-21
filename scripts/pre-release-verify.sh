@@ -32,8 +32,9 @@ Checks (in order):
   1. privacy         — scripts/check_no_personal_data.sh
   2. tool-map        — scripts/verify_tool_map.py
   3. release-ready   — scripts/verify_release_readiness.py --ci
-  4. pytest          — python3 -m pytest -q
-  5. release-target  — free tag + CHANGELOG entry + package.json version
+  4. workflows       — scripts/audit-release-workflows.py (NF-DS-E17D1B61)
+  5. pytest          — python3 -m pytest -q
+  6. release-target  — free tag + CHANGELOG entry + package.json version
                        (only when --release vX.Y.Z is passed)
 
 Flags:
@@ -112,6 +113,7 @@ run_step() {
 run_step privacy        "privacy guard"      bash scripts/check_no_personal_data.sh
 run_step tool-map       "tool-map sync"      python3 scripts/verify_tool_map.py
 run_step release-ready  "release readiness"  python3 scripts/verify_release_readiness.py --ci
+run_step workflows      "release workflows"  python3 scripts/audit-release-workflows.py "$REPO_ROOT"
 run_step pytest         "pytest smoke"       python3 -m pytest -q
 
 if [ -n "$RELEASE_TARGET" ]; then

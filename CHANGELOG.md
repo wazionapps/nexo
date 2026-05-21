@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.23.13] - 2026-05-21
+
+### Fixed — release guardrails
+
+- **Pre-release checks now audit workflow publish steps for masked failures.** The release wrapper flags publish/deploy steps that hide real errors behind `|| true`, `|| echo ...`, or missing registry verification.
+- **Minimal-delta guardrail coverage is in place for punctual UI edits.** The pure guardrail module detects small UI requests and blocks oversized diffs before they turn into broad visual rewrites.
+- **Coverage:** focused workflow-audit and minimal-delta guardrail tests.
+
 ## [7.23.12] - 2026-05-21
 
 ### Fixed — protected database recovery
