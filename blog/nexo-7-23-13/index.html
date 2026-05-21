@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.23.13: release guardrails</title>
+<meta name="description" content="NEXO Brain v7.23.13 audits release workflows for masked publish failures and adds minimal-delta guardrail coverage for punctual UI edits.">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-23-13/">
+<meta name="robots" content="index, follow">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.23.13: release guardrails","datePublished":"2026-05-21","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head>
+<body>
+<main class="section-compact">
+<div class="container" style="max-width:860px;">
+<a href="/blog/">Back to blog</a>
+<p class="section-label">Release notes</p>
+<h1>NEXO 7.23.13 - release guardrails</h1>
+<p>v7.23.13 hardens the release path after the recent publish and UI-regression incidents. The pre-release wrapper now audits workflow publish steps for masked failures such as <code>|| true</code>, <code>|| echo ...</code>, missing registry verification, or deploy steps that continue on real errors.</p>
+<p>The release also adds focused coverage for the minimal-delta guardrail. Small UI requests can be detected as punctual edits, while oversized diffs are blocked before they turn into broad visual rewrites.</p>
+<pre><code>python3 -m pytest tests/test_release_workflow_audit.py tests/test_minimal_delta_guardrail.py -q
+python3 scripts/audit-release-workflows.py .
+bash scripts/pre-release-verify.sh --release v7.23.13 --skip pytest</code></pre>
+<p><a href="/changelog/#v72313">Read the full v7.23.13 changelog</a></p>
+</div>
+</main>
+</body>
+</html>
