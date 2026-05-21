@@ -173,8 +173,8 @@ def handle_memory_timeline(
     result = memory_timeline(query, project_hint=project_hint, time_range=time_range, limit=limit)
     candidates = result.get("candidates") or []
     if not candidates:
-        return "No hay eventos suficientes para construir timeline."
-    lines = [f"MEMORY TIMELINE ({len(candidates)}) — {query or time_range or '(sin query)'}"]
+        return "There are not enough events to build a timeline."
+    lines = [f"MEMORY TIMELINE ({len(candidates)}) — {query or time_range or '(no query)'}"]
     for item in candidates:
         refs = item.get("evidence_refs") or []
         refs_note = f" refs={', '.join(refs[:3])}" if refs else ""

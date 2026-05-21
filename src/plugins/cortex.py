@@ -578,44 +578,44 @@ def _score_alternative(
 
     if direct_hits:
         impact += min(1.6, direct_hits * 0.4)
-        reasons.append("apunta directo al objetivo")
+        reasons.append("points directly at the goal")
     if safe_hits:
         success += min(1.8, safe_hits * 0.45)
         risk = max(1.0, risk - min(1.1, safe_hits * 0.35))
-        reasons.append("incluye verificación o despliegue seguro")
+        reasons.append("includes verification or safe deployment")
     if not safe_hits and task_type in {"edit", "execute"}:
         risk += 1.2
-        reasons.append("no explicita verificación")
+        reasons.append("does not make verification explicit")
     if risk_hits:
         risk += min(2.8, risk_hits * 0.7)
-        reasons.append("contiene señales de alto riesgo")
+        reasons.append("contains high-risk signals")
 
     if focus == "impact" and direct_hits:
         impact += 0.45
         risk = max(1.0, risk - 0.35)
-        reasons.append("el perfil activo prioriza impacto")
+        reasons.append("the active profile prioritizes impact")
     elif focus == "impact":
         impact = max(1.0, impact - 0.35)
-        reasons.append("el perfil activo penaliza opciones de bajo empuje")
+        reasons.append("the active profile penalizes low-momentum options")
     elif focus == "success" and safe_hits:
         success += 0.45
-        reasons.append("el perfil activo prioriza exito verificable")
+        reasons.append("the active profile prioritizes verifiable success")
     elif focus == "risk":
         if safe_hits:
             risk = max(1.0, risk - 0.4)
         if risk_hits:
             risk += 0.8
-        reasons.append("el perfil activo penaliza riesgo")
+        reasons.append("the active profile penalizes risk")
     elif focus == "somatic":
-        reasons.append("el perfil activo da peso a la huella somática")
+        reasons.append("the active profile weights the somatic footprint")
 
     history = _history_signal(lowered, area=area, goal=goal)
     success += history["positive"]
     risk += history["negative"]
     if history["positive"]:
-        reasons.append("histórico parecido favorable")
+        reasons.append("similar history is favorable")
     if history["negative"]:
-        reasons.append("histórico parecido conflictivo")
+        reasons.append("similar history is conflicting")
 
     historical = _historical_outcome_signal(
         alternative.get("name", ""),
@@ -628,15 +628,15 @@ def _score_alternative(
         risk += historical["risk_adjustment"]
         if historical["success_adjustment"] > 0:
             reasons.append(
-                f"histórico resuelto favorable ({historical['met']}/{historical['resolved_outcomes']} met)"
+                f"resolved history is favorable ({historical['met']}/{historical['resolved_outcomes']} met)"
             )
         elif historical["success_adjustment"] < 0:
             reasons.append(
-                f"histórico resuelto flojo ({historical['missed']}/{historical['resolved_outcomes']} missed)"
+                f"resolved history is weak ({historical['missed']}/{historical['resolved_outcomes']} missed)"
             )
     elif historical["resolved_outcomes"] > 0:
         reasons.append(
-            f"histórico insuficiente aún ({historical['resolved_outcomes']}/{historical['threshold']} outcomes)"
+            f"history is still insufficient ({historical['resolved_outcomes']}/{historical['threshold']} outcomes)"
         )
 
     pattern_learning = _pattern_learning_signal(
@@ -649,9 +649,9 @@ def _score_alternative(
         success += pattern_learning["success_adjustment"]
         risk += pattern_learning["risk_adjustment"]
         if pattern_learning["mode"] == "prefer":
-            reasons.append("regla estructurada capturada favorece esta estrategia")
+            reasons.append("captured structured rule favors this strategy")
         elif pattern_learning["mode"] == "avoid":
-            reasons.append("regla estructurada capturada penaliza esta estrategia")
+            reasons.append("captured structured rule penalizes this strategy")
 
     constraint_penalty, constraint_reasons = _constraint_penalty(lowered, constraints)
     if constraint_penalty:
@@ -722,19 +722,19 @@ def _log_cortex_activation(goal: str, task_type: str, result: dict):
 
 
 def _format_decision_summary(recommended: dict, alternatives_scored: list[dict]) -> str:
-    notes = ", ".join(recommended.get("notes") or []) or "balance general más sólido"
+    notes = ", ".join(recommended.get("notes") or []) or "strongest overall balance"
     historical = recommended.get("historical_signal") or {}
     second_gap = 0.0
     if len(alternatives_scored) > 1:
         second_gap = recommended["total_score"] - alternatives_scored[1]["total_score"]
     if historical.get("active"):
         notes = (
-            f"{notes}; histórico resuelto {historical.get('met', 0)}/"
-            f"{historical.get('resolved_outcomes', 0)} favorable en contexto comparable"
+            f"{notes}; resolved history {historical.get('met', 0)}/"
+            f"{historical.get('resolved_outcomes', 0)} favorable in comparable context"
         )
     if second_gap > 0.2:
-        return f"Recomendada por margen claro ({second_gap:.2f}) y porque {notes}."
-    return f"Recomendada por el mejor balance entre impacto, éxito, riesgo y huella somática; {notes}."
+        return f"Recommended by a clear margin ({second_gap:.2f}) and because {notes}."
+    return f"Recommended for the best balance between impact, success, risk, and somatic footprint; {notes}."
 
 
 def _parse_json_object_response(raw: str) -> dict:

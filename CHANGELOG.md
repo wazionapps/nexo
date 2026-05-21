@@ -613,37 +613,37 @@
 
 ## [7.12.14] - 2026-05-04
 
-### Fixed — paridad followup runner Mac/WSL/Linux
+### Fixed — follow-up runner parity across macOS/WSL/Linux
 
-- **Dashboard `POST /api/followups/{id}/run`: paridad multi-plataforma.** Hasta 7.12.13 este endpoint devolvía 501 ("This operation requires macOS") en cualquier host no-Darwin, dejando a usuarios Win11+WSL sin forma de lanzar followups desde el panel del dashboard. La detección de plataforma ahora abre el terminal nativo del host:
-  - **macOS**: igual que antes, `osascript -e 'tell application "Terminal"'` (legacy).
-  - **WSL** (detectado vía `WSL_DISTRO_NAME` o `/proc/sys/fs/binfmt_misc/WSLInterop`): shell out vía `cmd.exe /c start "" wt.exe new-tab -- cmd.exe /k wsl.exe -d <distro> -- bash -lc "<shell_cmd>"` para abrir Windows Terminal con el followup en ejecución dentro de la distro.
-  - **Linux puro**: intenta `x-terminal-emulator`, `gnome-terminal`, `konsole`, `xterm` en orden.
-  - Si todos los emuladores fallan, devuelve 503 con el `manual_command` para copy-paste, en vez del 501 ciego.
+- **Dashboard `POST /api/followups/{id}/run`: cross-platform parity.** Until 7.12.13 this endpoint returned 501 ("This operation requires macOS") on every non-Darwin host, leaving Win11+WSL users without a way to launch follow-ups from the dashboard panel. Platform detection now opens the host's native terminal:
+  - **macOS**: same as before, `osascript -e 'tell application "Terminal"'` (legacy).
+  - **WSL** (detected via `WSL_DISTRO_NAME` or `/proc/sys/fs/binfmt_misc/WSLInterop`): shells out through `cmd.exe /c start "" wt.exe new-tab -- cmd.exe /k wsl.exe -d <distro> -- bash -lc "<shell_cmd>"` to open Windows Terminal with the follow-up running inside the distro.
+  - **Plain Linux**: tries `x-terminal-emulator`, `gnome-terminal`, `konsole`, and `xterm` in order.
+  - If every emulator fails, returns 503 with `manual_command` for copy-paste instead of the blind 501.
 
 ## [7.12.13] - 2026-05-03
 
-### Changed — paso "residence" del onboarding usa autocomplete + coordenadas
+### Changed — onboarding `residence` step uses autocomplete + coordinates
 
-- **El step `residence` ahora se marca con `type: "city"`** (`src/desktop_bridge.py`). El renderer de Desktop (`CityStep` en `OnboardingWizardSteps.jsx`) consulta Nominatim (OpenStreetMap) y persiste un payload JSON `{display, name, lat, lon, country}` en `profile.current_residence`, con fallback a texto plano si el geocoder está fuera de alcance. El widget del tiempo y cualquier feature location-aware lee coordenadas reales en lugar de un string suelto. Necesita Desktop 0.32.16+.
+- **The `residence` step is now marked with `type: "city"`** (`src/desktop_bridge.py`). The Desktop renderer (`CityStep` in `OnboardingWizardSteps.jsx`) queries Nominatim (OpenStreetMap) and persists a JSON payload `{display, name, lat, lon, country}` in `profile.current_residence`, with a plain-text fallback when the geocoder is out of reach. The weather widget and any location-aware feature read real coordinates instead of a loose string. Requires Desktop 0.32.16+.
 
 ## [7.12.12] - 2026-05-03
 
-### Fixed — paridad Mac↔Linux/WSL
+### Fixed — macOS↔Linux/WSL parity
 
-- **Dashboard accesible desde Windows host cuando Brain corre en WSL.** `src/dashboard/app.py:1963` vinculaba uvicorn siempre a `127.0.0.1`. WSL2 normalmente hace port-forwarding automático del loopback, pero en WSL configurado con redes corporate o builds no recientes ese puente se rompe y el dashboard queda inalcanzable desde Win. Ahora detectamos `running_inside_wsl()` y bind `0.0.0.0` (la guest VM es privada del usuario logueado, sin coste de seguridad).
-- **`nexo service start/stop/status` funciona en Linux/WSL.** Antes la rama Linux imprimía "Service control only supported on macOS for now." y devolvía 1. Ahora controla unidades systemd user (`nexo-<service>.service`): `on→start`, `off→stop`, `status→is-active`. Mismo nombre del binario, paridad CLI con macOS.
-- **Auto-update Brain ahora hace `daemon-reload` en Linux.** `_reload_launch_agents()` saltaba todo si `sys.platform != "darwin"`, así que un usuario en WSL al actualizar Brain veía sus crons mantenerse en la versión vieja hasta reinstalar manualmente. Ahora la rama Linux escanea `~/.config/systemd/user/nexo-*.{service,timer}`, hace `systemctl --user daemon-reload` y `restart` por unit. Best-effort: en máquinas sin systemd (Docker, CI) reporta `skipped_reason: systemctl-not-available` y sigue. (`src/auto_update.py`)
-- **`npm install` ya no pide contraseña sin razón en WSL.** El path B (fallback cuando el bundle local de claude-code no se encuentra) hardcodeaba `sudo npm install -g` en Linux, lo que disparaba un prompt de contraseña en una TTY que el operador no ve y dejaba el bootstrap colgado. Probamos primero sin sudo (la prefix global por defecto en la distro de NEXO ya es writable: `~/.nexo/runtime/bootstrap/npm-global`); sólo si pip retorna `EACCES` o `permission denied` reintenta con `sudo -n`. (`src/client_sync.py`)
+- **Dashboard reachable from the Windows host when Brain runs in WSL.** `src/dashboard/app.py:1963` always bound uvicorn to `127.0.0.1`. WSL2 normally forwards loopback automatically, but in WSL environments with corporate networking or older builds that bridge breaks and the dashboard becomes unreachable from Windows. Brain now detects `running_inside_wsl()` and binds `0.0.0.0` (the guest VM is private to the logged-in user, with no added security cost).
+- **`nexo service start/stop/status` works on Linux/WSL.** Previously the Linux branch printed "Service control only supported on macOS for now." and returned 1. It now controls user systemd units (`nexo-<service>.service`): `on→start`, `off→stop`, `status→is-active`. Same binary name, CLI parity with macOS.
+- **Brain auto-update now runs `daemon-reload` on Linux.** `_reload_launch_agents()` skipped everything when `sys.platform != "darwin"`, so WSL users updating Brain saw their crons remain on the old version until manual reinstall. The Linux branch now scans `~/.config/systemd/user/nexo-*.{service,timer}`, runs `systemctl --user daemon-reload`, and restarts each unit. Best effort: on machines without systemd (Docker, CI), it reports `skipped_reason: systemctl-not-available` and continues. (`src/auto_update.py`)
+- **`npm install` no longer asks for a password without reason on WSL.** Path B (fallback when the local claude-code bundle is not found) hardcoded `sudo npm install -g` on Linux, triggering a password prompt in a TTY the operator cannot see and leaving bootstrap stuck. Brain now tries without sudo first (the default global prefix in the NEXO distro is writable: `~/.nexo/runtime/bootstrap/npm-global`); only if pip returns `EACCES` or `permission denied` does it retry with `sudo -n`. (`src/client_sync.py`)
 
 ## [7.12.11] - 2026-05-03
 
-### Fixed — el wizard de onboarding no aparecía en la primera instalación Desktop
+### Fixed — onboarding wizard did not appear on first Desktop install
 
-- **El calibration creado por bootstrap ya no finge que el onboarding terminó.** Cuando NEXO Desktop arranca por primera vez ejecuta `nexo-brain --yes` para no preguntarle nada al usuario en terminal (las preguntas viven en el wizard React de la app). Hasta 7.12.10 ese arranque escribía `meta.onboarding_completed: true` junto a los valores placeholder (`name: "Usuario"`, `language: "en"`, `assistant_name: "Nova"`). Cuando el renderer le preguntaba a Brain "¿está configurado el operador?", la respuesta era SÍ y el wizard React no se montaba. Resultado: usuario nuevo abre NEXO y se encuentra un chat vacío con identidad por defecto, sin haber visto ninguna pregunta. Ahora los runs `--yes` dejan `onboarding_completed: false` (y `onboarding_completed_at: null`); sólo un `nexo-brain init` interactivo marca el flag en true. (`bin/nexo-brain.js`)
-- **`isOnboardingComplete()` también descarta el marker placeholder.** Cinturón extra para calibrations antiguas con la combinación mala: aunque `meta.onboarding_completed === true`, si el nombre de usuario es placeholder ("Usuario" / vacío), la función devuelve false. Es la misma protección que ya tenía el fallback legacy. Usuarios reales con setup interactivo conservan su estado.
+- **Bootstrap-created calibration no longer pretends onboarding is complete.** When NEXO Desktop starts for the first time it runs `nexo-brain --yes` so terminal prompts do not block the user (the questions live in the app's React wizard). Until 7.12.10 that startup wrote `meta.onboarding_completed: true` alongside placeholder values (`name: "Usuario"`, `language: "en"`, `assistant_name: "Nova"`). When the renderer asked Brain "is the operator configured?", the answer was YES and the React wizard did not mount. Result: a new user opened NEXO and landed in an empty chat with the default identity, without seeing any question. `--yes` runs now leave `onboarding_completed: false` (and `onboarding_completed_at: null`); only interactive `nexo-brain init` marks the flag true. (`bin/nexo-brain.js`)
+- **`isOnboardingComplete()` also rejects the placeholder marker.** Extra belt for old calibrations with the bad combination: even when `meta.onboarding_completed === true`, if the user name is a placeholder ("Usuario" / empty), the function returns false. This is the same protection the legacy fallback already had. Real users with interactive setup keep their state.
 
-Detectado durante el smoke install en el Win11 de Inma (2026-05-03): el bootstrap llegaba al 100% pero la app no mostraba el wizard de las 10 preguntas de onboarding y el usuario aterrizaba en un chat vacío.
+Detected during the smoke install on Inma's Win11 machine (2026-05-03): bootstrap reached 100%, but the app did not show the 10-question onboarding wizard and the user landed in an empty chat.
 
 ## [7.12.10] - 2026-05-03
 
@@ -1759,8 +1759,7 @@ their target enforcement level.
 - **R16 classifier prompt** (Gap 2). `templates/core-prompts/
   r16-declared-done-question.md` now matches sent / delivered /
   published / deployed / released / fixed / resolved / merged /
-  pushed (plus Spanish: listo / hecho / terminado / enviado /
-  arreglado / desplegado / publicado / lanzado / resuelto / mergeado).
+  pushed (plus Spanish close-claim equivalents).
   The on_event trigger `done_claimed_with_open_task` now fires on
   the full close-claim vocabulary the checklist called out.
 - **R_CATALOG extended scope** (Gap 3). `src/r_catalog.py`:
@@ -1828,8 +1827,8 @@ constructor-guardian-90 checklist asks for.
   is called AFTER this specific trigger instance. The previous check
   (`target not in self.tools_called`) was silently satisfied forever
   after the first historical target call — a defect the checklist
-  called out explicitly ("Elimina la semántica rota de 'ya se llamó una
-  vez en la sesión'"). Both engines now compare a monotonic
+  called out explicitly ("Remove the broken semantics of 'already called
+  once in the session'"). Both engines now compare a monotonic
   `_tool_instance_counter` per trigger call.
 - Desktop's `onToolCall` mirrors the change (`toolLastInstance` /
   `toolInstanceCounter` in session state).
@@ -1838,7 +1837,7 @@ constructor-guardian-90 checklist asks for.
 
 - `tool-enforcement-map.json` version bumped to **2.2.0**.
 - `nexo_learning_add` on_event rule `grace_messages: 3 → 0`. Checklist
-  quote: "No quiero que quede limitada a 3 mensajes". A correction now
+  quote: "I do not want it limited to 3 messages." A correction now
   produces the learning in the same turn it lands.
 - `nexo_task_open` conditional rule `threshold: 10 → 4`, level `should
   → must`, and adds an explicit `inject_prompt` so the dispatcher has a
@@ -2096,7 +2095,7 @@ Hotfix minor release. Three critical bugs surfaced right after v7.2.0 went live 
 - **SSH prescreen in `hook_guardrails.process_pre_tool_event`** — `_classify_bash_operation` returns `"other"` for `ssh host "cat > ..."` because remote mutation is invisible at the local shell classifier level. The prescreen runs `_classify_ssh_remote_write` before the early return so G3-SSH hard mode can actually block those commands.
 - **`tool-enforcement-map.json` is now shipped via npm** — added to the `files` whitelist in `package.json`. Desktop's `npm -g nexo-brain/tool-enforcement-map.json` candidate resolves on fresh installs for the first time since the map existed.
 - **PE1 0.4** — 5 new `destructive_command` preset entries in `src/presets/entities_universal.json`: `curl_pipe_shell`, `dd_to_device`, `chmod_recursive_wide_open`, `ssh_remote_overwrite`, `scp_rsync_upload`. Coverage floor raised from 7 to 12 entries. 8 new contract tests in `tests/test_entities_universal_preset.py`.
-- **PE1 0.25** — `guardian-metrics` cron wired in `src/crons/manifest.json`. Runs `scripts/guardian_metrics_aggregate.py` daily at 02:15 to feed Fase C gate and the Guardian Proposals panel.
+- **PE1 0.25** — `guardian-metrics` cron wired in `src/crons/manifest.json`. Runs `scripts/guardian_metrics_aggregate.py` daily at 02:15 to feed the Phase C gate and the Guardian Proposals panel.
 
 ### Fixed
 
@@ -2105,7 +2104,7 @@ Hotfix minor release. Three critical bugs surfaced right after v7.2.0 went live 
 ### Notes
 
 - PE1 0.5 (guardian defaults), 0.17 (rule_override tool), and 0.19 (validator rejecting mode=off on core rules) were already shipped in v7.2.0 and are listed here only because the v7.3.0 release gate verified them as stable.
-- Desktop v0.23.0 ships the renderer-side half of B12 (enforcement map bundle + preflight sync + visible warning) alongside B13/B14 (the "Parar → Enviar cola" recovery loop).
+- Desktop v0.23.0 ships the renderer-side half of B12 (enforcement map bundle + preflight sync + visible warning) alongside B13/B14 (the "Stop → Send queue" recovery loop).
 
 ## [7.2.0] - 2026-04-22
 
@@ -2176,8 +2175,9 @@ to keep the runtime coherent.
 ### Added
 
 - `src/autonomy_mandate.py` expands the mandate-detection vocabulary
-  ("hazlo todo", "no pares", "estás al mando", "te dejo al mando",
-  "sigue sin parar", "haz el plan completo") and adds three
+  Spanish-language mandate-detection phrase set (do everything,
+  do not stop, you are in charge, I leave you in charge,
+  keep going, do the full plan) and adds three
   honest-to-state flags on `MandateState`:
   `execute_until_blocker`, `suppress_mid_task_menus`,
   `revalidate_after_compaction`, with session filtering via
@@ -2636,7 +2636,7 @@ returning empty results despite the real table being populated.
 
 ## [7.0.0] - 2026-04-19
 
-**BREAKING — Plan Consolidado fase F0.6**: physical separation of the
+**BREAKING — Consolidated Plan Phase F0.6**: physical separation of the
 runtime tree into `~/.nexo/{core,personal,runtime}/`. The flat layout
 (`~/.nexo/scripts/`, `~/.nexo/brain/`, `~/.nexo/data/`,
 `~/.nexo/operations/`, ...) is gone. Operators on v6.x runtimes are
@@ -2755,7 +2755,7 @@ directly in the new tree.
 
 ## [6.5.0] - 2026-04-19
 
-Plan Consolidado fase F0.2 — operator can now enable / disable any
+Consolidated Plan Phase F0.2 — operator can now enable / disable any
 personal script without touching plists, and the cron wrapper honours
 the flag at every tick.
 
@@ -2799,13 +2799,13 @@ the flag at every tick.
 ### Notes
 
 - The matching NEXO Desktop release (v0.19.0 → v0.20.0) re-wires the
-  Settings → Automatizaciones panel toggle on top of these CLI verbs.
+  Settings → Automations panel toggle on top of these CLI verbs.
   Both releases ship coordinated.
 
 
 ## [6.4.0] - 2026-04-19
 
-Plan Consolidado fase F1 — multi-tenant email accounts and the JSON
+Consolidated Plan Phase F1 — multi-tenant email accounts and the JSON
 bridge that lets NEXO Desktop drive email configuration without
 operators ever touching a JSON file.
 
@@ -2927,7 +2927,7 @@ private entries to `~/.nexo/brain/presets/entities_local.json`.
 
 ## [6.3.0] - 2026-04-18
 
-Plan Consolidado — wave 2 (coordinated with NEXO Desktop v0.18.0).
+Consolidated Plan — wave 2 (coordinated with NEXO Desktop v0.18.0).
 Closes the remaining items from the v7 roadmap that can land without
 an invasive structure migration. The breaking v7.0.0 (F0.3–F0.6
 physical move of `~/.nexo/scripts/`, `skills/`, `plugins/`, `hooks/`,
@@ -2958,7 +2958,7 @@ runtimes.
   search covered.
 - **Plan A.4 — R34 added to the system prompt** — trigger + action
   + anti-example text for identity coherence across terminals.
-- **Plan F.2 / F.3 / F.5 / F.6 — Fase F telemetry loops** —
+- **Plan F.2 / F.3 / F.5 / F.6 — Phase F telemetry loops** —
   `src/fase_f_loops.py` (per-rule aggregate, FP grouping, FN
   candidate promotion) + `src/scripts/phase_guardian_analysis.py`
   Deep Sleep phase writing
@@ -2992,10 +2992,10 @@ runtimes.
 
 ## [6.2.0] - 2026-04-18
 
-Plan Consolidado — first coordinated release of the two-wave plan.
+Consolidated Plan — first coordinated release of the two-wave plan.
 Second wave (T4 LLM classifier wrap, 0.2 cognitive_sentiment reshape,
 0.3 extended entities schema, 0.21 local zero-shot BGE-M3, R06 email
-secret filter, R11 plugin pre-inventory, Fase E.3–E.6, F0.1–F0.6
+secret filter, R11 plugin pre-inventory, Phase E.3–E.6, F0.1–F0.6
 scripts migration with the breaking v7.0.0 symlink removal) is tracked
 in `~/Desktop/NEXO-PLAN-CONSOLIDADO-BACKLOG.md`.
 
@@ -3020,7 +3020,7 @@ in `~/Desktop/NEXO-PLAN-CONSOLIDADO-BACKLOG.md`.
 
 ### Added — Plan 0.15 · drift baseline
 
-- **`scripts/measure_drift_baseline.py`** — reads the last 90 session diaries from `~/.nexo/brain/session_archive/` (fallback `brain/diaries/`), counts occurrences of known drift patterns per rule (R13/R14/R16/R17/R19/R20/R25/R26/R27/R30/R31), and writes an aggregated JSON report to `~/.nexo/reports/drift-baseline-<YYYY-MM-DD>.json`. Pure reader: never writes inside the diary tree. Exits non-zero when no diaries are found so the caller knows the baseline is unusable. Prerequisite for Fase F KPI "reducción >50% por regla en 30 días".
+- **`scripts/measure_drift_baseline.py`** — reads the last 90 session diaries from `~/.nexo/brain/session_archive/` (fallback `brain/diaries/`), counts occurrences of known drift patterns per rule (R13/R14/R16/R17/R19/R20/R25/R26/R27/R30/R31), and writes an aggregated JSON report to `~/.nexo/reports/drift-baseline-<YYYY-MM-DD>.json`. Pure reader: never writes inside the diary tree. Exits non-zero when no diaries are found so the caller knows the baseline is unusable. Prerequisite for the Phase F KPI ">50% reduction per rule over 30 days".
 
 ### Added — Plan 0.16 · pre-commit parity hook
 
@@ -3045,11 +3045,11 @@ in `~/Desktop/NEXO-PLAN-CONSOLIDADO-BACKLOG.md`.
 
 ## [6.1.0] - 2026-04-18
 
-### Added — Protocol Enforcer Fase 2 (Capa 2 runtime guardian)
+### Added — Protocol Enforcer Phase 2 (Layer 2 runtime guardian)
 
-- **Wrapper Bloque 1 (Fase C)** — 4 core rules: R13 pre-Edit guard, R14 post-correction learning window, R16 declared-done without close, R25 Nora/María read-only destructive block. CORE rules have defence-in-depth: guardian.json cannot turn them off.
-- **Wrapper Bloque 2 (Fase D)** — 9 rules: R15 project-context, R17 promise-debt, R18 followup-autocomplete, R19 require-grep-before-Write, R20 constant-change grep probe, R21 legacy-path, R22 personal-script probe, R23 ssh-without-atlas, R24 stale-memory window.
-- **Wrapper Bloque 3 (Fase D2)** — 12 incident-driven rules: R23b deploy-vhost-mismatch, R23c destructive-in-wrong-cwd, R23d chown-R-without-ls, R23e force-push-main (`--force-with-lease` allowed), R23f DB-DELETE/UPDATE-no-WHERE (heredoc aware), R23g secrets-in-output (Bearer/sk-/pk-/api_key/JWT/AWS/GitHub/Shopify/KEY=VALUE/mysql -p<pass>), R23h shebang-vs-interpreter-mismatch (no shell injection), R23i auto-deploy-ignored, R23j global-install, R23k script-duplicates-skill, R23l resource-collision (type-scoped), R23m message-duplicate.
+- **Wrapper Block 1 (Phase C)** — 4 core rules: R13 pre-Edit guard, R14 post-correction learning window, R16 declared-done without close, R25 Nora/María read-only destructive block. CORE rules have defence-in-depth: guardian.json cannot turn them off.
+- **Wrapper Block 2 (Phase D)** — 9 rules: R15 project-context, R17 promise-debt, R18 followup-autocomplete, R19 require-grep-before-Write, R20 constant-change grep probe, R21 legacy-path, R22 personal-script probe, R23 ssh-without-atlas, R24 stale-memory window.
+- **Wrapper Block 3 (Phase D2)** — 12 incident-driven rules: R23b deploy-vhost-mismatch, R23c destructive-in-wrong-cwd, R23d chown-R-without-ls, R23e force-push-main (`--force-with-lease` allowed), R23f DB-DELETE/UPDATE-no-WHERE (heredoc aware), R23g secrets-in-output (Bearer/sk-/pk-/api_key/JWT/AWS/GitHub/Shopify/KEY=VALUE/mysql -p<pass>), R23h shebang-vs-interpreter-mismatch (no shell injection), R23i auto-deploy-ignored, R23j global-install, R23k script-duplicates-skill, R23l resource-collision (type-scoped), R23m message-duplicate.
 - **Guardian config** (`guardian_config.py`) — loader + validator + defence-in-depth resolver.
 - **Guardian telemetry** (`guardian_telemetry.py`) — per-enqueue NDJSON event log.
 - **Installer** (`scripts/install_guardian.py`) — seeds presets, SSH hosts, automation_backend, guardian.json with merge-on-update.
@@ -3254,10 +3254,10 @@ Eight new / updated test cases: `test_resonance_loader.py`, `test_migration_lega
 
 ### Fix: bootstrap `brain/profile.json` from `calibration.json` on `nexo update`
 
-NEXO Desktop's *Preferencias → Avanzado* tab shows two JSON blocks: `brain/calibration.json` (editable personality, language, name, mood history) and `brain/profile.json` (deep-scan results from onboarding). Operators who went through the onboarding flow before v5.9.x ended up with `role` and `technical_level` recorded under `calibration.meta.*` but no `profile.json` file at all — Desktop then rendered an empty `{}` for the profile block with no context, which looked broken. v5.10.2 closes that gap from both ends:
+NEXO Desktop's *Preferences → Advanced* tab shows two JSON blocks: `brain/calibration.json` (editable personality, language, name, mood history) and `brain/profile.json` (deep-scan results from onboarding). Operators who went through the onboarding flow before v5.9.x ended up with `role` and `technical_level` recorded under `calibration.meta.*` but no `profile.json` file at all — Desktop then rendered an empty `{}` for the profile block with no context, which looked broken. v5.10.2 closes that gap from both ends:
 
 - **Brain** — new `_bootstrap_profile_from_calibration_meta(dest)` runs inside `_run_runtime_post_sync()` right after the v5.10.1 effort→resonance migration. When `brain/profile.json` is missing, empty, or corrupt AND `brain/calibration.json` carries at least one of `meta.role`, `meta.technical_level`, `name`, `language`, the helper seeds `profile.json` with those fields plus a `"source": "auto_update._bootstrap_profile_from_calibration_meta"` marker. Never overwrites a populated profile, never raises, logs `profile-bootstrap:<n>-fields` on the actions trail. Idempotent by construction.
-- **Desktop (v0.11.2)** — the *Avanzado* tab now prefixes each JSON block with a short explanation ("Calibración = personalidad + idioma + identidad editada desde las pestañas anteriores" / "Perfil completo = deep-scan del onboarding, construido por NEXO Brain en segundo plano"). When `profile.json` does not exist, renders a friendly placeholder explaining that the basic fields live meanwhile inside `calibration.meta` and `name`, instead of dumping `{}`.
+- **Desktop (v0.11.2)** — the *Advanced* tab now prefixes each JSON block with a short explanation ("Calibration = personality + language + identity edited from the previous tabs" / "Full profile = onboarding deep scan, built by NEXO Brain in the background"). When `profile.json` does not exist, renders a friendly placeholder explaining that the basic fields live meanwhile inside `calibration.meta` and `name`, instead of dumping `{}`.
 
 ### Test regression also fixed
 
@@ -3301,7 +3301,7 @@ Full suite: 1011 passed, 1 skipped.
 
 ### Feature: extract-path bloat fix + `caller=` enforced + personal scripts on the map
 
-v5.9.x introduced the resonance map and the `nexo preferences --resonance` selector but left three pieces of deuda tempered: deep-sleep extract still took ~57 minutes because each Claude CLI child reloaded an 11 KB `CLAUDE.md` bootstrap, callers without a `caller=` kept going via the legacy task-profile path, and the operators' personal scripts (email-monitor, followup-runner, github-monitor, post-x, orchestrator-v2) were not in the resonance map at all. v5.10.0 closes all three.
+v5.9.x introduced the resonance map and the `nexo preferences --resonance` selector but left three pieces of tempered debt: deep-sleep extract still took ~57 minutes because each Claude CLI child reloaded an 11 KB `CLAUDE.md` bootstrap, callers without a `caller=` kept going via the legacy task-profile path, and the operators' personal scripts (email-monitor, followup-runner, github-monitor, post-x, orchestrator-v2) were not in the resonance map at all. v5.10.0 closes all three.
 
 **Extract bootstrap bloat fix — `bare_mode` in run_automation_prompt**
 
@@ -3370,7 +3370,7 @@ v5.9.0 shipped `nexo preferences --resonance` as a CLI-only way to change the de
 
 Changes:
 
-- **`src/desktop_bridge.py`**: new field `preferences.default_resonance` (stored in `brain/calibration.json`) in the `preferences` group. Four labelled options (`Máximo` / `Alto (recomendado)` / `Medio` / `Bajo` in Spanish, `Maximum` / `High (recommended)` / `Medium` / `Low` in English) with an inline hint explaining that the preference only affects interactive sessions — crons and background processes (deep-sleep, evolution, …) stay pinned per caller in `resonance_map.py`. Desktop renders this automatically via its existing `buildFieldsFromBrainSchema()` path.
+- **`src/desktop_bridge.py`**: new field `preferences.default_resonance` (stored in `brain/calibration.json`) in the `preferences` group. The field exposes localized labels with an inline hint explaining that the preference only affects interactive sessions — crons and background processes (deep-sleep, evolution, …) stay pinned per caller in `resonance_map.py`. Desktop renders this automatically via its existing `buildFieldsFromBrainSchema()` path.
 - **`src/resonance_map.py`**: new `_load_user_default_resonance()` helper. Reads `brain/calibration.json` first (`preferences.default_resonance`, where Desktop's UI writes) and falls back to `config/schedule.json` (where the v5.9.0 CLI wrote). `resolve_tier_for_caller` now consults that helper when the caller does not pass `user_default` explicitly — so `nexo chat` and `launch_interactive_client` pick up the Desktop-edited value without needing any extra wiring.
 - **`src/cli.py`**: `nexo preferences --resonance` now writes to BOTH `calibration.json` (new canonical location matching the UI) and `schedule.json` (legacy location, kept so clients that read schedule.json keep working). `--show` reports which source provided the current value.
 - **`tests/test_resonance_map.py`**: six new cases (20 total) covering calibration-first resolution, schedule.json fallback, invalid-tier rejection, empty-home fallback, `resolve_tier_for_caller` auto-discovery, and explicit `user_default` override winning over the file.
@@ -3443,7 +3443,7 @@ Out of scope for v5.9.0 (intentionally deferred to 5.9.1+):
 
 ### Fix: neutralize Brain core — remove Spanish-first NEXO-specific classification heuristic
 
-v5.8.0 added `internal` and `owner` columns on `followups` and `reminders` with a regex-based auto-classifier (`classify_task`, `is_internal_id`, `classify_owner`) that fired whenever an agent left those fields blank. The heuristic was NEXO-specific in three ways: it matched `NF-PROTOCOL-*` / `NF-DS-*` / `NF-AUDIT-*` ID prefixes, it parsed Spanish user-verbs (`debes`, `revisar`, `firmar`, `llamar`), and it treated recurrence + agent keywords (`monitor`, `auditoría diaria`, `checkpoint`) as agent-owned. That was a reasonable bootstrap for NEXO's own DB but bled conventions into any third-party agent plugged into the shared Brain — deployments that did not follow NEXO's Spanish naming would see their user-facing tasks misclassified without ever touching the `internal`/`owner` API.
+v5.8.0 added `internal` and `owner` columns on `followups` and `reminders` with a regex-based auto-classifier (`classify_task`, `is_internal_id`, `classify_owner`) that fired whenever an agent left those fields blank. The heuristic was NEXO-specific in three ways: it matched `NF-PROTOCOL-*` / `NF-DS-*` / `NF-AUDIT-*` ID prefixes, it parsed Spanish user-verb patterns, and it treated recurrence + agent keywords as agent-owned. That was a reasonable bootstrap for NEXO's own DB but bled conventions into any third-party agent plugged into the shared Brain — deployments that did not follow NEXO's Spanish naming would see their user-facing tasks misclassified without ever touching the `internal`/`owner` API.
 
 v5.8.2 removes the heuristic entirely. The Brain core no longer classifies tasks on behalf of agents: when `internal` is omitted it persists as `0`, and when `owner` is omitted it persists as `NULL`. Clients that want automatic classification compute it themselves (NEXO Desktop already does, via its `_legacyClassifyOwner` / `_legacyIsInternalTaskId` helpers) and pass the result to `nexo_followup_create` / `nexo_reminder_create` / their `_update` counterparts.
 
@@ -3606,7 +3606,7 @@ that gap in one command.
   does not push third-party CLIs onto operators who never opted in.
   `TimeoutExpired` and `FileNotFoundError` (no `npm` on `PATH`) are handled
   explicitly per learning #294. A companion `_format_external_clis_results()`
-  emits a visible warning per bumped CLI ("`reinicia terminal para activar`"),
+  emits a visible warning per bumped CLI ("restart the terminal to activate"),
   a warning per failure, and a single informational line when everything
   was already on the latest version.
 - **`src/plugins/update.py`**: `handle_update()` and `_handle_packaged_update()`
@@ -4096,7 +4096,7 @@ No behavior changes to existing commands. Pure additive surface.
 - `nexo_heartbeat` output now begins with a `NOW_UTC: <ISO-8601>` line so
   clients always have an authoritative wall-clock time on every user turn.
   Prevents date/day-of-week drift in long sessions (e.g. emails or diaries
-  saying "ayer domingo" when yesterday was actually Monday).
+  saying "yesterday was Sunday" when yesterday was actually Monday).
 - Neutral UTC, no locale/timezone baked into core — clients format per
   operator preferences in runtime personal.
 
@@ -4528,22 +4528,21 @@ identified during the audit of the response-contract behaviour: the
 reward tasks with meaningful prior context, and the `nexo-cortex-cycle`
 cron was writing a quality snapshot that no reader ever consumed.
 
-#### Protocol — response contract Fase 1
+#### Protocol — response contract Phase 1
 
 - **Bilingual high-stakes detection.** `HIGH_STAKES_KEYWORDS_ES` adds ~45
-  Spanish keywords (`crítico`, `producción`, `facturación`, `clientes`,
-  `despliegue`, `credencial`, `privacidad`, `reembolso`, accented and
-  unaccented variants). A task written in Spanish now trips the same
-  high-stakes gate as its English twin — previously a goal like
-  *"migrar la base de datos de producción"* silently skipped the
-  high-stakes penalty because none of its words matched the English set.
+  Spanish-language keywords with accented and unaccented variants. A
+  task written in Spanish now trips the same high-stakes gate as its
+  English twin — previously, Spanish production-database migration
+  wording silently skipped the high-stakes penalty because none of its
+  words matched the English set.
 - **Negation-aware detection.** `NEGATION_PATTERNS` suppresses the
   high-stakes flag when the text explicitly disclaims touching the
-  sensitive area (`sin afectar producción`, `no tocar prod`,
-  `without touching production`, `don't modify`, etc.). Before this
-  release these boundary statements caused false positives because the
-  raw keyword was physically present in the string. `_detect_high_stakes`
-  now runs negation suppression before keyword matching.
+  sensitive area, including both Spanish and English boundary
+  statements. Before this release these boundary statements caused false
+  positives because the raw keyword was physically present in the string.
+  `_detect_high_stakes` now runs negation suppression before keyword
+  matching.
 - **Positive signals on the confidence score.** `evaluate_response_confidence`
   accepts two new optional kwargs:
   - `pre_action_context_hits: int` — adds `+min(10, hits*2)` when the

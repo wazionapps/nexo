@@ -429,7 +429,7 @@ def complete_followup_if_needed(fu_id: str, result_summary: str = ""):
         return
     try:
         nexo_db.complete_followup(fu_id, result_summary)
-        log(f"  {fu_id}: marcado completado por el runner")
+        log(f"  {fu_id}: marked completed por el runner")
     except Exception as exc:
         log(f"  {fu_id}: failed to mark followup as completed ({exc})")
 
@@ -502,14 +502,14 @@ def attention_reminder_description(
     detail = " ".join((summary or "").split())
     if not detail:
         detail = (
-            "El runner no puede cerrar este punto sin intervención del operador."
+            "The runner cannot close this item without operator input."
             if _uses_spanish(operator_language)
             else "The runner cannot close this item without operator input."
         )
     description = f"{fu_id}: {detail}"
     opts_text = render_options(options)
     if opts_text:
-        description += f" {'Opciones' if _uses_spanish(operator_language) else 'Options'}: {opts_text}"
+        description += f" {'Options' if _uses_spanish(operator_language) else 'Options'}: {opts_text}"
     return description[:480]
 
 
@@ -548,7 +548,7 @@ def upsert_attention_reminder(
             log(f"  {fu_id}: failed to update reminder {reminder_id} ({result['error']})")
             return
         nexo_db.add_reminder_note(reminder_id, description, actor="followup-runner")
-        log(f"  {fu_id}: reminder {reminder_id} actualizado para orchestrator")
+        log(f"  {fu_id}: reminder {reminder_id} updated for orchestrator")
         return
 
     result = nexo_db.create_reminder(
@@ -565,7 +565,7 @@ def upsert_attention_reminder(
         f"source_followup={fu_id} status={status}",
         actor="followup-runner",
     )
-    log(f"  {fu_id}: reminder {reminder_id} creado para orchestrator")
+    log(f"  {fu_id}: reminder {reminder_id} created for orchestrator")
 
 
 def resolve_attention_reminder(fu_id: str, *, resolution: str = ""):
@@ -579,14 +579,14 @@ def resolve_attention_reminder(fu_id: str, *, resolution: str = ""):
     if resolution:
         nexo_db.add_reminder_note(
             reminder_id,
-            f"Resuelto desde {fu_id}: {resolution[:300]}",
+            f"Resolved from {fu_id}: {resolution[:300]}",
             actor="followup-runner",
         )
     result = nexo_db.complete_reminder(reminder_id)
     if result.get("error"):
         log(f"  {fu_id}: failed to complete reminder {reminder_id} ({result['error']})")
         return
-    log(f"  {fu_id}: reminder {reminder_id} marcado completado")
+    log(f"  {fu_id}: reminder {reminder_id} marked completed")
 
 
 def defer_followup_after_attention(
@@ -602,7 +602,7 @@ def defer_followup_after_attention(
     details = summary.strip()
     opts_text = render_options(options)
     if opts_text:
-        details = f"{details}\nOpciones: {opts_text}"
+        details = f"{details}\nOptions: {opts_text}"
     if details:
         note_result = nexo_db.add_followup_note(
             fu_id,

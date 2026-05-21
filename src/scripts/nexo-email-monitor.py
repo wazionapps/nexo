@@ -395,12 +395,12 @@ def load_config():
             return cfg
     except Exception:
         pass
-    # v0.32.5 — graceful return None when no email setup yet. Antes esto
-    # lanzaba FileNotFoundError y el cron de cada minuto generaba 1440
-    # filas de error/día por cliente sin email configurado. 50 clientes
-    # pagados sin email setup → 72k filas de error/día → watchdog L2
-    # alertas falsas → ruido en logs y posible token burn. Ahora el
-    # cron retorna sin error cuando no hay config.
+    # v0.32.5 — return None gracefully when no email setup exists yet. Before
+    # this, FileNotFoundError bubbled up and the once-per-minute cron generated
+    # 1,440 error rows per day per client without configured email. 50 paid
+    # clients without email setup meant 72k error rows/day, false watchdog L2
+    # alerts, log noise, and possible token burn. The cron now returns without
+    # error when config is absent.
     try:
         with open(CONFIG_PATH) as f:
             payload = json.load(f)
@@ -952,8 +952,8 @@ def scan_debt(db_path=EMAIL_DB_PATH, *, max_items=5):
             {
                 "email_id": row["email_id"],
                 "kind": "ack",
-                "label": f"ACK sin cierre >{DEBT_SLA_HOURS}h — {row['subject'] or row['email_id']} [{row['email_id']}]",
-                "detail": f"ack desde {row['last_ack_ts']}",
+                "label": f"ACK without closure >{DEBT_SLA_HOURS}h — {row['subject'] or row['email_id']} [{row['email_id']}]",
+                "detail": f"ack since {row['last_ack_ts']}",
             }
         )
 
@@ -979,8 +979,8 @@ def scan_debt(db_path=EMAIL_DB_PATH, *, max_items=5):
             {
                 "email_id": row["email_id"],
                 "kind": "commitment",
-                "label": f"COMPROMISO sin cierre >{DEBT_SLA_HOURS}h — {row['subject'] or row['email_id']} [{row['email_id']}]",
-                "detail": f"commitment desde {row['last_commitment_ts']}",
+                "label": f"COMMITMENT without closure >{DEBT_SLA_HOURS}h — {row['subject'] or row['email_id']} [{row['email_id']}]",
+                "detail": f"commitment since {row['last_commitment_ts']}",
             }
         )
 
@@ -1932,13 +1932,13 @@ def _localized_operator_escalation_email(
     details: str,
 ) -> tuple[str, str]:
     if _uses_spanish(operator_language):
-        subject = f"[NEXO] Emails que necesitan atención manual ({exhausted_count})"
+        subject = f"[NEXO] Emails requiring manual attention ({exhausted_count})"
         body = (
-            f"Hola {operator_name},\n\n"
-            f"Los siguientes emails ya se han intentado {MAX_EMAIL_ATTEMPTS} veces "
-            f"sin completarse correctamente (la sesión cae antes de terminar):\n\n{details}\n\n"
-            "Los he marcado como `needs_interactive`. "
-            f"Abre {assistant_name} Desktop y pregúntale por ese email para resolverlo manualmente.\n\n"
+            f"Hello {operator_name},\n\n"
+            f"The following emails have already been attempted {MAX_EMAIL_ATTEMPTS} times "
+            f"without succeeding (the session dies before completion):\n\n{details}\n\n"
+            "I marked them as `needs_interactive`. "
+            f"Open {assistant_name} Desktop and ask about the affected email so it can be resolved manually.\n\n"
             f"— {assistant_name}"
         )
         return subject, body
@@ -2494,9 +2494,9 @@ def main():
             return
 
         config = load_config()
-        # v0.32.5 — exit cleanly cuando no hay email setup.
-        # Antes el FileNotFoundError propagaba a 1440 errores/día por
-        # cliente Win sin email. Ahora salimos en silencio.
+        # v0.32.5 — exit cleanly when no email setup exists. Before this,
+        # FileNotFoundError bubbled up to 1,440 errors/day per Windows client
+        # without email. Now the monitor exits silently.
         if config is None:
             log.info("No email config — skipping monitor check.")
             return

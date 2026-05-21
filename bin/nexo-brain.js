@@ -535,7 +535,7 @@ function isOnboardingComplete(calibration) {
   if (meta.onboarding_completed === true) {
     // v7.12.11 — bug surfaced on Inma's smoke install 2026-05-03: Desktop
     // bootstrap runs nexo-brain in --yes/--skip mode, which used to write
-    // `onboarding_completed: true` alongside the placeholder "Usuario"/"en"
+    // `onboarding_completed: true` alongside the placeholder "User"/"en"
     // defaults. The Desktop wizard then never fired because this returned
     // true on the very first launch. Treat a placeholder name as "marker is
     // a lie, real onboarding never happened" so the renderer can still
@@ -1918,29 +1918,6 @@ function persistClaudeCliPath(claudePath) {
 }
 
 function clientSetupStrings(lang) {
-  if (lang === "es") {
-    return {
-      title: "Shared brain siempre activo. Ahora elige clientes y backend de automatización.",
-      detected: "Clientes detectados",
-      yes: "sí",
-      no: "no",
-      useClaudeCodeQ: "  ¿Quieres usar Claude Code como cliente interactivo? (recomendado)",
-      useCodexQ: "  ¿Quieres usar Codex como cliente interactivo?",
-      useDesktopQ: "  ¿Quieres conectar Claude Desktop al mismo brain?",
-      defaultTerminalQ: "  ¿Qué cliente debe abrir `nexo chat` por defecto?",
-      automationQ: "  ¿Quieres automatización en background? (sleep, deep-sleep, synthesis, self-audit, evolution, postmortem)",
-      automationBackendQ: "  ¿Qué backend debe ejecutar esa automatización?",
-      installClaudeQ: "  Claude Code no está instalado. ¿Quieres instalarlo ahora?",
-      installCodexQ: "  Codex no está instalado. ¿Quieres instalarlo ahora?",
-      installingClaude: "Instalando Claude Code...",
-      installingCodex: "Instalando Codex...",
-      desktopManual: "Claude Desktop no se instala desde NEXO. Cuando exista, se conectará con la sync de clientes.",
-      terminalFallback: (label) => `El cliente terminal elegido no está disponible. \`nexo chat\` quedará pendiente hasta instalar ${label}.`,
-      automationDisabled: (label) => `El backend ${label} sigue sin estar disponible. Se desactiva la automatización por ahora.`,
-      summary: (defaultClient, defaultProfile, backend, backendProfile, automationEnabled) =>
-        `Configuración clientes: chat=${defaultClient}(${defaultProfile}), automation=${automationEnabled ? `${backend}(${backendProfile})` : "none"}`,
-    };
-  }
   return {
     title: "Shared brain is always on. Now choose your clients and automation backend.",
     detected: "Detected clients",
@@ -2021,15 +1998,13 @@ function formatRuntimeProfile(profile = {}) {
 // tier (maximo / alto / medio / bajo) and that choice drives every backend
 // via src/resonance_tiers.json. No more model or effort questions.
 async function askResonanceTier(lang, currentTier) {
-  const recommended = lang === "es" ? " (recomendado)" : " (recommended)";
-  const question = lang === "es"
-    ? "  ¿Qué nivel de potencia quieres por defecto para tus conversaciones?"
-    : "  Which default power level do you want for your conversations?";
+  const recommended = " (recommended)";
+  const question = "  Which default power level do you want for your conversations?";
   const options = [
-    { value: "maximo", label: lang === "es" ? "máximo"                 : "maximum" },
-    { value: "alto",   label: (lang === "es" ? "alto"                  : "high") + recommended },
-    { value: "medio",  label: lang === "es" ? "medio"                  : "medium" },
-    { value: "bajo",   label: lang === "es" ? "bajo"                   : "low" },
+    { value: "maximo", label: "maximum" },
+    { value: "alto",   label: "high" + recommended },
+    { value: "medio",  label: "medium" },
+    { value: "bajo",   label: "low" },
   ];
   const fallback = RESONANCE_TIER_NAMES.includes(currentTier) ? currentTier : DEFAULT_RESONANCE_TIER;
   const chosen = await askChoice(question, options, fallback);
@@ -2101,20 +2076,20 @@ function installClaudeCodeCli(platform) {
   // OFFLINE-FIRST v0.32.4: install claude-code wrapper + ALL its native packs
   // from bundled tarballs. Path: resources/brain-bundle/claude-code/*.tgz.
   //
-  // Bug que arregla este fix (encontrado 2026-05-02):
-  // claude-code 2.1.x ships como wrapper + 4 native packs por arquitectura
+  // Bug fixed here (found 2026-05-02):
+  // claude-code 2.1.x ships as a wrapper + 4 native packs per architecture
   // (@anthropic-ai/claude-code-linux-x64, -darwin-arm64, -darwin-x64,
-  // -linux-arm64). Antes solo bundeaba el wrapper (.tgz 13 KB) y pasaba SOLO
-  // ese al npm install. npm intentaba resolver los `optionalDependencies` del
-  // registry online → fallo offline → wrapper instala SIN binario claude →
+  // -linux-arm64). Previously only the wrapper was bundled (.tgz 13 KB) and
+  // passed to npm install. npm tried to resolve `optionalDependencies` from the
+  // online registry -> offline failure -> wrapper installs WITHOUT claude binary ->
   // `command -v claude` exit 127 → bootstrap "claude-runtime-missing-soft".
-  // Ahora bundeamos los 5 .tgz (wrapper + 4 native) y se los pasamos TODOS
-  // a npm en un solo install. npm los ve como dependencias pre-resueltas
-  // y skip el registry lookup. claude binary ejecutable resultante.
+  // Now the 5 .tgz files (wrapper + 4 native packs) are bundled and passed to
+  // npm in a single install. npm sees them as pre-resolved dependencies and
+  // skips registry lookup, leaving an executable claude binary.
   const bundledClaudeDir = path.join(__dirname, "..", "claude-code");
   if (fs.existsSync(bundledClaudeDir)) {
     const allTgz = fs.readdirSync(bundledClaudeDir).filter((f) => f.endsWith(".tgz"));
-    // Ordenar: el wrapper primero (sin sufijo de plataforma), después los packs.
+    // Order wrapper first (without platform suffix), then native packs.
     const wrapper = allTgz.find((f) => /^anthropic-ai-claude-code-\d/.test(f));
     // v7.12.6 — Filter native packs to ONLY the current platform/arch.
     // Bug: passing all 4 native packs to `npm install` triggers EBADPLATFORM
@@ -2154,7 +2129,7 @@ function installClaudeCodeCli(platform) {
         return { installed: true, path: claudeInstalled };
       }
     } else if (wrapper) {
-      // Fallback: solo wrapper (legacy bundle 0.32.3 y anteriores).
+      // Fallback: wrapper only (legacy bundle 0.32.3 and older).
       const tgzPath = path.join(bundledClaudeDir, wrapper);
       log("  Installing claude-code from bundled wrapper only (legacy bundle, may need network for native pack)...");
       spawnSync(
@@ -2255,7 +2230,7 @@ async function configureClientSetup({ lang, useDefaults, autoInstall, detected }
     setup.interactive_clients.claude_desktop = await askYesNo(strings.useDesktopQ, detected.claude_desktop.installed);
 
     const defaultTerminalChoices = [
-      { value: "claude_code", label: lang === "es" ? "Claude Code (recomendado)" : "Claude Code (recommended)" },
+      { value: "claude_code", label: "Claude Code (recommended)" },
       { value: "codex", label: "Codex" },
     ].filter((item) => setup.interactive_clients[item.value]);
 
@@ -2275,7 +2250,7 @@ async function configureClientSetup({ lang, useDefaults, autoInstall, detected }
       setup.automation_backend = await askChoice(
         strings.automationBackendQ,
         [
-          { value: "claude_code", label: lang === "es" ? "Claude Code (recomendado)" : "Claude Code (recommended)" },
+          { value: "claude_code", label: "Claude Code (recommended)" },
           { value: "codex", label: "Codex" },
         ],
         backendDefault,
@@ -2834,10 +2809,10 @@ async function runSetup() {
     "  ║                                                        ║"
   );
   console.log(
-    "  ║  Hello! / ¡Hola! / Bonjour! / Hallo!                  ║"
+    "  ║  Hello!                                                ║"
   );
   console.log(
-    "  ║  Ciao! / Olá! / こんにちは! / 你好!                     ║"
+    "  ║  Interactive installer                                  ║"
   );
   console.log(
     "  ╚══════════════════════════════════════════════════════════╝"
@@ -3274,14 +3249,13 @@ async function runSetup() {
   let python = resolveInstallerPython();
   if (!python) {
     if (platform === "darwin") {
-      // v0.32.5 — Mac vanilla NO trae python3. La auto-instalación de
-      // Homebrew vía `curl install.sh` requiere TTY interactivo + sudo +
-      // user accept license. Cuando este script se invoca desde Electron
-      // sandbox, NO hay TTY → curl pipe cuelga sin progreso → bootstrap
-      // se queda silencioso. Mejor: detectar la ausencia de Python y
-      // surface un error CLARO al user con instrucciones manuales que
-      // funcionan siempre. Si hay TTY (corriendo desde terminal), seguimos
-      // con el path automático.
+      // v0.32.5 — stock macOS does not include python3. Homebrew
+      // auto-installation via `curl install.sh` requires an interactive TTY,
+      // sudo, and license acceptance. When Electron invokes this script from
+      // the sandbox there is NO TTY, so the curl pipe can hang with no
+      // progress and leave bootstrap silent. Better: detect missing Python
+      // and surface a clear user-facing error with manual instructions that
+      // always work. If a TTY exists (terminal run), keep the automatic path.
       const isTty = !!(process.stdin && process.stdin.isTTY);
       let hasBrew = run("which brew");
       if (!hasBrew && !isTty) {
@@ -3305,11 +3279,11 @@ async function runSetup() {
         hasBrew = run("which brew") || run("eval $(/opt/homebrew/bin/brew shellenv) && which brew");
       }
       if (hasBrew) {
-        // v0.32.5 — explicit @3.12 pin: el Brain `requirements.txt` y los
-        // wheels manylinux están compilados contra cp312. `brew install
-        // python3` instala el `python3` formula que actualmente apunta a
-        // 3.13 → wheels rechazados → numpy/cffi/cryptography/onnxruntime
-        // fallan al import. Pinning a `python@3.12` evita el drift.
+        // v0.32.5 — explicit @3.12 pin: Brain `requirements.txt` and the
+        // manylinux wheels are compiled against cp312. `brew install python3`
+        // installs the `python3` formula, which currently points to 3.13:
+        // wheels are rejected and numpy/cffi/cryptography/onnxruntime imports
+        // fail. Pinning `python@3.12` avoids that drift.
         log("Python 3.12 not found. Installing via Homebrew...");
         spawnSync("brew", ["install", "python@3.12"], { stdio: "inherit" });
         python = resolveInstallerPython() || run("which python3.12") || run("which python3");
@@ -3383,172 +3357,7 @@ async function runSetup() {
       ready: (name, alias) => `${name} is ready. Open a new terminal and type: ${alias}`,
       readySubtext: "First time we talk, I'll finish getting to know you\nwith a couple of questions I can't figure out on my own.",
       profileTitle: "PROFILE",
-    },
-    es: {
-      langConfirm: "Español, perfecto.",
-      askDataDir: `  ¿Dónde quieres que guarde mis datos? (bases de datos, backups, plugins personales)\n  Por defecto: ~/.nexo/\n  > `,
-      dataDirConfirm: (p) => `Directorio de datos: ${p}`,
-      askUserName: "  ¿Cómo te llamas? > ",
-      userGreet: (n) => `Encantado, ${n}.`,
-      askAgentName: `  ¿Cómo quieres que me llame? (default: ${DEFAULT_ASSISTANT_NAME}) > `,
-      agentConfirm: (n) => `Perfecto, soy ${n}.`,
-      agentNameReserved: "Ese nombre está reservado para el producto. Elige otro nombre para el asistente.",
-      calibTitle: "Vamos a calibrar mi personalidad para trabajar mejor contigo.",
-      calibNote: "(Puedes cambiar esto en cualquier momento con nexo_preference_set)",
-      autonomyQ: "  ¿Cuánta autonomía me das?\n    1. Conservador — pregunto antes de casi todo\n    2. Equilibrado — actúo en lo rutinario, pregunto en lo importante\n    3. Total — actúo primero, informo después, solo pregunto si hay duda real\n  > ",
-      commQ: "\n  ¿Cómo prefieres que me comunique?\n    1. Conciso — solo resultados, cero relleno\n    2. Equilibrado — explicaciones breves cuando aporten\n    3. Detallado — razonamiento y trade-offs incluidos\n  > ",
-      honestyQ: "\n  Cuando no esté de acuerdo con tu enfoque:\n    1. Te lo digo claro y explico por qué\n    2. Lo menciono brevemente pero sigo tu criterio\n    3. Ejecuto lo que pides sin más\n  > ",
-      proactiveQ: "\n  ¿Qué tan proactivo quieres que sea?\n    1. Solo hago lo que me pidas\n    2. Sugiero mejoras cuando las detecto\n    3. Arreglo lo que veo sin preguntar y propongo optimizaciones\n  > ",
-      errorQ: "\n  Cuando me equivoque:\n    1. Corrijo rápido y sigo\n    2. Explico qué falló y qué aprendí\n  > ",
-      scanQ: "  ¿Quieres que analice tu entorno para conocerte a fondo?\n  Todo queda en local, nada sale de tu máquina.\n\n    1. Sí, analiza todo\n    2. No, ya te iré contando\n  > ",
-      scanStart: "Conociéndote... esto toma 1-2 minutos.",
-      scanDone: "Listo.",
-      caffeinateQ: "  ¿Activo el helper de energía del Mac para mis procesos en segundo plano?\n  (Usa caffeinate. Con la tapa cerrada depende de tu setup; la recuperación al despertar sigue activa.)\n    1. Sí\n    2. No\n  > ",
-      caffYes: "Helper de energía activado.",
-      caffNo: "Ok, la recuperación al despertar cubrirá las ventanas perdidas.",
-      dashboardQ: "  ¿Activar el dashboard web en localhost:6174?\n  (UI siempre activa para explorar memoria, sesiones, learnings y salud del sistema)\n    1. Sí\n    2. No\n  > ",
-      dashYes: "Dashboard activado.",
-      dashNo: "Dashboard desactivado. Puedes iniciarlo manualmente: nexo dashboard",
-      autoInstallQ: "  ¿Puedo instalar herramientas automáticamente si las necesito? (brew, pip, npm)\n    1. Sí, instala lo que necesites\n    2. Pregúntame antes de instalar algo\n  > ",
-      autoInstallYes: "Auto-instalación activada.",
-      autoInstallNo: "Te preguntaré antes.",
-      installing: "Configurando...",
-      ready: (name, alias) => `${name} está listo. Abre una terminal nueva y escribe: ${alias}`,
-      readySubtext: "La primera vez que hablemos, terminaré de conocerte\ncon un par de preguntas que no puedo resolver solo.",
-      profileTitle: "PERFIL",
-    },
-    fr: {
-      langConfirm: "Français, parfait.",
-      askDataDir: `  Où stocker mes données ? (bases de données, sauvegardes, plugins)\n  Par défaut : ~/.nexo/\n  > `,
-      dataDirConfirm: (p) => `Répertoire de données : ${p}`,
-      askUserName: "  Comment tu t'appelles ? > ",
-      userGreet: (n) => `Enchanté, ${n}.`,
-      askAgentName: `  Comment veux-tu m'appeler ? (défaut : ${DEFAULT_ASSISTANT_NAME}) > `,
-      agentConfirm: (n) => `C'est noté. Je suis ${n}.`,
-      agentNameReserved: "Ce nom est réservé au produit. Choisis un autre nom pour l'assistant.",
-      calibTitle: "Calibrons ma personnalité pour mieux travailler ensemble.",
-      calibNote: "(Tu peux changer ça à tout moment avec nexo_preference_set)",
-      autonomyQ: "  Quel niveau d'autonomie me donnes-tu ?\n    1. Conservateur — je demande avant presque tout\n    2. Équilibré — j'agis en routine, je demande pour l'important\n    3. Total — j'agis d'abord, j'informe après\n  > ",
-      commQ: "\n  Comment préfères-tu que je communique ?\n    1. Concis — résultats seulement\n    2. Équilibré — brèves explications quand c'est utile\n    3. Détaillé — raisonnement et compromis inclus\n  > ",
-      honestyQ: "\n  Quand je ne suis pas d'accord :\n    1. Je te le dis clairement\n    2. Je le mentionne brièvement\n    3. J'exécute sans commenter\n  > ",
-      proactiveQ: "\n  Quel niveau de proactivité ?\n    1. Seulement ce qui est demandé\n    2. Je suggère des améliorations\n    3. Je corrige ce que je vois et propose des optimisations\n  > ",
-      errorQ: "\n  Quand je me trompe :\n    1. Correction rapide\n    2. J'explique ce qui s'est passé\n  > ",
-      scanQ: "  Veux-tu que j'analyse ton environnement pour te connaître en profondeur ?\n  Tout reste local.\n\n    1. Oui, analyse tout\n    2. Non, je te raconterai\n  > ",
-      scanStart: "Je fais connaissance... ça prend 1-2 minutes.",
-      scanDone: "Terminé.",
-      caffeinateQ: "  Activer l'aide énergie du Mac pour mes processus en arrière-plan ?\n  (Utilise caffeinate. Avec le capot fermé, cela dépend de votre configuration ; la reprise au réveil reste active.)\n    1. Oui\n    2. Non\n  > ",
-      caffYes: "Aide énergie activée.",
-      caffNo: "D'accord, la reprise au réveil couvrira les fenêtres manquées.",
-      dashboardQ: "  Activer le dashboard web sur localhost:6174 ?\n  (UI toujours active pour explorer mémoire, sessions et santé du système)\n    1. Oui\n    2. Non\n  > ",
-      dashYes: "Dashboard activé.",
-      dashNo: "Dashboard désactivé. Démarrage manuel : nexo dashboard",
-      autoInstallQ: "  Puis-je installer des outils automatiquement ? (brew, pip, npm)\n    1. Oui\n    2. Demande-moi avant\n  > ",
-      autoInstallYes: "Auto-installation activée.",
-      autoInstallNo: "Je demanderai avant.",
-      installing: "Configuration...",
-      ready: (name, alias) => `${name} est prêt. Ouvre un nouveau terminal et tape : ${alias}`,
-      readySubtext: "La première fois qu'on se parle, je finirai de te connaître\navec quelques questions que je ne peux pas résoudre seul.",
-      profileTitle: "PROFIL",
-    },
-    de: {
-      langConfirm: "Deutsch, perfekt.",
-      askDataDir: `  Wo sollen meine Daten gespeichert werden? (Datenbanken, Backups, Plugins)\n  Standard: ~/.nexo/\n  > `,
-      dataDirConfirm: (p) => `Datenverzeichnis: ${p}`,
-      askUserName: "  Wie heißt du? > ",
-      userGreet: (n) => `Freut mich, ${n}.`,
-      askAgentName: `  Wie soll ich heißen? (Standard: ${DEFAULT_ASSISTANT_NAME}) > `,
-      agentConfirm: (n) => `Alles klar. Ich bin ${n}.`,
-      agentNameReserved: "Dieser Name ist für das Produkt reserviert. Bitte wähle einen anderen Assistentennamen.",
-      calibTitle: "Kalibrieren wir meine Persönlichkeit für die Zusammenarbeit.",
-      calibNote: "(Jederzeit änderbar mit nexo_preference_set)",
-      autonomyQ: "  Wie viel Autonomie gibst du mir?\n    1. Konservativ — frage vor fast allem\n    2. Ausgewogen — handle bei Routine, frage bei Wichtigem\n    3. Voll — handle zuerst, informiere danach\n  > ",
-      commQ: "\n  Wie soll ich kommunizieren?\n    1. Knapp — nur Ergebnisse\n    2. Ausgewogen — kurze Erklärungen wenn nützlich\n    3. Detailliert — Begründungen und Abwägungen\n  > ",
-      honestyQ: "\n  Wenn ich nicht einverstanden bin:\n    1. Sage es klar\n    2. Erwähne es kurz\n    3. Führe einfach aus\n  > ",
-      proactiveQ: "\n  Wie proaktiv soll ich sein?\n    1. Nur was gefragt wird\n    2. Verbesserungen vorschlagen\n    3. Selbst korrigieren und optimieren\n  > ",
-      errorQ: "\n  Wenn ich einen Fehler mache:\n    1. Schnell korrigieren\n    2. Erklären was schiefging\n  > ",
-      scanQ: "  Soll ich deine Umgebung analysieren um dich kennenzulernen?\n  Alles bleibt lokal.\n\n    1. Ja, analysiere alles\n    2. Nein, ich erzähle dir mit der Zeit\n  > ",
-      scanStart: "Lerne dich kennen... dauert 1-2 Minuten.",
-      scanDone: "Fertig.",
-      caffeinateQ: "  Den Mac-Energiehelfer für meine Hintergrundprozesse aktivieren?\n  (Nutzt caffeinate. Bei geschlossenem Deckel hängt das vom Setup ab; Wiederaufnahme beim Aufwachen bleibt aktiv.)\n    1. Ja\n    2. Nein\n  > ",
-      caffYes: "Energiehelfer aktiviert.",
-      caffNo: "Okay, die Wiederaufnahme beim Aufwachen deckt verpasste Fenster ab.",
-      dashboardQ: "  Web-Dashboard auf localhost:6174 aktivieren?\n  (Immer aktive UI für Speicher, Sitzungen und Systemgesundheit)\n    1. Ja\n    2. Nein\n  > ",
-      dashYes: "Dashboard aktiviert.",
-      dashNo: "Dashboard deaktiviert. Manuell starten: nexo dashboard",
-      autoInstallQ: "  Darf ich Tools automatisch installieren? (brew, pip, npm)\n    1. Ja\n    2. Frag mich vorher\n  > ",
-      autoInstallYes: "Auto-Installation aktiviert.",
-      autoInstallNo: "Frage vorher.",
-      installing: "Konfiguriere...",
-      ready: (name, alias) => `${name} ist bereit. Öffne ein neues Terminal und tippe: ${alias}`,
-      readySubtext: "Beim ersten Gespräch stelle ich noch ein paar Fragen\ndie ich nicht alleine beantworten kann.",
-      profileTitle: "PROFIL",
-    },
-    it: {
-      langConfirm: "Italiano, perfetto.",
-      askDataDir: `  Dove salvare i miei dati? (database, backup, plugin)\n  Default: ~/.nexo/\n  > `,
-      dataDirConfirm: (p) => `Directory dati: ${p}`,
-      askUserName: "  Come ti chiami? > ",
-      userGreet: (n) => `Piacere, ${n}.`,
-      askAgentName: `  Come vuoi chiamarmi? (default: ${DEFAULT_ASSISTANT_NAME}) > `,
-      agentConfirm: (n) => `Perfetto, sono ${n}.`,
-      agentNameReserved: "Quel nome è riservato al prodotto. Scegli un altro nome per l'assistente.",
-      calibTitle: "Calibriamo la mia personalità per lavorare meglio insieme.",
-      calibNote: "(Puoi cambiare in qualsiasi momento con nexo_preference_set)",
-      autonomyQ: "  Quanta autonomia mi dai?\n    1. Conservatore — chiedo prima di quasi tutto\n    2. Equilibrato — agisco nella routine, chiedo per le cose importanti\n    3. Totale — agisco prima, informo dopo\n  > ",
-      commQ: "\n  Come preferisci che comunichi?\n    1. Conciso — solo risultati\n    2. Equilibrato — brevi spiegazioni quando utili\n    3. Dettagliato — ragionamento e compromessi\n  > ",
-      honestyQ: "\n  Quando non sono d'accordo:\n    1. Te lo dico chiaramente\n    2. Lo accenno brevemente\n    3. Eseguo senza commentare\n  > ",
-      proactiveQ: "\n  Quanto proattivo vuoi che sia?\n    1. Solo quello che chiedi\n    2. Suggerisco miglioramenti\n    3. Correggo quello che vedo e propongo ottimizzazioni\n  > ",
-      errorQ: "\n  Quando sbaglio:\n    1. Correggo veloce e vado avanti\n    2. Spiego cosa è andato storto\n  > ",
-      scanQ: "  Vuoi che analizzi il tuo ambiente per conoscerti a fondo?\n  Tutto resta locale.\n\n    1. Sì, analizza tutto\n    2. No, ti racconterò col tempo\n  > ",
-      scanStart: "Ti conosco... ci vogliono 1-2 minuti.",
-      scanDone: "Fatto.",
-      caffeinateQ: "  Attivare l'helper energetico del Mac per i processi in background?\n  (Usa caffeinate. Con il coperchio chiuso dipende dal setup; il recupero al risveglio resta attivo.)\n    1. Sì\n    2. No\n  > ",
-      caffYes: "Helper energetico attivato.",
-      caffNo: "Ok, il recupero al risveglio coprirà le finestre perse.",
-      dashboardQ: "  Attivare la dashboard web su localhost:6174?\n  (UI sempre attiva per esplorare memoria, sessioni e salute del sistema)\n    1. Sì\n    2. No\n  > ",
-      dashYes: "Dashboard attivata.",
-      dashNo: "Dashboard disattivata. Avvio manuale: nexo dashboard",
-      autoInstallQ: "  Posso installare strumenti automaticamente? (brew, pip, npm)\n    1. Sì\n    2. Chiedimi prima\n  > ",
-      autoInstallYes: "Auto-installazione attivata.",
-      autoInstallNo: "Chiederò prima.",
-      installing: "Configurazione...",
-      ready: (name, alias) => `${name} è pronto. Apri un nuovo terminale e scrivi: ${alias}`,
-      readySubtext: "La prima volta che parliamo, finirò di conoscerti\ncon un paio di domande che non posso risolvere da solo.",
-      profileTitle: "PROFILO",
-    },
-    pt: {
-      langConfirm: "Português, perfeito.",
-      askDataDir: `  Onde guardar os meus dados? (bases de dados, backups, plugins)\n  Padrão: ~/.nexo/\n  > `,
-      dataDirConfirm: (p) => `Diretório de dados: ${p}`,
-      askUserName: "  Como te chamas? > ",
-      userGreet: (n) => `Prazer, ${n}.`,
-      askAgentName: `  Como queres que eu me chame? (padrão: ${DEFAULT_ASSISTANT_NAME}) > `,
-      agentConfirm: (n) => `Perfeito, sou ${n}.`,
-      agentNameReserved: "Esse nome está reservado para o produto. Escolhe outro nome para o assistente.",
-      calibTitle: "Vamos calibrar a minha personalidade para trabalhar melhor contigo.",
-      calibNote: "(Podes mudar a qualquer momento com nexo_preference_set)",
-      autonomyQ: "  Quanta autonomia me dás?\n    1. Conservador — pergunto antes de quase tudo\n    2. Equilibrado — ajo na rotina, pergunto no importante\n    3. Total — ajo primeiro, informo depois\n  > ",
-      commQ: "\n  Como preferes que eu comunique?\n    1. Conciso — só resultados\n    2. Equilibrado — explicações breves quando úteis\n    3. Detalhado — raciocínio e trade-offs\n  > ",
-      honestyQ: "\n  Quando não concordo:\n    1. Digo claramente\n    2. Menciono brevemente\n    3. Executo sem comentar\n  > ",
-      proactiveQ: "\n  Quão proativo queres que eu seja?\n    1. Só o que pedes\n    2. Sugiro melhorias\n    3. Corrijo o que vejo e proponho otimizações\n  > ",
-      errorQ: "\n  Quando erro:\n    1. Corrijo rápido\n    2. Explico o que correu mal\n  > ",
-      scanQ: "  Queres que analise o teu ambiente para te conhecer a fundo?\n  Tudo fica local.\n\n    1. Sim, analisa tudo\n    2. Não, vou-te contando\n  > ",
-      scanStart: "A conhecer-te... demora 1-2 minutos.",
-      scanDone: "Pronto.",
-      caffeinateQ: "  Ativar o helper de energia do Mac para processos em segundo plano?\n  (Usa caffeinate. Com a tampa fechada depende do teu setup; a recuperação ao despertar continua ativa.)\n    1. Sim\n    2. Não\n  > ",
-      caffYes: "Helper de energia ativado.",
-      caffNo: "Ok, a recuperação ao despertar cobrirá janelas perdidas.",
-      dashboardQ: "  Ativar dashboard web em localhost:6174?\n  (UI sempre ativa para explorar memória, sessões e saúde do sistema)\n    1. Sim\n    2. Não\n  > ",
-      dashYes: "Dashboard ativado.",
-      dashNo: "Dashboard desativado. Iniciar manualmente: nexo dashboard",
-      autoInstallQ: "  Posso instalar ferramentas automaticamente? (brew, pip, npm)\n    1. Sim\n    2. Pergunta antes\n  > ",
-      autoInstallYes: "Auto-instalação ativada.",
-      autoInstallNo: "Perguntarei antes.",
-      installing: "A configurar...",
-      ready: (name, alias) => `${name} está pronto. Abre um novo terminal e escreve: ${alias}`,
-      readySubtext: "Na primeira vez que falarmos, termino de te conhecer\ncom umas perguntas que não consigo resolver sozinho.",
-      profileTitle: "PERFIL",
-    },
+    }
   };
 
   const existingCalibrationRecord = readRuntimeCalibration(NEXO_HOME);
@@ -3564,7 +3373,7 @@ async function runSetup() {
   let lang = existingIdentity.language || "en";
   let t = i18n[lang] || i18n.en;
   if (!useDefaults) {
-    const langInput = await ask("  What's your preferred language? / ¿En qué idioma prefieres hablar?\n  > ");
+    const langInput = await ask("  What's your preferred language?\n  > ");
     const langLower = langInput.trim().toLowerCase();
     // Detect language from common responses
     if (/^(es|español|spanish|castellano)/.test(langLower)) lang = "es";
@@ -3600,14 +3409,14 @@ async function runSetup() {
     console.log("");
   }
 
-  // Step 2: User's name (P2) — v6.0.0 empty input falls through to "Usuario"
+  // Step 2: User's name (P2) — v6.0.0 empty input falls through to "User"
   // instead of keeping an empty string. The calibration file always ships
   // with a concrete user.name so downstream tooling does not need guards.
-  let userName = existingIdentity.userName || "Usuario";
+  let userName = existingIdentity.userName || "User";
   if (!useDefaults) {
     const nameInput = await ask(t.askUserName);
     const trimmedName = nameInput.trim();
-    userName = trimmedName || "Usuario";
+    userName = trimmedName || "User";
     if (trimmedName) {
       log(t.userGreet(trimmedName));
       console.log("");
@@ -3636,9 +3445,7 @@ async function runSetup() {
   let resonanceTier = DEFAULT_RESONANCE_TIER;
   if (!useDefaults) {
     resonanceTier = await askResonanceTier(lang, DEFAULT_RESONANCE_TIER);
-    log(lang === "es"
-      ? `Potencia por defecto: ${resonanceTier}.`
-      : `Default power: ${resonanceTier}.`);
+    log(`Default power: ${resonanceTier}.`);
     console.log("");
   }
 
@@ -3698,7 +3505,7 @@ async function runSetup() {
       // answered the prompts (interactive run, !useDefaults). The
       // Desktop bootstrap calls nexo-brain with `--yes/--skip` to set up
       // the runtime non-interactively; in that path the values are
-      // placeholders ("Usuario" / "en" / "Nova") and the real wizard
+      // placeholders ("User" / "en" / "Nova") and the real wizard
       // lives in the renderer. Marking it complete here used to short-
       // circuit that wizard and leave new users staring at an empty chat
       // (Inma 2026-05-03 smoke install).
@@ -4722,7 +4529,7 @@ I am ${operatorName}, a cognitive co-operator. Not an assistant — an operation
     if (profileData.calendar.events) line(`Calendar: ${profileData.calendar.events} events`);
     line(`Timezone: ${profileData.system.timezone}`);
     line("");
-    line(lang === "es" ? "Ya te conozco. Vamos a trabajar." : lang === "fr" ? "Je te connais. Au travail." : lang === "de" ? "Ich kenne dich. Los geht's." : lang === "it" ? "Ti conosco. Al lavoro." : lang === "pt" ? "J\u00E1 te conhe\u00E7o. Ao trabalho." : "I know you now. Let's work.");
+    line("I know you now. Let's work.");
     console.log(`  \u255A${"═".repeat(boxW - 2)}\u255D`);
     console.log("");
 
@@ -4739,7 +4546,7 @@ I am ${operatorName}, a cognitive co-operator. Not an assistant — an operation
       path.join(resolveRuntimeBrainDir(NEXO_HOME), "profile.json"),
       JSON.stringify(profileData, null, 2)
     );
-    log(lang === "es" ? "Sin problema. Iré aprendiéndote sobre la marcha." : "No problem. I'll learn about you as we go.");
+    log("No problem. I'll learn about you as we go.");
   }
 
   // Generate user profile markdown (from scan or minimal)

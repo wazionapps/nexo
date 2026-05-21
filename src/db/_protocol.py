@@ -365,9 +365,9 @@ def cortex_evaluation_summary(days: int = 30) -> dict:
 
     gaps: list[str] = []
     if total < 3:
-        gaps.append("Muy pocas evaluaciones del cortex para inferir mejora estable.")
+        gaps.append("Too few Cortex evaluations to infer stable improvement.")
     if len(linked) < 2:
-        gaps.append("Muy pocas decisiones enlazadas a outcomes para medir calidad real de recomendación.")
+        gaps.append("Too few decisions linked to outcomes to measure real recommendation quality.")
 
     return {
         "days": max(1, int(days)),

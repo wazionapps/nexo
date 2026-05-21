@@ -158,7 +158,7 @@ def format_markdown(report: dict[str, Any]) -> str:
     lines = [
         "## saved_not_used audit",
         "",
-        "| Store | Productor | Consumidor | Ultima escritura | Ultimo uso | Riesgo | Prueba | Estado |",
+        "| Store | Producer | Consumer | Last write | Last use | Risk | Test | Status |",
         "|---|---|---|---|---|---|---|---|",
     ]
     for item in stores or []:
@@ -176,12 +176,12 @@ def format_markdown(report: dict[str, Any]) -> str:
             )
         )
 
-    lines.extend(["", "### Alertas", ""])
+    lines.extend(["", "### Alerts", ""])
     if not findings:
-        lines.append("- Sin alertas saved_not_used.")
+        lines.append("- No saved_not_used alerts.")
     for finding in findings or []:
         lines.append(
-            "- {severity} `{alert_id}` en `{store_id}`: {risk} Prueba: {test}".format(
+            "- {severity} `{alert_id}` in `{store_id}`: {risk} Test: {test}".format(
                 severity=_md(finding.get("severity")),
                 alert_id=_md(finding.get("alert_id")),
                 store_id=_md(finding.get("store_id")),
@@ -196,8 +196,8 @@ def _audit_local_context(cfg: SavedNotUsedConfig) -> tuple[StoreAuditRow, list[S
     store = _path_text(cfg.local_context_db_path)
     producer = "nexo-local-index.py -> local_context.api"
     consumer = "nexo_context_router / nexo_local_context / pre_action_context"
-    risk = "Indice local escrito pero no consultado antes de responder."
-    test = "local_assets/chunks/entities > 0 exige local_context_queries reciente."
+    risk = "Local index is written but may not be consulted before answering."
+    test = "local_assets/chunks/entities > 0 requires a recent local_context_queries row."
     if not cfg.local_context_db_path or not cfg.local_context_db_path.exists():
         row = _row("local_context", producer, store, consumer, "", "", risk, test, "missing", "P2", {"path_exists": False})
         return row, []
@@ -264,8 +264,8 @@ def _audit_local_context(cfg: SavedNotUsedConfig) -> tuple[StoreAuditRow, list[S
                 consumer,
                 last_write,
                 last_use,
-                "Tablas local_* legacy no vacias pueden atraer consumidores antiguos.",
-                "legacy local_* debe estar vacio o marcado como compat si existe sidecar vivo.",
+                "Non-empty legacy local_* tables may attract old consumers.",
+                "legacy local_* must be empty or marked as compatibility if a live sidecar exists.",
                 {"legacy_main_db_counts": legacy_counts},
             )
         )
@@ -277,8 +277,8 @@ def _audit_memory_pipeline(cfg: SavedNotUsedConfig) -> tuple[StoreAuditRow, list
     store_id = "memory_observations_pipeline"
     producer = "record_memory_event"
     consumer = "memory_observation_worker -> nexo_memory_search / nexo_memory_answer"
-    risk = "Eventos capturados pueden no transformarse en memoria consultable."
-    test = "memory_events y memory_observation_queue deben terminar en memory_observations."
+    risk = "Captured events may fail to become searchable memory."
+    test = "memory_events and memory_observation_queue must end in memory_observations."
     row, conn = _open_main_row(cfg, store_id, producer, consumer, risk, test)
     if conn is None:
         return row, []
@@ -308,8 +308,8 @@ def _audit_session_diary(cfg: SavedNotUsedConfig) -> tuple[StoreAuditRow, list[S
     store_id = "session_diary"
     producer = "write_session_diary / lifecycle fallback"
     consumer = "startup briefing / nexo_session_diary_read / continuity resume"
-    risk = "Diarios guardados pueden no entrar en continuidad si solo quedan como filas historicas."
-    test = "session_diary debe tener consumidor MCP/startup documentado y fila reciente legible."
+    risk = "Saved diaries may miss continuity if they only remain as historical rows."
+    test = "session_diary must have a documented MCP/startup consumer and a readable recent row."
     row, conn = _open_main_row(cfg, store_id, producer, consumer, risk, test)
     if conn is None:
         return row, []
@@ -324,8 +324,8 @@ def _audit_followups_reminders(cfg: SavedNotUsedConfig) -> tuple[StoreAuditRow, 
     store_id = "followups_reminders"
     producer = "followup/reminder create/update"
     consumer = "nexo_reminders / followup-runner / dashboard"
-    risk = "Items pendientes pueden acumularse sin runner ni lectura humana efectiva."
-    test = "followups/reminders deben tener item_history de consumo o aparecer en nexo_reminders."
+    risk = "Pending items can accumulate without an effective runner or human read path."
+    test = "followups/reminders must have item_history consumption or appear in nexo_reminders."
     row, conn = _open_main_row(cfg, store_id, producer, consumer, risk, test)
     if conn is None:
         return row, []
@@ -344,8 +344,8 @@ def _audit_workflows(cfg: SavedNotUsedConfig) -> tuple[StoreAuditRow, list[Saved
     store_id = "workflows"
     producer = "nexo_goal_open / nexo_workflow_open / nexo_workflow_update"
     consumer = "workflow_resume / workflow_replay / daily audit"
-    risk = "Workflows abiertos sin checkpoints pierden reanudacion real."
-    test = "workflow_runs abiertos deben tener workflow_checkpoints o updates."
+    risk = "Open workflows without checkpoints lose real resumability."
+    test = "Open workflow_runs must have workflow_checkpoints or updates."
     row, conn = _open_main_row(cfg, store_id, producer, consumer, risk, test)
     if conn is None:
         return row, []
@@ -371,8 +371,8 @@ def _audit_change_log(cfg: SavedNotUsedConfig) -> tuple[StoreAuditRow, list[Save
     store_id = "change_log"
     producer = "log_change / nexo_task_close"
     consumer = "nexo_change_log / FTS / daily audit / memory export"
-    risk = "Cambios guardados pueden no aparecer en auditorias futuras si el consumidor no consulta change_log."
-    test = "change_log debe tener filas con verify y consumidor MCP."
+    risk = "Saved changes may not appear in future audits if the consumer does not query change_log."
+    test = "change_log must have rows with verify and an MCP consumer."
     row, conn = _open_main_row(cfg, store_id, producer, consumer, risk, test)
     if conn is None:
         return row, []
@@ -387,7 +387,7 @@ def _audit_change_log(cfg: SavedNotUsedConfig) -> tuple[StoreAuditRow, list[Save
     if missing_verify:
         severity = "P2"
         status = "weak_evidence"
-        findings.append(_finding("change_log_missing_verify", "P2", store_id, producer, row.store, consumer, last_write, "static:nexo_change_log", "Change log sin campo verify reduce prueba de consumo.", test, evidence))
+        findings.append(_finding("change_log_missing_verify", "P2", store_id, producer, row.store, consumer, last_write, "static:nexo_change_log", "Change log rows without verify weaken consumption evidence.", test, evidence))
     return _row(store_id, producer, row.store, consumer, last_write, "static:nexo_change_log", risk, test, status, severity, evidence), findings
 
 
@@ -395,8 +395,8 @@ def _audit_continuity_lifecycle(cfg: SavedNotUsedConfig) -> tuple[StoreAuditRow,
     store_id = "continuity_lifecycle"
     producer = "Desktop lifecycle bridge / write_continuity_snapshot"
     consumer = "resume-bundle / lifecycle canonical completion / Desktop flush"
-    risk = "Continuidad local o eventos de cierre pueden quedar escritos sin confirmacion canonica."
-    test = "continuity_queue vacia y lifecycle_events terminal/canonical_done."
+    risk = "Local continuity or close events may be written without canonical confirmation."
+    test = "continuity_queue must be empty and lifecycle_events must be terminal/canonical_done."
     row, conn = _open_main_row(cfg, store_id, producer, consumer, risk, test)
     pending_lifecycle = 0
     snapshots = 0
@@ -434,8 +434,8 @@ def _audit_transcripts(cfg: SavedNotUsedConfig) -> tuple[StoreAuditRow, list[Sav
     store_id = "transcripts"
     producer = "Claude/Codex clients JSONL"
     consumer = "nexo_transcript_search / nexo_transcript_read fallback"
-    risk = "Sesiones cortas o fuera de roots pueden quedar invisibles al preguntar por trabajo previo."
-    test = "JSONL con >=3 mensajes de usuario debe estar en roots conocidos."
+    risk = "Short sessions or sessions outside roots may stay invisible when asking about prior work."
+    test = "JSONL with >=3 user messages must be in known roots."
     files = _transcript_files(cfg.transcript_roots)
     counts = [_transcript_user_message_count(path) for path in files]
     usable = sum(1 for count in counts if count >= 3)
@@ -460,8 +460,8 @@ def _audit_email_db(cfg: SavedNotUsedConfig) -> tuple[StoreAuditRow, list[SavedN
     store_id = "email_db"
     producer = "email_sent_events / nexo-email-monitor"
     consumer = "check-context email lookup / local-context email roots / cognitive ingest"
-    risk = "Emails enviados o monitorizados pueden quedar fuera de continuidad si no se proyectan a memoria."
-    test = "sent_email_events debe tener consumidor directo o memory_events source_type=email_sent."
+    risk = "Sent or monitored emails may miss continuity if they are not projected to memory."
+    test = "sent_email_events must have a direct consumer or memory_events source_type=email_sent."
     store = _path_text(cfg.email_db_path)
     if not cfg.email_db_path or not cfg.email_db_path.exists():
         return _row(store_id, producer, store, consumer, "", "", risk, test, "missing", "P2", {"path_exists": False}), []
@@ -476,7 +476,7 @@ def _audit_email_db(cfg: SavedNotUsedConfig) -> tuple[StoreAuditRow, list[SavedN
     if sent and not memory_email_events:
         severity = "P2"
         status = "direct_only"
-        findings.append(_finding("email_db_without_memory_projection", "P2", store_id, producer, store, consumer, last_write, "direct:check-context", "Email DB tiene consumidor directo, pero no hay proyeccion a memory_events.", test, evidence))
+        findings.append(_finding("email_db_without_memory_projection", "P2", store_id, producer, store, consumer, last_write, "direct:check-context", "Email DB has a direct consumer, but no projection to memory_events.", test, evidence))
     return _row(store_id, producer, store, consumer, last_write, "direct:check-context", risk, test, status, severity, evidence), findings
 
 
@@ -484,8 +484,8 @@ def _audit_plugins(cfg: SavedNotUsedConfig) -> tuple[StoreAuditRow, list[SavedNo
     store_id = "plugins_catalog_live"
     producer = "plugin_loader._update_registry"
     consumer = "MCP live tool list / nexo_plugin_list / system catalog"
-    risk = "Catalogo puede prometer herramientas que el cliente no tiene cargadas."
-    test = "tools en tabla plugins o catalogo deben estar presentes en live_tools."
+    risk = "Catalog may promise tools the client has not loaded."
+    test = "tools in the plugins table or catalog must be present in live_tools."
     row, conn = _open_main_row(cfg, store_id, producer, consumer, risk, test)
     catalog_tools = set(cfg.plugin_catalog_tools)
     last_write = ""
@@ -508,7 +508,7 @@ def _audit_plugins(cfg: SavedNotUsedConfig) -> tuple[StoreAuditRow, list[SavedNo
     elif catalog_tools and not live_tools:
         severity = "P2"
         status = "live_unknown"
-        findings.append(_finding("plugin_live_tools_not_provided", "P2", store_id, producer, row.store, consumer, last_write, "", "No hay snapshot live para comparar catalogo de plugins.", test, evidence))
+        findings.append(_finding("plugin_live_tools_not_provided", "P2", store_id, producer, row.store, consumer, last_write, "", "There is no live snapshot to compare the plugin catalog.", test, evidence))
     return _row(store_id, producer, row.store, consumer, last_write, f"live_tools={len(live_tools)}" if live_tools else "", risk, test, status, severity, evidence), findings
 
 
@@ -516,8 +516,8 @@ def _audit_cron_spool(cfg: SavedNotUsedConfig) -> tuple[StoreAuditRow, list[Save
     store_id = "cron_spool"
     producer = "nexo-cron-wrapper.sh"
     consumer = "cron_runs summary / cron spool reconciler / watchdog"
-    risk = "Spool JSON o cron_runs abiertos dejan automatismos en estado ambiguo."
-    test = "cron-spool debe estar vacio y cron_runs no-Evolution debe tener ended_at."
+    risk = "Spool JSON or open cron_runs leave automations in an ambiguous state."
+    test = "cron-spool must be empty and non-Evolution cron_runs must have ended_at."
     row, conn = _open_main_row(cfg, store_id, producer, consumer, risk, test)
     open_runs = 0
     last_write = ""

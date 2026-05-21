@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""measure_drift_baseline — Fase 2 spec item 0.15.
+"""measure_drift_baseline — Phase 2 spec item 0.15.
 
 Reads the last 90 session diaries from ``~/.nexo/brain/session_archive/``
 (fallback to ``~/.nexo/brain/diaries/``), counts occurrences of known drift
 patterns per rule, and writes an aggregated JSON report to
 ``~/.nexo/reports/drift-baseline-<YYYY-MM-DD>.json``.
 
-The baseline is a prerequisite for Fase F ("reducción >50% por regla en 30
-días"): without a pre-Guardian baseline per rule, the "reduction" KPI has
-nothing to compare against. It must be run ONCE before landing Fase F
+The baseline is a prerequisite for Phase F ("reduction >50% per rule in 30
+days"): without a pre-Guardian baseline per rule, the "reduction" KPI has
+nothing to compare against. It must be run ONCE before landing Phase F
 aggregates so the later delta has meaning.
 
 Invariants:

@@ -1,42 +1,42 @@
-# Protocol Enforcer Fase 2 — FASE D2 Report (Wrapper Bloque 3)
+# Protocol Enforcer Phase 2 — PHASE D2 Report (Wrapper Block 3)
 
-**Sesión:** 2026-04-18
-**Branch Python:** `fase2-impl` en worktree `~/work/nexo-fase2/` (repo `wazionapps/nexo` @ main v6.0.6 `da754f1` + hotfix `4f37ab1`).
-**Branch JS:** `fase2-impl-desktop` en worktree `~/work/nexo-desktop-fase2/` (repo `nexo-desktop` @ main rebased sobre v0.14.3 `c6989cd`).
-**Estado:** Fase D2 cerrada en ambos engines. 12 reglas incident-driven (R23b–R23m) implementadas y testeadas. Parity byte-for-byte con fix retroactivo compartido (R23f WHERE regex).
+**Session:** 2026-04-18
+**Python branch:** `fase2-impl` in worktree `~/work/nexo-fase2/` (repo `wazionapps/nexo` @ main v6.0.6 `da754f1` + hotfix `4f37ab1`).
+**JS branch:** `fase2-impl-desktop` in worktree `~/work/nexo-desktop-fase2/` (repo `nexo-desktop` @ main rebased onto v0.14.3 `c6989cd`).
+**Status:** Phase D2 closed in both engines. 12 incident-driven rules (R23b–R23m) implemented and tested. Byte-for-byte parity with a shared retroactive fix (R23f WHERE regex).
 
-## Reglas entregadas
+## Delivered rules
 
-### Tranche 1 — Hard bloqueantes (4)
+### Tranche 1 — Hard blockers (4)
 
-| Regla | Función | Python | JS | Tests Py | Tests JS |
+| Rule | Function | Python | JS | Py tests | JS tests |
 |-------|---------|--------|----|----|----|
 | **R23b** deploy_vhost | scp/rsync docroot vs user-cited domain cross-check | `_check_r23b` + `r23b_deploy_vhost.py` | `_checkR23b` + `lib/r23b-deploy-vhost.js` | 3 integ | 1 integ |
 | **R23e** force_push_main | git push --force/-f on main/master/production/release-* | `_check_r23e` + `r23e_force_push_main.py` | `_checkR23e` + `lib/r23e-force-push-main.js` | 6 integ | 3 unit + 2 integ |
-| **R23f** db_no_where | DELETE/UPDATE sin WHERE contra DB client | `_check_r23f` + `r23f_db_no_where.py` | `_checkR23f` + `lib/r23f-db-no-where.js` | 5 integ | 2 unit + 1 integ |
-| **R23l** resource_collision | create de recurso cloud con nombre ya registrado | `_check_r23l` + `r23l_resource_collision.py` | `_checkR23l` + `lib/r23l-resource-collision.js` | 3 integ | 1 integ |
+| **R23f** db_no_where | DELETE/UPDATE without WHERE against client DB | `_check_r23f` + `r23f_db_no_where.py` | `_checkR23f` + `lib/r23f-db-no-where.js` | 5 integ | 2 unit + 1 integ |
+| **R23l** resource_collision | creating a cloud resource with an already registered name | `_check_r23l` + `r23l_resource_collision.py` | `_checkR23l` + `lib/r23l-resource-collision.js` | 3 integ | 1 integ |
 
 ### Tranche 2 — Soft (6)
 
-| Regla | Función | Python | JS | Tests Py | Tests JS |
+| Rule | Function | Python | JS | Py tests | JS tests |
 |-------|---------|--------|----|----|----|
 | **R23c** cwd_mismatch | destructive bash cwd != project.local_path | `_check_r23c` + `r23c_cwd_mismatch.py` | `_checkR23c` + `lib/r23c-cwd-mismatch.js` | 3 integ | 1 integ |
-| **R23d** chown_chmod_recursive | -R chown/chmod root-ish sin ls previo | `_check_r23d` + `r23d_chown_chmod_recursive.py` | `_checkR23d` + `lib/r23d-chown-chmod-recursive.js` | 3 integ | 2 unit + 1 integ |
+| **R23d** chown_chmod_recursive | -R chown/chmod on root-ish path without prior ls | `_check_r23d` + `r23d_chown_chmod_recursive.py` | `_checkR23d` + `lib/r23d-chown-chmod-recursive.js` | 3 integ | 2 unit + 1 integ |
 | **R23g** secrets_in_output | env dump, echo secret, cat key files, bearer tokens | `_check_r23g` + `r23g_secrets_in_output.py` | `_checkR23g` + `lib/r23g-secrets-in-output.js` | 4 integ | 3 unit + 1 integ |
-| **R23i** auto_deploy_ignored | Edit/Write en auto_deploy repo tras push reciente | `_check_r23i` + `r23i_auto_deploy_ignored.py` | `_checkR23i` + `lib/r23i-auto-deploy-ignored.js` | 2 integ | 1 integ |
-| **R23k** script_duplicates_skill | nexo_personal_script_create con skill_match ≥ 0.75 | `_check_r23k` + `r23k_script_duplicates_skill.py` | `_checkR23k` + `lib/r23k-script-duplicates-skill.js` | 0 (silent probe) | 0 (silent probe) |
-| **R23m** message_duplicate | jaccard 90% vs 15min mismo hilo | `_check_r23m` + `r23m_message_duplicate.py` | `_checkR23m` + `lib/r23m-message-duplicate.js` | 3 integ | 1 unit + 1 integ |
+| **R23i** auto_deploy_ignored | Edit/Write in auto_deploy repo after recent push | `_check_r23i` + `r23i_auto_deploy_ignored.py` | `_checkR23i` + `lib/r23i-auto-deploy-ignored.js` | 2 integ | 1 integ |
+| **R23k** script_duplicates_skill | nexo_personal_script_create with skill_match ≥ 0.75 | `_check_r23k` + `r23k_script_duplicates_skill.py` | `_checkR23k` + `lib/r23k-script-duplicates-skill.js` | 0 (silent probe) | 0 (silent probe) |
+| **R23m** message_duplicate | 90% jaccard vs same thread within 15min | `_check_r23m` + `r23m_message_duplicate.py` | `_checkR23m` + `lib/r23m-message-duplicate.js` | 3 integ | 1 unit + 1 integ |
 
 ### Tranche 3 — Shadow (2)
 
-| Regla | Función | Python | JS | Tests Py | Tests JS |
+| Rule | Function | Python | JS | Py tests | JS tests |
 |-------|---------|--------|----|----|----|
-| **R23h** shebang_mismatch | `#!` vs `which` resolve con misma familia interp | `_check_r23h` + `r23h_shebang_mismatch.py` | `_checkR23h` + `lib/r23h-shebang-mismatch.js` | 3 integ | 0 (shadow-only, cubre Python) |
-| **R23j** global_install | npm -g / pip --user / brew install sin permit | `_check_r23j` + `r23j_global_install.py` | `_checkR23j` + `lib/r23j-global-install.js` | 6 integ | 3 integ |
+| **R23h** shebang_mismatch | `#!` vs `which` resolve within same interpreter family | `_check_r23h` + `r23h_shebang_mismatch.py` | `_checkR23h` + `lib/r23h-shebang-mismatch.js` | 3 integ | 0 (shadow-only, covered by Python) |
+| **R23j** global_install | npm -g / pip --user / brew install without permit | `_check_r23j` + `r23j_global_install.py` | `_checkR23j` + `lib/r23j-global-install.js` | 6 integ | 3 integ |
 
-## Entidades nuevas
+## New entities
 
-**D2.0 — vhost_mapping:** 8 entidades seed (`entities_universal.json`):
+**D2.0 — vhost_mapping:** 8 seed entities (`entities_universal.json`):
 
 | name | domain | host | docroot |
 |------|--------|------|---------|
@@ -51,100 +51,100 @@
 
 ## Parity contract
 
-- Mismas `CLASSIFIER_QUESTION` / `INJECTION_PROMPT_TEMPLATE` texto byte-for-byte donde aplica.
-- Mismos thresholds: R23m 90% jaccard + 15min, R23k 0.75 skill similarity, R23d whitelist root-ish (`/`, `/home`, `/var`, `/etc`, `/opt`, `/usr`, `/srv`).
-- Mismo permit markers R23j: `install globally`, `si instala global`, `yes install globally`, `global install ok`, etc.
-- R23i state shape idéntico: `recentPush` flag + Edit/Write evaluation clears it once.
-- R23m ring buffer máx 16 entradas, mismo schema {thread, body, ts}.
-- Core defence-in-depth sin cambios: R13/R14/R16/R25/R30 siguen bloqueados a no-`off`.
-- Fail-closed paths: classifier caído / preset unreadable / entidad ausente → no inyección.
-- **Fix compartido retroactivo:** R23f regex en ambos lados chequeaba WHERE solo en `tail` (grupo post-SET); para `UPDATE x SET y WHERE z` el grupo SET greedy consumía WHERE y producía falso positivo. Fix: chequear `WHERE_RE.search(match.group(0))` — full match, no tail.
+- Same `CLASSIFIER_QUESTION` / `INJECTION_PROMPT_TEMPLATE` text byte-for-byte where applicable.
+- Same thresholds: R23m 90% jaccard + 15min, R23k 0.75 skill similarity, R23d root-ish whitelist (`/`, `/home`, `/var`, `/etc`, `/opt`, `/usr`, `/srv`).
+- Same R23j permit markers: `install globally`, `si instala global`, `yes install globally`, `global install ok`, etc.
+- Identical R23i state shape: `recentPush` flag + Edit/Write evaluation clears it once.
+- R23m ring buffer max 16 entries, same schema {thread, body, ts}.
+- Core defense in depth unchanged: R13/R14/R16/R25/R30 remain blocked from non-`off`.
+- Fail-closed paths: classifier down / preset unreadable / entity absent → no injection.
+- **Shared retroactive fix:** R23f regex on both sides checked WHERE only in `tail` (post-SET group); for `UPDATE x SET y WHERE z`, the greedy SET group consumed WHERE and produced a false positive. Fix: check `WHERE_RE.search(match.group(0))` — full match, not tail.
 
-## Estado de enforcement modes (defaults packaged)
+## Enforcement mode status (packaged defaults)
 
 `guardian_default.json` v1.3.3:
 
-| Regla | Default mode |
+| Rule | Default mode |
 |-------|--------------|
 | R23b, R23e, R23f, R23l | `hard` |
 | R23c, R23d, R23g, R23i, R23k, R23m | `soft` |
 | R23h, R23j | `shadow` |
 
-Operadores ajustan vía `~/.nexo/config/guardian.json`. Para R21 y R24 (Fase D) hard mode sigue requiriendo override; para D2 core-bloqueantes no se bloquea explícitamente en el validator (no son R13/R14/R16/R25/R30 — son incident-driven). Considerar endurecer en Fase F si telemetría lo pide.
+Operators adjust via `~/.nexo/config/guardian.json`. For R21 and R24 (Phase D), hard mode still requires override; for D2 core blockers, the validator does not explicitly block them (they are not R13/R14/R16/R25/R30 — they are incident-driven). Consider hardening in Phase F if telemetry asks for it.
 
-**Cleanup:** removidas 9 claves placeholder del plan original que mis implementaciones superseden (`R23b_deploy_path_mismatch`, `R23c_cwd_destructive`, `R23d_chown_recursive`, `R23e_git_push_force_main`, `R23f_db_prod_no_where`, `R23g_secrets_in_logs`, `R23h_interpreter_mismatch`, `R23l_resource_name_collision`, `R23m_duplicate_email`). Final R23 rule count en preset: 13.
+**Cleanup:** removed 9 placeholder keys from the original plan that my implementations supersede (`R23b_deploy_path_mismatch`, `R23c_cwd_destructive`, `R23d_chown_recursive`, `R23e_git_push_force_main`, `R23f_db_prod_no_where`, `R23g_secrets_in_logs`, `R23h_interpreter_mismatch`, `R23l_resource_name_collision`, `R23m_duplicate_email`). Final R23 rule count in preset: 13.
 
 ## Tests
 
-**Python isolated suite post-Fase D2:**
+**Python isolated suite post-Phase D2:**
 ```
 NEXO_HOME=/tmp/nexo-test-fase2 python3 -m pytest tests/test_fase_d2_*.py -q
 41 passed
 ```
 
-**Python combined Fase C+D+D2:**
+**Python combined Phase C+D+D2:**
 ```
 NEXO_HOME=/tmp/nexo-test-fase2 python3 -m pytest tests/test_fase_c_*.py tests/test_fase_d_*.py tests/test_fase_d2_*.py -q
 127 passed
 ```
 
-**JS (desde worktree Desktop):**
+**JS (from Desktop worktree):**
 ```
 node --test tests/fase-d-enforcement.test.js tests/fase-d2-enforcement.test.js tests/r13-enforcement.test.js tests/r14-r16-r25-enforcement.test.js
 92 pass, 0 fail
 ```
 
-## Protocol Enforcer: scope fase por fase
+## Protocol Enforcer: phase-by-phase scope
 
-| Fase | Scope | Estado |
+| Phase | Scope | Status |
 |------|-------|--------|
-| Fase 0 | Preflight, snapshots, dry-run infra, MCP bridge | cerrada |
-| Fase A | Capa 1 server-side (R01–R12 tools.*) | cerrada |
-| Fase B | `tool-enforcement-map.json` v2.1.0 + bridge delivery | cerrada |
-| Fase C | Wrapper Bloque 1 core: R13 + R14 + R16 + R25 | cerrada |
-| Fase D | Wrapper Bloque 2: R15 + R17–R24 | cerrada |
-| **Fase D2** | **Wrapper Bloque 3: R23b–R23m (12 reglas incident-driven)** | **cerrada** |
-| Fase E | Installer + preset distribuido + Desktop UI quarantine | pendiente |
-| Fase F | Telemetría + red-team + loops E2E | pendiente |
+| Phase 0 | Preflight, snapshots, dry-run infra, MCP bridge | closed |
+| Phase A | Layer 1 server-side (R01–R12 tools.*) | closed |
+| Phase B | `tool-enforcement-map.json` v2.1.0 + bridge delivery | closed |
+| Phase C | Wrapper Block 1 core: R13 + R14 + R16 + R25 | closed |
+| Phase D | Wrapper Block 2: R15 + R17–R24 | closed |
+| **Phase D2** | **Wrapper Block 3: R23b–R23m (12 incident-driven rules)** | **closed** |
+| Phase E | Installer + distributed preset + Desktop UI quarantine | pending |
+| Phase F | Telemetry + red-team + E2E loops | pending |
 
-## Commits de esta fase
+## Commits from this phase
 
 **Python (`fase2-impl`):**
-- `dbb6bb9` — Fase D2 tranche 1 hard (R23b/R23e/R23f/R23l)
-- `32eef51` — Fase D2 tranche 2 soft (R23c/R23d/R23g/R23i/R23k/R23m)
-- `ba0887a` — Fase D2 tranche 3 shadow (R23h/R23j) + cleanup duplicados
+- `dbb6bb9` — Phase D2 tranche 1 hard (R23b/R23e/R23f/R23l)
+- `32eef51` — Phase D2 tranche 2 soft (R23c/R23d/R23g/R23i/R23k/R23m)
+- `ba0887a` — Phase D2 tranche 3 shadow (R23h/R23j) + duplicate cleanup
 - `e83c5f5` — parity fix R23f WHERE regex
 
 **JS (`fase2-impl-desktop`):**
-- `31aa202` — Fase D2 JS twins (12 modulos + engine + tests)
+- `31aa202` — Phase D2 JS twins (12 modules + engine + tests)
 
-## Próximos pasos
+## Next steps
 
-1. **Fase E** — `scripts/install_guardian.py`, Desktop UI para cuarentena de reminders (reusa componentes TodoWrite + approval modal ya existentes), preset distribuido empaquetado.
-2. **Fase F** — Telemetría (`guardian_telemetry.jsonl`), red-team corpus, loops E2E Claude Code ↔ Desktop.
-3. **Auditoría pre-release (gate obligatorio)** — Francisco ordenó: antes de cualquier tag se hace auditoría 100% capa-por-capa de todos los commits usando las mejores skills, y cualquier hallazgo se arregla en el mismo flujo (no se posterga).
-4. **Release consolidado** — tag único `v6.1.0` core + `v0.15.0` Desktop cuando Fase F esté cerrada y la auditoría esté pasada.
+1. **Phase E** — `scripts/install_guardian.py`, Desktop UI for reminder quarantine (reuse existing TodoWrite components + approval modal), distributed packaged preset.
+2. **Phase F** — Telemetry (`guardian_telemetry.jsonl`), red-team corpus, Claude Code ↔ Desktop E2E loops.
+3. **Pre-release audit (mandatory gate)** — Francisco ordered: before any tag, perform a 100% layer-by-layer audit of all commits using the best skills, and fix any finding in the same flow (do not postpone).
+4. **Consolidated release** — single tag `v6.1.0` core + `v0.15.0` Desktop when Phase F is closed and the audit passes.
 
-## Pending técnicos (heredados + nuevos)
+## Technical pending items (inherited + new)
 
-- `nexo-desktop/package.json`: añadir `@anthropic-ai/sdk` + `openai` como deps runtime antes del tag.
-- Desktop: wire `hasOpenTask` probe al `onUserMessage` desde el main process.
-- CI parity test JS↔Python: item 0.23 pendiente — ahora cubre también los D2 templates.
-- R23d Python: `_is_root_ish` acepta `/opt/app` y `/usr/...`, confirmar con Francisco si hay falso positivo para paths que estén dentro de un workspace real. Subpath matching ya mitiga (requiere ls previo). Telemetría Fase F lo dirá.
-- R23i: persistir `recentPush` cross-session no está soportado. Si el operador hace push y luego cierra la terminal y abre otra, el flag no llega. Documentado como limitación.
-- R23k: silent skill_match sólo funciona cuando el caller alimenta `__skillMatches` en `toolInput` (Desktop) o el plugin `skill_registry` está disponible (Python). Si ninguno, fail-closed.
+- `nexo-desktop/package.json`: add `@anthropic-ai/sdk` + `openai` as runtime deps before the tag.
+- Desktop: wire `hasOpenTask` probe to `onUserMessage` from the main process.
+- JS↔Python CI parity test: item 0.23 pending — now also covers the D2 templates.
+- R23d Python: `_is_root_ish` accepts `/opt/app` and `/usr/...`; confirm with Francisco whether there is a false positive for paths inside a real workspace. Subpath matching already mitigates it (requires prior ls). Phase F telemetry will tell.
+- R23i: persisting `recentPush` cross-session is not supported. If the operator pushes and then closes the terminal and opens another, the flag does not carry over. Documented as a limitation.
+- R23k: silent skill_match only works when the caller feeds `__skillMatches` in `toolInput` (Desktop) or the `skill_registry` plugin is available (Python). If neither exists, fail-closed.
 
-## Archivos clave para handoff
+## Key handoff files
 
 **Python:**
-- `src/enforcement_engine.py:1-1693` (engine ampliado +693 vs post-Fase D)
+- `src/enforcement_engine.py:1-1693` (engine expanded +693 vs post-Phase D)
 - `src/r23b_deploy_vhost.py`, `src/r23c_cwd_mismatch.py`, `src/r23d_chown_chmod_recursive.py`, `src/r23e_force_push_main.py`, `src/r23f_db_no_where.py`, `src/r23g_secrets_in_output.py`, `src/r23h_shebang_mismatch.py`, `src/r23i_auto_deploy_ignored.py`, `src/r23j_global_install.py`, `src/r23k_script_duplicates_skill.py`, `src/r23l_resource_collision.py`, `src/r23m_message_duplicate.py`
 - `src/presets/entities_universal.json` (+8 vhost_mapping)
 - `src/presets/guardian_default.json` v1.3.3
 
 **JS:**
-- `enforcement-engine.js:1-1090` (ampliado +256 vs post-Fase D)
-- `lib/r23b-deploy-vhost.js` … `lib/r23m-message-duplicate.js` (12 modulos)
+- `enforcement-engine.js:1-1090` (expanded +256 vs post-Phase D)
+- `lib/r23b-deploy-vhost.js` … `lib/r23m-message-duplicate.js` (12 modules)
 - `tests/fase-d2-enforcement.test.js`
 
-**Reports:** `FASE0-REPORT.md`, `FASE-C-REPORT.md`, `FASE-D-REPORT.md`, `FASE-D2-REPORT.md` (este).
+**Reports:** `FASE0-REPORT.md`, `FASE-C-REPORT.md`, `FASE-D-REPORT.md`, `FASE-D2-REPORT.md` (this one).

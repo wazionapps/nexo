@@ -174,7 +174,7 @@ def handle_backup_restore(filename: str) -> str:
             pass
         db._shared_conn = None
 
-    return f"DB restaurada desde {filename}. Safety backup: {safety.name}"
+    return f"DB restored from {filename}. Safety backup: {safety.name}"
 
 
 def _cleanup_old():

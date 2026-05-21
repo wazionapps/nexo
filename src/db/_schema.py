@@ -1341,7 +1341,7 @@ def _m49_protocol_guard_ack_backfill(conn):
 
 def _m50_dedupe_nexo_product_learning_pair(conn):
     """Block D.2 / G7-adjacent: dedupe the two learnings that encode the
-    "NEXO Brain producto público vs instancia personal de Francisco"
+    "NEXO Brain public product vs Francisco's personal instance"
     invariant as a physically separate pair.
 
     Francisco's runtime has this concept stored twice (historical IDs 212
@@ -1368,7 +1368,7 @@ def _m50_dedupe_nexo_product_learning_pair(conn):
 
     def _norm(text: str) -> str:
         # Collapse whitespace and strip punctuation/case so "NEXO Brain
-        # producto público vs instancia personal" matches its twin no
+        # public product vs personal instance" matches its twin no
         # matter how the operator rephrased it.
         import re as _re
         stripped = _re.sub(r"[\W_]+", " ", str(text or "")).strip().lower()

@@ -1,7 +1,7 @@
 {
   "$schema": "https://nexo-brain.com/schemas/tool-enforcement-map-v2.1.json",
   "version": "2.2.0",
-  "description": "Canonical map of all NEXO Brain MCP tools with enforcement rules, dependency chains, and behavioral hints. Source of truth for Protocol Enforcer (Desktop + headless). v2.1 adds schema support for Fase 2 event-driven rules (R01-R33): server_side_rules at tool level, per-rule mode (shadow|soft|hard), core_rule flag, and new rule types (pre_tool_intent, post_user_message, on_output_classify, before_tool_strict_block). Backward-compatible: executors that only handle v2.0 rule types ignore the new fields.",
+  "description": "Canonical map of all NEXO Brain MCP tools with enforcement rules, dependency chains, and behavioral hints. Source of truth for Protocol Enforcer (Desktop + headless). v2.1 adds schema support for Phase 2 event-driven rules (R01-R33): server_side_rules at tool level, per-rule mode (shadow|soft|hard), core_rule flag, and new rule types (pre_tool_intent, post_user_message, on_output_classify, before_tool_strict_block). Backward-compatible: executors that only handle v2.0 rule types ignore the new fields.",
   "tools": {
     "nexo_adaptive_decay": {
       "description": "Trigger inter-session tension decay",
@@ -4378,19 +4378,19 @@
     }
   },
   "enforcement_levels": {
-    "must": "OBLIGACIÓN — el enforcer FUERZA la llamada inyectando un prompt invisible",
-    "should": "AVISO — el enforcer inyecta un recordatorio suave, el modelo puede ignorarlo",
-    "none": "Sin enforcement — tool bajo demanda del modelo/usuario"
+    "must": "MANDATORY — the enforcer FORCES the call by injecting an invisible prompt",
+    "should": "WARNING — the enforcer injects a soft reminder; the model may ignore it",
+    "none": "No enforcement — tool is called on model or user demand"
   },
   "rule_types": {
-    "on_session_start": "Al inicio de sesión (primeros N mensajes del usuario)",
-    "on_session_end": "Al cerrar sesión/chat/app",
-    "periodic_by_messages": "Cada N mensajes del usuario sin que se haya llamado",
-    "periodic_by_time": "Cada N minutos de sesión activa sin que se haya llamado",
-    "after_tool": "Inmediatamente después de que se llame a una tool en watch_tools",
-    "before_tool": "Antes de que se use una tool en watch_tools",
-    "on_event": "Cuando se detecta un evento específico",
-    "conditional": "Solo si se cumple una condición evaluada dinámicamente"
+    "on_session_start": "At session start (first N user messages)",
+    "on_session_end": "When closing the session, chat, or app",
+    "periodic_by_messages": "Every N user messages without the tool being called",
+    "periodic_by_time": "Every N minutes of active session time without the tool being called",
+    "after_tool": "Immediately after a tool in watch_tools is called",
+    "before_tool": "Before a tool in watch_tools is used",
+    "on_event": "When a specific event is detected",
+    "conditional": "Only when a dynamically evaluated condition is met"
   },
   "fase2_schema": {
     "guardian_config_version": "1.0.0",
@@ -4432,6 +4432,6 @@
       "action": "one of: warn, reject, merge, bypass_with_force",
       "force_key": "string — client must pass this key=true to bypass a warning"
     },
-    "notes": "Fase 2 rules are added incrementally via Fases A–D. Fase 0 only bumps the schema version and documents the supported extensions. Adding a new rule type REQUIRES simultaneous support in enforcement-engine.js AND enforcement_engine.py (parity rule, see docs/client-parity-checklist.md)."
+    "notes": "Phase 2 rules are added incrementally via Phases A–D. Phase 0 only bumps the schema version and documents the supported extensions. Adding a new rule type REQUIRES simultaneous support in enforcement-engine.js AND enforcement_engine.py (parity rule, see docs/client-parity-checklist.md)."
   }
 }

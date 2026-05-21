@@ -31,8 +31,8 @@ INSTRUCTIONS:
    - A feedback covering the same topic already exists
 
 4. For each rule to promote, create the file with Write en [[memory_dir]]/:
-   Nombre: feedback_postmortem_[slug_descriptivo].md
-   Formato:
+   Name: feedback_postmortem_[descriptive_slug].md
+   Format:
    ---
    name: [descriptive title]
    description: Behavioral rule extracted from self-critique — recurring pattern
@@ -49,7 +49,7 @@ INSTRUCTIONS:
    Sessions: X | Self-critiques: Y | Promoted: Z
 
    ## Today's self-critiques (summary)
-   [Lista breve]
+   [Brief list]
 
    ## Promoted to permanent memory
    [What you promoted and why]

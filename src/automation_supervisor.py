@@ -467,7 +467,7 @@ def format_markdown(report: Mapping[str, Any]) -> str:
             )
         )
     if not findings:
-        lines.append("| ninguno | OK | Sin open rows/spool/LaunchAgents pendientes en fixtures |")
+        lines.append("| none | OK | No pending open rows/spool/LaunchAgents in fixtures |")
     return "\n".join(lines)
 
 
