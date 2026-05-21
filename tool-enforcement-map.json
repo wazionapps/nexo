@@ -94,6 +94,45 @@
       },
       "triggers_after": []
     },
+    "nexo_agent_archive": {
+      "description": "Archive or restore a personal-script-backed agent",
+      "category": "agent",
+      "source": "plugin:personal_scripts",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_agent_disable": {
+      "description": "Disable a personal-script-backed agent",
+      "category": "agent",
+      "source": "plugin:personal_scripts",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_agent_enable": {
+      "description": "Enable a personal-script-backed agent",
+      "category": "agent",
+      "source": "plugin:personal_scripts",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
     "nexo_agent_delete": {
       "description": "Remove agent from registry",
       "category": "agent",
@@ -124,6 +163,45 @@
       "description": "List registered agents",
       "category": "agent",
       "source": "plugin:agents",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_agent_schedule": {
+      "description": "Set or clear cadence for a personal-script-backed agent",
+      "category": "agent",
+      "source": "plugin:personal_scripts",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_agent_status": {
+      "description": "Read composed runtime status for one personal-script-backed agent",
+      "category": "agent",
+      "source": "plugin:personal_scripts",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_agents_list": {
+      "description": "List personal scripts marked as NEXO agents",
+      "category": "agent",
+      "source": "plugin:personal_scripts",
       "requires": [],
       "provides": [],
       "internal_calls": [],
@@ -1137,6 +1215,19 @@
       },
       "triggers_after": []
     },
+    "nexo_cognitive_control_observatory": {
+      "description": "Read-only cognitive quality metrics",
+      "category": "cognitive",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
     "nexo_cortex_check": {
       "description": "Cognitive pre-action check",
       "category": "cortex",
@@ -1668,6 +1759,19 @@
       },
       "triggers_after": []
     },
+    "nexo_followup_lifecycle": {
+      "description": "Return followups grouped by lifecycle lane",
+      "category": "followups",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
     "nexo_followup_note": {
       "description": "Append note to followup",
       "category": "followups",
@@ -2170,6 +2274,19 @@
       },
       "triggers_after": []
     },
+    "nexo_learning_resolve_candidate": {
+      "description": "Dry-run canonical learning resolver",
+      "category": "learning",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
     "nexo_learning_search": {
       "description": "Search learnings by keyword in title and content",
       "category": "learning",
@@ -2518,6 +2635,19 @@
       "description": "Media memory stats",
       "category": "media",
       "source": "plugin:media_memory_tools",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_intraday_memory_cycle": {
+      "description": "Run a low-limit evidence-backed intraday memory cycle",
+      "category": "memory",
+      "source": "server",
       "requires": [],
       "provides": [],
       "internal_calls": [],
