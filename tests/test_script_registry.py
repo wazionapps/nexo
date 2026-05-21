@@ -28,7 +28,12 @@ from script_registry import (
     doctor_script,
     load_core_script_names,
     create_script,
+    create_agent_script,
     ensure_personal_schedules,
+    archive_agent,
+    get_agent_status,
+    list_agents,
+    set_agent_schedule,
     reconcile_personal_scripts,
     rename_legacy_personal_script_filenames,
     repair_orphan_personal_schedule_metadata,
@@ -233,6 +238,31 @@ class TestMetadataParsing:
         assert declared["valid"] is True
         assert declared["schedule_label"] == "09:00 weekday=1"
 
+    def test_agent_metadata_keys_are_parsed(self, tmp_path):
+        script = tmp_path / "agent.py"
+        script.write_text(
+            "#!/usr/bin/env python3\n"
+            "# nexo: name=reviews-agent\n"
+            "# nexo: description=Reviews monitor\n"
+            "# nexo: runtime=python\n"
+            "# nexo: agent=true\n"
+            "# nexo: agent_title=Reviews agent\n"
+            "# nexo: agent_description=Checks reviews and prepares followups\n"
+            "# nexo: agent_conversation_id=conv-123\n"
+            "# nexo: agent_created_from=protocol-card\n"
+            "# nexo: agent_archived=false\n"
+            "print('ok')\n"
+        )
+
+        meta = parse_inline_metadata(script)
+
+        assert meta["agent"] == "true"
+        assert meta["agent_title"] == "Reviews agent"
+        assert meta["agent_description"] == "Checks reviews and prepares followups"
+        assert meta["agent_conversation_id"] == "conv-123"
+        assert meta["agent_created_from"] == "protocol-card"
+        assert meta["agent_archived"] == "false"
+
 
 class TestRuntimeDetection:
     def test_metadata_runtime(self, tmp_path):
@@ -273,6 +303,140 @@ class TestRuntimeDetection:
         script = tmp_path / "test.php"
         script.write_text("<?php echo 'hi';\n")
         assert classify_runtime(script, {}) == "php"
+
+
+class TestAgentRegistry:
+    def test_list_agents_filters_personal_scripts_marked_as_agent(self, scripts_dir):
+        agent = scripts_dir / "ps-reviews-agent.py"
+        agent.write_text(
+            "#!/usr/bin/env python3\n"
+            "# nexo: name=reviews-agent\n"
+            "# nexo: description=Reviews monitor\n"
+            "# nexo: runtime=python\n"
+            "# nexo: agent=true\n"
+            "# nexo: agent_title=Reviews agent\n"
+            "# nexo: agent_description=Checks reviews\n"
+            "print('ok')\n"
+        )
+        regular = scripts_dir / "ps-regular.py"
+        regular.write_text(
+            "#!/usr/bin/env python3\n"
+            "# nexo: name=regular\n"
+            "# nexo: runtime=python\n"
+            "print('ok')\n"
+        )
+
+        rows = list_agents()
+
+        assert [row["name"] for row in rows] == ["reviews-agent"]
+        assert rows[0]["title"] == "Reviews agent"
+        assert rows[0]["description"] == "Checks reviews"
+        assert rows[0]["schedule_configurable"] is True
+        assert rows[0]["health"] == "unknown"
+
+    def test_agent_create_marks_scaffold_with_agent_metadata(self, scripts_dir):
+        result = create_agent_script("Daily Review", description="Daily review agent", runtime="python")
+
+        assert result["ok"] is True
+        status = get_agent_status(result["name"])
+        assert status["ok"] is True
+        assert status["agent"]["name"] == "daily-review"
+        assert status["agent"]["title"] == "Daily Review"
+        assert status["agent"]["description"] == "Daily review agent"
+
+    def test_archive_agent_hides_without_deleting_script(self, scripts_dir):
+        result = create_agent_script("Archive Me", description="Disposable agent", runtime="python")
+        archived = archive_agent(result["name"])
+
+        assert archived["ok"] is True
+        assert archived["archived"] is True
+        assert Path(result["path"]).exists()
+        assert list_agents() == []
+        rows = list_agents(include_archived=True)
+        assert len(rows) == 1
+        assert rows[0]["archived"] is True
+        assert rows[0]["enabled"] is False
+
+    def test_archive_restore_reenables_agent_when_it_was_enabled(self, scripts_dir):
+        result = create_agent_script("Restore Me", description="Restorable agent", runtime="python")
+
+        assert archive_agent(result["name"])["ok"] is True
+        restored = archive_agent(result["name"], archived=False)
+
+        assert restored["ok"] is True
+        assert restored["agent"]["archived"] is False
+        assert restored["agent"]["enabled"] is True
+
+    def test_set_agent_schedule_rejects_invalid_daily_before_writing_metadata(self, scripts_dir):
+        result = create_agent_script("Bad Schedule", description="Bad schedule agent", runtime="python")
+
+        scheduled = set_agent_schedule(result["name"], daily_at="99:99")
+
+        assert scheduled["ok"] is False
+        assert "Invalid schedule time" in scheduled["error"]
+        text = Path(result["path"]).read_text()
+        assert "schedule_required=true" not in text
+        assert "schedule=99:99" not in text
+
+    def test_set_agent_schedule_preserves_unknown_nexo_metadata(self, scripts_dir, monkeypatch):
+        import script_registry
+        from plugins import schedule as schedule_plugin
+
+        result = create_agent_script("Future Metadata", description="Future metadata agent", runtime="python")
+        path = Path(result["path"])
+        path.write_text(path.read_text() + "# nexo: future_agent_key=keep-me\n")
+        monkeypatch.setattr(script_registry, "_discover_personal_schedule_records", lambda: [])
+        monkeypatch.setattr(schedule_plugin, "handle_schedule_add", lambda **kwargs: f"OK {kwargs.get('cron_id')}")
+
+        scheduled = set_agent_schedule(result["name"], interval_seconds=300)
+
+        assert scheduled["ok"] is True
+        assert "# nexo: future_agent_key=keep-me" in path.read_text()
+
+    def test_list_agents_handles_multi_calendar_schedule_records(self, scripts_dir):
+        from script_registry import _agent_schedule_from_script
+
+        schedule = _agent_schedule_from_script({
+            "name": "multi-calendar",
+            "metadata": {"agent": "true"},
+            "schedules": [{
+                "cron_id": "multi-calendar",
+                "schedule_type": "calendar",
+                "schedule_value": '[{"Hour": 9, "Minute": 0}, {"Hour": 17, "Minute": 30}]',
+                "schedule_label": "multiple calendar entries",
+            }],
+        })
+
+        assert schedule["schedule_type"] == "calendar"
+        assert schedule["daily_at"] == ""
+        assert schedule["effective_schedule_label"] == "multiple calendar entries"
+
+    def test_agents_run_rejects_regular_personal_script(self, scripts_dir, monkeypatch, capsys):
+        import cli
+
+        init_db()
+        regular = scripts_dir / "ps-regular.py"
+        regular.write_text(
+            "#!/usr/bin/env python3\n"
+            "# nexo: name=regular\n"
+            "# nexo: runtime=python\n"
+            "print('should-not-run')\n"
+        )
+        sync_personal_scripts()
+        called = False
+
+        def fake_scripts_run(_args):
+            nonlocal called
+            called = True
+            return 0
+
+        monkeypatch.setattr(cli, "_scripts_run", fake_scripts_run)
+        rc = cli._agents_run(SimpleNamespace(name="regular", script_args=[]))
+
+        captured = capsys.readouterr()
+        assert rc == 1
+        assert called is False
+        assert "not marked as an agent" in captured.err
 
 
 class TestCoreFiltering:

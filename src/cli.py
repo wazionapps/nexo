@@ -20,6 +20,7 @@ Entry points:
   nexo scripts run NAME_OR_PATH [-- args...]
   nexo scripts doctor [NAME_OR_PATH] [--json]
   nexo scripts call TOOL --input JSON [--json-output]
+  nexo agents list|create|status|enable|disable|schedule|archive|run [--json]
   nexo pre-answer route [--json] [--payload JSON|--payload-file PATH|--payload-stdin] [--query TEXT]
   nexo memory-observations process [--json]
   nexo local-context status|run-once|reconcile|pause|resume|roots|exclusions|query|diagnostics|models [--json]
@@ -1055,6 +1056,145 @@ def _automations_set_schedule(args):
     else:
         print(f"Schedule updated for {result['name']}.")
     return 0
+
+
+def _agents_list(args):
+    from script_registry import list_agents
+
+    rows = list_agents(include_archived=bool(getattr(args, "all", False)))
+    if args.json:
+        print(json.dumps({"ok": True, "agents": rows}, indent=2, ensure_ascii=False))
+        return 0
+    if not rows:
+        print("No agents registered.")
+        return 0
+    for row in rows:
+        state = "archived" if row.get("archived") else ("enabled" if row.get("enabled", True) else "disabled")
+        schedule = str(row.get("effective_schedule_label") or "manual")
+        print(f"{row.get('name')} [{state}] · {schedule} · {row.get('title') or row.get('description') or ''}")
+    return 0
+
+
+def _agents_create(args):
+    from script_registry import create_agent_script
+
+    try:
+        result = create_agent_script(
+            args.name,
+            description=args.description,
+            runtime=args.runtime,
+            force=args.force,
+        )
+    except (FileExistsError, ValueError) as e:
+        if args.json:
+            print(json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False))
+        else:
+            print(str(e), file=sys.stderr)
+        return 1
+    if args.json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    else:
+        print(f"Created agent script: {result['path']}")
+    return 0
+
+
+def _agents_status(args):
+    from script_registry import get_agent_status
+
+    result = get_agent_status(args.name)
+    if args.json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return 0 if result.get("ok") else 1
+    if not result.get("ok"):
+        print(result.get("error", "Failed to read agent status"), file=sys.stderr)
+        return 1
+    agent = result.get("agent") or {}
+    state = "archived" if agent.get("archived") else ("enabled" if agent.get("enabled") else "DISABLED")
+    print(f"{agent.get('name')} [{state}] -> {agent.get('title') or agent.get('description') or ''}")
+    schedule = str(agent.get("effective_schedule_label") or "").strip()
+    if schedule:
+        print(f"  schedule: {schedule} ({agent.get('schedule_source') or 'metadata'})")
+    if agent.get("last_run_at"):
+        print(f"  last run: {agent.get('last_run_at')} (exit={agent.get('last_exit_code')})")
+    return 0
+
+
+def _agents_set_enabled(args, enabled):
+    from script_registry import set_agent_enabled
+
+    result = set_agent_enabled(args.name, enabled)
+    if args.json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return 0 if result.get("ok") else 1
+    if not result.get("ok"):
+        print(result.get("error", "Failed to toggle agent"), file=sys.stderr)
+        return 1
+    verb = "enabled" if enabled else "disabled"
+    print(f"Agent {result['name']} {verb}.")
+    return 0
+
+
+def _agents_archive(args):
+    from script_registry import archive_agent
+
+    result = archive_agent(args.name, archived=not bool(getattr(args, "restore", False)))
+    if args.json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return 0 if result.get("ok") else 1
+    if not result.get("ok"):
+        print(result.get("error", "Failed to archive agent"), file=sys.stderr)
+        return 1
+    print(f"Agent {result['name']} {'restored' if args.restore else 'archived'}.")
+    return 0
+
+
+def _agents_set_schedule(args):
+    from script_registry import set_agent_schedule
+
+    interval_seconds = None
+    daily_at = None
+    if getattr(args, "every_minutes", None) is not None:
+        interval_seconds = int(args.every_minutes) * 60
+    elif getattr(args, "every_seconds", None) is not None:
+        interval_seconds = int(args.every_seconds)
+    elif getattr(args, "daily_at", None):
+        daily_at = str(args.daily_at).strip()
+
+    result = set_agent_schedule(
+        args.name,
+        interval_seconds=interval_seconds,
+        daily_at=daily_at,
+        clear=bool(getattr(args, "reset", False)),
+    )
+    if args.json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return 0 if result.get("ok") else 1
+    if not result.get("ok"):
+        print(result.get("error", "Failed to update agent cadence"), file=sys.stderr)
+        return 1
+    agent = result.get("agent") or {}
+    label = str(agent.get("effective_schedule_label") or "").strip()
+    print(f"Agent schedule updated for {result['name']}: {label or 'manual'}")
+    return 0
+
+
+def _agents_run(args):
+    from script_registry import get_agent_status
+
+    status = get_agent_status(args.name)
+    if not status.get("ok"):
+        print(status.get("error", "Agent not found"), file=sys.stderr)
+        return 1
+    agent = status.get("agent") or {}
+    if agent.get("archived"):
+        print(f"Agent is archived: {agent.get('name') or args.name}", file=sys.stderr)
+        return 1
+    if agent.get("enabled") is False:
+        print(f"Agent is disabled: {agent.get('name') or args.name}", file=sys.stderr)
+        return 1
+    args.name = agent.get("path") or args.name
+    args.script_args = list(getattr(args, "script_args", []) or [])
+    return _scripts_run(args)
 
 
 def _core_schedules_list(args):
@@ -3632,6 +3772,50 @@ def main():
     local_context_asset_purge_p.add_argument("asset_id", help="Asset id")
     local_context_asset_purge_p.add_argument("--json", action="store_true", help="JSON output")
 
+    agents_parser = sub.add_parser("agents", help="Manage Home-facing personal agents")
+    agents_sub = agents_parser.add_subparsers(dest="agents_command")
+
+    agents_list_p = agents_sub.add_parser("list", help="List personal-script-backed agents")
+    agents_list_p.add_argument("--all", action="store_true", help="Include archived agents")
+    agents_list_p.add_argument("--json", action="store_true", help="JSON output")
+
+    agents_create_p = agents_sub.add_parser("create", help="Create a personal script marked as an agent")
+    agents_create_p.add_argument("name", help="Human/agent name")
+    agents_create_p.add_argument("--description", default="", help="One-line description")
+    agents_create_p.add_argument("--runtime", default="python", choices=["python", "shell"], help="Script runtime")
+    agents_create_p.add_argument("--force", action="store_true", help="Overwrite if the target file exists")
+    agents_create_p.add_argument("--json", action="store_true", help="JSON output")
+
+    agents_status_p = agents_sub.add_parser("status", help="Read agent status")
+    agents_status_p.add_argument("name", help="Agent name or path")
+    agents_status_p.add_argument("--json", action="store_true", help="JSON output")
+
+    agents_enable_p = agents_sub.add_parser("enable", help="Enable an agent")
+    agents_enable_p.add_argument("name", help="Agent name or path")
+    agents_enable_p.add_argument("--json", action="store_true", help="JSON output")
+
+    agents_disable_p = agents_sub.add_parser("disable", help="Disable an agent")
+    agents_disable_p.add_argument("name", help="Agent name or path")
+    agents_disable_p.add_argument("--json", action="store_true", help="JSON output")
+
+    agents_archive_p = agents_sub.add_parser("archive", help="Archive an agent without deleting its script")
+    agents_archive_p.add_argument("name", help="Agent name or path")
+    agents_archive_p.add_argument("--restore", action="store_true", help="Restore instead of archive")
+    agents_archive_p.add_argument("--json", action="store_true", help="JSON output")
+
+    agents_schedule_p = agents_sub.add_parser("schedule", help="Change an agent cadence")
+    agents_schedule_p.add_argument("name", help="Agent name or path")
+    agents_schedule_group = agents_schedule_p.add_mutually_exclusive_group(required=True)
+    agents_schedule_group.add_argument("--every-minutes", type=int, help="Run the agent every N minutes")
+    agents_schedule_group.add_argument("--every-seconds", type=int, help="Run the agent every N seconds")
+    agents_schedule_group.add_argument("--daily-at", type=str, help="Run the agent every day at HH:MM or HH:MM:weekday")
+    agents_schedule_group.add_argument("--reset", action="store_true", help="Clear the agent schedule")
+    agents_schedule_p.add_argument("--json", action="store_true", help="JSON output")
+
+    agents_run_p = agents_sub.add_parser("run", help="Run an agent now")
+    agents_run_p.add_argument("name", help="Agent name or path")
+    agents_run_p.add_argument("script_args", nargs=argparse.REMAINDER, help="Arguments passed to the script")
+
     automations_parser = sub.add_parser("automations", help="Manage Desktop-facing automations")
     automations_sub = automations_parser.add_subparsers(dest="automations_command")
 
@@ -4200,6 +4384,25 @@ def main():
                 return 0
             return _local_context_asset(args)
         local_context_parser.print_help()
+        return 0
+    elif args.command == "agents":
+        if args.agents_command == "list":
+            return _agents_list(args)
+        elif args.agents_command == "create":
+            return _agents_create(args)
+        elif args.agents_command == "status":
+            return _agents_status(args)
+        elif args.agents_command == "enable":
+            return _agents_set_enabled(args, True)
+        elif args.agents_command == "disable":
+            return _agents_set_enabled(args, False)
+        elif args.agents_command == "archive":
+            return _agents_archive(args)
+        elif args.agents_command == "schedule":
+            return _agents_set_schedule(args)
+        elif args.agents_command == "run":
+            return _agents_run(args)
+        agents_parser.print_help()
         return 0
     elif args.command == "automations":
         if args.automations_command == "list":
