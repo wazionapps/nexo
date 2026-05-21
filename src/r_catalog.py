@@ -4,11 +4,10 @@ Pre-create discovery probe. Two trigger families:
 
   (a) `nexo_*_create` / `_open` / `_add` — the original MCP-tool path.
   (b) v7.7: `Edit` / `Write` writing into artefact-bearing paths
-      (skills/, plugins/, scripts/, personal scripts). The checklist
-      item "ampliar el ámbito del pre-probe de catálogo para cubrir
-      no solo nexo_*_create/_open/_add, sino también writes de
-      archivos que materializan skills/plugins/scripts/plantillas/
-      artefactos aunque no hayan pasado por un tool MCP de 'create'".
+      (skills/, plugins/, scripts/, personal scripts). This expands the
+      catalog pre-probe beyond `nexo_*_create/_open/_add` to also cover
+      writes that materialise skills, plugins, scripts, templates, or
+      artefacts without going through a dedicated MCP `create` tool.
 
 Rationale: the Guardian should not re-teach what tools exist; the live
 catalog does that. But if the agent materialises a new skill / plugin /

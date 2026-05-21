@@ -26,6 +26,13 @@ def test_append_operator_language_contract_is_idempotent():
     assert twice == once
 
 
+def test_describe_operator_language_covers_desktop_language_options():
+    import operator_language
+
+    assert operator_language.describe_operator_language("gl") == "Galician (gl)"
+    assert operator_language.describe_operator_language("eu") == "Basque (eu)"
+
+
 def test_agent_runner_language_contract_applies_to_operator_facing_callers(monkeypatch):
     import agent_runner
     import operator_language

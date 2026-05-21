@@ -1,50 +1,50 @@
-# Guardian Quickstart (Fase 2 Protocol Enforcer)
+# Guardian Quickstart (Phase 2 Protocol Enforcer)
 
-El Guardian es la capa de enforcement runtime que convierte a cualquier cliente Claude (Code, Codex, Desktop) en un agente que obedece el protocolo NEXO al 100%.
+Guardian is the runtime enforcement layer that turns any Claude client (Code, Codex, Desktop) into an agent that follows the NEXO protocol completely.
 
-## ¿Qué hace el Guardian?
+## What does Guardian do?
 
-Observa cada mensaje del usuario, cada tool call del agente, y cada fragmento de texto del agente. Cuando detecta:
+It watches each user message, each agent tool call, and each piece of agent text. When it detects:
 
-- **Pre-Edit sin guard_check** → recordatorio de llamar `nexo_guard_check` antes.
-- **Correcciones del operador** → exige capturar learning en la ventana siguiente.
-- **Declaración prematura de "hecho" sin evidencia** → recordatorio de `nexo_task_close`.
-- **Comandos destructivos en hosts read-only** → bloquea.
-- **Force-push a main / master / release-*** → bloquea.
-- **DELETE/UPDATE SQL sin WHERE contra producción** → bloquea.
-- **Otros ~40 patrones** catalogados en `src/presets/guardian_default.json`.
+- **Pre-Edit without guard_check** -> reminder to call `nexo_guard_check` first.
+- **Operator corrections** -> requires capturing a learning in the next window.
+- **Premature "done" declaration without evidence** -> reminder to call `nexo_task_close`.
+- **Destructive commands on read-only hosts** -> blocks.
+- **Force-push to main / master / release-*** -> blocks.
+- **SQL DELETE/UPDATE without WHERE against production** -> blocks.
+- **Another ~40 patterns** cataloged in `src/presets/guardian_default.json`.
 
-## Instalación
+## Installation
 
 ```bash
 python3 scripts/install_guardian.py
 ```
 
-Esto crea / actualiza:
+This creates / updates:
 
-- `~/.nexo/config/guardian.json` — modos por regla (off/shadow/soft/hard).
-- `~/.nexo/brain/presets/entities_universal.json` — baseline de entidades.
-- `~/.nexo/brain/presets/guardian_default.json` — defaults por versión.
-- `~/.nexo/brain/presets/ssh_imported_hosts.json` — hosts de `~/.ssh/config` importados como `access_mode=unknown`.
-- `~/.nexo/config/schedule.json` — `automation_backend=claude_code` (si el operador no tiene `automation_user_override=true`).
+- `~/.nexo/config/guardian.json` - per-rule modes (off/shadow/soft/hard).
+- `~/.nexo/brain/presets/entities_universal.json` - entity baseline.
+- `~/.nexo/brain/presets/guardian_default.json` - versioned defaults.
+- `~/.nexo/brain/presets/ssh_imported_hosts.json` - hosts from `~/.ssh/config` imported as `access_mode=unknown`.
+- `~/.nexo/config/schedule.json` - `automation_backend=claude_code` (if the operator does not have `automation_user_override=true`).
 
 Flags:
 
-- `--dry-run` — reporta lo que haría sin tocar nada.
-- `--force` — sobrescribe guardian.json y presets (destructivo sobre customizaciones).
+- `--dry-run` - reports what it would do without touching anything.
+- `--force` - overwrites guardian.json and presets (destructive to customizations).
 
-## Modos por regla
+## Per-rule modes
 
-Cada regla puede configurarse en 4 modos:
+Each rule can be configured in 4 modes:
 
-| Mode | Comportamiento |
+| Mode | Behavior |
 |------|----------------|
-| `off` | Regla deshabilitada. Core rules (R13/R14/R16/R25/R30) rechazan este valor automáticamente. |
-| `shadow` | La regla evalúa y registra, pero no inyecta recordatorios visibles. Útil para rollout. |
-| `soft` | Inyecta recordatorio al agente; el agente puede ignorar si el contexto lo justifica. |
-| `hard` | Inyecta con prioridad alta; bloqueo efectivo de la acción sin override explícito del operador. |
+| `off` | Rule disabled. Core rules (R13/R14/R16/R25/R30) reject this value automatically. |
+| `shadow` | The rule evaluates and logs, but does not inject visible reminders. Useful for rollout. |
+| `soft` | Injects a reminder to the agent; the agent may ignore it if context justifies it. |
+| `hard` | Injects with high priority; effectively blocks the action without an explicit operator override. |
 
-Edita `~/.nexo/config/guardian.json`:
+Edit `~/.nexo/config/guardian.json`:
 
 ```json
 {
@@ -58,40 +58,40 @@ Edita `~/.nexo/config/guardian.json`:
 }
 ```
 
-Las reglas no listadas en tu archivo heredan el default empaquetado.
+Rules not listed in your file inherit the packaged default.
 
-## Añadir tus proyectos
+## Add your projects
 
-El Guardian usa entidades del brain (SQLite + preset) para saber de qué proyectos hablas. Para que R15 (project_context), R19 (require_grep) o R23b (deploy vhost mismatch) funcionen con tus proyectos:
+Guardian uses brain entities (SQLite + preset) to know which projects you are talking about. For R15 (project_context), R19 (require_grep), or R23b (deploy vhost mismatch) to work with your projects:
 
 ```bash
-# Via MCP (preferido):
+# Via MCP (preferred):
 nexo_entity_create type=project name=MyProject metadata='{"local_path":"/Users/me/work/myproject","aliases":["myproj"]}'
 
-# Para vhosts:
+# For vhosts:
 nexo_entity_create type=vhost_mapping name=myshop_com metadata='{"domain":"myshop.com","host":"myserver","docroot":"/var/www/myshop"}'
 ```
 
-El preset ya viene con 8 vhost_mapping + 8 destructive_command + 3 legacy_path. Añadir los tuyos es puro marginal — el Guardian crece con tu realidad.
+The preset already includes 8 vhost_mapping + 8 destructive_command + 3 legacy_path entries. Adding yours is incremental: Guardian grows with your reality.
 
-## Añadir tus SSH hosts
+## Add your SSH hosts
 
-`install_guardian.py` importa automáticamente tus hosts de `~/.ssh/config`. Quedan como `access_mode=unknown` — si quieres marcar alguno como read-only (Nora/Maria pattern):
+`install_guardian.py` automatically imports your hosts from `~/.ssh/config`. They remain as `access_mode=unknown`; if you want to mark one as read-only (Nora/Maria pattern):
 
 ```bash
 nexo_entity_update name=maria_server type=host metadata='{"access_mode":"read_only","reason":"prod box tenant Maria"}'
 ```
 
-R25 bloqueará comandos destructivos contra ese host hasta que el operador diga `force OK` en el mensaje.
+R25 will block destructive commands against that host until the operator says `force OK` in the message.
 
-## Telemetría
+## Telemetry
 
-Cada inyección del Guardian se registra en `~/.nexo/logs/guardian-telemetry.ndjson`. Datos locales, nunca salen de tu máquina salvo que actives `telemetry_external_optin=true` en el futuro (Fase F).
+Each Guardian injection is logged in `~/.nexo/logs/guardian-telemetry.ndjson`. Data stays local and never leaves your machine unless you enable `telemetry_external_optin=true` in the future (Phase F).
 
 ## Troubleshooting
 
-**"El Guardian no inyecta nada"** — verifica que `~/.nexo/config/guardian.json` existe. Si no, `python3 scripts/install_guardian.py`.
+**"Guardian is not injecting anything"** - verify that `~/.nexo/config/guardian.json` exists. If not, run `python3 scripts/install_guardian.py`.
 
-**"Me está bloqueando un comando que sé que quiero ejecutar"** — en el siguiente mensaje al agente, di explícitamente `force OK` o `si borra` (sinónimos permitidos están en `r25_nora_maria_read_only.py::PERMIT_MARKERS`).
+**"It is blocking a command I know I want to run"** - in the next message to the agent, explicitly say `force OK` or `si borra` (allowed synonyms are in `r25_nora_maria_read_only.py::PERMIT_MARKERS`).
 
-**"Quiero apagar una regla concreta"** — edita `~/.nexo/config/guardian.json` → `rules.<rule_id> = "off"`. Core rules no se pueden apagar (defensa en profundidad).
+**"I want to turn off one specific rule"** - edit `~/.nexo/config/guardian.json` -> `rules.<rule_id> = "off"`. Core rules cannot be turned off (defense in depth).

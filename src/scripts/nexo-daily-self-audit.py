@@ -681,8 +681,8 @@ def _retire_stale_audit_goals_inline(
                    closed_at = ?
                WHERE goal_id = ?""",
             (
-                "Ninguna. Placeholder stale retirado automáticamente; el self-audit lo recreará si el patrón reaparece.",
-                f"Self-audit placeholder stale >{max_age_hours}h sin workflow runs abiertos.",
+                "None. Stale placeholder removed automatically; self-audit will recreate it if the pattern reappears.",
+                f"Self-audit placeholder stale >{max_age_hours}h without open workflow runs.",
                 now_iso,
                 now_iso,
                 row["goal_id"],

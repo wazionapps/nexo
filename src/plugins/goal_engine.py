@@ -107,11 +107,11 @@ def handle_goal_engine_status() -> str:
     }
     next_gap = []
     if not readiness["has_outcome_history"]:
-        next_gap.append("Necesita acumular outcomes reales antes de optimizar por historico.")
+        next_gap.append("Needs real outcomes before optimizing from history.")
     if not readiness["has_cortex_history"]:
-        next_gap.append("Necesita acumular evaluaciones reales del cortex antes de medir Decision Cortex v2.")
+        next_gap.append("Needs real cortex evaluations before measuring Decision Cortex v2.")
     if not readiness["has_linked_decisions"]:
-        next_gap.append("Necesita decisiones de impacto enlazadas a outcome para cerrar el loop.")
+        next_gap.append("Needs impact decisions linked to outcomes to close the loop.")
 
     return json.dumps(
         {

@@ -256,7 +256,7 @@ def handle_session_diary_write(decisions: str = '', summary: str = '',
                                 self_critique: str = '',
                                 source: str = 'claude',
                                 payload_json: str = '') -> str:
-    """Write session diary entry at end of session. OBLIGATORIO antes de cerrar.
+    """Write a session diary entry at end of session. Mandatory before closing.
 
     Args:
         decisions: What was decided and why (JSON array or structured text)
@@ -344,22 +344,22 @@ def handle_session_diary_write(decisions: str = '', summary: str = '',
     if repo_orphan_changes > 0:
         if recent_repo_orphan_changes > 0 and recent_repo_orphan_changes != repo_orphan_changes:
             warnings.append(
-                f"{_recent_change_phrase(recent_repo_orphan_changes)} de repo sin commit_ref "
+                f"{_recent_change_phrase(recent_repo_orphan_changes)} repo changes without commit_ref "
                 f"({_format_change_count(repo_orphan_changes)} de repo total)"
             )
         elif recent_repo_orphan_changes > 0:
             warnings.append(
-                f"{_recent_change_phrase(recent_repo_orphan_changes)} de repo sin commit_ref"
+                f"{_recent_change_phrase(recent_repo_orphan_changes)} repo changes without commit_ref"
             )
         else:
             warnings.append(
-                f"{_format_change_count(repo_orphan_changes)} históricos de repo sin commit_ref"
+                f"{_format_change_count(repo_orphan_changes)} historical repo changes without commit_ref"
             )
     orphan_decisions = conn.execute(
         "SELECT COUNT(*) FROM decisions WHERE (outcome IS NULL OR outcome = '') AND created_at < datetime('now', '-7 days')"
     ).fetchone()[0]
     if orphan_decisions > 0:
-        warnings.append(f"{orphan_decisions} decisions >7d sin outcome")
+        warnings.append(f"{orphan_decisions} decisions >7d without outcome")
     if warnings:
         msg += "\n⚠ EPISODIC GAPS: " + " | ".join(warnings) + " — resolve before closing session."
 
@@ -423,13 +423,13 @@ def _handle_session_diary_read_inner(session_id: str = '', last_n: int = 3, last
         if d.get('decisions'):
             lines.append(f"  Decisions: {d['decisions'][:200]}")
         if d.get('discarded'):
-            lines.append(f"  Descartado: {d['discarded'][:150]}")
+            lines.append(f"  Discarded: {d['discarded'][:150]}")
         if d.get('pending'):
             lines.append(f"  Pending: {d['pending'][:150]}")
         if d.get('context_next'):
             lines.append(f"  For next session: {d['context_next'][:200]}")
         if d.get('mental_state'):
-            lines.append(f"  Estado mental: {d['mental_state'][:300]}")
+            lines.append(f"  Mental state: {d['mental_state'][:300]}")
         if d.get('user_signals'):
             lines.append(f"  User signals: {d['user_signals'][:300]}")
     return "\n".join(lines)
@@ -477,7 +477,7 @@ def handle_change_log(files: str, what_changed: str, why: str,
             )
         else:
             msg += (
-                f"\n⚠ NO COMMIT GIT. If this was a local/server-side change, link a marker "
+                f"\n⚠ NO GIT COMMIT. If this was a local/server-side change, link a marker "
                 f"with nexo_change_commit({change_id}, 'server-direct') or "
                 f"'local-uncommitted'."
             )
@@ -507,9 +507,9 @@ def handle_change_search(query: str = '', files: str = '', days: int = 30) -> st
         if c.get('triggered_by'):
             lines.append(f"    Trigger: {c['triggered_by'][:80]}")
         if c.get('affects'):
-            lines.append(f"    Afecta: {c['affects'][:80]}")
+            lines.append(f"    Affects: {c['affects'][:80]}")
         if c.get('risks'):
-            lines.append(f"    Riesgos: {c['risks'][:80]}")
+            lines.append(f"    Risks: {c['risks'][:80]}")
     return "\n".join(lines)
 
 
@@ -644,7 +644,7 @@ def handle_diary_archive_search(
         if r.get('decisions'):
             lines.append(f"    Decisions: {r['decisions'][:150]}")
         if r.get('mental_state'):
-            lines.append(f"    Estado: {r['mental_state'][:100]}")
+            lines.append(f"    State: {r['mental_state'][:100]}")
     return "\n".join(lines)
 
 

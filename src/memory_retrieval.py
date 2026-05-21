@@ -246,8 +246,8 @@ def memory_timeline(query: str = "", *, project_hint: str = "", time_range: str 
 def format_memory_search(result: dict) -> str:
     candidates = result.get("candidates") or []
     if not candidates:
-        return "No hay evidencia suficiente en Memory Observations para esa consulta."
-    lines = [f"MEMORY SEARCH ({len(candidates)}) — {result.get('query') or '(sin query)'}"]
+        return "There is not enough evidence in Memory Observations for that query."
+    lines = [f"MEMORY SEARCH ({len(candidates)}) — {result.get('query') or '(no query)'}"]
     for item in candidates:
         refs = item.get("evidence_refs") or []
         refs_note = f" refs={', '.join(refs[:3])}" if refs else " refs=none"
@@ -269,10 +269,10 @@ def answer_memory_question(query: str, *, project_hint: str = "", time_range: st
     candidates = result.get("candidates") or []
     evidence_candidates = [item for item in candidates if item.get("evidence_refs")]
     if not evidence_candidates:
-        return "No tengo evidencia suficiente en la memoria nueva para responder eso sin inventar."
-    lines = ["Respuesta basada en evidencia:"]
+        return "There is not enough evidence in new memory to answer that without inventing."
+    lines = ["Evidence-based answer:"]
     for item in evidence_candidates[:limit]:
         refs = item.get("evidence_refs") or []
-        refs_note = ", ".join(refs[:3]) if refs else "sin refs"
+        refs_note = ", ".join(refs[:3]) if refs else "no refs"
         lines.append(f"- {item.get('summary')} ({refs_note})")
     return "\n".join(lines)

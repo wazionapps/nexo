@@ -65,7 +65,7 @@ if [ -n "$MESSAGES" ]; then
 fi
 
 if [ -n "$QUESTIONS" ]; then
-    echo "  ⚠ PREGUNTAS de otra terminal — responder con nexo_answer:"
+    echo "  ⚠ QUESTIONS from another terminal — answer with nexo_answer:"
     echo "$QUESTIONS" | while IFS='|' read -r qid from question; do
         echo "  Q[$qid] de [$from]: $question"
     done

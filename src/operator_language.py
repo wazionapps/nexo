@@ -13,6 +13,8 @@ _LANGUAGE_LABELS = {
     "en": "English (en)",
     "es": "Spanish (es)",
     "fr": "French (fr)",
+    "gl": "Galician (gl)",
+    "eu": "Basque (eu)",
     "it": "Italian (it)",
     "ja": "Japanese (ja)",
     "pt": "Portuguese (pt)",

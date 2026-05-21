@@ -2217,13 +2217,13 @@ def _prompt_model_recommendations(*, interactive: bool) -> None:
         effort_str = f" / {entry['current_effort']}" if entry["current_effort"] else ""
         prev_effort = f" / {entry['user_effort']}" if entry["user_effort"] else ""
         print()
-        print(f"[NEXO] ⭐ Nueva recomendación de modelo para {client}:")
+        print(f"[NEXO] ⭐ New model recommendation for {client}:")
         print(
             f"       {entry['current_model']}{effort_str}  "
-            f"(antes: {entry['user_model']}{prev_effort})"
+            f"(previous: {entry['user_model']}{prev_effort})"
         )
-        print(f"       {entry['display_name']} — recomendado por NEXO.")
-        answer = input("       ¿Migrar tu configuración? [y/N/later]: ").strip().lower()
+        print(f"       {entry['display_name']} — recommended by NEXO.")
+        answer = input("       Migrate your configuration? [y/N/later]: ").strip().lower()
         client_key = normalize_client_key(client) or client
         if answer in {"y", "yes", "s", "si", "sí"}:
             updated_profiles[client_key] = {
@@ -2231,15 +2231,15 @@ def _prompt_model_recommendations(*, interactive: bool) -> None:
                 "reasoning_effort": entry["current_effort"],
             }
             updated_ack[client_key] = entry["current_version"]
-            print(f"       ✅ Migrado a {entry['current_model']}.")
+            print(f"       ✅ Migrated to {entry['current_model']}.")
             changed = True
         elif answer in {"later", "l", "luego"}:
             # Do NOT acknowledge — will prompt again next interactive update.
-            print("       ↻ Te lo preguntaré en el próximo update.")
+            print("       ↻ I will ask again during the next update.")
         else:
             # "N" / empty / anything else → record ack so we don't re-ask.
             updated_ack[client_key] = entry["current_version"]
-            print(f"       Mantenido {entry['user_model']}. No te preguntaré de nuevo para esta versión.")
+            print(f"       Kept {entry['user_model']}. I will not ask again for this version.")
             changed = True
 
     if changed:
@@ -4106,7 +4106,7 @@ def main():
         return 0
 
     if args.command == "email":
-        # Plan F1 — setup / list / test / remove cuentas email.
+        # Plan F1 — setup / list / test / remove email accounts.
         fn = getattr(args, "func", None)
         if fn is None:
             print("usage: nexo email {setup,list,test,remove}")

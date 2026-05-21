@@ -101,11 +101,10 @@ def emit(
     path.parent.mkdir(parents=True, exist_ok=True)
     _rotate_if_needed(path)
 
-    # v0.32.5 — antes `_next_id(path)` se calculaba ANTES de adquirir el
-    # flock → dos emitters concurrentes leían el mismo tail, computaban
-    # el mismo id, y escribían dos eventos con el mismo id. El renderer
-    # dedup descartaba el segundo silently → eventos perdidos. Ahora
-    # `_next_id` se llama DENTRO del lock, garantizando monotonía.
+    # v0.32.5 — `_next_id(path)` used to run BEFORE taking the flock. Two
+    # concurrent emitters could read the same tail, compute the same id, and
+    # write two events with that id. Renderer dedup then dropped the second
+    # event silently. Calling `_next_id` INSIDE the lock guarantees monotonicity.
     line = None
     event = None
     with path.open("a", encoding="utf-8") as fh:

@@ -171,8 +171,8 @@ def main(argv: list[str]) -> int:
             is_default=False,
         )
         print(
-            f"(cuenta '{args.label}' ya existe — email={account.get('email')}, "
-            "normalizo el contrato agente y sólo completo buzones del operador faltantes)."
+            f"(account '{args.label}' already exists — email={account.get('email')}, "
+            "normalizing the agent contract and only filling missing operator mailboxes)."
         )
     else:
         account = add_email_account(

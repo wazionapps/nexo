@@ -262,110 +262,110 @@ def _guide_for_tool(name: str) -> dict[str, list]:
     if name == "nexo_learning_add":
         return {
             "workflow": [
-                "Usa `applies_to` si quieres que el guard recuerde este learning antes de tocar un archivo, directorio o patrón concreto.",
-                "Usa `priority` (`critical`, `high`, `medium`, `low`) para marcar severidad operativa.",
+                "Use `applies_to` if you want the pre-edit check to surface this learning before touching a concrete file, directory, or pattern.",
+                "Use `priority` (`critical`, `high`, `medium`, `low`) to mark operational severity.",
             ],
             "examples": [
                 {
-                    "title": "Learning mínimo",
-                    "code": 'nexo_learning_add(category="shopify", title="Hacer pull antes de editar", content="Siempre sincronizar antes de editar el tema live.")',
+                    "title": "Minimal learning",
+                    "code": 'nexo_learning_add(category="shopify", title="Pull before editing", content="Always sync before editing the live theme.")',
                 },
                 {
-                    "title": "Learning ligado a archivo o patrón",
-                    "code": 'nexo_learning_add(category="recambios-bmw", title="Pull antes de editar theme", content="El admin puede tocar JSONs live.", applies_to="/abs/path/templates/product.json,templates/*.json,sections/*.liquid", prevention="Ejecutar `shopify theme pull` antes de editar.", priority="high")',
+                    "title": "Learning linked to a file or pattern",
+                    "code": 'nexo_learning_add(category="recambios-bmw", title="Pull before editing theme", content="The admin can touch live JSON files.", applies_to="/abs/path/templates/product.json,templates/*.json,sections/*.liquid", prevention="Run `shopify theme pull` before editing.", priority="high")',
                 },
             ],
             "common_errors": [
-                "Usar `severity` en vez de `priority`.",
-                "Olvidar `title`, que es obligatorio.",
-                "No poner `applies_to` cuando quieres que el warning salte antes de tocar archivos concretos.",
+                "Using `severity` instead of `priority`.",
+                "Omitting `title`, which is required.",
+                "Omitting `applies_to` when you want the warning to appear before touching concrete files.",
             ],
         }
     if name == "nexo_learning_update":
         return {
             "workflow": [
-                "Úsalo para completar o endurecer un learning existente cuando descubres nuevos archivos afectados, mejor `prevention` o prioridad distinta.",
+                "Use it to complete or harden an existing learning when you discover newly affected files, a better `prevention`, or a different priority.",
             ],
             "examples": [
                 {
-                    "title": "Añadir alcance a un learning existente",
-                    "code": 'nexo_learning_update(id=57, applies_to="/abs/path/file.py,src/plugins/*.py", prevention="Leer schema antes del primer uso", priority="high")',
+                    "title": "Add scope to an existing learning",
+                    "code": 'nexo_learning_update(id=57, applies_to="/abs/path/file.py,src/plugins/*.py", prevention="Read the schema before first use", priority="high")',
                 },
             ],
             "common_errors": [
-                "Intentar recrear el learning desde cero cuando basta con actualizar el existente.",
+                "Recreating the learning from scratch when updating the existing one is enough.",
             ],
         }
     if name == "nexo_reminder_get":
         return {
             "workflow": [
-                "Devuelve el `READ_TOKEN` necesario para `update`, `delete`, `restore` y `note` sobre ese reminder.",
+                "Returns the `READ_TOKEN` required for `update`, `delete`, `restore`, and `note` on that reminder.",
             ],
             "examples": [
                 {
-                    "title": "Leer reminder y obtener token",
+                    "title": "Read reminder and get token",
                     "code": 'nexo_reminder_get(id="R87")',
                 },
             ],
             "common_errors": [
-                "Intentar editar o borrar un reminder sin llamar antes a `nexo_reminder_get`.",
+                "Trying to edit or delete a reminder without calling `nexo_reminder_get` first.",
             ],
         }
     if name in {"nexo_reminder_update", "nexo_reminder_delete", "nexo_reminder_restore", "nexo_reminder_note"}:
         return {
             "workflow": [
-                "Primero llama `nexo_reminder_get(id=\"R87\")` para obtener `READ_TOKEN`.",
-                f"Luego reutiliza ese `READ_TOKEN` en `{name}(...)`.",
+                "First call `nexo_reminder_get(id=\"R87\")` to obtain `READ_TOKEN`.",
+                f"Then reuse that `READ_TOKEN` in `{name}(...)`.",
             ],
             "examples": [
                 {
-                    "title": "1. Obtener token",
+                    "title": "1. Get token",
                     "code": 'nexo_reminder_get(id="R87")',
                 },
                 {
-                    "title": "2. Reutilizar READ_TOKEN",
+                    "title": "2. Reuse READ_TOKEN",
                     "code": f'{name}(id="R87", read_token="TOKEN")',
                 },
             ],
             "common_errors": [
-                "Llamar a esta tool sin `READ_TOKEN` válido.",
-                "Usar un `READ_TOKEN` de otro reminder o de una lectura antigua.",
+                "Calling this tool without a valid `READ_TOKEN`.",
+                "Using a `READ_TOKEN` from another reminder or an older read.",
             ],
         }
     if name == "nexo_followup_get":
         return {
             "workflow": [
-                "Devuelve el `READ_TOKEN` necesario para `update`, `delete`, `restore` y `note` sobre ese followup.",
+                "Returns the `READ_TOKEN` required for `update`, `delete`, `restore`, and `note` on that followup.",
             ],
             "examples": [
                 {
-                    "title": "Leer followup y obtener token",
+                    "title": "Read followup and get token",
                     "code": 'nexo_followup_get(id="NF45")',
                 },
             ],
             "common_errors": [
-                "Intentar editar o borrar un followup sin llamar antes a `nexo_followup_get`.",
+                "Trying to edit or delete a followup without calling `nexo_followup_get` first.",
             ],
         }
     if name in {"nexo_followup_update", "nexo_followup_delete", "nexo_followup_restore", "nexo_followup_note"}:
         return {
             "workflow": [
-                "Primero llama `nexo_followup_get(id=\"NF45\")` para obtener `READ_TOKEN`.",
-                f"Luego reutiliza ese `READ_TOKEN` en `{name}(...)`.",
+                "First call `nexo_followup_get(id=\"NF45\")` to obtain `READ_TOKEN`.",
+                f"Then reuse that `READ_TOKEN` in `{name}(...)`.",
             ],
             "examples": [
                 {
-                    "title": "1. Obtener token",
+                    "title": "1. Get token",
                     "code": 'nexo_followup_get(id="NF45")',
                 },
                 {
-                    "title": "2. Reutilizar READ_TOKEN",
+                    "title": "2. Reuse READ_TOKEN",
                     "code": f'{name}(id="NF45", read_token="TOKEN")',
                 },
             ],
             "common_errors": [
-                "Llamar a esta tool sin `READ_TOKEN` válido.",
-                "Usar un `READ_TOKEN` de otro followup o de una lectura antigua.",
+                "Calling this tool without a valid `READ_TOKEN`.",
+                "Using a `READ_TOKEN` from another followup or an older read.",
             ],
         }
     return {}
