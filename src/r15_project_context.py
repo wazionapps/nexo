@@ -1,10 +1,10 @@
 """r15_project_context — demand project context before editing a project path.
 
-Fase 2 Protocol Enforcer Fase D item R15. Plan doc 1 reads:
+Phase 2 Protocol Enforcer Phase D item R15. Plan doc 1 reads:
 
-  SI user msg menciona entidad type=project registrada
-  Y en sesión no hay nexo_recall(proyecto) NI lectura atlas
-  ENTONCES inyectar obligación.
+  IF the user message mentions a registered entity with type=project
+  AND the session has no nexo_recall(project) nor atlas read
+  THEN inject the obligation.
 
 This module exposes pure helpers:
 

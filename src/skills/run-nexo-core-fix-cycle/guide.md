@@ -1,17 +1,17 @@
 # Run NEXO Core Fix Cycle
 
-Usa esta skill cuando haya que implementar y verificar un grupo pequeño de fixes del core de NEXO sin improvisar el plano ni repetir siempre la misma fase de descubrimiento y test.
+Use this skill when a small group of NEXO core fixes must be implemented and verified without improvising the plane or repeating the same discovery and test phase every time.
 
 ## Steps
-1. Fija primero el plano: repo público `nexo`, runtime instalado `~/.nexo` y claims/documentación pública. No mezcles esos tres mundos.
-2. Abre `nexo_task_open(...)` y `nexo_workflow_open(...)` antes de tocar código. Si el fix es de acción, pasa también por `nexo_cortex_decide(...)`.
-3. Ejecuta la skill con `areas` ajustadas al fix. El helper te devuelve el mapa de archivos y corre la batería de tests focalizada para `protocol`, `plane`, `guard`, `cortex` y/o `release`.
-4. Implementa el cambio mínimo defendible solo en la superficie correcta. Si el problema es producto, se arregla en el repo; no en `~/.nexo`.
-5. Reejecuta la skill para revalidar el clúster exacto de tests tocado por el fix.
-6. Cierra con `nexo_task_close(...)` y evidencia real. Si hubo edición real, deja `change_log` y captura learning si cambió una regla canónica.
+1. First fix the plane: public `nexo` repo, installed `~/.nexo` runtime, and public claims/docs. Do not mix those three worlds.
+2. Open `nexo_task_open(...)` and `nexo_workflow_open(...)` before touching code. If the fix is action-related, also pass through `nexo_cortex_decide(...)`.
+3. Run the skill with `areas` adjusted to the fix. The helper returns the file map and runs the focused test battery for `protocol`, `plane`, `guard`, `cortex`, and/or `release`.
+4. Implement the smallest defensible change only on the correct surface. If the problem is product-level, fix it in the repo, not in `~/.nexo`.
+5. Rerun the skill to revalidate the exact test cluster touched by the fix.
+6. Close with `nexo_task_close(...)` and real evidence. If there was a real edit, leave `change_log` and capture a learning if a canonical rule changed.
 
 ## Gotchas
-- No uses diary, workflow text o intuición como sustituto de git/tests/runtime reales.
-- Si el fix toca doctor o claims públicos, fija el `plane` explícito antes de ejecutar diagnósticos.
-- Si el fix toca release o runtime update, usa la vía oficial (`nexo update`, doctor, skill de release final) y no scripts laterales.
-- Si el helper no encuentra un área, añade la superficie nueva de forma explícita en la skill en vez de seguir repitiendo grep manual disperso.
+- Do not use diary, workflow text, or intuition as a substitute for real git/tests/runtime evidence.
+- If the fix touches doctor or public claims, set the explicit `plane` before running diagnostics.
+- If the fix touches release or runtime update, use the official path (`nexo update`, doctor, final release skill), not side scripts.
+- If the helper does not find an area, add the new surface explicitly to the skill instead of continuing scattered manual grep.

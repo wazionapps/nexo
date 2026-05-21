@@ -1,17 +1,17 @@
 """r18_followup_autocomplete — suggest followup_complete retroactively.
 
-Fase 2 Protocol Enforcer Fase D item R18. Plan doc 1 reads:
+Phase 2 Protocol Enforcer Phase D item R18. Plan doc 1 reads:
 
-  Al abrir sesión: cargar followups activos
-  SI acción ejecutada coincide (>70%) con followup activo
-  ENTONCES sugerir followup_complete.
+  On session open: load active followups
+  IF the executed action matches an active followup (>70%)
+  THEN suggest followup_complete.
 
 R18 is a SUGGESTION rule (not a block). The enforcer emits a single
 reminder per followup hit per turn, and operators / Cortex decide
 whether to actually call nexo_followup_complete.
 
 Reuses the Jaccard matcher from tools_reminders_crud.find_completable_
-followups (Fase B R04 helper) rather than duplicating the matching
+followups (Phase B R04 helper) rather than duplicating the matching
 logic. The trigger signal is the tool_name + tool_input of the agent's
 actions — we build a one-shot "action description" string from those
 and run the R04 matcher over it.

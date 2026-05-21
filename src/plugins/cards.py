@@ -47,8 +47,8 @@ def _api_base() -> str:
     return raw.strip().rstrip("/") or DEFAULT_API_BASE
 
 
-def _normalize_locale(locale: str = "es") -> str:
-    return "en" if str(locale or "").lower().startswith("en") else "es"
+def _normalize_locale(locale: str = "en") -> str:
+    return "es" if str(locale or "").lower().startswith("es") else "en"
 
 
 def _shared_auth_candidates() -> list[Path]:
@@ -126,12 +126,12 @@ def _decode_body(raw: bytes) -> dict[str, Any]:
         return {"raw": raw.decode("utf-8", errors="replace")[:1000]}
 
 
-def _request_json(method: str, path: str, *, body: dict[str, Any] | None = None, locale: str = "es") -> dict[str, Any]:
+def _request_json(method: str, path: str, *, body: dict[str, Any] | None = None, locale: str = "en") -> dict[str, Any]:
     token = _read_token()
     if not token:
         return _error(
             "not_authenticated",
-            "No hay sesión NEXO Desktop disponible para consultar fichas.",
+            "No NEXO Desktop session is available to fetch protocol cards.",
         )
 
     data = json.dumps(body or {}, ensure_ascii=False).encode("utf-8") if body is not None else None
@@ -169,13 +169,13 @@ def _request_json(method: str, path: str, *, body: dict[str, Any] | None = None,
         return _error("network_error", str(exc))
 
 
-def handle_card_catalog(locale: str = "es") -> str:
+def handle_card_catalog(locale: str = "en") -> str:
     """Return the visible official protocol card catalog. Never includes protocols."""
     params = urllib.parse.urlencode({"locale": _normalize_locale(locale)})
     return _json(_request_json("GET", f"/api/cards/catalog?{params}", locale=locale))
 
 
-def handle_card_get(slug: str, locale: str = "es") -> str:
+def handle_card_get(slug: str, locale: str = "en") -> str:
     """Fetch one official protocol card, including protocol text, by slug."""
     clean_slug = str(slug or "").strip()
     if not clean_slug:
@@ -189,7 +189,7 @@ def handle_card_match(
     query: str,
     limit: int = 5,
     include_protocol: bool = True,
-    locale: str = "es",
+    locale: str = "en",
     category: str = "",
     business_type: str = "",
 ) -> str:

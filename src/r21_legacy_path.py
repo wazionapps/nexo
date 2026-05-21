@@ -1,10 +1,10 @@
 """r21_legacy_path — warn when a command / edit touches a legacy path.
 
-Fase 2 Protocol Enforcer Fase D item R21. Plan doc 1 reads:
+Phase 2 Protocol Enforcer Phase D item R21. Plan doc 1 reads:
 
-  SI intent Bash o Edit con path contiene entrada de entity_list
+  IF Bash or Edit intent path contains an entity_list entry
      type=legacy_path
-  ENTONCES inyectar recordatorio canónico.
+  THEN inject the canonical reminder.
 
 Pure decision module. Legacy-path entities are seeded at `nexo init`
 from src/presets/entities_universal.json (the ~/claude → ~/.nexo mapping).

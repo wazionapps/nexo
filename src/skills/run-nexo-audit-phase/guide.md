@@ -1,43 +1,43 @@
 # Run NEXO Audit Phase
 
-Usa esta skill cuando haya que ejecutar una fase de auditoria de NEXO y el cuello de botella sea decidir el alcance de `evolution_apply` y arrancar una tanda de items con disciplina empirica.
+Use this skill when a NEXO audit phase must be run and the bottleneck is deciding the `evolution_apply` scope and starting a batch of items with empirical discipline.
 
-## Pasos
-1. Abre `goal + workflow + task` y fija el terreno real antes de interpretar el informe:
-   - repo/runtime activo
-   - DB real
-   - mecanismo de update
-   - tests y estado git
-2. Fija la regla de autonomia antes de empezar:
-   - Francisco no quiere checkpoints uno-a-uno para trabajo mecanico
-   - NEXO hace branches, PRs, merge y reporta despues con evidencia
-   - solo un blast radius arquitectonico enorme merece checkpoint
-3. Trata `evolution_apply` como una decision tecnica de implementacion, no como permiso humano:
-   - el camino de apply ya existe via `evolution_log` + `_apply_accepted_proposals`
-   - el sandbox/snapshot/rollback protege la materializacion del cambio aceptado
-   - no dupliques ese mecanismo en deep sleep ni en el runner de auditoria
-4. Lanza la verificacion empirica de todos los items en paralelo:
-   - `grep + read` del codigo
-   - SQL/schema real
-   - AST/tests/imports/logs cuando aplique
-   - asume FP hasta que la evidencia lo contradiga
-5. Clasifica cada item:
+## Steps
+1. Open `goal + workflow + task` and establish the real surface before interpreting the report:
+   - active repo/runtime
+   - real DB
+   - update mechanism
+   - tests and git status
+2. Set the autonomy rule before starting:
+   - Francisco does not want one-by-one checkpoints for mechanical work
+   - NEXO creates branches, PRs, merges, and reports afterward with evidence
+   - only a huge architectural blast radius deserves a checkpoint
+3. Treat `evolution_apply` as a technical implementation decision, not as human permission:
+   - the apply path already exists through `evolution_log` + `_apply_accepted_proposals`
+   - sandbox/snapshot/rollback protects materialization of the accepted change
+   - do not duplicate that mechanism in deep sleep or the audit runner
+4. Launch empirical verification of all items in parallel:
+   - `grep + read` over code
+   - real SQL/schema
+   - AST/tests/imports/logs when applicable
+   - assume FP until evidence contradicts it
+5. Classify each item:
    - `real_gap`
-   - `casi_fp`
+   - `near_fp`
    - `fp`
-6. Ordena solo los `real_gap` por riesgo/blast radius y ejecutalos con worktree aislado si tocan core.
-7. Por cada `real_gap`:
+6. Order only `real_gap` items by risk/blast radius and execute them with an isolated worktree if they touch core.
+7. For each `real_gap`:
    - `guard_check`
    - `track`
-   - branch propia
-   - implementacion minima
-   - tests adyacentes
+   - dedicated branch
+   - minimal implementation
+   - adjacent tests
    - PR + auto-merge squash
-   - seguir al siguiente sin esperar CI salvo bloqueo real
-8. Para `fp` o `casi_fp`, captura learning/patron reusable en vez de reimplementar.
-9. Cierra la fase con evidencia real: PRs, tests, merge status y resultados de verificacion.
+   - continue to the next item without waiting for CI unless there is a real blocker
+8. For `fp` or `near_fp`, capture a learning/reusable pattern instead of reimplementing.
+9. Close the phase with real evidence: PRs, tests, merge status, and verification results.
 
 ## Gotchas
-- Learning #198: no confundas "como trabaja NEXO" con "que puede aplicar evolution_apply". Lo primero ya esta resuelto: autonomia total.
-- `apply_findings.py` ya stagea `code_change` en `evolution_log`; `nexo-evolution-run.py` ya consume `accepted` con sandbox/snapshot/rollback. Si el item pide eso, primero verifica si ya existe.
-- En Fase 1+2 la auditoria automatica sobreestimo ~70% de gaps. Si no hay evidencia dura, no abras codigo.
+- Learning #198: do not confuse "how NEXO works" with "what evolution_apply may apply". The first is already settled: full autonomy.
+- `apply_findings.py` already stages `code_change` in `evolution_log`; `nexo-evolution-run.py` already consumes `accepted` with sandbox/snapshot/rollback. If the item asks for that, first verify whether it already exists.
+- In Phase 1+2 the automated audit overestimated about 70% of gaps. If there is no hard evidence, do not open code.

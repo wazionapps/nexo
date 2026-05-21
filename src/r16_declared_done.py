@@ -1,10 +1,10 @@
 """r16_declared_done — detect "I'm done" outputs without nexo_task_close.
 
-Fase 2 Protocol Enforcer Fase C (Capa 2) item R16. Plan doc 1 reads:
+Phase 2 Protocol Enforcer Phase C (Layer 2) item R16. Plan doc 1 reads:
 
-  SI classifier detecta que último output afirma tarea completada
-  Y hay protocol task abierta
-  ENTONCES inyectar obligación task_close con evidence.
+  IF the classifier detects that the last output claims task completion
+  AND there is an open protocol task
+  THEN inject the task_close-with-evidence obligation.
 
 Exposes detect_declared_done(assistant_text, classifier=None) → bool and
 the reminder prompt template. The window-and-state tracking lives in

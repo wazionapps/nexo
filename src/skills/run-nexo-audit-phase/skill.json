@@ -1,7 +1,7 @@
 {
   "id": "SK-RUN-NEXO-AUDIT-PHASE",
   "name": "Run NEXO Audit Phase",
-  "description": "Workflow para ejecutar una fase de auditoria de NEXO con autonomia total y verificacion empirica. Cubre el patron repetido de decidir el scope de evolution_apply y arrancar una tanda de items sin checkpoints manuales.",
+  "description": "Workflow for running a NEXO audit phase with full autonomy and empirical verification. Covers the recurring pattern of deciding the evolution_apply scope and starting a batch of items without manual checkpoints.",
   "level": "published",
   "mode": "guide",
   "source_kind": "core",
@@ -17,26 +17,26 @@
   ],
   "trigger_patterns": [
     "evolution_apply sandbox scope",
-    "fase 2 item 1",
-    "arrancar verificacion empirica",
-    "ejecutar fase de auditoria nexo",
+    "phase 2 item 1",
+    "start empirical verification",
+    "run nexo audit phase",
     "audit phase nexo",
     "7 items audit"
   ],
   "steps": [
-    "Abrir goal, workflow y task antes de tocar la auditoria; resolver repo/runtime real, DB real, tests y estado git antes de interpretar el informe.",
-    "Fijar la regla de autonomia: NEXO hace branches, PRs, merge y progreso periodico; no pedir checkpoints uno-a-uno a Francisco para trabajo mecanico.",
-    "Para `evolution_apply`, separar dos planos: el sandbox es para materializar/aplicar cambios aceptados con snapshot/rollback; no es un freno para el modo de trabajo autonomo del agente.",
-    "Lanzar verificacion empirica de TODOS los items en paralelo: grep+read, SQL/schema real, AST/tests, logs. Partir de la hipotesis de FP hasta tener evidencia.",
-    "Clasificar cada item en `real_gap`, `casi_fp` o `fp` y ordenar solo los reales por blast radius/riesgo.",
-    "Si hay que tocar core, usar worktree aislado; por item real: guard_check -> track -> branch -> implement -> tests adyacentes -> PR -> auto-merge squash.",
-    "Para items FP o casi-FP, capturar learning o ajustar el patron reusable en vez de reimplementar.",
-    "Cerrar con evidencia de PRs, tests y merge status reales; no usar diarios o workflow text como sustituto."
+    "Open the goal, workflow, and task before touching the audit; resolve the real repo/runtime, real DB, tests, and git status before interpreting the report.",
+    "Set the autonomy rule: NEXO creates branches, PRs, merges, and periodic progress reports; do not ask Francisco for one-by-one checkpoints for mechanical work.",
+    "For `evolution_apply`, separate two planes: the sandbox materializes/applies accepted changes with snapshot/rollback; it is not a brake on the agent's autonomous work mode.",
+    "Launch empirical verification of ALL items in parallel: grep+read, real SQL/schema, AST/tests, logs. Start from the FP hypothesis until evidence says otherwise.",
+    "Classify each item as `real_gap`, `near_fp`, or `fp`, and order only real items by blast radius/risk.",
+    "If core must be touched, use an isolated worktree; for each real item: guard_check -> track -> branch -> implement -> adjacent tests -> PR -> auto-merge squash.",
+    "For FP or near-FP items, capture a learning or adjust the reusable pattern instead of reimplementing.",
+    "Close with real PR, test, and merge-status evidence; do not use diaries or workflow text as substitutes."
   ],
   "gotchas": [
-    "No pedir aprobacion manual a Francisco para cada PR: learning #198 confirma autonomia total con transparencia y reportes periodicos.",
-    "No duplicar el sandbox de evolution en otros sitios: el apply de cambios aceptados ya reutiliza evolution_log + sandbox/snapshot/rollback.",
-    "El ratio historico de FPs en esta clase de auditoria es alto; si no hay evidencia concreta, el item no se toca."
+    "Do not ask Francisco for manual approval on every PR: learning #198 confirms full autonomy with transparency and periodic reports.",
+    "Do not duplicate the evolution sandbox elsewhere: accepted-change apply already reuses evolution_log + sandbox/snapshot/rollback.",
+    "The historical FP rate for this audit class is high; if there is no concrete evidence, the item is not touched."
   ],
   "params_schema": {
     "audit_file": {

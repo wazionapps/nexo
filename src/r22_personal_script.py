@@ -1,10 +1,10 @@
 """r22_personal_script — demand context lookup before creating a personal script.
 
-Fase 2 Protocol Enforcer Fase D item R22. Plan doc 1 reads:
+Phase 2 Protocol Enforcer Phase D item R22. Plan doc 1 reads:
 
-  SI intent nexo_personal_script_create O Write sobre scripts/
-  Y no hubo personal_scripts_list + skill_match + learning_search
-  ENTONCES inyectar obligación.
+  IF the intent is nexo_personal_script_create OR Write under scripts/
+  AND there was no personal_scripts_list + skill_match + learning_search
+  THEN inject the obligation.
 
 R22 fires BEFORE introducing a new personal script to make sure the
 agent first checked:

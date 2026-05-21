@@ -6,24 +6,24 @@ from doctor.models import DoctorCheck
 
 VALID_DIAGNOSTIC_PLANES = {
     "product_public": {
-        "label": "producto público",
-        "use": "release contracts, artefactos publicados, compare/, docs y surfaces públicas del repo",
+        "label": "public product",
+        "use": "release contracts, published artifacts, compare/, docs, and public repo surfaces",
     },
     "runtime_personal": {
-        "label": "runtime personal",
-        "use": "~/.nexo, scripts personales, followups, reminders y hábitos operativos del operador",
+        "label": "personal runtime",
+        "use": "~/.nexo, personal scripts, followups, reminders, and operator work habits",
     },
     "installation_live": {
-        "label": "instalación viva",
-        "use": "runtime instalado, hooks activos, clientes conectados, cron sync y parity de la instalación local",
+        "label": "live installation",
+        "use": "installed runtime, active hooks, connected clients, cron sync, and local installation parity",
     },
     "database_real": {
-        "label": "BD real",
-        "use": "SQLite/MySQL reales, filas, schema, deudas, sesiones y evidencia persistida",
+        "label": "real database",
+        "use": "real SQLite/MySQL, rows, schema, debts, sessions, and persisted evidence",
     },
     "cooperator": {
-        "label": "co-operador",
-        "use": "comportamiento del agente, protocolo, comunicación y decisiones del asistente",
+        "label": "co-operator",
+        "use": "agent behavior, protocol, communication, and assistant decisions",
     },
 }
 
@@ -53,17 +53,17 @@ def diagnostic_plane_preflight(plane: str = "") -> tuple[str, DoctorCheck | None
             tier="orchestrator",
             status="critical",
             severity="error",
-            summary=f"Plano diagnóstico desconocido: {raw_plane}",
+            summary=f"Unknown diagnostic plane: {raw_plane}",
             evidence=[
-                f"planes válidos: {options}",
-                "Usa `runtime_personal` para ~/.nexo y hábitos del runtime; `installation_live` para hooks/clientes/instalación; `database_real` para filas y schema reales.",
+                f"valid planes: {options}",
+                "Use `runtime_personal` for ~/.nexo and runtime habits; `installation_live` for hooks/clients/installation; `database_real` for real rows and schema.",
             ],
             repair_plan=[
-                "Repite `nexo_doctor` o `nexo doctor` con `plane='runtime_personal'`, `plane='installation_live'` o `plane='database_real'`.",
-                "Si el problema pertenece a producto público o al co-operador, usa el surface correcto en vez de NEXO Doctor.",
+                "Run `nexo_doctor` or `nexo doctor` again with `plane='runtime_personal'`, `plane='installation_live'`, or `plane='database_real'`.",
+                "If the issue belongs to the public product or the co-operator, use the correct surface instead of NEXO Doctor.",
             ],
             escalation_prompt=(
-                "El plano elegido no existe. Repite el diagnóstico con un plano válido para evitar mezclar runtime, instalación, BD real o surfaces ajenas al doctor."
+                "The selected plane does not exist. Repeat the diagnosis with a valid plane to avoid mixing runtime, installation, real DB, or non-doctor surfaces."
             ),
         )
 
@@ -74,17 +74,17 @@ def diagnostic_plane_preflight(plane: str = "") -> tuple[str, DoctorCheck | None
             tier="orchestrator",
             status="degraded",
             severity="warn",
-            summary=f"NEXO Doctor no es la superficie correcta para el plano {plane_info['label']}",
+            summary=f"NEXO Doctor is not the correct surface for the {plane_info['label']} plane",
             evidence=[
                 f"plane: {clean_plane}",
-                f"este plano se diagnostica mejor desde: {plane_info['use']}",
+                f"this plane is better diagnosed from: {plane_info['use']}",
             ],
             repair_plan=[
-                "Si quieres diagnosticar runtime/instalación/BD, vuelve a lanzar el doctor con el plano correcto.",
-                "Si el problema es del producto público o del co-operador, usa release checks, repo checks o herramientas de protocolo/sesión en vez de Doctor.",
+                "If you want to diagnose runtime/installation/DB, rerun the doctor with the correct plane.",
+                "If the issue belongs to the public product or the co-operator, use release checks, repo checks, or protocol/session tools instead of Doctor.",
             ],
             escalation_prompt=(
-                "El plano elegido no corresponde al runtime doctor. Cambia de plano o de herramienta antes de seguir para no mezclar diagnóstico técnico con producto o comportamiento del agente."
+                "The selected plane does not belong to the runtime doctor. Change the plane or tool before continuing so technical diagnosis is not mixed with product or agent behavior."
             ),
         )
 

@@ -89,7 +89,7 @@ def test_inspect_fails_on_root_settings_drift(tmp_path):
     )
 
     assert report["ok"] is False
-    assert any("desincronizado" in issue for issue in report["issues"])
+    assert any("out of sync" in issue for issue in report["issues"])
 
 
 def test_inspect_fails_on_root_cortex_drift(tmp_path):
@@ -107,7 +107,7 @@ def test_inspect_fails_on_root_cortex_drift(tmp_path):
     )
 
     assert report["ok"] is False
-    assert any("tercera superficie MCP desincronizada" in issue for issue in report["issues"])
+    assert any("A third MCP surface is out of sync" in issue for issue in report["issues"])
 
 
 def test_inspect_fails_on_legacy_home_and_db(tmp_path):
@@ -202,4 +202,4 @@ def test_inspect_fails_when_config_points_to_versioned_runtime_snapshot(tmp_path
     )
 
     assert report["ok"] is False
-    assert any("snapshot versionado" in issue for issue in report["issues"])
+    assert any("versioned snapshot" in issue for issue in report["issues"])

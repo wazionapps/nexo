@@ -1,10 +1,10 @@
 """r20_constant_change — demand grep-all-usages before changing a constant.
 
-Fase 2 Protocol Enforcer Fase D item R20. Plan doc 1 reads:
+Phase 2 Protocol Enforcer Phase D item R20. Plan doc 1 reads:
 
-  SI classifier detecta que Edit modifica constante/global/config compartida
-  Y no hubo Grep del símbolo
-  ENTONCES inyectar obligación grep TODOS los usos.
+  IF the classifier detects that Edit changes a shared constant/global/config
+  AND there was no Grep for the symbol
+  THEN inject an obligation to grep ALL usages.
 
 Decision logic is split in two:
 

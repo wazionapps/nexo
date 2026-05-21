@@ -3159,7 +3159,7 @@ class TestOrchestrator:
         assert report.overall_status == "degraded"
         assert len(report.checks) == 1
         assert report.checks[0].id == "orchestrator.diagnostic_plane_mismatch"
-        assert "co-operador" in report.checks[0].summary.lower()
+        assert "co-operator" in report.checks[0].summary.lower()
 
     def test_tier_crash_is_caught_and_reported(self, nexo_home, monkeypatch):
         from doctor import orchestrator

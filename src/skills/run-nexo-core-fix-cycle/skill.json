@@ -1,7 +1,7 @@
 {
   "id": "SK-RUN-NEXO-CORE-FIX-CYCLE",
   "name": "Run NEXO Core Fix Cycle",
-  "description": "Mapea las superficies core impactadas y ejecuta la verificación focalizada para ciclos pequeños de fixes de NEXO sin mezclar repo público, runtime y claims no verificados.",
+  "description": "Map impacted core surfaces and run focused verification for small NEXO fix cycles without mixing the public repo, runtime, and unverified claims.",
   "level": "published",
   "mode": "hybrid",
   "source_kind": "core",
@@ -16,11 +16,11 @@
     "verification"
   ],
   "trigger_patterns": [
-    "dos fixes core nexo",
+    "two nexo core fixes",
     "core fix cycle",
-    "enforcement protocolario",
-    "plano antes del diagnostico",
-    "ciclo fix core nexo"
+    "protocol enforcement",
+    "plane before diagnosis",
+    "nexo core fix cycle"
   ],
   "params_schema": {
     "areas": {

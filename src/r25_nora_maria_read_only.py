@@ -1,16 +1,16 @@
 """r25_nora_maria_read_only — block destructive SSH/scp/rsync to read-only hosts.
 
-Fase 2 Protocol Enforcer Fase C (Capa 2) item R25. Plan doc 1 reads:
+Phase 2 Protocol Enforcer Phase C (Layer 2) item R25. Plan doc 1 reads:
 
-  SI intent Bash "ssh" hacia host con entity.access_mode=read_only
-  Y comando incluye verbos destructivos (rm/mv/>/>>/sed -i)
-  Y user message no contiene permiso explícito
-  ENTONCES BLOQUEAR + pedir confirmación.
+  IF Bash "ssh" intent targets a host with entity.access_mode=read_only
+  AND the command includes destructive verbs (rm/mv/>/>>/sed -i)
+  AND the user message contains no explicit permission
+  THEN BLOCK + ask for confirmation.
 
 The enforcer runs in observer mode (headless subprocess, Desktop
 stream wrapper), so "blocking" in practice means enqueueing a hard,
 prominent injection that names the host and the destructive verb.
-The MCP-side guard (Capa 1 learnings #283 / #336 / #358) and the
+The MCP-side guard (Layer 1 learnings #283 / #336 / #358) and the
 system-prompt rule R32 keep the agent from actually issuing the
 command when it honours the reminder.
 

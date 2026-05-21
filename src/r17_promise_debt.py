@@ -1,10 +1,10 @@
 """r17_promise_debt — detect assistant promises that were not executed.
 
-Fase 2 Protocol Enforcer Fase D item R17. Plan doc 1 reads:
+Phase 2 Protocol Enforcer Phase D item R17. Plan doc 1 reads:
 
-  SI classifier detecta promesa de acción futura en output al usuario
-  Y en los 2 turnos siguientes no hay tool calls relevantes
-  ENTONCES flag promise_debt + recordatorio.
+  IF the classifier detects a future-action promise in user-facing output
+  AND the next 2 turns have no relevant tool calls
+  THEN flag promise_debt + reminder.
 
 Exposes detect_promise(text, classifier) → bool. State (promise window
 countdown) lives in the caller — mirrors the R14 / R16 pattern.
@@ -13,7 +13,7 @@ Classifier path is the same as R14 / R16:
 semantic_router decision_kind ``r17_promise_debt``. Fail-closed on any
 unavailable backend (no promise flagged rather than a false positive).
 
-Mirror: nexo-desktop/lib/r17-promise-debt.js (bundled with Fase D JS
+Mirror: nexo-desktop/lib/r17-promise-debt.js (bundled with Phase D JS
 twins at the end of the tranche).
 """
 from __future__ import annotations

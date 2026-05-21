@@ -331,14 +331,14 @@ async function sendMessage() {
       const data = await res.json();
       chatHistory.push({
         role: 'nexo',
-        content: data.answer || 'Sin respuesta.',
+        content: data.answer || 'No response.',
         data: data.data || null,
         query_type: data.query_type || null
       });
     }
   } catch (err) {
     hideTyping();
-    chatHistory.push({ role: 'nexo', content: `Error de conexion: ${err.message}` });
+    chatHistory.push({ role: 'nexo', content: `Connection error: ${err.message}` });
   }
 
   isWaiting = false;

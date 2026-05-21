@@ -1,10 +1,10 @@
 """r23_ssh_without_atlas — demand atlas lookup before SSHing to an unknown host.
 
-Fase 2 Protocol Enforcer Fase D item R23. Plan doc 1 reads:
+Phase 2 Protocol Enforcer Phase D item R23. Plan doc 1 reads:
 
-  SI intent Bash con ssh|scp|rsync|curl hacia host
-  Y host no está en entity_list type=host
-  ENTONCES inyectar obligación leer atlas.
+  IF Bash intent uses ssh|scp|rsync|curl toward a host
+  AND the host is not in entity_list type=host
+  THEN inject the atlas-read obligation.
 
 Reuses the host-extraction primitive from r25 (imported lazily to avoid
 a hard dependency — same mirror is provided on the JS side via the r25

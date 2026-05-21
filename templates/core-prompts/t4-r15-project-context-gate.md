@@ -4,8 +4,8 @@ Examples:
 + User: "Vamos a arreglar el bug del checkout" -> yes
 + User: "Hazme un refactor del login de CanaRirural" -> yes
 + User: "Revisa la PR del orchestrator" -> yes
-- User: "qué hora es" -> no
-- User: "gracias, ya está" -> no
+- User: "what time is it" -> no
+- User: "thanks, that's done" -> no
 - User: "dime un chiste" -> no
 
 Now decide. Input:

@@ -1,10 +1,10 @@
 """r24_stale_memory — warn when a stale memory is cited without verification.
 
-Fase 2 Protocol Enforcer Fase D item R24. Plan doc 1 reads:
+Phase 2 Protocol Enforcer Phase D item R24. Plan doc 1 reads:
 
-  SI en los últimos 3 turnos se citó dato de recall/memory con age>7
-  Y no hubo tool call de verificación fresh
-  ENTONCES warning.
+  IF the last 3 turns cited recall/memory data with age>7
+  AND there was no fresh verification tool call
+  THEN warn.
 
 Implementation approach:
 

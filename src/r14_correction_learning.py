@@ -1,11 +1,11 @@
 """r14_correction_learning — detect user corrections and demand a learning_add.
 
-Fase 2 Protocol Enforcer Fase C (Capa 2) item R14. Plan doc 1 reads:
+Phase 2 Protocol Enforcer Phase C (Layer 2) item R14. Plan doc 1 reads:
 
-  SI último user msg → cognitive_sentiment.is_correction = true
-     O valence < -0.4
-  Y en los 3 tool calls siguientes NO aparece nexo_learning_add
-  ENTONCES inyectar obligación.
+  IF the last user message -> cognitive_sentiment.is_correction = true
+     OR valence < -0.4
+  AND nexo_learning_add does NOT appear in the next 3 tool calls
+  THEN inject the obligation.
 
 Implementation contract:
 

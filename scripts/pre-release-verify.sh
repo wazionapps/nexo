@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
 # NEXO Brain — pre-release discipline wrapper.
 #
-# Fuente: NF-DS-B232B713 (read-plan + check-data + contract-test unified)
+# Source: NF-DS-B232B713 (read-plan + check-data + contract-test unified)
 #         + NF-RELEASE-DISCIPLINA-20260414 (version / changelog / tag).
 #
-# Orquesta los checks que ya existen en el repo en un solo comando para
-# uso local y CI. NO añade lógica nueva de verificación — cada check
-# vive en su script canónico.
+# Orchestrates the existing repo checks in one command for local use and CI.
+# It does NOT add new verification logic; each check lives in its canonical
+# script.
 #
-# Uso:
-#   scripts/pre-release-verify.sh                    # smoke sin target
-#   scripts/pre-release-verify.sh --release v7.2.0   # + valida tag + changelog + package.json
-#   scripts/pre-release-verify.sh --skip pytest      # omite un step concreto
+# Usage:
+#   scripts/pre-release-verify.sh                    # smoke without target
+#   scripts/pre-release-verify.sh --release v7.2.0   # + validate tag + changelog + package.json
+#   scripts/pre-release-verify.sh --skip pytest      # skip one specific step
 #   scripts/pre-release-verify.sh --help
 #
-# Exit code 0 si todos los steps habilitados pasan, 1 si falla alguno.
+# Exit code 0 if all enabled steps pass, 1 if any step fails.
 
 set -uo pipefail
 
@@ -33,13 +33,13 @@ Checks (in order):
   2. tool-map        — scripts/verify_tool_map.py
   3. release-ready   — scripts/verify_release_readiness.py --ci
   4. pytest          — python3 -m pytest -q
-  5. release-target  — tag libre + CHANGELOG entry + package.json version
-                       (solo si se pasa --release vX.Y.Z)
+  5. release-target  — free tag + CHANGELOG entry + package.json version
+                       (only when --release vX.Y.Z is passed)
 
 Flags:
-  --release vX.Y.Z   Activa el step release-target.
-  --skip NAME        Omite un step por nombre (repetible). Útil en loops locales.
-  --help, -h         Muestra este texto.
+  --release vX.Y.Z   Enable the release-target step.
+  --skip NAME        Skip a step by name (repeatable). Useful for local loops.
+  --help, -h         Show this text.
 HELP
 }
 

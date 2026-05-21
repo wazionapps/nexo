@@ -191,44 +191,44 @@ def inspect_claude_code_mcp(
 
     if not root_server and settings_server:
         issues.append(
-            f"{root_path} no define mcpServers.{server_name}, pero {settings_path} sí. "
-            "Claude Code 2.1.x lee el config raíz para MCP user-scoped."
+            f"{root_path} does not define mcpServers.{server_name}, but {settings_path} does. "
+            "Claude Code 2.1.x reads the root config for user-scoped MCP."
         )
     elif not root_server:
-        issues.append(f"{root_path} no define mcpServers.{server_name}.")
+        issues.append(f"{root_path} does not define mcpServers.{server_name}.")
 
     if root_server and settings_server and not _is_same_file(root_server, settings_server):
         issues.append(
-            f"{root_path} y {settings_path} tienen {server_name} distinto. "
-            f"El root es la fuente de verdad y settings.json está desincronizado."
+            f"{root_path} and {settings_path} define different {server_name} entries. "
+            f"The root config is the source of truth and settings.json is out of sync."
         )
     if root_server and cortex_server and not _is_same_file(root_server, cortex_server):
         issues.append(
-            f"{root_path} y {cortex_path} tienen {server_name} distinto. "
-            "Hay una tercera superficie MCP desincronizada."
+            f"{root_path} and {cortex_path} define different {server_name} entries. "
+            "A third MCP surface is out of sync."
         )
 
     if workspace_server and root_server and not _is_same_file(workspace_server, root_server):
         if active_source_label == "workspace":
             issues.append(
-                f"El CLI está cargando {server_name} desde {workspace_mcp_path}, no desde {root_path}. "
-                "Antes de culpar al server global, revisa el attach local del workspace."
+                f"The CLI is loading {server_name} from {workspace_mcp_path}, not from {root_path}. "
+                "Before blaming the global server, inspect the workspace-local attach."
             )
         else:
             issues.append(
-                f"{workspace_mcp_path} define {server_name} distinto al root global. "
-                "Antes de culpar al server, confirma si el workspace está adjuntando otro MCP."
+                f"{workspace_mcp_path} defines a different {server_name} than the global root. "
+                "Before blaming the server, confirm whether the workspace is attaching another MCP."
             )
     elif workspace_server:
-        notes.append(f"Workspace local detectado: {workspace_mcp_path}")
+        notes.append(f"Local workspace config detected: {workspace_mcp_path}")
 
     if cli_returncode != 0:
         issues.append(
-            f"`claude mcp list` falló con rc={cli_returncode}: {(cli_stderr or cli_output).strip() or 'sin detalle'}"
+            f"`claude mcp list` failed with rc={cli_returncode}: {(cli_stderr or cli_output).strip() or 'no detail'}"
         )
     elif not cli_server:
         issues.append(
-            f"`claude mcp list` no reporta {server_name}; el CLI activo no está cargando ese server."
+            f"`claude mcp list` does not report {server_name}; the active CLI is not loading that server."
         )
     else:
         expected = _server_command(active_source_config or global_config)
@@ -238,7 +238,7 @@ def inspect_claude_code_mcp(
             )
         if "Connected" not in cli_server["status"]:
             issues.append(
-                f"`claude mcp list` ve {server_name} pero no conecta: {cli_server['status']}."
+                f"`claude mcp list` sees {server_name} but it is not connected: {cli_server['status']}."
             )
 
     legacy_tokens = [str(legacy_home), "~/claude", f"{home}/claude"]
@@ -248,53 +248,53 @@ def inspect_claude_code_mcp(
         seen_strings.append(cli_server["command"])
     legacy_hits = sorted({value for value in seen_strings for token in legacy_tokens if token and token in value})
     if legacy_hits:
-        issues.append("Rutas legacy detectadas en la configuración activa: " + "; ".join(legacy_hits))
+        issues.append("Legacy paths detected in the active configuration: " + "; ".join(legacy_hits))
 
     if global_home_raw:
         expanded_home = Path(global_home_raw).expanduser()
         if expanded_home == legacy_home or resolved_home == legacy_home:
             issues.append(
-                f"NEXO_HOME apunta a legacy `{legacy_home}`. El home gestionado actual es `{managed_home}`."
+                f"NEXO_HOME points to legacy `{legacy_home}`. The current managed home is `{managed_home}`."
             )
 
     if server_path and not server_path.exists():
-        issues.append(f"server.py no existe en la ruta configurada: {server_path}")
+        issues.append(f"server.py does not exist at the configured path: {server_path}")
 
     if isinstance(global_config, dict):
         command = str(global_config.get("command", "")).strip()
         if command.startswith("/") and not Path(command).exists():
-            issues.append(f"El binario configurado no existe: {command}")
+            issues.append(f"The configured binary does not exist: {command}")
 
     if global_code_raw:
         expanded_code = Path(global_code_raw).expanduser()
         if expanded_code == legacy_home:
             issues.append(
-                f"NEXO_CODE sigue apuntando a legacy `{legacy_home}` en vez del runtime o repo real."
+                f"NEXO_CODE still points to legacy `{legacy_home}` instead of the real runtime or repo."
             )
         managed_core = managed_home / "core"
         if _is_relative_to(expanded_code, managed_core / "versions"):
             issues.append(
-                f"NEXO_CODE apunta a un snapshot versionado `{expanded_code}`. "
-                f"Debe apuntar al runtime gestionado estable `{managed_core}`."
+                f"NEXO_CODE points to a versioned snapshot `{expanded_code}`. "
+                f"It must point to the stable managed runtime `{managed_core}`."
             )
 
     if server_path and _is_relative_to(server_path, managed_home / "core" / "versions"):
         issues.append(
-            f"server.py apunta a un snapshot versionado `{server_path}` en vez del runtime gestionado estable "
+            f"server.py points to a versioned snapshot `{server_path}` instead of the stable managed runtime "
             f"`{managed_home / 'core' / 'server.py'}`."
         )
 
     if not active_db.exists():
-        issues.append(f"La DB activa esperada no existe: {active_db}")
+        issues.append(f"The expected active DB does not exist: {active_db}")
 
     stale_legacy_dbs = [path for path in legacy_db_candidates if path.exists() and path != active_db]
     for path in stale_legacy_dbs:
-        warnings.append(f"DB legacy presente pero no activa: {path}")
+        warnings.append(f"Legacy DB is present but not active: {path}")
 
     if resolved_home == managed_home and active_db.exists():
-        notes.append(f"NEXO_HOME resuelto correctamente a {resolved_home}")
+        notes.append(f"NEXO_HOME resolves correctly to {resolved_home}")
     if cli_server:
-        notes.append(f"`claude mcp list` reporta: {cli_server['raw']}")
+        notes.append(f"`claude mcp list` reports: {cli_server['raw']}")
 
     return {
         "ok": not issues,
@@ -347,11 +347,11 @@ def _print_human(report: dict[str, Any]) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Diagnostica qué MCP carga realmente Claude Code para evitar culpar al server antes de leer la configuración efectiva."
+        description="Diagnose which MCP Claude Code actually loads so the effective configuration is checked before blaming the server."
     )
-    parser.add_argument("--server", default="nexo", help="Nombre del server MCP a comprobar (default: nexo)")
-    parser.add_argument("--workspace", default="", help="Workspace a revisar para detectar .mcp.json local (default: cwd)")
-    parser.add_argument("--json", action="store_true", help="Imprime el informe en JSON")
+    parser.add_argument("--server", default="nexo", help="MCP server name to check (default: nexo)")
+    parser.add_argument("--workspace", default="", help="Workspace to inspect for a local .mcp.json (default: cwd)")
+    parser.add_argument("--json", action="store_true", help="Print the report as JSON")
     args = parser.parse_args(argv)
 
     report = inspect_claude_code_mcp(

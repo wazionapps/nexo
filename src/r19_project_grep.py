@@ -1,10 +1,10 @@
 """r19_project_grep — require Grep before Write on project paths with require_grep flag.
 
-Fase 2 Protocol Enforcer Fase D item R19. Plan doc 1 reads:
+Phase 2 Protocol Enforcer Phase D item R19. Plan doc 1 reads:
 
-  SI intent Write sobre path de entidad type=project con flag require_grep
-  Y no hubo Grep buscando símbolo/función previamente
-  ENTONCES inyectar obligación grep.
+  IF the intent is Write on a type=project entity path with require_grep
+  AND there was no prior Grep for the symbol/function
+  THEN inject the grep obligation.
 
 Pure decision module — state (projects list, recent_tool_records) is
 owned by the caller (HeadlessEnforcer).
