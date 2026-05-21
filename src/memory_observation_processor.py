@@ -16,6 +16,8 @@ import db
 DEFAULT_BACKFILL_LIMIT = 100
 DEFAULT_PENDING_SLA_SECONDS = 3600
 DEFAULT_PROCESS_LIMIT = 100
+DEFAULT_INTRADAY_PROCESS_LIMIT = 20
+DEFAULT_INTRADAY_BACKFILL_LIMIT = 20
 MAX_BATCH_SIZE = 1000
 
 
@@ -274,4 +276,30 @@ def process_incremental(
         "repair": repair,
         "processed": processed,
         "health": health,
+    }
+
+
+def process_intraday_cycle(
+    *,
+    process_limit: int = DEFAULT_INTRADAY_PROCESS_LIMIT,
+    backfill_limit: int = DEFAULT_INTRADAY_BACKFILL_LIMIT,
+    pending_sla_seconds: int = DEFAULT_PENDING_SLA_SECONDS,
+    now: float | None = None,
+) -> dict:
+    """Run the low-limit daytime path for evidence-backed intraday facts."""
+
+    return {
+        **process_incremental(
+            process_limit=_clamp_limit(process_limit, DEFAULT_INTRADAY_PROCESS_LIMIT),
+            backfill_limit=_clamp_limit(backfill_limit, DEFAULT_INTRADAY_BACKFILL_LIMIT),
+            pending_sla_seconds=pending_sla_seconds,
+            now=now,
+        ),
+        "mode": "intraday",
+        "limits": {
+            "process_limit": _clamp_limit(process_limit, DEFAULT_INTRADAY_PROCESS_LIMIT),
+            "backfill_limit": _clamp_limit(backfill_limit, DEFAULT_INTRADAY_BACKFILL_LIMIT),
+            "pending_sla_seconds": max(1, int(pending_sla_seconds or DEFAULT_PENDING_SLA_SECONDS)),
+        },
+        "promotion": "hot_context_intraday_fact_only",
     }

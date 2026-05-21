@@ -1334,10 +1334,21 @@ def handle_context_packet(area: str, files: str = "") -> str:
         parts.append("")
 
     # 3. Active followups for this area
-    followups = conn.execute(
-        "SELECT id, description, date, verification FROM followups WHERE status = 'PENDING' AND (description LIKE ? OR verification LIKE ?) ORDER BY date ASC LIMIT 10",
+    from db import followup_lifecycle_lane, normalize_followup_status
+
+    followup_rows = conn.execute(
+        "SELECT id, description, date, verification, status, owner FROM followups "
+        "WHERE (description LIKE ? OR verification LIKE ?) ORDER BY date ASC LIMIT 50",
         (f"%{area}%", f"%{area}%")
     ).fetchall()
+    followups = []
+    for row in followup_rows:
+        item = dict(row)
+        item["status"] = normalize_followup_status(item.get("status"))
+        if followup_lifecycle_lane(item) == "active":
+            followups.append(item)
+        if len(followups) >= 10:
+            break
     if followups:
         parts.append("## ACTIVE FOLLOWUPS")
         for f in followups:
@@ -1479,11 +1490,18 @@ def handle_smart_startup_query() -> str:
         sent_email_block = ""
 
     # 1. Pending followups (what NEXO needs to do)
-    followups = conn.execute(
-        "SELECT description FROM followups WHERE status = 'PENDING' ORDER BY date ASC LIMIT 5"
-    ).fetchall()
-    for f in followups:
-        query_parts.append(f['description'][:100])
+    try:
+        from db import followup_lifecycle_snapshot
+
+        active_followups = (followup_lifecycle_snapshot(limit=500).get("lanes") or {}).get("active", [])[:5]
+        for f in active_followups:
+            query_parts.append(str(f.get("description") or "")[:100])
+    except Exception:
+        followups = conn.execute(
+            "SELECT description FROM followups WHERE status = 'PENDING' ORDER BY date ASC LIMIT 5"
+        ).fetchall()
+        for f in followups:
+            query_parts.append(f['description'][:100])
 
     # 2. Due reminders (what the user needs to know)
     reminders = conn.execute(

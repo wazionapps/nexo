@@ -447,7 +447,34 @@ def _intraday_fact_candidate(observation: dict) -> bool:
         "task_result",
     }:
         return False
-    return bool(str(observation.get("summary") or "").strip())
+    if not str(observation.get("summary") or "").strip():
+        return False
+
+    facts = observation.get("facts") if isinstance(observation.get("facts"), dict) else {}
+    metadata = facts.get("metadata") if isinstance(facts.get("metadata"), dict) else {}
+    event_type = str(facts.get("event_type") or "")
+    source_type = str(facts.get("source_type") or "")
+    refs = [str(ref) for ref in observation.get("evidence_refs") or []]
+    observation_type = str(observation.get("observation_type") or "")
+
+    if observation_type == "task_result":
+        outcome = str(metadata.get("outcome") or event_type.removeprefix("protocol_task_") or "").lower()
+        return outcome in {"done", "closed", "completed", "success", "partial"}
+    if observation_type == "code_change":
+        verification_keys = {
+            "verified",
+            "verification",
+            "change_verify",
+            "test_output",
+            "tests_passed",
+            "evidence",
+        }
+        if source_type in {"change_log", "evidence_ledger", "protocol_task"}:
+            return True
+        if any(key in metadata and str(metadata.get(key) or "").strip() for key in verification_keys):
+            return True
+        return any(ref.startswith(("change_log:", "evidence:", "protocol_task:")) for ref in refs)
+    return observation_type in {"correction", "decision"}
 
 
 def publish_intraday_fact(observation: dict, *, ttl_hours: int = 36) -> dict:

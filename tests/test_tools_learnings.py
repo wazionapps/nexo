@@ -21,6 +21,7 @@ def _reload_learning_stack():
     import db._schema as db_schema
     import db._learnings as db_learnings
     import db
+    import learning_resolver
     import tools_learnings
 
     importlib.reload(db_core)
@@ -28,6 +29,7 @@ def _reload_learning_stack():
     importlib.reload(db_schema)
     importlib.reload(db_learnings)
     importlib.reload(db)
+    importlib.reload(learning_resolver)
     importlib.reload(tools_learnings)
     return db, tools_learnings
 

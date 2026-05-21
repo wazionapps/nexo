@@ -1177,11 +1177,20 @@ def _source_local_context(request: SourceRequest) -> SourceResult:
 
     mode = _local_context_pre_answer_mode()
     if mode == "off":
+        _record_local_context_skip(request, mode=mode, reason="disabled")
         return SourceResult(
             source="local_context",
             ok=True,
             skipped=True,
             aborted_reason="disabled",
+        )
+    if not _local_context_query_worthwhile(request):
+        _record_local_context_skip(request, mode=mode, reason="adaptive_skip")
+        return SourceResult(
+            source="local_context",
+            ok=True,
+            skipped=True,
+            aborted_reason="adaptive_skip",
         )
 
     started = time.monotonic()
@@ -1228,6 +1237,46 @@ def _local_context_pre_answer_mode() -> str:
     if clean in {"shadow", "observe", "observability", "audit"}:
         return "shadow"
     return "inject"
+
+
+def _local_context_query_worthwhile(request: SourceRequest) -> bool:
+    if request.intent == "file_location":
+        return True
+    if request.files.strip() or request.area.strip():
+        return True
+    normalized = _normalize(f"{request.query}\n{request.current_context}")
+    if _PATHISH_RE.search(normalized):
+        return True
+    tokens = _plain_tokens(normalized)
+    concept_score = max(
+        _feature_score(tokens, _FEATURE_LEXICON[field])
+        for field in ("existing_ref", "location", "memory", "modify", "past_work")
+    )
+    return concept_score >= 0.18
+
+
+def _record_local_context_skip(request: SourceRequest, *, mode: str, reason: str) -> None:
+    try:
+        from local_context import usage_events
+
+        usage_events.record_usage_event(
+            query=request.query,
+            client="pre_answer_router",
+            tool="local_context",
+            source="local_context",
+            route_stage=f"pre_answer:{mode}",
+            intent=request.intent,
+            result_count=0,
+            should_inject=False,
+            aborted_reason=reason,
+            used_before_response=True,
+            metadata={
+                "adaptive": reason == "adaptive_skip",
+                "current_context_present": bool(request.current_context),
+            },
+        )
+    except Exception:
+        return
 
 
 def _record_local_context_pre_answer_usage(

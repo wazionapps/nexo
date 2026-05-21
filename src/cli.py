@@ -21,7 +21,8 @@ Entry points:
   nexo scripts doctor [NAME_OR_PATH] [--json]
   nexo scripts call TOOL --input JSON [--json-output]
   nexo pre-answer route [--json] [--payload JSON|--payload-file PATH|--payload-stdin] [--query TEXT]
-  nexo memory-observations process [--json]
+  nexo cognitive-control observatory [--json]
+  nexo memory-observations process|intraday [--json]
   nexo local-context status|run-once|reconcile|pause|resume|roots|exclusions|query|diagnostics|models [--json]
   nexo automations reactivate NAME [--test-run] [--json]
   nexo skills list [--level ...] [--source-kind ...] [--json]
@@ -1605,6 +1606,30 @@ def _memory_observations_process(args) -> int:
             process_limit=int(getattr(args, "limit", 100) or 100),
             backfill_limit=int(getattr(args, "backfill_limit", 100) or 100),
             pending_sla_seconds=int(getattr(args, "pending_sla_seconds", 3600) or 3600),
+        ),
+        as_json=bool(getattr(args, "json", False)),
+    )
+
+
+def _memory_observations_intraday(args) -> int:
+    from memory_observation_processor import process_intraday_cycle
+
+    return _print_json_or_text(
+        process_intraday_cycle(
+            process_limit=int(getattr(args, "limit", 20) or 20),
+            backfill_limit=int(getattr(args, "backfill_limit", 20) or 20),
+            pending_sla_seconds=int(getattr(args, "pending_sla_seconds", 3600) or 3600),
+        ),
+        as_json=bool(getattr(args, "json", False)),
+    )
+
+
+def _cognitive_control_observatory(args) -> int:
+    from cognitive_control_observatory import build_cognitive_control_observatory
+
+    return _print_json_or_text(
+        build_cognitive_control_observatory(
+            window_seconds=int(getattr(args, "window_seconds", 86400) or 86400),
         ),
         as_json=bool(getattr(args, "json", False)),
     )
@@ -3523,6 +3548,12 @@ def main():
     pre_answer_route_p.add_argument("--current-context", default="", help="Current conversation/task context")
     pre_answer_route_p.add_argument("--json", action="store_true", help="JSON output")
 
+    cognitive_control_parser = sub.add_parser("cognitive-control", help="Cognitive control observability")
+    cognitive_control_sub = cognitive_control_parser.add_subparsers(dest="cognitive_control_command")
+    cognitive_observatory_p = cognitive_control_sub.add_parser("observatory", help="Read-only cognitive quality metrics")
+    cognitive_observatory_p.add_argument("--window-seconds", type=int, default=86400, help="Observation window")
+    cognitive_observatory_p.add_argument("--json", action="store_true", help="JSON output")
+
     memory_observations_parser = sub.add_parser("memory-observations", help="Process Memory Observations v2 queue")
     memory_observations_sub = memory_observations_parser.add_subparsers(dest="memory_observations_command")
     memory_observations_process_p = memory_observations_sub.add_parser("process", help="Run one bounded observation processor cycle")
@@ -3530,6 +3561,11 @@ def main():
     memory_observations_process_p.add_argument("--backfill-limit", type=int, default=100, help="Maximum legacy events to enqueue or repair")
     memory_observations_process_p.add_argument("--pending-sla-seconds", type=int, default=3600, help="Pending queue SLA threshold")
     memory_observations_process_p.add_argument("--json", action="store_true", help="JSON output")
+    memory_observations_intraday_p = memory_observations_sub.add_parser("intraday", help="Run low-limit daytime observation cycle")
+    memory_observations_intraday_p.add_argument("--limit", type=int, default=20, help="Maximum pending rows to process")
+    memory_observations_intraday_p.add_argument("--backfill-limit", type=int, default=20, help="Maximum legacy events to enqueue or repair")
+    memory_observations_intraday_p.add_argument("--pending-sla-seconds", type=int, default=3600, help="Pending queue SLA threshold")
+    memory_observations_intraday_p.add_argument("--json", action="store_true", help="JSON output")
 
     local_context_parser = sub.add_parser("local-context", help="Manage the local memory index")
     local_context_sub = local_context_parser.add_subparsers(dest="local_context_command")
@@ -4156,9 +4192,16 @@ def main():
             return _pre_answer_route(args)
         pre_answer_parser.print_help()
         return 0
+    elif args.command == "cognitive-control":
+        if args.cognitive_control_command == "observatory":
+            return _cognitive_control_observatory(args)
+        cognitive_control_parser.print_help()
+        return 0
     elif args.command == "memory-observations":
         if args.memory_observations_command == "process":
             return _memory_observations_process(args)
+        if args.memory_observations_command == "intraday":
+            return _memory_observations_intraday(args)
         memory_observations_parser.print_help()
         return 0
     elif args.command == "local-context":

@@ -310,6 +310,8 @@ def _empty_summary(*, since: float, window_seconds: int, store_path: Path) -> di
         "latest_event_at": 0.0,
         "latest_used_before_response_at": 0.0,
         "by_intent": {},
+        "by_source": {},
+        "by_route_stage": {},
     }
 
 
@@ -371,6 +373,26 @@ def summarize_usage(
             """,
             (since,),
         ).fetchall()
+        source_rows = conn.execute(
+            f"""
+            SELECT source, COUNT(*) AS total
+            FROM {USAGE_TABLE}
+            WHERE created_at >= ?
+            GROUP BY source
+            ORDER BY total DESC, source ASC
+            """,
+            (since,),
+        ).fetchall()
+        stage_rows = conn.execute(
+            f"""
+            SELECT route_stage, COUNT(*) AS total
+            FROM {USAGE_TABLE}
+            WHERE created_at >= ?
+            GROUP BY route_stage
+            ORDER BY total DESC, route_stage ASC
+            """,
+            (since,),
+        ).fetchall()
     finally:
         conn.close()
     return {
@@ -386,6 +408,8 @@ def summarize_usage(
         "latest_event_at": float(totals["latest_event_at"] or 0.0),
         "latest_used_before_response_at": float(totals["latest_used_before_response_at"] or 0.0),
         "by_intent": {str(row["intent"]): int(row["total"] or 0) for row in intent_rows},
+        "by_source": {str(row["source"]): int(row["total"] or 0) for row in source_rows},
+        "by_route_stage": {str(row["route_stage"]): int(row["total"] or 0) for row in stage_rows},
     }
 
 

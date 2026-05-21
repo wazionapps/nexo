@@ -71,6 +71,8 @@ def test_usage_snapshot_distinguishes_indexed_from_used_before_response():
     assert active["status"] == "indexed_and_used"
     assert active["used_before_response"]["events"] == 1
     assert active["usage"]["injected_events"] == 1
+    assert active["usage"]["by_source"]["local_context"] == 1
+    assert active["usage"]["by_route_stage"][""] == 1
 
 
 def test_record_router_usage_extracts_injection_metrics():
@@ -158,3 +160,27 @@ def test_pre_answer_local_context_shadow_records_without_inject(monkeypatch):
     assert events[0]["route_stage"] == "pre_answer:shadow"
     assert events[0]["intent"] == "file_location"
     assert events[0]["should_inject"] == 0
+
+
+def test_pre_answer_local_context_adaptive_skip_records_event(monkeypatch):
+    import local_context.api as local_context_api
+    import pre_answer_router as router
+
+    def fail_context_router(*_args, **_kwargs):
+        raise AssertionError("adaptive skip should not query local context")
+
+    monkeypatch.setattr(local_context_api, "context_router", fail_context_router)
+
+    result = router._source_local_context(
+        router.SourceRequest(
+            query="hola, gracias",
+            intent="prior_work",
+            max_chars=900,
+        )
+    )
+    events = usage_events.list_recent_events(limit=5)
+
+    assert result.skipped is True
+    assert result.aborted_reason == "adaptive_skip"
+    assert events[0]["route_stage"] == "pre_answer:inject"
+    assert events[0]["aborted_reason"] == "adaptive_skip"

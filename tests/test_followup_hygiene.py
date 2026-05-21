@@ -112,5 +112,6 @@ def test_followup_lifecycle_snapshot_groups_non_executable_lanes(isolated_db):
     assert "NF-USER" in waiting_user_ids
     assert "NF-WAIT" in waiting_external_ids
     assert "NF-PARK" in parked_ids
+    assert snapshot["lanes"]["active"][0]["due_state"] == "due"
     assert "NF-WAIT" not in visible_active_ids
     assert "NF-PARK" not in visible_active_ids

@@ -75,6 +75,7 @@ from constants import AUTOMATION_SUBPROCESS_TIMEOUT
 from core_prompts import render_core_prompt
 from cognitive_paths import audit_cognitive_db_paths, resolve_cognitive_db
 import db as nexo_db
+from learning_resolver import applies_overlap, looks_contradictory, resolve_learning_candidate
 from public_evolution_queue import queue_public_port_candidate
 
 try:
@@ -390,12 +391,34 @@ def _upsert_inline_learning(
         return {"ok": False, "reason": "learnings_missing"}
 
     columns = _table_columns(conn, "learnings")
+    resolution = resolve_learning_candidate(
+        category=category,
+        title=title,
+        content=content,
+        reasoning=reasoning,
+        prevention=prevention,
+        applies_to=applies_to,
+        priority=priority,
+        source_authority="code_test_evidence",
+        conn=conn,
+    )
+    if resolution["action"] == "reject":
+        return {"ok": False, "reason": resolution["reason"], "resolver": resolution}
+    if resolution["action"] == "conflict_review":
+        return {"ok": False, "reason": "conflict_review_required", "resolver": resolution}
+    resolver_target_id = int(resolution.get("target_id") or 0)
+    supersede_target_id = resolver_target_id if resolution["action"] == "supersede" else 0
     rows = conn.execute(
         "SELECT * FROM learnings WHERE COALESCE(status, 'active') != 'superseded' ORDER BY updated_at DESC, id DESC LIMIT 200"
     ).fetchall()
     target_signature = _topic_signature(f"{title} {content}")
     existing = None
     for row in rows:
+        if resolution["action"] == "merge" and resolver_target_id and int(row["id"]) == resolver_target_id:
+            existing = row
+            break
+        if supersede_target_id:
+            continue
         row_title = str(row["title"] or "").strip() if "title" in columns else ""
         row_content = str(row["content"] or "").strip() if "content" in columns else ""
         row_applies = str(row["applies_to"] or "").strip() if "applies_to" in columns else ""
@@ -471,6 +494,13 @@ def _upsert_inline_learning(
         list(values.values()),
     )
     learning_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    if supersede_target_id:
+        _supersede_learning_inline(
+            conn,
+            keep_id=int(learning_id),
+            retire_id=supersede_target_id,
+            note=f"Self-audit canonical resolver superseded learning #{supersede_target_id}.",
+        )
     return {"ok": True, "action": "created", "learning_id": int(learning_id)}
 
 
@@ -853,15 +883,20 @@ def check_overdue_reminders():
 def check_overdue_followups():
     if not NEXO_DB.exists():
         return
-    conn = sqlite3.connect(str(NEXO_DB))
     today = datetime.now().strftime("%Y-%m-%d")
-    rows = conn.execute(
-        "SELECT description, date FROM followups WHERE status='PENDING' AND date < ? AND date != '' ORDER BY date",
-        (today,)
-    ).fetchall()
-    conn.close()
+    try:
+        active = (nexo_db.followup_lifecycle_snapshot(limit=5000).get("lanes") or {}).get("active", [])
+        rows = [item for item in active if item.get("date") and str(item["date"]) < today]
+        rows.sort(key=lambda item: str(item.get("date") or ""))
+    except Exception:
+        conn = sqlite3.connect(str(NEXO_DB))
+        rows = conn.execute(
+            "SELECT description, date FROM followups WHERE status='PENDING' AND date < ? AND date != '' ORDER BY date",
+            (today,)
+        ).fetchall()
+        conn.close()
     if rows:
-        finding("WARN", "followups", f"{len(rows)} overdue: {', '.join(r[0][:40] for r in rows[:5])}")
+        finding("WARN", "followups", f"{len(rows)} overdue: {', '.join(str((r.get('description') if isinstance(r, dict) else r[0]) or '')[:40] for r in rows[:5])}")
 
 
 def check_uncommitted_changes():
@@ -1156,8 +1191,6 @@ def check_learning_contradictions():
         conn.close()
         return
 
-    from tools_learnings import _applies_overlap, _looks_contradictory
-
     rows = conn.execute(
         """SELECT id, title, content, applies_to
            FROM learnings
@@ -1168,9 +1201,9 @@ def check_learning_contradictions():
     contradictions: list[tuple[sqlite3.Row, sqlite3.Row]] = []
     for index, left in enumerate(rows):
         for right in rows[index + 1:]:
-            if not _applies_overlap(left["applies_to"], right["applies_to"]):
+            if not applies_overlap(left["applies_to"], right["applies_to"]):
                 continue
-            if not _looks_contradictory(
+            if not looks_contradictory(
                 f"{left['title']} {left['content']}",
                 f"{right['title']} {right['content']}",
             ):

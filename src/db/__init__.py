@@ -125,7 +125,7 @@ from db._reminders import (
     find_similar_followups,
     compute_followup_impact, score_followup, score_active_followups,
     add_item_history, get_item_history, validate_item_read_token,
-    normalize_followup_status, followup_lifecycle_lane, followup_lifecycle_snapshot,
+    normalize_followup_status, followup_due_state, followup_lifecycle_lane, followup_lifecycle_snapshot,
 )
 
 # Learnings

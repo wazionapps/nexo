@@ -62,6 +62,7 @@ DB_PATH = data_dir() / "nexo.db"
 
 from agent_runner import AutomationBackendUnavailableError, run_automation_prompt
 from core_prompts import render_core_prompt
+from learning_resolver import resolve_learning_candidate
 
 try:
     from client_preferences import resolve_user_model as _resolve_user_model
@@ -79,12 +80,12 @@ def get_all_learnings(category: str | None = None) -> list[dict]:
     conn.row_factory = sqlite3.Row
     if category:
         rows = conn.execute(
-            "SELECT id, category, title, content FROM learnings WHERE category = ?",
+            "SELECT id, category, title, content FROM learnings WHERE category = ? AND COALESCE(status, 'active') = 'active'",
             (category,),
         ).fetchall()
     else:
         rows = conn.execute(
-            "SELECT id, category, title, content FROM learnings"
+            "SELECT id, category, title, content FROM learnings WHERE COALESCE(status, 'active') = 'active'"
         ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
@@ -131,6 +132,12 @@ def validate_finding(finding: str, category: str | None = None) -> dict:
             "recommendation": str
         }
     """
+    resolver = resolve_learning_candidate(
+        category=category or "process",
+        title=(finding or "Finding").strip()[:120] or "Finding",
+        content=finding or "",
+        source_authority="code_test_evidence" if any(token in (finding or "").lower() for token in ("test", "traceback", "stack", "verified", "evidence")) else "inference",
+    )
     learnings = get_all_learnings(category)
 
     if not learnings:
@@ -139,6 +146,7 @@ def validate_finding(finding: str, category: str | None = None) -> dict:
             "confidence": 0,
             "matching_learnings": [],
             "recommendation": "No learnings in DB — finding is new by default",
+            "resolver": resolver,
         }
 
     learnings_ref = [
@@ -168,13 +176,26 @@ def validate_finding(finding: str, category: str | None = None) -> dict:
         )
         parsed = _extract_json(result.stdout)
         if result.returncode == 0 and parsed:
+            parsed["resolver"] = resolver
             return parsed
     except AutomationBackendUnavailableError:
         pass
     except Exception:
         pass
 
-    return _mechanical_validate(finding, learnings)
+    result = _mechanical_validate(finding, learnings)
+    result["resolver"] = resolver
+    if resolver.get("action") in {"merge", "supersede", "conflict_review"}:
+        result["known"] = True
+        result["confidence"] = max(float(result.get("confidence") or 0), float(resolver.get("similarity") or 0.7))
+        result["matching_learnings"] = result.get("matching_learnings") or [{
+            "id": resolver.get("target_id"),
+            "category": category or "process",
+            "title": resolver.get("target_title"),
+            "similarity": resolver.get("similarity"),
+        }]
+        result["recommendation"] = f"Resolver action: {resolver.get('action')} ({resolver.get('reason')})"
+    return result
 
 
 def _mechanical_validate(finding: str, learnings: list[dict]) -> dict:

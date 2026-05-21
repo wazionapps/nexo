@@ -14,7 +14,19 @@ from db._hot_context import capture_context_event
 from db._learnings import extract_keywords
 from db._semantic_similarity import hybrid_similarity_score
 
-ACTIVE_EXCLUDED_STATUSES = {"ARCHIVED", "BLOCKED", "DELETED", "DONE", "EXPIRED", "PARKED", "WAITING", "WAITING_EXTERNAL"}
+ACTIVE_EXCLUDED_STATUSES = {
+    "ARCHIVED",
+    "BLOCKED",
+    "DELETED",
+    "DONE",
+    "EXPIRED",
+    "NEEDS_DECISION",
+    "PARKED",
+    "STALE_REVIEW",
+    "WAITING",
+    "WAITING_EXTERNAL",
+    "WAITING_USER",
+}
 FOLLOWUP_TERMINAL_STATUSES = {"COMPLETED", "DELETED", "DONE", "EXPIRED", "ARCHIVED"}
 FOLLOWUP_WAITING_USER_STATUSES = {"NEEDS_DECISION", "WAITING_USER"}
 FOLLOWUP_WAITING_EXTERNAL_STATUSES = {"WAITING", "WAITING_EXTERNAL"}
@@ -132,12 +144,20 @@ def followup_lifecycle_lane(followup: dict) -> str:
         return "parked"
     if status == "STALE_REVIEW":
         return "stale_review"
+    return "active"
+
+
+def followup_due_state(followup: dict) -> str:
+    """Return due/backlog/future/completed without changing the lifecycle lane."""
+    lane = followup_lifecycle_lane(followup)
+    if lane != "active":
+        return lane
     due = _parse_date(followup.get("date"))
     if due is None:
         return "backlog"
     if due > datetime.date.today():
         return "future"
-    return "active"
+    return "due"
 
 
 def _format_changes(before: sqlite3.Row | dict | None, after: sqlite3.Row | dict | None, fields: list[str]) -> str:
@@ -300,13 +320,15 @@ def _active_status_where(column_name: str = "status") -> str:
 
 
 def _context_state_from_status(status: str | None) -> str:
-    normalized = str(status or "PENDING").strip().upper()
+    normalized = normalize_followup_status(status)
     if normalized.startswith("COMPLETED"):
         return "resolved"
     if normalized == "DELETED":
         return "abandoned"
-    if normalized == "WAITING":
+    if normalized in {"WAITING_USER", "NEEDS_DECISION"}:
         return "waiting_user"
+    if normalized in {"WAITING", "WAITING_EXTERNAL"}:
+        return "waiting_third_party"
     if normalized == "BLOCKED":
         return "blocked"
     return "active"
@@ -1186,19 +1208,19 @@ def followup_lifecycle_snapshot(limit: int = 500) -> dict:
         "waiting_user": [],
         "waiting_external": [],
         "blocked": [],
-        "future": [],
-        "backlog": [],
         "parked": [],
         "stale_review": [],
+        "expired": [],
         "completed": [],
         "deleted": [],
-        "expired": [],
         "archived": [],
     }
     for row in rows:
         item = dict(row)
         item["status"] = normalize_followup_status(item.get("status"))
         lane = followup_lifecycle_lane(item)
+        item["lifecycle_lane"] = lane
+        item["due_state"] = followup_due_state(item)
         lanes.setdefault(lane, []).append(item)
     return {
         "ok": True,
