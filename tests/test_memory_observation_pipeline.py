@@ -43,6 +43,84 @@ def test_new_event_becomes_queryable_and_processing_is_idempotent(isolated_db):
     assert len(db.list_memory_observations(query="pipeline.py", limit=10)) == 1
 
 
+def test_high_salience_observation_publishes_intraday_fact(isolated_db):
+    import db
+    import memory_observation_processor as processor
+
+    event = db.record_memory_event(
+        event_type="protocol_task_done",
+        source_type="protocol_task",
+        source_id="PT-INTRADAY",
+        session_id="nexo-intraday",
+        project_key="nexo",
+        metadata={"goal": "Implement cognitive control branch", "outcome": "done"},
+        idempotency_key="pt-intraday",
+        created_at=1000.0,
+    )
+
+    result = processor.process_incremental(process_limit=10, backfill_limit=10, now=1010.0)
+    observation_uid = processor.observation_uid_for_event(event["event_uid"])
+    hot = db.get_hot_context(f"intraday_fact:{observation_uid}", include_events=True)
+
+    assert result["processed"]["processed"] == 1
+    assert result["processed"]["intraday_facts"] == 1
+    assert hot is not None
+    assert hot["context_type"] == "intraday_fact"
+    assert hot["source_type"] == "memory_observation"
+    assert hot["source_id"] == observation_uid
+
+
+def test_unverified_code_change_does_not_publish_intraday_fact(isolated_db):
+    import db
+    import memory_observation_processor as processor
+
+    event = db.record_memory_event(
+        event_type="tool_write",
+        source_type="tool",
+        source_id="tool-unverified",
+        session_id="nexo-intraday",
+        tool_name="Edit",
+        file_paths=["src/unverified.py"],
+        metadata={"summary": "Edit wrote src/unverified.py without verification"},
+        idempotency_key="tool-unverified",
+        created_at=1000.0,
+    )
+
+    result = processor.process_intraday_cycle(process_limit=10, backfill_limit=10, now=1010.0)
+    observation_uid = processor.observation_uid_for_event(event["event_uid"])
+    hot = db.get_hot_context(f"intraday_fact:{observation_uid}", include_events=True)
+
+    assert result["mode"] == "intraday"
+    assert result["processed"]["processed"] == 1
+    assert result["processed"]["intraday_facts"] == 0
+    assert hot is None
+
+
+def test_verified_code_change_can_publish_intraday_fact(isolated_db):
+    import db
+    import memory_observation_processor as processor
+
+    event = db.record_memory_event(
+        event_type="tool_write",
+        source_type="tool",
+        source_id="tool-verified",
+        session_id="nexo-intraday",
+        tool_name="Edit",
+        file_paths=["src/verified.py"],
+        metadata={"summary": "Edit wrote src/verified.py", "test_output": "pytest passed"},
+        idempotency_key="tool-verified",
+        created_at=1000.0,
+    )
+
+    result = processor.process_intraday_cycle(process_limit=10, backfill_limit=10, now=1010.0)
+    observation_uid = processor.observation_uid_for_event(event["event_uid"])
+    hot = db.get_hot_context(f"intraday_fact:{observation_uid}", include_events=True)
+
+    assert result["processed"]["intraday_facts"] == 1
+    assert hot is not None
+    assert hot["context_type"] == "intraday_fact"
+
+
 def test_backfill_incrementally_queues_memory_events_without_duplicates(isolated_db):
     import db
     import memory_observation_processor as processor

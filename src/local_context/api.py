@@ -3177,7 +3177,61 @@ def _entity_matches_for_query(conn, query: str, *, limit: int) -> tuple[list[dic
     return matches[: int(limit)], boosts
 
 
-def _context_candidate_rows(conn, entity_asset_ids: list[str], *, base_limit: int = 5000) -> list:
+def _context_prefilter_limit(default: int = 1200) -> int:
+    raw = os.environ.get("NEXO_LOCAL_CONTEXT_PREFILTER_LIMIT", str(default))
+    try:
+        value = int(raw)
+    except Exception:
+        value = default
+    return max(100, min(value, 5000))
+
+
+def _context_candidate_rows(
+    conn,
+    entity_asset_ids: list[str],
+    *,
+    search_query: str = "",
+    base_limit: int = 5000,
+) -> list:
+    terms = _query_terms(search_query)[:6]
+    prefilter_limit = min(int(base_limit or 5000), _context_prefilter_limit())
+    prefilter_rows = []
+    if terms:
+        term_clauses = []
+        params: list[str] = []
+        for term in terms:
+            term_clauses.append("(lower(a.path) LIKE ? OR lower(COALESCE(v.summary, '')) LIKE ? OR lower(c.text) LIKE ?)")
+            like = f"%{term}%"
+            params.extend([like, like, like])
+        prefilter_rows = conn.execute(
+            f"""
+            SELECT c.chunk_id, c.asset_id, c.text, a.path, a.file_type, a.privacy_class, v.summary,
+                   e.vector_json, e.model_id, e.model_revision, e.dimension
+            FROM local_chunks c
+            JOIN local_assets a ON a.asset_id = c.asset_id
+            LEFT JOIN local_asset_versions v ON v.version_id = c.version_id
+            LEFT JOIN local_embeddings e ON e.chunk_id = c.chunk_id
+            WHERE a.status='active'
+              AND a.privacy_class='normal'
+              AND ({" OR ".join(term_clauses)})
+            ORDER BY
+              CASE
+                WHEN {" OR ".join("lower(a.path) LIKE ?" for _ in terms)} THEN 0
+                WHEN {" OR ".join("lower(COALESCE(v.summary, '')) LIKE ?" for _ in terms)} THEN 1
+                ELSE 2
+              END,
+              c.created_at DESC
+            LIMIT ?
+            """,
+            [
+                *params,
+                *(f"%{term}%" for term in terms),
+                *(f"%{term}%" for term in terms),
+                prefilter_limit,
+            ],
+        ).fetchall()
+
+    fallback_limit = prefilter_limit if not terms else max(120, min(500, prefilter_limit // 3))
     base_rows = conn.execute(
         """
         SELECT c.chunk_id, c.asset_id, c.text, a.path, a.file_type, a.privacy_class, v.summary,
@@ -3191,10 +3245,18 @@ def _context_candidate_rows(conn, entity_asset_ids: list[str], *, base_limit: in
         ORDER BY c.created_at DESC
         LIMIT ?
         """,
-        (int(base_limit),),
+        (int(fallback_limit),),
     ).fetchall()
     if not entity_asset_ids:
-        return base_rows
+        rows = []
+        seen_chunks = set()
+        for row in [*prefilter_rows, *base_rows]:
+            chunk_id = row["chunk_id"]
+            if chunk_id in seen_chunks:
+                continue
+            seen_chunks.add(chunk_id)
+            rows.append(row)
+        return rows
 
     placeholders = ",".join("?" for _ in entity_asset_ids)
     entity_rows = conn.execute(
@@ -3216,7 +3278,7 @@ def _context_candidate_rows(conn, entity_asset_ids: list[str], *, base_limit: in
 
     rows = []
     seen_chunks = set()
-    for row in [*entity_rows, *base_rows]:
+    for row in [*entity_rows, *prefilter_rows, *base_rows]:
         chunk_id = row["chunk_id"]
         if chunk_id in seen_chunks:
             continue
@@ -3618,7 +3680,7 @@ def _context_query_conn(
     query_embedding = embeddings.embed_record(search_query)
     qvec = query_embedding["vector"]
     entities_payload, entity_boosts = _entity_matches_for_query(conn, search_query, limit=max(int(limit), 1))
-    rows = _context_candidate_rows(conn, list(entity_boosts.keys()), base_limit=5000)
+    rows = _context_candidate_rows(conn, list(entity_boosts.keys()), search_query=search_query, base_limit=5000)
     scored = []
     stale_embedding_seen = False
     for row in rows:

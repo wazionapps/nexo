@@ -79,7 +79,7 @@ from tools_reminders_crud import (
 from tools_learnings import (
     handle_learning_add, handle_learning_search,
     handle_learning_update, handle_learning_delete, handle_learning_list,
-    handle_learning_quality,
+    handle_learning_quality, handle_learning_resolve_candidate,
 )
 from tools_credentials import (
     handle_credential_get, handle_credential_create,
@@ -1090,6 +1090,19 @@ def nexo_context_router(query: str, intent: str = "answer", limit: int = 4, curr
 
 
 @mcp.tool
+def nexo_cognitive_control_observatory(window_seconds: int = 86400) -> str:
+    """Read-only metrics for Local Context, learnings, followups and intraday memory."""
+    from cognitive_control_observatory import build_cognitive_control_observatory
+
+    return json.dumps(
+        build_cognitive_control_observatory(window_seconds=window_seconds),
+        ensure_ascii=False,
+        indent=2,
+        sort_keys=True,
+    )
+
+
+@mcp.tool
 def nexo_local_asset_get(asset_id: str) -> str:
     """Return one indexed local asset by asset id."""
     return json.dumps(local_context_api.get_asset(asset_id), ensure_ascii=False)
@@ -1376,6 +1389,23 @@ def nexo_memory_observation_process(limit: int = 25, backfill_limit: int = 100, 
 
     return json.dumps(
         process_incremental(
+            process_limit=limit,
+            backfill_limit=backfill_limit,
+            pending_sla_seconds=pending_sla_seconds,
+        ),
+        ensure_ascii=False,
+        indent=2,
+        sort_keys=True,
+    )
+
+
+@mcp.tool
+def nexo_intraday_memory_cycle(limit: int = 20, backfill_limit: int = 20, pending_sla_seconds: int = 3600) -> str:
+    """Run a low-limit daytime memory observation cycle that only publishes evidence-backed intraday facts."""
+    from memory_observation_processor import process_intraday_cycle
+
+    return json.dumps(
+        process_intraday_cycle(
             process_limit=limit,
             backfill_limit=backfill_limit,
             pending_sla_seconds=pending_sla_seconds,
@@ -1969,6 +1999,19 @@ def nexo_followup_get(id: str) -> str:
 
 
 @mcp.tool
+def nexo_followup_lifecycle(limit: int = 500) -> str:
+    """Return followups grouped by lifecycle lane for runner, dashboard and startup parity."""
+    from db import followup_lifecycle_snapshot
+
+    return json.dumps(
+        followup_lifecycle_snapshot(limit=limit),
+        ensure_ascii=False,
+        indent=2,
+        sort_keys=True,
+    )
+
+
+@mcp.tool
 def nexo_followup_update(
     id: str,
     description: str = "",
@@ -2066,6 +2109,7 @@ def nexo_learning_add(
     review_days: int = 30,
     priority: str = "medium",
     supersedes_id: int = 0,
+    source_authority: str = "explicit_instruction",
 ) -> str:
     """Add a new learning (resolved error, pattern, gotcha).
 
@@ -2079,11 +2123,39 @@ def nexo_learning_add(
         review_days: Days until this learning should be reviewed again (default 30).
         priority: critical, high, medium, low (default: medium). Critical/high never decay below floor.
         supersedes_id: Existing learning ID this new canonical rule replaces (optional).
+        source_authority: Authority tier for conflict resolution: francisco_correction, explicit_instruction, code_test_evidence, deep_sleep, inference.
     """
     return handle_learning_add(
         category, title, content, reasoning,
         prevention=prevention, applies_to=applies_to,
         review_days=review_days, priority=priority, supersedes_id=supersedes_id,
+        source_authority=source_authority,
+    )
+
+
+@mcp.tool
+def nexo_learning_resolve_candidate(
+    category: str,
+    title: str,
+    content: str,
+    reasoning: str = "",
+    prevention: str = "",
+    applies_to: str = "",
+    priority: str = "medium",
+    supersedes_id: int = 0,
+    source_authority: str = "inference",
+) -> str:
+    """Dry-run the canonical learning resolver without creating or updating learnings."""
+    return handle_learning_resolve_candidate(
+        category=category,
+        title=title,
+        content=content,
+        reasoning=reasoning,
+        prevention=prevention,
+        applies_to=applies_to,
+        priority=priority,
+        supersedes_id=supersedes_id,
+        source_authority=source_authority,
     )
 
 

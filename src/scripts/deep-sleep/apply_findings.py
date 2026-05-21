@@ -33,6 +33,7 @@ if str(NEXO_CODE) not in sys.path:
 import db as nexo_db
 import paths
 from cognitive_paths import resolve_cognitive_db
+from learning_resolver import resolve_learning_candidate
 
 def _resolve_nexo_db() -> Path:
     candidates = [
@@ -161,21 +162,24 @@ def _top_followups_by_impact(limit: int = 5) -> list[dict]:
             conn.close()
             return []
         impact_factors_sql = ", impact_factors" if "impact_factors" in columns else ""
-        rows = [
-            dict(row)
-            for row in conn.execute(
-                f"""SELECT id, description, date, priority, impact_score{impact_factors_sql}
-                    FROM followups
-                    WHERE status IN ('PENDING', 'ACTIVE', 'WAITING', 'BLOCKED')
-                    ORDER BY
-                      CASE WHEN COALESCE(impact_score, 0) > 0 THEN 0 ELSE 1 END ASC,
-                      COALESCE(impact_score, 0) DESC,
-                      CASE WHEN date IS NULL OR date = '' THEN 1 ELSE 0 END ASC,
-                      date ASC
-                    LIMIT ?""",
-                (max(1, int(limit)),),
-            ).fetchall()
-        ]
+        owner_sql = ", owner" if "owner" in columns else ""
+        rows = []
+        for row in conn.execute(
+            f"""SELECT id, description, date, priority, impact_score, status{owner_sql}{impact_factors_sql}
+                FROM followups
+                ORDER BY
+                  CASE WHEN COALESCE(impact_score, 0) > 0 THEN 0 ELSE 1 END ASC,
+                  COALESCE(impact_score, 0) DESC,
+                  CASE WHEN date IS NULL OR date = '' THEN 1 ELSE 0 END ASC,
+                  date ASC
+                LIMIT ?""",
+            (max(20, int(limit) * 4),),
+        ).fetchall():
+            item = dict(row)
+            if nexo_db.followup_lifecycle_lane(item) == "active":
+                rows.append(item)
+            if len(rows) >= max(1, int(limit)):
+                break
         conn.close()
     except Exception:
         return []
@@ -501,6 +505,18 @@ def _find_learning_match(category: str, title: str, content: str) -> dict | None
     return candidates[0]
 
 
+def _learning_by_id(learning_id: int) -> dict | None:
+    if not learning_id or not NEXO_DB.exists():
+        return None
+    conn = sqlite3.connect(str(NEXO_DB))
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute("SELECT * FROM learnings WHERE id = ?", (int(learning_id),)).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
 def _update_learning_row(learning_id: int, updates: dict[str, object]) -> None:
     if not updates:
         return
@@ -545,7 +561,34 @@ def add_learning(category: str, title: str, content: str) -> dict:
     if not NEXO_DB.exists():
         return {"success": False, "error": "nexo.db not found"}
     try:
-        existing = _find_learning_match(category, title, content)
+        resolution = resolve_learning_candidate(
+            category=category,
+            title=title,
+            content=content,
+            source_authority="deep_sleep",
+        )
+        if resolution["action"] == "reject":
+            return {"success": False, "error": resolution["reason"], "outcome": "rejected_learning"}
+        if resolution["action"] == "conflict_review":
+            return _flag_learning_contradiction(
+                {
+                    "id": resolution.get("target_id"),
+                    "title": resolution.get("target_title"),
+                    "_similarity": resolution.get("similarity", 0.0),
+                },
+                category,
+                title,
+                content,
+            )
+
+        canonical_supersedes_id = int(resolution.get("target_id") or 0) if resolution["action"] == "supersede" else 0
+        existing = None if canonical_supersedes_id else _find_learning_match(category, title, content)
+        if resolution["action"] == "merge" and int(resolution.get("target_id") or 0):
+            row = _learning_by_id(int(resolution["target_id"]))
+            if row:
+                existing = dict(row)
+                existing["_similarity"] = float(resolution.get("similarity") or 1.0)
+                existing["_contradiction"] = False
         if existing:
             similarity = existing.get("_similarity", 0.0)
             if existing.get("_contradiction"):
@@ -631,7 +674,21 @@ def add_learning(category: str, title: str, content: str) -> dict:
         learning_id = cursor.lastrowid
         conn.commit()
         conn.close()
-        return {"success": True, "id": learning_id, "outcome": "new_learning"}
+        if canonical_supersedes_id:
+            try:
+                nexo_db.supersede_learning(
+                    int(canonical_supersedes_id),
+                    int(learning_id),
+                    f"Superseded by Deep Sleep canonical learning #{learning_id}.",
+                )
+            except Exception:
+                pass
+        return {
+            "success": True,
+            "id": learning_id,
+            "outcome": "new_learning" if not canonical_supersedes_id else "superseding_learning",
+            "supersedes_id": canonical_supersedes_id,
+        }
     except Exception as e:
         return {"success": False, "error": str(e)}
 
@@ -677,6 +734,11 @@ def create_followup(description: str, date: str = "", reasoning_note: str = "", 
         )
         if followup_result.get("error"):
             return {"success": False, "error": followup_result["error"]}
+        if desired_status.lower() == "archived":
+            conn = sqlite3.connect(str(NEXO_DB))
+            conn.execute("UPDATE followups SET status = ? WHERE id = ?", ("archived", fid))
+            conn.commit()
+            conn.close()
         if desired_status != "PENDING":
             nexo_db.add_followup_note(
                 fid,

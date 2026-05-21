@@ -1,16 +1,25 @@
 """Learnings CRUD tools: add, search, update, delete, list."""
 
+import json
 import os
 import re
+import unicodedata
 from datetime import datetime
 
 from db import (create_learning, update_learning, delete_learning, search_learnings,
                 list_learnings, find_similar_learnings, get_db, now_epoch, supersede_learning, extract_keywords,
                 resolve_session_correction_requirements)
+from learning_resolver import (
+    applies_overlap as _canonical_applies_overlap,
+    looks_contradictory as _canonical_looks_contradictory,
+    resolve_learning_candidate,
+)
 
 NEGATION_PATTERNS = (
     "do not", "don't", "never", "avoid", "skip", "without", "forbid", "forbidden",
     "disable", "disabled", "remove", "ban", "bypass",
+    " no ", " nunca ", " evita ", " evitar ", " sin ", " prohibe ", " prohibido ",
+    " desactiva ", " desactivar ", " elimina ", " eliminar ", " bloquea ", " bloquear ",
 )
 CONTRADICTION_PAIRS = (
     ("enable", "disable"),
@@ -23,6 +32,15 @@ CONTRADICTION_PAIRS = (
     ("validate", "skip"),
     ("validate", "bypass"),
     ("include", "exclude"),
+    ("activar", "desactivar"),
+    ("usar", "evitar"),
+    ("usar", "no usar"),
+    ("editar", "no editar"),
+    ("tocar", "no tocar"),
+    ("anadir", "eliminar"),
+    ("permitir", "prohibir"),
+    ("validar", "saltar"),
+    ("incluir", "excluir"),
 )
 
 
@@ -40,26 +58,13 @@ def _normalize_applies_token(value: str) -> str:
 
 
 def _applies_overlap(left: str, right: str) -> bool:
-    left_tokens = {_normalize_applies_token(item) for item in _split_applies_to(left)}
-    right_tokens = {_normalize_applies_token(item) for item in _split_applies_to(right)}
-    left_tokens.discard("")
-    right_tokens.discard("")
-    if not left_tokens or not right_tokens:
-        return False
-    if left_tokens & right_tokens:
-        return True
-    for left_token in left_tokens:
-        for right_token in right_tokens:
-            if "/" in left_token or "/" in right_token:
-                if left_token.startswith(f"{right_token}/") or right_token.startswith(f"{left_token}/"):
-                    return True
-                if left_token.endswith(f"/{right_token}") or right_token.endswith(f"/{left_token}"):
-                    return True
-    return False
+    return _canonical_applies_overlap(left, right)
 
 
 def _normalize_text(text: str) -> str:
-    return re.sub(r"\s+", " ", str(text or "").strip().lower())
+    normalized = unicodedata.normalize("NFKD", str(text or ""))
+    ascii_text = "".join(ch for ch in normalized if not unicodedata.combining(ch))
+    return re.sub(r"\s+", " ", ascii_text.strip().lower())
 
 
 def _tokenize(text: str) -> list[str]:
@@ -67,7 +72,7 @@ def _tokenize(text: str) -> list[str]:
 
 
 def _contains_negation(text: str) -> bool:
-    lowered = _normalize_text(text)
+    lowered = f" {_normalize_text(text)} "
     return any(token in lowered for token in NEGATION_PATTERNS)
 
 
@@ -75,37 +80,16 @@ def _negated_action_verbs(text: str) -> set[str]:
     lowered = _normalize_text(text)
     matches = set()
     for pattern in (
-        r"(?:never|avoid|skip|disable|remove|forbid|bypass)\s+([a-z0-9_-]+)",
-        r"(?:do not|don't)\s+([a-z0-9_-]+)",
+        r"(?:never|avoid|skip|disable|remove|forbid|bypass|nunca|evita|evitar|desactiva|desactivar|elimina|eliminar|prohibe|prohibir|bloquea|bloquear)\s+([a-z0-9_-]+)",
+        r"(?:do not|don't|no)\s+([a-z0-9_-]+)",
+        r"(?:without|sin)\s+([a-z0-9_-]+)",
     ):
         matches.update(re.findall(pattern, lowered))
     return {match for match in matches if len(match) > 2}
 
 
 def _looks_contradictory(existing_text: str, new_text: str) -> bool:
-    existing_norm = _normalize_text(existing_text)
-    new_norm = _normalize_text(new_text)
-    if not existing_norm or not new_norm:
-        return False
-    existing_tokens = set(_tokenize(existing_norm))
-    new_tokens = set(_tokenize(new_norm))
-    if not (existing_tokens & new_tokens):
-        return False
-    existing_negated_verbs = _negated_action_verbs(existing_norm)
-    new_negated_verbs = _negated_action_verbs(new_norm)
-    if existing_negated_verbs & new_tokens and not existing_negated_verbs & new_negated_verbs:
-        return True
-    if new_negated_verbs & existing_tokens and not existing_negated_verbs & new_negated_verbs:
-        return True
-    if _contains_negation(existing_norm) != _contains_negation(new_norm):
-        return True
-    for positive, negative in CONTRADICTION_PAIRS:
-        existing_has_pair = positive in existing_norm or negative in existing_norm
-        new_has_pair = positive in new_norm or negative in new_norm
-        if existing_has_pair and new_has_pair:
-            if (positive in existing_norm and negative in new_norm) or (negative in existing_norm and positive in new_norm):
-                return True
-    return False
+    return _canonical_looks_contradictory(existing_text, new_text)
 
 
 def _find_conflicting_active_learning(conn, *, category: str, title: str, content: str,
@@ -286,7 +270,8 @@ def score_learning_quality(row: dict, conn=None) -> dict:
 
 def handle_learning_add(category: str, title: str, content: str, reasoning: str = '',
                         prevention: str = '', applies_to: str = '', review_days: int = 30,
-                        priority: str = 'medium', supersedes_id: int = 0) -> str:
+                        priority: str = 'medium', supersedes_id: int = 0,
+                        source_authority: str = 'explicit_instruction') -> str:
     """Add a new learning entry to the specified category.
 
     Args:
@@ -304,15 +289,55 @@ def handle_learning_add(category: str, title: str, content: str, reasoning: str 
     category = category.lower().strip()
     if not category:
         return "ERROR: Category cannot be empty."
-    # Dedup guard: block exact title duplicates in same category
     conn = get_db()
-    existing = conn.execute(
-        "SELECT id, title FROM learnings WHERE LOWER(title) = LOWER(?) AND category = ? AND status = 'active'",
-        (title.strip(), category)
-    ).fetchone()
-    if existing:
-        _resolve_pending_correction_learning(int(existing["id"]))
-        return f"Learning #{existing['id']} already exists with same title in {category}: {existing['title']}. Use nexo_learning_update to modify it."
+    resolution = resolve_learning_candidate(
+        category=category,
+        title=title,
+        content=content,
+        reasoning=reasoning,
+        prevention=prevention,
+        applies_to=applies_to,
+        priority=priority,
+        supersedes_id=supersedes_id,
+        source_authority=source_authority,
+        conn=conn,
+    )
+    if resolution["action"] == "reject":
+        return f"ERROR: Learning candidate rejected: {resolution['reason']}."
+    if resolution["action"] == "merge":
+        existing_id = int(resolution.get("target_id") or 0)
+        existing = conn.execute("SELECT id, title, weight FROM learnings WHERE id = ?", (existing_id,)).fetchone()
+        if existing:
+            if resolution.get("reason") == "exact_title_duplicate":
+                _resolve_pending_correction_learning(existing_id)
+                return f"Learning #{existing['id']} already exists with same title in {category}: {existing['title']}. Use nexo_learning_update to modify it."
+            old_weight = float(existing["weight"] or 0.0)
+            new_weight = min(1.0, old_weight + 0.1)
+            conn.execute(
+                "UPDATE learnings SET weight = ?, updated_at = ? WHERE id = ?",
+                (new_weight, now_epoch(), existing_id),
+            )
+            conn.commit()
+            _resolve_pending_correction_learning(existing_id)
+            return (
+                f"Learning #{existing_id} resolved as merge ({resolution['reason']}, similarity "
+                f"{float(resolution.get('similarity') or 0):.2f}). No duplicate created. "
+                f"Weight bumped {old_weight:.2f} -> {new_weight:.2f}. Use nexo_learning_update(id={existing_id}) "
+                "to refine the canonical text."
+            )
+    if resolution["action"] == "conflict_review":
+        conflicting = {
+            "id": resolution.get("target_id"),
+            "title": resolution.get("target_title"),
+            "applies_to": applies_to,
+        }
+        return (
+            f"ERROR: Contradictory active learning #{conflicting['id']} already exists for applies_to="
+            f"{conflicting.get('applies_to', '')}: {conflicting['title']}. "
+            f"Supersede or update the existing canonical rule instead of creating two active file rules."
+        )
+    if resolution["action"] == "supersede":
+        supersedes_id = int(resolution.get("target_id") or supersedes_id or 0)
 
     # ── R05 (Fase 2 Protocol Enforcer): auto-merge on high Jaccard similarity ──
     # When a near-duplicate active learning exists (Jaccard >= R05 threshold),
@@ -356,19 +381,6 @@ def handle_learning_add(category: str, title: str, content: str, reasoning: str 
                     f"→ {new_weight:.2f}. Use nexo_learning_update(id={existing_id}) if you need to "
                     "refine the canonical text."
                 )
-    conflicting = _find_conflicting_active_learning(
-        conn,
-        category=category,
-        title=title,
-        content=content,
-        applies_to=applies_to,
-    )
-    if conflicting and int(supersedes_id or 0) != int(conflicting["id"]):
-        return (
-            f"ERROR: Contradictory active learning #{conflicting['id']} already exists for applies_to="
-            f"{conflicting.get('applies_to', '')}: {conflicting['title']}. "
-            f"Supersede or update the existing canonical rule instead of creating two active file rules."
-        )
     result = create_learning(
         category, title, content, reasoning=reasoning, supersedes_id=(int(supersedes_id) if supersedes_id else None)
     )
@@ -506,6 +518,25 @@ def handle_learning_add(category: str, title: str, content: str, reasoning: str 
         if resolved_corrections else ""
     )
     return f"Learning #{result['id']} added in {category}: {title}{meta_str} ✓verified{repetition_msg}{retro_meta_msg}{correction_msg}"
+
+
+def handle_learning_resolve_candidate(category: str, title: str, content: str, reasoning: str = '',
+                                      prevention: str = '', applies_to: str = '',
+                                      priority: str = 'medium', supersedes_id: int = 0,
+                                      source_authority: str = 'inference') -> str:
+    """Dry-run the canonical learning resolver without mutating state."""
+    result = resolve_learning_candidate(
+        category=category,
+        title=title,
+        content=content,
+        reasoning=reasoning,
+        prevention=prevention,
+        applies_to=applies_to,
+        priority=priority,
+        supersedes_id=supersedes_id,
+        source_authority=source_authority,
+    )
+    return json.dumps(result, ensure_ascii=False, indent=2)
 
 
 def handle_learning_search(query: str, category: str = '') -> str:

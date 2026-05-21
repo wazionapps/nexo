@@ -21,7 +21,9 @@ REPO_PREFIXES = (
     "db",
     "doctor",
     "cognitive",
+    "cognitive_control_observatory",
     "hook_guardrails",
+    "learning_resolver",
     "script_registry",
     "state_watchers_runtime",
 )

@@ -227,7 +227,8 @@ def _normalize_item_status(status: object) -> str:
 
 
 def _dashboard_status_matches(status: object, requested: str | None) -> bool:
-    normalized = _normalize_item_status(status)
+    db = _db()
+    normalized = db.normalize_followup_status(status)
     requested_key = str(requested or "").strip().lower()
     if not requested_key:
         return normalized != "DELETED"
@@ -239,6 +240,11 @@ def _dashboard_status_matches(status: object, requested: str | None) -> bool:
         return normalized.startswith("COMPLETED")
     if requested_key == "deleted":
         return normalized == "DELETED"
+    if requested_key in {
+        "active", "waiting_user", "waiting_external", "blocked",
+        "parked", "stale_review", "expired", "completed",
+    }:
+        return db.followup_lifecycle_lane({"status": normalized}) == requested_key
     return normalized == requested_key.upper()
 
 
@@ -1019,6 +1025,10 @@ async def api_followups_list(
     """List followups."""
     db = _db()
     followups = db.get_followups("history")
+    for item in followups:
+        item["status"] = db.normalize_followup_status(item.get("status"))
+        item["lifecycle_lane"] = db.followup_lifecycle_lane(item)
+        item["due_state"] = db.followup_due_state(item)
     followups = [r for r in followups if _dashboard_status_matches(r.get("status"), status)]
     followups = sorted(followups, key=lambda item: item.get("updated_at") or item.get("created_at") or 0, reverse=True)
     return {"count": len(followups), "followups": followups}
@@ -2064,12 +2074,11 @@ async def api_backups():
 @app.get("/api/followup-health")
 async def api_followup_health():
     db = _db()
-    conn = db.get_db()
-    all_f = [dict(r) for r in conn.execute("SELECT * FROM followups").fetchall()]
-    today = datetime.date.today().isoformat()
-    pending = [f for f in all_f if f.get("status") not in ("completed", "archived", "deleted")]
-    completed = [f for f in all_f if f.get("status") == "completed"]
-    overdue = [f for f in pending if f.get("date") and f["date"] < today]
+    snapshot = db.followup_lifecycle_snapshot(limit=5000)
+    all_f = [item for lane_items in (snapshot.get("lanes") or {}).values() for item in lane_items]
+    active = list((snapshot.get("lanes") or {}).get("active", []))
+    completed = list((snapshot.get("lanes") or {}).get("completed", []))
+    overdue = [f for f in active if f.get("due_state") == "due"]
     rate = round(len(completed) / max(len(all_f), 1) * 100, 1)
     age_buckets = {"0-3d": 0, "4-7d": 0, "8-14d": 0, "15-30d": 0, "30d+": 0}
     for f in overdue:
@@ -2082,8 +2091,16 @@ async def api_followup_health():
             elif age <= 14: age_buckets["8-14d"] += 1
             elif age <= 30: age_buckets["15-30d"] += 1
             else: age_buckets["30d+"] += 1
-    return {"total": len(all_f), "pending": len(pending), "completed": len(completed),
-            "overdue": len(overdue), "completion_rate": rate, "age_buckets": age_buckets, "overdue_items": overdue[:20]}
+    return {
+        "total": len(all_f),
+        "pending": len(active),
+        "completed": len(completed),
+        "overdue": len(overdue),
+        "completion_rate": rate,
+        "age_buckets": age_buckets,
+        "overdue_items": overdue[:20],
+        "lifecycle": snapshot,
+    }
 
 
 # ---------------------------------------------------------------------------

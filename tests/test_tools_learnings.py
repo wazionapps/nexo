@@ -21,6 +21,7 @@ def _reload_learning_stack():
     import db._schema as db_schema
     import db._learnings as db_learnings
     import db
+    import learning_resolver
     import tools_learnings
 
     importlib.reload(db_core)
@@ -28,6 +29,7 @@ def _reload_learning_stack():
     importlib.reload(db_schema)
     importlib.reload(db_learnings)
     importlib.reload(db)
+    importlib.reload(learning_resolver)
     importlib.reload(tools_learnings)
     return db, tools_learnings
 
@@ -94,6 +96,33 @@ def test_handle_learning_add_blocks_conflicting_file_conditioned_learning(learni
     assert active == 1
 
 
+def test_handle_learning_add_blocks_spanish_conflicting_file_rule_before_merge(learning_env):
+    db, tools_learnings = _reload_learning_stack()
+    db.init_db()
+
+    first = tools_learnings.handle_learning_add(
+        category="nexo-ops",
+        title="Usar apply_patch en ediciones manuales",
+        content="Usar apply_patch para editar archivos compartidos del repo.",
+        applies_to="/repo/src/router.py",
+        priority="high",
+    )
+    second = tools_learnings.handle_learning_add(
+        category="nexo-ops",
+        title="No usar apply_patch en ediciones manuales",
+        content="No usar apply_patch para editar archivos compartidos del repo.",
+        applies_to="/repo/src/router.py",
+        priority="high",
+    )
+
+    conn = db.get_db()
+    active = conn.execute("SELECT COUNT(*) FROM learnings WHERE status = 'active'").fetchone()[0]
+
+    assert "added in nexo-ops" in first
+    assert "Contradictory active learning" in second
+    assert active == 1
+
+
 def test_handle_learning_update_requires_supersede_when_conflicting_file_rule_exists(learning_env):
     db, tools_learnings = _reload_learning_stack()
     db.init_db()
@@ -150,6 +179,31 @@ def test_handle_learning_add_can_supersede_existing_file_rule(learning_env):
     assert old_row["status"] == "superseded"
     assert new_row["supersedes_id"] == 1
     assert new_row["status"] == "active"
+
+
+def test_similarity_repetition_ignores_superseded_learning(learning_env):
+    db, tools_learnings = _reload_learning_stack()
+    db.init_db()
+
+    db.create_learning(
+        category="nexo-ops",
+        title="Validate releases before push",
+        content="Validate releases before push and record evidence.",
+    )
+    db.create_learning(
+        category="nexo-ops",
+        title="Validate releases with stronger evidence",
+        content="Validate releases before push and record stronger evidence.",
+    )
+    db.supersede_learning(1, 2)
+    matches = db.find_similar_learnings(
+        2,
+        "Validate releases before push again",
+        "Validate releases before push and record stronger evidence again.",
+        "nexo-ops",
+    )
+
+    assert all(match[0] != 1 for match in matches)
 
 
 def test_handle_learning_add_records_repeated_error_similarity(learning_env):

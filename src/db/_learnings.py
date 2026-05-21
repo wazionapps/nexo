@@ -205,7 +205,7 @@ def find_similar_learnings(new_id: int, title: str, content: str, category: str)
         return []
     conn = _core().get_db()
     rows = conn.execute(
-        "SELECT id, title, content FROM learnings WHERE category = ? AND id != ?",
+        "SELECT id, title, content FROM learnings WHERE category = ? AND id != ? AND COALESCE(status, 'active') = 'active'",
         (category, new_id)
     ).fetchall()
     results = []

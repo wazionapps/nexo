@@ -5,8 +5,9 @@ NEXO Followup Hygiene — Weekly cleanup of followup/reminder statuses.
 
 Runs Sundays via LaunchAgent (or manually). Tasks:
 1. Normalize dirty statuses (COMPLETED YYYY-MM-DD -> COMPLETED)
-2. Escalate PENDING followups >14 days without updates to needs_decision
-3. Generate summary of orphaned/forgotten followups for synthesis
+2. Move PENDING followups >14 days without updates to stale_review
+3. Expire stale_review followups that stayed untouched for the TTL window
+4. Generate summary of orphaned/forgotten followups for synthesis
 
 No CLI needed — this is pure mechanical cleanup.
 """
@@ -32,6 +33,7 @@ COORD_DIR = paths.coordination_dir()
 LOG_FILE = paths.logs_dir() / "followup-hygiene.log"
 
 TODAY = date.today().isoformat()
+EXPIRE_STALE_REVIEW_DAYS = int(os.environ.get("NEXO_FOLLOWUP_EXPIRE_STALE_REVIEW_DAYS", "90") or "90")
 
 
 def log(msg):
@@ -91,7 +93,7 @@ def main():
     stale = conn.execute(
         "SELECT id, description, date, updated_at FROM followups "
         "WHERE status NOT LIKE 'COMPLETED%' "
-        "AND status NOT IN ('DELETED','archived','blocked','waiting','needs_decision','waiting_user') "
+        "AND UPPER(COALESCE(status, '')) NOT IN ('DELETED','ARCHIVED','BLOCKED','WAITING','WAITING_EXTERNAL','NEEDS_DECISION','WAITING_USER','PARKED','STALE_REVIEW','EXPIRED','DONE') "
         "AND date != '' AND date < ? "
         "AND (updated_at IS NULL OR updated_at = '' OR updated_at < ?) "
         "ORDER BY date",
@@ -106,23 +108,51 @@ def main():
         for s in stale:
             result = nexo_db.update_followup(
                 str(s["id"]),
-                status="needs_decision",
+                status="stale_review",
                 date=TODAY,
                 history_actor="followup-hygiene",
                 history_event="stale_triage",
                 history_note=(
-                    "Weekly hygiene escalated this old due followup to needs_decision "
+                    "Weekly hygiene moved this old due followup to stale_review "
                     "instead of leaving it in the executable briefing indefinitely."
                 ),
             )
             if not result.get("error"):
                 escalated_stale.append(str(s["id"]))
 
-    # 3. Orphaned followups (no date, no recent update)
+    # 3. Expire stale_review followups that received no decision for the TTL window
+    expire_cutoff = datetime.now().timestamp() - (max(1, EXPIRE_STALE_REVIEW_DAYS) * 24 * 60 * 60)
+    expirable = conn.execute(
+        "SELECT id, description, updated_at FROM followups "
+        "WHERE UPPER(COALESCE(status, '')) = 'STALE_REVIEW' "
+        "AND (updated_at IS NULL OR updated_at = '' OR updated_at < ?) "
+        "ORDER BY updated_at ASC",
+        (expire_cutoff,),
+    ).fetchall()
+    expired_ids = []
+    if expirable:
+        log(f"Expiring {len(expirable)} stale_review followups untouched for >{EXPIRE_STALE_REVIEW_DAYS} days:")
+        for item in expirable[:10]:
+            log(f"  {item['id']}: {item['description'][:60]}")
+        for item in expirable:
+            result = nexo_db.update_followup(
+                str(item["id"]),
+                status="expired",
+                history_actor="followup-hygiene",
+                history_event="expired",
+                history_note=(
+                    f"Weekly hygiene expired stale_review followup after "
+                    f"{EXPIRE_STALE_REVIEW_DAYS} days without movement."
+                ),
+            )
+            if not result.get("error"):
+                expired_ids.append(str(item["id"]))
+
+    # 4. Orphaned followups (no date, no recent update)
     orphans = conn.execute(
         "SELECT id, description FROM followups "
         "WHERE status NOT LIKE 'COMPLETED%' "
-        "AND status NOT IN ('DELETED','archived','blocked','waiting') "
+        "AND UPPER(COALESCE(status, '')) NOT IN ('DELETED','ARCHIVED','BLOCKED','WAITING','WAITING_EXTERNAL','NEEDS_DECISION','WAITING_USER','PARKED','STALE_REVIEW','EXPIRED','DONE') "
         "AND (date IS NULL OR date = '') "
         "ORDER BY id"
     ).fetchall()
@@ -141,9 +171,11 @@ def main():
         "dirty_normalized": dirty_f + dirty_r,
         "stale_count": len(stale) if stale else 0,
         "stale_escalated_count": len(escalated_stale),
+        "expired_count": len(expired_ids),
         "orphan_count": len(orphans) if orphans else 0,
         "stale_ids": [s["id"] for s in stale[:20]] if stale else [],
         "stale_escalated_ids": escalated_stale[:20],
+        "expired_ids": expired_ids[:20],
         "orphan_ids": [o["id"] for o in orphans[:20]] if orphans else [],
     }
 
@@ -151,7 +183,7 @@ def main():
     summary_file.parent.mkdir(parents=True, exist_ok=True)
     summary_file.write_text(json.dumps(summary, indent=2))
 
-    log(f"Summary: {dirty_f + dirty_r} normalized, {len(escalated_stale)} stale escalated, {len(orphans) if orphans else 0} orphans")
+    log(f"Summary: {dirty_f + dirty_r} normalized, {len(escalated_stale)} stale escalated, {len(expired_ids)} expired, {len(orphans) if orphans else 0} orphans")
     log("=== Followup Hygiene complete ===")
 
 

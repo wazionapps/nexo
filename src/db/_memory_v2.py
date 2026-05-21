@@ -9,6 +9,7 @@ stable substrate without changing hook behaviour again.
 import hashlib
 import importlib
 import json
+import os
 import re
 import sqlite3
 import sys
@@ -429,6 +430,101 @@ def _derive_observation(event: dict) -> dict:
     }
 
 
+def _intraday_facts_enabled() -> bool:
+    value = os.environ.get("NEXO_INTRADAY_FACTS_ENABLED", "1").strip().lower()
+    return value not in {"0", "false", "no", "off", "disabled"}
+
+
+def _intraday_fact_candidate(observation: dict) -> bool:
+    if str(observation.get("status") or "active").lower() != "active":
+        return False
+    if float(observation.get("salience") or 0.0) < 0.62:
+        return False
+    if str(observation.get("observation_type") or "") not in {
+        "code_change",
+        "correction",
+        "decision",
+        "task_result",
+    }:
+        return False
+    if not str(observation.get("summary") or "").strip():
+        return False
+
+    facts = observation.get("facts") if isinstance(observation.get("facts"), dict) else {}
+    metadata = facts.get("metadata") if isinstance(facts.get("metadata"), dict) else {}
+    event_type = str(facts.get("event_type") or "")
+    source_type = str(facts.get("source_type") or "")
+    refs = [str(ref) for ref in observation.get("evidence_refs") or []]
+    observation_type = str(observation.get("observation_type") or "")
+
+    if observation_type == "task_result":
+        outcome = str(metadata.get("outcome") or event_type.removeprefix("protocol_task_") or "").lower()
+        return outcome in {"done", "closed", "completed", "success", "partial"}
+    if observation_type == "code_change":
+        verification_keys = {
+            "verified",
+            "verification",
+            "change_verify",
+            "test_output",
+            "tests_passed",
+            "evidence",
+        }
+        if source_type in {"change_log", "evidence_ledger", "protocol_task"}:
+            return True
+        if any(key in metadata and str(metadata.get(key) or "").strip() for key in verification_keys):
+            return True
+        return any(ref.startswith(("change_log:", "evidence:", "protocol_task:")) for ref in refs)
+    return observation_type in {"correction", "decision"}
+
+
+def publish_intraday_fact(observation: dict, *, ttl_hours: int = 36) -> dict:
+    """Expose high-salience observations as temporary hot context.
+
+    This is deliberately not long-term promotion. Deep Sleep can later promote,
+    merge, or discard the observation; the intraday fact only keeps today's
+    important work visible while the operator keeps working.
+    """
+    if not _intraday_facts_enabled():
+        return {"ok": True, "skipped": True, "reason": "intraday facts disabled"}
+    if not _intraday_fact_candidate(observation):
+        return {"ok": True, "skipped": True, "reason": "not an intraday fact candidate"}
+
+    uid = str(observation.get("observation_uid") or "").strip()
+    if not uid:
+        return {"ok": False, "error": "observation_uid is required"}
+
+    try:
+        from db._hot_context import capture_context_event
+
+        result = capture_context_event(
+            event_type="intraday_fact",
+            title=_truncate(observation.get("subject") or uid, 160),
+            summary=_truncate(observation.get("summary") or "", 600),
+            body=_truncate(observation.get("summary") or "", 1600),
+            context_key=f"intraday_fact:{uid}",
+            context_title=_truncate(observation.get("subject") or uid, 160),
+            context_summary=_truncate(observation.get("summary") or "", 600),
+            context_type="intraday_fact",
+            state="active",
+            owner="nexo",
+            actor="memory-observation-processor",
+            source_type="memory_observation",
+            source_id=uid,
+            session_id=str(observation.get("session_id") or ""),
+            metadata={
+                "observation_type": observation.get("observation_type") or "",
+                "project_key": observation.get("project_key") or "",
+                "promotion_state": observation.get("promotion_state") or "observation",
+                "evidence_refs": observation.get("evidence_refs") or [],
+            },
+            ttl_hours=ttl_hours,
+            created_at=float(observation.get("updated_at") or _core().now_epoch()),
+        )
+        return {"ok": True, "context_key": result.get("context_key"), "result": result}
+    except Exception as exc:
+        return {"ok": False, "error": _truncate(str(exc), 500)}
+
+
 def upsert_memory_observation(observation: dict) -> dict:
     conn = _core().get_db()
     if not _table_exists(conn, "memory_observations"):
@@ -520,6 +616,7 @@ def process_memory_observation_queue(limit: int = 25) -> dict:
     ).fetchall()
     processed = 0
     failed = 0
+    intraday_facts = 0
     now = _core().now_epoch()
     for row in rows:
         event = _row_to_event(row)
@@ -527,6 +624,9 @@ def process_memory_observation_queue(limit: int = 25) -> dict:
         try:
             observation = _derive_observation(event)
             upsert_memory_observation(observation)
+            intraday_result = publish_intraday_fact(observation)
+            if intraday_result.get("ok") and not intraday_result.get("skipped"):
+                intraday_facts += 1
             conn.execute(
                 """
                 UPDATE memory_observation_queue
@@ -554,7 +654,13 @@ def process_memory_observation_queue(limit: int = 25) -> dict:
             )
             failed += 1
     conn.commit()
-    return {"ok": failed == 0, "processed": processed, "failed": failed, "total_seen": len(rows)}
+    return {
+        "ok": failed == 0,
+        "processed": processed,
+        "failed": failed,
+        "intraday_facts": intraday_facts,
+        "total_seen": len(rows),
+    }
 
 
 def list_memory_events(

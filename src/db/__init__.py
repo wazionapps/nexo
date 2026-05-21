@@ -100,6 +100,7 @@ from db._memory_v2 import (
     list_memory_events,
     memory_event_stats,
     upsert_memory_observation,
+    publish_intraday_fact,
     process_memory_observation_queue,
     list_memory_observations,
     search_memory_observations_fts,
@@ -124,6 +125,7 @@ from db._reminders import (
     find_similar_followups,
     compute_followup_impact, score_followup, score_active_followups,
     add_item_history, get_item_history, validate_item_read_token,
+    normalize_followup_status, followup_due_state, followup_lifecycle_lane, followup_lifecycle_snapshot,
 )
 
 # Learnings

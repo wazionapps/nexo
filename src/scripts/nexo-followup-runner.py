@@ -73,7 +73,7 @@ RESULTS_FILE = data_dir() / "followup-runner-results.json"
 CLI_TIMEOUT = AUTOMATION_SUBPROCESS_TIMEOUT
 LOCK_FILE = LOG_DIR / "followup-runner.lock"
 MAX_FOLLOWUPS_PER_RUN = 5  # Focus: Opus can actually execute 5, not 30
-COOLDOWN_DAYS = 3  # Don't retry needs_decision/blocked for 3 days
+COOLDOWN_DAYS = 3  # Don't retry waiting_user/stale_review/blocked for 3 days
 STALE_FOLLOWUP_TRIAGE_DAYS = 14
 MAX_STALE_TRIAGE_PER_RUN = 8
 MAX_NEEDS_OPERATOR_BRIEFING = 12
@@ -134,7 +134,7 @@ def _history_has_recent_movement(history, *, days: int = STALE_FOLLOWUP_TRIAGE_D
 
 def _is_stale_followup_for_triage(followup: dict) -> bool:
     status = str(followup.get("status") or "").strip().lower()
-    if status in {"needs_decision", "waiting_user", "blocked", "waiting"}:
+    if status in {"needs_decision", "waiting_user", "blocked", "waiting", "stale_review"}:
         return False
     if _followup_days_overdue(str(followup.get("date") or "")) < STALE_FOLLOWUP_TRIAGE_DAYS:
         return False
@@ -148,7 +148,7 @@ def _is_in_cooldown(fu_id: str, state: dict) -> bool:
     if not last:
         return False
     last_status = last.get("status", "")
-    if last_status not in ("needs_decision", "blocked"):
+    if last_status not in ("needs_decision", "waiting_user", "stale_review", "blocked"):
         return False
     last_date_str = last.get("date", "")
     if not last_date_str:
@@ -298,17 +298,17 @@ def get_all_active_followups(state: dict) -> dict:
     conn = sqlite3.connect(str(NEXO_DB))
     conn.row_factory = sqlite3.Row
     try:
-        rows = conn.execute(
-            "SELECT id, description, date, reasoning, verification, priority, recurrence, status, owner, updated_at "
-            "FROM followups WHERE status NOT LIKE 'COMPLETED%' "
-            "AND UPPER(COALESCE(status, '')) NOT IN ('BLOCKED', 'ARCHIVED', 'DELETED', 'WAITING', 'DONE') "
-            "AND description NOT LIKE '[Abandoned]%' "
-            "ORDER BY "
-            "  CASE priority "
-            "    WHEN 'critical' THEN 1 WHEN 'high' THEN 2 "
-            "    WHEN 'medium' THEN 3 WHEN 'low' THEN 4 ELSE 5 END, "
-            "  date ASC"
-        ).fetchall()
+        snapshot = nexo_db.followup_lifecycle_snapshot(limit=5000)
+        rows = [
+            item for item in (snapshot.get("lanes") or {}).get("active", [])
+            if not str(item.get("description") or "").startswith("[Abandoned]")
+        ]
+        rows.sort(
+            key=lambda item: (
+                {"critical": 1, "high": 2, "medium": 3, "low": 4}.get(str(item.get("priority") or "medium"), 5),
+                str(item.get("date") or "9999-12-31"),
+            )
+        )
 
         result = {"actionable": [], "needs_operator": [], "future": [], "backlog": [], "cooled_down": [], "stale_triage": []}
         undated_triage_budget = 2
@@ -488,7 +488,7 @@ def attention_reminder_id(fu_id: str) -> str:
 
 
 def attention_reminder_category(status: str) -> str:
-    return "decisions" if status == "needs_decision" else "waiting"
+    return "decisions" if status in {"needs_decision", "waiting_user", "stale_review"} else "waiting"
 
 
 def attention_reminder_description(
@@ -690,10 +690,10 @@ def get_recent_activity(hours: int = 24) -> str:
 
         # Recent followup notes from the runner
         notes = conn.execute(
-            "SELECT followup_id, note, created_at FROM followup_history "
-            "WHERE actor='followup-runner' AND created_at >= datetime('now', ?)"
+            "SELECT item_id AS followup_id, note, created_at FROM item_history "
+            "WHERE item_type='followup' AND actor='followup-runner' AND created_at >= ? "
             "ORDER BY created_at DESC LIMIT 10",
-            (f"-{hours} hours",)
+            ((datetime.now() - timedelta(hours=hours)).timestamp(),),
         ).fetchall()
         if notes:
             lines.append("\nFOLLOWUP NOTES WRITTEN (last 24h):")
@@ -821,7 +821,7 @@ def main():
         update_followup_fields(
             fid,
             date_value=date.today().isoformat(),
-            status="needs_decision",
+            status="stale_review",
             history_event="stale_triage",
             history_note=summary,
         )
@@ -829,10 +829,10 @@ def main():
             fid,
             summary=summary,
             options={"a": "close obsolete", "b": "reschedule", "c": "convert to next action"},
-            status="needs_decision",
+            status="stale_review",
             operator_language=_operator_language(),
         )
-        record_attempt(state, fid, "needs_decision")
+        record_attempt(state, fid, "stale_review")
 
     results = []
 
@@ -914,7 +914,7 @@ def main():
             advance_recurrent(fid, recurrence, summary)
             resolve_attention_reminder(fid, resolution=summary)
             record_attempt(state, fid, "checked")
-        elif r["status"] in ("needs_decision", "blocked"):
+        elif r["status"] in ("needs_decision", "waiting_user", "stale_review", "blocked"):
             defer_followup_after_attention(
                 fid,
                 summary=summary,
@@ -929,7 +929,7 @@ def main():
 
     total = len(all_actionable) + len(groups["needs_operator"]) + len(groups["future"]) + len(groups["backlog"]) + len(stale_triage)
     attention_handed_off = any(
-        r.get("needs_attention") or r["status"] in ("needs_decision", "blocked")
+        r.get("needs_attention") or r["status"] in ("needs_decision", "waiting_user", "stale_review", "blocked")
         for r in results
     )
     if total > 0 or results:
