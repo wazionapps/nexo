@@ -80,7 +80,16 @@ jobs:
               exit "$publish_status"
             fi
           fi
-          published="$(npm view "nexo-brain@$version" version --registry=https://registry.npmjs.org/)"
+          published=""
+          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+            published="$(npm view "nexo-brain@$version" version --registry=https://registry.npmjs.org/ 2>/dev/null || true)"
+            if [ "$published" = "$version" ]; then
+              echo "nexo-brain@$version visible on npm registry on attempt $attempt."
+              break
+            fi
+            echo "nexo-brain@$version not visible on npm registry yet (attempt $attempt/12); waiting..."
+            sleep 10
+          done
           test "$published" = "$version"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -104,7 +113,16 @@ jobs:
               exit "$publish_status"
             fi
           fi
-          published="$(npm view "$package_name@$version" version --registry=https://registry.npmjs.org/)"
+          published=""
+          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+            published="$(npm view "$package_name@$version" version --registry=https://registry.npmjs.org/ 2>/dev/null || true)"
+            if [ "$published" = "$version" ]; then
+              echo "$package_name@$version visible on npm registry on attempt $attempt."
+              break
+            fi
+            echo "$package_name@$version not visible on npm registry yet (attempt $attempt/12); waiting..."
+            sleep 10
+          done
           test "$published" = "$version"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
