@@ -1,5 +1,12 @@
 # Changelog
 
+## [7.23.10] - 2026-05-21
+
+### Fixed — English operational copy
+
+- **Brain operational output stays in English.** Runtime/update-facing Brain copy no longer falls back to Spanish strings in open-source CLI and maintenance surfaces.
+- **Coverage:** focused doctor, rule, card, skill and MCP tests for the touched operational-copy paths.
+
 ## [7.23.9] - 2026-05-20
 
 ### Fixed — Desktop MCP status after successful re-probe

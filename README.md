@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.23.6` is the current packaged-runtime line. Patch over v7.23.5 - `nexo update` clears safe legacy `cognitive.db` shadows and keeps superseded archives under runtime backup retention.
+Version `7.23.10` is the current packaged-runtime line. Patch over v7.23.9 - Brain operational CLI/update copy stays English for the open-source runtime contract.
+
+Previously in `7.23.6`: patch over v7.23.5 - `nexo update` clears safe legacy `cognitive.db` shadows and keeps superseded archives under runtime backup retention.
 
 Previously in `7.23.5`: patch over v7.23.4 - `nexo update` keeps external CLI maintenance summary copy in English.
 
