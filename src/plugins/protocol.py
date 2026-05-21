@@ -325,6 +325,7 @@ HIGH_STAKES_OVERRIDE_FALSE = {
     "dry-run",
     "dryrun",
 }
+TASK_OPEN_LOCAL_CONTEXT_TRUE_VALUES = {"1", "true", "yes", "y", "on", "force"}
 
 _INTERNAL_AUDIT_AREAS = {
     "guardian",
@@ -448,6 +449,14 @@ def _parse_bool(value) -> bool:
     if isinstance(value, str):
         return value.strip().lower() in {"1", "true", "yes", "y", "on"}
     return bool(value)
+
+
+def _task_open_local_context_enabled() -> bool:
+    """Keep heavy local-context routing off the task_open critical path by default."""
+    return (
+        os.environ.get("NEXO_TASK_OPEN_LOCAL_CONTEXT", "").strip().lower()
+        in TASK_OPEN_LOCAL_CONTEXT_TRUE_VALUES
+    )
 
 
 def _parse_int_list(value) -> list[int]:
@@ -1326,7 +1335,7 @@ def handle_task_open(
         response_contract["next_action"] = next_action
 
     recent_excerpt = format_pre_action_context_bundle(recent_bundle, compact=True) if recent_bundle.get("has_matches") else ""
-    if append_local_context_evidence is not None:
+    if append_local_context_evidence is not None and _task_open_local_context_enabled():
         recent_excerpt = append_local_context_evidence(
             recent_excerpt,
             " | ".join(part for part in [clean_goal, context_hint.strip()] if part),

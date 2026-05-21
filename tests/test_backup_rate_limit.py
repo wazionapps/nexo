@@ -80,14 +80,14 @@ def test_backup_restore_first_call_succeeds(backup_env):
     src_backup = backup_env["backups"] / "nexo-2026-01-01-0000.db"
     _seed_db(src_backup)
     result = backup_env["mod"].handle_backup_restore("nexo-2026-01-01-0000.db")
-    assert result.startswith("DB restaurada desde"), result
+    assert result.startswith("DB restored from"), result
 
 
 def test_backup_restore_second_call_is_rate_limited(backup_env):
     src_backup = backup_env["backups"] / "nexo-2026-01-01-0000.db"
     _seed_db(src_backup)
     first = backup_env["mod"].handle_backup_restore("nexo-2026-01-01-0000.db")
-    assert first.startswith("DB restaurada desde"), first
+    assert first.startswith("DB restored from"), first
     second = backup_env["mod"].handle_backup_restore("nexo-2026-01-01-0000.db")
     assert "Rate-limited" in second
     assert "backup_restore" in second
@@ -108,7 +108,7 @@ def test_rate_limit_state_is_tool_local(backup_env):
     assert first.startswith("Backup created:")
     # restore should still be allowed — separate counter
     restore = backup_env["mod"].handle_backup_restore("nexo-2026-01-01-0000.db")
-    assert restore.startswith("DB restaurada desde")
+    assert restore.startswith("DB restored from")
 
 
 def test_backup_plugin_uses_runtime_paths_after_f06(backup_env):

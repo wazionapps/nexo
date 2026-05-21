@@ -163,9 +163,40 @@ def test_task_open_includes_recent_context_excerpt(isolated_db):
     assert "holidays2thecanaries" in payload["recent_context"]["excerpt"].lower()
 
 
-def test_task_open_includes_local_context_evidence_automatically(tmp_path):
+def test_task_open_skips_local_context_evidence_by_default(isolated_db, monkeypatch):
+    import plugins.protocol as protocol
+
+    called = False
+
+    def _fake_append(rendered, query, *, limit=4):
+        nonlocal called
+        called = True
+        return f"{rendered}\nLOCAL CONTEXT EVIDENCE:\n- should not appear"
+
+    monkeypatch.delenv("NEXO_TASK_OPEN_LOCAL_CONTEXT", raising=False)
+    monkeypatch.setattr(protocol, "append_local_context_evidence", _fake_append)
+
+    sid = _register_session("nexo-2001-8001")
+    payload = json.loads(
+        protocol.handle_task_open(
+            sid=sid,
+            goal="Actualizar funcion SendWA",
+            task_type="analyze",
+            area="code",
+            context_hint="necesito saber que afecta SendWA",
+            verification_step="revisar contexto local",
+        )
+    )
+
+    assert payload["ok"] is True
+    assert called is False
+    assert "LOCAL CONTEXT EVIDENCE" not in payload["recent_context"]["excerpt"]
+
+
+def test_task_open_includes_local_context_evidence_when_enabled(tmp_path, monkeypatch):
     from plugins.protocol import handle_task_open
 
+    monkeypatch.setenv("NEXO_TASK_OPEN_LOCAL_CONTEXT", "force")
     root = tmp_path / "docs"
     root.mkdir()
     note = root / "sendwa-context.txt"

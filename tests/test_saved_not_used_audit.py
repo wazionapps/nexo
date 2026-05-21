@@ -340,5 +340,5 @@ def test_markdown_fragment_has_required_columns(tmp_path):
 
     md = format_markdown(audit_saved_not_used(_config(tmp_path, main_db=main, local_context_db=local, email_db=email)))
 
-    assert "| Store | Productor | Consumidor | Ultima escritura | Ultimo uso | Riesgo | Prueba | Estado |" in md
+    assert "| Store | Producer | Consumer | Last write | Last use | Risk | Test | Status |" in md
     assert "`local_context_saved_not_used`" in md

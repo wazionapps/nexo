@@ -66,7 +66,7 @@ def test_session_diary_write_distinguishes_recent_and_historical_commit_ref_gaps
     )
     conn.close()
 
-    assert "1 cambio reciente de repo sin commit_ref (2 cambios de repo total)" in result
+    assert "1 cambio reciente repo changes without commit_ref (2 cambios de repo total)" in result
 
 
 def test_change_log_message_distinguishes_repo_and_local_commit_refs(monkeypatch):

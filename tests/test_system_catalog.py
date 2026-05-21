@@ -64,7 +64,7 @@ def test_system_catalog_surfaces_new_core_tools_and_runtime_metadata(monkeypatch
     assert "CATALOG ENTRY — nexo_learning_add" in learning_explain
     assert "Required args:" in learning_explain
     assert "applies_to" in learning_explain
-    assert "Learning ligado a archivo o patrón" in learning_explain
+    assert "Learning linked to a file or pattern" in learning_explain
     assert "severity" in learning_explain
 
     reminder_explain = tools_system_catalog.handle_tool_explain("nexo_reminder_update")

@@ -1,5 +1,18 @@
 # Changelog
 
+## [7.24.0] - 2026-05-21
+
+### Added — agents and cognitive controls
+
+- **Home Agents registry support is now part of Brain.** Agent registry, CLI/MCP surfaces, schedule validation, archive/restore and script execution contracts are integrated into the main runtime.
+- **Cognitive quality controls are merged into the release line.** Local Context modes, canonical learning resolution, followup lifecycle consolidation and intraday evidence memory move from feature worktree into `main`.
+- **Brain operational copy stays English.** Internal CLI/runtime surfaces avoid hardcoded Spanish except intentional lexicons, detectors and examples.
+
+### Fixed — task open latency
+
+- **`nexo_task_open` no longer blocks on heavy Local Context evidence by default.** The task is still created with Brain recent-context continuity, while optional local-file evidence can be explicitly enabled with `NEXO_TASK_OPEN_LOCAL_CONTEXT=1`.
+- **Coverage:** full Brain suite plus focused hot-context regression tests for default non-blocking task open and opt-in Local Context evidence.
+
 ## [7.23.13] - 2026-05-21
 
 ### Fixed — release guardrails

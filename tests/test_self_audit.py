@@ -830,7 +830,7 @@ def test_retire_stale_audit_goals_inline_abandons_old_placeholders(self_audit_en
     assert result["ok"] is True
     assert result["retired"] == 1
     assert goal[0] == "abandoned"
-    assert "retirado automáticamente" in goal[1]
+    assert "removed automatically" in goal[1]
     assert "stale >24h" in goal[2]
     assert goal[3] is not None
 

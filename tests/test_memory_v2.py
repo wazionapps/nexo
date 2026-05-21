@@ -339,7 +339,7 @@ def test_memory_search_answer_and_timeline_are_evidence_first(isolated_db):
     assert result["count"] >= 1
     assert result["has_evidence"] is True
     assert "memory_event:" in formatted
-    assert "Respuesta basada en evidencia" in answer
+    assert "Evidence-based answer" in answer
     assert timeline["candidates"][0]["evidence_refs"][0].startswith("memory_event:")
 
 
@@ -366,7 +366,7 @@ def test_memory_answer_refuses_candidates_without_evidence_refs(isolated_db):
 
     assert result["count"] >= 1
     assert result["has_evidence"] is False
-    assert "No tengo evidencia suficiente" in answer
+    assert "There is not enough evidence" in answer
 
 
 def test_memory_search_accepts_project_path_hint(isolated_db):
@@ -530,4 +530,4 @@ def test_memory_answer_refuses_without_evidence(isolated_db):
 
     answer = answer_memory_question("no existe esta memoria")
 
-    assert "No tengo evidencia suficiente" in answer
+    assert "There is not enough evidence" in answer
