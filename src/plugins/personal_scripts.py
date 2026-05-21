@@ -6,13 +6,19 @@ from collections import Counter
 from db import init_db, list_personal_scripts, list_personal_script_schedules
 from plugins.schedule import handle_schedule_add
 from script_registry import (
+    archive_agent,
     classify_scripts_dir,
+    create_agent_script,
     create_script,
     ensure_personal_schedules,
+    get_agent_status,
     get_automation_status,
+    list_agents,
     list_operator_automations,
     reconcile_personal_scripts,
     remove_personal_script,
+    set_agent_enabled,
+    set_agent_schedule,
     set_automation_enabled,
     set_automation_instructions,
     set_automation_schedule,
@@ -168,6 +174,61 @@ def handle_automations_list(include_all: bool = False) -> str:
     return json.dumps({"ok": True, "automations": list_operator_automations(include_all=include_all)}, ensure_ascii=False)
 
 
+def handle_agents_list(include_archived: bool = False) -> str:
+    init_db()
+    return json.dumps({"ok": True, "agents": list_agents(include_archived=include_archived)}, ensure_ascii=False)
+
+
+def handle_agent_status(name: str) -> str:
+    init_db()
+    return json.dumps(get_agent_status(name), ensure_ascii=False)
+
+
+def handle_agent_create(name: str, description: str = "", runtime: str = "python") -> str:
+    init_db()
+    try:
+        return json.dumps(create_agent_script(name, description=description, runtime=runtime), ensure_ascii=False)
+    except (FileExistsError, ValueError) as exc:
+        return json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False)
+
+
+def handle_agent_enable(name: str) -> str:
+    init_db()
+    return json.dumps(set_agent_enabled(name, True), ensure_ascii=False)
+
+
+def handle_agent_disable(name: str) -> str:
+    init_db()
+    return json.dumps(set_agent_enabled(name, False), ensure_ascii=False)
+
+
+def handle_agent_archive(name: str, restore: bool = False) -> str:
+    init_db()
+    return json.dumps(archive_agent(name, archived=not bool(restore)), ensure_ascii=False)
+
+
+def handle_agent_schedule(
+    name: str,
+    every_seconds: int = 0,
+    daily_at: str = "",
+    clear: bool = False,
+) -> str:
+    init_db()
+    try:
+        interval_seconds = int(every_seconds or 0) or None
+    except (TypeError, ValueError):
+        return json.dumps({"ok": False, "error": f"Invalid every_seconds: {every_seconds}"}, ensure_ascii=False)
+    return json.dumps(
+        set_agent_schedule(
+            name,
+            interval_seconds=interval_seconds,
+            daily_at=str(daily_at or "").strip() or None,
+            clear=bool(clear),
+        ),
+        ensure_ascii=False,
+    )
+
+
 def handle_automation_status(name: str) -> str:
     init_db()
     return json.dumps(get_automation_status(name), ensure_ascii=False)
@@ -273,6 +334,20 @@ TOOLS = [
      "Set or clear operator-side extra instructions for one automation without editing the core prompt."),
     (handle_automation_schedule, "nexo_automation_schedule",
      "Set or clear the cadence override for one operator-facing automation."),
+    (handle_agents_list, "nexo_agents_list",
+     "List personal scripts marked as NEXO agents for the Desktop Home panel."),
+    (handle_agent_status, "nexo_agent_status",
+     "Read the composed runtime status for one personal-script-backed agent."),
+    (handle_agent_create, "nexo_agent_create",
+     "Create a personal script scaffold already marked as a NEXO agent."),
+    (handle_agent_enable, "nexo_agent_enable",
+     "Enable one personal-script-backed agent."),
+    (handle_agent_disable, "nexo_agent_disable",
+     "Disable one personal-script-backed agent without deleting its schedule."),
+    (handle_agent_archive, "nexo_agent_archive",
+     "Archive or restore one personal-script-backed agent without deleting its file."),
+    (handle_agent_schedule, "nexo_agent_schedule",
+     "Set or clear the cadence for one personal-script-backed agent."),
     (handle_core_schedules_list, "nexo_core_schedules_list",
      "List structural core crons whose cadence can be tuned without disabling them."),
     (handle_core_schedule_status, "nexo_core_schedule_status",

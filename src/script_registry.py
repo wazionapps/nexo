@@ -91,7 +91,53 @@ METADATA_KEYS = {
     "idempotent",
     "max_catchup_age",
     "doctor_allow_db",
+    "agent",
+    "agent_title",
+    "agent_description",
+    "agent_conversation_id",
+    "agent_created_from",
+    "agent_archived",
+    "agent_enabled_before_archive",
+    "agent_icon",
 }
+AGENT_METADATA_KEYS = {
+    "agent",
+    "agent_title",
+    "agent_description",
+    "agent_conversation_id",
+    "agent_created_from",
+    "agent_archived",
+    "agent_enabled_before_archive",
+    "agent_icon",
+}
+METADATA_WRITE_ORDER = [
+    "name",
+    "description",
+    "runtime",
+    "agent",
+    "agent_title",
+    "agent_description",
+    "agent_conversation_id",
+    "agent_created_from",
+    "agent_archived",
+    "agent_enabled_before_archive",
+    "agent_icon",
+    "cron_id",
+    "schedule_required",
+    "schedule",
+    "interval_seconds",
+    "recovery_policy",
+    "run_on_boot",
+    "run_on_wake",
+    "idempotent",
+    "max_catchup_age",
+    "timeout",
+    "requires",
+    "tools",
+    "hidden",
+    "category",
+    "doctor_allow_db",
+]
 SUPPORTED_RUNTIMES = {"python", "shell", "node", "php", "unknown"}
 PERSONAL_SCHEDULE_MANAGED_ENV = "NEXO_MANAGED_PERSONAL_CRON"
 SUPPORTED_RECOVERY_POLICIES = {"none", "run_once_on_wake", "catchup", "restart", "restart_daemon"}
@@ -1130,7 +1176,10 @@ def _compact_schedule_from_record(record: dict) -> str:
         with contextlib.suppress(Exception):
             payload = json.loads(raw)
     if isinstance(payload, list):
-        payload = payload[0] if len(payload) == 1 and isinstance(payload[0], dict) else None
+        if len(payload) == 1 and isinstance(payload[0], dict):
+            payload = payload[0]
+        else:
+            return ""
     if isinstance(payload, dict):
         hour = payload.get("Hour")
         minute = payload.get("Minute")
@@ -1219,6 +1268,400 @@ def _write_metadata_block(path: Path, metadata_lines: list[str]) -> None:
     block = [line.rstrip("\n") + "\n" for line in metadata_lines]
     filtered[insert_at:insert_at] = block
     path.write_text("".join(filtered))
+
+
+def _metadata_lines_from_values(path: Path, metadata: dict) -> list[str]:
+    prefix = _metadata_comment_prefix(path)
+    keys = [key for key in METADATA_WRITE_ORDER if key in metadata]
+    keys.extend(sorted(key for key in metadata if key in METADATA_KEYS and key not in keys))
+    lines: list[str] = []
+    for key in keys:
+        value = str(metadata.get(key) or "").strip()
+        if not value:
+            continue
+        lines.append(f"{prefix} nexo: {key}={value}")
+    return lines
+
+
+def _unknown_inline_metadata_lines(path: Path) -> list[str]:
+    try:
+        raw = path.read_text(errors="ignore")
+    except Exception:
+        return []
+    lines = raw.splitlines(keepends=True)
+    insert_at = 1 if lines and lines[0].startswith("#!") else 0
+    preserved: list[str] = []
+    for index, line in enumerate(lines):
+        if index < insert_at or index >= 25:
+            continue
+        stripped = line.strip()
+        payload = ""
+        if stripped.startswith("# nexo:"):
+            payload = stripped[len("# nexo:"):].strip()
+        elif stripped.startswith("// nexo:"):
+            payload = stripped[len("// nexo:"):].strip()
+        if "=" not in payload:
+            continue
+        key, _value = payload.split("=", 1)
+        if key.strip() not in METADATA_KEYS:
+            preserved.append(line.rstrip("\n") + "\n")
+    return preserved
+
+
+def _update_script_metadata(path: Path, updates: dict, *, remove: set[str] | None = None) -> dict:
+    metadata = dict(parse_inline_metadata(path))
+    for key in remove or set():
+        metadata.pop(key, None)
+    for key, value in updates.items():
+        if key not in METADATA_KEYS:
+            continue
+        text = str(value or "").strip()
+        if text:
+            metadata[key] = _normalize_metadata_value(key, text)
+        else:
+            metadata.pop(key, None)
+    _write_metadata_block(path, _unknown_inline_metadata_lines(path) + _metadata_lines_from_values(path, metadata))
+    return parse_inline_metadata(path)
+
+
+def _is_agent_metadata(metadata: dict | None) -> bool:
+    return _truthy((metadata or {}).get("agent"))
+
+
+def _is_agent_archived(metadata: dict | None) -> bool:
+    return _truthy((metadata or {}).get("agent_archived"))
+
+
+def _format_agent_calendar_value(raw: str) -> tuple[str, str]:
+    compact = _compact_schedule_from_record({
+        "schedule_type": "calendar",
+        "schedule_value": raw,
+        "schedule_label": raw,
+    })
+    if not compact:
+        return "", ""
+    parts = compact.split(":")
+    if len(parts) not in {2, 3}:
+        return "", "calendar"
+    try:
+        hour = int(parts[0])
+        minute = int(parts[1])
+        weekday = int(parts[2]) if len(parts) == 3 else None
+    except (TypeError, ValueError):
+        return "", "calendar"
+    if len(parts) == 3:
+        return compact, f"{hour:02d}:{minute:02d} weekday={weekday}"
+    return compact, f"{hour:02d}:{minute:02d} daily"
+
+
+def _agent_schedule_from_script(script: dict) -> dict:
+    schedules = script.get("schedules") if isinstance(script.get("schedules"), list) else []
+    if schedules:
+        schedule = dict(schedules[0])
+        schedule_type = str(schedule.get("schedule_type") or "")
+        schedule_value = str(schedule.get("schedule_value") or "")
+        label = str(schedule.get("schedule_label") or schedule_value or schedule_type)
+        interval_seconds = 0
+        daily_at = ""
+        if schedule_type == "interval":
+            with contextlib.suppress(Exception):
+                interval_seconds = int(schedule_value)
+        elif schedule_type == "calendar":
+            daily_at, formatted = _format_agent_calendar_value(schedule_value)
+            label = formatted or label
+        return {
+            "schedule_type": schedule_type,
+            "schedule_value": schedule_value,
+            "schedule_label": label,
+            "effective_schedule_label": label,
+            "interval_seconds": interval_seconds,
+            "daily_at": daily_at,
+            "cron_id": str(schedule.get("cron_id") or ""),
+            "schedule_source": "runtime",
+            "schedules": schedules,
+        }
+
+    metadata = script.get("metadata") if isinstance(script.get("metadata"), dict) else {}
+    declared = get_declared_schedule(metadata, str(script.get("name") or ""))
+    if declared.get("valid") and declared.get("required"):
+        return {
+            "schedule_type": str(declared.get("schedule_type") or ""),
+            "schedule_value": str(declared.get("schedule_value") or ""),
+            "schedule_label": str(declared.get("schedule_label") or ""),
+            "effective_schedule_label": str(declared.get("schedule_label") or ""),
+            "interval_seconds": int(declared.get("interval_seconds", 0) or 0),
+            "daily_at": str(declared.get("schedule") or ""),
+            "cron_id": str(declared.get("cron_id") or ""),
+            "schedule_source": "metadata",
+            "schedules": [],
+        }
+
+    return {
+        "schedule_type": "manual",
+        "schedule_value": "",
+        "schedule_label": "",
+        "effective_schedule_label": "",
+        "interval_seconds": 0,
+        "daily_at": "",
+        "cron_id": str(metadata.get("cron_id") or script.get("name") or ""),
+        "schedule_source": "",
+        "schedules": [],
+    }
+
+
+def _agent_health(script: dict) -> str:
+    metadata = script.get("metadata") if isinstance(script.get("metadata"), dict) else {}
+    if _is_agent_archived(metadata):
+        return "archived"
+    if not bool(script.get("enabled", True)):
+        return "disabled"
+    exit_code = script.get("last_exit_code")
+    if exit_code is None:
+        return "unknown"
+    return "ok" if exit_code == 0 else "failing"
+
+
+def _agent_row(script: dict) -> dict:
+    metadata = script.get("metadata") if isinstance(script.get("metadata"), dict) else {}
+    schedule = _agent_schedule_from_script(script)
+    title = str(metadata.get("agent_title") or script.get("name") or "").strip()
+    description = str(
+        metadata.get("agent_description")
+        or script.get("description")
+        or metadata.get("description")
+        or ""
+    ).strip()
+    return {
+        "name": script.get("name", ""),
+        "title": title,
+        "description": description,
+        "path": script.get("path", ""),
+        "runtime": script.get("runtime", "unknown"),
+        "enabled": bool(script.get("enabled", True)),
+        "archived": _is_agent_archived(metadata),
+        "health": _agent_health(script),
+        "last_run_at": script.get("last_run_at", ""),
+        "last_exit_code": script.get("last_exit_code"),
+        "conversation_id": str(metadata.get("agent_conversation_id") or ""),
+        "created_from": str(metadata.get("agent_created_from") or ""),
+        "icon": str(metadata.get("agent_icon") or "automation"),
+        "metadata": metadata,
+        "schedule_configurable": True,
+        **schedule,
+    }
+
+
+def list_agents(*, include_archived: bool = False) -> list[dict]:
+    """List personal scripts explicitly marked as NEXO agents."""
+    from db import init_db, list_personal_scripts
+
+    init_db()
+    sync_personal_scripts()
+    rows = []
+    for script in list_personal_scripts(include_disabled=True):
+        metadata = script.get("metadata") if isinstance(script.get("metadata"), dict) else {}
+        if not _is_agent_metadata(metadata):
+            continue
+        if _is_agent_archived(metadata) and not include_archived:
+            continue
+        rows.append(_agent_row(script))
+    rows.sort(key=lambda row: (bool(row.get("archived")), str(row.get("title") or row.get("name") or "").lower()))
+    return rows
+
+
+def get_agent_status(name_or_path: str) -> dict:
+    from db import init_db, get_personal_script, list_personal_scripts
+
+    init_db()
+    sync_personal_scripts()
+    script = get_personal_script(name_or_path)
+    if not script:
+        return {"ok": False, "error": f"Agent not found: {name_or_path}"}
+    metadata = script.get("metadata") if isinstance(script.get("metadata"), dict) else {}
+    if not _is_agent_metadata(metadata):
+        return {"ok": False, "error": f"Personal script is not marked as an agent: {name_or_path}"}
+    for row in list_personal_scripts(include_disabled=True):
+        if row.get("path") == script.get("path"):
+            script = row
+            break
+    return {"ok": True, "agent": _agent_row(script)}
+
+
+def create_agent_script(name: str, *, description: str = "", runtime: str = "python", force: bool = False) -> dict:
+    created = create_script(name, description=description, runtime=runtime, force=force)
+    path = Path(created["path"])
+    metadata = parse_inline_metadata(path)
+    updates = {
+        "agent": "true",
+        "agent_title": name,
+        "agent_description": description or metadata.get("description") or f"Agent: {created['name']}",
+    }
+    _update_script_metadata(path, updates)
+    sync_result = sync_personal_scripts()
+    return {
+        **created,
+        "agent": True,
+        "sync": sync_result,
+    }
+
+
+def set_agent_enabled(name_or_path: str, enabled: bool) -> dict:
+    status = get_agent_status(name_or_path)
+    if not status.get("ok"):
+        return status
+    agent = status["agent"]
+    if enabled and agent.get("archived"):
+        _update_script_metadata(Path(agent["path"]), {"agent_archived": "false"})
+    result = set_personal_script_enabled(agent["path"], enabled)
+    if not result.get("ok"):
+        return result
+    refreshed = get_agent_status(agent["path"])
+    return {
+        "ok": True,
+        "name": agent["name"],
+        "enabled": enabled,
+        "changed": bool(result.get("changed")),
+        "agent": refreshed.get("agent") if refreshed.get("ok") else agent,
+    }
+
+
+def archive_agent(name_or_path: str, *, archived: bool = True) -> dict:
+    status = get_agent_status(name_or_path)
+    if not status.get("ok"):
+        return status
+    agent = status["agent"]
+    path = Path(agent["path"])
+    metadata = parse_inline_metadata(path)
+    if archived:
+        _update_script_metadata(path, {
+            "agent_archived": "true",
+            "agent_enabled_before_archive": "true" if agent.get("enabled", True) else "false",
+        })
+        next_enabled = False
+    else:
+        previous_enabled = metadata.get("agent_enabled_before_archive")
+        next_enabled = _truthy(previous_enabled) if previous_enabled else True
+        _update_script_metadata(path, {"agent_archived": "false"}, remove={"agent_enabled_before_archive"})
+    toggle = set_personal_script_enabled(agent["path"], next_enabled)
+    refreshed = get_agent_status(agent["path"])
+    return {
+        "ok": bool(toggle.get("ok", True)) and bool(refreshed.get("ok", True)),
+        "name": agent["name"],
+        "archived": archived,
+        "agent": refreshed.get("agent") if refreshed.get("ok") else agent,
+    }
+
+
+def _agent_schedule_ensure_error(result: dict, *, cron_id: str, path: Path) -> str:
+    if not isinstance(result, dict):
+        return "schedule ensure returned an invalid response"
+    if result.get("ok") is False:
+        return str(result.get("error") or "schedule ensure failed")
+    path_text = str(path)
+    for item in result.get("invalid", []) if isinstance(result.get("invalid"), list) else []:
+        if item.get("path") == path_text or item.get("cron_id") == cron_id:
+            return str(item.get("error") or "invalid schedule metadata")
+    for bucket in ("created", "repaired"):
+        for item in result.get(bucket, []) if isinstance(result.get(bucket), list) else []:
+            if item.get("cron_id") != cron_id:
+                continue
+            response = str(item.get("result") or "")
+            if response.upper().startswith("ERROR:"):
+                return response
+    return ""
+
+
+def set_agent_schedule(
+    name_or_path: str,
+    *,
+    interval_seconds: int | None = None,
+    daily_at: str | None = None,
+    clear: bool = False,
+) -> dict:
+    status = get_agent_status(name_or_path)
+    if not status.get("ok"):
+        return status
+    agent = status["agent"]
+    path = Path(agent["path"])
+    metadata = parse_inline_metadata(path)
+    cron_id = _safe_slug(str(metadata.get("cron_id") or agent.get("name") or path.stem))
+    runtime = classify_runtime(path, metadata)
+    if runtime == "unknown":
+        runtime = "shell" if path.suffix.lower() == ".sh" else "python"
+
+    remove = {"schedule", "interval_seconds", "recovery_policy", "run_on_boot", "run_on_wake", "idempotent", "max_catchup_age"}
+    updates = {
+        "agent": "true",
+        "name": metadata.get("name") or agent.get("name") or _logical_personal_script_name(path.stem),
+        "description": metadata.get("description") or agent.get("description") or f"Agent: {agent.get('name')}",
+        "runtime": runtime,
+        "cron_id": cron_id,
+    }
+    if clear:
+        remove.add("schedule_required")
+        _update_script_metadata(path, updates, remove=remove)
+        removed = unschedule_personal_script(str(path))
+        sync_result = sync_personal_scripts()
+        refreshed = get_agent_status(str(path))
+        return {
+            "ok": bool(removed.get("ok", True)),
+            "name": agent["name"],
+            "cleared": True,
+            "removed": removed,
+            "sync": sync_result,
+            "agent": refreshed.get("agent") if refreshed.get("ok") else agent,
+        }
+
+    if interval_seconds is not None:
+        try:
+            interval = int(interval_seconds)
+        except (TypeError, ValueError):
+            return {"ok": False, "error": f"Invalid interval_seconds: {interval_seconds}"}
+        if interval <= 0:
+            return {"ok": False, "error": "interval_seconds must be > 0"}
+        updates.update({
+            "schedule_required": "true",
+            "interval_seconds": str(interval),
+            "recovery_policy": "run_once_on_wake",
+        })
+    elif daily_at:
+        schedule_value = _normalize_schedule_metadata(str(daily_at).strip())
+        updates.update({
+            "schedule_required": "true",
+            "schedule": schedule_value,
+            "recovery_policy": "catchup",
+        })
+    else:
+        return {"ok": False, "error": "Choose interval_seconds, daily_at, or clear=true"}
+
+    candidate_metadata = dict(metadata)
+    for key in remove:
+        candidate_metadata.pop(key, None)
+    for key, value in updates.items():
+        if key in METADATA_KEYS:
+            candidate_metadata[key] = _normalize_metadata_value(key, str(value or ""))
+    declared = get_declared_schedule(candidate_metadata, str(agent.get("name") or path.stem))
+    if not declared.get("valid"):
+        return {
+            "ok": False,
+            "error": str(declared.get("error") or "invalid schedule metadata"),
+            "cron_id": cron_id,
+        }
+
+    _update_script_metadata(path, updates, remove=remove)
+    removed = unschedule_personal_script(str(path))
+    ensured = ensure_personal_schedules(dry_run=False)
+    ensure_error = _agent_schedule_ensure_error(ensured, cron_id=cron_id, path=path)
+    refreshed = get_agent_status(str(path))
+    return {
+        "ok": not ensure_error,
+        "name": agent["name"],
+        "cron_id": cron_id,
+        "error": ensure_error,
+        "removed": removed,
+        "ensure_schedules": ensured,
+        "agent": refreshed.get("agent") if refreshed.get("ok") else agent,
+    }
 
 
 def repair_orphan_personal_schedule_metadata(*, dry_run: bool = False) -> dict:
