@@ -91,7 +91,7 @@ def main():
     stale = conn.execute(
         "SELECT id, description, date, updated_at FROM followups "
         "WHERE status NOT LIKE 'COMPLETED%' "
-        "AND status NOT IN ('DELETED','archived','blocked','waiting','needs_decision','waiting_user') "
+        "AND UPPER(COALESCE(status, '')) NOT IN ('DELETED','ARCHIVED','BLOCKED','WAITING','WAITING_EXTERNAL','NEEDS_DECISION','WAITING_USER','PARKED','EXPIRED','DONE') "
         "AND date != '' AND date < ? "
         "AND (updated_at IS NULL OR updated_at = '' OR updated_at < ?) "
         "ORDER BY date",
@@ -122,7 +122,7 @@ def main():
     orphans = conn.execute(
         "SELECT id, description FROM followups "
         "WHERE status NOT LIKE 'COMPLETED%' "
-        "AND status NOT IN ('DELETED','archived','blocked','waiting') "
+        "AND UPPER(COALESCE(status, '')) NOT IN ('DELETED','ARCHIVED','BLOCKED','WAITING','WAITING_EXTERNAL','NEEDS_DECISION','WAITING_USER','PARKED','EXPIRED','DONE') "
         "AND (date IS NULL OR date = '') "
         "ORDER BY id"
     ).fetchall()

@@ -21,6 +21,14 @@ def test_followup_runner_excludes_done_status_from_executable_batch():
     assert "'BLOCKED', 'ARCHIVED', 'DELETED', 'WAITING', 'DONE'" in src
 
 
+def test_followup_runner_reads_item_history_not_legacy_followup_history():
+    src = (REPO_ROOT / "src" / "scripts" / "nexo-followup-runner.py").read_text(encoding="utf-8")
+
+    assert "FROM item_history" in src
+    assert "item_type='followup'" in src
+    assert "FROM followup_history" not in src
+
+
 def test_followup_hygiene_escalates_stale_items_instead_of_only_logging():
     src = (REPO_ROOT / "src" / "scripts" / "nexo-followup-hygiene.py").read_text(encoding="utf-8")
 
@@ -28,3 +36,4 @@ def test_followup_hygiene_escalates_stale_items_instead_of_only_logging():
     assert "history_event=\"stale_triage\"" in src
     assert "stale_escalated_count" in src
     assert "updated_at < ?" in src
+    assert "UPPER(COALESCE(status, '')) NOT IN" in src

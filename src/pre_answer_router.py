@@ -440,6 +440,7 @@ _SOURCE_PLANS: dict[str, SourcePlan] = {
         fallback=(
             SourceStep("transcripts", phase="fallback", timeout_ms=700),
             SourceStep("memory", phase="fallback", timeout_ms=400),
+            SourceStep("local_context", phase="fallback", timeout_ms=700, max_chars=700),
         ),
     ),
     "file_location": SourcePlan(
@@ -1174,6 +1175,16 @@ def _source_project_atlas(request: SourceRequest) -> SourceResult:
 def _source_local_context(request: SourceRequest) -> SourceResult:
     from local_context import api as local_context_api
 
+    mode = _local_context_pre_answer_mode()
+    if mode == "off":
+        return SourceResult(
+            source="local_context",
+            ok=True,
+            skipped=True,
+            aborted_reason="disabled",
+        )
+
+    started = time.monotonic()
     payload = local_context_api.context_router(
         request.query,
         intent=request.intent,
@@ -1181,6 +1192,20 @@ def _source_local_context(request: SourceRequest) -> SourceResult:
         current_context=request.current_context,
         max_chars=request.max_chars,
     )
+    elapsed_ms = (time.monotonic() - started) * 1000
+    _record_local_context_pre_answer_usage(
+        request,
+        payload,
+        mode=mode,
+        elapsed_ms=elapsed_ms,
+    )
+    if mode == "shadow":
+        return SourceResult(
+            source="local_context",
+            ok=True,
+            skipped=True,
+            aborted_reason="shadow_no_inject",
+        )
     if not payload.get("should_inject"):
         return SourceResult(source="local_context", result_count=0)
     return SourceResult(
@@ -1189,6 +1214,48 @@ def _source_local_context(request: SourceRequest) -> SourceResult:
         evidence_refs=[str(ref) for ref in payload.get("evidence_refs") or []],
         result_count=len(payload.get("evidence_refs") or []),
     )
+
+
+def _local_context_pre_answer_mode() -> str:
+    value = (
+        os.environ.get("NEXO_PRE_ANSWER_LOCAL_CONTEXT_MODE")
+        or os.environ.get("NEXO_LOCAL_CONTEXT_PRE_ANSWER_MODE")
+        or "inject"
+    )
+    clean = str(value or "").strip().lower()
+    if clean in {"0", "false", "no", "off", "disabled"}:
+        return "off"
+    if clean in {"shadow", "observe", "observability", "audit"}:
+        return "shadow"
+    return "inject"
+
+
+def _record_local_context_pre_answer_usage(
+    request: SourceRequest,
+    payload: dict[str, Any],
+    *,
+    mode: str,
+    elapsed_ms: float,
+) -> None:
+    try:
+        from local_context import usage_events
+
+        usage_payload = dict(payload)
+        usage_payload["intent"] = request.intent
+        usage_payload["should_inject"] = bool(payload.get("should_inject")) and mode == "inject"
+        usage_events.record_router_usage(
+            request.query,
+            usage_payload,
+            client="pre_answer_router",
+            tool="local_context",
+            route_stage=f"pre_answer:{mode}",
+            intent=request.intent,
+            elapsed_ms=int(max(0.0, elapsed_ms)),
+            deadline_ms=0,
+            used_before_response=True,
+        )
+    except Exception:
+        return
 
 
 def _source_filesystem(request: SourceRequest) -> SourceResult:

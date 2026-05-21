@@ -690,10 +690,10 @@ def get_recent_activity(hours: int = 24) -> str:
 
         # Recent followup notes from the runner
         notes = conn.execute(
-            "SELECT followup_id, note, created_at FROM followup_history "
-            "WHERE actor='followup-runner' AND created_at >= datetime('now', ?)"
+            "SELECT item_id AS followup_id, note, created_at FROM item_history "
+            "WHERE item_type='followup' AND actor='followup-runner' AND created_at >= ? "
             "ORDER BY created_at DESC LIMIT 10",
-            (f"-{hours} hours",)
+            ((datetime.now() - timedelta(hours=hours)).timestamp(),),
         ).fetchall()
         if notes:
             lines.append("\nFOLLOWUP NOTES WRITTEN (last 24h):")

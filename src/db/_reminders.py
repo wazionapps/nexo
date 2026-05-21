@@ -14,7 +14,41 @@ from db._hot_context import capture_context_event
 from db._learnings import extract_keywords
 from db._semantic_similarity import hybrid_similarity_score
 
-ACTIVE_EXCLUDED_STATUSES = {"DELETED", "archived", "blocked", "waiting"}
+ACTIVE_EXCLUDED_STATUSES = {"ARCHIVED", "BLOCKED", "DELETED", "DONE", "EXPIRED", "PARKED", "WAITING", "WAITING_EXTERNAL"}
+FOLLOWUP_TERMINAL_STATUSES = {"COMPLETED", "DELETED", "DONE", "EXPIRED", "ARCHIVED"}
+FOLLOWUP_WAITING_USER_STATUSES = {"NEEDS_DECISION", "WAITING_USER"}
+FOLLOWUP_WAITING_EXTERNAL_STATUSES = {"WAITING", "WAITING_EXTERNAL"}
+FOLLOWUP_BLOCKED_STATUSES = {"BLOCKED"}
+FOLLOWUP_STATUS_ALIASES = {
+    "": "PENDING",
+    "PENDIENTE": "PENDING",
+    "PENDING": "PENDING",
+    "ACTIVE": "PENDING",
+    "ACTIVO": "PENDING",
+    "COMPLETADO": "COMPLETED",
+    "COMPLETED": "COMPLETED",
+    "DONE": "DONE",
+    "HECHO": "DONE",
+    "ELIMINADO": "DELETED",
+    "DELETED": "DELETED",
+    "ARCHIVED": "ARCHIVED",
+    "ARCHIVADO": "ARCHIVED",
+    "BLOCKED": "BLOCKED",
+    "BLOQUEADO": "BLOCKED",
+    "WAITING": "WAITING",
+    "WAITING_EXTERNAL": "WAITING_EXTERNAL",
+    "ESPERANDO": "WAITING_EXTERNAL",
+    "WAITING_USER": "WAITING_USER",
+    "NEEDS_DECISION": "NEEDS_DECISION",
+    "NEEDS-DECISION": "NEEDS_DECISION",
+    "NEEDS DECISION": "NEEDS_DECISION",
+    "DECISION": "NEEDS_DECISION",
+    "NECESITA_DECISION": "NEEDS_DECISION",
+    "PARKED": "PARKED",
+    "APARCADO": "PARKED",
+    "STALE_REVIEW": "STALE_REVIEW",
+    "EXPIRED": "EXPIRED",
+}
 READ_TOKEN_TTL_SECONDS = 30 * 60
 
 # Opportunistic cleanup of expired item_read_tokens: runs at most once every
@@ -69,6 +103,41 @@ def _truncate(text: str | None, limit: int = 240) -> str:
         return ""
     text = str(text).strip()
     return text if len(text) <= limit else text[: limit - 3] + "..."
+
+
+def normalize_followup_status(status: str | None) -> str:
+    """Return the canonical followup status used by lifecycle tools."""
+    clean = str(status or "").strip()
+    if not clean:
+        return "PENDING"
+    upper = clean.upper().replace("-", "_")
+    if upper.startswith("COMPLETED"):
+        return "COMPLETED"
+    return FOLLOWUP_STATUS_ALIASES.get(upper, upper)
+
+
+def followup_lifecycle_lane(followup: dict) -> str:
+    """Classify one followup into an operational lane without mutating it."""
+    status = normalize_followup_status(followup.get("status"))
+    owner = str(followup.get("owner") or "").strip().lower()
+    if status in FOLLOWUP_TERMINAL_STATUSES:
+        return "completed" if status in {"COMPLETED", "DONE"} else status.lower()
+    if status in FOLLOWUP_BLOCKED_STATUSES:
+        return "blocked"
+    if status in FOLLOWUP_WAITING_USER_STATUSES or owner == "user":
+        return "waiting_user"
+    if status in FOLLOWUP_WAITING_EXTERNAL_STATUSES or owner == "waiting":
+        return "waiting_external"
+    if status == "PARKED":
+        return "parked"
+    if status == "STALE_REVIEW":
+        return "stale_review"
+    due = _parse_date(followup.get("date"))
+    if due is None:
+        return "backlog"
+    if due > datetime.date.today():
+        return "future"
+    return "active"
 
 
 def _format_changes(before: sqlite3.Row | dict | None, after: sqlite3.Row | dict | None, fields: list[str]) -> str:
@@ -226,7 +295,7 @@ def _active_status_where(column_name: str = "status") -> str:
     excluded = ", ".join(f"'{value}'" for value in sorted(ACTIVE_EXCLUDED_STATUSES))
     return (
         f"{column_name} NOT LIKE 'COMPLETED%' "
-        f"AND {column_name} NOT IN ({excluded})"
+        f"AND UPPER(COALESCE({column_name}, '')) NOT IN ({excluded})"
     )
 
 
@@ -632,6 +701,7 @@ def create_followup(
     """
     conn = get_db()
     now = now_epoch()
+    status = normalize_followup_status(status)
     similar = find_similar_followups(description)
     warning = ""
     if similar:
@@ -742,6 +812,8 @@ def update_followup(
             updates.pop("owner")
         else:
             updates["owner"] = coerced
+    if "status" in updates:
+        updates["status"] = normalize_followup_status(updates["status"])
     if not updates:
         return {"error": "No valid fields to update"}
 
@@ -1100,6 +1172,40 @@ def get_followup(id: str, include_history: bool = False) -> dict | None:
 
 def get_followup_history(id: str, limit: int = 20) -> list[dict]:
     return get_item_history("followup", id, limit=limit)
+
+
+def followup_lifecycle_snapshot(limit: int = 500) -> dict:
+    """Return followups grouped by lifecycle lane for dashboards and runners."""
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT * FROM followups ORDER BY updated_at DESC LIMIT ?",
+        (max(1, min(int(limit or 500), 5000)),),
+    ).fetchall()
+    lanes = {
+        "active": [],
+        "waiting_user": [],
+        "waiting_external": [],
+        "blocked": [],
+        "future": [],
+        "backlog": [],
+        "parked": [],
+        "stale_review": [],
+        "completed": [],
+        "deleted": [],
+        "expired": [],
+        "archived": [],
+    }
+    for row in rows:
+        item = dict(row)
+        item["status"] = normalize_followup_status(item.get("status"))
+        lane = followup_lifecycle_lane(item)
+        lanes.setdefault(lane, []).append(item)
+    return {
+        "ok": True,
+        "total": len(rows),
+        "lanes": lanes,
+        "counts": {lane: len(items) for lane, items in lanes.items()},
+    }
 
 
 def _parse_date(date_str: str | None) -> datetime.date | None:

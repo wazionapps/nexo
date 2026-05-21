@@ -2,6 +2,7 @@
 
 import os
 import re
+import unicodedata
 from datetime import datetime
 
 from db import (create_learning, update_learning, delete_learning, search_learnings,
@@ -11,6 +12,8 @@ from db import (create_learning, update_learning, delete_learning, search_learni
 NEGATION_PATTERNS = (
     "do not", "don't", "never", "avoid", "skip", "without", "forbid", "forbidden",
     "disable", "disabled", "remove", "ban", "bypass",
+    " no ", " nunca ", " evita ", " evitar ", " sin ", " prohibe ", " prohibido ",
+    " desactiva ", " desactivar ", " elimina ", " eliminar ", " bloquea ", " bloquear ",
 )
 CONTRADICTION_PAIRS = (
     ("enable", "disable"),
@@ -23,6 +26,15 @@ CONTRADICTION_PAIRS = (
     ("validate", "skip"),
     ("validate", "bypass"),
     ("include", "exclude"),
+    ("activar", "desactivar"),
+    ("usar", "evitar"),
+    ("usar", "no usar"),
+    ("editar", "no editar"),
+    ("tocar", "no tocar"),
+    ("anadir", "eliminar"),
+    ("permitir", "prohibir"),
+    ("validar", "saltar"),
+    ("incluir", "excluir"),
 )
 
 
@@ -59,7 +71,9 @@ def _applies_overlap(left: str, right: str) -> bool:
 
 
 def _normalize_text(text: str) -> str:
-    return re.sub(r"\s+", " ", str(text or "").strip().lower())
+    normalized = unicodedata.normalize("NFKD", str(text or ""))
+    ascii_text = "".join(ch for ch in normalized if not unicodedata.combining(ch))
+    return re.sub(r"\s+", " ", ascii_text.strip().lower())
 
 
 def _tokenize(text: str) -> list[str]:
@@ -67,7 +81,7 @@ def _tokenize(text: str) -> list[str]:
 
 
 def _contains_negation(text: str) -> bool:
-    lowered = _normalize_text(text)
+    lowered = f" {_normalize_text(text)} "
     return any(token in lowered for token in NEGATION_PATTERNS)
 
 
@@ -75,8 +89,9 @@ def _negated_action_verbs(text: str) -> set[str]:
     lowered = _normalize_text(text)
     matches = set()
     for pattern in (
-        r"(?:never|avoid|skip|disable|remove|forbid|bypass)\s+([a-z0-9_-]+)",
-        r"(?:do not|don't)\s+([a-z0-9_-]+)",
+        r"(?:never|avoid|skip|disable|remove|forbid|bypass|nunca|evita|evitar|desactiva|desactivar|elimina|eliminar|prohibe|prohibir|bloquea|bloquear)\s+([a-z0-9_-]+)",
+        r"(?:do not|don't|no)\s+([a-z0-9_-]+)",
+        r"(?:without|sin)\s+([a-z0-9_-]+)",
     ):
         matches.update(re.findall(pattern, lowered))
     return {match for match in matches if len(match) > 2}
@@ -314,6 +329,20 @@ def handle_learning_add(category: str, title: str, content: str, reasoning: str 
         _resolve_pending_correction_learning(int(existing["id"]))
         return f"Learning #{existing['id']} already exists with same title in {category}: {existing['title']}. Use nexo_learning_update to modify it."
 
+    conflicting = _find_conflicting_active_learning(
+        conn,
+        category=category,
+        title=title,
+        content=content,
+        applies_to=applies_to,
+    )
+    if conflicting and int(supersedes_id or 0) != int(conflicting["id"]):
+        return (
+            f"ERROR: Contradictory active learning #{conflicting['id']} already exists for applies_to="
+            f"{conflicting.get('applies_to', '')}: {conflicting['title']}. "
+            f"Supersede or update the existing canonical rule instead of creating two active file rules."
+        )
+
     # ── R05 (Fase 2 Protocol Enforcer): auto-merge on high Jaccard similarity ──
     # When a near-duplicate active learning exists (Jaccard >= R05 threshold),
     # do NOT create a new row. Instead increment the weight on the existing
@@ -356,19 +385,6 @@ def handle_learning_add(category: str, title: str, content: str, reasoning: str 
                     f"→ {new_weight:.2f}. Use nexo_learning_update(id={existing_id}) if you need to "
                     "refine the canonical text."
                 )
-    conflicting = _find_conflicting_active_learning(
-        conn,
-        category=category,
-        title=title,
-        content=content,
-        applies_to=applies_to,
-    )
-    if conflicting and int(supersedes_id or 0) != int(conflicting["id"]):
-        return (
-            f"ERROR: Contradictory active learning #{conflicting['id']} already exists for applies_to="
-            f"{conflicting.get('applies_to', '')}: {conflicting['title']}. "
-            f"Supersede or update the existing canonical rule instead of creating two active file rules."
-        )
     result = create_learning(
         category, title, content, reasoning=reasoning, supersedes_id=(int(supersedes_id) if supersedes_id else None)
     )

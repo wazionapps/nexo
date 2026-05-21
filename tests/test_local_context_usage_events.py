@@ -122,3 +122,39 @@ def test_record_router_usage_marks_deadline_abortions_as_timeouts():
 
     assert result["ok"] is True
     assert result["event"]["timed_out"] is True
+
+
+def test_pre_answer_local_context_shadow_records_without_inject(monkeypatch):
+    import local_context.api as local_context_api
+    import pre_answer_router as router
+
+    monkeypatch.setenv("NEXO_PRE_ANSWER_LOCAL_CONTEXT_MODE", "shadow")
+
+    def fake_context_router(query, *, intent, limit, current_context, max_chars):
+        return {
+            "ok": True,
+            "query": query,
+            "intent": intent,
+            "should_inject": True,
+            "rendered": "LOCAL CONTEXT EVIDENCE\n- useful local file",
+            "evidence_refs": ["local_asset:a#chunk:c"],
+        }
+
+    monkeypatch.setattr(local_context_api, "context_router", fake_context_router)
+
+    result = router._source_local_context(
+        router.SourceRequest(
+            query="donde esta el archivo local",
+            intent="file_location",
+            max_chars=900,
+        )
+    )
+    events = usage_events.list_recent_events(limit=5)
+
+    assert result.skipped is True
+    assert result.aborted_reason == "shadow_no_inject"
+    assert result.has_evidence is False
+    assert events
+    assert events[0]["route_stage"] == "pre_answer:shadow"
+    assert events[0]["intent"] == "file_location"
+    assert events[0]["should_inject"] == 0

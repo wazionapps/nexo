@@ -91,3 +91,26 @@ def test_followup_hygiene_normalizes_dirty_statuses_with_history(tmp_path, monke
         "Weekly hygiene normalized dirty status from COMPLETED 2026-04-08 to COMPLETED.",
         "followup-hygiene",
     )
+
+
+def test_followup_lifecycle_snapshot_groups_non_executable_lanes(isolated_db):
+    import db
+
+    db.create_followup("NF-ACTIVE", "Run concrete task", date="2026-01-01", status="PENDING")
+    db.create_followup("NF-USER", "Needs operator decision", date="2026-01-01", status="needs_decision")
+    db.create_followup("NF-WAIT", "Waiting for vendor", date="2026-01-01", status="waiting")
+    db.create_followup("NF-PARK", "Parked idea", date="", status="parked")
+
+    snapshot = db.followup_lifecycle_snapshot()
+    active_ids = {item["id"] for item in snapshot["lanes"]["active"]}
+    waiting_user_ids = {item["id"] for item in snapshot["lanes"]["waiting_user"]}
+    waiting_external_ids = {item["id"] for item in snapshot["lanes"]["waiting_external"]}
+    parked_ids = {item["id"] for item in snapshot["lanes"]["parked"]}
+    visible_active_ids = {item["id"] for item in db.get_followups()}
+
+    assert "NF-ACTIVE" in active_ids
+    assert "NF-USER" in waiting_user_ids
+    assert "NF-WAIT" in waiting_external_ids
+    assert "NF-PARK" in parked_ids
+    assert "NF-WAIT" not in visible_active_ids
+    assert "NF-PARK" not in visible_active_ids
