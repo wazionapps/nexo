@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.23.12] - 2026-05-21
+
+### Fixed — protected database recovery
+
+- **`nexo doctor --tier boot --plane database_real --fix` now repairs protected Brain table regressions.** The repair path restores `PROTECTED_TABLES` from the latest valid backup instead of accidentally using the local-memory default table set.
+- **Recovery preserves newer rows.** Protected-table repair now merges missing backup rows with `INSERT OR IGNORE`, so rows created after the backup are not rolled back while the wipe guard is cleared.
+- **Coverage:** regression tests for protected-table repair plus merge-preserving restore behavior.
+
 ## [7.23.11] - 2026-05-21
 
 ### Fixed — packaged update compatibility

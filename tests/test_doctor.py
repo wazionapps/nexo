@@ -253,6 +253,43 @@ class TestBootChecks:
         assert counts["protocol_tasks"] == 999
         assert local_counts["local_assets"] == 2000
 
+    def test_db_integrity_fix_merges_protected_tables_without_losing_current_rows(self, nexo_home):
+        from db_guard import CRITICAL_TABLES, PROTECTED_TABLES, db_row_counts
+
+        primary = nexo_home / "data" / "nexo.db"
+        backup = nexo_home / "backups" / "nexo-2026-05-21-0114.db"
+        backup.parent.mkdir(parents=True, exist_ok=True)
+
+        conn = sqlite3.connect(str(primary))
+        for table in CRITICAL_TABLES:
+            conn.execute(f"CREATE TABLE IF NOT EXISTS {table} (id INTEGER PRIMARY KEY, payload TEXT)")
+        conn.execute("INSERT INTO protocol_tasks (id, payload) VALUES (?, ?)", (1, "current-wins"))
+        conn.execute("INSERT INTO protocol_tasks (id, payload) VALUES (?, ?)", (1000, "new-current-row"))
+        conn.commit()
+        conn.close()
+
+        conn = sqlite3.connect(str(backup))
+        for table in CRITICAL_TABLES:
+            conn.execute(f"CREATE TABLE IF NOT EXISTS {table} (id INTEGER PRIMARY KEY, payload TEXT)")
+        for i in range(1, 101):
+            conn.execute("INSERT INTO protocol_tasks (id, payload) VALUES (?, ?)", (i, f"backup-{i}"))
+        conn.commit()
+        conn.close()
+
+        from doctor.providers.boot import check_db_integrity
+        check = check_db_integrity(fix=True)
+
+        assert check.status == "healthy"
+        assert check.fixed is True
+        assert "protected tables restored" in check.summary
+        assert db_row_counts(primary, PROTECTED_TABLES)["protocol_tasks"] == 101
+        conn = sqlite3.connect(str(primary))
+        try:
+            assert conn.execute("SELECT payload FROM protocol_tasks WHERE id=1").fetchone()[0] == "current-wins"
+            assert conn.execute("SELECT payload FROM protocol_tasks WHERE id=1000").fetchone()[0] == "new-current-row"
+        finally:
+            conn.close()
+
     def test_missing_dirs_fix(self, nexo_home):
         import shutil
         shutil.rmtree(str(nexo_home / "runtime" / "coordination"), ignore_errors=True); shutil.rmtree(str(nexo_home / "coordination"), ignore_errors=True)

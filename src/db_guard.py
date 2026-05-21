@@ -29,7 +29,7 @@ auto_update.py):
     diff_row_counts(current, reference, tables) -> WipeReport
     safe_sqlite_backup(source, dest) -> tuple[bool, str | None]
     validate_backup_matches_source(source, dest, tables) -> tuple[bool, str | None]
-    restore_tables_from_backup(source, target, tables) -> dict
+    restore_tables_from_backup(source, target, tables, mode) -> dict
     kill_nexo_mcp_servers(dry_run) -> dict
     quiesce_nexo_db_writers(dry_run) -> dict
     resume_nexo_launchagents(labels, dry_run) -> dict
@@ -501,23 +501,42 @@ def _quote_identifier(identifier: str) -> str:
     return '"' + identifier.replace('"', '""') + '"'
 
 
+def _quote_sql_name(identifier: str) -> str:
+    return '"' + identifier.replace('"', '""') + '"'
+
+
+def _table_columns(conn: sqlite3.Connection, schema: str, table: str) -> list[str]:
+    if schema not in {"main", "backup_db"}:
+        raise ValueError(f"refusing unsafe schema identifier: {schema!r}")
+    quoted = _quote_identifier(table)
+    rows = conn.execute(f"PRAGMA {schema}.table_info({quoted})").fetchall()
+    return [str(row[1]) for row in rows]
+
+
 def restore_tables_from_backup(
     source: str | Path,
     target: str | Path,
     tables: tuple[str, ...] = LOCAL_CONTEXT_TABLES,
+    *,
+    mode: str = "replace",
 ) -> dict:
-    """Replace selected tables in ``target`` with the copy from ``source``.
+    """Restore selected tables in ``target`` from ``source``.
 
-    This is intentionally table-scoped. It lets Doctor/repair recover days of
-    local indexing from a backup without rolling back newer conversations,
-    credentials, followups, or other Brain state created after that backup.
+    ``mode="replace"`` keeps the historical behavior: target rows are deleted
+    and replaced by the backup table. ``mode="merge_missing"`` preserves target
+    rows and inserts missing rows from the backup with ``INSERT OR IGNORE``.
+    This is intentionally table-scoped so repair can recover data without
+    rolling back unrelated Brain state created after the backup.
     """
+    if mode not in {"replace", "merge_missing"}:
+        raise ValueError(f"unsupported restore mode: {mode!r}")
     src = Path(source)
     dst = Path(target)
     result: dict = {
         "ok": False,
         "source": str(src),
         "target": str(dst),
+        "mode": mode,
         "tables": {},
         "errors": [],
     }
@@ -553,13 +572,29 @@ def restore_tables_from_backup(
                     continue
                 conn.execute(create_sql)
             before = _table_count(conn, table) or 0
-            conn.execute(f"DELETE FROM main.{quoted}")
-            conn.execute(f"INSERT INTO main.{quoted} SELECT * FROM backup_db.{quoted}")
+            if mode == "replace":
+                conn.execute(f"DELETE FROM main.{quoted}")
+                conn.execute(f"INSERT INTO main.{quoted} SELECT * FROM backup_db.{quoted}")
+                status = "restored"
+            else:
+                target_columns = _table_columns(conn, "main", table)
+                source_columns = set(_table_columns(conn, "backup_db", table))
+                common_columns = [column for column in target_columns if column in source_columns]
+                if not common_columns:
+                    result["tables"][table] = {"status": "no_common_columns", "before": int(before)}
+                    continue
+                column_sql = ", ".join(_quote_sql_name(column) for column in common_columns)
+                conn.execute(
+                    f"INSERT OR IGNORE INTO main.{quoted} ({column_sql}) "
+                    f"SELECT {column_sql} FROM backup_db.{quoted}"
+                )
+                status = "merged"
             after = _table_count(conn, table) or 0
             result["tables"][table] = {
-                "status": "restored",
+                "status": status,
                 "before": int(before),
                 "after": int(after),
+                "restored": max(int(after) - int(before), 0),
             }
         conn.commit()
         result["ok"] = not result["errors"]

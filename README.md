@@ -18,11 +18,11 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.23.11` is the current packaged-runtime line. Patch over v7.23.10 - older installed runtimes can update safely even when `cognitive_paths.py` has not been synced yet.
+Version `7.23.12` is the current packaged-runtime line. Patch over v7.23.11 - protected database recovery now repairs degraded Brain tables from backup without rolling back newer rows.
+
+Previously in `7.23.11`: patch over v7.23.10 - older installed runtimes can update safely even when `cognitive_paths.py` has not been synced yet.
 
 Previously in `7.23.6`: patch over v7.23.5 - `nexo update` clears safe legacy `cognitive.db` shadows and keeps superseded archives under runtime backup retention.
-
-Previously in `7.23.5`: patch over v7.23.4 - `nexo update` keeps external CLI maintenance summary copy in English.
 
 Previously in `7.23.3`: patch over v7.23.2 - Followup runner skips DONE terminal statuses so already-finished followups do not re-enter executable batches.
 

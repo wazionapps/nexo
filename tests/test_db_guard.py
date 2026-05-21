@@ -288,6 +288,34 @@ def test_restore_tables_from_backup_restores_only_local_memory_tables(tmp_path):
     assert local_counts["local_chunks"] == 7
 
 
+def test_restore_tables_from_backup_merge_missing_preserves_current_rows(tmp_path):
+    source = tmp_path / "source.db"
+    target = tmp_path / "target.db"
+    _make_db(source, {"protocol_tasks": 5})
+    _make_empty_db(target)
+
+    conn = sqlite3.connect(str(target))
+    try:
+        conn.execute("INSERT INTO protocol_tasks (id, payload) VALUES (?, ?)", (1, "current-wins"))
+        conn.execute("INSERT INTO protocol_tasks (id, payload) VALUES (?, ?)", (1000, "newer-current-row"))
+        conn.commit()
+    finally:
+        conn.close()
+
+    report = restore_tables_from_backup(source, target, tables=PROTECTED_TABLES, mode="merge_missing")
+
+    assert report["ok"] is True, report
+    assert report["tables"]["protocol_tasks"]["status"] == "merged"
+    assert report["tables"]["protocol_tasks"]["restored"] == 4
+    assert db_row_counts(target, PROTECTED_TABLES)["protocol_tasks"] == 6
+    conn = sqlite3.connect(str(target))
+    try:
+        assert conn.execute("SELECT payload FROM protocol_tasks WHERE id=1").fetchone()[0] == "current-wins"
+        assert conn.execute("SELECT payload FROM protocol_tasks WHERE id=1000").fetchone()[0] == "newer-current-row"
+    finally:
+        conn.close()
+
+
 def test_quiesce_nexo_db_writers_combines_known_writers(monkeypatch):
     import db_guard
 

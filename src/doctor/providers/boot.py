@@ -202,21 +202,26 @@ def check_db_integrity(fix: bool = False) -> DoctorCheck:
         evidence.extend(["Local memory regression:", *local_regression.summary_lines()])
 
     if fix and recoverable_regression:
-        report = restore_tables_from_backup(reference, db_path)
+        report = restore_tables_from_backup(
+            reference,
+            db_path,
+            tables=PROTECTED_TABLES,
+            mode="merge_missing",
+        )
         if report.get("ok"):
             restored = {
                 table: payload
                 for table, payload in (report.get("tables") or {}).items()
-                if isinstance(payload, dict) and payload.get("status") == "restored"
+                if isinstance(payload, dict) and payload.get("status") in {"restored", "merged"}
             }
-            restored_rows = sum(int(payload.get("after") or 0) for payload in restored.values())
+            restored_rows = sum(int(payload.get("restored") or 0) for payload in restored.values())
             return DoctorCheck(
                 id="boot.db_integrity",
                 tier="boot",
                 status="healthy",
                 severity="info",
-                summary=f"Local memory restored from backup ({restored_rows} protected rows)",
-                evidence=evidence + [f"Restored local-memory tables: {len(restored)}"],
+                summary=f"Database protected tables restored from backup ({restored_rows} rows recovered)",
+                evidence=evidence + [f"Restored protected tables: {len(restored)}"],
                 fixed=True,
             )
         return DoctorCheck(
@@ -224,7 +229,7 @@ def check_db_integrity(fix: bool = False) -> DoctorCheck:
             tier="boot",
             status="critical",
             severity="error",
-            summary="Local memory repair failed",
+            summary="Database protected-table repair failed",
             evidence=evidence + [f"Restore errors: {report.get('errors') or []}"],
             repair_plan=["Close NEXO Desktop and run nexo doctor --tier boot --plane database_real --fix"],
         )
