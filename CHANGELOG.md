@@ -1,5 +1,12 @@
 # Changelog
 
+## [7.23.11] - 2026-05-21
+
+### Fixed — packaged update compatibility
+
+- **Older installed runtimes can update into the cognitive DB cleanup release.** `auto_update.py` now stays importable when an older runtime has not received `cognitive_paths.py` yet, allowing the package sync to finish and deliver the missing module.
+- **Coverage:** regression coverage for the installed-runtime update repair path plus the cognitive DB path contract.
+
 ## [7.23.10] - 2026-05-21
 
 ### Fixed — English operational copy

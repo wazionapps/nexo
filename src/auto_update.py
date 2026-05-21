@@ -32,7 +32,23 @@ except ModuleNotFoundError as exc:
             sys.path.insert(0, core_path)
     from product_mode import enforce_desktop_product_contract
 from runtime_home import export_resolved_nexo_home, managed_nexo_home
-from cognitive_paths import cleanup_legacy_cognitive_db_artifacts
+
+try:
+    from cognitive_paths import cleanup_legacy_cognitive_db_artifacts
+except ModuleNotFoundError as exc:
+    if getattr(exc, "name", "") != "cognitive_paths":
+        raise
+
+    # Older installed runtimes may import this newer auto_update.py before
+    # cognitive_paths.py has been copied into place. Keep update importable so
+    # the sync can finish and deliver the missing module.
+    def cleanup_legacy_cognitive_db_artifacts(*, dry_run: bool = False) -> dict:
+        return {
+            "ok": True,
+            "skipped": True,
+            "reason": "cognitive_paths_unavailable_until_runtime_sync",
+            "dry_run": dry_run,
+        }
 
 try:
     from tree_hygiene import is_duplicate_artifact_name

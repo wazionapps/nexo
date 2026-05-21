@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.23.11: packaged update compatibility</title>
+<meta name="description" content="NEXO Brain v7.23.11 keeps packaged updates compatible with older runtimes while cognitive DB cleanup modules are synced.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-23-11/">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.23.11: packaged update compatibility","datePublished":"2026-05-21","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head>
+<body class="features-page">
+<main class="section-compact">
+<div class="container" style="max-width:860px;">
+<p class="section-label">Release notes</p>
+<h1>NEXO 7.23.11 - packaged update compatibility</h1>
+<p>v7.23.11 is a Brain update-compatibility patch. Older installed runtimes can now import the newer updater even before <code>cognitive_paths.py</code> has been synced into place.</p>
+<p>This lets the package sync finish, deliver the cognitive DB cleanup module, and move users past legacy <code>cognitive.db</code> layouts without blocking the update path.</p>
+<pre><code>bash scripts/pre-release-verify.sh --release v7.23.11 --skip pytest
+npm view nexo-brain@7.23.11 version</code></pre>
+<p><a href="/changelog/#v72311">Read the full v7.23.11 changelog</a></p>
+</div>
+</main>
+</body>
+</html>
