@@ -2080,6 +2080,51 @@ def _m67_diary_quality_backfill_repair(conn):
     _migrate_add_index(conn, "idx_diary_archive_quality", "diary_archive", "quality_tier, quality_score, created_at")
 
 
+def _m68_memory_fabric_index(conn):
+    """Memory Fabric v1 index tables for historical backup memory."""
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS memory_fabric_sources (
+            source_id TEXT PRIMARY KEY,
+            source_type TEXT NOT NULL,
+            source_ref TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'active',
+            item_count INTEGER NOT NULL DEFAULT 0,
+            last_indexed_at TEXT DEFAULT '',
+            metadata_json TEXT NOT NULL DEFAULT '{}'
+        );
+
+        CREATE TABLE IF NOT EXISTS historical_diary_index (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_backup_path TEXT NOT NULL,
+            source_table TEXT NOT NULL DEFAULT 'session_diary',
+            source_row_id INTEGER NOT NULL,
+            session_id TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL DEFAULT '',
+            domain TEXT NOT NULL DEFAULT '',
+            summary TEXT NOT NULL DEFAULT '',
+            decisions TEXT NOT NULL DEFAULT '',
+            pending TEXT NOT NULL DEFAULT '',
+            context_next TEXT NOT NULL DEFAULT '',
+            mental_state TEXT NOT NULL DEFAULT '',
+            self_critique TEXT NOT NULL DEFAULT '',
+            source TEXT NOT NULL DEFAULT '',
+            content_hash TEXT NOT NULL UNIQUE,
+            indexed_at TEXT DEFAULT (datetime('now')),
+            metadata_json TEXT NOT NULL DEFAULT '{}',
+            UNIQUE(source_backup_path, source_table, source_row_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_historical_diary_session
+            ON historical_diary_index(session_id);
+        CREATE INDEX IF NOT EXISTS idx_historical_diary_created
+            ON historical_diary_index(created_at);
+        CREATE INDEX IF NOT EXISTS idx_historical_diary_domain
+            ON historical_diary_index(domain);
+        """
+    )
+
+
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
     (2, "followups_reasoning", _m2_followups_reasoning),
@@ -2148,6 +2193,7 @@ MIGRATIONS = [
     (65, "diary_quality", _m65_diary_quality),
     (66, "transcript_index", _m66_transcript_index),
     (67, "diary_quality_backfill_repair", _m67_diary_quality_backfill_repair),
+    (68, "memory_fabric_index", _m68_memory_fabric_index),
 ]
 
 

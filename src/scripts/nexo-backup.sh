@@ -2,6 +2,8 @@
 # NEXO DB hourly backup — crontab: 0 * * * * $NEXO_HOME/core/scripts/nexo-backup.sh
 NEXO_HOME="${NEXO_HOME:-$HOME/.nexo}"
 NEXO_DIR="$NEXO_HOME"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+CORE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 BACKUP_DIR="$NEXO_HOME/runtime/backups"
 if [ ! -d "$BACKUP_DIR" ] && [ -d "$NEXO_HOME/backups" ]; then
     BACKUP_DIR="$NEXO_HOME/backups"
@@ -23,7 +25,35 @@ LOCAL_CONTEXT_MAX_BACKUP_BYTES="${NEXO_LOCAL_CONTEXT_MAX_BACKUP_BYTES:-214748364
 
 mkdir -p "$BACKUP_DIR" "$WEEKLY_DIR"
 
+reconcile_memory_fabric_before_prune() {
+    python3 - "$BACKUP_DIR" "$CORE_DIR" <<'PY' >/dev/null 2>&1 || true
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+backup_dir = Path(sys.argv[1])
+core_dir = Path(sys.argv[2])
+for candidate in (core_dir, core_dir.parent / "src"):
+    if candidate.exists():
+        sys.path.insert(0, str(candidate))
+
+try:
+    import memory_fabric
+
+    memory_fabric.reconcile_backup_diaries(
+        backups_root=backup_dir,
+        max_backup_files=80,
+        limit=10000,
+    )
+except Exception:
+    pass
+PY
+}
+
 cleanup_backups() {
+    reconcile_memory_fabric_before_prune
+
     PRUNER="$NEXO_HOME/core/scripts/prune_runtime_backups.py"
     if [ ! -f "$PRUNER" ]; then
         PRUNER="$(dirname "$0")/prune_runtime_backups.py"

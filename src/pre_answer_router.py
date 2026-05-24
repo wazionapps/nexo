@@ -1100,10 +1100,11 @@ def _source_diary(request: SourceRequest) -> SourceResult:
 
 def _source_transcripts(request: SourceRequest) -> SourceResult:
     try:
-        from transcript_index import index_recent_transcripts, search_transcript_index
+        from transcript_index import ensure_transcript_index, search_transcript_index
+        from transcript_utils import MAX_TRANSCRIPT_HOURS
 
-        index_recent_transcripts(hours=72, limit=120, min_user_messages=1)
-        indexed_rows = search_transcript_index(request.query, hours=72, limit=4)
+        ensure_transcript_index(hours=MAX_TRANSCRIPT_HOURS, limit=1000, min_user_messages=1)
+        indexed_rows = search_transcript_index(request.query, hours=MAX_TRANSCRIPT_HOURS, limit=4)
         if indexed_rows:
             indexed_result = _rows_result(
                 "transcript_index",

@@ -1,9 +1,10 @@
 # NEXO Brain
 
-> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v7.24.0). NEXO Desktop is a separate closed-source companion app distributed at nexo-desktop.com; its source does not ship in this repo. Mentions of "NEXO Desktop" in changelog entries describe coordinated client releases that consume the Brain CLI / MCP contract. For the commercial Desktop product, contact info@wazion.com.
+> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v7.25.0). NEXO Desktop is a separate closed-source companion app distributed at nexo-desktop.com; its source does not ship in this repo. Mentions of "NEXO Desktop" in changelog entries describe coordinated client releases that consume the Brain CLI / MCP contract. For the commercial Desktop product, contact info@wazion.com.
 
 NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. It adds a local shared brain across supported clients, configurable terminal and automation backends, recovery-aware background jobs, startup preflight, runtime self-healing, smarter retrieval defaults, long-horizon overnight analysis, and 150+ MCP tools.
 
+v7.25.0: minor release. Adds Memory Fabric: fast transcript index refresh, exact/prefix transcript lookup, historical backup diary reconciliation before retention cleanup, unified search/KG links for recovered diary evidence, and update/doctor repair hooks.
 v7.24.0: minor release. Integrates Home Agents, cognitive quality controls, English operational copy, and keeps `nexo_task_open` fast by leaving heavy Local Context evidence opt-in.
 v7.23.13: patch release. Audits release workflows for masked publish/deploy failures and adds minimal-delta guardrail coverage for punctual UI edits, preventing broad visual rewrites from small requests.
 v7.23.12: patch release. Repairs protected Brain database table regressions from valid backups with a merge-preserving recovery path, so `nexo doctor --tier boot --plane database_real --fix` clears wipe-guard blocks without rolling back newer rows.

@@ -928,3 +928,19 @@ def test_sync_wsl_installs_windows_host_local_index_task(tmp_path, monkeypatch):
     command = calls[0][0][-1]
     assert "Register-ScheduledTask" in command
     assert "Start-ScheduledTask" in command
+
+
+def test_memory_fabric_core_cron_is_declared_and_script_exists():
+    root = Path(__file__).resolve().parents[1]
+    manifest = json.loads((root / "src" / "crons" / "manifest.json").read_text(encoding="utf-8"))
+
+    cron = next((item for item in manifest["crons"] if item["id"] == "memory-fabric"), None)
+
+    assert cron is not None
+    assert cron["script"] == "scripts/nexo-memory-fabric.py"
+    assert cron["core"] is True
+    assert cron["recovery_policy"] == "catchup"
+    assert cron["idempotent"] is True
+    assert cron["run_on_boot"] is True
+    assert cron["run_on_wake"] is True
+    assert (root / "src" / cron["script"]).is_file()

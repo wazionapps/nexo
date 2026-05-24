@@ -3,7 +3,11 @@
 import sqlite3
 
 import db as db_mod
-from db._schema import _m65_diary_quality, _m67_diary_quality_backfill_repair
+from db._schema import (
+    _m65_diary_quality,
+    _m67_diary_quality_backfill_repair,
+    _m68_memory_fabric_index,
+)
 
 
 def test_init_db_creates_core_tables():
@@ -150,6 +154,30 @@ def test_m67_diary_quality_repairs_databases_that_already_ran_m65_defaults():
         """).fetchone()
         assert row["quality_tier"] == "auto_close_minimal"
         assert row["quality_score"] == 25
+
+
+def test_m68_memory_fabric_index_migration_is_idempotent():
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+
+    _m68_memory_fabric_index(conn)
+    _m68_memory_fabric_index(conn)
+
+    tables = {
+        row["name"]
+        for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    }
+    indexes = {
+        row["name"]
+        for row in conn.execute("SELECT name FROM sqlite_master WHERE type='index'")
+    }
+
+    assert {"memory_fabric_sources", "historical_diary_index"}.issubset(tables)
+    assert {
+        "idx_historical_diary_session",
+        "idx_historical_diary_created",
+        "idx_historical_diary_domain",
+    }.issubset(indexes)
 
 
 def test_session_crud():

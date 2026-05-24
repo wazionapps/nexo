@@ -1,5 +1,5 @@
 """NEXO DB — Fts module."""
-import os, pathlib, sqlite3, threading, datetime
+import os, pathlib, re, sqlite3, threading, datetime
 import paths
 from db._core import get_db, now_epoch, DB_PATH
 
@@ -328,22 +328,26 @@ def fts_search(query: str, source_filter: str = None, limit: int = 20) -> list[d
         limit: Max results (default 20)
     """
     conn = get_db()
-    words = query.strip().split()
+    raw_query = query.strip()
+    words = raw_query.split()
     if not words:
         return []
 
     # Expand with synonyms for cross-language matching
     all_words = _expand_synonyms(words)
 
-    # Build FTS5 query: each word as quoted term with OR for broad matching
+    # Build FTS5 query: each word as quoted term with OR for broad matching.
+    # Symbol-heavy identifiers (emails, paths, refs) need deterministic token
+    # boundaries so FTS5 never treats punctuation as query syntax.
     fts_terms = []
     for w in all_words:
         # Strip FTS5 special chars to avoid syntax errors
-        safe = w.replace('"', '').replace("'", '').replace('*', '').replace('^', '').replace('-', ' ').strip()
+        safe = w.replace('"', '').replace("'", '').replace('*', '').replace('^', '').strip()
+        safe = re.sub(r"[-@/\\:]+", " ", safe)
         if not safe:
             continue
-        # Split on dots (e.g., "capabilities.json" → "capabilities" + "json")
-        parts = [p.strip() for p in safe.split('.') if p.strip()]
+        # Split on dots and punctuation boundaries (e.g., emails, paths, files).
+        parts = [p.strip() for p in re.split(r"[.\s]+", safe) if p.strip()]
         for part in parts:
             fts_terms.append(f'"{part}"')
             # Add prefix search for camelCase/code identifiers (contains uppercase mid-word)
@@ -361,6 +365,24 @@ def fts_search(query: str, source_filter: str = None, limit: int = 20) -> list[d
     params.append(limit)
 
     try:
+        exact_rows = []
+        if re.search(r"[@/\\:.-]", raw_query):
+            exact_where = ""
+            exact_params = [f"%{raw_query}%", f"%{raw_query}%", f"%{raw_query}%"]
+            if source_filter:
+                exact_where = "AND source = ?"
+                exact_params.append(source_filter)
+            exact_params.append(limit)
+            exact_rows = conn.execute(f"""
+                SELECT source, source_id, title,
+                       substr(body, 1, 240) AS snippet,
+                       category, updated_at, -100.0 AS rank
+                FROM unified_search
+                WHERE (title LIKE ? OR body LIKE ? OR source_id LIKE ?) {exact_where}
+                ORDER BY updated_at DESC
+                LIMIT ?
+            """, exact_params).fetchall()
+
         rows = conn.execute(f"""
             SELECT source, source_id, title,
                    snippet(unified_search, 3, '»', '«', '...', 40) AS snippet,
@@ -370,7 +392,16 @@ def fts_search(query: str, source_filter: str = None, limit: int = 20) -> list[d
             ORDER BY rank
             LIMIT ?
         """, params).fetchall()
-        return [dict(r) for r in rows]
+        merged = []
+        seen = set()
+        for row in list(exact_rows) + list(rows):
+            item = dict(row)
+            key = (item.get("source"), item.get("source_id"))
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append(item)
+        return merged[:limit]
     except Exception:
         return []
 
@@ -403,4 +434,3 @@ def _migrate_add_index(conn, index_name: str, table: str, column: str):
     """Create index if it doesn't exist (idempotent)."""
     conn.execute(f"CREATE INDEX IF NOT EXISTS {index_name} ON {table}({column})")
     conn.commit()
-

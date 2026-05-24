@@ -98,6 +98,33 @@ def test_runtime_post_sync_keeps_client_sync_and_classifier_bootstrap_enabled(mo
     assert sync_calls[0]["auto_install_missing_claude"] is True
 
 
+def test_runtime_post_sync_reports_memory_fabric_repair_and_unreconciled_rows(monkeypatch, tmp_path):
+    au = _reload_auto_update(monkeypatch, tmp_path)
+    _install_post_sync_stubs(monkeypatch, au, sync_ok=True)
+    monkeypatch.setattr(
+        au,
+        "_parse_runtime_init_payload",
+        lambda raw: {
+            "memory_fabric": {
+                "ok": False,
+                "transcripts": {"indexed": 2},
+                "backups": {"inserted": 1},
+                "health": {
+                    "historical_diaries": {"backup_rows_unreconciled": 4},
+                    "issues": [{"code": "backup_diaries_not_reconciled"}],
+                },
+            }
+        },
+    )
+
+    ok, actions = au._run_runtime_post_sync(tmp_path)
+
+    assert ok is True
+    assert "memory-fabric-repaired:3" in actions
+    assert "memory-fabric-unreconciled:4" in actions
+    assert "memory-fabric-warning" in actions
+
+
 def test_runtime_post_sync_does_not_skip_classifier_when_client_sync_warns(monkeypatch, tmp_path):
     au = _reload_auto_update(monkeypatch, tmp_path)
     sync_calls, classifier_calls = _install_post_sync_stubs(monkeypatch, au, sync_ok=False)

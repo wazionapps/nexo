@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.24.0` is the current packaged-runtime line. Minor release over v7.23.13 - Home Agents, cognitive quality controls, English operational copy, and non-blocking task-open context are integrated into main.
+Version `7.25.0` is the current packaged-runtime line. Minor release over v7.24.0 - Memory Fabric links transcript lookup, historical backup diary recovery, unified search and knowledge graph evidence so memories are not available only inside expiring snapshots.
+
+Previously in `7.24.0`: minor release over v7.23.13 - Home Agents, cognitive quality controls, English operational copy, and non-blocking task-open context are integrated into main.
 
 Previously in `7.23.13`: patch over v7.23.12 - release guardrails now audit publish workflows for masked failures and add minimal-delta coverage for punctual UI edits.
 

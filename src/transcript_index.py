@@ -15,9 +15,12 @@ from typing import Any
 from db import get_db
 from transcript_utils import (
     DEFAULT_TRANSCRIPT_HOURS,
+    MAX_TRANSCRIPT_HOURS,
     _score_text_match,
     _tokenize,
     _truncate,
+    find_claude_session_files,
+    find_codex_session_files,
     list_recent_transcripts,
 )
 
@@ -103,6 +106,29 @@ def _sanitized_summary(session: dict[str, Any], *, limit: int = 900) -> str:
     return _truncate(summary, limit)
 
 
+def _row_ref_matches(query: str, row: dict[str, Any]) -> bool:
+    clean = str(query or "").strip().lower()
+    if len(clean) < 6:
+        return False
+    values = [
+        row.get("session_id"),
+        row.get("conversation_id"),
+        row.get("display_name"),
+        row.get("path_ref"),
+        Path(str(row.get("path_ref") or "")).name,
+        Path(str(row.get("path_ref") or "")).stem,
+    ]
+    for value in values:
+        candidate = str(value or "").strip().lower()
+        if not candidate:
+            continue
+        if candidate.startswith(clean):
+            return True
+        if candidate.split(":")[-1].startswith(clean):
+            return True
+    return False
+
+
 def index_transcript_session(session: dict[str, Any]) -> dict[str, Any]:
     """Upsert a single transcript metadata row and return it."""
     _ensure_transcript_index_table()
@@ -186,6 +212,81 @@ def index_recent_transcripts(
     return indexed
 
 
+def _latest_source_modified_ts(client: str = "") -> float:
+    paths: list[Path] = []
+    if not client or client == "claude_code":
+        paths.extend(find_claude_session_files())
+    if not client or client == "codex":
+        paths.extend(find_codex_session_files())
+    latest = 0.0
+    for path in paths:
+        try:
+            latest = max(latest, path.stat().st_mtime)
+        except OSError:
+            continue
+    return latest
+
+
+def _parse_iso_ts(value: str) -> float:
+    if not value:
+        return 0.0
+    try:
+        return datetime.fromisoformat(value).timestamp()
+    except Exception:
+        return 0.0
+
+
+def ensure_transcript_index(
+    *,
+    hours: int = MAX_TRANSCRIPT_HOURS,
+    client: str = "",
+    limit: int = 1000,
+    min_user_messages: int = 1,
+    force: bool = False,
+) -> dict[str, Any]:
+    """Keep the compact transcript DB index warm enough for fast lookup.
+
+    This is intentionally bounded. Raw JSONL remains the source of truth, but
+    normal MCP searches should hit this table before falling back to slow file
+    scans.
+    """
+    _ensure_transcript_index_table()
+    conn = get_db()
+    params: list[Any] = []
+    where = "1=1"
+    if client:
+        where += " AND source_client = ?"
+        params.append(client)
+    before = int(conn.execute(f"SELECT COUNT(*) AS total FROM transcript_index WHERE {where}", tuple(params)).fetchone()["total"] or 0)
+    latest_indexed = str(conn.execute(
+        f"SELECT MAX(modified_at) AS latest FROM transcript_index WHERE {where}",
+        tuple(params),
+    ).fetchone()["latest"] or "")
+    latest_source_ts = _latest_source_modified_ts(client)
+    latest_indexed_ts = _parse_iso_ts(latest_indexed)
+    stale = bool(latest_source_ts and latest_source_ts > latest_indexed_ts + 1.0)
+    should_index = bool(force or before == 0 or stale)
+    indexed: list[dict[str, Any]] = []
+    if should_index:
+        indexed = index_recent_transcripts(
+            hours=hours,
+            client=client,
+            limit=limit,
+            min_user_messages=min_user_messages,
+        )
+    after = int(conn.execute(f"SELECT COUNT(*) AS total FROM transcript_index WHERE {where}", tuple(params)).fetchone()["total"] or 0)
+    return {
+        "ok": True,
+        "before": before,
+        "after": after,
+        "indexed": len(indexed),
+        "forced": bool(force),
+        "stale": stale,
+        "hours": hours,
+        "client": client,
+    }
+
+
 def search_transcript_index(
     query: str = "",
     *,
@@ -201,7 +302,7 @@ def search_transcript_index(
         where += " AND source_client = ?"
         params.append(client)
     rows = [dict(row) for row in conn.execute(
-        f"SELECT * FROM transcript_index WHERE {where} ORDER BY modified_at DESC LIMIT 500",
+        f"SELECT * FROM transcript_index WHERE {where} ORDER BY modified_at DESC LIMIT 5000",
         tuple(params),
     ).fetchall()]
 
@@ -222,9 +323,11 @@ def search_transcript_index(
             continue
         haystack = " ".join(
             str(row.get(field) or "")
-            for field in ("sanitized_summary", "display_name", "session_id", "conversation_id", "metadata_json")
+            for field in ("sanitized_summary", "display_name", "session_id", "conversation_id", "path_ref", "metadata_json")
         )
         score = _score_text_match(query_tokens, haystack)
+        if _row_ref_matches(query, row):
+            score = max(score, 2.0)
         if score <= 0:
             continue
         row["_score"] = round(score, 4)

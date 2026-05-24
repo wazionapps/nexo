@@ -303,6 +303,19 @@
       "run_on_wake": true
     },
     {
+      "id": "memory-fabric",
+      "script": "scripts/nexo-memory-fabric.py",
+      "schedule": {"hour": 2, "minute": 35},
+      "description": "Daily Memory Fabric maintenance — refresh transcript search, historical backup diaries, and graph links",
+      "core": true,
+      "recovery_policy": "catchup",
+      "idempotent": true,
+      "max_catchup_age": 172800,
+      "stuck_after_seconds": 3600,
+      "run_on_boot": true,
+      "run_on_wake": true
+    },
+    {
       "id": "local-index",
       "script": "scripts/nexo-local-index.py",
       "interval_seconds": 60,

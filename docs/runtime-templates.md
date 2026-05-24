@@ -212,6 +212,14 @@ The effective default cap is adaptive:
 at `50G`. Emergency prune steps may use lower caps (`10G`, `5G`, `0`) to
 recover space.
 
+Before any hourly or weekly `nexo-*.db` backup can be deleted by retention,
+`scripts/nexo-backup.sh` must run Memory Fabric reconciliation against
+`runtime/backups/`. Recoverable diary rows that are no longer present in the
+active DB are copied into `historical_diary_index`, added to unified search as
+`historical_diary`, and linked into the knowledge graph. Backups may rotate;
+the semantic memory they contain must not be available only inside an expiring
+snapshot.
+
 ### Universal Backup Wrapper
 
 Every technical snapshot creator under `runtime/backups/` must use:

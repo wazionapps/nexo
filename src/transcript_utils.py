@@ -110,7 +110,10 @@ def find_codex_session_files() -> list[Path]:
         if not root.exists():
             continue
         for jsonl in sorted(root.rglob("*.jsonl")):
-            key = jsonl.name
+            try:
+                key = str(jsonl.resolve())
+            except OSError:
+                key = str(jsonl)
             if key in seen:
                 continue
             seen.add(key)
@@ -346,8 +349,20 @@ def list_recent_transcripts(
     return filtered[: max(1, int(limit or 10))]
 
 
-def search_transcripts(query: str, *, hours: int = DEFAULT_TRANSCRIPT_HOURS, client: str = "", limit: int = 10) -> list[dict]:
-    rows = list_recent_transcripts(hours=hours, client=client, limit=200)
+def search_transcripts(
+    query: str,
+    *,
+    hours: int = DEFAULT_TRANSCRIPT_HOURS,
+    client: str = "",
+    limit: int = 10,
+    min_user_messages: int = MIN_USER_MESSAGES,
+) -> list[dict]:
+    rows = list_recent_transcripts(
+        hours=hours,
+        client=client,
+        limit=200,
+        min_user_messages=min_user_messages,
+    )
     query_tokens = _tokenize(query)
     if not query_tokens:
         return rows[: max(1, int(limit or 10))]
@@ -398,7 +413,46 @@ def search_transcripts(query: str, *, hours: int = DEFAULT_TRANSCRIPT_HOURS, cli
     return matches[: max(1, int(limit or 10))]
 
 
-def load_transcript(session_ref: str = "", transcript_path: str = "", client: str = "") -> dict | None:
+def _transcript_ref_matches(ref: str, session: dict, path: Path) -> bool:
+    clean = str(ref or "").strip()
+    if not clean:
+        return True
+    candidates = {
+        str(session.get("session_file", "")),
+        str(session.get("display_name", "")),
+        str(session.get("session_uid", "")),
+        str(session.get("conversation_id", "")),
+        str(path),
+        path.name,
+        path.stem,
+    }
+    if clean in candidates:
+        return True
+
+    # Operator-facing refs are often short prefixes copied from filenames
+    # or session ids. Require a minimum length so common words do not match
+    # arbitrary historical transcripts.
+    if len(clean) < 6:
+        return False
+    lowered = clean.lower()
+    for candidate in candidates:
+        value = str(candidate or "").strip().lower()
+        if not value:
+            continue
+        if value.startswith(lowered):
+            return True
+        if value.split(":")[-1].startswith(lowered):
+            return True
+    return False
+
+
+def load_transcript(
+    session_ref: str = "",
+    transcript_path: str = "",
+    client: str = "",
+    *,
+    min_user_messages: int = 1,
+) -> dict | None:
     ref = str(session_ref or "").strip()
     path_ref = str(transcript_path or "").strip()
 
@@ -416,17 +470,15 @@ def load_transcript(session_ref: str = "", transcript_path: str = "", client: st
                     continue
             except Exception:
                 continue
-        session = extract_codex_session(path) if detected_client == "codex" else extract_claude_session(path)
+        session = (
+            extract_codex_session(path, min_user_messages=min_user_messages)
+            if detected_client == "codex"
+            else extract_claude_session(path, min_user_messages=min_user_messages)
+        )
         if not session:
             continue
-        if ref:
-            if ref not in {
-                str(session.get("session_file", "")),
-                str(session.get("display_name", "")),
-                str(session.get("session_uid", "")),
-                str(path),
-            }:
-                continue
+        if ref and not _transcript_ref_matches(ref, session, path):
+            continue
         try:
             session["modified"] = datetime.fromtimestamp(path.stat().st_mtime).isoformat()
         except OSError:

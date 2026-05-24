@@ -4715,6 +4715,11 @@ def _run_runtime_post_sync(dest: Path = NEXO_HOME, progress_fn=None) -> tuple[bo
                     "reconcile_scripts = getattr(script_registry, 'reconcile_personal_scripts', None); "
                     "result = reconcile_scripts(dry_run=False) if callable(reconcile_scripts) else {}; "
                     "result = result if isinstance(result, dict) else {}; "
+                    "exec(\"try:\\n"
+                    " import memory_fabric\\n"
+                    " result['memory_fabric'] = memory_fabric.repair_memory_fabric(transcript_limit=1000, backup_limit=5000)\\n"
+                    "except Exception as exc:\\n"
+                    " result['memory_fabric_error'] = repr(exc)\"); "
                     "result['retired_superseded_scripts'] = retired; "
                     "result['retired_superseded_skills'] = retired_skills; "
                     "print(json.dumps(result))"
@@ -4732,6 +4737,31 @@ def _run_runtime_post_sync(dest: Path = NEXO_HOME, progress_fn=None) -> tuple[bo
         reconcile_payload = _parse_runtime_init_payload(init_result.stdout or "")
         extra_actions, reconcile_message = _personal_schedule_reconcile_summary(reconcile_payload)
         actions.extend(extra_actions)
+        memory_fabric_result = reconcile_payload.get("memory_fabric")
+        if isinstance(memory_fabric_result, dict):
+            transcript_indexed = int((memory_fabric_result.get("transcripts") or {}).get("indexed") or 0)
+            historical_inserted = int((memory_fabric_result.get("backups") or {}).get("inserted") or 0)
+            health = memory_fabric_result.get("health") or {}
+            health_issues = health.get("issues") or []
+            historical_health = health.get("historical_diaries") or {}
+            unreconciled = int(historical_health.get("backup_rows_unreconciled") or 0)
+            if transcript_indexed or historical_inserted:
+                actions.append(f"memory-fabric-repaired:{transcript_indexed + historical_inserted}")
+                _emit_progress(
+                    progress_fn,
+                    f"Memory Fabric: indexed {transcript_indexed} transcript(s), reconciled {historical_inserted} historical diary row(s).",
+                )
+            else:
+                actions.append("memory-fabric-checked")
+            if unreconciled:
+                actions.append(f"memory-fabric-unreconciled:{unreconciled}")
+            if memory_fabric_result.get("ok") is False or any(
+                isinstance(issue, dict) and issue.get("code") == "backup_diaries_not_reconciled"
+                for issue in health_issues
+            ):
+                actions.append("memory-fabric-warning")
+        elif reconcile_payload.get("memory_fabric_error"):
+            actions.append("memory-fabric-warning")
         if reconcile_message:
             _emit_progress(progress_fn, reconcile_message)
     except Exception as e:

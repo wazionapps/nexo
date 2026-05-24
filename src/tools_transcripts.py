@@ -8,26 +8,53 @@ from transcript_utils import (
     load_transcript,
     search_transcripts,
 )
+from transcript_index import ensure_transcript_index, search_transcript_index
 
 
 def handle_transcript_search(query: str = "", hours: int = 24, client: str = "", limit: int = 10) -> str:
     """Search recent Claude Code / Codex transcripts as a fallback when memory is insufficient."""
     window = clamp_transcript_hours(hours)
-    rows = search_transcripts(query or "", hours=window, client=(client or "").strip(), limit=limit)
+    clean_client = (client or "").strip()
+    ensure_transcript_index(
+        hours=window,
+        client=clean_client,
+        limit=max(200, min(2000, int(limit or 10) * 50)),
+        min_user_messages=1,
+    )
+    rows = search_transcript_index(query or "", hours=window, client=clean_client, limit=limit)
+    source = "index"
+    if not rows:
+        rows = search_transcripts(
+            query or "",
+            hours=window,
+            client=clean_client,
+            limit=limit,
+            min_user_messages=1,
+        )
+        source = "raw"
     if not rows:
         scope = f"query='{query}'" if query else "recent transcripts"
         return f"No transcript matches for {scope} in the last {window}h."
 
-    lines = [f"TRANSCRIPTS ({len(rows)}) — last {window}h"]
+    lines = [f"TRANSCRIPTS ({len(rows)}) — last {window}h ({source})"]
     for item in rows:
+        session_file = item.get("session_file") or item.get("session_id") or item.get("display_name")
+        display_name = item.get("display_name") or item.get("path_ref") or item.get("session_path")
+        modified = item.get("modified") or item.get("modified_at")
         lines.append(
-            f"- {item.get('session_file')}: [{item.get('client')}] {item.get('display_name')} "
-            f"(modified={item.get('modified')}, messages={item.get('message_count')}, user={item.get('user_message_count')})"
+            f"- {session_file}: [{item.get('client') or item.get('source_client')}] {display_name} "
+            f"(modified={modified}, messages={item.get('message_count')}, user={item.get('user_message_count')})"
         )
         if item.get("cwd"):
             lines.append(f"  cwd: {item['cwd']}")
         if item.get("session_uid"):
             lines.append(f"  session_uid: {item['session_uid']}")
+        if item.get("conversation_id") and item.get("conversation_id") != item.get("session_id"):
+            lines.append(f"  conversation_id: {item['conversation_id']}")
+        if item.get("path_ref"):
+            lines.append(f"  path: {item['path_ref']}")
+        if item.get("sanitized_summary"):
+            lines.append(f"  summary: {item['sanitized_summary']}")
         for snippet in item.get("matched_messages") or []:
             lines.append(
                 f"  [{snippet.get('role')}#{snippet.get('index')}] {snippet.get('snippet')}"
@@ -38,15 +65,29 @@ def handle_transcript_search(query: str = "", hours: int = 24, client: str = "",
 def handle_transcript_recent(hours: int = 24, client: str = "", limit: int = 10) -> str:
     """List recent transcripts without searching full text."""
     window = clamp_transcript_hours(hours)
-    rows = list_recent_transcripts(hours=window, client=(client or "").strip(), limit=limit)
+    clean_client = (client or "").strip()
+    ensure_transcript_index(
+        hours=window,
+        client=clean_client,
+        limit=max(200, min(2000, int(limit or 10) * 50)),
+        min_user_messages=1,
+    )
+    rows = search_transcript_index("", hours=window, client=clean_client, limit=limit)
+    source = "index"
+    if not rows:
+        rows = list_recent_transcripts(hours=window, client=clean_client, limit=limit, min_user_messages=1)
+        source = "raw"
     if not rows:
         return f"No transcripts found in the last {window}h."
 
-    lines = [f"RECENT TRANSCRIPTS ({len(rows)}) — last {window}h"]
+    lines = [f"RECENT TRANSCRIPTS ({len(rows)}) — last {window}h ({source})"]
     for item in rows:
+        session_file = item.get("session_file") or item.get("session_id") or item.get("display_name")
+        display_name = item.get("display_name") or item.get("path_ref") or item.get("session_path")
+        modified = item.get("modified") or item.get("modified_at")
         lines.append(
-            f"- {item.get('session_file')}: [{item.get('client')}] {item.get('display_name')} "
-            f"(modified={item.get('modified')}, messages={item.get('message_count')}, user={item.get('user_message_count')})"
+            f"- {session_file}: [{item.get('client') or item.get('source_client')}] {display_name} "
+            f"(modified={modified}, messages={item.get('message_count')}, user={item.get('user_message_count')})"
         )
     return "\n".join(lines)
 
@@ -62,6 +103,7 @@ def handle_transcript_read(
         session_ref=(session_ref or "").strip(),
         transcript_path=(transcript_path or "").strip(),
         client=(client or "").strip(),
+        min_user_messages=1,
     )
     if not transcript:
         target = session_ref or transcript_path or "(empty ref)"

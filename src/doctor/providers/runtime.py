@@ -3900,6 +3900,74 @@ def check_local_index_hygiene(fix: bool = False) -> DoctorCheck:
         )
 
 
+def check_memory_fabric_health(fix: bool = False) -> DoctorCheck:
+    try:
+        import memory_fabric
+
+        repair = None
+        if fix:
+            repair = memory_fabric.repair_memory_fabric(
+                transcript_hours=720,
+                transcript_limit=1000,
+                backup_limit=5000,
+            )
+        report = memory_fabric.memory_fabric_health(include_backup_scan=True)
+        issues = report.get("issues") or []
+        evidence = [
+            "transcripts=" + json.dumps(report.get("transcripts") or {}, sort_keys=True),
+            "historical_diaries=" + json.dumps(report.get("historical_diaries") or {}, sort_keys=True),
+            "local_context=" + json.dumps(report.get("local_context") or {}, sort_keys=True),
+            "knowledge_graph=" + json.dumps(report.get("knowledge_graph") or {}, sort_keys=True),
+        ]
+        evidence.extend(
+            f"issue={item.get('severity')}:{item.get('code')}:{item.get('message')}"
+            for item in issues[:6]
+            if isinstance(item, dict)
+        )
+        if repair:
+            evidence.append("repair=" + json.dumps({
+                "transcripts_indexed": (repair.get("transcripts") or {}).get("indexed"),
+                "historical_diaries_inserted": (repair.get("backups") or {}).get("inserted"),
+            }, sort_keys=True))
+        blocking = [
+            item for item in issues
+            if isinstance(item, dict) and item.get("code") in {"transcript_index_empty", "backup_diaries_not_reconciled"}
+        ]
+        if not blocking:
+            return DoctorCheck(
+                id="runtime.memory_fabric",
+                tier="runtime",
+                status="healthy",
+                severity="info",
+                summary="Memory Fabric coverage is queryable",
+                evidence=evidence,
+                repair_plan=[],
+                fixed=bool(repair),
+            )
+        return DoctorCheck(
+            id="runtime.memory_fabric",
+            tier="runtime",
+            status="degraded",
+            severity="warn",
+            summary="Memory Fabric coverage needs repair",
+            evidence=evidence,
+            repair_plan=["Run `nexo doctor --tier runtime --fix` or `nexo update` to warm transcript and historical backup indexes"],
+            escalation_prompt="Some memory sources exist outside the active query indexes, so exact historical lookup may fall back to slow raw scans.",
+            fixed=bool(repair),
+        )
+    except Exception as exc:
+        return DoctorCheck(
+            id="runtime.memory_fabric",
+            tier="runtime",
+            status="degraded",
+            severity="warn",
+            summary="Memory Fabric health could not be checked",
+            evidence=[str(exc)],
+            repair_plan=["Inspect memory_fabric.py and DB migrations"],
+            escalation_prompt="Support cannot verify unified memory coverage.",
+        )
+
+
 def run_runtime_checks(fix: bool = False) -> list[DoctorCheck]:
     """Run all runtime-tier checks. Read-only by default."""
     return [
@@ -3922,6 +3990,7 @@ def run_runtime_checks(fix: bool = False) -> list[DoctorCheck]:
         safe_check(check_automation_caller_coverage),
         safe_check(check_state_watchers),
         safe_check(check_local_index_hygiene, fix=fix),
+        safe_check(check_memory_fabric_health, fix=fix),
         safe_check(check_release_artifact_sync),
         safe_check(check_release_trace_hygiene),
         safe_check(check_launchagent_inventory),

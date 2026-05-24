@@ -15,6 +15,15 @@ def test_backup_script_uses_runtime_backups_dir() -> None:
     assert 'BACKUP_DIR="$NEXO_HOME/runtime/backups"' in text
 
 
+def test_backup_script_reconciles_memory_fabric_before_prune() -> None:
+    text = _read("src/scripts/nexo-backup.sh")
+    assert "reconcile_memory_fabric_before_prune()" in text
+    assert "    reconcile_memory_fabric_before_prune" in text
+    assert "memory_fabric.reconcile_backup_diaries" in text
+    assert text.index("reconcile_memory_fabric_before_prune") < text.index('python3 "$PRUNER"')
+    assert text.index("reconcile_memory_fabric_before_prune") < text.index('weekly = base / "weekly"')
+
+
 def test_deep_sleep_script_uses_runtime_logs_dir() -> None:
     text = _read("src/scripts/nexo-deep-sleep.sh")
     assert 'LOG_DIR="$NEXO_HOME/runtime/logs"' in text

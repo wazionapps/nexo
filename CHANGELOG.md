@@ -1,5 +1,14 @@
 # Changelog
 
+## [7.25.0] - 2026-05-24
+
+### Added — Memory Fabric
+
+- **Memory Fabric now links transcript lookup, historical diary recovery, unified search and the knowledge graph.** Short Codex/Claude sessions are indexed, exact/prefix transcript ids are boosted, and pre-answer transcript lookup uses the product's long horizon instead of a 72h-only window.
+- **Backup diaries are no longer allowed to live only in expiring snapshots.** `nexo-backup.sh` reconciles recoverable diary rows into `historical_diary_index`, unified search and KG links before hourly/weekly DB retention can delete backups; weekly DBs are scanned before recent hourlies.
+- **Updates and doctor can repair Memory Fabric automatically.** Existing installs get schema migration 68, post-update transcript/backup reconciliation and runtime health reporting for stale transcript indexes, unreconciled backup diaries and legacy hash embeddings.
+- **Coverage:** full Brain pytest, focused Memory Fabric/transcript/pre-answer/update/migration suites, shell backup-retention contract tests and release-readiness checks.
+
 ## [7.24.0] - 2026-05-21
 
 ### Added — agents and cognitive controls
