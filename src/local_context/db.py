@@ -18,6 +18,7 @@ MAIN_CLEANUP_STATE_KEY = "local_context_main_tables_drained"
 LOCAL_CONTEXT_TABLES: tuple[str, ...] = (
     "local_index_roots",
     "local_index_exclusions",
+    "local_index_file_type_rules",
     "local_index_jobs",
     "local_index_checkpoints",
     "local_index_state",
@@ -103,8 +104,51 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
     _m63_local_context_layer(conn)
     _m64_local_context_live_dirs(conn)
     _ensure_entity_dossier_schema(conn)
-    conn.execute("PRAGMA user_version=64")
+    _ensure_local_context_v2_schema(conn)
+    conn.execute("PRAGMA user_version=65")
     conn.commit()
+
+
+def _table_columns(conn: sqlite3.Connection, table: str) -> set[str]:
+    rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
+    return {str(row["name"] if isinstance(row, sqlite3.Row) else row[1]) for row in rows}
+
+
+def _add_column_if_missing(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
+    if column in _table_columns(conn, table):
+        return
+    conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+
+
+def _ensure_local_context_v2_schema(conn: sqlite3.Connection) -> None:
+    """Idempotent local-index v2 schema for managed roots and file type rules."""
+    _add_column_if_missing(conn, "local_index_roots", "source", "TEXT NOT NULL DEFAULT 'legacy'")
+    _add_column_if_missing(conn, "local_index_roots", "remote", "INTEGER NOT NULL DEFAULT 0")
+    _add_column_if_missing(conn, "local_index_roots", "seed_version", "INTEGER NOT NULL DEFAULT 1")
+    _add_column_if_missing(conn, "local_index_exclusions", "source", "TEXT NOT NULL DEFAULT 'legacy'")
+    _add_column_if_missing(conn, "local_index_exclusions", "kind", "TEXT NOT NULL DEFAULT 'folder'")
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS local_index_file_type_rules (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            extension TEXT NOT NULL,
+            action TEXT NOT NULL DEFAULT 'ignore',
+            source TEXT NOT NULL DEFAULT 'user',
+            priority INTEGER NOT NULL DEFAULT 0,
+            reason TEXT NOT NULL DEFAULT '',
+            created_at REAL NOT NULL,
+            updated_at REAL NOT NULL,
+            UNIQUE(extension, source)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_local_index_roots_source
+            ON local_index_roots(source, status);
+        CREATE INDEX IF NOT EXISTS idx_local_index_exclusions_source
+            ON local_index_exclusions(source);
+        CREATE INDEX IF NOT EXISTS idx_local_index_file_type_rules_ext
+            ON local_index_file_type_rules(extension, source);
+        """
+    )
 
 
 def _ensure_entity_dossier_schema(conn: sqlite3.Connection) -> None:

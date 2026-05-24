@@ -1027,6 +1027,32 @@ def nexo_local_index_exclusions(action: str = "list", path: str = "", reason: st
 
 
 @mcp.tool
+def nexo_local_index_filetypes(action: str = "list", extension: str = "", mode: str = "extract", reason: str = "user") -> str:
+    """List, include, exclude or reset local memory file extension rules."""
+    normalized = str(action or "list").strip().lower()
+    if normalized == "list":
+        result = local_context_api.list_file_type_rules(readonly=True)
+    elif normalized in {"include", "add"}:
+        result = local_context_api.set_file_type_rule(extension, action=mode or "extract", reason=reason)
+    elif normalized in {"exclude", "ignore"}:
+        result = local_context_api.set_file_type_rule(extension, action="ignore", reason=reason)
+    elif normalized in {"remove", "delete"}:
+        result = local_context_api.remove_file_type_rule(extension)
+    elif normalized == "reset":
+        result = local_context_api.reset_file_type_rules()
+    else:
+        result = {"ok": False, "error": "unknown_action", "allowed": ["list", "include", "exclude", "remove", "reset"]}
+    return json.dumps(result, ensure_ascii=False)
+
+
+@mcp.tool
+def nexo_local_index_migrate_roots_v2(apply: bool = False) -> str:
+    """Plan or apply Local Memory roots v2 cleanup."""
+    result = local_context_api.migrate_roots_seed_v2(dry_run=not bool(apply))
+    return json.dumps(result, ensure_ascii=False)
+
+
+@mcp.tool
 def nexo_local_context(
     query: str,
     intent: str = "answer",

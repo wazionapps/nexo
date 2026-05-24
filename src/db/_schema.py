@@ -1775,6 +1775,9 @@ def _m63_local_context_layer(conn):
             display_path TEXT NOT NULL,
             mode TEXT NOT NULL DEFAULT 'normal',
             depth INTEGER NOT NULL DEFAULT 2,
+            source TEXT NOT NULL DEFAULT 'user',
+            remote INTEGER NOT NULL DEFAULT 0,
+            seed_version INTEGER NOT NULL DEFAULT 1,
             status TEXT NOT NULL DEFAULT 'active',
             last_scan_at REAL,
             created_at REAL NOT NULL,
@@ -1785,8 +1788,22 @@ def _m63_local_context_layer(conn):
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             path TEXT NOT NULL UNIQUE,
             display_path TEXT NOT NULL,
+            source TEXT NOT NULL DEFAULT 'user',
+            kind TEXT NOT NULL DEFAULT 'folder',
             reason TEXT NOT NULL DEFAULT 'user',
             created_at REAL NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS local_index_file_type_rules (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            extension TEXT NOT NULL,
+            action TEXT NOT NULL DEFAULT 'ignore',
+            source TEXT NOT NULL DEFAULT 'user',
+            priority INTEGER NOT NULL DEFAULT 0,
+            reason TEXT NOT NULL DEFAULT '',
+            created_at REAL NOT NULL,
+            updated_at REAL NOT NULL,
+            UNIQUE(extension, source)
         );
 
         CREATE TABLE IF NOT EXISTS local_index_jobs (
@@ -1940,6 +1957,12 @@ def _m63_local_context_layer(conn):
 
         CREATE INDEX IF NOT EXISTS idx_local_index_roots_status
             ON local_index_roots(status);
+        CREATE INDEX IF NOT EXISTS idx_local_index_roots_source
+            ON local_index_roots(source, status);
+        CREATE INDEX IF NOT EXISTS idx_local_index_exclusions_source
+            ON local_index_exclusions(source);
+        CREATE INDEX IF NOT EXISTS idx_local_index_file_type_rules_ext
+            ON local_index_file_type_rules(extension, source);
         CREATE INDEX IF NOT EXISTS idx_local_index_jobs_status_priority
             ON local_index_jobs(status, priority, created_at);
         CREATE INDEX IF NOT EXISTS idx_local_index_jobs_asset

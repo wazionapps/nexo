@@ -13,6 +13,7 @@ from local_context.db import (
     MIGRATION_STATE_KEY,
     close_local_context_db,
     get_local_context_db,
+    local_context_db_path,
 )
 
 
@@ -686,6 +687,128 @@ def test_exclusion_prevents_indexing(tmp_path):
     assert row["total"] == 0
 
 
+def test_file_type_rules_allow_user_include_and_exclude_overrides(tmp_path):
+    root = tmp_path / "docs"
+    root.mkdir()
+    custom = root / "case.asd"
+    note = root / "note.txt"
+    custom.write_text("custom format Maria context", encoding="utf-8")
+    note.write_text("normal note Maria context", encoding="utf-8")
+
+    local_context.add_root(str(root))
+    local_context.run_once(limit=20, process_limit=20)
+    conn = get_local_context_db()
+    assert conn.execute("SELECT COUNT(*) AS total FROM local_assets WHERE path=?", (str(custom),)).fetchone()["total"] == 0
+    assert conn.execute("SELECT COUNT(*) AS total FROM local_assets WHERE path=?", (str(note),)).fetchone()["total"] == 1
+
+    include = local_context.set_file_type_rule(".asd", action="extract")
+    assert include["ok"] is True
+    local_context.run_once(limit=20, process_limit=20)
+    assert conn.execute("SELECT COUNT(*) AS total FROM local_assets WHERE path=?", (str(custom),)).fetchone()["total"] == 1
+    assert conn.execute("SELECT COUNT(*) AS total FROM local_chunks c JOIN local_assets a ON a.asset_id=c.asset_id WHERE a.path=?", (str(custom),)).fetchone()["total"] >= 1
+
+    exclude = local_context.set_file_type_rule(".txt", action="ignore")
+    assert exclude["cleanup"]["assets"] >= 1
+    local_context.reconcile_live_changes(asset_limit=20, dir_limit=20, file_limit=20)
+    assert conn.execute("SELECT COUNT(*) AS total FROM local_assets WHERE path=?", (str(note),)).fetchone()["total"] == 0
+
+
+def test_roots_seed_v2_migration_removes_legacy_disk_root_but_keeps_user_content(tmp_path):
+    disk = tmp_path / "disk"
+    home = disk / "Users" / "me"
+    system = disk / "Shared"
+    home.mkdir(parents=True)
+    system.mkdir(parents=True)
+    keep_doc = home / "invoice.pdf"
+    system_noise = system / "cache.txt"
+    keep_doc.write_text("Maria invoice", encoding="utf-8")
+    system_noise.write_text("system noise", encoding="utf-8")
+
+    local_context.add_root(str(disk), depth=api.DEFAULT_SYSTEM_ROOT_DEPTH, source="legacy")
+    local_context.add_root(str(home), depth=api.DEFAULT_ROOT_DEPTH, source="core_default")
+    local_context.run_once(limit=100, process_limit=0)
+
+    plan = local_context.migrate_roots_seed_v2(dry_run=True)
+    assert plan["dry_run"] is True
+    assert str(disk) in plan["legacy_disk_roots"]
+    assert plan["assets_to_purge"] >= 1
+
+    applied = local_context.migrate_roots_seed_v2(dry_run=False)
+    assert applied["dry_run"] is False
+    conn = get_local_context_db()
+    roots = {row["root_path"]: row["status"] for row in conn.execute("SELECT root_path, status FROM local_index_roots").fetchall()}
+    assert roots[api.norm_path(str(disk))] == "removed"
+    assert roots[api.norm_path(str(home))] == "active"
+    assert conn.execute("SELECT COUNT(*) AS total FROM local_assets WHERE path=?", (str(keep_doc),)).fetchone()["total"] == 1
+    assert conn.execute("SELECT COUNT(*) AS total FROM local_assets WHERE path=?", (str(system_noise),)).fetchone()["total"] == 0
+
+
+def test_roots_seed_v2_large_db_archives_rebuilds_and_preserves_config(tmp_path, monkeypatch):
+    disk = tmp_path / "disk"
+    home = disk / "Users" / "me"
+    external = tmp_path / "external"
+    ignored = disk / "SystemCache"
+    home.mkdir(parents=True)
+    external.mkdir()
+    ignored.mkdir()
+    (home / "invoice.pdf").write_text("Maria invoice", encoding="utf-8")
+    (ignored / "cache.txt").write_text("system cache", encoding="utf-8")
+    monkeypatch.setattr(api.Path, "home", staticmethod(lambda: home))
+    monkeypatch.setattr(api, "_system_volume_roots", lambda: [])
+    monkeypatch.setattr(api, "_mounted_volume_roots", lambda: [])
+    monkeypatch.setattr(api, "_local_email_roots", lambda: [])
+    monkeypatch.delenv("NEXO_LOCAL_INDEX_DEFAULT_ROOTS", raising=False)
+
+    local_context.add_root(str(disk), depth=api.DEFAULT_SYSTEM_ROOT_DEPTH, source="legacy")
+    local_context.add_root(str(home), depth=api.DEFAULT_ROOT_DEPTH, source="core_default")
+    local_context.add_root(str(external), depth=api.DEFAULT_ROOT_DEPTH)
+    local_context.add_exclusion(str(ignored), reason="user")
+    local_context.set_file_type_rule(".asd", action="extract")
+    local_context.run_once(limit=100, process_limit=0)
+
+    db_path = local_context_db_path()
+    assert db_path.is_file()
+    monkeypatch.setattr(api, "LOCAL_CONTEXT_REBUILD_THRESHOLD_BYTES", 1)
+
+    applied = local_context.migrate_roots_seed_v2(dry_run=False)
+
+    assert applied["ok"] is True
+    assert applied["strategy"] == "archive_rebuild"
+    assert Path(applied["cleanup"]["backup_dir"]).is_dir()
+    assert any(Path(row["backup_path"]).name == db_path.name for row in applied["cleanup"]["moved"])
+    conn = get_local_context_db()
+    active_roots = {row["root_path"] for row in conn.execute("SELECT root_path FROM local_index_roots WHERE status='active'").fetchall()}
+    assert api.norm_path(str(home)) in active_roots
+    assert api.norm_path(str(external)) in active_roots
+    assert api.norm_path(str(disk)) not in active_roots
+    assert conn.execute("SELECT COUNT(*) AS total FROM local_assets").fetchone()["total"] == 0
+    assert conn.execute("SELECT COUNT(*) AS total FROM local_index_exclusions WHERE path=?", (api.norm_path(str(ignored)),)).fetchone()["total"] == 1
+    assert conn.execute("SELECT action FROM local_index_file_type_rules WHERE extension='.asd' AND source='user'").fetchone()["action"] == "extract"
+    assert conn.execute("SELECT value FROM local_index_state WHERE key=?", (api.ROOT_SEED_VERSION_KEY,)).fetchone()["value"] == str(api.DEFAULT_ROOT_SEED_VERSION)
+
+
+def test_removed_core_default_root_is_not_reseeded(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setattr(api.Path, "home", staticmethod(lambda: home))
+    monkeypatch.setattr(api, "_system_volume_roots", lambda: [])
+    monkeypatch.setattr(api, "_mounted_volume_roots", lambda: [])
+    monkeypatch.delenv("NEXO_LOCAL_INDEX_DEFAULT_ROOTS", raising=False)
+
+    first = api.ensure_default_roots()
+    assert first["created"] == 1
+
+    removed = local_context.remove_root(str(home))
+    assert removed["ok"] is True
+    second = api.ensure_default_roots()
+
+    assert second["skipped_removed"] == 1
+    assert api.list_roots() == []
+    conn = get_local_context_db()
+    row = conn.execute("SELECT status, source FROM local_index_roots WHERE root_path=?", (api.norm_path(str(home)),)).fetchone()
+    assert row["status"] == "removed"
+
+
 def test_noisy_dependency_trees_are_skipped_by_default(tmp_path):
     root = tmp_path / "project"
     root.mkdir()
@@ -742,9 +865,13 @@ def test_default_roots_add_new_mounted_volumes_incrementally(tmp_path, monkeypat
     second = api.ensure_default_roots()
 
     roots = {row["root_path"] for row in api.list_roots()}
-    assert second["created"] == 1
+    assert second["created"] == 0
     assert api.norm_path(str(home)) in roots
-    assert api.norm_path(str(external)) in roots
+    assert api.norm_path(str(external)) not in roots
+
+    manual = local_context.add_root(str(external))
+    assert manual["ok"] is True
+    assert api.norm_path(str(external)) in {row["root_path"] for row in api.list_roots()}
 
 
 def test_default_roots_start_from_system_volume_and_keep_special_email_roots(tmp_path, monkeypatch):
@@ -765,8 +892,9 @@ def test_default_roots_start_from_system_volume_and_keep_special_email_roots(tmp
     result = api.ensure_default_roots()
     roots = {row["root_path"] for row in result["roots"]}
 
-    assert api.norm_path(str(startup)) in roots
-    assert api.norm_path(str(mounted)) in roots
+    assert api.norm_path(str(startup)) not in roots
+    assert api.norm_path(str(mounted)) not in roots
+    assert api.norm_path(str(home)) in roots
     assert api.norm_path(str(nexo_email)) in roots
     assert api.norm_path(str(mail)) in roots
 
@@ -788,8 +916,8 @@ def test_configured_default_roots_are_additive_not_global_override(tmp_path, mon
 
     roots = {row["root_path"] for row in api.ensure_default_roots()["roots"]}
 
-    assert api.norm_path(str(startup)) in roots
-    assert api.norm_path(str(mounted)) in roots
+    assert api.norm_path(str(startup)) not in roots
+    assert api.norm_path(str(mounted)) not in roots
     assert api.norm_path(str(configured)) in roots
     assert api.norm_path(str(mail)) in roots
 

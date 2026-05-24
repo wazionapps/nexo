@@ -96,6 +96,17 @@ def test_local_context_cli_controls_and_metadata(tmp_path):
     exclusions = _json(_run_cli(nexo_home, "local-context", "exclusions", "list", "--json"))
     assert any(row["path"] == str(excluded) for row in exclusions["exclusions"])
 
+    included = _json(_run_cli(nexo_home, "local-context", "filetypes", "include", ".asd", "--json"))
+    assert included["ok"] is True
+    assert included["extension"] == ".asd"
+
+    filetypes = _json(_run_cli(nexo_home, "local-context", "filetypes", "list", "--json"))
+    assert any(row["extension"] == ".asd" and row["source"] == "user" for row in filetypes["rules"])
+
+    migration = _json(_run_cli(nexo_home, "local-context", "migrate-roots-v2", "--json"))
+    assert migration["ok"] is True
+    assert migration["dry_run"] is True
+
     paused = _json(_run_cli(nexo_home, "local-context", "pause", "--json"))
     assert paused["paused"] is True
 

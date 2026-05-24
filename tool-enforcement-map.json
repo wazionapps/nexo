@@ -2502,6 +2502,37 @@
       },
       "triggers_after": []
     },
+    "nexo_local_index_filetypes": {
+      "description": "List, include, exclude, remove, or reset Local Context file extension rules",
+      "category": "local_context",
+      "source": "server",
+      "requires": [],
+      "provides": [
+        "local_index_file_type_rules"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_local_index_migrate_roots_v2": {
+      "description": "Plan or apply Local Context roots v2 cleanup",
+      "category": "local_context",
+      "source": "server",
+      "requires": [],
+      "provides": [
+        "local_index_roots",
+        "local_index_cleanup"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
     "nexo_local_index_models": {
       "description": "Inspect or warm Local Context local model availability",
       "category": "local_context",

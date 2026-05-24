@@ -1,5 +1,14 @@
 # Changelog
 
+## [7.25.4] - 2026-05-24
+
+### Added — Local Memory roots and file-type controls
+
+- **Local Memory now starts from safe user-content roots instead of whole-disk roots.** Fresh installs seed the user's content area and known email roots by default; whole system volumes, mounted drives, network shares and `/`/drive roots are opt-in through explicit user roots or environment flags.
+- **Updates clean legacy whole-disk Local Memory state safely.** The roots v2 migration removes legacy system roots, remaps kept user content, purges ignored/system/private payloads, preserves user roots/exclusions/file-type overrides, and archives/rebuilds very large `local-context.db` files instead of doing a risky in-place purge.
+- **File-type rules are now configurable through Brain CLI and MCP.** Core defaults read documents, text, email and useful code files, keep photos/media as metadata, ignore unknown/binary/transient extensions, and let the user include a custom extension or exclude a default extension.
+- **Coverage:** Local Context schema/API/CLI/MCP tests for extension overrides, roots v2 migration, large-DB archive rebuild, removed-default roots, read-only status paths, runtime service refresh paths, plus Python syntax validation.
+
 ## [7.25.3] - 2026-05-24
 
 ### Fixed — Desktop-managed Python runtime repair

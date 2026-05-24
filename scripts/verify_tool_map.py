@@ -26,7 +26,7 @@ IGNORE_TOOLS = {"nexo_example_tool"}
 def get_server_tools() -> set[str]:
     with open(SERVER_PY) as f:
         content = f.read()
-    return {m.group(1) for m in re.finditer(r"def (nexo_[a-z_]+)\(", content)}
+    return {m.group(1) for m in re.finditer(r"def (nexo_[a-z0-9_]+)\(", content)}
 
 
 def get_plugin_tools() -> set[str]:
@@ -36,7 +36,7 @@ def get_plugin_tools() -> set[str]:
             continue
         with open(os.path.join(PLUGINS_DIR, fname)) as f:
             content = f.read()
-        tools.update(m.group(1) for m in re.finditer(r'"(nexo_[a-z_]+)"', content))
+        tools.update(m.group(1) for m in re.finditer(r'"(nexo_[a-z0-9_]+)"', content))
     return tools
 
 

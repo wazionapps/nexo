@@ -1853,6 +1853,42 @@ def _local_context_exclusions(args) -> int:
     return _local_context_emit({"ok": False, "error": f"unsupported exclusions command: {command}"}, args)
 
 
+def _local_context_filetypes(args) -> int:
+    import local_context
+    command = str(getattr(args, "local_context_filetypes_command", "") or "")
+    if command == "list":
+        return _local_context_emit(local_context.list_file_type_rules(readonly=False), args)
+    if command == "include":
+        return _local_context_emit(
+            local_context.set_file_type_rule(
+                getattr(args, "extension", ""),
+                action=getattr(args, "action", "extract") or "extract",
+                reason=getattr(args, "reason", "user") or "user",
+            ),
+            args,
+        )
+    if command == "exclude":
+        return _local_context_emit(
+            local_context.set_file_type_rule(
+                getattr(args, "extension", ""),
+                action="ignore",
+                reason=getattr(args, "reason", "user") or "user",
+            ),
+            args,
+        )
+    if command == "remove":
+        return _local_context_emit(local_context.remove_file_type_rule(getattr(args, "extension", "")), args)
+    if command == "reset":
+        return _local_context_emit(local_context.reset_file_type_rules(), args)
+    return _local_context_emit({"ok": False, "error": f"unsupported filetypes command: {command}"}, args)
+
+
+def _local_context_migrate_roots_v2(args) -> int:
+    import local_context
+    dry_run = not bool(getattr(args, "apply", False))
+    return _local_context_emit(local_context.migrate_roots_seed_v2(dry_run=dry_run), args)
+
+
 def _local_context_query(args) -> int:
     import local_context
     return _local_context_emit(
@@ -3759,6 +3795,29 @@ def main():
     local_context_exclusions_remove_p.add_argument("path", help="Folder path")
     local_context_exclusions_remove_p.add_argument("--json", action="store_true", help="JSON output")
 
+    local_context_filetypes_p = local_context_sub.add_parser("filetypes", help="Manage included and excluded file extensions")
+    local_context_filetypes_sub = local_context_filetypes_p.add_subparsers(dest="local_context_filetypes_command")
+    local_context_filetypes_list_p = local_context_filetypes_sub.add_parser("list", help="List file type rules")
+    local_context_filetypes_list_p.add_argument("--json", action="store_true", help="JSON output")
+    local_context_filetypes_include_p = local_context_filetypes_sub.add_parser("include", help="Include a file extension")
+    local_context_filetypes_include_p.add_argument("extension", help="Extension, for example .pdf or asd")
+    local_context_filetypes_include_p.add_argument("--action", choices=["extract", "metadata"], default="extract", help="How to index this extension")
+    local_context_filetypes_include_p.add_argument("--reason", default="user", help="Reason label")
+    local_context_filetypes_include_p.add_argument("--json", action="store_true", help="JSON output")
+    local_context_filetypes_exclude_p = local_context_filetypes_sub.add_parser("exclude", help="Exclude a file extension")
+    local_context_filetypes_exclude_p.add_argument("extension", help="Extension, for example .jpg or tmp")
+    local_context_filetypes_exclude_p.add_argument("--reason", default="user", help="Reason label")
+    local_context_filetypes_exclude_p.add_argument("--json", action="store_true", help="JSON output")
+    local_context_filetypes_remove_p = local_context_filetypes_sub.add_parser("remove", help="Remove a user extension override")
+    local_context_filetypes_remove_p.add_argument("extension", help="Extension to reset")
+    local_context_filetypes_remove_p.add_argument("--json", action="store_true", help="JSON output")
+    local_context_filetypes_reset_p = local_context_filetypes_sub.add_parser("reset", help="Remove all user extension overrides")
+    local_context_filetypes_reset_p.add_argument("--json", action="store_true", help="JSON output")
+
+    local_context_migrate_roots_v2_p = local_context_sub.add_parser("migrate-roots-v2", help="Plan or apply Local Memory roots v2 cleanup")
+    local_context_migrate_roots_v2_p.add_argument("--apply", action="store_true", help="Apply cleanup. Omit for dry-run.")
+    local_context_migrate_roots_v2_p.add_argument("--json", action="store_true", help="JSON output")
+
     local_context_query_p = local_context_sub.add_parser("query", help="Query local memory evidence")
     local_context_query_p.add_argument("query", help="Question or search phrase")
     local_context_query_p.add_argument("--intent", default="answer", help="Intent label included with the query result")
@@ -4407,6 +4466,13 @@ def main():
                 local_context_exclusions_p.print_help()
                 return 0
             return _local_context_exclusions(args)
+        if args.local_context_command == "filetypes":
+            if not args.local_context_filetypes_command:
+                local_context_filetypes_p.print_help()
+                return 0
+            return _local_context_filetypes(args)
+        if args.local_context_command == "migrate-roots-v2":
+            return _local_context_migrate_roots_v2(args)
         if args.local_context_command == "query":
             return _local_context_query(args)
         if args.local_context_command == "diagnostics":

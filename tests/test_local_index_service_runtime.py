@@ -275,7 +275,7 @@ def test_run_once_refreshes_new_default_roots_after_initial_setup(tmp_path, monk
     roots = {row["root_path"] for row in api.list_roots()}
     assert result["ok"] is True
     assert norm_path(str(home)) in roots
-    assert norm_path(str(mounted)) in roots
+    assert norm_path(str(mounted)) not in roots
 
 
 def test_norm_path_preserves_windows_drive_root():

@@ -408,6 +408,9 @@ def test_reinstall_runtime_pip_deps_creates_venv_when_missing(tmp_path, monkeypa
 
     def fake_run(cmd, capture_output=True, text=True, timeout=120, env=None):
         calls.append(cmd)
+        if cmd[:2] == [sys.executable, "-c"]:
+            version = ".".join(map(str, sys.version_info[:3]))
+            return subprocess.CompletedProcess(cmd, 0, version + "\n", "")
         if cmd[:3] == [sys.executable, "-m", "venv"]:
             venv_bin = runtime_home / ".venv" / "bin"
             venv_bin.mkdir(parents=True, exist_ok=True)
@@ -419,11 +422,29 @@ def test_reinstall_runtime_pip_deps_creates_venv_when_missing(tmp_path, monkeypa
         return subprocess.CompletedProcess(cmd, 0, "", "")
 
     monkeypatch.setattr(auto_update.subprocess, "run", fake_run)
+    monkeypatch.setattr(auto_update, "desktop_product_requested", lambda: False)
 
     ok = auto_update._reinstall_runtime_pip_deps(runtime_home)
 
     assert ok is True
     assert any(cmd[:3] == [sys.executable, "-m", "venv"] for cmd in calls)
+
+
+def test_desktop_managed_venv_only_accepts_core_pinned_python(monkeypatch):
+    import auto_update
+
+    versions = {
+        "/tmp/python3.12": (3, 12, 9),
+        "/tmp/python3.11": (3, 11, 9),
+        "/tmp/python3.14": (3, 14, 0),
+    }
+
+    monkeypatch.setattr(auto_update, "desktop_product_requested", lambda: True)
+    monkeypatch.setattr(auto_update, "_python_version_tuple", lambda candidate: versions.get(str(candidate)))
+
+    assert auto_update._managed_venv_python_supported("/tmp/python3.12") is True
+    assert auto_update._managed_venv_python_supported("/tmp/python3.11") is False
+    assert auto_update._managed_venv_python_supported("/tmp/python3.14") is False
 
 
 def test_run_runtime_post_sync_uses_reconcile_personal_scripts(tmp_path, monkeypatch):

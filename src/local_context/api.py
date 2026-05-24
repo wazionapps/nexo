@@ -17,10 +17,10 @@ from typing import Any
 
 import paths
 from . import embeddings
-from .db import LOCAL_CONTEXT_TABLES, close_local_context_db, connect_local_context_db_readonly, ensure_local_context_db, get_local_context_db
+from .db import LOCAL_CONTEXT_TABLES, close_local_context_db, connect_local_context_db_readonly, ensure_local_context_db, get_local_context_db, local_context_db_path
 from .extractors import canonical_entity_key, chunk_text, contains_secret, entities, entity_mentions, extract_text, normalize_entity_alias, summarize
 from .logging import log_event, tail
-from .privacy import classify_path, is_local_email_tree, is_queryable_path, should_extract, should_skip_file, should_skip_tree
+from .privacy import classify_path, is_local_email_db, is_local_email_tree, is_queryable_path, should_extract, should_skip_file, should_skip_tree
 from .util import content_hash, json_dumps, json_loads, norm_path, now, quick_fingerprint, redact_path, stable_id, system_label, tokenize
 
 LOCAL_INDEX_SERVICE_LABEL = "com.nexo.local-index"
@@ -34,6 +34,9 @@ DEFAULT_ROOT_DEPTH = int(os.environ.get("NEXO_LOCAL_INDEX_DEFAULT_DEPTH", "24") 
 DEFAULT_EMAIL_ROOT_DEPTH = int(os.environ.get("NEXO_LOCAL_INDEX_EMAIL_ROOT_DEPTH", "24") or "24")
 DEFAULT_MOUNTED_ROOT_DEPTH = int(os.environ.get("NEXO_LOCAL_INDEX_MOUNTED_ROOT_DEPTH", "24") or "24")
 DEFAULT_SYSTEM_ROOT_DEPTH = int(os.environ.get("NEXO_LOCAL_INDEX_SYSTEM_ROOT_DEPTH", "24") or "24")
+DEFAULT_ROOT_SEED_VERSION = 2
+ROOT_SEED_VERSION_KEY = "local_index_roots_seed_version"
+LOCAL_CONTEXT_REBUILD_THRESHOLD_BYTES = int(os.environ.get("NEXO_LOCAL_INDEX_V2_REBUILD_THRESHOLD_BYTES", str(2 * 1024 * 1024 * 1024)) or str(2 * 1024 * 1024 * 1024))
 DEFAULT_CONTEXT_MAX_CHARS = int(os.environ.get("NEXO_LOCAL_CONTEXT_MAX_CHARS", "20000") or "20000")
 DEFAULT_ROUTER_MAX_CHARS = int(os.environ.get("NEXO_LOCAL_CONTEXT_ROUTER_MAX_CHARS", "6000") or "6000")
 DEFAULT_MAX_JOB_ATTEMPTS = int(os.environ.get("NEXO_LOCAL_INDEX_MAX_JOB_ATTEMPTS", "3") or "3")
@@ -66,7 +69,6 @@ HIGH_VALUE_DOCUMENT_SUFFIXES = {
     ".pptx",
     ".pages",
     ".numbers",
-    ".key",
     ".rtf",
     ".odt",
     ".ods",
@@ -83,6 +85,65 @@ EMAIL_DOCUMENT_SUFFIXES = {
     ".eml",
     ".emlx",
     ".msg",
+}
+CODE_DOCUMENT_SUFFIXES = {
+    ".py",
+    ".js",
+    ".ts",
+    ".tsx",
+    ".jsx",
+    ".php",
+    ".sql",
+    ".json",
+    ".yaml",
+    ".yml",
+    ".toml",
+    ".html",
+    ".css",
+}
+IMAGE_METADATA_SUFFIXES = {
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".gif",
+    ".heic",
+    ".webp",
+    ".tif",
+    ".tiff",
+    ".bmp",
+    ".raw",
+    ".dng",
+}
+MEDIA_METADATA_SUFFIXES = {
+    ".mp3",
+    ".m4a",
+    ".wav",
+    ".aac",
+    ".flac",
+    ".mp4",
+    ".mov",
+    ".avi",
+    ".mkv",
+    ".m4v",
+}
+IGNORED_BINARY_SUFFIXES = {
+    ".app",
+    ".bin",
+    ".class",
+    ".dll",
+    ".dmg",
+    ".dylib",
+    ".exe",
+    ".iso",
+    ".jar",
+    ".lock",
+    ".o",
+    ".obj",
+    ".pyc",
+    ".so",
+    ".swp",
+    ".swo",
+    ".tmp",
 }
 HIGH_VALUE_DIRECTORY_NAMES = {
     "users",
@@ -213,26 +274,249 @@ def _with_sqlite_busy_retry(callback, *, attempts: int | None = None):
     return None
 
 
-def add_root(path: str, *, mode: str = "normal", depth: int | None = None) -> dict:
+def _normalize_source(source: str | None) -> str:
+    value = str(source or "user").strip().lower().replace("-", "_")
+    return value or "user"
+
+
+def _normalize_extension(extension: str) -> str:
+    value = str(extension or "").strip().lower()
+    if not value:
+        return ""
+    if not value.startswith("."):
+        value = "." + value
+    return value
+
+
+def _normalize_file_type_action(action: str | None) -> str:
+    value = str(action or "").strip().lower()
+    if value in {"include", "extract", "read", "full"}:
+        return "extract"
+    if value in {"metadata", "inventory", "index"}:
+        return "metadata"
+    if value in {"exclude", "ignore", "skip", "blocked"}:
+        return "ignore"
+    return "ignore"
+
+
+def _default_file_type_rule_specs() -> list[dict]:
+    specs: list[dict] = []
+    for suffix in sorted(HIGH_VALUE_DOCUMENT_SUFFIXES):
+        specs.append({"extension": suffix, "action": "extract", "priority": 90, "reason": "core_high_value_document"})
+    for suffix in sorted(KNOWN_TEXT_SUFFIXES):
+        specs.append({"extension": suffix, "action": "extract", "priority": 82, "reason": "core_text_document"})
+    for suffix in sorted(EMAIL_DOCUMENT_SUFFIXES):
+        specs.append({"extension": suffix, "action": "extract", "priority": 70, "reason": "core_email_document"})
+    for suffix in sorted(CODE_DOCUMENT_SUFFIXES):
+        specs.append({"extension": suffix, "action": "extract", "priority": 55, "reason": "core_code_document"})
+    for suffix in sorted(IMAGE_METADATA_SUFFIXES):
+        specs.append({"extension": suffix, "action": "metadata", "priority": 35, "reason": "core_photo_metadata"})
+    for suffix in sorted(MEDIA_METADATA_SUFFIXES):
+        specs.append({"extension": suffix, "action": "metadata", "priority": 25, "reason": "core_media_metadata"})
+    for suffix in sorted(IGNORED_BINARY_SUFFIXES):
+        specs.append({"extension": suffix, "action": "ignore", "priority": 0, "reason": "core_binary_or_transient"})
+    return specs
+
+
+def seed_core_file_type_rules(conn=None) -> dict:
+    conn = conn or _conn()
+    created_or_updated = 0
+    timestamp = now()
+    for spec in _default_file_type_rule_specs():
+        conn.execute(
+            """
+            INSERT INTO local_index_file_type_rules(extension, action, source, priority, reason, created_at, updated_at)
+            VALUES (?, ?, 'core_default', ?, ?, ?, ?)
+            ON CONFLICT(extension, source) DO UPDATE SET
+              action=excluded.action,
+              priority=excluded.priority,
+              reason=excluded.reason,
+              updated_at=excluded.updated_at
+            """,
+            (spec["extension"], spec["action"], int(spec["priority"]), spec["reason"], timestamp, timestamp),
+        )
+        created_or_updated += 1
+    return {"ok": True, "rules": created_or_updated}
+
+
+def _list_file_type_rules_conn(conn) -> list[dict]:
+    rows = conn.execute(
+        """
+        SELECT *
+        FROM local_index_file_type_rules
+        ORDER BY
+          CASE source WHEN 'user' THEN 0 WHEN 'core_default' THEN 1 ELSE 2 END,
+          extension
+        """
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def _shape_file_type_rules(rows: list[dict]) -> dict:
+    effective: dict[str, dict] = {}
+    for row in rows:
+        ext = str(row.get("extension") or "")
+        if ext not in effective or row.get("source") == "user":
+            effective[ext] = row
+    return {"ok": True, "rules": rows, "effective": list(effective.values())}
+
+
+def _effective_file_type_rule(conn, extension: str) -> dict:
+    ext = _normalize_extension(extension)
+    if not ext:
+        return {"extension": "", "action": "ignore", "source": "implicit", "priority": 0, "reason": "missing_extension"}
+    rows = conn.execute(
+        """
+        SELECT *
+        FROM local_index_file_type_rules
+        WHERE extension=?
+        ORDER BY CASE source WHEN 'user' THEN 0 WHEN 'core_default' THEN 1 ELSE 2 END
+        LIMIT 1
+        """,
+        (ext,),
+    ).fetchall()
+    if rows:
+        return dict(rows[0])
+    if is_local_email_tree(ext):
+        return {"extension": ext, "action": "extract", "source": "implicit", "priority": 70, "reason": "local_email"}
+    return {"extension": ext, "action": "ignore", "source": "implicit", "priority": 0, "reason": "unknown_extension"}
+
+
+def list_file_type_rules(*, readonly: bool = True) -> dict:
+    if not readonly:
+        conn = _conn()
+        seed_core_file_type_rules(conn)
+        conn.commit()
+        rows = _list_file_type_rules_conn(conn)
+    else:
+        conn = _read_conn()
+        try:
+            rows = _list_file_type_rules_conn(conn)
+        finally:
+            _close_read_conn(conn)
+    return _shape_file_type_rules(rows)
+
+
+def _purge_assets_by_extension(conn, extension: str) -> dict:
+    ext = _normalize_extension(extension)
+    if not ext:
+        return {"assets": 0}
+    rows = conn.execute("SELECT asset_id FROM local_assets WHERE lower(extension)=?", (ext,)).fetchall()
+    return _purge_asset_ids(conn, [str(row["asset_id"]) for row in rows])
+
+
+def set_file_type_rule(extension: str, *, action: str = "extract", source: str = "user", priority: int | None = None, reason: str = "user") -> dict:
+    conn = _conn()
+    ext = _normalize_extension(extension)
+    if not ext:
+        return {"ok": False, "error": "extension_required"}
+    normalized_action = _normalize_file_type_action(action)
+    source_value = _normalize_source(source)
+    priority_value = int(priority if priority is not None else (82 if normalized_action == "extract" else 20 if normalized_action == "metadata" else 0))
+    timestamp = now()
+    conn.execute(
+        """
+        INSERT INTO local_index_file_type_rules(extension, action, source, priority, reason, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(extension, source) DO UPDATE SET
+          action=excluded.action,
+          priority=excluded.priority,
+          reason=excluded.reason,
+          updated_at=excluded.updated_at
+        """,
+        (ext, normalized_action, source_value, priority_value, reason, timestamp, timestamp),
+    )
+    cleanup = _purge_assets_by_extension(conn, ext) if normalized_action == "ignore" and source_value == "user" else {"assets": 0}
+    conn.commit()
+    log_event("info", "file_type_rule_set", "Local memory file type rule set", extension=ext, action=normalized_action, source=source_value, cleanup=cleanup)
+    return {"ok": True, "extension": ext, "action": normalized_action, "source": source_value, "priority": priority_value, "cleanup": cleanup}
+
+
+def remove_file_type_rule(extension: str, *, source: str = "user") -> dict:
+    conn = _conn()
+    ext = _normalize_extension(extension)
+    source_value = _normalize_source(source)
+    conn.execute("DELETE FROM local_index_file_type_rules WHERE extension=? AND source=?", (ext, source_value))
+    conn.commit()
+    log_event("info", "file_type_rule_removed", "Local memory file type rule removed", extension=ext, source=source_value)
+    return {"ok": True, "extension": ext, "source": source_value}
+
+
+def reset_file_type_rules() -> dict:
+    conn = _conn()
+    deleted = int(conn.execute("DELETE FROM local_index_file_type_rules WHERE source='user'").rowcount or 0)
+    seeded = seed_core_file_type_rules(conn)
+    conn.commit()
+    log_event("info", "file_type_rules_reset", "Local memory user file type overrides reset", deleted=deleted)
+    return {"ok": True, "deleted": deleted, "core_rules": int(seeded.get("rules") or 0), "file_types": list_file_type_rules(readonly=False)}
+
+
+def _file_type_action(conn, path: str | Path) -> str:
+    p = Path(path)
+    if is_local_email_db(str(path)) or is_local_email_tree(str(path)):
+        return "extract"
+    return str(_effective_file_type_rule(conn, p.suffix.lower()).get("action") or "ignore")
+
+
+def _should_index_file(conn, path: str | Path) -> bool:
+    if should_skip_file(str(path)):
+        return False
+    return _file_type_action(conn, path) != "ignore"
+
+
+def _should_extract_file(conn, path: str | Path, depth: int) -> bool:
+    if depth < 2 or should_skip_file(str(path)):
+        return False
+    return _file_type_action(conn, path) == "extract"
+
+
+def add_root(path: str, *, mode: str = "normal", depth: int | None = None, source: str = "user", remote: bool = False, seed_version: int | None = None) -> dict:
     conn = _conn()
     root_path = norm_path(path)
     if should_skip_tree(root_path) and not _allow_explicit_blocked_root(root_path):
         log_event("warn", "root_rejected_private", "Root rejected by local memory privacy rules", path=redact_path(root_path))
         return {"ok": False, "error": "root_blocked_by_privacy", "root_path": root_path}
     depth_value = 2 if depth is None else int(depth)
-    existing = conn.execute("SELECT id, status FROM local_index_roots WHERE root_path=?", (root_path,)).fetchone()
+    source_value = _normalize_source(source)
+    seed_value = int(seed_version if seed_version is not None else (DEFAULT_ROOT_SEED_VERSION if source_value == "core_default" else 0))
+    existing = conn.execute("SELECT id, status, source, depth FROM local_index_roots WHERE root_path=?", (root_path,)).fetchone()
+    if existing and str(existing["status"] or "") == "active" and source_value == "user" and str(existing["source"] or "") == "core_default":
+        return {"ok": True, "root_path": root_path, "mode": mode, "depth": int(existing["depth"] or depth_value), "already_included": True, "included_by": "core_default"}
+    if source_value == "user":
+        parent = conn.execute(
+            """
+            SELECT root_path, source, depth
+            FROM local_index_roots
+            WHERE status='active' AND source='core_default'
+            ORDER BY length(root_path) DESC
+            """
+        ).fetchall()
+        for row in parent:
+            parent_path = str(row["root_path"] or "")
+            if _is_nested_path(root_path, parent_path):
+                return {
+                    "ok": True,
+                    "root_path": root_path,
+                    "already_included": True,
+                    "included_by": "core_default",
+                    "included_root": parent_path,
+                    "depth": int(row["depth"] or depth_value),
+                }
     conn.execute(
         """
-        INSERT INTO local_index_roots(root_path, display_path, mode, depth, status, created_at, updated_at)
-        VALUES (?, ?, ?, ?, 'active', ?, ?)
+        INSERT INTO local_index_roots(root_path, display_path, mode, depth, source, remote, seed_version, status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
         ON CONFLICT(root_path) DO UPDATE SET
           display_path=excluded.display_path,
           mode=excluded.mode,
           depth=excluded.depth,
+          source=excluded.source,
+          remote=excluded.remote,
+          seed_version=excluded.seed_version,
           status='active',
           updated_at=excluded.updated_at
         """,
-        (root_path, path, mode, depth_value, now(), now()),
+        (root_path, path, mode, depth_value, source_value, 1 if remote else 0, seed_value, now(), now()),
     )
     row = conn.execute("SELECT id FROM local_index_roots WHERE root_path=?", (root_path,)).fetchone()
     existing_status = str(existing["status"] or "") if existing else ""
@@ -241,8 +525,8 @@ def add_root(path: str, *, mode: str = "normal", depth: int | None = None) -> di
         _set_initial_index_complete(conn, False)
         _set_initial_index_started_at(conn, now())
     conn.commit()
-    log_event("info", "root_added", "Root added", path=redact_path(root_path), mode=mode, depth=depth_value)
-    return {"ok": True, "root_path": root_path, "mode": mode, "depth": depth_value}
+    log_event("info", "root_added", "Root added", path=redact_path(root_path), mode=mode, depth=depth_value, source=source_value)
+    return {"ok": True, "root_path": root_path, "mode": mode, "depth": depth_value, "source": source_value, "remote": bool(remote)}
 
 
 def remove_root(path: str) -> dict:
@@ -331,15 +615,40 @@ def _mounted_volume_roots() -> list[str]:
 
 
 def _system_volume_roots() -> list[str]:
+    if os.environ.get("NEXO_LOCAL_INDEX_ENABLE_SYSTEM_ROOTS", "").strip().lower() in {"1", "true", "yes"}:
+        if sys.platform == "darwin":
+            return ["/"]
+        if sys.platform.startswith("win"):
+            return []
+        return ["/"]
     if os.environ.get("NEXO_LOCAL_INDEX_DISABLE_SYSTEM_ROOTS", "").strip() in {"1", "true", "yes"}:
         return []
-    if sys.platform == "darwin":
-        return ["/"]
+    return []
+
+
+def _user_content_roots() -> list[str]:
+    home = Path.home()
+    candidates: list[Path] = [home]
     if sys.platform.startswith("win"):
-        # Windows roots are discovered as mounted drive roots so mapped drives
-        # and removable disks share the same code path.
-        return []
-    return ["/"]
+        candidates.extend([
+            home / "OneDrive",
+            home / "OneDrive - Personal",
+            home / "OneDrive - Empresa",
+        ])
+        for key in ("OneDrive", "OneDriveCommercial", "OneDriveConsumer"):
+            value = os.environ.get(key, "").strip()
+            if value:
+                candidates.append(Path(value))
+    elif sys.platform == "darwin":
+        candidates.append(home / "Library" / "Mobile Documents" / "com~apple~CloudDocs")
+    roots: list[str] = []
+    for candidate in candidates:
+        try:
+            if candidate.exists() and candidate.is_dir() and (not should_skip_tree(str(candidate)) or _allow_explicit_blocked_root(str(candidate))):
+                roots.append(str(candidate))
+        except Exception:
+            continue
+    return _dedupe_roots(roots)
 
 
 def _local_email_roots() -> list[str]:
@@ -379,42 +688,501 @@ def default_roots() -> list[str]:
 
 
 def default_root_specs() -> list[tuple[str, int]]:
-    home = Path.home()
     configured = os.environ.get("NEXO_LOCAL_INDEX_DEFAULT_ROOTS", "").strip()
-    system_specs = [(root, DEFAULT_SYSTEM_ROOT_DEPTH) for root in _system_volume_roots()]
-    mounted_specs = [(root, DEFAULT_MOUNTED_ROOT_DEPTH) for root in _mounted_volume_roots()]
+    system_specs: list[tuple[str, int]] = []
+    if os.environ.get("NEXO_LOCAL_INDEX_ENABLE_SYSTEM_ROOTS", "").strip().lower() in {"1", "true", "yes"}:
+        system_specs = [(root, DEFAULT_SYSTEM_ROOT_DEPTH) for root in _system_volume_roots()]
+    mounted_specs = []
+    if os.environ.get("NEXO_LOCAL_INDEX_INCLUDE_MOUNTED_ROOTS", "").strip().lower() in {"1", "true", "yes"}:
+        mounted_specs = [(root, DEFAULT_MOUNTED_ROOT_DEPTH) for root in _mounted_volume_roots()]
     configured_specs = [(item, DEFAULT_ROOT_DEPTH) for item in configured.split(os.pathsep) if item.strip()]
-    base_specs = system_specs + mounted_specs + configured_specs
-    if not base_specs:
-        base_specs = [(str(home), DEFAULT_ROOT_DEPTH)]
+    user_specs = [(root, DEFAULT_ROOT_DEPTH) for root in _user_content_roots()]
+    base_specs = user_specs + system_specs + mounted_specs + configured_specs
     return _dedupe_root_specs(
         base_specs
         + [(root, DEFAULT_EMAIL_ROOT_DEPTH) for root in _local_email_roots()]
     )
 
 
-def ensure_default_roots() -> dict:
-    existing = {row["root_path"]: row for row in list_roots(readonly=False)}
+def _all_roots_by_path_conn(conn) -> dict[str, dict]:
+    rows = conn.execute("SELECT * FROM local_index_roots ORDER BY root_path").fetchall()
+    return {str(row["root_path"]): dict(row) for row in rows}
+
+
+def _seed_default_roots_conn(conn) -> dict:
+    existing = _all_roots_by_path_conn(conn)
     created = []
     updated = []
+    skipped_removed = []
     for root, depth in default_root_specs():
         candidate = Path(root).expanduser()
         if not candidate.exists() or not candidate.is_dir():
             continue
-        existing_row = existing.get(norm_path(str(candidate)))
+        root_path = norm_path(str(candidate))
+        existing_row = existing.get(root_path)
         if existing_row:
+            if str(existing_row.get("status") or "") == "removed":
+                skipped_removed.append({"root_path": root_path})
+                continue
             current_depth = int(existing_row.get("depth") or 0)
             if current_depth < depth:
-                conn = _conn()
                 conn.execute(
-                    "UPDATE local_index_roots SET depth=?, updated_at=? WHERE root_path=?",
-                    (depth, now(), existing_row["root_path"]),
+                    "UPDATE local_index_roots SET depth=?, source='core_default', seed_version=?, updated_at=? WHERE root_path=?",
+                    (depth, DEFAULT_ROOT_SEED_VERSION, now(), root_path),
                 )
-                conn.commit()
-                updated.append({"root_path": existing_row["root_path"], "depth": depth})
+                updated.append({"root_path": root_path, "depth": depth})
             continue
-        created.append(add_root(str(candidate), mode="normal", depth=depth))
-    return {"ok": True, "created": len(created), "updated": len(updated), "roots": list_roots(readonly=False)}
+        timestamp = now()
+        conn.execute(
+            """
+            INSERT INTO local_index_roots(root_path, display_path, mode, depth, source, remote, seed_version, status, created_at, updated_at)
+            VALUES (?, ?, 'normal', ?, 'core_default', 0, ?, 'active', ?, ?)
+            """,
+            (root_path, str(candidate), int(depth), DEFAULT_ROOT_SEED_VERSION, timestamp, timestamp),
+        )
+        created.append({"root_path": root_path, "depth": int(depth)})
+        existing[root_path] = {
+            "root_path": root_path,
+            "display_path": str(candidate),
+            "mode": "normal",
+            "depth": int(depth),
+            "source": "core_default",
+            "remote": 0,
+            "seed_version": DEFAULT_ROOT_SEED_VERSION,
+            "status": "active",
+        }
+    return {"created": created, "updated": updated, "skipped_removed": skipped_removed}
+
+
+def ensure_default_roots() -> dict:
+    conn = _conn()
+    seed_core_file_type_rules(conn)
+    seeded = _seed_default_roots_conn(conn)
+    migration = migrate_roots_seed_v2(dry_run=False, _already_seeded=True)
+    try:
+        conn.commit()
+    except sqlite3.ProgrammingError:
+        # A large legacy DB may have been archived and replaced during migration.
+        pass
+    return {
+        "ok": True,
+        "created": len(seeded["created"]),
+        "updated": len(seeded["updated"]),
+        "skipped_removed": len(seeded["skipped_removed"]),
+        "migration": migration,
+        "roots": list_roots(readonly=False),
+        "file_types": list_file_type_rules(readonly=False),
+    }
+
+
+def _local_context_sidecar_paths(db_path: Path) -> list[Path]:
+    return [db_path, db_path.with_name(db_path.name + "-wal"), db_path.with_name(db_path.name + "-shm")]
+
+
+def _local_context_db_size_bytes() -> int:
+    total = 0
+    for candidate in _local_context_sidecar_paths(local_context_db_path()):
+        try:
+            if candidate.exists():
+                total += int(candidate.stat().st_size)
+        except OSError:
+            continue
+    return total
+
+
+def _capture_roots_v2_config(conn) -> dict:
+    state_rows = [
+        dict(row)
+        for row in conn.execute(
+            """
+            SELECT key, value, updated_at
+            FROM local_index_state
+            WHERE key NOT LIKE 'root_initial_scan:%'
+              AND key NOT IN (?, ?, ?)
+            ORDER BY key
+            """,
+            (ROOT_SEED_VERSION_KEY, INITIAL_INDEX_COMPLETE_KEY, INITIAL_INDEX_STARTED_AT_KEY),
+        ).fetchall()
+    ]
+    root_rows = []
+    for row in conn.execute(
+        """
+        SELECT root_path, display_path, mode, depth, source, remote, seed_version, status, created_at, updated_at
+        FROM local_index_roots
+        ORDER BY root_path
+        """
+    ).fetchall():
+        shaped = dict(row)
+        source = str(shaped.get("source") or "legacy")
+        status = str(shaped.get("status") or "")
+        root_path = str(shaped.get("root_path") or "")
+        preserve = (
+            source == "user"
+            or bool(shaped.get("remote"))
+            or status == "removed"
+            or (source == "core_default" and status == "active" and not _is_disk_root_path(root_path))
+        )
+        if preserve:
+            root_rows.append(shaped)
+    exclusion_rows = [
+        dict(row)
+        for row in conn.execute(
+            """
+            SELECT path, display_path, source, kind, reason, created_at
+            FROM local_index_exclusions
+            ORDER BY path
+            """
+        ).fetchall()
+    ]
+    file_type_rows = [
+        dict(row)
+        for row in conn.execute(
+            """
+            SELECT extension, action, source, priority, reason, created_at, updated_at
+            FROM local_index_file_type_rules
+            WHERE source='user'
+            ORDER BY extension
+            """
+        ).fetchall()
+    ]
+    return {
+        "state": state_rows,
+        "roots": root_rows,
+        "exclusions": exclusion_rows,
+        "file_types": file_type_rows,
+    }
+
+
+def _restore_roots_v2_config(conn, config: dict) -> dict:
+    restored = {"state": 0, "roots": 0, "exclusions": 0, "file_types": 0}
+    timestamp = now()
+    for row in config.get("state") or []:
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO local_index_state(key, value, updated_at)
+            VALUES (?, ?, ?)
+            """,
+            (row.get("key"), row.get("value") or "", float(row.get("updated_at") or timestamp)),
+        )
+        restored["state"] += 1
+    for row in config.get("roots") or []:
+        root_path = norm_path(str(row.get("root_path") or ""))
+        if not root_path:
+            continue
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO local_index_roots(root_path, display_path, mode, depth, source, remote, seed_version, status, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                root_path,
+                row.get("display_path") or root_path,
+                row.get("mode") or "normal",
+                int(row.get("depth") or DEFAULT_ROOT_DEPTH),
+                _normalize_source(row.get("source") or "user"),
+                1 if row.get("remote") else 0,
+                int(row.get("seed_version") or 0),
+                row.get("status") or "active",
+                float(row.get("created_at") or timestamp),
+                float(row.get("updated_at") or timestamp),
+            ),
+        )
+        restored["roots"] += 1
+    for row in config.get("exclusions") or []:
+        exclusion_path = norm_path(str(row.get("path") or ""))
+        if not exclusion_path:
+            continue
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO local_index_exclusions(path, display_path, source, kind, reason, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                exclusion_path,
+                row.get("display_path") or exclusion_path,
+                _normalize_source(row.get("source") or "user"),
+                row.get("kind") or "folder",
+                row.get("reason") or "user",
+                float(row.get("created_at") or timestamp),
+            ),
+        )
+        restored["exclusions"] += 1
+    for row in config.get("file_types") or []:
+        extension = _normalize_extension(str(row.get("extension") or ""))
+        if not extension:
+            continue
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO local_index_file_type_rules(extension, action, source, priority, reason, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                extension,
+                _normalize_file_type_action(str(row.get("action") or "ignore")),
+                _normalize_source(row.get("source") or "user"),
+                int(row.get("priority") or 0),
+                row.get("reason") or "user",
+                float(row.get("created_at") or timestamp),
+                float(row.get("updated_at") or timestamp),
+            ),
+        )
+        restored["file_types"] += 1
+    return restored
+
+
+def _create_roots_v2_sqlite_backup(conn) -> dict:
+    db_path = local_context_db_path()
+    if not db_path.is_file():
+        return {"ok": True, "skipped": True, "reason": "db_missing"}
+    conn.commit()
+    backup_path = paths.create_backup_path("local-context-roots-v2", ".db")
+    backup_conn = None
+    try:
+        backup_conn = sqlite3.connect(str(backup_path))
+        conn.backup(backup_conn)
+        backup_conn.close()
+        backup_conn = None
+        backup_check = sqlite3.connect(str(backup_path))
+        try:
+            source_roots = int(conn.execute("SELECT COUNT(*) FROM local_index_roots").fetchone()[0] or 0)
+            backup_roots = int(backup_check.execute("SELECT COUNT(*) FROM local_index_roots").fetchone()[0] or 0)
+        finally:
+            backup_check.close()
+        if backup_roots < source_roots:
+            return {
+                "ok": False,
+                "error": "backup_validation_failed",
+                "path": str(backup_path),
+                "source_roots": source_roots,
+                "backup_roots": backup_roots,
+            }
+        prune = paths.finalize_backup_snapshot(backup_path)
+        return {"ok": True, "path": str(backup_path), "source_roots": source_roots, "backup_roots": backup_roots, "prune": prune}
+    except Exception as exc:
+        return {"ok": False, "error": str(exc), "path": str(backup_path)}
+    finally:
+        if backup_conn is not None:
+            try:
+                backup_conn.close()
+            except Exception:
+                pass
+
+
+def _archive_rebuild_local_context_for_roots_v2(conn, summary: dict) -> dict:
+    db_path = local_context_db_path()
+    config = _capture_roots_v2_config(conn)
+    size_bytes = _local_context_db_size_bytes()
+    backup_dir = paths.create_backup_dir("local-context-roots-v2")
+    conn.commit()
+    close_local_context_db()
+    moved = []
+    try:
+        for candidate in _local_context_sidecar_paths(db_path):
+            if not candidate.exists():
+                continue
+            target = backup_dir / candidate.name
+            shutil.move(str(candidate), str(target))
+            moved.append({"path": str(candidate), "backup_path": str(target)})
+        fresh = _conn()
+        seed_core_file_type_rules(fresh)
+        restored = _restore_roots_v2_config(fresh, config)
+        seeded = _seed_default_roots_conn(fresh)
+        _set_state_conn(fresh, ROOT_SEED_VERSION_KEY, str(DEFAULT_ROOT_SEED_VERSION))
+        _set_initial_index_complete(fresh, False)
+        _set_initial_index_started_at(fresh, now())
+        fresh.commit()
+        prune = paths.finalize_backup_snapshot(backup_dir)
+        result = {
+            "ok": True,
+            "strategy": "archive_rebuild",
+            "backup_dir": str(backup_dir),
+            "size_bytes": size_bytes,
+            "moved": moved,
+            "preserved": restored,
+            "seeded": seeded,
+            "prune": prune,
+        }
+        log_event("info", "roots_seed_v2_archived_rebuilt", "Local memory roots seed v2 archived large DB and rebuilt config", summary=summary, result=result)
+        return result
+    except Exception as exc:
+        return {
+            "ok": False,
+            "strategy": "archive_rebuild",
+            "backup_dir": str(backup_dir),
+            "size_bytes": size_bytes,
+            "moved": moved,
+            "error": str(exc),
+        }
+
+
+def _is_disk_root_path(path: str) -> bool:
+    normalized = norm_path(path)
+    if normalized in {"/", "\\"}:
+        return True
+    return bool(re.match(r"^[A-Za-z]:\\?$", normalized))
+
+
+def _path_is_under_any(path: str, prefixes: list[str]) -> bool:
+    value = norm_path(path)
+    return any(value == prefix or value.startswith(_path_prefix(prefix)) for prefix in prefixes if prefix)
+
+
+def _best_root_id_for_path(path: str, roots: list[dict]) -> int | None:
+    value = norm_path(path)
+    best: tuple[int, int] | None = None
+    for row in roots:
+        root_path = str(row.get("root_path") or "")
+        if not root_path or not (value == root_path or value.startswith(_path_prefix(root_path))):
+            continue
+        candidate = (len(root_path), int(row.get("id") or 0))
+        if best is None or candidate[0] > best[0]:
+            best = candidate
+    return best[1] if best else None
+
+
+def _purge_dir_ids(conn, dir_ids: list[str]) -> int:
+    unique_ids = [item for item in dict.fromkeys(dir_ids) if item]
+    deleted = 0
+    for start in range(0, len(unique_ids), 500):
+        batch = unique_ids[start:start + 500]
+        placeholders = ",".join("?" for _ in batch)
+        deleted += int(conn.execute(f"DELETE FROM local_index_dirs WHERE dir_id IN ({placeholders})", tuple(batch)).rowcount or 0)
+    return deleted
+
+
+def migrate_roots_seed_v2(*, dry_run: bool = True, _already_seeded: bool = False) -> dict:
+    """Move legacy whole-disk roots to curated user roots and purge obvious noise."""
+    conn = _conn()
+    if not _already_seeded:
+        seed_core_file_type_rules(conn)
+    current_seed = _get_state_conn(conn, ROOT_SEED_VERSION_KEY, "0")
+    if str(current_seed) == str(DEFAULT_ROOT_SEED_VERSION):
+        return {"ok": True, "dry_run": dry_run, "needed": False, "seed_version": DEFAULT_ROOT_SEED_VERSION}
+
+    active_roots = [dict(row) for row in conn.execute("SELECT * FROM local_index_roots WHERE status='active'").fetchall()]
+    keep_roots = [
+        row for row in active_roots
+        if str(row.get("status") or "") == "active"
+        and not (
+            _is_disk_root_path(str(row.get("root_path") or ""))
+            and str(row.get("source") or "legacy") in {"legacy", "core_default", "system_default"}
+        )
+    ]
+    keep_prefixes = [str(row.get("root_path") or "") for row in keep_roots if row.get("root_path")]
+    legacy_disk_roots = [
+        row for row in active_roots
+        if (
+            _is_disk_root_path(str(row.get("root_path") or ""))
+            and str(row.get("source") or "legacy") in {"legacy", "core_default", "system_default"}
+        )
+        or (
+            str(row.get("source") or "legacy") in {"legacy", "system_default"}
+            and any(_is_nested_path(prefix, str(row.get("root_path") or "")) for prefix in keep_prefixes)
+        )
+    ]
+    keep_roots = [row for row in keep_roots if row not in legacy_disk_roots]
+    keep_prefixes = [str(row.get("root_path") or "") for row in keep_roots if row.get("root_path")]
+    legacy_ids = {int(row.get("id") or 0) for row in legacy_disk_roots}
+    legacy_prefixes = [str(row.get("root_path") or "") for row in legacy_disk_roots if row.get("root_path")]
+
+    asset_ids_to_purge: list[str] = []
+    asset_remaps: dict[int, list[str]] = {}
+    asset_rows = conn.execute("SELECT asset_id, root_id, path, extension, privacy_class FROM local_assets").fetchall()
+    for row in asset_rows:
+        path = str(row["path"] or "")
+        under_legacy = int(row["root_id"] or 0) in legacy_ids or _path_is_under_any(path, legacy_prefixes)
+        action = _file_type_action(conn, path)
+        unsafe = should_skip_file(path) or str(row["privacy_class"] or "") in {"private_profile_blocked", "system_blocked", "sensitive_inventory_only"}
+        if action == "ignore" or unsafe or (under_legacy and not _path_is_under_any(path, keep_prefixes)):
+            asset_ids_to_purge.append(str(row["asset_id"]))
+            continue
+        if under_legacy:
+            new_root_id = _best_root_id_for_path(path, keep_roots)
+            if new_root_id:
+                asset_remaps.setdefault(new_root_id, []).append(str(row["asset_id"]))
+
+    dir_ids_to_purge: list[str] = []
+    dir_remaps: dict[int, list[str]] = {}
+    dir_rows = conn.execute("SELECT dir_id, root_id, path FROM local_index_dirs").fetchall()
+    for row in dir_rows:
+        path = str(row["path"] or "")
+        under_legacy = int(row["root_id"] or 0) in legacy_ids or _path_is_under_any(path, legacy_prefixes)
+        if should_skip_tree(path) or (under_legacy and not _path_is_under_any(path, keep_prefixes)):
+            dir_ids_to_purge.append(str(row["dir_id"]))
+            continue
+        if under_legacy:
+            new_root_id = _best_root_id_for_path(path, keep_roots)
+            if new_root_id:
+                dir_remaps.setdefault(new_root_id, []).append(str(row["dir_id"]))
+
+    summary = {
+        "ok": True,
+        "dry_run": dry_run,
+        "needed": True,
+        "legacy_disk_roots": [str(row.get("root_path") or "") for row in legacy_disk_roots],
+        "keep_roots": keep_prefixes,
+        "assets_to_purge": len(asset_ids_to_purge),
+        "dirs_to_purge": len(dir_ids_to_purge),
+        "assets_to_remap": sum(len(items) for items in asset_remaps.values()),
+        "dirs_to_remap": sum(len(items) for items in dir_remaps.values()),
+        "cleanup": {},
+    }
+    if dry_run:
+        return summary
+
+    destructive = bool(
+        asset_ids_to_purge
+        or dir_ids_to_purge
+        or legacy_ids
+        or any(asset_remaps.values())
+        or any(dir_remaps.values())
+    )
+    db_size = _local_context_db_size_bytes()
+    summary["db_size_bytes"] = db_size
+    if destructive and LOCAL_CONTEXT_REBUILD_THRESHOLD_BYTES > 0 and db_size > LOCAL_CONTEXT_REBUILD_THRESHOLD_BYTES:
+        rebuild = _archive_rebuild_local_context_for_roots_v2(conn, summary)
+        summary["cleanup"] = rebuild
+        summary["strategy"] = "archive_rebuild"
+        summary["ok"] = bool(rebuild.get("ok"))
+        if not rebuild.get("ok"):
+            summary["error"] = str(rebuild.get("error") or "archive_rebuild_failed")
+        return summary
+
+    backup = None
+    if destructive:
+        backup = _create_roots_v2_sqlite_backup(conn)
+        summary["backup"] = backup
+        if not backup.get("ok"):
+            summary["ok"] = False
+            summary["error"] = "migration_backup_failed"
+            return summary
+
+    for new_root_id, asset_ids in asset_remaps.items():
+        for start in range(0, len(asset_ids), 500):
+            batch = asset_ids[start:start + 500]
+            placeholders = ",".join("?" for _ in batch)
+            conn.execute(f"UPDATE local_assets SET root_id=?, updated_at=? WHERE asset_id IN ({placeholders})", (new_root_id, now(), *batch))
+    for new_root_id, dir_ids in dir_remaps.items():
+        for start in range(0, len(dir_ids), 500):
+            batch = dir_ids[start:start + 500]
+            placeholders = ",".join("?" for _ in batch)
+            conn.execute(f"UPDATE local_index_dirs SET root_id=?, updated_at=? WHERE dir_id IN ({placeholders})", (new_root_id, now(), *batch))
+    cleanup = _purge_asset_ids(conn, asset_ids_to_purge)
+    cleanup["dirs"] = _purge_dir_ids(conn, dir_ids_to_purge)
+    if legacy_ids:
+        placeholders = ",".join("?" for _ in legacy_ids)
+        conn.execute(f"DELETE FROM local_index_checkpoints WHERE root_id IN ({placeholders})", tuple(legacy_ids))
+        conn.execute(
+            f"UPDATE local_index_roots SET status='removed', source='core_removed', updated_at=? WHERE id IN ({placeholders})",
+            (now(), *legacy_ids),
+        )
+    _set_state_conn(conn, ROOT_SEED_VERSION_KEY, str(DEFAULT_ROOT_SEED_VERSION))
+    _set_initial_index_complete(conn, False)
+    _set_initial_index_started_at(conn, now())
+    summary["cleanup"] = cleanup
+    summary["strategy"] = "in_place"
+    log_event("info", "roots_seed_v2_migrated", "Local memory roots seed v2 applied", summary=summary)
+    return summary
 
 
 def _should_skip_mounted_root(candidate: Path) -> bool:
@@ -667,20 +1435,26 @@ def repair_index_hygiene() -> dict:
     return local_index_hygiene(fix=True)
 
 
-def add_exclusion(path: str, *, reason: str = "user") -> dict:
+def add_exclusion(path: str, *, reason: str = "user", source: str = "user", kind: str = "folder") -> dict:
     conn = _conn()
     excluded_path = norm_path(path)
+    source_value = _normalize_source(source)
+    kind_value = str(kind or "folder").strip().lower() or "folder"
     conn.execute(
         """
-        INSERT INTO local_index_exclusions(path, display_path, reason, created_at)
-        VALUES (?, ?, ?, ?)
-        ON CONFLICT(path) DO UPDATE SET display_path=excluded.display_path, reason=excluded.reason
+        INSERT INTO local_index_exclusions(path, display_path, source, kind, reason, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(path) DO UPDATE SET
+          display_path=excluded.display_path,
+          source=excluded.source,
+          kind=excluded.kind,
+          reason=excluded.reason
         """,
-        (excluded_path, path, reason, now()),
+        (excluded_path, path, source_value, kind_value, reason, now()),
     )
     conn.commit()
-    log_event("info", "exclusion_added", "Exclusion added", path=redact_path(excluded_path), reason=reason)
-    return {"ok": True, "path": excluded_path}
+    log_event("info", "exclusion_added", "Exclusion added", path=redact_path(excluded_path), reason=reason, source=source_value)
+    return {"ok": True, "path": excluded_path, "source": source_value, "kind": kind_value}
 
 
 def remove_exclusion(path: str) -> dict:
@@ -1184,7 +1958,7 @@ def _upsert_asset(conn, root_id: int, path: Path, seen_at: float, root_depth: in
     raw_path = str(path)
     normalized = norm_path(raw_path)
     asset_id = stable_id("asset", normalized)
-    if should_skip_file(normalized):
+    if not _should_index_file(conn, normalized):
         return asset_id, False, "skipped"
     perm = _permission_state(path)
     depth, privacy_class, depth_reason = classify_path(normalized)
@@ -1265,8 +2039,8 @@ def _upsert_asset(conn, root_id: int, path: Path, seen_at: float, root_depth: in
             """,
             (version_id, asset_id, fingerprint, int(st.st_size), float(st.st_mtime), now()),
         )
-        if should_extract(normalized, depth):
-            enqueue_job(conn, asset_id, "light_extraction", priority=_extraction_priority(path))
+        if _should_extract_file(conn, normalized, depth):
+            enqueue_job(conn, asset_id, "light_extraction", priority=_extraction_priority(path, conn=conn))
         enqueue_job(conn, asset_id, "graph", priority=40)
     return asset_id, changed, "ok"
 
@@ -1377,7 +2151,15 @@ def enqueue_job(conn, asset_id: str, job_type: str, *, priority: int = 50) -> st
     return job_id
 
 
-def _extraction_priority(path: Path) -> int:
+def _extraction_priority(path: Path, *, conn=None) -> int:
+    if conn is not None:
+        rule = _effective_file_type_rule(conn, path.suffix.lower())
+        try:
+            priority = int(rule.get("priority") or 0)
+        except Exception:
+            priority = 0
+        if priority > 0:
+            return priority
     suffix = path.suffix.lower()
     if suffix in HIGH_VALUE_DOCUMENT_SUFFIXES:
         return 90
@@ -1385,7 +2167,7 @@ def _extraction_priority(path: Path) -> int:
         return 82
     if suffix in EMAIL_DOCUMENT_SUFFIXES or is_local_email_tree(str(path)):
         return 70
-    if suffix in {".py", ".js", ".ts", ".tsx", ".jsx", ".php", ".sql", ".json", ".yaml", ".yml", ".toml", ".html", ".css"}:
+    if suffix in CODE_DOCUMENT_SUFFIXES:
         return 55
     return 45
 
@@ -1465,7 +2247,7 @@ def _iter_files(
                 continue
             if entry.is_file():
                 normalized = norm_path(entry)
-                if should_skip_file(normalized):
+                if not _should_index_file(conn, normalized):
                     continue
                 if start_after_norm and normalized <= start_after_norm:
                     continue
@@ -1548,7 +2330,7 @@ def _reconcile_known_assets(conn, exclusions: list[str], *, limit: int) -> dict:
             _purge_asset_ids(conn, [row["asset_id"]])
             stats["excluded"] += 1
             continue
-        if should_skip_file(path):
+        if not _should_index_file(conn, path):
             _purge_asset_ids(conn, [row["asset_id"]])
             stats["excluded"] += 1
             continue
@@ -1656,7 +2438,7 @@ def _scan_known_directory(
                         stack.append(entry)
                     continue
                 if entry.is_file():
-                    if should_skip_file(str(entry)):
+                    if not _should_index_file(conn, entry):
                         continue
                     seen_files.add(norm_path(entry))
                     if stats["files_scanned"] >= file_limit:
@@ -1750,6 +2532,7 @@ def reconcile_live_changes(
     file_limit: int = DEFAULT_LIVE_FILE_LIMIT,
 ) -> dict:
     conn = _conn()
+    seed_core_file_type_rules(conn)
     if _is_paused():
         return {"ok": True, "paused": True, "assets": {}, "dirs": {}}
     exclusions = [row["path"] for row in list_exclusions(readonly=False)]
@@ -1781,6 +2564,7 @@ def reconcile_live_changes(
 
 def scan_once(*, limit: int | None = None) -> dict:
     conn = _conn()
+    seed_core_file_type_rules(conn)
     if _is_paused():
         log_event("info", "scan_skipped_paused", "Local memory scan skipped because indexing is paused")
         return {"ok": True, "paused": True, "roots": 0, "seen": 0, "changed": 0, "errors": 0, "partial": False}
@@ -2970,6 +3754,7 @@ def _status_from_conn(conn, *, readonly: bool = False) -> dict:
         "volumes": volumes,
         "roots": roots,
         "exclusions": _list_exclusions_conn(conn),
+        "file_types": _shape_file_type_rules(_list_file_type_rules_conn(conn)),
         "problems": problems,
         "permissions": [],
         "models": model_status()["models"],

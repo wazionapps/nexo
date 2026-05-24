@@ -68,6 +68,20 @@ def _read_text(path: Path) -> str:
     return data.decode("utf-8", errors="replace")[:MAX_CHARS]
 
 
+def _read_text_if_safe(path: Path) -> str:
+    data = path.read_bytes()[:MAX_TEXT_BYTES]
+    if not data or b"\x00" in data[:8192]:
+        return ""
+    text = _read_text(path)
+    if not text:
+        return ""
+    printable = sum(1 for char in text[:4096] if char.isprintable() or char.isspace())
+    sample_len = max(1, min(len(text), 4096))
+    if printable / sample_len < 0.85:
+        return ""
+    return text
+
+
 def _extract_csv(path: Path) -> str:
     text = _read_text(path)
     rows = []
@@ -291,7 +305,9 @@ def extract_text(path: Path) -> tuple[str, dict]:
     elif suffix == ".xlsx":
         text = _extract_xlsx(path)
     else:
-        text = ""
+        text = _read_text_if_safe(path)
+        if text:
+            metadata["extractor"] = "generic_text"
     if contains_secret(text):
         metadata["content_secret_detected"] = True
     return clean_text(text), metadata
