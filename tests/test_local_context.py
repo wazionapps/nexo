@@ -829,6 +829,37 @@ def test_noisy_dependency_trees_are_skipped_by_default(tmp_path):
     assert indexed["total"] == 1
 
 
+def test_user_include_overrides_default_skipped_tree_under_core_root(tmp_path):
+    root = tmp_path / "project"
+    skipped_tree = root / ".venv"
+    dependency = skipped_tree / "lib" / "package.py"
+    source = root / "src" / "app.py"
+    dependency.parent.mkdir(parents=True)
+    source.parent.mkdir(parents=True)
+    dependency.write_text("print('dependency override')", encoding="utf-8")
+    source.write_text("print('source')", encoding="utf-8")
+
+    local_context.add_root(str(root), source="core_default")
+    local_context.run_once(limit=50, process_limit=0)
+    conn = get_local_context_db()
+    assert conn.execute("SELECT COUNT(*) AS total FROM local_assets WHERE path=?", (str(dependency),)).fetchone()["total"] == 0
+
+    included = local_context.add_root(str(skipped_tree))
+    assert included["ok"] is True
+    assert included["explicit_override"] is True
+    assert included.get("already_included") is not True
+
+    local_context.run_once(limit=50, process_limit=20)
+    assert conn.execute("SELECT COUNT(*) AS total FROM local_assets WHERE path=?", (str(dependency),)).fetchone()["total"] == 1
+    asset = conn.execute("SELECT privacy_class, depth_reason FROM local_assets WHERE path=?", (str(dependency),)).fetchone()
+    assert asset["privacy_class"] == "normal"
+    assert asset["depth_reason"] == "explicit_user_include"
+
+    hygiene = local_context.local_index_hygiene(fix=True)
+    assert api.norm_path(str(skipped_tree)) not in hygiene["removed_roots"]
+    assert conn.execute("SELECT status FROM local_index_roots WHERE root_path=?", (api.norm_path(str(skipped_tree)),)).fetchone()["status"] == "active"
+
+
 def test_nexo_product_artifacts_are_skipped_by_default(tmp_path):
     root = tmp_path / "Applications"
     product_artifact = root / "NEXO Desktop QA backups" / "qa-20260509" / "NEXO Desktop QA.app" / "Contents" / "Resources" / "brain-bundle" / "bin" / "postinstall.js"

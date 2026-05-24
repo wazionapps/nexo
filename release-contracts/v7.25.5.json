@@ -1,0 +1,125 @@
+{
+  "release_line": "v7.25",
+  "target_version": "7.25.5",
+  "scope_owner": "NEXO",
+  "distribution": {
+    "git_updates_on": "merge_to_main",
+    "packaged_release_on": "tag_publish"
+  },
+  "required_repo_files": [
+    "package.json",
+    "CHANGELOG.md",
+    "README.md",
+    "llms.txt",
+    ".well-known/llms.txt",
+    "sitemap.xml",
+    "index.html",
+    "blog/index.html",
+    "blog/nexo-7-25-5/index.html",
+    "changelog/index.html",
+    "release-contracts/v7.25.5.json",
+    "scripts/run_v7_25_smoke.py",
+    "scripts/sync_release_artifacts.py",
+    "scripts/verify_release_readiness.py",
+    ".claude-plugin/plugin.json",
+    "clawhub-skill/SKILL.md",
+    "openclaw-plugin/package.json",
+    "openclaw-plugin/src/mcp-bridge.ts",
+    "src/local_context/api.py",
+    "tests/test_local_context.py",
+    "tests/test_startup_preflight.py"
+  ],
+  "required_website_files": [
+    "index.html",
+    "blog/index.html",
+    "blog/nexo-7-25-5/index.html",
+    "changelog/index.html",
+    "llms.txt",
+    ".well-known/llms.txt",
+    "sitemap.xml"
+  ],
+  "smoke": {
+    "required_groups": [
+      "local_index_roots_v2",
+      "local_index_privacy_hygiene",
+      "managed_python_contract",
+      "release_surface_contract"
+    ],
+    "max_age_hours": 48
+  },
+  "publication": {
+    "status": "ready",
+    "checklist_complete": true,
+    "blockers": [
+      {
+        "id": "desktop_bundle_requires_clean_brain_tag",
+        "title": "Desktop packaging must wait until Brain 7.25.5 is committed, tagged, and public",
+        "severity": "medium",
+        "status": "open",
+        "resolution": "Medium severity flow dependency; verify Desktop bundle source after Brain publication before building Desktop 0.39.1."
+      }
+    ]
+  },
+  "gates": [
+    {
+      "id": "safe_roots_and_legacy_cleanup",
+      "title": "Local Memory starts from conservative user-content roots and cleans legacy whole-disk state",
+      "status": "complete",
+      "evidence_required": [
+        "Default root migration removes legacy disk roots but preserves user content and email roots",
+        "System/cache/dependency/noisy trees remain skipped by default",
+        "Doctor hygiene repairs removed root residue"
+      ]
+    },
+    {
+      "id": "explicit_user_include_override",
+      "title": "Explicit user include can override default skipped/system/noisy rules without bypassing manual exclusions",
+      "status": "complete",
+      "evidence_required": [
+        "A user-added skipped subtree under a core default root is registered as its own root",
+        "Explicit user include roots survive effective-root de-duplication and hygiene",
+        "Explicit user include changes privacy classification only for that intentional root"
+      ]
+    },
+    {
+      "id": "file_type_controls",
+      "title": "File-type allowlist and user include/exclude overrides remain configurable",
+      "status": "complete",
+      "evidence_required": [
+        "Default file type rules prioritize extractable documents and metadata/image classes",
+        "User include rules can add an extension that Core would otherwise ignore",
+        "User exclude rules can suppress an allowed extension"
+      ]
+    },
+    {
+      "id": "language_boundary",
+      "title": "Brain internal text stays English while Desktop owns localized user-facing copy",
+      "status": "complete",
+      "evidence_required": [
+        "Brain LocalIndex operator messages are English",
+        "Desktop exposes English and Spanish labels for folder modes, rule sources, reasons, and file actions",
+        "Desktop normal UI avoids raw internal tokens such as normal, user, extract, metadata, or ignore"
+      ]
+    },
+    {
+      "id": "desktop_python_contract",
+      "title": "Desktop-managed installs remain pinned to the Core-approved Python 3.12 ABI",
+      "status": "complete",
+      "evidence_required": [
+        "Desktop-visible Python guidance says Python 3.12, not 3.13",
+        "Brain startup preflight rejects Desktop-managed Python versions outside the Core-pinned ABI",
+        "Coverage includes the Desktop-managed Python 3.12 contract"
+      ]
+    },
+    {
+      "id": "public_release_surfaces",
+      "title": "Public release surfaces and integration artifacts are aligned for v7.25.5",
+      "status": "complete",
+      "evidence_required": [
+        "README, llms, homepage, blog index, blog post, changelog page, and sitemap reference v7.25.5",
+        "Claude plugin, ClawHub skill, and OpenClaw package metadata reference 7.25.5",
+        "Release smoke and readiness checks validate the v7.25.5 contract before tag publish"
+      ]
+    }
+  ]
+}

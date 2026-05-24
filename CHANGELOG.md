@@ -1,5 +1,14 @@
 # Changelog
 
+## [7.25.5] - 2026-05-24
+
+### Fixed — Local Memory explicit include overrides
+
+- **Explicit user-included roots now override default skipped/system/noisy-tree rules.** A user can include `/`, a drive root, `.venv`, cache-like folders or another normally skipped subtree intentionally; manual exclusions still win, and normal default discovery remains conservative.
+- **Local Memory hygiene and roots v2 migration preserve explicit user overrides.** Privacy/hygiene cleanup and legacy whole-disk migration no longer purge paths that live under an explicit user include.
+- **Brain LocalIndex operator-facing error messages are English.** Desktop remains responsible for localized visible UI, while Brain/internal product strings stay English.
+- **Coverage:** Local Context regression for explicit includes under a core default root, plus the Desktop-managed Python 3.12 ABI contract test.
+
 ## [7.25.4] - 2026-05-24
 
 ### Added — Local Memory roots and file-type controls

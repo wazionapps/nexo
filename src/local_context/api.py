@@ -458,14 +458,14 @@ def _file_type_action(conn, path: str | Path) -> str:
     return str(_effective_file_type_rule(conn, p.suffix.lower()).get("action") or "ignore")
 
 
-def _should_index_file(conn, path: str | Path) -> bool:
-    if should_skip_file(str(path)):
+def _should_index_file(conn, path: str | Path, *, allow_default_skip_override: bool = False) -> bool:
+    if not allow_default_skip_override and should_skip_file(str(path)):
         return False
     return _file_type_action(conn, path) != "ignore"
 
 
-def _should_extract_file(conn, path: str | Path, depth: int) -> bool:
-    if depth < 2 or should_skip_file(str(path)):
+def _should_extract_file(conn, path: str | Path, depth: int, *, allow_default_skip_override: bool = False) -> bool:
+    if depth < 2 or (not allow_default_skip_override and should_skip_file(str(path))):
         return False
     return _file_type_action(conn, path) == "extract"
 
@@ -473,14 +473,15 @@ def _should_extract_file(conn, path: str | Path, depth: int) -> bool:
 def add_root(path: str, *, mode: str = "normal", depth: int | None = None, source: str = "user", remote: bool = False, seed_version: int | None = None) -> dict:
     conn = _conn()
     root_path = norm_path(path)
-    if should_skip_tree(root_path) and not _allow_explicit_blocked_root(root_path):
+    source_value = _normalize_source(source)
+    explicit_user_override = source_value == "user" and (_is_disk_root_path(root_path) or should_skip_tree(root_path))
+    if should_skip_tree(root_path) and source_value != "user" and not _allow_explicit_blocked_root(root_path):
         log_event("warn", "root_rejected_private", "Root rejected by local memory privacy rules", path=redact_path(root_path))
         return {"ok": False, "error": "root_blocked_by_privacy", "root_path": root_path}
     depth_value = 2 if depth is None else int(depth)
-    source_value = _normalize_source(source)
     seed_value = int(seed_version if seed_version is not None else (DEFAULT_ROOT_SEED_VERSION if source_value == "core_default" else 0))
     existing = conn.execute("SELECT id, status, source, depth FROM local_index_roots WHERE root_path=?", (root_path,)).fetchone()
-    if existing and str(existing["status"] or "") == "active" and source_value == "user" and str(existing["source"] or "") == "core_default":
+    if existing and str(existing["status"] or "") == "active" and source_value == "user" and str(existing["source"] or "") == "core_default" and not explicit_user_override:
         return {"ok": True, "root_path": root_path, "mode": mode, "depth": int(existing["depth"] or depth_value), "already_included": True, "included_by": "core_default"}
     if source_value == "user":
         parent = conn.execute(
@@ -493,7 +494,7 @@ def add_root(path: str, *, mode: str = "normal", depth: int | None = None, sourc
         ).fetchall()
         for row in parent:
             parent_path = str(row["root_path"] or "")
-            if _is_nested_path(root_path, parent_path):
+            if _is_nested_path(root_path, parent_path) and not explicit_user_override:
                 return {
                     "ok": True,
                     "root_path": root_path,
@@ -525,8 +526,8 @@ def add_root(path: str, *, mode: str = "normal", depth: int | None = None, sourc
         _set_initial_index_complete(conn, False)
         _set_initial_index_started_at(conn, now())
     conn.commit()
-    log_event("info", "root_added", "Root added", path=redact_path(root_path), mode=mode, depth=depth_value, source=source_value)
-    return {"ok": True, "root_path": root_path, "mode": mode, "depth": depth_value, "source": source_value, "remote": bool(remote)}
+    log_event("info", "root_added", "Root added", path=redact_path(root_path), mode=mode, depth=depth_value, source=source_value, explicit_override=explicit_user_override)
+    return {"ok": True, "root_path": root_path, "mode": mode, "depth": depth_value, "source": source_value, "remote": bool(remote), "explicit_override": explicit_user_override}
 
 
 def remove_root(path: str) -> dict:
@@ -1084,6 +1085,7 @@ def migrate_roots_seed_v2(*, dry_run: bool = True, _already_seeded: bool = False
     keep_prefixes = [str(row.get("root_path") or "") for row in keep_roots if row.get("root_path")]
     legacy_ids = {int(row.get("id") or 0) for row in legacy_disk_roots}
     legacy_prefixes = [str(row.get("root_path") or "") for row in legacy_disk_roots if row.get("root_path")]
+    override_prefixes = [str(row.get("root_path") or "") for row in keep_roots if _root_allows_default_skip_override(row)]
 
     asset_ids_to_purge: list[str] = []
     asset_remaps: dict[int, list[str]] = {}
@@ -1092,7 +1094,11 @@ def migrate_roots_seed_v2(*, dry_run: bool = True, _already_seeded: bool = False
         path = str(row["path"] or "")
         under_legacy = int(row["root_id"] or 0) in legacy_ids or _path_is_under_any(path, legacy_prefixes)
         action = _file_type_action(conn, path)
-        unsafe = should_skip_file(path) or str(row["privacy_class"] or "") in {"private_profile_blocked", "system_blocked", "sensitive_inventory_only"}
+        explicit_override = _path_under_any_prefix(path, override_prefixes)
+        unsafe = not explicit_override and (
+            should_skip_file(path)
+            or str(row["privacy_class"] or "") in {"private_profile_blocked", "system_blocked", "sensitive_inventory_only"}
+        )
         if action == "ignore" or unsafe or (under_legacy and not _path_is_under_any(path, keep_prefixes)):
             asset_ids_to_purge.append(str(row["asset_id"]))
             continue
@@ -1107,7 +1113,8 @@ def migrate_roots_seed_v2(*, dry_run: bool = True, _already_seeded: bool = False
     for row in dir_rows:
         path = str(row["path"] or "")
         under_legacy = int(row["root_id"] or 0) in legacy_ids or _path_is_under_any(path, legacy_prefixes)
-        if should_skip_tree(path) or (under_legacy and not _path_is_under_any(path, keep_prefixes)):
+        explicit_override = _path_under_any_prefix(path, override_prefixes)
+        if (should_skip_tree(path) and not explicit_override) or (under_legacy and not _path_is_under_any(path, keep_prefixes)):
             dir_ids_to_purge.append(str(row["dir_id"]))
             continue
         if under_legacy:
@@ -1311,17 +1318,26 @@ def _purge_asset_ids(conn, asset_ids: list[str]) -> dict:
 
 def _privacy_unsafe_asset_ids(conn) -> list[str]:
     rows = conn.execute("SELECT asset_id, path, privacy_class FROM local_assets").fetchall()
+    override_prefixes = _active_user_override_prefixes_conn(conn)
     unsafe: list[str] = []
     for row in rows:
         privacy_class = str(row["privacy_class"] or "")
-        if should_skip_file(str(row["path"] or "")) or privacy_class in {"private_profile_blocked", "system_blocked", "sensitive_inventory_only"}:
+        path = str(row["path"] or "")
+        if _path_under_any_prefix(path, override_prefixes):
+            continue
+        if should_skip_file(path) or privacy_class in {"private_profile_blocked", "system_blocked", "sensitive_inventory_only"}:
             unsafe.append(str(row["asset_id"]))
     return unsafe
 
 
 def _privacy_unsafe_dir_ids(conn) -> list[str]:
     rows = conn.execute("SELECT dir_id, path FROM local_index_dirs").fetchall()
-    return [str(row["dir_id"]) for row in rows if should_skip_tree(str(row["path"] or ""))]
+    override_prefixes = _active_user_override_prefixes_conn(conn)
+    return [
+        str(row["dir_id"])
+        for row in rows
+        if should_skip_tree(str(row["path"] or "")) and not _path_under_any_prefix(str(row["path"] or ""), override_prefixes)
+    ]
 
 
 def _content_secret_asset_ids(conn) -> list[str]:
@@ -1414,9 +1430,10 @@ def local_index_privacy_hygiene(*, fix: bool = False) -> dict:
 def local_index_hygiene(*, fix: bool = False) -> dict:
     conn = _conn()
     removed_paths: list[str] = []
-    for row in conn.execute("SELECT id, root_path FROM local_index_roots").fetchall():
+    for row in conn.execute("SELECT id, root_path, source, status FROM local_index_roots").fetchall():
         path = str(row["root_path"] or "")
-        if _should_skip_mounted_root(Path(path)) or should_skip_tree(path):
+        root = dict(row)
+        if _should_skip_mounted_root(Path(path)) or (should_skip_tree(path) and not _root_allows_default_skip_override(root)):
             removed_paths.append(path)
             if fix:
                 conn.execute("UPDATE local_index_roots SET status='removed', updated_at=? WHERE id=?", (now(), row["id"]))
@@ -1824,6 +1841,39 @@ def _is_nested_path(path: str, parent: str) -> bool:
     return value_cmp.startswith(prefix)
 
 
+def _root_allows_default_skip_override(root: dict | None) -> bool:
+    if not root:
+        return False
+    root_path = str(root.get("root_path") or "")
+    return str(root.get("source") or "") == "user" and bool(root_path) and (
+        _is_disk_root_path(root_path) or should_skip_tree(root_path)
+    )
+
+
+def _active_user_override_prefixes_conn(conn) -> list[str]:
+    rows = conn.execute(
+        """
+        SELECT root_path
+        FROM local_index_roots
+        WHERE status='active' AND source='user'
+        """
+    ).fetchall()
+    return [
+        str(row["root_path"] or "")
+        for row in rows
+        if row["root_path"] and (_is_disk_root_path(str(row["root_path"] or "")) or should_skip_tree(str(row["root_path"] or "")))
+    ]
+
+
+def _path_under_any_prefix(path: str, prefixes: list[str]) -> bool:
+    for prefix in prefixes:
+        if not prefix:
+            continue
+        if norm_path(path) == norm_path(prefix) or _is_nested_path(path, prefix):
+            return True
+    return False
+
+
 def _is_discovered_mount_path(path: str) -> bool:
     value = norm_path(path).replace("\\", "/").lower()
     if not value:
@@ -1844,6 +1894,9 @@ def _effective_scan_roots(roots: list[dict]) -> list[dict]:
     effective: list[dict] = []
     for root in active_roots:
         root_path = str(root.get("root_path") or "")
+        if _root_allows_default_skip_override(root):
+            effective.append(root)
+            continue
         if _is_discovered_mount_path(root_path):
             effective.append(root)
             continue
@@ -1954,14 +2007,16 @@ def _upsert_dir(
     return changed, fingerprint
 
 
-def _upsert_asset(conn, root_id: int, path: Path, seen_at: float, root_depth: int) -> tuple[str, bool, str]:
+def _upsert_asset(conn, root_id: int, path: Path, seen_at: float, root_depth: int, *, allow_default_skip_override: bool = False) -> tuple[str, bool, str]:
     raw_path = str(path)
     normalized = norm_path(raw_path)
     asset_id = stable_id("asset", normalized)
-    if not _should_index_file(conn, normalized):
+    if not _should_index_file(conn, normalized, allow_default_skip_override=allow_default_skip_override):
         return asset_id, False, "skipped"
     perm = _permission_state(path)
     depth, privacy_class, depth_reason = classify_path(normalized)
+    if allow_default_skip_override and privacy_class in {"private_profile_blocked", "system_blocked", "sensitive_inventory_only", "inventory_only"}:
+        depth, privacy_class, depth_reason = 2, "normal", "explicit_user_include"
     depth = min(depth, root_depth)
     try:
         st = path.stat()
@@ -1971,7 +2026,7 @@ def _upsert_asset(conn, root_id: int, path: Path, seen_at: float, root_depth: in
             INSERT INTO local_index_errors(asset_id, path, phase, error_code, user_message, technical_detail, retryable, created_at)
             VALUES (?, ?, 'quick_index', ?, ?, ?, 1, ?)
             """,
-            (asset_id, normalized, type(exc).__name__, "Algunos archivos no se pudieron leer", str(exc), now()),
+            (asset_id, normalized, type(exc).__name__, "Some files could not be read", str(exc), now()),
         )
         return asset_id, False, "error"
     fingerprint = quick_fingerprint(path, st)
@@ -2039,7 +2094,7 @@ def _upsert_asset(conn, root_id: int, path: Path, seen_at: float, root_depth: in
             """,
             (version_id, asset_id, fingerprint, int(st.st_size), float(st.st_mtime), now()),
         )
-        if _should_extract_file(conn, normalized, depth):
+        if _should_extract_file(conn, normalized, depth, allow_default_skip_override=allow_default_skip_override):
             enqueue_job(conn, asset_id, "light_extraction", priority=_extraction_priority(path, conn=conn))
         enqueue_job(conn, asset_id, "graph", priority=40)
     return asset_id, changed, "ok"
@@ -2128,7 +2183,7 @@ def _record_scan_error(conn, stats: dict | None, path: str, phase: str, exc: Exc
         path=path,
         phase=phase,
         error_code=type(exc).__name__,
-        user_message="Algunas carpetas o archivos no se pudieron leer",
+        user_message="Some folders or files could not be read",
         technical_detail=str(exc),
         retryable=True,
     )
@@ -2207,6 +2262,7 @@ def _iter_files(
     start_after: str = "",
     seen_at: float | None = None,
     stats: dict | None = None,
+    allow_default_skip_override: bool = False,
 ):
     seen_at = seen_at or now()
     seen_dirs: set[tuple[int, int]] = set()
@@ -2217,7 +2273,7 @@ def _iter_files(
         current = stack.pop()
         if _is_excluded(str(current), exclusions):
             continue
-        if current != root and should_skip_tree(str(current)):
+        if current != root and should_skip_tree(str(current)) and not allow_default_skip_override:
             continue
         try:
             st = current.stat()
@@ -2241,13 +2297,13 @@ def _iter_files(
             if entry.is_symlink():
                 continue
             if entry.is_dir():
-                if should_skip_tree(str(entry)):
+                if should_skip_tree(str(entry)) and not allow_default_skip_override:
                     continue
                 dirs.append(entry)
                 continue
             if entry.is_file():
                 normalized = norm_path(entry)
-                if not _should_index_file(conn, normalized):
+                if not _should_index_file(conn, normalized, allow_default_skip_override=allow_default_skip_override):
                     continue
                 if start_after_norm and normalized <= start_after_norm:
                     continue
@@ -2312,7 +2368,7 @@ def _reconcile_known_assets(conn, exclusions: list[str], *, limit: int) -> dict:
         return stats
     rows = conn.execute(
         """
-        SELECT a.asset_id, a.path, a.root_id, a.quick_fingerprint, a.depth, r.root_path
+        SELECT a.asset_id, a.path, a.root_id, a.quick_fingerprint, a.depth, r.root_path, r.source
         FROM local_assets a
         LEFT JOIN local_index_roots r ON r.id = a.root_id
         WHERE a.status='active'
@@ -2326,11 +2382,12 @@ def _reconcile_known_assets(conn, exclusions: list[str], *, limit: int) -> dict:
         stats["checked"] += 1
         path = str(row["path"])
         root_path = Path(row["root_path"]).expanduser() if row["root_path"] else None
+        allow_default_skip_override = _root_allows_default_skip_override(dict(row))
         if _is_excluded(path, exclusions):
             _purge_asset_ids(conn, [row["asset_id"]])
             stats["excluded"] += 1
             continue
-        if not _should_index_file(conn, path):
+        if not _should_index_file(conn, path, allow_default_skip_override=allow_default_skip_override):
             _purge_asset_ids(conn, [row["asset_id"]])
             stats["excluded"] += 1
             continue
@@ -2349,7 +2406,7 @@ def _reconcile_known_assets(conn, exclusions: list[str], *, limit: int) -> dict:
             _record_scan_error(conn, stats, path, "live_reconcile", exc)
             continue
         if fingerprint != row["quick_fingerprint"]:
-            _, changed, state = _upsert_asset(conn, int(row["root_id"] or 0), file_path, seen_at, int(row["depth"] or 2))
+            _, changed, state = _upsert_asset(conn, int(row["root_id"] or 0), file_path, seen_at, int(row["depth"] or 2), allow_default_skip_override=allow_default_skip_override)
             if changed:
                 stats["modified"] += 1
             if state != "ok":
@@ -2398,6 +2455,7 @@ def _scan_known_directory(
     *,
     file_limit: int,
     dir_limit: int,
+    allow_default_skip_override: bool = False,
 ) -> None:
     stack = [directory]
     seen_at = now()
@@ -2408,7 +2466,7 @@ def _scan_known_directory(
             _mark_dir_subtree_deleted(conn, str(current), seen_at)
             stats["excluded_dirs"] += 1
             continue
-        if current != directory and should_skip_tree(str(current)):
+        if current != directory and should_skip_tree(str(current)) and not allow_default_skip_override:
             continue
         try:
             st = current.stat()
@@ -2430,7 +2488,7 @@ def _scan_known_directory(
                 if entry.is_symlink():
                     continue
                 if entry.is_dir():
-                    if should_skip_tree(str(entry)):
+                    if should_skip_tree(str(entry)) and not allow_default_skip_override:
                         continue
                     changed, _ = _upsert_dir(conn, root_id, entry, seen_at)
                     seen_dirs.add(norm_path(entry))
@@ -2438,12 +2496,12 @@ def _scan_known_directory(
                         stack.append(entry)
                     continue
                 if entry.is_file():
-                    if not _should_index_file(conn, entry):
+                    if not _should_index_file(conn, entry, allow_default_skip_override=allow_default_skip_override):
                         continue
                     seen_files.add(norm_path(entry))
                     if stats["files_scanned"] >= file_limit:
                         continue
-                    _, changed, state = _upsert_asset(conn, root_id, entry, seen_at, root_depth)
+                    _, changed, state = _upsert_asset(conn, root_id, entry, seen_at, root_depth, allow_default_skip_override=allow_default_skip_override)
                     stats["files_scanned"] += 1
                     if changed:
                         stats["files_changed"] += 1
@@ -2473,7 +2531,7 @@ def _reconcile_known_dirs(conn, exclusions: list[str], *, dir_limit: int, file_l
         return stats
     rows = conn.execute(
         """
-        SELECT d.dir_id, d.path, d.quick_fingerprint, d.root_id, r.root_path, r.depth
+        SELECT d.dir_id, d.path, d.quick_fingerprint, d.root_id, r.root_path, r.depth, r.source
         FROM local_index_dirs d
         LEFT JOIN local_index_roots r ON r.id = d.root_id
         WHERE d.status='active'
@@ -2487,11 +2545,12 @@ def _reconcile_known_dirs(conn, exclusions: list[str], *, dir_limit: int, file_l
         stats["checked"] += 1
         dir_path = Path(row["path"])
         root_path = Path(row["root_path"]).expanduser() if row["root_path"] else None
+        allow_default_skip_override = _root_allows_default_skip_override(dict(row))
         if _is_excluded(str(dir_path), exclusions):
             stats["files_deleted"] += _mark_dir_subtree_deleted(conn, str(dir_path), seen_at)
             stats["excluded_dirs"] += 1
             continue
-        if should_skip_tree(str(dir_path)):
+        if should_skip_tree(str(dir_path)) and not allow_default_skip_override:
             stats["files_deleted"] += _purge_dir_subtree(conn, str(dir_path))
             stats["excluded_dirs"] += 1
             continue
@@ -2519,6 +2578,7 @@ def _reconcile_known_dirs(conn, exclusions: list[str], *, dir_limit: int, file_l
                 stats,
                 file_limit=file_limit,
                 dir_limit=dir_limit,
+                allow_default_skip_override=allow_default_skip_override,
             )
         else:
             conn.execute("UPDATE local_index_dirs SET updated_at=? WHERE dir_id=?", (seen_at, row["dir_id"]))
@@ -2576,8 +2636,9 @@ def scan_once(*, limit: int | None = None) -> dict:
     for root in roots:
         root_path = Path(root["root_path"]).expanduser()
         root_id = int(root["id"])
+        allow_default_skip_override = _root_allows_default_skip_override(dict(root))
         root_initial_complete = _root_initial_scan_complete(conn, dict(root))
-        if should_skip_tree(str(root_path)) and not _allow_explicit_blocked_root(str(root_path)):
+        if should_skip_tree(str(root_path)) and not allow_default_skip_override and not _allow_explicit_blocked_root(str(root_path)):
             conn.execute(
                 "UPDATE local_index_roots SET status='removed', last_scan_at=?, updated_at=? WHERE id=?",
                 (now(), now(), root_id),
@@ -2607,8 +2668,16 @@ def scan_once(*, limit: int | None = None) -> dict:
             start_after=str(checkpoint["current_path"] or ""),
             seen_at=cycle_started_at,
             stats=totals,
+            allow_default_skip_override=allow_default_skip_override,
         ):
-            asset_id, changed, state = _upsert_asset(conn, root_id, file_path, cycle_started_at, int(root["depth"] or 2))
+            asset_id, changed, state = _upsert_asset(
+                conn,
+                root_id,
+                file_path,
+                cycle_started_at,
+                int(root["depth"] or 2),
+                allow_default_skip_override=allow_default_skip_override,
+            )
             last_seen_path = norm_path(file_path)
             totals["seen"] += 1
             seen_for_root += 1
@@ -3180,7 +3249,7 @@ def process_jobs(*, limit: int = 100) -> dict:
                 path=row["path"],
                 phase=job_type,
                 error_code=type(exc).__name__,
-                user_message="Algunos archivos no se pudieron leer",
+                user_message="Some files could not be read",
                 technical_detail=str(exc),
                 retryable=not terminal,
             )
