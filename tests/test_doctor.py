@@ -157,6 +157,40 @@ class TestBootChecks:
         statuses = [c.status for c in checks]
         assert "critical" not in statuses
 
+    def test_desktop_managed_venv_python_flags_python_313(self, nexo_home, monkeypatch):
+        from doctor.providers import boot
+
+        venv_python = nexo_home / ".venv" / "bin" / "python3"
+        venv_python.parent.mkdir(parents=True, exist_ok=True)
+        venv_python.write_text("#!/bin/sh\nexit 0\n")
+
+        monkeypatch.setattr(boot, "_desktop_product_requested", lambda: True)
+        monkeypatch.setattr(boot, "_probe_python_version", lambda _path: (3, 13, 13))
+
+        check = boot.check_managed_venv_python()
+
+        assert check.id == "boot.managed_venv_python"
+        assert check.status == "degraded"
+        assert "Python 3.12" in check.summary
+
+    def test_desktop_managed_venv_python_fix_rechecks_after_repair(self, nexo_home, monkeypatch):
+        from doctor.providers import boot
+
+        venv_python = nexo_home / ".venv" / "bin" / "python3"
+        venv_python.parent.mkdir(parents=True, exist_ok=True)
+        venv_python.write_text("#!/bin/sh\nexit 0\n")
+        versions = iter([(3, 13, 13), (3, 12, 10)])
+
+        monkeypatch.setattr(boot, "_desktop_product_requested", lambda: True)
+        monkeypatch.setattr(boot, "_probe_python_version", lambda _path: next(versions))
+        monkeypatch.setattr(boot, "_repair_managed_venv_python", lambda: True)
+
+        check = boot.check_managed_venv_python(fix=True)
+
+        assert check.status == "healthy"
+        assert check.fixed is True
+        assert "3.12.10" in check.summary
+
     def test_missing_db(self, nexo_home):
         os.remove(str(nexo_home / "data" / "nexo.db"))
         from doctor.providers.boot import check_db_exists

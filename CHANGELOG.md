@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.25.3] - 2026-05-24
+
+### Fixed — Desktop-managed Python runtime repair
+
+- **Desktop-managed Brain installs now require the same Python ABI as the bundled wheels.** The installer prefers Python 3.12 and rejects Python 3.13 when running under NEXO Desktop, preventing clean macOS installs from creating a virtual environment that cannot install the packaged cp312 wheels.
+- **Updates and doctor can repair incompatible managed virtual environments.** If a previous Desktop install created `~/.nexo/.venv` with Python 3.13, Brain archives that technical venv under runtime backups, recreates it with Python 3.12, and reinstalls runtime dependencies instead of reusing the broken environment.
+- **Coverage:** installer contract tests, packaged-update repair tests, doctor managed-venv checks, plus Python/Node syntax validation.
+
 ## [7.25.2] - 2026-05-24
 
 ### Fixed — Desktop-managed Brain updates

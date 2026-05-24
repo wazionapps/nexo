@@ -549,6 +549,111 @@ def check_python_runtime() -> DoctorCheck:
     )
 
 
+def _desktop_product_requested() -> bool:
+    try:
+        from product_mode import desktop_product_requested
+        return bool(desktop_product_requested())
+    except Exception:
+        return str(os.environ.get("NEXO_DESKTOP_MANAGED", "")).strip() == "1"
+
+
+def _managed_venv_python_path() -> Path:
+    if sys.platform == "win32":
+        return NEXO_HOME / ".venv" / "Scripts" / "python.exe"
+    return NEXO_HOME / ".venv" / "bin" / "python3"
+
+
+def _probe_python_version(python_bin: Path | str) -> tuple[int, int, int] | None:
+    try:
+        result = subprocess.run(
+            [str(python_bin), "-c", "import sys; print('.'.join(map(str, sys.version_info[:3])))"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+    except Exception:
+        return None
+    if result.returncode != 0:
+        return None
+    import re
+    match = re.search(r"(\d+)\.(\d+)\.(\d+)", result.stdout or result.stderr or "")
+    if not match:
+        return None
+    return int(match.group(1)), int(match.group(2)), int(match.group(3))
+
+
+def _managed_venv_version_supported(version: tuple[int, int, int] | None) -> bool:
+    if not version:
+        return False
+    if _desktop_product_requested():
+        return version[:2] == (3, 12)
+    return version >= (3, 10, 0)
+
+
+def _repair_managed_venv_python() -> bool:
+    try:
+        import auto_update
+        return bool(auto_update._ensure_runtime_venv(NEXO_HOME)) and bool(auto_update._reinstall_pip_deps())
+    except Exception:
+        return False
+
+
+def check_managed_venv_python(fix: bool = False) -> DoctorCheck:
+    """Check the managed NEXO venv is compatible with bundled runtime deps."""
+    venv_python = _managed_venv_python_path()
+    if not venv_python.exists():
+        if not _desktop_product_requested():
+            return DoctorCheck(
+                id="boot.managed_venv_python",
+                tier="boot",
+                status="healthy",
+                severity="info",
+                summary="Managed Python venv not present yet",
+                evidence=[str(venv_python)],
+            )
+        return DoctorCheck(
+            id="boot.managed_venv_python",
+            tier="boot",
+            status="degraded",
+            severity="warn",
+            summary="Managed Python venv missing",
+            evidence=[str(venv_python)],
+            repair_plan=["Run nexo doctor --tier boot --fix or nexo update to recreate the managed venv"],
+        )
+
+    version = _probe_python_version(venv_python)
+    if _managed_venv_version_supported(version):
+        return DoctorCheck(
+            id="boot.managed_venv_python",
+            tier="boot",
+            status="healthy",
+            severity="info",
+            summary=f"Managed venv Python {'.'.join(map(str, version))}",
+            evidence=[str(venv_python)],
+        )
+
+    summary = "Managed venv Python is incompatible"
+    if version:
+        summary = f"Managed venv Python {'.'.join(map(str, version))} is incompatible"
+    if _desktop_product_requested():
+        summary += " — Desktop bundled wheels require Python 3.12"
+    if fix and _repair_managed_venv_python():
+        post = check_managed_venv_python(fix=False)
+        if post.status == "healthy":
+            post.fixed = True
+            post.summary += " (fixed)"
+            return post
+    return DoctorCheck(
+        id="boot.managed_venv_python",
+        tier="boot",
+        status="degraded",
+        severity="warn",
+        summary=summary,
+        evidence=[str(venv_python)],
+        repair_plan=["Run nexo doctor --tier boot --fix or nexo update to archive and recreate the managed venv"],
+    )
+
+
 CRITICAL_CONFIG_FILES = (
     ("schedule.json", ("config", "schedule.json")),
     ("optionals.json", ("config", "optionals.json")),
@@ -803,6 +908,7 @@ def run_boot_checks(fix: bool = False) -> list[DoctorCheck]:
         safe_check(check_disk_space),
         safe_check(check_wrapper_scripts),
         safe_check(check_python_runtime),
+        safe_check(check_managed_venv_python, fix=fix),
         safe_check(check_config_parse),
         safe_check(check_core_dev_packaged_install),
         safe_check(check_dashboard_desktop_contract),

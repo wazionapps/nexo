@@ -715,4 +715,19 @@ def test_auto_update_falls_back_to_core_product_mode_when_root_shim_is_missing()
     assert 'if getattr(exc, "name", "") != "product_mode":' in text
     assert '_core_runtime = Path(__file__).resolve().parent / "core"' in text
     assert 'sys.path.insert(0, core_path)' in text
-    assert text.count("from product_mode import enforce_desktop_product_contract") >= 2
+    assert text.count("from product_mode import desktop_product_requested, enforce_desktop_product_contract") >= 2
+
+
+def test_packaged_update_repairs_desktop_managed_python_venv_contract():
+    update = REPO_ROOT / "src" / "plugins" / "update.py"
+    text = update.read_text(encoding="utf-8")
+
+    assert "from product_mode import desktop_product_requested" in text
+    assert "def _managed_venv_python_supported(python_bin: Path | str) -> bool:" in text
+    assert "return version[:2] == (3, 12)" in text
+    assert "def _resolve_managed_venv_base_python() -> str:" in text
+    assert '"/Library/Frameworks/Python.framework/Versions/3.12/bin/python3.12"' in text
+    assert 'shutil.which("python3.12")' in text
+    assert "def _archive_incompatible_managed_venv" in text
+    assert "_archive_incompatible_managed_venv(root, reason=reason)" in text
+    assert "managed Desktop venv pip is unavailable after repair" in text

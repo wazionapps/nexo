@@ -57,6 +57,8 @@ const DEFAULT_ASSISTANT_NAME = "Nova";
 const RESERVED_ASSISTANT_NAME_KEYS = new Set(["nexo", "nexobrain", "nexodesktop"]);
 const MIN_INSTALLER_PYTHON_MAJOR = 3;
 const MIN_INSTALLER_PYTHON_MINOR = 10;
+const DESKTOP_BUNDLED_WHEEL_PYTHON_MAJOR = 3;
+const DESKTOP_BUNDLED_WHEEL_PYTHON_MINOR = 12;
 
 function normalizeAssistantNameCandidate(value) {
   return String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
@@ -278,11 +280,25 @@ function pythonVersionMeetsMinimum(versionText) {
     || (major === MIN_INSTALLER_PYTHON_MAJOR && minor >= MIN_INSTALLER_PYTHON_MINOR);
 }
 
+function pythonVersionMatchesDesktopBundle(versionText) {
+  const match = String(versionText || "").trim().match(/^(\d+)\.(\d+)(?:\.|$)/);
+  if (!match) return false;
+  return Number(match[1]) === DESKTOP_BUNDLED_WHEEL_PYTHON_MAJOR
+    && Number(match[2]) === DESKTOP_BUNDLED_WHEEL_PYTHON_MINOR;
+}
+
+function pythonVersionUsableForInstaller(versionText) {
+  if (!pythonVersionMeetsMinimum(versionText)) return false;
+  if (isDesktopManagedInstall()) return pythonVersionMatchesDesktopBundle(versionText);
+  return true;
+}
+
 function resolveInstallerPython() {
   const candidates = [
     process.env.NEXO_BOOTSTRAP_PYTHON,
     process.env.NEXO_RUNTIME_PYTHON,
     process.env.NEXO_PYTHON,
+    run("which python3.12"),
     run("which python3"),
     run("which python"),
   ].filter(Boolean);
@@ -292,7 +308,7 @@ function resolveInstallerPython() {
     if (!clean || seen.has(clean)) continue;
     seen.add(clean);
     const version = pythonVersion(clean);
-    if (version && pythonVersionMeetsMinimum(version)) return clean;
+    if (version && pythonVersionUsableForInstaller(version)) return clean;
   }
   return "";
 }
@@ -366,9 +382,11 @@ function uniqueBackupPath(targetPath, suffix) {
 function ensureManagedVenvCompatible(venvPath, venvPython) {
   if (!fs.existsSync(venvPython)) return;
   const version = pythonVersion(venvPython);
-  if (version && pythonVersionMeetsMinimum(version)) return;
+  if (version && pythonVersionUsableForInstaller(version)) return;
 
-  const reason = version ? `Python ${version}` : "an unreadable Python executable";
+  const reason = version
+    ? `Python ${version}${isDesktopManagedInstall() ? " (Desktop bundle requires Python 3.12)" : ""}`
+    : "an unreadable Python executable";
   const backupPath = uniqueBackupPath(venvPath, "unsupported-python");
   log(`  Existing Python virtual environment uses ${reason}; moving it aside to recreate.`);
   try {
@@ -3300,14 +3318,14 @@ async function runSetup() {
     }
     if (!python) {
       log("Python 3 not found and couldn't install automatically.");
-      log(platform === "darwin" ? "Install it: brew install python3" : "Install it: sudo apt install python3");
+      log(platform === "darwin" ? "Install it: brew install python@3.12" : "Install it: sudo apt install python3");
       process.exit(1);
     }
   }
   const pyVersion = pythonVersion(python);
-  if (!pyVersion || !pythonVersionMeetsMinimum(pyVersion)) {
+  if (!pyVersion || !pythonVersionUsableForInstaller(pyVersion)) {
     log(pyVersion
-      ? `Python at ${python} is ${pyVersion}; NEXO Brain requires Python >=${MIN_INSTALLER_PYTHON_MAJOR}.${MIN_INSTALLER_PYTHON_MINOR}.`
+      ? `Python at ${python} is ${pyVersion}; NEXO Brain requires ${isDesktopManagedInstall() ? "Python 3.12 for Desktop bundled wheels" : `Python >=${MIN_INSTALLER_PYTHON_MAJOR}.${MIN_INSTALLER_PYTHON_MINOR}`}.`
       : `Python at ${python || "(not found)"} is not executable.`);
     process.exit(1);
   }
@@ -3618,7 +3636,7 @@ async function runSetup() {
   }
   if (fs.existsSync(venvPython)) {
     const venvVersion = pythonVersion(venvPython);
-    if (!venvVersion || !pythonVersionMeetsMinimum(venvVersion)) {
+    if (!venvVersion || !pythonVersionUsableForInstaller(venvVersion)) {
       log(`Python virtual environment is unsupported after creation (${venvVersion || "unknown version"}).`);
       process.exit(1);
     }

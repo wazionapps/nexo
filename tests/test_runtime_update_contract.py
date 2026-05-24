@@ -151,3 +151,18 @@ def test_runtime_post_sync_skips_classifier_on_ephemeral_runtime(monkeypatch, tm
     assert "classifier-install" in actions
     assert classifier_calls == []
     assert len(sync_calls) == 1
+
+
+def test_desktop_managed_dependency_repair_requires_python_312_venv():
+    text = (Path(__file__).resolve().parents[1] / "src" / "auto_update.py").read_text()
+
+    assert "from product_mode import desktop_product_requested, enforce_desktop_product_contract" in text
+    assert "def _managed_venv_python_supported(python_bin: Path | str) -> bool:" in text
+    assert "return version[:2] == (3, 12)" in text
+    assert "def _resolve_managed_venv_base_python() -> str:" in text
+    assert '"/Library/Frameworks/Python.framework/Versions/3.12/bin/python3.12"' in text
+    assert 'shutil.which("python3.12")' in text
+    assert "def _archive_incompatible_runtime_venv" in text
+    assert "_archive_incompatible_runtime_venv(runtime_root, reason=reason)" in text
+    assert "managed venv unavailable for Desktop dependency repair" in text
+    assert "elif not desktop_product_requested():" in text

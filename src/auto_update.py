@@ -21,7 +21,7 @@ import time
 from pathlib import Path
 
 try:
-    from product_mode import enforce_desktop_product_contract
+    from product_mode import desktop_product_requested, enforce_desktop_product_contract
 except ModuleNotFoundError as exc:
     if getattr(exc, "name", "") != "product_mode":
         raise
@@ -30,7 +30,7 @@ except ModuleNotFoundError as exc:
         core_path = str(_core_runtime)
         if core_path not in sys.path:
             sys.path.insert(0, core_path)
-    from product_mode import enforce_desktop_product_contract
+    from product_mode import desktop_product_requested, enforce_desktop_product_contract
 from runtime_home import export_resolved_nexo_home, managed_nexo_home
 
 try:
@@ -939,14 +939,94 @@ def _venv_pip_path(runtime_root: Path = NEXO_HOME) -> Path:
     return runtime_root / ".venv" / "bin" / "pip"
 
 
+def _python_version_tuple(python_bin: Path | str) -> tuple[int, int, int] | None:
+    try:
+        result = subprocess.run(
+            [str(python_bin), "-c", "import sys; print('.'.join(map(str, sys.version_info[:3])))"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+    except Exception:
+        return None
+    if result.returncode != 0:
+        return None
+    match = re.search(r"(\d+)\.(\d+)\.(\d+)", result.stdout or result.stderr or "")
+    if not match:
+        return None
+    return int(match.group(1)), int(match.group(2)), int(match.group(3))
+
+
+def _managed_venv_python_supported(python_bin: Path | str) -> bool:
+    version = _python_version_tuple(python_bin)
+    if not version:
+        return False
+    if desktop_product_requested():
+        return version[:2] == (3, 12)
+    return version >= (3, 10, 0)
+
+
+def _resolve_managed_venv_base_python() -> str:
+    candidates = [
+        os.environ.get("NEXO_BOOTSTRAP_PYTHON", ""),
+        os.environ.get("NEXO_RUNTIME_PYTHON", ""),
+        os.environ.get("NEXO_PYTHON", ""),
+    ]
+    if desktop_product_requested():
+        candidates.extend([
+            "/Library/Frameworks/Python.framework/Versions/3.12/bin/python3.12",
+            "/Library/Frameworks/Python.framework/Versions/3.12/bin/python3",
+            "/opt/homebrew/bin/python3.12",
+            "/usr/local/bin/python3.12",
+            shutil.which("python3.12") or "",
+        ])
+    candidates.append(sys.executable)
+    candidates.append(shutil.which("python3") or "")
+    for candidate in candidates:
+        clean = str(candidate or "").strip()
+        if clean and Path(clean).exists() and _managed_venv_python_supported(clean):
+            return clean
+    return sys.executable
+
+
+def _archive_incompatible_runtime_venv(runtime_root: Path = NEXO_HOME, reason: str = "incompatible-python") -> Path | None:
+    venv_dir = runtime_root / ".venv"
+    if not venv_dir.exists():
+        return None
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    backup_root = runtime_root / "runtime" / "backups"
+    try:
+        backup_root.mkdir(parents=True, exist_ok=True)
+        target = backup_root / f"venv-{reason}-{stamp}"
+        counter = 2
+        while target.exists():
+            target = backup_root / f"venv-{reason}-{stamp}-{counter}"
+            counter += 1
+        shutil.move(str(venv_dir), str(target))
+        _log(f"Archived incompatible managed venv at {target}")
+        return target
+    except Exception as exc:
+        _log(f"venv archive failed: {exc}")
+        return None
+
+
 def _ensure_runtime_venv(runtime_root: Path = NEXO_HOME) -> Path | None:
     venv_python = _venv_python_path(runtime_root)
     if venv_python.exists():
-        return venv_python
+        if _managed_venv_python_supported(venv_python):
+            return venv_python
+        version = _python_version_tuple(venv_python)
+        reason = f"python-{'.'.join(map(str, version[:2]))}" if version else "unreadable-python"
+        if _archive_incompatible_runtime_venv(runtime_root, reason=reason) is None:
+            return None
+    base_python = _resolve_managed_venv_base_python()
+    if not _managed_venv_python_supported(base_python):
+        _log(f"no supported base Python found for managed venv: {base_python}")
+        return None
     try:
         runtime_root.mkdir(parents=True, exist_ok=True)
         result = subprocess.run(
-            [sys.executable, "-m", "venv", str(runtime_root / ".venv")],
+            [base_python, "-m", "venv", str(runtime_root / ".venv")],
             capture_output=True,
             text=True,
             timeout=120,
@@ -965,7 +1045,7 @@ def _reinstall_pip_deps() -> bool:
     req_file = SRC_DIR / "requirements.txt"
     if not req_file.exists():
         return True
-    _ensure_runtime_venv(NEXO_HOME)
+    venv_python = _ensure_runtime_venv(NEXO_HOME)
     venv_pip = _venv_pip_path(NEXO_HOME)
     if not venv_pip.exists() and sys.platform != "win32":
         alt_pip = NEXO_HOME / ".venv" / "bin" / "pip3"
@@ -977,11 +1057,14 @@ def _reinstall_pip_deps() -> bool:
                 [str(venv_pip), "install", "--quiet", "-r", str(req_file)],
                 capture_output=True, text=True, timeout=120,
             )
-        else:
+        elif not desktop_product_requested():
             result = subprocess.run(
                 [sys.executable, "-m", "pip", "install", "--quiet", "-r", str(req_file), "--break-system-packages"],
                 capture_output=True, text=True, timeout=120,
             )
+        else:
+            _log(f"managed venv unavailable for Desktop dependency repair: {venv_python}")
+            return False
         if result.returncode != 0:
             _log(f"pip install failed (exit {result.returncode}): {result.stderr or result.stdout}")
             return False
@@ -4665,7 +4748,7 @@ def _reinstall_runtime_pip_deps(runtime_root: Path = NEXO_HOME) -> bool:
     req_file = runtime_root / "requirements.txt"
     if not req_file.exists():
         return True
-    _ensure_runtime_venv(runtime_root)
+    venv_python = _ensure_runtime_venv(runtime_root)
     venv_pip = _venv_pip_path(runtime_root)
     if not venv_pip.exists() and sys.platform != "win32":
         alt_pip = runtime_root / ".venv" / "bin" / "pip3"
@@ -4679,13 +4762,16 @@ def _reinstall_runtime_pip_deps(runtime_root: Path = NEXO_HOME) -> bool:
                 text=True,
                 timeout=120,
             )
-        else:
+        elif not desktop_product_requested():
             result = subprocess.run(
                 [sys.executable, "-m", "pip", "install", "--quiet", "-r", str(req_file), "--break-system-packages"],
                 capture_output=True,
                 text=True,
                 timeout=120,
             )
+        else:
+            _log(f"managed venv unavailable for Desktop runtime dependency repair: {venv_python}")
+            return False
         return result.returncode == 0
     except Exception:
         return False

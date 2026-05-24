@@ -122,9 +122,14 @@ def test_desktop_managed_installer_uses_valid_bootstrap_python():
     assert "process.env.NEXO_BOOTSTRAP_PYTHON" in text
     assert "function pythonVersionMeetsMinimum(versionText)" in text
     assert "MIN_INSTALLER_PYTHON_MINOR = 10" in text
-    assert "if (version && pythonVersionMeetsMinimum(version)) return clean;" in text
+    assert "DESKTOP_BUNDLED_WHEEL_PYTHON_MINOR = 12" in text
+    assert "function pythonVersionMatchesDesktopBundle(versionText)" in text
+    assert "function pythonVersionUsableForInstaller(versionText)" in text
+    assert "if (isDesktopManagedInstall()) return pythonVersionMatchesDesktopBundle(versionText);" in text
+    assert 'run("which python3.12")' in text
+    assert "if (version && pythonVersionUsableForInstaller(version)) return clean;" in text
     assert "let python = resolveInstallerPython();" in text
-    assert "NEXO Brain requires Python >=" in text
+    assert "Python 3.12 for Desktop bundled wheels" in text
 
 
 def test_desktop_managed_installer_recreates_incompatible_existing_venv():
@@ -132,7 +137,8 @@ def test_desktop_managed_installer_recreates_incompatible_existing_venv():
 
     assert "function ensureManagedVenvCompatible(venvPath, venvPython)" in text
     assert "const version = pythonVersion(venvPython);" in text
-    assert "pythonVersionMeetsMinimum(version)" in text
+    assert "pythonVersionUsableForInstaller(version)" in text
+    assert "Desktop bundle requires Python 3.12" in text
     assert 'uniqueBackupPath(venvPath, "unsupported-python")' in text
     assert "fs.renameSync(venvPath, backupPath)" in text
     assert "ensureManagedVenvCompatible(venvPath, venvPython);" in text
