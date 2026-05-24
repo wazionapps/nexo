@@ -2102,6 +2102,7 @@ def _run_protocol_debt_drain_inline() -> dict:
         "error": report.get("error", ""),
         "drained_count": len(report.get("drained_ids") or []),
         "requires_user_summary": report.get("requires_user_summary") or [],
+        "requires_user_by_severity": report.get("requires_user_by_severity") or {},
         "audit_path": report.get("audit_path", ""),
     }
 
@@ -2193,11 +2194,45 @@ def run_mechanical_autofixes():
         if debt_drain.get("ok"):
             drained_count = int(debt_drain.get("drained_count") or 0)
             requires_user_summary = debt_drain.get("requires_user_summary") or []
+            requires_user_by_severity = debt_drain.get("requires_user_by_severity") or {}
             if drained_count or requires_user_summary:
                 detail_bits: list[str] = []
                 if drained_count:
                     detail_bits.append(f"drained {drained_count} stale protocol debt item(s)")
-                if requires_user_summary:
+                if requires_user_by_severity:
+                    # Split by severity so ERROR-class debt always appears
+                    # in the morning briefing, regardless of which debt
+                    # types happen to exist that day. Within a severity,
+                    # show every type (no top-N truncation) — silent drift
+                    # is what the previous "top-4" cap was hiding.
+                    severity_order = ["error", "warn", "info"]
+                    seen = set()
+                    severity_bits: list[str] = []
+                    for sev in severity_order + [
+                        s for s in requires_user_by_severity if s not in severity_order
+                    ]:
+                        if sev in seen or sev not in requires_user_by_severity:
+                            continue
+                        seen.add(sev)
+                        stat = requires_user_by_severity[sev]
+                        breakdown = ", ".join(
+                            f"{entry.get('debt_type')}={int(entry.get('count') or 0)}"
+                            for entry in stat.get("by_type") or []
+                        )
+                        label = sev.upper()
+                        if breakdown:
+                            severity_bits.append(
+                                f"{label}={int(stat.get('total') or 0)} ({breakdown})"
+                            )
+                        else:
+                            severity_bits.append(f"{label}={int(stat.get('total') or 0)}")
+                    if severity_bits:
+                        detail_bits.append(
+                            "still needs review: " + " | ".join(severity_bits)
+                        )
+                elif requires_user_summary:
+                    # Defensive fallback: older drain reports without the
+                    # per-severity aggregation still render usefully.
                     summary = ", ".join(
                         f"{item.get('debt_type')} x{int(item.get('count') or 0)}"
                         for item in requires_user_summary[:4]

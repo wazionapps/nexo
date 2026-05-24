@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.25.0` is the current packaged-runtime line. Minor release over v7.24.0 - Memory Fabric links transcript lookup, historical backup diary recovery, unified search and knowledge graph evidence so memories are not available only inside expiring snapshots.
+Version `7.25.1` is the current packaged-runtime line. Patch release over v7.25.0 - shell guardrails skip non-path curl/wget arguments and daily protocol-debt audits keep ERROR classes visible by severity and type.
+
+Previously in `7.25.0`: minor release over v7.24.0 - Memory Fabric links transcript lookup, historical backup diary recovery, unified search and knowledge graph evidence so memories are not available only inside expiring snapshots.
 
 Previously in `7.24.0`: minor release over v7.23.13 - Home Agents, cognitive quality controls, English operational copy, and non-blocking task-open context are integrated into main.
 

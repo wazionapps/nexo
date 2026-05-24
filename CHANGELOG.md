@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.25.1] - 2026-05-24
+
+### Fixed — operational guardrail audit noise
+
+- **Shell guardrail path extraction no longer treats HTTP headers, user-agent fragments or curl payload flags as touched files.** `curl -A "Mozilla/5.0 ..."`, `-H`, `--data`, `--cookie` and similar non-path arguments are skipped before guard debt is created, and version-looking fragments such as `/537.36` are filtered as false positives.
+- **Daily protocol-debt drain now reports user-review items by severity and debt type.** Morning audit output keeps every ERROR class visible instead of hiding newly introduced error buckets behind a fixed top-N summary.
+- **Coverage:** focused hook guardrail, protocol-debt drain and daily self-audit regression tests.
+
 ## [7.25.0] - 2026-05-24
 
 ### Added — Memory Fabric

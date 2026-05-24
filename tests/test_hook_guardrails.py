@@ -1393,6 +1393,14 @@ def test_looks_like_real_path_filters_known_artifacts():
     assert hook_guardrails._looks_like_real_path("/1000") is False
     assert hook_guardrails._looks_like_real_path("/04/2026") is False
 
+    # Version-like fragments lifted from User-Agent strings (curl/wget
+    # with ``-A``) — must NOT be treated as paths. Regression for
+    # NF-AUDIT-20260522-DRAIN-WHITELIST-EXPAND.
+    assert hook_guardrails._looks_like_real_path("/5.0") is False
+    assert hook_guardrails._looks_like_real_path("/537.36") is False
+    assert hook_guardrails._looks_like_real_path("/140.0.0.0") is False
+    assert hook_guardrails._looks_like_real_path("/1.2.3.4") is False
+
     # Dictionary block-list (false positives observed in production debt log).
     assert hook_guardrails._looks_like_real_path("/diary") is False
     assert hook_guardrails._looks_like_real_path("/stdout") is False

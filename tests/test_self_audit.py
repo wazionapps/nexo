@@ -1186,7 +1186,20 @@ def test_run_mechanical_autofixes_reports_protocol_debt_drain(self_audit_env, mo
         lambda: {
             "ok": True,
             "drained_count": 2,
-            "requires_user_summary": [{"debt_type": "missing_cortex_evaluation", "count": 1}],
+            "requires_user_summary": [
+                {"severity": "error", "debt_type": "g4_guard_check_required", "count": 2},
+                {"severity": "warn", "debt_type": "missing_cortex_evaluation", "count": 1},
+            ],
+            "requires_user_by_severity": {
+                "error": {
+                    "total": 2,
+                    "by_type": [{"debt_type": "g4_guard_check_required", "count": 2}],
+                },
+                "warn": {
+                    "total": 1,
+                    "by_type": [{"debt_type": "missing_cortex_evaluation", "count": 1}],
+                },
+            },
             "audit_path": "/tmp/protocol-debt-drain.json",
         },
     )
@@ -1200,7 +1213,10 @@ def test_run_mechanical_autofixes_reports_protocol_debt_drain(self_audit_env, mo
     messages = [item["msg"] for item in module.findings if item["area"] == "autofix"]
     assert any("protocol debt drain" in msg for msg in messages)
     assert any("drained 2 stale protocol debt item(s)" in msg for msg in messages)
-    assert any("missing_cortex_evaluation x1" in msg for msg in messages)
+    assert any(
+        "still needs review: ERROR=2 (g4_guard_check_required=2) | WARN=1 (missing_cortex_evaluation=1)" in msg
+        for msg in messages
+    )
 
 
 def test_check_evolution_health_treats_desktop_product_disable_as_info(self_audit_env):

@@ -76,6 +76,26 @@ SHELL_WRITE_BASES = {
     "rsync",
 }
 SHELL_REDIRECT_TOKENS = {">", ">>", "1>", "1>>", "2>", "2>>"}
+# Flags whose *next* token is a non-path argument (User-Agent strings,
+# headers, query payloads, URLs, etc.). Without this whitelist the bash
+# path extractor lifts fragments like ``Mozilla/5.0`` and ``AppleWebKit/
+# 537.36`` as candidate paths, generating a ``g4_guard_check_required``
+# debt for every curl/wget with a ``-A`` flag. Tracked by NF-AUDIT-
+# 20260522-DRAIN-WHITELIST-EXPAND (W2).
+SHELL_FLAGS_WITH_NON_PATH_ARG = {
+    "-A", "--user-agent",
+    "-H", "--header",
+    "-e", "--referer",
+    "-X", "--request",
+    "-d", "--data", "--data-raw", "--data-binary", "--data-urlencode",
+    "-F", "--form",
+    "-u", "--user",
+    "--url",
+    "--cookie", "-b",
+    "--connect-timeout", "--max-time",
+    "--retry", "--retry-delay", "--retry-max-time",
+    "--resolve",
+}
 INLINE_INTERPRETER_BASES = {
     "python",
     "python3",
@@ -392,6 +412,14 @@ def _looks_like_real_path(path: str) -> bool:
     stripped = raw.lstrip("/")
     if stripped and re.fullmatch(r"\d+", stripped):
         return False
+    # Version-like fragments (``/5.0``, ``/537.36``, ``/140.0.0.0``) come
+    # from User-Agent / library version strings that the EMBEDDED_PATH_RE
+    # scanner lifts out of curl/wget commands. Token-level skip
+    # (SHELL_FLAGS_WITH_NON_PATH_ARG) does not help here because the regex
+    # runs against the raw command string. Filter them out at the path
+    # plausibility check instead.
+    if stripped and re.fullmatch(r"\d+(?:\.\d+)+", stripped):
+        return False
     if raw.lower() in _PATH_DICTIONARY_BLOCKLIST:
         return False
     # Reject single-segment ``/word`` candidates that do not exist on the
@@ -697,12 +725,25 @@ def _extract_bash_touched_files(tool_input) -> list[str]:
             seen.add(normalized)
             candidates.append(resolved)
 
+    skip_next = False
     for index, token in enumerate(tokens):
+        if skip_next:
+            skip_next = False
+            continue
         if token in SHELL_REDIRECT_TOKENS:
             if index + 1 < len(tokens):
                 add(tokens[index + 1])
             continue
         if token.startswith("-"):
+            # ``--flag=value`` is self-contained; the value is glued so the
+            # extractor already ignores it. For the separated form
+            # (``-A "Mozilla/5.0 ..."`` / ``-H "X-Foo: bar"``) we have to
+            # skip the NEXT token, otherwise the path extractor lifts
+            # User-Agent / header / payload fragments as candidate paths
+            # and floods the audit with ``g4_guard_check_required`` noise.
+            flag_head = token.split("=", 1)[0]
+            if flag_head in SHELL_FLAGS_WITH_NON_PATH_ARG and "=" not in token:
+                skip_next = True
             continue
         if (
             token.startswith(("/", "~", ".", "$"))

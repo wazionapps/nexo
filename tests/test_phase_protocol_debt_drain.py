@@ -54,12 +54,20 @@ def seeded_db(tmp_path):
     return db
 
 
-def _seed_debt(db: Path, *, debt_type: str, task_id: str, created_at: str, resolved: bool = False) -> int:
+def _seed_debt(
+    db: Path,
+    *,
+    debt_type: str,
+    task_id: str,
+    created_at: str,
+    resolved: bool = False,
+    severity: str = "error",
+) -> int:
     conn = sqlite3.connect(db)
     cur = conn.execute(
         "INSERT INTO protocol_debt (task_id, debt_type, severity, created_at, resolved_at) "
-        "VALUES (?, ?, 'error', ?, ?)",
-        (task_id, debt_type, created_at, "2020-01-01 00:00:00" if resolved else None),
+        "VALUES (?, ?, ?, ?, ?)",
+        (task_id, debt_type, severity, created_at, "2020-01-01 00:00:00" if resolved else None),
     )
     conn.commit()
     debt_id = int(cur.lastrowid or 0)
@@ -212,6 +220,54 @@ def test_run_dry_run_leaves_db_intact(seeded_db, tmp_path):
             "SELECT resolved_at FROM protocol_debt WHERE id = ?", (debt_stale,)
         ).fetchone()
     assert row[0] is None  # dry_run left it untouched
+
+
+def test_run_groups_requires_user_by_severity_and_type(seeded_db, tmp_path):
+    now = datetime(2026, 4, 22, 12, 0, 0)
+    _seed_debt(
+        seeded_db,
+        debt_type="g4_guard_check_required",
+        task_id="",
+        created_at="2026-04-20 00:00:00",
+        severity="error",
+    )
+    _seed_debt(
+        seeded_db,
+        debt_type="missing_task_close_evidence",
+        task_id="",
+        created_at="2026-04-20 00:00:00",
+        severity="warn",
+    )
+    _seed_debt(
+        seeded_db,
+        debt_type="g4_guard_check_required",
+        task_id="",
+        created_at="2026-04-20 01:00:00",
+        severity="error",
+    )
+
+    report = PHASE.run(
+        db_path=seeded_db,
+        ops_dir=tmp_path / "ops",
+        stale_age_days=7,
+        dry_run=True,
+        now=now,
+    )
+
+    assert report["requires_user_summary"] == [
+        {"severity": "error", "debt_type": "g4_guard_check_required", "count": 2},
+        {"severity": "warn", "debt_type": "missing_task_close_evidence", "count": 1},
+    ]
+    assert report["requires_user_by_severity"] == {
+        "error": {
+            "total": 2,
+            "by_type": [{"debt_type": "g4_guard_check_required", "count": 2}],
+        },
+        "warn": {
+            "total": 1,
+            "by_type": [{"debt_type": "missing_task_close_evidence", "count": 1}],
+        },
+    }
 
 
 def test_run_is_idempotent(seeded_db, tmp_path):

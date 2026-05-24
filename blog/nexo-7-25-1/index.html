@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.25.1: operational guardrail audit cleanup</title>
+<meta name="description" content="NEXO Brain v7.25.1 reduces shell guardrail false positives from curl and wget commands and keeps protocol-debt audit severity visible.">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-25-1/">
+<meta name="robots" content="index, follow">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.25.1: operational guardrail audit cleanup","datePublished":"2026-05-24","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head>
+<body>
+<main class="section-compact">
+<div class="container" style="max-width:860px;">
+<a href="/blog/">Back to blog</a>
+<p class="section-label">Release notes</p>
+<h1>NEXO 7.25.1 - operational guardrail audit cleanup</h1>
+<p>v7.25.1 is a focused operational patch after the Memory Fabric release. It keeps the guardrail audit useful by removing noisy false positives and making review queues explicit by severity.</p>
+<p>The shell guardrail extractor now skips non-path arguments for common HTTP flags such as user agents, headers, cookies, data payloads, forms and request methods. Version-like fragments lifted from strings such as <code>Mozilla/5.0</code> or <code>AppleWebKit/537.36</code> are filtered before they can become fake file paths.</p>
+<p>The protocol-debt drain now groups review-needed items by severity and debt type. Daily self-audit output can show <code>ERROR</code>, <code>WARN</code> and other buckets without hiding new error classes behind a fixed short summary.</p>
+<pre><code>python3 -m pytest -q tests/test_hook_guardrails.py tests/test_phase_protocol_debt_drain.py tests/test_self_audit.py::test_run_mechanical_autofixes_reports_protocol_debt_drain
+python3 scripts/verify_release_readiness.py --ci</code></pre>
+<p><a href="/changelog/#v7251">Read the full v7.25.1 changelog</a></p>
+</div>
+</main>
+</body>
+</html>

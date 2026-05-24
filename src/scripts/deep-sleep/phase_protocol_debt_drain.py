@@ -192,7 +192,7 @@ def run(
             "SELECT id, session_id, task_id, debt_type, severity, evidence, created_at "
             "FROM protocol_debt WHERE resolved_at IS NULL"
         ).fetchall()
-        by_type: dict[str, int] = {}
+        by_severity_type: dict[tuple[str, str], int] = {}
         for row in rows:
             task_open = _task_is_open(conn, str(row["task_id"] or ""))
             bucket = classify_debt(
@@ -216,13 +216,36 @@ def run(
                         ),
                     )
             elif bucket == "requires_user":
-                by_type[str(row["debt_type"])] = by_type.get(str(row["debt_type"]), 0) + 1
-        # Consolidate requires_user into a per-type summary so the morning
-        # briefing stays short even when the backlog is long.
+                # Track by (severity, debt_type) so the morning briefing
+                # can split ERROR vs WARN buckets dynamically — without
+                # this split, freshly-introduced ERROR debt classes stay
+                # invisible until someone hand-edits the whitelist.
+                severity = str(row["severity"] or "warn").strip().lower() or "warn"
+                debt_type = str(row["debt_type"] or "")
+                key = (severity, debt_type)
+                by_severity_type[key] = by_severity_type.get(key, 0) + 1
+        # Consolidate requires_user into a per-severity, per-type summary
+        # so the morning briefing stays short even when the backlog is
+        # long, while still surfacing ALL error classes (not a fixed top-4).
         report["requires_user_summary"] = [
-            {"debt_type": debt_type, "count": count}
-            for debt_type, count in sorted(by_type.items(), key=lambda x: -x[1])
+            {"severity": severity, "debt_type": debt_type, "count": count}
+            for (severity, debt_type), count in sorted(
+                by_severity_type.items(),
+                key=lambda item: (item[0][0] != "error", -item[1]),
+            )
         ]
+        # Aggregate by severity so consumers can report
+        # ``ERROR=N (a=x, b=y), WARN=M`` without re-bucketing.
+        report["requires_user_by_severity"] = {}
+        for entry in report["requires_user_summary"]:
+            sev = entry["severity"]
+            stat = report["requires_user_by_severity"].setdefault(
+                sev, {"total": 0, "by_type": []}
+            )
+            stat["total"] += int(entry["count"])
+            stat["by_type"].append(
+                {"debt_type": entry["debt_type"], "count": int(entry["count"])}
+            )
         if dry_run:
             conn.execute("ROLLBACK")
         else:
