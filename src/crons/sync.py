@@ -150,6 +150,41 @@ RETIRED_CORE_FILES = (
 )
 
 
+def _resolve_core_python_bin() -> str:
+    """Prefer the NEXO-managed Python for core cron execution."""
+    candidates = [
+        os.environ.get("NEXO_RUNTIME_PYTHON", ""),
+        os.environ.get("NEXO_PYTHON", ""),
+        str(RUNTIME_ROOT / ".venv" / "bin" / "python3"),
+        str(RUNTIME_ROOT / ".venv" / "bin" / "python"),
+        str(_runtime_code_dir() / ".venv" / "bin" / "python3"),
+        str(_runtime_code_dir() / ".venv" / "bin" / "python"),
+    ]
+    if platform.system() == "Darwin":
+        candidates.extend(
+            [
+                "/Library/Frameworks/Python.framework/Versions/3.12/bin/python3",
+                "/opt/homebrew/bin/python3.12",
+                "/usr/local/bin/python3.12",
+                "/opt/homebrew/bin/python3",
+                "/usr/local/bin/python3",
+                "/usr/bin/python3",
+            ]
+        )
+    else:
+        candidates.extend(["/usr/bin/python3", "/usr/local/bin/python3", "python3"])
+
+    for candidate in candidates:
+        if not candidate:
+            continue
+        expanded = Path(str(candidate)).expanduser()
+        if expanded.exists():
+            return str(expanded)
+        if os.sep not in str(candidate) and shutil.which(str(candidate)):
+            return str(candidate)
+    return "python3"
+
+
 def _runtime_scripts_dir() -> Path:
     new = RUNTIME_ROOT / "core" / "scripts"
     legacy = RUNTIME_ROOT / "scripts"
@@ -407,21 +442,10 @@ def build_plist(cron: dict) -> dict:
     if subdir_src.is_dir():
         _copy_into_runtime(subdir_src)
 
+    python_bin = _resolve_core_python_bin()
     if script_type == "shell":
         program_args = ["/bin/bash", wrapper_path, cron_id, "/bin/bash", script_path]
     else:
-        # Find python3
-        python_candidates = [
-            "/opt/homebrew/bin/python3",
-            "/usr/local/bin/python3",
-            "/Library/Frameworks/Python.framework/Versions/3.12/bin/python3",
-            "/usr/bin/python3",
-        ]
-        python_bin = "python3"
-        for p in python_candidates:
-            if Path(p).exists():
-                python_bin = p
-                break
         program_args = ["/bin/bash", wrapper_path, cron_id, python_bin, script_path]
 
     plist = {
@@ -436,6 +460,7 @@ def build_plist(cron: dict) -> dict:
             "NEXO_CODE": str(_runtime_code_dir()),
             "NEXO_SOURCE_CODE": str(SOURCE_ROOT),
             "NEXO_MANAGED_CORE_CRON": "1",
+            "NEXO_RUNTIME_PYTHON": python_bin,
             "PYTHONUNBUFFERED": "1",
         },
     }
@@ -505,6 +530,7 @@ def _linux_crontab_entry(cron: dict, exec_cmd: str, stdout_log: Path, stderr_log
             "HOME": Path.home(),
             "NEXO_HOME": NEXO_HOME,
             "NEXO_CODE": _runtime_code_dir(),
+            "NEXO_RUNTIME_PYTHON": _resolve_core_python_bin(),
             "PYTHONUNBUFFERED": "1",
         }.items()
     )
@@ -578,12 +604,13 @@ def _sync_wsl_windows_host_local_index_task(dry_run: bool = False) -> dict:
         log("WARNING: WSL_DISTRO_NAME missing; local-index host task not installed.")
         return {"ok": False, "skipped": True, "reason": "wsl_distro_missing"}
 
-    python_bin = "/usr/bin/python3" if Path("/usr/bin/python3").exists() else "python3"
+    python_bin = _resolve_core_python_bin()
     script_path = _runtime_code_dir() / "scripts" / "nexo-local-index.py"
     command = (
         f"cd {shlex.quote(str(Path.home()))} && "
         f"NEXO_HOME={shlex.quote(str(NEXO_HOME))} "
         f"NEXO_CODE={shlex.quote(str(_runtime_code_dir()))} "
+        f"NEXO_RUNTIME_PYTHON={shlex.quote(python_bin)} "
         f"{shlex.quote(python_bin)} {shlex.quote(str(script_path))}"
     )
     wsl_args = " ".join(
@@ -835,11 +862,7 @@ def sync_linux(dry_run: bool = False):
 
     log(f"Manifest: {len(manifest_crons)} core crons")
 
-    python_bin = "/usr/bin/python3"
-    for p in ["/usr/bin/python3", "/usr/local/bin/python3"]:
-        if Path(p).exists():
-            python_bin = p
-            break
+    python_bin = _resolve_core_python_bin()
 
     enable_units: list[str] = []
     crontab_entries: list[str] = []
@@ -878,6 +901,7 @@ Type={service_type}
 ExecStart={exec_cmd}
 Environment=NEXO_HOME={NEXO_HOME}
 Environment=NEXO_CODE={_runtime_code_dir()}
+Environment=NEXO_RUNTIME_PYTHON={python_bin}
 Environment=HOME={Path.home()}
 StandardOutput=append:{stdout_log}
 StandardError=append:{stderr_log}

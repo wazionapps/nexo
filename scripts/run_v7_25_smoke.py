@@ -13,9 +13,23 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_OUTPUT = ROOT / "release-contracts" / "smoke" / "v7.25.5.json"
+DEFAULT_OUTPUT = ROOT / "release-contracts" / "smoke" / "v7.25.6.json"
 
 SMOKE_GROUPS = [
+    {
+        "id": "local_index_legacy_sidecar_migration",
+        "description": "Existing Local Memory sidecar DBs repair legacy v2 columns before source-dependent indexes",
+        "targets": [
+            "tests/test_local_context.py::test_local_context_repairs_legacy_sidecar_v2_columns_before_source_indexes",
+        ],
+    },
+    {
+        "id": "managed_python_core_crons",
+        "description": "Core cron LaunchAgents prefer the NEXO-managed Python runtime",
+        "targets": [
+            "tests/test_cron_sync.py::test_build_plist_uses_managed_runtime_python",
+        ],
+    },
     {
         "id": "local_index_roots_v2",
         "description": "Local Memory roots v2 starts conservative, preserves email/user content, and supports explicit includes",
@@ -46,12 +60,12 @@ SMOKE_GROUPS = [
     },
     {
         "id": "release_surface_contract",
-        "description": "Release-facing public surfaces and contract metadata stay aligned for v7.25.5",
+        "description": "Release-facing public surfaces and contract metadata stay aligned for v7.25.6",
         "args": [
             "scripts/verify_release_readiness.py",
             "--ci",
             "--contract",
-            "release-contracts/v7.25.5.json",
+            "release-contracts/v7.25.6.json",
             "--require-contract-complete",
         ],
     },

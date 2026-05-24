@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.25.6] - 2026-05-24
+
+### Fixed — Local Memory update migration hardening
+
+- **Existing Local Memory sidecar databases now repair legacy root/exclusion columns before source-dependent indexes are created.** Updates from older installs no longer fail with `no such column: source` before the v2 roots/file-type migration can run.
+- **Core cron LaunchAgents and Linux timers now prefer the NEXO-managed Python runtime.** Background Local Memory and other core crons avoid accidentally using Homebrew/system Python versions that differ from the managed Brain virtual environment.
+- **Coverage:** Local Context legacy sidecar migration regression, core cron managed-Python LaunchAgent regression, full Local Context suite, full cron sync suite, and Python syntax validation.
+
 ## [7.25.5] - 2026-05-24
 
 ### Fixed — Local Memory explicit include overrides
