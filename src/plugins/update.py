@@ -280,10 +280,32 @@ def _npm_command_parts() -> tuple[list[str], dict[str, str]]:
     desktop_node = str(os.environ.get("NEXO_DESKTOP_NODE", "")).strip()
     bundled_npm_cli = str(os.environ.get("NEXO_DESKTOP_NPM_CLI", "")).strip()
     env = dict(os.environ)
-    if desktop_node and bundled_npm_cli and Path(desktop_node).exists():
+    if desktop_node and bundled_npm_cli and Path(desktop_node).exists() and Path(bundled_npm_cli).exists():
         env["ELECTRON_RUN_AS_NODE"] = "1"
+        _apply_desktop_npm_prefix(env)
         return [desktop_node, bundled_npm_cli], env
     return ["npm"], env
+
+
+def _desktop_npm_prefix() -> str:
+    return (
+        str(os.environ.get("NEXO_DESKTOP_NPM_PREFIX", "")).strip()
+        or str(os.environ.get("NEXO_CLAUDE_PREFIX", "")).strip()
+        or str(NEXO_HOME / "runtime" / "bootstrap" / "npm-global")
+    )
+
+
+def _apply_desktop_npm_prefix(env: dict[str, str]) -> None:
+    if env.get("ELECTRON_RUN_AS_NODE") != "1":
+        return
+    npm_prefix = _desktop_npm_prefix()
+    if not npm_prefix:
+        return
+    env.setdefault("NPM_CONFIG_PREFIX", npm_prefix)
+    prefix_bin = str(Path(npm_prefix) / "bin")
+    current_path = str(env.get("PATH", ""))
+    entries = [entry for entry in current_path.split(os.pathsep) if entry]
+    env["PATH"] = os.pathsep.join([prefix_bin, *[entry for entry in entries if entry != prefix_bin]])
 
 
 def _run_npm(args: list[str], **kwargs):
@@ -292,6 +314,7 @@ def _run_npm(args: list[str], **kwargs):
     merged_env = dict(env)
     if extra_env:
         merged_env.update(extra_env)
+    _apply_desktop_npm_prefix(merged_env)
     return subprocess.run([*cmd, *args], env=merged_env, **kwargs)
 
 
@@ -1268,7 +1291,7 @@ def _handle_packaged_update(progress_fn=None, *, include_clis: bool = True) -> s
     try:
         _emit_progress(progress_fn, "Downloading and applying the latest npm package...")
         result = _run_npm(
-            ["update", "-g", "nexo-brain"],
+            ["install", "-g", "nexo-brain@latest"],
             capture_output=True, text=True, timeout=120,
             env={**os.environ, "NEXO_HOME": str(NEXO_HOME)},
         )

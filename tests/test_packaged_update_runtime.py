@@ -333,7 +333,7 @@ def test_handle_packaged_update_reloads_launchagents_after_successful_bump(monke
     )
 
     def fake_run(args, **kwargs):
-        if args == ["npm", "update", "-g", "nexo-brain"]:
+        if args == ["npm", "install", "-g", "nexo-brain@latest"]:
             return mock.Mock(returncode=0, stdout="", stderr="")
         raise AssertionError(f"unexpected subprocess call: {args}")
 
@@ -355,9 +355,11 @@ def test_handle_packaged_update_uses_desktop_managed_npm_runtime(monkeypatch):
     versions = iter(["7.1.1", "7.1.2"])
     desktop_node = "/Applications/NEXO Desktop.app/Contents/MacOS/NEXO Desktop"
     bundled_npm_cli = "/Applications/NEXO Desktop.app/Contents/Resources/app.asar.unpacked/node_modules/npm/bin/npm-cli.js"
+    managed_prefix = "/Users/franciscoc/.nexo/runtime/bootstrap/npm-global"
 
     monkeypatch.setenv("NEXO_DESKTOP_NODE", desktop_node)
     monkeypatch.setenv("NEXO_DESKTOP_NPM_CLI", bundled_npm_cli)
+    monkeypatch.setenv("NEXO_DESKTOP_NPM_PREFIX", managed_prefix)
     monkeypatch.setattr(update, "_read_version", lambda: next(versions))
     monkeypatch.setattr(update, "_backup_databases", lambda: ("backup-dir", None))
     monkeypatch.setattr(update, "_backup_code_tree", lambda: ("code-backup", None))
@@ -385,7 +387,7 @@ def test_handle_packaged_update_uses_desktop_managed_npm_runtime(monkeypatch):
         "write_restart_required_marker",
         lambda from_version, to_version, **_kw: {"path": f"/tmp/mcp-restart-required-{to_version}.json"},
     )
-    monkeypatch.setattr(update.Path, "exists", lambda self: str(self) == desktop_node)
+    monkeypatch.setattr(update.Path, "exists", lambda self: str(self) in {desktop_node, bundled_npm_cli})
 
     captured = {}
 
@@ -399,8 +401,10 @@ def test_handle_packaged_update_uses_desktop_managed_npm_runtime(monkeypatch):
     result = update._handle_packaged_update(include_clis=False)
 
     assert "UPDATE SUCCESSFUL (packaged install)" in result
-    assert captured["args"] == [desktop_node, bundled_npm_cli, "update", "-g", "nexo-brain"]
+    assert captured["args"] == [desktop_node, bundled_npm_cli, "install", "-g", "nexo-brain@latest"]
     assert captured["env"]["ELECTRON_RUN_AS_NODE"] == "1"
+    assert captured["env"]["NPM_CONFIG_PREFIX"] == managed_prefix
+    assert captured["env"]["PATH"].split(":")[0] == f"{managed_prefix}/bin"
 
 
 def test_handle_packaged_update_finalizes_layout_before_import_verification(monkeypatch):
@@ -446,7 +450,7 @@ def test_handle_packaged_update_finalizes_layout_before_import_verification(monk
     )
 
     def fake_run(args, **kwargs):
-        if args == ["npm", "update", "-g", "nexo-brain"]:
+        if args == ["npm", "install", "-g", "nexo-brain@latest"]:
             return mock.Mock(returncode=0, stdout="", stderr="")
         raise AssertionError(f"unexpected subprocess call: {args}")
 
@@ -480,7 +484,7 @@ def test_handle_packaged_update_runs_maintenance_when_version_unchanged(monkeypa
     monkeypatch.setattr(update, "write_restart_required_marker", lambda **_kw: (_ for _ in ()).throw(AssertionError("no restart marker for unchanged version")))
 
     def fake_run(args, **kwargs):
-        if args == ["npm", "update", "-g", "nexo-brain"]:
+        if args == ["npm", "install", "-g", "nexo-brain@latest"]:
             return mock.Mock(returncode=0, stdout="", stderr="")
         raise AssertionError(f"unexpected subprocess call: {args}")
 
@@ -522,7 +526,7 @@ def _common_packaged_update_stubs(monkeypatch, update, versions):
     )
 
     def fake_run(args, **kwargs):
-        if args == ["npm", "update", "-g", "nexo-brain"]:
+        if args == ["npm", "install", "-g", "nexo-brain@latest"]:
             return mock.Mock(returncode=0, stdout="", stderr="")
         raise AssertionError(f"unexpected subprocess call: {args}")
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## [7.25.2] - 2026-05-24
+
+### Fixed — Desktop-managed Brain updates
+
+- **Desktop-managed `nexo update` now installs `nexo-brain@latest` through a writable managed npm prefix.** Bundled npm no longer falls back to the macOS app bundle as its global prefix, which could report success while leaving the active Brain runtime unchanged.
+- **Coverage:** packaged-update regression test for Electron-managed npm command, prefix and install behavior.
+
 ## [7.25.1] - 2026-05-24
 
 ### Fixed — operational guardrail audit noise
