@@ -24,6 +24,57 @@ def test_local_context_migration_tables_exist():
     assert row is not None
 
 
+def test_local_context_repairs_legacy_sidecar_v2_columns_before_source_indexes():
+    close_local_context_db()
+    db_path = local_context_db_path()
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    raw = sqlite3.connect(db_path)
+    try:
+        raw.executescript(
+            """
+            CREATE TABLE local_index_roots (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                root_path TEXT NOT NULL UNIQUE,
+                display_path TEXT NOT NULL,
+                mode TEXT NOT NULL DEFAULT 'normal',
+                depth INTEGER NOT NULL DEFAULT 2,
+                status TEXT NOT NULL DEFAULT 'active',
+                last_scan_at REAL,
+                created_at REAL NOT NULL,
+                updated_at REAL NOT NULL
+            );
+            CREATE TABLE local_index_exclusions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                path TEXT NOT NULL UNIQUE,
+                display_path TEXT NOT NULL,
+                reason TEXT NOT NULL DEFAULT 'user',
+                created_at REAL NOT NULL
+            );
+            INSERT INTO local_index_roots(root_path, display_path, mode, depth, status, created_at, updated_at)
+            VALUES ('/legacy-root', '/legacy-root', 'normal', 2, 'active', 1, 1);
+            INSERT INTO local_index_exclusions(path, display_path, reason, created_at)
+            VALUES ('/legacy-root/System', '/legacy-root/System', 'legacy', 1);
+            """
+        )
+        raw.commit()
+    finally:
+        raw.close()
+
+    conn = get_local_context_db()
+
+    root_columns = {row["name"] for row in conn.execute("PRAGMA table_info(local_index_roots)").fetchall()}
+    exclusion_columns = {row["name"] for row in conn.execute("PRAGMA table_info(local_index_exclusions)").fetchall()}
+    assert {"source", "remote", "seed_version"}.issubset(root_columns)
+    assert {"source", "kind"}.issubset(exclusion_columns)
+
+    root = conn.execute("SELECT source, remote, seed_version FROM local_index_roots WHERE root_path='/legacy-root'").fetchone()
+    exclusion = conn.execute("SELECT source, kind FROM local_index_exclusions WHERE path='/legacy-root/System'").fetchone()
+    assert dict(root) == {"source": "legacy", "remote": 0, "seed_version": 1}
+    assert dict(exclusion) == {"source": "legacy", "kind": "folder"}
+    assert conn.execute("SELECT 1 FROM sqlite_master WHERE type='index' AND name='idx_local_index_roots_source'").fetchone()
+    assert conn.execute("SELECT 1 FROM sqlite_master WHERE type='index' AND name='idx_local_index_exclusions_source'").fetchone()
+
+
 def test_local_context_migrates_legacy_rows_out_of_main_db():
     main = get_db()
     main.execute(

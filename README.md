@@ -18,7 +18,7 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.25.5` is the current packaged-runtime line. Patch release over v7.25.4 - explicit user-included Local Memory roots can override default system/noisy-tree skips, while Brain LocalIndex operator messages stay in English and Desktop continues to enforce the Core-pinned Python 3.12 runtime.
+Version `7.25.6` is the current packaged-runtime line. Patch release over v7.25.5 - existing Local Memory sidecar databases repair legacy root/exclusion columns before source-dependent indexes are created, and core background crons prefer the NEXO-managed Python runtime.
 
 Previously in `7.25.4`: patch release over v7.25.3 - Local Memory starts from safe user-content and email roots, adds configurable included/excluded file types, and cleans legacy whole-disk index state with backup or archive-rebuild safety.
 

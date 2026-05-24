@@ -1767,6 +1767,7 @@ def _m62_memory_observations_fts_trigger_fix(conn):
 
 def _m63_local_context_layer(conn):
     """Local Context Layer storage for on-device memory indexing."""
+    _m63_repair_legacy_local_context_columns(conn)
     conn.executescript(
         """
         CREATE TABLE IF NOT EXISTS local_index_roots (
@@ -1993,6 +1994,35 @@ def _m63_local_context_layer(conn):
             ON local_embeddings(chunk_id);
         """
     )
+
+
+def _table_exists(conn, table: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=? LIMIT 1",
+        (table,),
+    ).fetchone()
+    return bool(row)
+
+
+def _m63_repair_legacy_local_context_columns(conn):
+    """Add v2 columns before m63 creates indexes that reference them.
+
+    Existing sidecar DBs can already have m63-era tables without the v2
+    columns. CREATE TABLE IF NOT EXISTS will not alter those tables, so index
+    creation must be preceded by additive repairs.
+    """
+    if _table_exists(conn, "local_index_roots"):
+        _migrate_add_column(conn, "local_index_roots", "source", "TEXT NOT NULL DEFAULT 'legacy'")
+        _migrate_add_column(conn, "local_index_roots", "remote", "INTEGER NOT NULL DEFAULT 0")
+        _migrate_add_column(conn, "local_index_roots", "seed_version", "INTEGER NOT NULL DEFAULT 1")
+    if _table_exists(conn, "local_index_exclusions"):
+        _migrate_add_column(conn, "local_index_exclusions", "source", "TEXT NOT NULL DEFAULT 'legacy'")
+        _migrate_add_column(conn, "local_index_exclusions", "kind", "TEXT NOT NULL DEFAULT 'folder'")
+    if _table_exists(conn, "local_index_file_type_rules"):
+        _migrate_add_column(conn, "local_index_file_type_rules", "source", "TEXT NOT NULL DEFAULT 'legacy'")
+        _migrate_add_column(conn, "local_index_file_type_rules", "priority", "INTEGER NOT NULL DEFAULT 0")
+        _migrate_add_column(conn, "local_index_file_type_rules", "reason", "TEXT NOT NULL DEFAULT ''")
+        _migrate_add_column(conn, "local_index_file_type_rules", "updated_at", "REAL NOT NULL DEFAULT 0")
 
 
 def _m64_local_context_live_dirs(conn):

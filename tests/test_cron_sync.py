@@ -10,6 +10,36 @@ from pathlib import Path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
 
 
+def test_build_plist_uses_managed_runtime_python(tmp_path, monkeypatch):
+    from crons import sync as cron_sync
+
+    source_root = tmp_path / "repo-src"
+    runtime_root = tmp_path / "nexo-home"
+    (source_root / "scripts").mkdir(parents=True)
+    (runtime_root / "runtime" / "logs").mkdir(parents=True)
+    managed_python = runtime_root / ".venv" / "bin" / "python3"
+    managed_python.parent.mkdir(parents=True)
+    managed_python.write_text("#!/bin/sh\nexit 0\n")
+
+    (source_root / "local_index.py").write_text("print('ok')\n")
+    wrapper = source_root / "scripts" / "nexo-cron-wrapper.sh"
+    wrapper.write_text("#!/bin/bash\nexit 0\n")
+    wrapper.chmod(0o755)
+
+    monkeypatch.delenv("NEXO_RUNTIME_PYTHON", raising=False)
+    monkeypatch.delenv("NEXO_PYTHON", raising=False)
+    monkeypatch.setattr(cron_sync, "SOURCE_ROOT", source_root)
+    monkeypatch.setattr(cron_sync, "RUNTIME_ROOT", runtime_root)
+    monkeypatch.setenv("NEXO_HOME", str(runtime_root))
+    monkeypatch.setattr(cron_sync, "NEXO_HOME", runtime_root)
+    monkeypatch.setattr(cron_sync, "LOG_DIR", runtime_root / "runtime" / "logs")
+
+    plist = cron_sync.build_plist({"id": "local-index", "script": "local_index.py"})
+
+    assert plist["ProgramArguments"][3] == str(managed_python)
+    assert plist["EnvironmentVariables"]["NEXO_RUNTIME_PYTHON"] == str(managed_python)
+
+
 def test_build_plist_runs_from_runtime_root(tmp_path, monkeypatch):
     from crons import sync as cron_sync
 

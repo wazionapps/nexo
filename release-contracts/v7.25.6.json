@@ -1,0 +1,100 @@
+{
+  "release_line": "v7.25",
+  "target_version": "7.25.6",
+  "scope_owner": "NEXO",
+  "distribution": {
+    "git_updates_on": "merge_to_main",
+    "packaged_release_on": "tag_publish"
+  },
+  "required_repo_files": [
+    "package.json",
+    "CHANGELOG.md",
+    "README.md",
+    "llms.txt",
+    ".well-known/llms.txt",
+    "sitemap.xml",
+    "index.html",
+    "blog/index.html",
+    "blog/nexo-7-25-6/index.html",
+    "changelog/index.html",
+    "release-contracts/v7.25.6.json",
+    "scripts/run_v7_25_smoke.py",
+    "scripts/sync_release_artifacts.py",
+    "scripts/verify_release_readiness.py",
+    ".claude-plugin/plugin.json",
+    "clawhub-skill/SKILL.md",
+    "openclaw-plugin/package.json",
+    "openclaw-plugin/src/mcp-bridge.ts",
+    "src/db/_schema.py",
+    "src/crons/sync.py",
+    "tests/test_local_context.py",
+    "tests/test_cron_sync.py"
+  ],
+  "required_website_files": [
+    "index.html",
+    "blog/index.html",
+    "blog/nexo-7-25-6/index.html",
+    "changelog/index.html",
+    "llms.txt",
+    ".well-known/llms.txt",
+    "sitemap.xml"
+  ],
+  "smoke": {
+    "required_groups": [
+      "local_index_legacy_sidecar_migration",
+      "managed_python_core_crons",
+      "local_index_roots_v2",
+      "local_index_privacy_hygiene",
+      "managed_python_contract",
+      "release_surface_contract"
+    ],
+    "max_age_hours": 48
+  },
+  "publication": {
+    "status": "ready",
+    "checklist_complete": true,
+    "blockers": []
+  },
+  "gates": [
+    {
+      "id": "legacy_sidecar_schema_repair",
+      "title": "Local Memory repairs legacy sidecar schema before source-dependent indexes",
+      "status": "complete",
+      "evidence_required": [
+        "Existing local_index_roots rows missing source/remote/seed_version are preserved and repaired",
+        "Existing local_index_exclusions rows missing source/kind are preserved and repaired",
+        "Source-dependent indexes are created after the additive repair"
+      ]
+    },
+    {
+      "id": "managed_python_core_crons",
+      "title": "Core background crons prefer the NEXO-managed Python runtime",
+      "status": "complete",
+      "evidence_required": [
+        "macOS LaunchAgents use the managed runtime Python when available",
+        "Linux timers and WSL host Local Memory tasks use the same resolver",
+        "NEXO_RUNTIME_PYTHON is exported to managed cron environments"
+      ]
+    },
+    {
+      "id": "roots_v2_contract_preserved",
+      "title": "Local Memory roots v2 and file-type controls remain intact",
+      "status": "complete",
+      "evidence_required": [
+        "Default roots stay conservative and preserve email/user content",
+        "Explicit user includes still override default skipped-tree rules",
+        "File-type include/exclude overrides remain configurable"
+      ]
+    },
+    {
+      "id": "public_release_surfaces",
+      "title": "Public release surfaces and integration artifacts are aligned for v7.25.6",
+      "status": "complete",
+      "evidence_required": [
+        "README, llms, homepage, blog index, blog post, changelog page, and sitemap reference v7.25.6",
+        "Claude plugin, ClawHub skill, and OpenClaw package metadata reference 7.25.6",
+        "Release smoke and readiness checks validate the v7.25.6 contract before tag publish"
+      ]
+    }
+  ]
+}
