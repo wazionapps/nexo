@@ -58,9 +58,9 @@ SMOKE_GROUPS = [
     },
     {
         "id": "packaged_codex_bundle",
-        "description": "npm package includes the Codex wrapper and native vendor tarballs",
+        "description": "npm package stays publishable while the repo/Desktop bundle retains Codex native vendor tarballs",
         "targets": [
-            "tests/test_desktop_managed_claude_deferral.py::test_npm_package_includes_codex_bundle_directory",
+            "tests/test_desktop_managed_claude_deferral.py::test_npm_package_keeps_public_codex_bundle_publishable",
         ],
     },
     {

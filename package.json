@@ -92,7 +92,7 @@
     "!templates/**/__pycache__",
     "!templates/**/*.pyc",
     "!templates/**/*.pyo",
-    "codex/",
+    "codex/openai-codex-0.133.0.tgz",
     ".claude-plugin/",
     ".mcp.json",
     "hooks/hooks.json",

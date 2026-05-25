@@ -46,5 +46,8 @@ def test_desktop_managed_installers_never_call_host_npm_after_managed_failure():
     assert 'if (desktopManaged) return { installed: false, path: "" };' in TEXT
 
 
-def test_npm_package_includes_codex_bundle_directory():
-    assert "codex/" in set(PACKAGE.get("files") or [])
+def test_npm_package_keeps_public_codex_bundle_publishable():
+    files = set(PACKAGE.get("files") or [])
+    assert "codex/openai-codex-0.133.0.tgz" in files
+    assert "codex/" not in files
+    assert not any(re.search(r"codex/.*-(darwin|linux|win32)-", entry) for entry in files)
