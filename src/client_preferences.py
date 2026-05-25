@@ -203,12 +203,15 @@ def _managed_codex_vendor_present(home: Path | None = None) -> bool:
         managed_prefix / "node_modules" / "@openai" / "codex",
     )
     for package_root in package_roots:
-        vendor_root = package_root / "vendor"
-        if not vendor_root.exists():
-            continue
+        vendor_roots = [package_root / "vendor"]
+        optional_root = package_root / "node_modules" / "@openai"
+        if optional_root.is_dir():
+            vendor_roots.extend(item / "vendor" for item in optional_root.glob("codex-*"))
+        existing_vendor_roots = [item for item in vendor_roots if item.exists()]
         try:
-            if any(candidate.is_file() for candidate in vendor_root.rglob("bin/codex*")):
-                return True
+            for vendor_root in existing_vendor_roots:
+                if any(candidate.is_file() for candidate in vendor_root.rglob("bin/codex*")):
+                    return True
         except Exception:
             continue
     return False

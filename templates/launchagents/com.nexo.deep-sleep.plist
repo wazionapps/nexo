@@ -15,7 +15,7 @@
     <key>ProgramArguments</key>
     <array>
         <string>/bin/bash</string>
-        <string>{{NEXO_HOME}}/scripts/nexo-deep-sleep.sh</string>
+        <string>{{NEXO_HOME}}/core/scripts/nexo-deep-sleep.sh</string>
     </array>
     <key>StartCalendarInterval</key>
     <dict>
@@ -25,9 +25,9 @@
         <integer>30</integer>
     </dict>
     <key>StandardOutPath</key>
-    <string>{{NEXO_HOME}}/logs/deep-sleep-stdout.log</string>
+    <string>{{NEXO_HOME}}/runtime/logs/deep-sleep-stdout.log</string>
     <key>StandardErrorPath</key>
-    <string>{{NEXO_HOME}}/logs/deep-sleep-stderr.log</string>
+    <string>{{NEXO_HOME}}/runtime/logs/deep-sleep-stderr.log</string>
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>

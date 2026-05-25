@@ -44,6 +44,7 @@ CLAUDE_LEGACY_MODEL_HINTS = {"opus", "sonnet"}
 MODEL_PRICING_USD_PER_1M = {
     # Pricing snapshot used only when the backend does not return explicit cost.
     # Codex model names map to the current GPT-5 family pricing.
+    "gpt-5.5": {"input": 1.25, "cached_input": 0.125, "output": 10.0},
     "gpt-5.4": {"input": 1.25, "cached_input": 0.125, "output": 10.0},
     "gpt-5.4-mini": {"input": 0.25, "cached_input": 0.025, "output": 2.0},
 }
@@ -66,7 +67,8 @@ def _canonical_pricing_model(model: str) -> str:
     lowered = str(model or "").strip().lower()
     lowered = lowered.split("[", 1)[0]
     aliases = {
-        "gpt-5": "gpt-5.4",
+        "gpt-5": "gpt-5.5",
+        "gpt-5.5": "gpt-5.5",
         "gpt-5.4": "gpt-5.4",
         "gpt-5-mini": "gpt-5.4-mini",
         "gpt-5.4-mini": "gpt-5.4-mini",

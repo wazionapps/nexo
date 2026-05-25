@@ -383,18 +383,22 @@ def _effective_file_type_rule(conn, extension: str) -> dict:
 
 
 def list_file_type_rules(*, readonly: bool = True) -> dict:
-    if not readonly:
+    def _list() -> dict:
+        if readonly:
+            conn = _read_conn()
+            try:
+                rows = _list_file_type_rules_conn(conn)
+            finally:
+                _close_read_conn(conn)
+            return _shape_file_type_rules(rows)
+
         conn = _conn()
         seed_core_file_type_rules(conn)
         conn.commit()
         rows = _list_file_type_rules_conn(conn)
-    else:
-        conn = _read_conn()
-        try:
-            rows = _list_file_type_rules_conn(conn)
-        finally:
-            _close_read_conn(conn)
-    return _shape_file_type_rules(rows)
+        return _shape_file_type_rules(rows)
+
+    return _with_sqlite_busy_retry(_list)
 
 
 def _purge_assets_by_extension(conn, extension: str) -> dict:
@@ -406,49 +410,58 @@ def _purge_assets_by_extension(conn, extension: str) -> dict:
 
 
 def set_file_type_rule(extension: str, *, action: str = "extract", source: str = "user", priority: int | None = None, reason: str = "user") -> dict:
-    conn = _conn()
-    ext = _normalize_extension(extension)
-    if not ext:
-        return {"ok": False, "error": "extension_required"}
-    normalized_action = _normalize_file_type_action(action)
-    source_value = _normalize_source(source)
-    priority_value = int(priority if priority is not None else (82 if normalized_action == "extract" else 20 if normalized_action == "metadata" else 0))
-    timestamp = now()
-    conn.execute(
-        """
-        INSERT INTO local_index_file_type_rules(extension, action, source, priority, reason, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(extension, source) DO UPDATE SET
-          action=excluded.action,
-          priority=excluded.priority,
-          reason=excluded.reason,
-          updated_at=excluded.updated_at
-        """,
-        (ext, normalized_action, source_value, priority_value, reason, timestamp, timestamp),
-    )
-    cleanup = _purge_assets_by_extension(conn, ext) if normalized_action == "ignore" and source_value == "user" else {"assets": 0}
-    conn.commit()
-    log_event("info", "file_type_rule_set", "Local memory file type rule set", extension=ext, action=normalized_action, source=source_value, cleanup=cleanup)
-    return {"ok": True, "extension": ext, "action": normalized_action, "source": source_value, "priority": priority_value, "cleanup": cleanup}
+    def _set() -> dict:
+        conn = _conn()
+        ext = _normalize_extension(extension)
+        if not ext:
+            return {"ok": False, "error": "extension_required"}
+        normalized_action = _normalize_file_type_action(action)
+        source_value = _normalize_source(source)
+        priority_value = int(priority if priority is not None else (82 if normalized_action == "extract" else 20 if normalized_action == "metadata" else 0))
+        timestamp = now()
+        conn.execute(
+            """
+            INSERT INTO local_index_file_type_rules(extension, action, source, priority, reason, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(extension, source) DO UPDATE SET
+              action=excluded.action,
+              priority=excluded.priority,
+              reason=excluded.reason,
+              updated_at=excluded.updated_at
+            """,
+            (ext, normalized_action, source_value, priority_value, reason, timestamp, timestamp),
+        )
+        cleanup = _purge_assets_by_extension(conn, ext) if normalized_action == "ignore" and source_value == "user" else {"assets": 0}
+        conn.commit()
+        log_event("info", "file_type_rule_set", "Local memory file type rule set", extension=ext, action=normalized_action, source=source_value, cleanup=cleanup)
+        return {"ok": True, "extension": ext, "action": normalized_action, "source": source_value, "priority": priority_value, "cleanup": cleanup}
+
+    return _with_sqlite_busy_retry(_set)
 
 
 def remove_file_type_rule(extension: str, *, source: str = "user") -> dict:
-    conn = _conn()
-    ext = _normalize_extension(extension)
-    source_value = _normalize_source(source)
-    conn.execute("DELETE FROM local_index_file_type_rules WHERE extension=? AND source=?", (ext, source_value))
-    conn.commit()
-    log_event("info", "file_type_rule_removed", "Local memory file type rule removed", extension=ext, source=source_value)
-    return {"ok": True, "extension": ext, "source": source_value}
+    def _remove() -> dict:
+        conn = _conn()
+        ext = _normalize_extension(extension)
+        source_value = _normalize_source(source)
+        conn.execute("DELETE FROM local_index_file_type_rules WHERE extension=? AND source=?", (ext, source_value))
+        conn.commit()
+        log_event("info", "file_type_rule_removed", "Local memory file type rule removed", extension=ext, source=source_value)
+        return {"ok": True, "extension": ext, "source": source_value}
+
+    return _with_sqlite_busy_retry(_remove)
 
 
 def reset_file_type_rules() -> dict:
-    conn = _conn()
-    deleted = int(conn.execute("DELETE FROM local_index_file_type_rules WHERE source='user'").rowcount or 0)
-    seeded = seed_core_file_type_rules(conn)
-    conn.commit()
-    log_event("info", "file_type_rules_reset", "Local memory user file type overrides reset", deleted=deleted)
-    return {"ok": True, "deleted": deleted, "core_rules": int(seeded.get("rules") or 0), "file_types": list_file_type_rules(readonly=False)}
+    def _reset() -> dict:
+        conn = _conn()
+        deleted = int(conn.execute("DELETE FROM local_index_file_type_rules WHERE source='user'").rowcount or 0)
+        seeded = seed_core_file_type_rules(conn)
+        conn.commit()
+        log_event("info", "file_type_rules_reset", "Local memory user file type overrides reset", deleted=deleted)
+        return {"ok": True, "deleted": deleted, "core_rules": int(seeded.get("rules") or 0), "file_types": list_file_type_rules(readonly=False)}
+
+    return _with_sqlite_busy_retry(_reset)
 
 
 def _file_type_action(conn, path: str | Path) -> str:

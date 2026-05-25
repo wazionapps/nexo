@@ -14,16 +14,16 @@
     <key>ProgramArguments</key>
     <array>
         <string>/bin/bash</string>
-        <string>{{NEXO_HOME}}/scripts/nexo-watchdog.sh</string>
+        <string>{{NEXO_HOME}}/core/scripts/nexo-watchdog.sh</string>
     </array>
     <key>StartInterval</key>
     <integer>1800</integer>
     <key>RunAtLoad</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>{{NEXO_HOME}}/logs/watchdog-stdout.log</string>
+    <string>{{NEXO_HOME}}/runtime/logs/watchdog-stdout.log</string>
     <key>StandardErrorPath</key>
-    <string>{{NEXO_HOME}}/logs/watchdog-stderr.log</string>
+    <string>{{NEXO_HOME}}/runtime/logs/watchdog-stderr.log</string>
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>

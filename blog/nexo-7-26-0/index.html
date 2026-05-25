@@ -3,22 +3,22 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NEXO 7.26.0: provider runtime parity for Claude and Codex</title>
-<meta name="description" content="NEXO Brain v7.26.0 adds provider runtime parity so Desktop-managed Brain can select Anthropic Claude or OpenAI Codex without confusing runtime login with API-key preferences.">
+<title>NEXO 7.26.0: provider runtime parity</title>
+<meta name="description" content="NEXO Brain v7.26.0 adds provider runtime parity so Desktop-managed Brain can select Anthropic or OpenAI without confusing runtime login with API-key preferences.">
 <link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-26-0/">
 <meta name="robots" content="index, follow">
 <link rel="stylesheet" href="/assets/style.css">
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.26.0: provider runtime parity for Claude and Codex","datePublished":"2026-05-25","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.26.0: provider runtime parity","datePublished":"2026-05-25","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
 </head>
 <body>
 <main class="section-compact">
 <div class="container" style="max-width:860px;">
 <a href="/blog/">Back to blog</a>
 <p class="section-label">Release notes</p>
-<h1>NEXO 7.26.0 - provider runtime parity for Claude and Codex</h1>
-<p>v7.26.0 is the provider-runtime parity release for Desktop-managed Brain. The runtime account surface can now select Anthropic Claude or OpenAI Codex while keeping that choice separate from API-key or BYOK preferences.</p>
-<p>Brain now persists provider/client/session metadata across interactive sessions, automation runs, and cron executions. A conversation that changes runtime records the provider switch and starts the new engine with continuity metadata instead of silently reusing stale Claude or Codex state.</p>
-<p>The managed install path now bundles Codex runtime artifacts, validates native vendor presence, and fails closed in Desktop-managed mode instead of falling back to a global host install. That keeps Mac and Windows Desktop behavior aligned with the same managed-runtime contract already used for Claude Code.</p>
+<h1>NEXO 7.26.0 - provider runtime parity</h1>
+<p>v7.26.0 is the provider-runtime parity release for Desktop-managed Brain. The runtime account surface can now select Anthropic or OpenAI while keeping that choice separate from API-key or BYOK preferences.</p>
+<p>Brain now persists provider/client/session metadata across interactive sessions, automation runs, and cron executions. A conversation that changes runtime records the provider switch and starts the new engine with continuity metadata instead of silently reusing stale provider state.</p>
+<p>The managed install path now bundles OpenAI runtime artifacts, validates native provider presence, and fails closed in Desktop-managed mode instead of falling back to a global host install. That keeps Mac and Windows Desktop behavior aligned with the same managed-runtime contract already used for Anthropic.</p>
 <pre><code>nexo provider status
 nexo provider select openai
 nexo preferences --chat-provider openai --automation-provider openai</code></pre>

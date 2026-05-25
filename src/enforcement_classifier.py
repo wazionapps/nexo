@@ -121,7 +121,7 @@ def classify(
         context: Optional extra context appended to the user message.
         call_raw: Injection point for tests — defaults to call_model_raw.
         cache: TTL cache instance. Tests can pass a fresh cache.
-        tier: Resonance tier. Default "muy_bajo" (Haiku / gpt-5.4-mini).
+        tier: Resonance tier. Default "muy_bajo" (Haiku / gpt-5.5 low).
         tristate: When True, return "yes" / "no" / "unknown" as strings.
             "unknown" represents the conservative-parse-fallback path
             which existing bool callers cannot distinguish from a real

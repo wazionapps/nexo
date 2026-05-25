@@ -15,7 +15,7 @@
     <key>ProgramArguments</key>
     <array>
         <string>/usr/bin/python3</string>
-        <string>{{NEXO_HOME}}/scripts/nexo-postmortem-consolidator.py</string>
+        <string>{{NEXO_HOME}}/core/scripts/nexo-postmortem-consolidator.py</string>
     </array>
     <key>RunAtLoad</key>
     <false/>
@@ -27,9 +27,9 @@
         <integer>30</integer>
     </dict>
     <key>StandardOutPath</key>
-    <string>{{NEXO_HOME}}/logs/postmortem-stdout.log</string>
+    <string>{{NEXO_HOME}}/runtime/logs/postmortem-stdout.log</string>
     <key>StandardErrorPath</key>
-    <string>{{NEXO_HOME}}/logs/postmortem-stderr.log</string>
+    <string>{{NEXO_HOME}}/runtime/logs/postmortem-stderr.log</string>
     <key>EnvironmentVariables</key>
     <dict>
         <key>HOME</key>

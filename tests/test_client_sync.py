@@ -464,7 +464,7 @@ def test_sync_codex_uses_codex_cli_when_available(tmp_path, monkeypatch):
     assert "NEXO Shared Brain for Codex" in bootstrap_text
     config_path = home / ".codex" / "config.toml"
     config_text = config_path.read_text()
-    assert 'model = "gpt-5.4"' in config_text
+    assert 'model = "gpt-5.5"' in config_text
     assert 'model_reasoning_effort = "xhigh"' in config_text
     assert "initial_messages = [{ role = \"system\"" in config_text
     assert "[nexo.codex]" in config_text
@@ -525,7 +525,7 @@ def test_sync_codex_preserves_explicit_approval_and_sandbox(tmp_path):
     result = client_sync._sync_codex_managed_config(
         config_path,
         bootstrap_prompt="",
-        runtime_profile={"model": "gpt-5.4-mini", "reasoning_effort": "low"},
+        runtime_profile={"model": "gpt-5.5", "reasoning_effort": "low"},
         server_config={},
     )
 
@@ -533,7 +533,7 @@ def test_sync_codex_preserves_explicit_approval_and_sandbox(tmp_path):
     config_text = config_path.read_text(encoding="utf-8")
     assert 'approval_policy = "on-request"' in config_text
     assert 'sandbox_mode = "workspace-write"' in config_text
-    assert 'model = "gpt-5.4-mini"' in config_text
+    assert 'model = "gpt-5.5"' in config_text
     assert "hooks = true" in config_text
     assert "codex_hooks" not in config_text
 
@@ -915,6 +915,40 @@ def test_ensure_codex_installed_desktop_managed_does_not_call_host_npm(monkeypat
     assert result["ok"] is False
     assert result["action"] == "failed"
     assert "global `npm -g` fallbacks are disabled" in result["error"]
+
+
+def test_codex_vendor_present_accepts_nested_optional_native_package(tmp_path):
+    import client_sync
+
+    managed_prefix = tmp_path / "npm-global"
+    vendor_bin = (
+        managed_prefix
+        / "lib"
+        / "node_modules"
+        / "@openai"
+        / "codex"
+        / "node_modules"
+        / "@openai"
+        / "codex-darwin-arm64"
+        / "vendor"
+        / "aarch64-apple-darwin"
+        / "bin"
+        / "codex"
+    )
+    vendor_bin.parent.mkdir(parents=True, exist_ok=True)
+    vendor_bin.write_text("#!/bin/sh\n")
+
+    assert client_sync._codex_vendor_present(managed_prefix) is True
+
+
+def test_codex_bundle_dir_can_come_from_desktop_env(monkeypatch, tmp_path):
+    import client_sync
+
+    bundled_codex = tmp_path / "Resources" / "brain-bundle" / "codex"
+    bundled_codex.mkdir(parents=True)
+    monkeypatch.setenv("NEXO_CODEX_BUNDLE_DIR", str(bundled_codex))
+
+    assert client_sync._codex_bundle_dir() == bundled_codex
 
 
 def test_codex_bundled_install_uses_wrapper_before_native_tarball(monkeypatch, tmp_path):

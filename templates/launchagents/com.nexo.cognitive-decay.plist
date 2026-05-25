@@ -14,7 +14,7 @@
     <key>ProgramArguments</key>
     <array>
         <string>/usr/bin/python3</string>
-        <string>{{NEXO_HOME}}/scripts/nexo-cognitive-decay.py</string>
+        <string>{{NEXO_HOME}}/core/scripts/nexo-cognitive-decay.py</string>
     </array>
     <key>StartCalendarInterval</key>
     <dict>
@@ -24,9 +24,9 @@
         <integer>0</integer>
     </dict>
     <key>StandardOutPath</key>
-    <string>{{NEXO_HOME}}/logs/cognitive-decay-stdout.log</string>
+    <string>{{NEXO_HOME}}/runtime/logs/cognitive-decay-stdout.log</string>
     <key>StandardErrorPath</key>
-    <string>{{NEXO_HOME}}/logs/cognitive-decay-stderr.log</string>
+    <string>{{NEXO_HOME}}/runtime/logs/cognitive-decay-stderr.log</string>
     <key>RunAtLoad</key>
     <false/>
     <key>EnvironmentVariables</key>

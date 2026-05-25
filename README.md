@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.26.0` is the current packaged-runtime line. Minor release over v7.25.6 - provider runtime parity lets Desktop-managed Brain choose Anthropic Claude or OpenAI Codex, keep provider metadata on sessions/automation/crons, and provision the managed Codex runtime from bundled Desktop resources.
+Version `7.27.0` is the current packaged-runtime line. Minor release over v7.26.0 - Codex-side defaults move to verified `gpt-5.5` resonance tiers, managed config healing follows that model family, and Local Memory file-type actions tolerate transient SQLite locks.
+
+Previously in `7.26.0`: minor release over v7.25.6 - provider runtime parity lets Desktop-managed Brain choose Anthropic or OpenAI, keep provider metadata on sessions/automation/crons, and provision the managed OpenAI runtime from bundled Desktop resources.
 
 Previously in `7.25.6`: patch release over v7.25.5 - existing Local Memory sidecar databases repair legacy root/exclusion columns before source-dependent indexes are created, and core background crons prefer the NEXO-managed Python runtime.
 

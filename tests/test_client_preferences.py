@@ -22,7 +22,7 @@ def test_normalize_client_preferences_preserves_old_defaults(tmp_path):
     assert prefs["provider_runtime"]["providers"]["openai"]["client"] == "codex"
     assert prefs["provider_runtime"]["fallback_policy"]["automation"] == "fail_closed"
     assert prefs["client_runtime_profiles"]["claude_code"]["model"] == "claude-opus-4-7[1m]"
-    assert prefs["client_runtime_profiles"]["codex"]["model"] == "gpt-5.4"
+    assert prefs["client_runtime_profiles"]["codex"]["model"] == "gpt-5.5"
     assert prefs["client_runtime_profiles"]["codex"]["reasoning_effort"] == "xhigh"
     assert prefs["automation_task_profiles"]["fast"]["backend"] == ""
     assert prefs["automation_task_profiles"]["fast"]["model"] == ""
@@ -200,7 +200,7 @@ def test_client_runtime_profiles_normalize_and_default():
         {
             "client_runtime_profiles": {
                 "codex": {
-                    "model": "gpt-5.4-mini",
+                    "model": "gpt-5.5",
                     "reasoning_effort": "high",
                 }
             }
@@ -208,7 +208,7 @@ def test_client_runtime_profiles_normalize_and_default():
     )
 
     assert prefs["client_runtime_profiles"]["claude_code"]["model"] == "claude-opus-4-7[1m]"
-    assert prefs["client_runtime_profiles"]["codex"]["model"] == "gpt-5.4-mini"
+    assert prefs["client_runtime_profiles"]["codex"]["model"] == "gpt-5.5"
     assert prefs["client_runtime_profiles"]["codex"]["reasoning_effort"] == "high"
 
 
@@ -220,11 +220,11 @@ def test_resolve_automation_task_profile_returns_semantic_tier_only():
             "automation_backend": "claude_code",
             "client_runtime_profiles": {
                 "claude_code": {"model": "claude-sonnet-4-6", "reasoning_effort": "medium"},
-                "codex": {"model": "gpt-5.4", "reasoning_effort": "high"},
+                "codex": {"model": "gpt-5.5", "reasoning_effort": "high"},
             },
             "automation_task_profiles": {
                 "deep": {"backend": "claude_code", "model": "", "reasoning_effort": ""},
-                "fast": {"backend": "codex", "model": "gpt-5.4-mini", "reasoning_effort": "medium"},
+                "fast": {"backend": "codex", "model": "gpt-5.5", "reasoning_effort": "medium"},
             },
         }
     )
@@ -372,6 +372,42 @@ def test_detect_installed_clients_desktop_managed_requires_codex_vendor(monkeypa
     vendor_bin.parent.mkdir(parents=True, exist_ok=True)
     vendor_bin.write_text("#!/bin/sh\n")
     detected = client_preferences.detect_installed_clients(home)
+    assert detected["codex"]["installed"] is True
+    assert detected["codex"]["path"] == str(managed_codex)
+
+
+def test_detect_installed_clients_desktop_managed_accepts_nested_codex_vendor(monkeypatch, tmp_path):
+    import client_preferences
+
+    home = tmp_path / "home"
+    managed_prefix = home / ".nexo" / "runtime" / "bootstrap" / "npm-global"
+    managed_codex = managed_prefix / "bin" / "codex"
+    managed_codex.parent.mkdir(parents=True, exist_ok=True)
+    managed_codex.write_text("#!/bin/sh\n")
+    nested_vendor = (
+        managed_prefix
+        / "lib"
+        / "node_modules"
+        / "@openai"
+        / "codex"
+        / "node_modules"
+        / "@openai"
+        / "codex-darwin-arm64"
+        / "vendor"
+        / "aarch64-apple-darwin"
+        / "bin"
+        / "codex"
+    )
+    nested_vendor.parent.mkdir(parents=True, exist_ok=True)
+    nested_vendor.write_text("#!/bin/sh\n")
+
+    monkeypatch.setenv("NEXO_DESKTOP_MANAGED", "1")
+    monkeypatch.setattr(client_preferences.shutil, "which", lambda name: None)
+    monkeypatch.setattr(client_preferences, "sys", type("SysStub", (), {"platform": "darwin"})())
+    monkeypatch.setattr(client_preferences, "os", type("OSStub", (), {"name": "posix", "environ": dict(os.environ)})())
+
+    detected = client_preferences.detect_installed_clients(home)
+
     assert detected["codex"]["installed"] is True
     assert detected["codex"]["path"] == str(managed_codex)
 

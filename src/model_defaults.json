@@ -8,10 +8,10 @@
     "previous_defaults": ["claude-opus-4-6[1m]"]
   },
   "codex": {
-    "model": "gpt-5.4",
+    "model": "gpt-5.5",
     "reasoning_effort": "xhigh",
-    "display_name": "GPT-5.4 with max reasoning",
-    "recommendation_version": 1,
-    "previous_defaults": []
+    "display_name": "GPT-5.5 with max reasoning",
+    "recommendation_version": 2,
+    "previous_defaults": ["gpt-5.4"]
   }
 }

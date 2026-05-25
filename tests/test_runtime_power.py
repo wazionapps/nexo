@@ -101,6 +101,7 @@ def test_reload_launchagent_treats_already_loaded_from_same_plist_as_success(tmp
             return types.SimpleNamespace(returncode=5, stdout="", stderr="Bootstrap failed: 5: Input/output error")
         return types.SimpleNamespace(returncode=0, stdout="", stderr="")
 
+    monkeypatch.setenv("NEXO_ALLOW_EPHEMERAL_INSTALL", "1")
     monkeypatch.setattr(runtime_power.os, "getuid", lambda: 501)
     monkeypatch.setattr(runtime_power.subprocess, "run", fake_run)
     monkeypatch.setattr(runtime_power.time, "sleep", lambda _seconds: None)
@@ -129,6 +130,7 @@ def test_reload_launchagent_reports_error_when_bootstrap_and_legacy_load_fail(tm
             return types.SimpleNamespace(returncode=1, stdout="", stderr="legacy load denied")
         return types.SimpleNamespace(returncode=0, stdout="", stderr="")
 
+    monkeypatch.setenv("NEXO_ALLOW_EPHEMERAL_INSTALL", "1")
     monkeypatch.setattr(runtime_power.os, "getuid", lambda: 501)
     monkeypatch.setattr(runtime_power.subprocess, "run", fake_run)
 

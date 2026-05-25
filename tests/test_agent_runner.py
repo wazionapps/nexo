@@ -91,7 +91,7 @@ def test_build_interactive_client_command_uses_codex_when_selected(tmp_path, mon
             "default_resonance": "maximo",
             "client_runtime_profiles": {
                 "claude_code": {"model": "claude-opus-4-7[1m]", "reasoning_effort": "max"},
-                "codex": {"model": "gpt-5.4", "reasoning_effort": "xhigh"},
+                "codex": {"model": "gpt-5.5", "reasoning_effort": "xhigh"},
             },
         },
     )
@@ -106,7 +106,7 @@ def test_build_interactive_client_command_uses_codex_when_selected(tmp_path, mon
     ]
     assert "--full-auto" not in cmd
     assert cmd[5:7] == ["-c", 'initial_messages=[{role="system",content="You are NEXO."}]']
-    assert cmd[7:9] == ["-m", "gpt-5.4"]
+    assert cmd[7:9] == ["-m", "gpt-5.5"]
     assert cmd[9:11] == ["-c", 'model_reasoning_effort="xhigh"']
     assert cmd[-3:] == ["-C", str(tmp_path), "Start NEXO now."]
 
@@ -170,7 +170,7 @@ def test_build_interactive_client_command_preserves_claude_flags(tmp_path, monke
             "default_resonance": "maximo",
             "client_runtime_profiles": {
                 "claude_code": {"model": "claude-opus-4-7[1m]", "reasoning_effort": "max"},
-                "codex": {"model": "gpt-5.4", "reasoning_effort": "xhigh"},
+                "codex": {"model": "gpt-5.5", "reasoning_effort": "xhigh"},
             },
         },
     )
@@ -202,7 +202,7 @@ def test_run_automation_prompt_uses_claude_backend_command(monkeypatch, tmp_path
         "automation_backend": "claude_code",
         "client_runtime_profiles": {
             "claude_code": {"model": "claude-opus-4-7[1m]", "reasoning_effort": "max"},
-            "codex": {"model": "gpt-5.4", "reasoning_effort": "xhigh"},
+            "codex": {"model": "gpt-5.5", "reasoning_effort": "xhigh"},
         },
     })
 
@@ -279,7 +279,7 @@ def test_run_automation_prompt_aborts_when_runner_guard_blocks(monkeypatch, tmp_
         "automation_backend": "claude_code",
         "client_runtime_profiles": {
             "claude_code": {"model": "claude-opus-4-7[1m]", "reasoning_effort": "max"},
-            "codex": {"model": "gpt-5.4", "reasoning_effort": "xhigh"},
+            "codex": {"model": "gpt-5.5", "reasoning_effort": "xhigh"},
         },
     })
     monkeypatch.setattr(agent_runner, "_run_headless_runner_guard", lambda **kwargs: {
@@ -320,7 +320,7 @@ def test_run_automation_prompt_uses_codex_exec_output_file(monkeypatch, tmp_path
         "automation_backend": "codex",
         "client_runtime_profiles": {
             "claude_code": {"model": "claude-opus-4-7[1m]", "reasoning_effort": "max"},
-            "codex": {"model": "gpt-5.4", "reasoning_effort": "xhigh"},
+            "codex": {"model": "gpt-5.5", "reasoning_effort": "xhigh"},
         },
     })
 
@@ -362,7 +362,7 @@ def test_run_automation_prompt_uses_codex_exec_output_file(monkeypatch, tmp_path
     ]
     assert "-m" in captured["cmd"]
     model_idx = captured["cmd"].index("-m") + 1
-    assert captured["cmd"][model_idx] == "gpt-5.4"
+    assert captured["cmd"][model_idx] == "gpt-5.5"
     config_values = [captured["cmd"][idx + 1] for idx, part in enumerate(captured["cmd"]) if part == "-c"]
     assert 'initial_messages=[{role="system",content="You are NEXO."}]' in config_values
     assert 'model_reasoning_effort="xhigh"' in config_values
@@ -392,7 +392,7 @@ def test_strict_child_claude_skips_global_discipline_prompt_and_wrapper(monkeypa
         "automation_backend": "claude_code",
         "client_runtime_profiles": {
             "claude_code": {"model": "claude-opus-4-7[1m]", "reasoning_effort": "max"},
-            "codex": {"model": "gpt-5.4", "reasoning_effort": "xhigh"},
+            "codex": {"model": "gpt-5.5", "reasoning_effort": "xhigh"},
         },
     })
 
@@ -440,7 +440,7 @@ def test_full_agent_claude_keeps_global_discipline_prompt_and_wrapper(monkeypatc
         "automation_backend": "claude_code",
         "client_runtime_profiles": {
             "claude_code": {"model": "claude-opus-4-7[1m]", "reasoning_effort": "max"},
-            "codex": {"model": "gpt-5.4", "reasoning_effort": "xhigh"},
+            "codex": {"model": "gpt-5.5", "reasoning_effort": "xhigh"},
         },
     })
 
@@ -483,7 +483,7 @@ def test_strict_child_codex_skips_protocol_contract(monkeypatch, tmp_path):
         "automation_backend": "codex",
         "client_runtime_profiles": {
             "claude_code": {"model": "claude-opus-4-7[1m]", "reasoning_effort": "max"},
-            "codex": {"model": "gpt-5.4", "reasoning_effort": "xhigh"},
+            "codex": {"model": "gpt-5.5", "reasoning_effort": "xhigh"},
         },
     })
 
@@ -529,7 +529,7 @@ def test_codex_backend_records_caller_session_and_contract(monkeypatch, tmp_path
         "automation_backend": "codex",
         "client_runtime_profiles": {
             "claude_code": {"model": "claude-opus-4-7[1m]", "reasoning_effort": "max"},
-            "codex": {"model": "gpt-5.4", "reasoning_effort": "xhigh"},
+            "codex": {"model": "gpt-5.5", "reasoning_effort": "xhigh"},
         },
     })
 
@@ -568,7 +568,7 @@ def test_run_automation_prompt_marks_public_contribution_env(monkeypatch, tmp_pa
         "automation_backend": "claude_code",
         "client_runtime_profiles": {
             "claude_code": {"model": "claude-opus-4-7[1m]", "reasoning_effort": "max"},
-            "codex": {"model": "gpt-5.4", "reasoning_effort": "xhigh"},
+            "codex": {"model": "gpt-5.5", "reasoning_effort": "xhigh"},
         },
     })
 
@@ -607,11 +607,11 @@ def test_run_automation_prompt_ignores_legacy_task_profile_routing_overrides(mon
         "automation_backend": "claude_code",
         "client_runtime_profiles": {
             "claude_code": {"model": "claude-opus-4-7[1m]", "reasoning_effort": "max"},
-            "codex": {"model": "gpt-5.4", "reasoning_effort": "high"},
+            "codex": {"model": "gpt-5.5", "reasoning_effort": "high"},
         },
         "automation_task_profiles": {
             "default": {"backend": "", "model": "", "reasoning_effort": ""},
-            "fast": {"backend": "codex", "model": "gpt-5.4-mini", "reasoning_effort": "medium"},
+            "fast": {"backend": "codex", "model": "gpt-5.5", "reasoning_effort": "medium"},
             "balanced": {"backend": "", "model": "", "reasoning_effort": ""},
             "deep": {"backend": "claude_code", "model": "claude-opus-4-7[1m]", "reasoning_effort": "max"},
         },
@@ -668,11 +668,11 @@ def test_run_automation_prompt_fails_closed_when_configured_backend_is_unavailab
         "automation_backend": "claude_code",
         "client_runtime_profiles": {
             "claude_code": {"model": "claude-opus-4-7[1m]", "reasoning_effort": "max"},
-            "codex": {"model": "gpt-5.4", "reasoning_effort": "high"},
+            "codex": {"model": "gpt-5.5", "reasoning_effort": "high"},
         },
         "automation_task_profiles": {
             "default": {"backend": "", "model": "", "reasoning_effort": ""},
-            "fast": {"backend": "codex", "model": "gpt-5.4-mini", "reasoning_effort": "medium"},
+            "fast": {"backend": "codex", "model": "gpt-5.5", "reasoning_effort": "medium"},
             "balanced": {"backend": "", "model": "", "reasoning_effort": ""},
             "deep": {"backend": "claude_code", "model": "claude-opus-4-7[1m]", "reasoning_effort": "max"},
         },
@@ -719,7 +719,7 @@ def test_codex_backend_maps_legacy_opus_hint_to_configured_profile(monkeypatch, 
         "automation_backend": "codex",
         "client_runtime_profiles": {
             "claude_code": {"model": "claude-opus-4-7[1m]", "reasoning_effort": "max"},
-            "codex": {"model": "gpt-5.4-mini", "reasoning_effort": "high"},
+            "codex": {"model": "gpt-5.5", "reasoning_effort": "high"},
         },
     })
 
@@ -744,12 +744,12 @@ def test_codex_backend_maps_legacy_opus_hint_to_configured_profile(monkeypatch, 
 
     # v5.10.0:
     #   - model="opus" is a legacy hint; `_resolve_runtime_model_and_effort`
-    #     rewrites it to the configured profile model (gpt-5.4-mini).
+    #     rewrites it to the configured profile model (gpt-5.5).
     #     The resonance map does NOT override here because the caller
     #     passed an explicit (legacy) model, so mapped_model short-circuits.
     #   - reasoning_effort was empty at entry, so the resonance map fills
     #     it in: test/harness=MAXIMO → codex effort "xhigh".
-    assert captured["cmd"][captured["cmd"].index("-m") + 1] == "gpt-5.4-mini"
+    assert captured["cmd"][captured["cmd"].index("-m") + 1] == "gpt-5.5"
     config_values = [captured["cmd"][idx + 1] for idx, part in enumerate(captured["cmd"]) if part == "-c"]
     assert 'initial_messages=[{role="system",content="You are NEXO."}]' in config_values
     assert 'model_reasoning_effort="xhigh"' in config_values
@@ -769,7 +769,7 @@ def test_codex_backend_uses_configured_profile_when_model_is_empty(monkeypatch, 
         "automation_backend": "codex",
         "client_runtime_profiles": {
             "claude_code": {"model": "claude-opus-4-7[1m]", "reasoning_effort": "max"},
-            "codex": {"model": "gpt-5.4-mini", "reasoning_effort": "high"},
+            "codex": {"model": "gpt-5.5", "reasoning_effort": "high"},
         },
     })
 
@@ -793,8 +793,8 @@ def test_codex_backend_uses_configured_profile_when_model_is_empty(monkeypatch, 
     )
 
     # See note in the prior test: the resonance map (test/harness=MAXIMO)
-    # drives the values to gpt-5.4/xhigh in v5.10.0 and onwards.
-    assert captured["cmd"][captured["cmd"].index("-m") + 1] == "gpt-5.4"
+    # drives the values to gpt-5.5/xhigh in v5.10.0 and onwards.
+    assert captured["cmd"][captured["cmd"].index("-m") + 1] == "gpt-5.5"
     config_values = [captured["cmd"][idx + 1] for idx, part in enumerate(captured["cmd"]) if part == "-c"]
     assert 'initial_messages=[{role="system",content="You are NEXO."}]' in config_values
     assert 'model_reasoning_effort="xhigh"' in config_values
@@ -818,7 +818,7 @@ def test_codex_runner_skips_inline_bootstrap_when_global_bootstrap_is_managed(mo
             "default_resonance": "maximo",
             "client_runtime_profiles": {
                 "claude_code": {"model": "claude-opus-4-7[1m]", "reasoning_effort": "max"},
-                "codex": {"model": "gpt-5.4", "reasoning_effort": "xhigh"},
+                "codex": {"model": "gpt-5.5", "reasoning_effort": "xhigh"},
             },
         },
     )
@@ -881,7 +881,7 @@ def test_build_followup_terminal_shell_command_uses_codex_interactive_flags(monk
             "automation_backend": "codex",
             "client_runtime_profiles": {
                 "claude_code": {"model": "claude-opus-4-7[1m]", "reasoning_effort": "max"},
-                "codex": {"model": "gpt-5.4", "reasoning_effort": "xhigh"},
+                "codex": {"model": "gpt-5.5", "reasoning_effort": "xhigh"},
             },
         },
     )
@@ -905,7 +905,7 @@ def test_codex_telemetry_estimates_cost_from_usage_snapshot():
     _, telemetry = agent_runner._extract_codex_telemetry(
         _codex_json_usage(input_tokens=1_000_000, cached_input_tokens=0, output_tokens=0),
         final_stdout="OK",
-        model="gpt-5.4",
+        model="gpt-5.5",
     )
 
     assert telemetry["usage"]["input_tokens"] == 1_000_000

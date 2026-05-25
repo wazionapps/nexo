@@ -15,7 +15,7 @@
     <key>ProgramArguments</key>
     <array>
         <string>/usr/bin/python3</string>
-        <string>{{NEXO_HOME}}/scripts/nexo-daily-self-audit.py</string>
+        <string>{{NEXO_HOME}}/core/scripts/nexo-daily-self-audit.py</string>
     </array>
 
     <key>StartCalendarInterval</key>
@@ -27,10 +27,10 @@
     </dict>
 
     <key>StandardOutPath</key>
-    <string>{{NEXO_HOME}}/logs/self-audit-stdout.log</string>
+    <string>{{NEXO_HOME}}/runtime/logs/self-audit-stdout.log</string>
 
     <key>StandardErrorPath</key>
-    <string>{{NEXO_HOME}}/logs/self-audit-stderr.log</string>
+    <string>{{NEXO_HOME}}/runtime/logs/self-audit-stderr.log</string>
 
     <key>EnvironmentVariables</key>
     <dict>

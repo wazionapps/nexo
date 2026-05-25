@@ -1,5 +1,14 @@
 # Changelog
 
+## [7.27.0] - 2026-05-25
+
+### Fixed — provider parity and GPT-5.5 defaults
+
+- **Codex-side Brain defaults now use `gpt-5.5` across all resonance tiers.** Max/alto/medio/bajo/muy bajo resolve to the verified `gpt-5.5` model with `xhigh/high/medium/low/low` reasoning efforts.
+- **Desktop-managed OpenAI bootstrap now heals to the current model family.** Managed config recovery no longer writes `gpt-5.4` when it repairs stale or Anthropic-only config.
+- **Local Memory file-type actions tolerate transient SQLite locks.** Include/exclude operations share the same busy-retry path as the rest of Local Context so Desktop button clicks do not disappear under background indexing.
+- **Coverage:** resonance-loader/map tests, client preferences/sync tests, agent-runner Codex routing tests, Local Context file-type tests, and direct Codex CLI verification for `gpt-5.5` low/medium/high/xhigh.
+
 ## [7.26.0] - 2026-05-25
 
 ### Added — provider runtime parity

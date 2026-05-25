@@ -15,7 +15,7 @@
     <key>ProgramArguments</key>
     <array>
         <string>/usr/bin/python3</string>
-        <string>{{NEXO_HOME}}/scripts/nexo-synthesis.py</string>
+        <string>{{NEXO_HOME}}/core/scripts/nexo-synthesis.py</string>
     </array>
 
     <key>StartCalendarInterval</key>

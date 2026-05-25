@@ -115,8 +115,8 @@ const PUBLIC_CONTRIBUTION_UPSTREAM = "wazionapps/nexo";
 const MODEL_DEFAULTS_PATH = path.join(__dirname, "..", "src", "model_defaults.json");
 function _loadModelDefaults() {
   const fallback = {
-    claude_code: { model: "claude-opus-4-6[1m]", reasoning_effort: "", display_name: "Opus 4.6 with 1M context" },
-    codex: { model: "gpt-5.4", reasoning_effort: "xhigh", display_name: "GPT-5.4 with max reasoning" },
+    claude_code: { model: "claude-opus-4-7[1m]", reasoning_effort: "max", display_name: "Opus 4.7 with 1M context" },
+    codex: { model: "gpt-5.5", reasoning_effort: "xhigh", display_name: "GPT-5.5 with max reasoning" },
   };
   try {
     const raw = JSON.parse(fs.readFileSync(MODEL_DEFAULTS_PATH, "utf8"));

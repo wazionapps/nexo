@@ -34,6 +34,7 @@ REPO_PREFIXES = (
 os.environ.setdefault("NEXO_TEST_DB", str(COLLECTION_RUNTIME / "collection_nexo.db"))
 os.environ.setdefault("NEXO_COGNITIVE_DB", str(COLLECTION_RUNTIME / "collection_cognitive.db"))
 os.environ.setdefault("NEXO_LOCAL_CONTEXT_DB", str(COLLECTION_RUNTIME / "collection_local_context.db"))
+os.environ.setdefault("NEXO_HOME", str(COLLECTION_RUNTIME / "nexo-home"))
 os.environ.setdefault("NEXO_SKIP_FS_INDEX", "1")
 os.environ.setdefault("NEXO_SKIP_LEARNING_COGNITIVE_INGEST", "1")
 os.environ.setdefault("NEXO_SKIP_SEMANTIC_SIMILARITY", "1")

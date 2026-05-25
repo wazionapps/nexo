@@ -14,7 +14,7 @@
     <key>ProgramArguments</key>
     <array>
         <string>/usr/bin/python3</string>
-        <string>{{NEXO_HOME}}/scripts/nexo-immune.py</string>
+        <string>{{NEXO_HOME}}/core/scripts/nexo-immune.py</string>
     </array>
 
     <key>StartInterval</key>

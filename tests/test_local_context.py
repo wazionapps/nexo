@@ -764,6 +764,26 @@ def test_file_type_rules_allow_user_include_and_exclude_overrides(tmp_path):
     assert conn.execute("SELECT COUNT(*) AS total FROM local_assets WHERE path=?", (str(note),)).fetchone()["total"] == 0
 
 
+def test_file_type_rule_write_retries_when_sidecar_db_is_busy(monkeypatch):
+    calls = {"count": 0}
+    real_conn = api._conn
+
+    def flaky_conn():
+        calls["count"] += 1
+        if calls["count"] == 1:
+            raise sqlite3.OperationalError("database is locked")
+        return real_conn()
+
+    monkeypatch.setattr(api.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(api, "_conn", flaky_conn)
+
+    result = local_context.set_file_type_rule(".retry", action="extract")
+
+    assert result["ok"] is True
+    assert result["extension"] == ".retry"
+    assert calls["count"] >= 2
+
+
 def test_roots_seed_v2_migration_removes_legacy_disk_root_but_keeps_user_content(tmp_path):
     disk = tmp_path / "disk"
     home = disk / "Users" / "me"

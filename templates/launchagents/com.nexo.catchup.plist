@@ -14,16 +14,16 @@
     <key>ProgramArguments</key>
     <array>
         <string>/usr/bin/python3</string>
-        <string>{{NEXO_HOME}}/scripts/nexo-catchup.py</string>
+        <string>{{NEXO_HOME}}/core/scripts/nexo-catchup.py</string>
     </array>
     <key>RunAtLoad</key>
     <true/>
     <key>StartInterval</key>
     <integer>900</integer>
     <key>StandardOutPath</key>
-    <string>{{NEXO_HOME}}/logs/catchup-stdout.log</string>
+    <string>{{NEXO_HOME}}/runtime/logs/catchup-stdout.log</string>
     <key>StandardErrorPath</key>
-    <string>{{NEXO_HOME}}/logs/catchup-stderr.log</string>
+    <string>{{NEXO_HOME}}/runtime/logs/catchup-stderr.log</string>
     <key>EnvironmentVariables</key>
     <dict>
         <key>HOME</key>

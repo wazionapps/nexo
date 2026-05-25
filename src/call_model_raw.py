@@ -260,7 +260,7 @@ def call_model_raw(
     Parameters follow the Fase 2 plan doc 1 spec:
 
         prompt          — the user-role text (English or the model's default).
-        tier            — resonance tier; default "muy_bajo" → Haiku / gpt-5.4-mini.
+        tier            — resonance tier; default "muy_bajo" → Haiku / gpt-5.5 low.
         caller          — resonance caller label. Must be registered in
                           resonance_map.SYSTEM_OWNED_CALLERS. Default
                           "enforcer_classifier".

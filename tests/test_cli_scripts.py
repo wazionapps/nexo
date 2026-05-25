@@ -945,7 +945,7 @@ class TestChatCommand:
                     "reasoning_effort": "max",
                 },
                 "codex": {
-                    "model": "gpt-5.4",
+                    "model": "gpt-5.5",
                     "reasoning_effort": "xhigh",
                 },
             },
@@ -968,7 +968,7 @@ class TestChatCommand:
         argv = payload["argv"]
         assert argv[:5] == ["--sandbox", "danger-full-access", "--ask-for-approval", "never", "-c"]
         assert argv[5].startswith('initial_messages=[{role="system",content=')
-        assert ["-m", "gpt-5.4"] == argv[6:8]
+        assert ["-m", "gpt-5.5"] == argv[6:8]
         # v6.0.4 — codex effort resolves via resonance_map (default tier "alto"
         # -> codex="high"). Previous assertion tested the legacy flow that
         # read reasoning_effort=xhigh straight from client_runtime_profiles.
@@ -1016,7 +1016,7 @@ class TestChatCommand:
                     "reasoning_effort": "max",
                 },
                 "codex": {
-                    "model": "gpt-5.4",
+                    "model": "gpt-5.5",
                     "reasoning_effort": "xhigh",
                 },
             },

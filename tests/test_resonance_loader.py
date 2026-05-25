@@ -42,6 +42,17 @@ def test_shipped_tiers_json_matches_contract():
             assert "effort" in entry  # may be empty string for future backends
 
 
+def test_shipped_codex_tiers_use_gpt_55_family():
+    """Guard the full-vs-mini split when the Codex family moves."""
+    payload = json.loads((SRC / "resonance_tiers.json").read_text())
+    tiers = payload["tiers"]
+    assert tiers["maximo"]["codex"] == {"model": "gpt-5.5", "effort": "xhigh"}
+    assert tiers["alto"]["codex"] == {"model": "gpt-5.5", "effort": "high"}
+    assert tiers["medio"]["codex"] == {"model": "gpt-5.5", "effort": "medium"}
+    assert tiers["bajo"]["codex"] == {"model": "gpt-5.5", "effort": "low"}
+    assert tiers["muy_bajo"]["codex"] == {"model": "gpt-5.5", "effort": "low"}
+
+
 def test_loader_returns_four_tiers_two_backends_eight_pairs():
     table, default_tier = rmap.load_resonance_table()
     assert default_tier in table
@@ -69,7 +80,7 @@ def test_loader_rejects_incomplete_tier_list(tmp_path):
         "tiers": {
             "maximo": {
                 "claude_code": {"model": "claude-opus-4-7[1m]", "effort": "max"},
-                "codex":       {"model": "gpt-5.4", "effort": "xhigh"},
+                "codex":       {"model": "gpt-5.5", "effort": "xhigh"},
             }
         },
         "default_tier": "maximo",

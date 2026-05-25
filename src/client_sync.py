@@ -65,10 +65,9 @@ except Exception:
         }
 
     def resolve_client_runtime_profile(client: str, preferences: dict | None = None) -> dict:
-        _default_model = "claude-opus-4-7[1m]"
         defaults = {
-            "claude_code": {"model": _default_model, "reasoning_effort": ""},
-            "codex": {"model": _default_model, "reasoning_effort": ""},
+            "claude_code": {"model": "claude-opus-4-7[1m]", "reasoning_effort": "max"},
+            "codex": {"model": "gpt-5.5", "reasoning_effort": "xhigh"},
         }
         return dict(defaults.get(client, {}))
 
@@ -241,6 +240,15 @@ def _brain_bundle_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
+def _codex_bundle_dir() -> Path:
+    explicit = str(os.environ.get("NEXO_CODEX_BUNDLE_DIR", "")).strip()
+    if explicit:
+        candidate = Path(explicit).expanduser()
+        if candidate.is_dir():
+            return candidate
+    return _brain_bundle_root() / "codex"
+
+
 def _platform_slug() -> str:
     if sys.platform.startswith("darwin"):
         os_part = "darwin"
@@ -379,12 +387,15 @@ def _codex_vendor_present(managed_prefix: Path) -> bool:
         managed_prefix / "node_modules" / "@openai" / "codex",
     ]
     for package_root in package_roots:
-        vendor_root = package_root / "vendor"
-        if not vendor_root.exists():
-            continue
+        vendor_roots = [package_root / "vendor"]
+        optional_root = package_root / "node_modules" / "@openai"
+        if optional_root.is_dir():
+            vendor_roots.extend(item / "vendor" for item in optional_root.glob("codex-*"))
+        existing_vendor_roots = [item for item in vendor_roots if item.exists()]
         try:
-            if any(candidate.is_file() for candidate in vendor_root.rglob("bin/codex*")):
-                return True
+            for vendor_root in existing_vendor_roots:
+                if any(candidate.is_file() for candidate in vendor_root.rglob("bin/codex*")):
+                    return True
         except Exception:
             continue
     return False
@@ -659,7 +670,7 @@ def ensure_codex_installed(*, user_home: str | os.PathLike[str] | None = None) -
     )
 
     desktop_node, bundled_npm_cli = _bundled_npm_runtime()
-    bundle_dir = _brain_bundle_root() / "codex"
+    bundle_dir = _codex_bundle_dir()
     if desktop_managed and not (desktop_node and bundled_npm_cli):
         vendor_installed = _install_codex_vendor_from_bundle(
             bundle_dir=bundle_dir,
@@ -946,7 +957,7 @@ def _sync_codex_managed_config(
     # Heal any pre-existing Claude model written by earlier NEXO versions.
     existing_model = str(payload.get("model") or "").strip()
     if existing_model and _looks_like_claude_model(existing_model):
-        payload["model"] = "gpt-5.4"
+        payload["model"] = "gpt-5.5"
 
     # Only write a model from the runtime profile into Codex config if it
     # looks like a Codex/OpenAI model. Claude models are invalid for Codex
@@ -956,7 +967,7 @@ def _sync_codex_managed_config(
         payload["model"] = profile_model
     elif profile_model:
         # Fall back to a known-good Codex default to self-heal.
-        payload["model"] = "gpt-5.4"
+        payload["model"] = "gpt-5.5"
     if "reasoning_effort" in runtime_profile:
         payload["model_reasoning_effort"] = runtime_profile.get("reasoning_effort") or ""
 
