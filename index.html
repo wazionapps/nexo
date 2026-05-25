@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>NEXO Brain — Libre Shared Brain for Claude Code, Codex, and MCP Agents</title>
-    <meta name="description" content="Libre/open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients. Version 7.24.0 adds Home Agents, cognitive quality controls, English operational copy, and faster task-open handling.">
+    <meta name="description" content="Libre/open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients. Version 7.26.0 adds provider runtime parity for Anthropic Claude and OpenAI Codex.">
     <meta name="keywords" content="AI memory, cognitive architecture, MCP, Claude Code, Codex, Claude Desktop, agent memory, vector search, AI agents, shared brain, open source">
     <meta name="author" content="WAzion">
     <meta name="robots" content="index, follow">
@@ -14,7 +14,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com">
     <meta property="og:title" content="NEXO Brain — Libre Shared Brain for Claude Code, Codex, and MCP Agents">
-    <meta property="og:description" content="Libre/open-source cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Version 7.24.0 adds Home Agents, cognitive quality controls, English operational copy, and faster task-open handling.">
+    <meta property="og:description" content="Libre/open-source cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Version 7.26.0 adds provider runtime parity for Anthropic Claude and OpenAI Codex.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-home.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -22,7 +22,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="NEXO Brain — Libre Shared Brain for Claude Code, Codex, and MCP Agents">
-    <meta name="twitter:description" content="Libre/open-source cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Version 7.24.0 adds Home Agents, cognitive quality controls, English operational copy, and faster task-open handling.">
+    <meta name="twitter:description" content="Libre/open-source cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Version 7.26.0 adds provider runtime parity for Anthropic Claude and OpenAI Codex.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-home.png">
 
     <!-- Google Analytics (GA4) -->
@@ -46,12 +46,12 @@
         "@context": "https://schema.org",
         "@type": "SoftwareApplication",
         "name": "NEXO Brain",
-        "description": "Libre/open-source local cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Version 7.24.0 adds Home Agents, cognitive quality controls, English operational copy, and faster task-open handling.",
+        "description": "Libre/open-source local cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Version 7.26.0 adds provider runtime parity for Anthropic Claude and OpenAI Codex.",
         "applicationCategory": "DeveloperApplication",
         "operatingSystem": "macOS, Linux, Windows",
         "url": "https://nexo-brain.com",
         "downloadUrl": "https://www.npmjs.com/package/nexo-brain",
-        "softwareVersion": "7.24.0",
+        "softwareVersion": "7.26.0",
         "license": "https://www.gnu.org/licenses/agpl-3.0",
         "author": {
             "@type": "Organization",
@@ -88,7 +88,7 @@
         "@type": "WebSite",
         "name": "NEXO Brain",
         "url": "https://nexo-brain.com",
-        "description": "Libre/open-source local cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Version 7.23.0 adds pre-answer continuity routing, evidence-ledger consumption, Memory Observations convergence and read-only drift audits.",
+        "description": "Libre/open-source local cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Version 7.26.0 adds provider runtime parity for Anthropic Claude and OpenAI Codex.",
         "publisher": {
             "@type": "Organization",
             "name": "WAzion",
@@ -697,7 +697,7 @@
     <div class="container">
         <div class="hero-badge fade-up">
             <span class="dot"></span>
-            <span id="version-badge">v7.24.0</span> Minor release - Home Agents, cognitive quality controls, English operational copy and faster task-open handling are merged into main. <a href="/changelog/#v7240">Read the v7.24.0 notes</a>.
+            <span id="version-badge">v7.26.0</span> Minor release - provider runtime parity lets Desktop-managed Brain choose Anthropic Claude or OpenAI Codex while keeping provider metadata on sessions, automations, and crons. <a href="/changelog/#v7260">Read the v7.26.0 notes</a>.
         </div>
         <div class="fade-up" style="display:flex;gap:8px;justify-content:center;margin-bottom:12px;">
             <img src="https://img.shields.io/npm/v/nexo-brain?color=7C3AED&label=npm" alt="npm version">
@@ -994,7 +994,7 @@
         <div class="client-path-grid">
             <div class="client-path-card recommended">
                 <h3>Claude Code</h3>
-                <p>The deepest path today: strongest hook surface, most battle-tested headless automation, and the cleanest fit for overnight jobs. Recommended default profile: <strong>Opus 4.6 with 1M context</strong>.</p>
+                <p>The deepest path today: strongest hook surface, most battle-tested headless automation, and the cleanest fit for overnight jobs. Recommended default profile: <strong>Opus 4.7 with 1M context</strong>.</p>
                 <div class="tag-row">
                     <span class="tag-chip">Recommended</span>
                     <span class="tag-chip">Hooks</span>
@@ -1288,7 +1288,7 @@
                                 <p>A condensed run of <strong>`npx nexo-brain`</strong>: language, install path, shared-brain clients, default terminal client, automation backend, and recommended model profiles.</p>
                                 <div class="install-flow-chip-row">
                                     <span class="install-flow-chip">Claude Code recommended</span>
-                                    <span class="install-flow-chip">Opus 4.6 with 1M</span>
+                                    <span class="install-flow-chip">Opus 4.7 with 1M</span>
                                     <span class="install-flow-chip">Codex optional</span>
                                     <span class="install-flow-chip">GPT-5.4 xhigh</span>
                                 </div>
@@ -1299,7 +1299,7 @@
                             </div>
                             <div class="install-flow-card">
                                 <h3>Current recommendation</h3>
-                                <p><strong>Claude Code</strong> remains the primary recommended path because it has the deepest hook and headless automation surface. The recommended Claude profile is now <strong>Opus 4.6 with 1M context</strong>.</p>
+                                <p><strong>Claude Code</strong> remains the primary recommended path because it has the deepest hook and headless automation surface. The recommended Claude profile is now <strong>Opus 4.7 with 1M context</strong>.</p>
                                 <div class="install-flow-actions">
                                     <a class="install-flow-link" href="https://www.npmjs.com/package/nexo-brain">npm</a>
                                     <a class="install-flow-link" href="/docs/install-flow/">Full install flow</a>
@@ -1985,7 +1985,7 @@ function copyInstall(btn) {
         '<span class="install-flow-prompt">?</span> Default client for <span class="install-flow-dim">nexo chat</span> <span class="install-flow-answer">Claude Code</span>',
         '<span class="install-flow-prompt">?</span> Enable background automation <span class="install-flow-answer">Yes</span>',
         '<span class="install-flow-prompt">?</span> Automation backend <span class="install-flow-answer">Claude Code</span>',
-        '<span class="install-flow-prompt">?</span> Claude model profile <span class="install-flow-answer">Opus 4.6 with 1M context</span>',
+        '<span class="install-flow-prompt">?</span> Claude model profile <span class="install-flow-answer">Opus 4.7 with 1M context</span>',
         '<span class="install-flow-prompt">?</span> Codex model profile <span class="install-flow-answer">GPT-5.4 · xhigh</span>',
         '<span class="install-flow-ok">✓</span> Shared brain configured for Claude Code, Codex, Claude Desktop',
         '<span class="install-flow-ok">✓</span> <span class="install-flow-dim">nexo chat</span>, <span class="install-flow-dim">nexo update</span>, and <span class="install-flow-dim">nexo doctor</span> ready'
