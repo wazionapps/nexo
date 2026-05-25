@@ -7,6 +7,30 @@ import types
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
 
 
+def test_load_schedule_config_reads_legacy_file_when_personal_config_exists(tmp_path, monkeypatch):
+    import runtime_power
+
+    nexo_home = tmp_path / "nexo"
+    legacy_schedule = nexo_home / "config" / "schedule.json"
+    personal_schedule = nexo_home / "personal" / "config" / "schedule.json"
+    legacy_schedule.parent.mkdir(parents=True)
+    personal_schedule.parent.mkdir(parents=True)
+    legacy_schedule.write_text(
+        '{"interactive_clients":{"claude_code":false,"codex":true},'
+        '"default_terminal_client":"codex","automation_backend":"claude_code"}'
+    )
+
+    monkeypatch.setattr(runtime_power, "NEXO_HOME", nexo_home)
+    monkeypatch.setattr(runtime_power, "CONFIG_DIR", personal_schedule.parent)
+    monkeypatch.setattr(runtime_power, "SCHEDULE_FILE", personal_schedule)
+
+    schedule = runtime_power.load_schedule_config()
+
+    assert schedule["default_terminal_client"] == "codex"
+    assert schedule["interactive_clients"]["codex"] is True
+    assert "provider_runtime" not in schedule
+
+
 def test_ensure_power_policy_choice_prompts_once(tmp_path, monkeypatch):
     import runtime_power
 

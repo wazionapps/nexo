@@ -373,6 +373,21 @@ def _provider_from_runtime_payload(value, key: str, fallback_client: str) -> str
     return client_to_provider(fallback_client) or PROVIDER_ANTHROPIC
 
 
+def _provider_runtime_is_unselected_default(value) -> bool:
+    if not isinstance(value, dict):
+        return False
+    selected = normalize_provider_key(value.get("selected_chat_provider"))
+    automation_provider = normalize_provider_key(value.get("automation_provider"))
+    automation_backend = normalize_backend_key(value.get("automation_backend"))
+    last_change = value.get("last_provider_change") if isinstance(value.get("last_provider_change"), dict) else {}
+    return (
+        selected == PROVIDER_ANTHROPIC
+        and automation_provider in {"", PROVIDER_ANTHROPIC}
+        and automation_backend in {"", CLIENT_CLAUDE_CODE}
+        and not last_change.get("changed_at")
+    )
+
+
 def normalize_provider_runtime(
     value,
     *,
@@ -690,8 +705,19 @@ def normalize_client_preferences(
     runtime_profiles = normalize_client_runtime_profiles(
         schedule.get("client_runtime_profiles")
     )
+    raw_provider_runtime = schedule.get("provider_runtime")
+    legacy_terminal_provider = client_to_provider(default_terminal_client)
+    if (
+        legacy_terminal_provider in PROVIDER_KEYS
+        and legacy_terminal_provider != PROVIDER_ANTHROPIC
+        and _provider_runtime_is_unselected_default(raw_provider_runtime)
+    ):
+        raw_provider_runtime = dict(raw_provider_runtime or {})
+        raw_provider_runtime["selected_chat_provider"] = legacy_terminal_provider
+        raw_provider_runtime["automation_provider"] = legacy_terminal_provider
+        raw_provider_runtime["automation_backend"] = provider_to_client(legacy_terminal_provider)
     provider_runtime = normalize_provider_runtime(
-        schedule.get("provider_runtime"),
+        raw_provider_runtime,
         default_terminal_client=default_terminal_client,
         automation_backend=automation_backend,
         automation_enabled=automation_enabled,

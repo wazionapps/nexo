@@ -378,16 +378,32 @@ def _schedule_defaults() -> dict:
     }
 
 
-def load_schedule_config() -> dict:
-    if not SCHEDULE_FILE.is_file():
-        return _schedule_defaults()
+def _load_schedule_payload(path: Path) -> dict | None:
     try:
-        data = json.loads(SCHEDULE_FILE.read_text())
+        data = json.loads(path.read_text())
     except Exception:
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _legacy_schedule_file() -> Path:
+    return NEXO_HOME / "config" / "schedule.json"
+
+
+def load_schedule_config() -> dict:
+    data: dict | None = None
+    if SCHEDULE_FILE.is_file():
+        data = _load_schedule_payload(SCHEDULE_FILE)
+    else:
+        legacy_file = _legacy_schedule_file()
+        if legacy_file != SCHEDULE_FILE and legacy_file.is_file():
+            data = _load_schedule_payload(legacy_file)
+    if data is None:
         return _schedule_defaults()
-    if not isinstance(data, dict):
-        return _schedule_defaults()
-    merged = _schedule_defaults()
+    defaults = _schedule_defaults()
+    if "provider_runtime" not in data:
+        defaults.pop("provider_runtime", None)
+    merged = defaults
     merged.update(data)
     merged.setdefault("processes", {})
     return merged

@@ -33,6 +33,55 @@ def test_normalize_client_preferences_preserves_old_defaults(tmp_path):
     assert prefs["acknowledged_model_recommendations"] == {"claude_code": 0, "codex": 0}
 
 
+def test_legacy_codex_config_without_provider_runtime_selects_openai(tmp_path):
+    import client_preferences
+
+    prefs = client_preferences.normalize_client_preferences(
+        {
+            "interactive_clients": {
+                "claude_code": False,
+                "codex": True,
+                "claude_desktop": False,
+            },
+            "default_terminal_client": "codex",
+            "automation_enabled": True,
+            "automation_backend": "claude_code",
+        },
+        user_home=tmp_path / "home",
+    )
+
+    assert prefs["provider_runtime"]["selected_chat_provider"] == "openai"
+    assert prefs["provider_runtime"]["automation_provider"] == "openai"
+    assert prefs["provider_runtime"]["automation_backend"] == "codex"
+    assert prefs["automation_backend"] == "codex"
+    assert prefs["default_terminal_client"] == "codex"
+
+
+def test_legacy_codex_config_with_default_provider_runtime_selects_openai(tmp_path):
+    import client_preferences
+
+    prefs = client_preferences.normalize_client_preferences(
+        {
+            "interactive_clients": {
+                "claude_code": False,
+                "codex": True,
+                "claude_desktop": False,
+            },
+            "default_terminal_client": "codex",
+            "automation_enabled": True,
+            "automation_backend": "claude_code",
+            "provider_runtime": client_preferences.default_provider_runtime(),
+        },
+        user_home=tmp_path / "home",
+    )
+
+    assert prefs["provider_runtime"]["selected_chat_provider"] == "openai"
+    assert prefs["provider_runtime"]["automation_provider"] == "openai"
+    assert prefs["provider_runtime"]["automation_backend"] == "codex"
+    assert prefs["automation_backend"] == "codex"
+    assert prefs["default_terminal_client"] == "codex"
+
+
 def test_apply_client_preferences_forces_backend_none_when_automation_disabled():
     import client_preferences
 
