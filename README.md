@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.27.1` is the current packaged-runtime line. Patch release over v7.27.0 - lifecycle stop calls now skip external provider session UUIDs safely, and provider runtime selection keeps chat plus automation aligned to the same Anthropic/OpenAI account.
+Version `7.27.2` is the current packaged-runtime line. Patch release over v7.27.1 - legacy Codex preferences now migrate to OpenAI correctly, and the F0.6 config-folder transition keeps reading existing `config/schedule.json` before it is moved.
+
+Previously in `7.27.1`: patch release over v7.27.0 - lifecycle stop calls skip external provider session UUIDs safely, and provider runtime selection keeps chat plus automation aligned to the same Anthropic/OpenAI account.
 
 Previously in `7.27.0`: minor release over v7.26.0 - Codex-side defaults move to verified `gpt-5.5` resonance tiers, managed config healing follows that model family, and Local Memory file-type actions tolerate transient SQLite locks.
 

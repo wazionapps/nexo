@@ -1,12 +1,19 @@
 # Changelog
 
+## [7.27.2] - 2026-05-25
+
+### Fixed — legacy OpenAI provider migration
+
+- **Legacy Codex preferences now migrate to OpenAI instead of falling back to Anthropic.** Older `schedule.json` files that selected Codex before the provider-runtime schema keep launching OpenAI/Codex after Desktop refreshes Brain.
+- **Brain now reads the legacy `config/schedule.json` during the F0.6 config-folder transition.** Creating `personal/config/` no longer hides the user's existing terminal/provider preference before it has been migrated.
+- **Coverage:** the exact `nexo chat` Codex regression that failed CI, provider preference migration tests, runtime schedule fallback tests, client parity verification, and release-readiness verification.
+
 ## [7.27.1] - 2026-05-25
 
 ### Fixed — provider lifecycle hotfix
 
 - **Lifecycle stop calls now skip external provider session UUIDs safely.** Desktop-managed Anthropic/OpenAI child sessions no longer produce retryable Brain errors when the visible conversation closes.
 - **Provider runtime remains single-provider for chat and automation.** Brain preferences normalize Desktop account selection so background jobs follow the same Anthropic/OpenAI account choice as interactive conversations, or fail closed when no provider is active.
-- **Legacy Codex preferences now migrate to OpenAI instead of falling back to Anthropic.** Older `schedule.json` files that selected Codex before the provider-runtime schema keep launching OpenAI/Codex after Desktop refreshes Brain.
 - **Coverage:** lifecycle event regressions, provider preference/CLI parity tests, client parity verification, and Desktop-managed release checks for the bundled Brain version.
 
 ## [7.27.0] - 2026-05-25
