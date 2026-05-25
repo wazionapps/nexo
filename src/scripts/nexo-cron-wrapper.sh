@@ -45,21 +45,71 @@ from datetime import datetime, timezone
 print(datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"))
 PY
 )
+RUNTIME_META=$(python3 - "$NEXO_HOME" <<'PY' 2>/dev/null || true
+from __future__ import annotations
+import json
+import sys
+from pathlib import Path
+
+nexo_home = Path(sys.argv[1]).expanduser()
+schedule = {}
+for candidate in (
+    nexo_home / "personal" / "config" / "schedule.json",
+    nexo_home / "config" / "schedule.json",
+):
+    try:
+        schedule = json.loads(candidate.read_text(encoding="utf-8"))
+        break
+    except Exception:
+        continue
+
+provider_runtime = schedule.get("provider_runtime") if isinstance(schedule.get("provider_runtime"), dict) else {}
+backend = str(provider_runtime.get("automation_backend") or schedule.get("automation_backend") or "claude_code").strip().lower()
+provider = str(provider_runtime.get("automation_provider") or "").strip().lower()
+if provider not in {"anthropic", "openai", "none"}:
+    provider = {"claude_code": "anthropic", "codex": "openai", "none": "none"}.get(backend, "")
+snapshot = {
+    "selected_chat_provider": provider_runtime.get("selected_chat_provider") or "",
+    "automation_provider": provider,
+    "automation_backend": backend,
+    "fallback_policy": provider_runtime.get("fallback_policy") or {"automation": "fail_closed"},
+}
+print(provider + "\t" + backend + "\t" + json.dumps(snapshot, ensure_ascii=False, separators=(",", ":")))
+PY
+)
+if [ -n "$RUNTIME_META" ]; then
+    IFS=$'\t' read -r CRON_PROVIDER CRON_BACKEND RUNTIME_SNAPSHOT <<< "$RUNTIME_META"
+else
+    CRON_PROVIDER=""
+    CRON_BACKEND=""
+    RUNTIME_SNAPSHOT="{}"
+fi
 
 # Phase 1: INSERT row at start (ended_at NULL = "running").
 # ROW_ID empty on DB failure; spool-fallback at the end handles that.
 ROW_ID=""
-ROW_ID=$(python3 - "$DB" "$CRON_ID" "$STARTED_AT" <<'PY' 2>/dev/null
+ROW_ID=$(python3 - "$DB" "$CRON_ID" "$STARTED_AT" "$CRON_PROVIDER" "$CRON_BACKEND" "$RUNTIME_SNAPSHOT" <<'PY' 2>/dev/null
 from __future__ import annotations
 import sqlite3
 import sys
-db_path, cron_id, started_at = sys.argv[1:]
+db_path, cron_id, started_at, provider, backend, runtime_snapshot = sys.argv[1:]
 conn = sqlite3.connect(db_path)
 try:
-    cur = conn.execute(
-        "INSERT INTO cron_runs (cron_id, started_at, ended_at) VALUES (?, ?, NULL)",
-        (cron_id, started_at),
-    )
+    try:
+        cur = conn.execute(
+            """
+            INSERT INTO cron_runs (cron_id, started_at, ended_at, provider, backend, runtime_snapshot)
+            VALUES (?, ?, NULL, ?, ?, ?)
+            """,
+            (cron_id, started_at, provider, backend, runtime_snapshot or "{}"),
+        )
+    except sqlite3.OperationalError as exc:
+        if "provider" not in str(exc) and "backend" not in str(exc) and "runtime_snapshot" not in str(exc):
+            raise
+        cur = conn.execute(
+            "INSERT INTO cron_runs (cron_id, started_at, ended_at) VALUES (?, ?, NULL)",
+            (cron_id, started_at),
+        )
     conn.commit()
     print(cur.lastrowid)
 finally:
@@ -97,30 +147,60 @@ PY
     fi
 
     # Update the row we inserted at start — or INSERT fresh if the start write failed.
-    if ! python3 - "$DB" "$ROW_ID" "$CRON_ID" "$STARTED_AT" "$ended_at" "$EXIT_CODE" "$summary" "$error" "$duration" <<'PY' 2>/dev/null
+    if ! python3 - "$DB" "$ROW_ID" "$CRON_ID" "$STARTED_AT" "$ended_at" "$EXIT_CODE" "$summary" "$error" "$duration" "$CRON_PROVIDER" "$CRON_BACKEND" "$RUNTIME_SNAPSHOT" <<'PY' 2>/dev/null
 from __future__ import annotations
 import sqlite3
 import sys
-db_path, row_id, cron_id, started_at, ended_at, exit_code, summary, error, duration_secs = sys.argv[1:]
+db_path, row_id, cron_id, started_at, ended_at, exit_code, summary, error, duration_secs, provider, backend, runtime_snapshot = sys.argv[1:]
 conn = sqlite3.connect(db_path)
 try:
     if row_id:
-        conn.execute(
-            """
-            UPDATE cron_runs
-               SET ended_at=?, exit_code=?, summary=?, error=?, duration_secs=?
-             WHERE id=?
-            """,
-            (ended_at, int(exit_code), summary, error, float(duration_secs), int(row_id)),
-        )
+        try:
+            conn.execute(
+                """
+                UPDATE cron_runs
+                   SET ended_at=?, exit_code=?, summary=?, error=?, duration_secs=?,
+                       provider=COALESCE(NULLIF(provider, ''), ?),
+                       backend=COALESCE(NULLIF(backend, ''), ?),
+                       runtime_snapshot=CASE
+                           WHEN runtime_snapshot IS NULL OR runtime_snapshot = '' OR runtime_snapshot = '{}'
+                           THEN ?
+                           ELSE runtime_snapshot
+                       END
+                 WHERE id=?
+                """,
+                (ended_at, int(exit_code), summary, error, float(duration_secs), provider, backend, runtime_snapshot or "{}", int(row_id)),
+            )
+        except sqlite3.OperationalError as exc:
+            if "provider" not in str(exc) and "backend" not in str(exc) and "runtime_snapshot" not in str(exc):
+                raise
+            conn.execute(
+                """
+                UPDATE cron_runs
+                   SET ended_at=?, exit_code=?, summary=?, error=?, duration_secs=?
+                 WHERE id=?
+                """,
+                (ended_at, int(exit_code), summary, error, float(duration_secs), int(row_id)),
+            )
     else:
-        conn.execute(
-            """
-            INSERT INTO cron_runs (cron_id, started_at, ended_at, exit_code, summary, error, duration_secs)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            (cron_id, started_at, ended_at, int(exit_code), summary, error, float(duration_secs)),
-        )
+        try:
+            conn.execute(
+                """
+                INSERT INTO cron_runs (cron_id, started_at, ended_at, exit_code, summary, error, duration_secs, provider, backend, runtime_snapshot)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (cron_id, started_at, ended_at, int(exit_code), summary, error, float(duration_secs), provider, backend, runtime_snapshot or "{}"),
+            )
+        except sqlite3.OperationalError as exc:
+            if "provider" not in str(exc) and "backend" not in str(exc) and "runtime_snapshot" not in str(exc):
+                raise
+            conn.execute(
+                """
+                INSERT INTO cron_runs (cron_id, started_at, ended_at, exit_code, summary, error, duration_secs)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (cron_id, started_at, ended_at, int(exit_code), summary, error, float(duration_secs)),
+            )
     conn.commit()
 finally:
     conn.close()
@@ -128,12 +208,12 @@ PY
     then
         mkdir -p "$SPOOL_DIR"
         local spool_file="$SPOOL_DIR/${CRON_ID}-$(date +%Y%m%d-%H%M%S)-$$.json"
-        python3 - "$spool_file" "$CRON_ID" "$STARTED_AT" "$ended_at" "$EXIT_CODE" "$summary" "$error" "$duration" <<'PY'
+        python3 - "$spool_file" "$CRON_ID" "$STARTED_AT" "$ended_at" "$EXIT_CODE" "$summary" "$error" "$duration" "$CRON_PROVIDER" "$CRON_BACKEND" "$RUNTIME_SNAPSHOT" <<'PY'
 from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-spool_file, cron_id, started_at, ended_at, exit_code, summary, error, duration_secs = sys.argv[1:]
+spool_file, cron_id, started_at, ended_at, exit_code, summary, error, duration_secs, provider, backend, runtime_snapshot = sys.argv[1:]
 Path(spool_file).write_text(
     json.dumps({
         "cron_id": cron_id,
@@ -143,6 +223,9 @@ Path(spool_file).write_text(
         "summary": summary,
         "error": error,
         "duration_secs": float(duration_secs),
+        "provider": provider,
+        "backend": backend,
+        "runtime_snapshot": runtime_snapshot or "{}",
     }, indent=2, ensure_ascii=False) + "\n",
     encoding="utf-8",
 )

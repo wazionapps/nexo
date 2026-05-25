@@ -440,7 +440,7 @@ def _run_kwargs_from_env() -> dict:
 # ── Session management (3 tools) ──────────────────────────────────
 
 @mcp.tool
-def nexo_startup(task: str = "Startup", claude_session_id: str = "", session_token: str = "", session_client: str = "", conversation_id: str = "") -> str:
+def nexo_startup(task: str = "Startup", claude_session_id: str = "", session_token: str = "", session_client: str = "", session_provider: str = "", conversation_id: str = "") -> str:
     """Register new session, clean stale ones, return active sessions + alerts.
 
     Call this ONCE at the start of every conversation.
@@ -453,6 +453,7 @@ def nexo_startup(task: str = "Startup", claude_session_id: str = "", session_tok
                       other clients may pass a synthetic durable token when useful.
                       Pass this to enable automatic inter-terminal inbox detection when available.
         session_client: Optional client label such as `claude_code` or `codex`.
+        session_provider: Optional provider label such as `anthropic` or `openai`.
         conversation_id: Stable client-side conversation identifier when available.
     """
     return handle_startup(
@@ -460,6 +461,7 @@ def nexo_startup(task: str = "Startup", claude_session_id: str = "", session_tok
         claude_session_id=claude_session_id,
         session_token=session_token,
         session_client=session_client,
+        session_provider=session_provider,
         conversation_id=conversation_id,
     )
 

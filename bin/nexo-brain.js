@@ -18,6 +18,7 @@ const { execSync, spawnSync } = require("child_process");
 const crypto = require("crypto");
 const fs = require("fs");
 const { createRequire } = require("module");
+const os = require("os");
 const path = require("path");
 const readline = require("readline");
 // Force relative launcher helpers to resolve from bin/ even under test harnesses.
@@ -1672,6 +1673,7 @@ function getDefaultSchedule(timezone) {
     default_terminal_client: "claude_code",
     automation_enabled: true,
     automation_backend: "claude_code",
+    provider_runtime: defaultProviderRuntime("anthropic", "anthropic"),
     // v6.0.0 — model/reasoning_effort have moved to src/resonance_tiers.json
     // keyed by the operator's preferences.default_resonance. The shape
     // below stays so that downstream readers that iterate the profile
@@ -1813,9 +1815,31 @@ function detectInstalledClients() {
     : [];
   const desktopAppPath = desktopApps.find((candidate) => fs.existsSync(candidate)) || "";
   const managedClaudeBin = resolveManagedClaudeBinary();
+  const managedCodexBin = resolveManagedCodexBinary();
+  const desktopManaged = isDesktopManagedInstall();
+  if (desktopManaged) {
+    const managedCodexReady = managedCodexBin && codexVendorPresent(managedClaudePrefix());
+    return {
+      claude_code: {
+        installed: Boolean(managedClaudeBin),
+        path: managedClaudeBin,
+        detectedBy: managedClaudeBin ? "managed_binary" : "missing",
+      },
+      codex: {
+        installed: Boolean(managedCodexReady),
+        path: managedCodexReady ? managedCodexBin : "",
+        detectedBy: managedCodexReady ? "managed_binary" : "missing",
+      },
+      claude_desktop: {
+        installed: Boolean(desktopAppPath || fs.existsSync(desktopConfig)),
+        path: desktopAppPath || desktopConfig,
+        detectedBy: desktopAppPath ? "app" : (fs.existsSync(desktopConfig) ? "config" : "missing"),
+      },
+    };
+  }
   const persistedClaudeBin = readPersistedClaudeCliPath();
   const claudeBin = managedClaudeBin || persistedClaudeBin || run("which claude", { env: buildManagedCliEnv() }) || run("which claude") || "";
-  const codexBin = run("which codex") || "";
+  const codexBin = managedCodexBin || run("which codex", { env: buildManagedCliEnv() }) || run("which codex") || "";
   return {
     claude_code: {
       installed: Boolean(claudeBin),
@@ -1902,6 +1926,14 @@ function resolveManagedClaudeBinary() {
   const candidates = process.platform === "win32"
     ? [path.join(prefix, "claude.cmd"), path.join(prefix, "bin", "claude.cmd")]
     : [path.join(prefix, "bin", "claude"), path.join(prefix, "claude")];
+  return candidates.find((candidate) => candidate && fs.existsSync(candidate)) || "";
+}
+
+function resolveManagedCodexBinary() {
+  const prefix = managedClaudePrefix();
+  const candidates = process.platform === "win32"
+    ? [path.join(prefix, "codex.cmd"), path.join(prefix, "bin", "codex.cmd")]
+    : [path.join(prefix, "bin", "codex"), path.join(prefix, "codex")];
   return candidates.find((candidate) => candidate && fs.existsSync(candidate)) || "";
 }
 
@@ -2000,6 +2032,60 @@ function defaultClientRuntimeProfiles() {
   };
 }
 
+function defaultProviderRuntime(selectedProvider = "anthropic", automationProvider = selectedProvider) {
+  const automationBackend = automationProvider === "openai" ? "codex" : (automationProvider === "anthropic" ? "claude_code" : "none");
+  return {
+    schema_version: 1,
+    selected_chat_provider: selectedProvider,
+    automation_provider: automationProvider,
+    automation_backend: automationBackend,
+    providers: {
+      anthropic: {
+        client: "claude_code",
+        runtime_account_status: {
+          surface: "desktop_login",
+          status: "unknown",
+          plan: null,
+          last_checked_at: null,
+          detail: null,
+        },
+        install_status: {
+          installed: false,
+          managed: true,
+          binary_path: null,
+          version: null,
+        },
+      },
+      openai: {
+        client: "codex",
+        runtime_account_status: {
+          surface: "desktop_login",
+          status: "unknown",
+          plan: null,
+          last_checked_at: null,
+          detail: null,
+        },
+        install_status: {
+          installed: false,
+          managed: true,
+          binary_path: null,
+          version: null,
+        },
+      },
+    },
+    fallback_policy: {
+      chat: "ask",
+      automation: "fail_closed",
+    },
+    last_provider_change: {
+      changed_at: null,
+      from_provider: null,
+      to_provider: null,
+      source: null,
+    },
+  };
+}
+
 function runtimeClientLabel(client) {
   if (client === "claude_code") return "Claude Code";
   if (client === "codex") return "Codex";
@@ -2039,6 +2125,7 @@ function defaultClientSetup(detected) {
     default_terminal_client: "claude_code",
     automation_enabled: true,
     automation_backend: "claude_code",
+    provider_runtime: defaultProviderRuntime("anthropic", "anthropic"),
     client_runtime_profiles: defaultClientRuntimeProfiles(),
     client_install_preferences: {
       claude_code: "ask",
@@ -2057,6 +2144,17 @@ function applyClientSetupToSchedule(schedule, setup) {
   schedule.default_terminal_client = setup.default_terminal_client;
   schedule.automation_enabled = Boolean(setup.automation_enabled);
   schedule.automation_backend = schedule.automation_enabled ? setup.automation_backend : "none";
+  const selectedProvider = setup.default_terminal_client === "codex" ? "openai" : "anthropic";
+  const automationProvider = schedule.automation_backend === "codex"
+    ? "openai"
+    : (schedule.automation_backend === "claude_code" ? "anthropic" : "none");
+  schedule.provider_runtime = {
+    ...defaultProviderRuntime(selectedProvider, automationProvider),
+    ...(setup.provider_runtime || {}),
+    selected_chat_provider: selectedProvider,
+    automation_provider: automationProvider,
+    automation_backend: schedule.automation_backend,
+  };
   schedule.client_runtime_profiles = {
     ...defaultClientRuntimeProfiles(),
     ...(setup.client_runtime_profiles || {}),
@@ -2090,6 +2188,9 @@ function installClaudeCodeCli(platform) {
   const npmViaDesktop = desktopNode && bundledNpmCli;
   let installEnv = buildManagedCliEnv();
   if (desktopNode) installEnv = withDesktopNodeShim(installEnv, desktopNode);
+  if (desktopManaged && !npmViaDesktop) {
+    return { installed: false, path: "" };
+  }
 
   // OFFLINE-FIRST v0.32.4: install claude-code wrapper + ALL its native packs
   // from bundled tarballs. Path: resources/brain-bundle/claude-code/*.tgz.
@@ -2186,22 +2287,7 @@ function installClaudeCodeCli(platform) {
     }
   }
 
-  if (desktopManaged) {
-    spawnSync(
-      "npm",
-      ["install", "-g", "--prefix", managedPrefix, "@anthropic-ai/claude-code"],
-      {
-        stdio: "inherit",
-        env: installEnv,
-      },
-    );
-    claudeInstalled = detectInstalledClients().claude_code.path || "";
-    if (claudeInstalled) {
-      persistClaudeCliPath(claudeInstalled);
-      return { installed: true, path: claudeInstalled };
-    }
-    return { installed: false, path: "" };
-  }
+  if (desktopManaged) return { installed: false, path: "" };
 
   spawnSync("npx", ["-y", "@anthropic-ai/claude-code", "--version"], {
     stdio: "pipe",
@@ -2221,11 +2307,128 @@ function installClaudeCodeCli(platform) {
   return { installed: Boolean(claudeInstalled), path: claudeInstalled || "" };
 }
 
+function installBundledCodexVendor(bundleDir, managedPrefix) {
+  const packageRoots = [
+    path.join(managedPrefix, "lib", "node_modules", "@openai", "codex"),
+    path.join(managedPrefix, "node_modules", "@openai", "codex"),
+  ];
+  const packageRoot = packageRoots.find((candidate) => fs.existsSync(candidate)) || packageRoots[0];
+  if (!fs.existsSync(packageRoot)) return false;
+  const allTgz = fs.readdirSync(bundleDir).filter((f) => f.endsWith(".tgz"));
+  const platformSlug = `${process.platform}-${process.arch}`;
+  const nativePacks = allTgz.filter((f) => f.includes(`-${platformSlug}.tgz`) || f.includes(`-${platformSlug}-`));
+  if (!nativePacks.length) return false;
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "nexo-codex-vendor-"));
+  try {
+    for (const pack of nativePacks) {
+      const tgzPath = path.join(bundleDir, pack);
+      const extract = spawnSync("tar", ["-xzf", tgzPath, "-C", tmpRoot], { stdio: "pipe" });
+      if (extract.status !== 0) continue;
+      const vendorRoot = path.join(tmpRoot, "package", "vendor");
+      if (!fs.existsSync(vendorRoot)) continue;
+      fs.mkdirSync(path.join(packageRoot, "vendor"), { recursive: true });
+      for (const entry of fs.readdirSync(vendorRoot)) {
+        fs.cpSync(path.join(vendorRoot, entry), path.join(packageRoot, "vendor", entry), { recursive: true, force: true });
+      }
+      return true;
+    }
+  } finally {
+    try { fs.rmSync(tmpRoot, { recursive: true, force: true }); } catch {}
+  }
+  return false;
+}
+
+function codexVendorPresent(managedPrefix) {
+  const packageRoots = [
+    path.join(managedPrefix, "lib", "node_modules", "@openai", "codex"),
+    path.join(managedPrefix, "node_modules", "@openai", "codex"),
+  ];
+  for (const packageRoot of packageRoots) {
+    const vendorRoot = path.join(packageRoot, "vendor");
+    if (!fs.existsSync(vendorRoot)) continue;
+    try {
+      const stack = [vendorRoot];
+      while (stack.length) {
+        const current = stack.pop();
+        for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+          const target = path.join(current, entry.name);
+          if (entry.isDirectory()) {
+            stack.push(target);
+          } else if (entry.isFile() && path.basename(path.dirname(target)) === "bin" && entry.name.startsWith("codex")) {
+            return true;
+          }
+        }
+      }
+    } catch {}
+  }
+  return false;
+}
+
 function installCodexCli() {
-  const before = run("which codex");
-  if (before) return { installed: true, path: before };
-  spawnSync("npm", ["install", "-g", "@openai/codex"], { stdio: "inherit" });
-  const codexInstalled = run("which codex") || "";
+  const desktopNode = String(process.env.NEXO_DESKTOP_NODE || "").trim();
+  const bundledNpmCli = String(process.env.NEXO_DESKTOP_NPM_CLI || "").trim();
+  const managedPrefix = managedClaudePrefix();
+  const desktopManaged = isDesktopManagedInstall();
+  let before = detectInstalledClients().codex.path || "";
+  if (before && (!desktopManaged || codexVendorPresent(managedPrefix))) return { installed: true, path: before };
+  if (before && desktopManaged) {
+    log("  Managed Codex wrapper exists, but native vendor is missing; repairing bundled vendor.");
+  }
+  const npmViaDesktop = desktopNode && bundledNpmCli;
+  let installEnv = buildManagedCliEnv();
+  if (desktopNode) installEnv = withDesktopNodeShim(installEnv, desktopNode);
+  if (desktopManaged && !npmViaDesktop) {
+    return { installed: false, path: "" };
+  }
+
+  const bundledCodexDir = path.join(__dirname, "..", "codex");
+  if (fs.existsSync(bundledCodexDir)) {
+    const allTgz = fs.readdirSync(bundledCodexDir).filter((f) => f.endsWith(".tgz")).sort();
+    const wrapper = allTgz.find((f) => /^openai-codex-\d+\.\d+\.\d+\.tgz$/.test(f));
+    if (wrapper) {
+      const tgzPath = path.join(bundledCodexDir, wrapper);
+      log("  Installing Codex from bundled tarball (offline wrapper + native vendor)...");
+      spawnSync(
+        npmViaDesktop ? desktopNode : "npm",
+        [
+          ...(npmViaDesktop ? [bundledNpmCli] : []),
+          "install",
+          "-g",
+          "--prefix",
+          managedPrefix,
+          "--offline",
+          "--no-audit",
+          "--no-fund",
+          tgzPath,
+        ],
+        { stdio: "inherit", env: installEnv },
+      );
+      const bundledVendorInstalled = installBundledCodexVendor(bundledCodexDir, managedPrefix);
+      before = detectInstalledClients().codex.path || "";
+      if (before && bundledVendorInstalled) return { installed: true, path: before };
+      if (before && !bundledVendorInstalled) {
+        log("  Bundled Codex wrapper installed, but native vendor extraction failed; falling back to online install.");
+      }
+    }
+  }
+
+  if (desktopNode && bundledNpmCli) {
+    spawnSync(
+      desktopNode,
+      [bundledNpmCli, "install", "-g", "--prefix", managedPrefix, "@openai/codex"],
+      {
+        stdio: "inherit",
+        env: { ...installEnv, ELECTRON_RUN_AS_NODE: "1" },
+      },
+    );
+    before = detectInstalledClients().codex.path || "";
+    if (before && (!desktopManaged || codexVendorPresent(managedPrefix))) return { installed: true, path: before };
+  }
+
+  if (desktopManaged) return { installed: false, path: "" };
+
+  spawnSync("npm", ["install", "-g", "--prefix", managedPrefix, "@openai/codex"], { stdio: "inherit", env: installEnv });
+  const codexInstalled = detectInstalledClients().codex.path || "";
   return { installed: Boolean(codexInstalled), path: codexInstalled };
 }
 
@@ -2284,19 +2487,19 @@ async function configureClientSetup({ lang, useDefaults, autoInstall, detected }
   const required = requiredCliClients(setup);
   for (const client of required) {
     if (detected[client] && detected[client].installed) continue;
-    if (desktopManaged && client === "claude_code") {
-      const bundledClaudeDir = path.join(__dirname, "..", "claude-code");
+    if (desktopManaged && (client === "claude_code" || client === "codex")) {
+      const bundledClientDir = path.join(__dirname, "..", client === "claude_code" ? "claude-code" : "codex");
       let hasBundle = false;
       try {
-        if (fs.existsSync(bundledClaudeDir)) {
-          hasBundle = fs.readdirSync(bundledClaudeDir).some((f) => f.endsWith(".tgz"));
+        if (fs.existsSync(bundledClientDir)) {
+          hasBundle = fs.readdirSync(bundledClientDir).some((f) => f.endsWith(".tgz"));
         }
       } catch (_) {}
       if (!hasBundle) {
-        log("Claude Code install deferred to Desktop final sync.");
+        log(`${runtimeClientLabel(client)} install deferred to Desktop final sync.`);
         continue;
       }
-      log("Bundled Claude Code tarball detected — installing offline now.");
+      log(`Bundled ${runtimeClientLabel(client)} tarball detected — installing offline now.`);
     }
     let shouldInstall = useDefaults || autoInstall === "auto";
     if (!shouldInstall && process.stdin.isTTY && process.stdout.isTTY) {
@@ -2326,8 +2529,9 @@ async function configureClientSetup({ lang, useDefaults, autoInstall, detected }
   }
 
   if (setup.automation_enabled && setup.automation_backend !== "none" && !detected[setup.automation_backend]?.installed) {
-    if (desktopManaged && setup.automation_backend === "claude_code") {
-      log("Claude Code will be provisioned by Desktop after the core runtime is ready.");
+    if (desktopManaged && (setup.automation_backend === "claude_code" || setup.automation_backend === "codex")) {
+      const label = setup.automation_backend === "claude_code" ? "Claude Code" : "Codex";
+      log(`${label} will be provisioned by Desktop after the core runtime is ready.`);
       return { setup, detected };
     }
     const label = setup.automation_backend === "claude_code" ? "Claude Code" : "Codex";

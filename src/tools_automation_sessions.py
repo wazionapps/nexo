@@ -84,11 +84,12 @@ def handle_session_log_create(payload: dict | None = None, **kwargs) -> dict:
         except Exception:
             resonance_tier = ""
 
-    from agent_runner import _record_automation_start
+    from agent_runner import _automation_provider_for_backend, _record_automation_start
 
     row_id, err = _record_automation_start(
         caller=caller,
         backend=backend,
+        provider=_automation_provider_for_backend(backend),
         session_type=session_type,
         task_profile="",
         model=model,

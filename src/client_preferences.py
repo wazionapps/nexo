@@ -20,6 +20,22 @@ CLIENT_CLAUDE_CODE = "claude_code"
 CLIENT_CODEX = "codex"
 CLIENT_CLAUDE_DESKTOP = "claude_desktop"
 BACKEND_NONE = "none"
+PROVIDER_ANTHROPIC = "anthropic"
+PROVIDER_OPENAI = "openai"
+PROVIDER_NONE = "none"
+
+PROVIDER_TO_CLIENT = {
+    PROVIDER_ANTHROPIC: CLIENT_CLAUDE_CODE,
+    PROVIDER_OPENAI: CLIENT_CODEX,
+}
+CLIENT_TO_PROVIDER = {
+    CLIENT_CLAUDE_CODE: PROVIDER_ANTHROPIC,
+    CLIENT_CODEX: PROVIDER_OPENAI,
+}
+PROVIDER_KEYS = (
+    PROVIDER_ANTHROPIC,
+    PROVIDER_OPENAI,
+)
 
 INTERACTIVE_CLIENT_KEYS = (
     CLIENT_CLAUDE_CODE,
@@ -65,6 +81,14 @@ AUTOMATION_TASK_PROFILE_TIERS = {
     "balanced": "medio",
     "deep": "maximo",
 }
+
+
+def provider_to_client(provider: str | None) -> str:
+    return PROVIDER_TO_CLIENT.get(normalize_provider_key(provider), "")
+
+
+def client_to_provider(client: str | None) -> str:
+    return CLIENT_TO_PROVIDER.get(normalize_client_key(client), "")
 
 
 def _user_home() -> Path:
@@ -158,6 +182,38 @@ def _managed_claude_binary(home: Path | None = None) -> str:
     return ""
 
 
+def _managed_codex_binary(home: Path | None = None) -> str:
+    base = (home or _user_home()).expanduser()
+    managed_prefix = _managed_claude_prefix(base)
+    candidates = [managed_prefix / "bin" / "codex"]
+    for candidate in candidates:
+        try:
+            if candidate.exists() and _path_within(candidate, managed_prefix):
+                return str(candidate)
+        except Exception:
+            continue
+    return ""
+
+
+def _managed_codex_vendor_present(home: Path | None = None) -> bool:
+    base = (home or _user_home()).expanduser()
+    managed_prefix = _managed_claude_prefix(base)
+    package_roots = (
+        managed_prefix / "lib" / "node_modules" / "@openai" / "codex",
+        managed_prefix / "node_modules" / "@openai" / "codex",
+    )
+    for package_root in package_roots:
+        vendor_root = package_root / "vendor"
+        if not vendor_root.exists():
+            continue
+        try:
+            if any(candidate.is_file() for candidate in vendor_root.rglob("bin/codex*")):
+                return True
+        except Exception:
+            continue
+    return False
+
+
 def _coerce_bool(value, default: bool) -> bool:
     if isinstance(value, bool):
         return value
@@ -182,6 +238,7 @@ def default_client_preferences() -> dict:
         "last_terminal_client": "",
         "automation_enabled": True,
         "automation_backend": CLIENT_CLAUDE_CODE,
+        "provider_runtime": default_provider_runtime(),
         # True iff the user has EXPLICITLY changed automation_backend from its
         # installer-chosen value. Installer/update flows (Fase E) only rewrite
         # automation_backend if this flag is False — respects user opt-out.
@@ -204,6 +261,59 @@ def default_client_preferences() -> dict:
     }
 
 
+def default_provider_runtime() -> dict:
+    return {
+        "schema_version": 1,
+        "selected_chat_provider": PROVIDER_ANTHROPIC,
+        "automation_provider": PROVIDER_ANTHROPIC,
+        "automation_backend": CLIENT_CLAUDE_CODE,
+        "providers": {
+            PROVIDER_ANTHROPIC: {
+                "client": CLIENT_CLAUDE_CODE,
+                "runtime_account_status": {
+                    "surface": "desktop_login",
+                    "status": "unknown",
+                    "plan": None,
+                    "last_checked_at": None,
+                    "detail": None,
+                },
+                "install_status": {
+                    "installed": False,
+                    "managed": True,
+                    "binary_path": None,
+                    "version": None,
+                },
+            },
+            PROVIDER_OPENAI: {
+                "client": CLIENT_CODEX,
+                "runtime_account_status": {
+                    "surface": "desktop_login",
+                    "status": "unknown",
+                    "plan": None,
+                    "last_checked_at": None,
+                    "detail": None,
+                },
+                "install_status": {
+                    "installed": False,
+                    "managed": True,
+                    "binary_path": None,
+                    "version": None,
+                },
+            },
+        },
+        "fallback_policy": {
+            "chat": "ask",
+            "automation": "fail_closed",
+        },
+        "last_provider_change": {
+            "changed_at": None,
+            "from_provider": None,
+            "to_provider": None,
+            "source": None,
+        },
+    }
+
+
 def normalize_client_key(value: str | None) -> str:
     candidate = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
     aliases = {
@@ -221,6 +331,27 @@ def normalize_client_key(value: str | None) -> str:
     return aliases.get(candidate, "")
 
 
+def normalize_provider_key(value: str | None) -> str:
+    candidate = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+    aliases = {
+        "": "",
+        "none": PROVIDER_NONE,
+        "off": PROVIDER_NONE,
+        "disabled": PROVIDER_NONE,
+        "false": PROVIDER_NONE,
+        "0": PROVIDER_NONE,
+        "anthropic": PROVIDER_ANTHROPIC,
+        "anthropic_claude": PROVIDER_ANTHROPIC,
+        "anthropic_claude_code": PROVIDER_ANTHROPIC,
+        "claude": PROVIDER_ANTHROPIC,
+        "claude_code": PROVIDER_ANTHROPIC,
+        "openai": PROVIDER_OPENAI,
+        "openai_codex": PROVIDER_OPENAI,
+        "codex": PROVIDER_OPENAI,
+    }
+    return aliases.get(candidate, "")
+
+
 def normalize_backend_key(value: str | None) -> str:
     candidate = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
     if candidate in {"", "none", "off", "disabled", "false", "0"}:
@@ -229,6 +360,75 @@ def normalize_backend_key(value: str | None) -> str:
     if client_key in TERMINAL_CLIENT_KEYS:
         return client_key
     return ""
+
+
+def _provider_from_runtime_payload(value, key: str, fallback_client: str) -> str:
+    if isinstance(value, dict):
+        provider = normalize_provider_key(value.get(key))
+        if provider in PROVIDER_KEYS:
+            return provider
+    return client_to_provider(fallback_client) or PROVIDER_ANTHROPIC
+
+
+def normalize_provider_runtime(
+    value,
+    *,
+    default_terminal_client: str = CLIENT_CLAUDE_CODE,
+    automation_backend: str = CLIENT_CLAUDE_CODE,
+    automation_enabled: bool = True,
+) -> dict:
+    defaults = default_provider_runtime()
+    raw = value if isinstance(value, dict) else {}
+    selected_provider = _provider_from_runtime_payload(
+        raw,
+        "selected_chat_provider",
+        default_terminal_client,
+    )
+    raw_automation_provider = normalize_provider_key(raw.get("automation_provider")) if isinstance(raw, dict) else ""
+    automation_provider = (
+        PROVIDER_NONE
+        if raw_automation_provider == PROVIDER_NONE
+        else _provider_from_runtime_payload(
+            raw,
+            "automation_provider",
+            automation_backend if automation_enabled else BACKEND_NONE,
+        )
+    )
+    if not automation_enabled or automation_backend == BACKEND_NONE:
+        automation_provider = PROVIDER_NONE
+    elif automation_provider not in PROVIDER_KEYS:
+        automation_provider = client_to_provider(automation_backend) or PROVIDER_ANTHROPIC
+
+    providers = defaults["providers"]
+    raw_providers = raw.get("providers") if isinstance(raw.get("providers"), dict) else {}
+    normalized_providers = {}
+    for provider, expected_client in PROVIDER_TO_CLIENT.items():
+        raw_provider = raw_providers.get(provider) if isinstance(raw_providers.get(provider), dict) else {}
+        merged = dict(providers[provider])
+        merged.update({k: v for k, v in raw_provider.items() if k not in {"client"}})
+        merged["client"] = expected_client
+        normalized_providers[provider] = merged
+
+    fallback_policy = raw.get("fallback_policy") if isinstance(raw.get("fallback_policy"), dict) else {}
+    last_provider_change = raw.get("last_provider_change") if isinstance(raw.get("last_provider_change"), dict) else {}
+
+    return {
+        "schema_version": 1,
+        "selected_chat_provider": selected_provider,
+        "automation_provider": automation_provider,
+        "automation_backend": provider_to_client(automation_provider) if automation_provider in PROVIDER_KEYS else BACKEND_NONE,
+        "providers": normalized_providers,
+        "fallback_policy": {
+            "chat": str(fallback_policy.get("chat") or defaults["fallback_policy"]["chat"]),
+            "automation": "fail_closed",
+        },
+        "last_provider_change": {
+            "changed_at": last_provider_change.get("changed_at"),
+            "from_provider": normalize_provider_key(last_provider_change.get("from_provider")) or None,
+            "to_provider": normalize_provider_key(last_provider_change.get("to_provider")) or None,
+            "source": last_provider_change.get("source"),
+        },
+    }
 
 
 def normalize_interactive_clients(value) -> dict[str, bool]:
@@ -339,7 +539,10 @@ def normalize_automation_user_override(value) -> bool:
 def normalize_automation_backend(value, *, automation_enabled: bool = True) -> str:
     if not automation_enabled:
         return BACKEND_NONE
+    raw = str(value or "").strip().lower()
     candidate = normalize_backend_key(value)
+    if candidate == BACKEND_NONE and raw in {"none", "off", "disabled", "false", "0"}:
+        return BACKEND_NONE
     if candidate in TERMINAL_CLIENT_KEYS:
         return candidate
     return CLIENT_CLAUDE_CODE
@@ -486,12 +689,27 @@ def normalize_client_preferences(
     runtime_profiles = normalize_client_runtime_profiles(
         schedule.get("client_runtime_profiles")
     )
+    provider_runtime = normalize_provider_runtime(
+        schedule.get("provider_runtime"),
+        default_terminal_client=default_terminal_client,
+        automation_backend=automation_backend,
+        automation_enabled=automation_enabled,
+    )
+    selected_client = provider_to_client(provider_runtime.get("selected_chat_provider"))
+    if selected_client in TERMINAL_CLIENT_KEYS:
+        interactive_clients[selected_client] = True
+        default_terminal_client = normalize_default_terminal_client(
+            selected_client,
+            interactive_clients=interactive_clients,
+        )
+    automation_backend = provider_runtime["automation_backend"]
     return {
         "interactive_clients": interactive_clients,
         "default_terminal_client": default_terminal_client,
         "last_terminal_client": last_terminal_client,
         "automation_enabled": automation_enabled,
         "automation_backend": automation_backend,
+        "provider_runtime": provider_runtime,
         "automation_user_override": automation_user_override,
         "client_runtime_profiles": runtime_profiles,
         "automation_task_profiles": normalize_automation_task_profiles(
@@ -530,6 +748,9 @@ def apply_client_preferences(
     last_terminal_client: str | None = None,
     automation_enabled=None,
     automation_backend: str | None = None,
+    provider_runtime: dict | None = None,
+    selected_chat_provider: str | None = None,
+    automation_provider: str | None = None,
     automation_user_override: bool | None = None,
     client_runtime_profiles: dict | None = None,
     automation_task_profiles: dict | None = None,
@@ -556,6 +777,45 @@ def apply_client_preferences(
         automation_backend if automation_backend is not None else current["automation_backend"],
         automation_enabled=merged["automation_enabled"],
     )
+    raw_provider_runtime = (
+        provider_runtime
+        if provider_runtime is not None
+        else current.get("provider_runtime")
+    )
+    raw_provider_runtime = dict(raw_provider_runtime or {})
+    if selected_chat_provider is not None:
+        raw_provider_runtime["selected_chat_provider"] = selected_chat_provider
+        derived_chat_client = provider_to_client(selected_chat_provider)
+        if derived_chat_client:
+            merged["interactive_clients"][derived_chat_client] = True
+            merged["default_terminal_client"] = derived_chat_client
+    elif default_terminal_client is not None:
+        raw_provider_runtime["selected_chat_provider"] = client_to_provider(
+            merged["default_terminal_client"]
+        )
+    if automation_provider is not None:
+        raw_provider_runtime["automation_provider"] = automation_provider
+        derived_backend = provider_to_client(automation_provider)
+        if derived_backend:
+            merged["interactive_clients"][derived_backend] = True
+        merged["automation_backend"] = (
+            derived_backend if derived_backend else BACKEND_NONE
+        )
+    elif automation_backend is not None or automation_enabled is not None:
+        raw_provider_runtime["automation_provider"] = client_to_provider(
+            merged["automation_backend"]
+        ) if merged["automation_backend"] != BACKEND_NONE else PROVIDER_NONE
+    merged["provider_runtime"] = normalize_provider_runtime(
+        raw_provider_runtime,
+        default_terminal_client=merged["default_terminal_client"],
+        automation_backend=merged["automation_backend"],
+        automation_enabled=merged["automation_enabled"],
+    )
+    merged["automation_backend"] = merged["provider_runtime"]["automation_backend"]
+    selected_client = provider_to_client(merged["provider_runtime"].get("selected_chat_provider"))
+    if selected_client in TERMINAL_CLIENT_KEYS:
+        merged["interactive_clients"][selected_client] = True
+        merged["default_terminal_client"] = selected_client
     merged["automation_user_override"] = normalize_automation_user_override(
         automation_user_override
         if automation_user_override is not None
@@ -597,6 +857,9 @@ def save_client_preferences(
     last_terminal_client: str | None = None,
     automation_enabled=None,
     automation_backend: str | None = None,
+    provider_runtime: dict | None = None,
+    selected_chat_provider: str | None = None,
+    automation_provider: str | None = None,
     automation_user_override: bool | None = None,
     client_runtime_profiles: dict | None = None,
     automation_task_profiles: dict | None = None,
@@ -611,6 +874,9 @@ def save_client_preferences(
         last_terminal_client=last_terminal_client,
         automation_enabled=automation_enabled,
         automation_backend=automation_backend,
+        provider_runtime=provider_runtime,
+        selected_chat_provider=selected_chat_provider,
+        automation_provider=automation_provider,
         automation_user_override=automation_user_override,
         client_runtime_profiles=client_runtime_profiles,
         automation_task_profiles=automation_task_profiles,
@@ -666,7 +932,11 @@ def detect_installed_clients(user_home: str | os.PathLike[str] | None = None) ->
         claude_bin = _managed_claude_binary(home)
     else:
         claude_bin = os.environ.get("CLAUDE_BIN", "").strip() or _which_with_nvm("claude", home)
-    codex_bin = os.environ.get("CODEX_BIN", "").strip() or _which_with_nvm("codex", home)
+    if _desktop_product_requested(home):
+        managed_codex_bin = _managed_codex_binary(home)
+        codex_bin = managed_codex_bin if managed_codex_bin and _managed_codex_vendor_present(home) else ""
+    else:
+        codex_bin = os.environ.get("CODEX_BIN", "").strip() or _which_with_nvm("codex", home)
 
     if sys.platform == "darwin":
         desktop_app = next(
@@ -712,6 +982,28 @@ def resolve_terminal_client(requested: str | None = None, *, preferences: dict |
         normalized["default_terminal_client"],
         interactive_clients=normalized["interactive_clients"],
     )
+
+
+def resolve_selected_chat_provider(preferences: dict | None = None) -> str:
+    normalized = preferences or load_client_preferences()
+    provider_runtime = normalize_provider_runtime(
+        normalized.get("provider_runtime"),
+        default_terminal_client=normalized.get("default_terminal_client", CLIENT_CLAUDE_CODE),
+        automation_backend=normalized.get("automation_backend", CLIENT_CLAUDE_CODE),
+        automation_enabled=normalized.get("automation_enabled", True),
+    )
+    return provider_runtime["selected_chat_provider"]
+
+
+def resolve_automation_provider(preferences: dict | None = None) -> str:
+    normalized = preferences or load_client_preferences()
+    provider_runtime = normalize_provider_runtime(
+        normalized.get("provider_runtime"),
+        default_terminal_client=normalized.get("default_terminal_client", CLIENT_CLAUDE_CODE),
+        automation_backend=normalized.get("automation_backend", CLIENT_CLAUDE_CODE),
+        automation_enabled=normalized.get("automation_enabled", True),
+    )
+    return provider_runtime["automation_provider"]
 
 
 def resolve_user_model(preferences: dict | None = None) -> str:

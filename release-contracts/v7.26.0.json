@@ -1,0 +1,124 @@
+{
+  "release_line": "v7.26",
+  "target_version": "7.26.0",
+  "scope_owner": "NEXO",
+  "distribution": {
+    "git_updates_on": "merge_to_main",
+    "packaged_release_on": "tag_publish"
+  },
+  "required_repo_files": [
+    "package.json",
+    "CHANGELOG.md",
+    "README.md",
+    "llms.txt",
+    ".well-known/llms.txt",
+    "sitemap.xml",
+    "index.html",
+    "blog/index.html",
+    "blog/nexo-7-26-0/index.html",
+    "changelog/index.html",
+    "release-contracts/v7.26.0.json",
+    "scripts/run_v7_26_smoke.py",
+    "scripts/sync_release_artifacts.py",
+    "scripts/verify_release_readiness.py",
+    ".claude-plugin/plugin.json",
+    "clawhub-skill/SKILL.md",
+    "openclaw-plugin/package.json",
+    "openclaw-plugin/src/mcp-bridge.ts",
+    "src/provider_runtime.py",
+    "src/client_preferences.py",
+    "src/client_sync.py",
+    "src/agent_runner.py",
+    "src/db/_schema.py",
+    "src/db/_sessions.py",
+    "src/tools_automation_sessions.py",
+    "src/tools_sessions.py",
+    "src/scripts/nexo-cron-wrapper.sh",
+    "codex/openai-codex-0.133.0.tgz",
+    "codex/openai-codex-0.133.0-darwin-arm64.tgz",
+    "codex/openai-codex-0.133.0-darwin-x64.tgz",
+    "codex/openai-codex-0.133.0-linux-arm64.tgz",
+    "codex/openai-codex-0.133.0-linux-x64.tgz",
+    "codex/openai-codex-0.133.0-win32-arm64.tgz",
+    "codex/openai-codex-0.133.0-win32-x64.tgz"
+  ],
+  "required_website_files": [
+    "index.html",
+    "blog/index.html",
+    "blog/nexo-7-26-0/index.html",
+    "changelog/index.html",
+    "llms.txt",
+    ".well-known/llms.txt",
+    "sitemap.xml"
+  ],
+  "smoke": {
+    "required_groups": [
+      "provider_runtime_preferences",
+      "managed_codex_fail_closed",
+      "automation_session_provider_metadata",
+      "schema_cron_provider_metadata",
+      "packaged_codex_bundle",
+      "release_surface_contract"
+    ],
+    "max_age_hours": 48
+  },
+  "publication": {
+    "status": "ready",
+    "checklist_complete": true,
+    "blockers": []
+  },
+  "gates": [
+    {
+      "id": "provider_runtime_preferences",
+      "title": "Provider runtime maps Anthropic to Claude Code and OpenAI to Codex without BYOK/API conflation",
+      "status": "complete",
+      "evidence_required": [
+        "Provider runtime exposes Anthropic/OpenAI as runtime-account choices",
+        "OpenAI maps to Codex and Anthropic maps to Claude Code",
+        "Automation fallback policy stays fail-closed"
+      ]
+    },
+    {
+      "id": "managed_codex_fail_closed",
+      "title": "Desktop-managed installs use only managed Claude/Codex runtimes",
+      "status": "complete",
+      "evidence_required": [
+        "Desktop-managed Codex detection requires the managed binary plus native vendor",
+        "Desktop-managed Codex never falls back to a host global npm install",
+        "Desktop-managed Codex sync ignores global PATH Codex and only runs a managed binary with native vendor",
+        "Headless Codex runner requires the managed wrapper plus native vendor before marking the backend available",
+        "Desktop-managed Claude detection ignores stale global and persisted host paths"
+      ]
+    },
+    {
+      "id": "provider_metadata_persistence",
+      "title": "Sessions, automation runs, and crons persist provider/client metadata",
+      "status": "complete",
+      "evidence_required": [
+        "automation_runs stores backend provider metadata",
+        "interactive sessions store provider/client metadata",
+        "cron wrapper records the selected automation provider/backend"
+      ]
+    },
+    {
+      "id": "packaged_codex_bundle",
+      "title": "Brain package ships the managed Codex wrapper and native vendor tarballs",
+      "status": "complete",
+      "evidence_required": [
+        "npm pack includes codex/openai-codex-0.133.0.tgz",
+        "npm pack includes darwin, linux, and win32 native Codex tarballs",
+        "release readiness blocks incomplete public surfaces before tag publish"
+      ]
+    },
+    {
+      "id": "public_release_surfaces",
+      "title": "Public release surfaces and integration artifacts are aligned for v7.26.0",
+      "status": "complete",
+      "evidence_required": [
+        "README, llms, homepage, blog index, blog post, changelog page, and sitemap reference v7.26.0",
+        "Claude plugin, ClawHub skill, and OpenClaw package metadata reference 7.26.0",
+        "Release smoke and readiness checks validate the v7.26.0 contract before tag publish"
+      ]
+    }
+  ]
+}

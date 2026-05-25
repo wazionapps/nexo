@@ -2470,6 +2470,7 @@ def _clients_sync(args):
         enabled_clients=("claude_code", "claude_desktop", "codex"),
         preferences=load_client_preferences(),
         auto_install_missing_claude=bool(getattr(args, "auto_install_missing_claude", False)),
+        auto_install_missing_codex=bool(getattr(args, "auto_install_missing_codex", False)),
     )
     if args.json:
         print(json.dumps(result, indent=2, ensure_ascii=False))
@@ -2515,6 +2516,8 @@ def _preferences(args):
     from client_preferences import (
         BACKEND_NONE,
         AUTOMATION_BACKEND_KEYS,
+        PROVIDER_KEYS,
+        PROVIDER_NONE,
         load_client_preferences,
         normalize_default_terminal_client,
         save_client_preferences,
@@ -2536,7 +2539,21 @@ def _preferences(args):
         automation_enabled = False
 
     automation_backend = getattr(args, "automation_backend", None)
-    automation_changed = automation_enabled is not None or automation_backend is not None
+    chat_provider = getattr(args, "chat_provider", None)
+    automation_provider = getattr(args, "automation_provider", None)
+    automation_changed = (
+        automation_enabled is not None
+        or automation_backend is not None
+        or automation_provider is not None
+    )
+    provider_changed = chat_provider is not None or automation_provider is not None
+
+    if automation_backend and automation_provider:
+        print(
+            "[NEXO] Use either --automation-provider or --automation-backend, not both.",
+            file=sys.stderr,
+        )
+        return 2
 
     if args.resonance:
         tier = args.resonance.lower()
@@ -2560,11 +2577,13 @@ def _preferences(args):
                 interactive_clients=prefs.get("interactive_clients"),
             ) or "claude_code"
 
-    if tier or automation_changed:
+    if tier or automation_changed or provider_changed:
         save_client_preferences(
             default_resonance=tier,
             automation_enabled=automation_enabled,
             automation_backend=automation_backend,
+            selected_chat_provider=chat_provider,
+            automation_provider=automation_provider,
             automation_user_override=True if automation_changed else None,
         )
         if tier:
@@ -2579,8 +2598,9 @@ def _preferences(args):
     ).strip().lower()
     current_resonance = calibration_value or schedule_value or DEFAULT_RESONANCE
 
-    if args.show or tier or automation_changed:
+    if args.show or tier or automation_changed or provider_changed:
         is_explicit = bool(calibration_value or schedule_value)
+        provider_runtime = prefs.get("provider_runtime") if isinstance(prefs.get("provider_runtime"), dict) else {}
         payload = {
             "default_resonance": current_resonance,
             "default_resonance_is_explicit": is_explicit,
@@ -2594,6 +2614,10 @@ def _preferences(args):
             "automation_user_override": bool(prefs.get("automation_user_override", False)),
             "available_automation_backends": list(AUTOMATION_BACKEND_KEYS),
             "default_terminal_client": str(prefs.get("default_terminal_client") or "claude_code"),
+            "selected_chat_provider": str(provider_runtime.get("selected_chat_provider") or "anthropic"),
+            "automation_provider": str(provider_runtime.get("automation_provider") or PROVIDER_NONE),
+            "available_providers": list(PROVIDER_KEYS),
+            "provider_runtime": provider_runtime,
         }
         if args.json:
             print(json.dumps(payload, indent=2, ensure_ascii=False))
@@ -2605,6 +2629,10 @@ def _preferences(args):
                 + ("enabled" if payload["automation_enabled"] else "disabled")
                 + f" · backend={payload['automation_backend']}"
             )
+            print(
+                "provider = "
+                + f"chat:{payload['selected_chat_provider']} · automation:{payload['automation_provider']}"
+            )
             if not is_explicit:
                 print(f"  (inherited from DEFAULT_RESONANCE; run "
                       f"`nexo preferences --resonance alto` to set explicitly)")
@@ -2614,10 +2642,66 @@ def _preferences(args):
     print(
         "Usage: nexo preferences [--resonance TIER] "
         "[--automation-enabled|--automation-disabled] "
-        "[--automation-backend BACKEND] [--show] [--json]"
+        "[--automation-backend BACKEND|--automation-provider PROVIDER] "
+        "[--chat-provider PROVIDER] [--show] [--json]"
     )
     print(f"  resonance tiers: {', '.join(TIERS)}")
     print(f"  current default: {current_resonance}")
+    return 0
+
+
+def _provider(args):
+    """Provider runtime status/selection for Desktop and terminal parity."""
+    from client_preferences import (
+        PROVIDER_KEYS,
+        detect_installed_clients,
+        load_client_preferences,
+        provider_to_client,
+        save_client_preferences,
+    )
+
+    command = getattr(args, "provider_command", "status") or "status"
+    prefs = load_client_preferences()
+    provider_runtime = prefs.get("provider_runtime") if isinstance(prefs.get("provider_runtime"), dict) else {}
+    if command == "select":
+        target = str(args.provider or "").strip().lower()
+        if target not in PROVIDER_KEYS:
+            print(f"[NEXO] Unknown provider '{target}'. Valid values: {', '.join(PROVIDER_KEYS)}.", file=sys.stderr)
+            return 2
+        chat_provider = None if getattr(args, "automation_only", False) else target
+        automation_provider = None if getattr(args, "chat_only", False) else target
+        save_client_preferences(
+            selected_chat_provider=chat_provider,
+            automation_provider=automation_provider,
+            automation_user_override=True if automation_provider is not None else None,
+        )
+        prefs = load_client_preferences()
+        provider_runtime = prefs.get("provider_runtime") if isinstance(prefs.get("provider_runtime"), dict) else {}
+
+    detected = detect_installed_clients()
+    payload = {
+        "selected_chat_provider": str(provider_runtime.get("selected_chat_provider") or "anthropic"),
+        "automation_provider": str(provider_runtime.get("automation_provider") or "none"),
+        "automation_backend": str(prefs.get("automation_backend") or "none"),
+        "default_terminal_client": str(prefs.get("default_terminal_client") or "claude_code"),
+        "providers": provider_runtime.get("providers") or {},
+        "installed_clients": detected,
+    }
+    for provider in PROVIDER_KEYS:
+        client = provider_to_client(provider)
+        payload["providers"].setdefault(provider, {})
+        payload["providers"][provider]["client"] = client
+        payload["providers"][provider]["detected"] = detected.get(client, {})
+
+    if getattr(args, "json", False):
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+    else:
+        print(f"chat_provider = {payload['selected_chat_provider']}")
+        print(f"automation_provider = {payload['automation_provider']} · backend={payload['automation_backend']}")
+        for provider in PROVIDER_KEYS:
+            detected_provider = payload["providers"].get(provider, {}).get("detected", {})
+            state = "installed" if detected_provider.get("installed") else "missing"
+            print(f"  {provider}: {state}")
     return 0
 
 
@@ -4058,6 +4142,11 @@ def main():
         action="store_true",
         help="Install Claude Code automatically when the selected runtime needs it and it is missing.",
     )
+    clients_sync_p.add_argument(
+        "--auto-install-missing-codex",
+        action="store_true",
+        help="Install Codex automatically when the selected runtime needs it and it is missing.",
+    )
 
     # -- preferences --
     preferences_parser = sub.add_parser(
@@ -4093,7 +4182,29 @@ def main():
         choices=["claude_code", "codex", "none"],
         help="Backend used by background automations when they are enabled.",
     )
+    preferences_parser.add_argument(
+        "--chat-provider",
+        choices=["anthropic", "openai"],
+        help="Provider used for new chat sessions: Anthropic runs Claude Code, OpenAI runs Codex.",
+    )
+    preferences_parser.add_argument(
+        "--automation-provider",
+        choices=["anthropic", "openai", "none"],
+        help="Provider used by background automations. 'none' pauses the runtime instead of falling back.",
+    )
     preferences_parser.add_argument("--json", action="store_true", help="JSON output")
+
+    # -- provider --
+    provider_parser = sub.add_parser("provider", help="Provider runtime status and selection")
+    provider_sub = provider_parser.add_subparsers(dest="provider_command")
+    provider_status_p = provider_sub.add_parser("status", help="Show selected Anthropic/OpenAI runtime")
+    provider_status_p.add_argument("--json", action="store_true", help="JSON output")
+    provider_select_p = provider_sub.add_parser("select", help="Select Anthropic or OpenAI runtime")
+    provider_select_p.add_argument("provider", choices=["anthropic", "openai"], help="Provider to select")
+    provider_scope = provider_select_p.add_mutually_exclusive_group()
+    provider_scope.add_argument("--chat-only", action="store_true", help="Only switch new chat sessions")
+    provider_scope.add_argument("--automation-only", action="store_true", help="Only switch background automation")
+    provider_select_p.add_argument("--json", action="store_true", help="JSON output")
 
     # -- doctor --
     doctor_parser = sub.add_parser("doctor", help="Unified diagnostics")
@@ -4585,6 +4696,8 @@ def main():
         return 0
     elif args.command == "preferences":
         return _preferences(args)
+    elif args.command == "provider":
+        return _provider(args)
     elif args.command == "doctor":
         return _doctor(args)
     elif args.command == "support-snapshot":

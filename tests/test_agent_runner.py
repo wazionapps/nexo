@@ -111,6 +111,47 @@ def test_build_interactive_client_command_uses_codex_when_selected(tmp_path, mon
     assert cmd[-3:] == ["-C", str(tmp_path), "Start NEXO now."]
 
 
+def test_resolve_codex_cli_uses_managed_desktop_binary(monkeypatch):
+    import agent_runner
+
+    monkeypatch.delenv("CODEX_BIN", raising=False)
+    monkeypatch.setattr(agent_runner, "_desktop_product_requested", lambda home=None: True)
+    monkeypatch.setattr(agent_runner, "_managed_codex_binary", lambda home=None: "/tmp/managed-codex")
+    monkeypatch.setattr(agent_runner, "_managed_codex_vendor_present", lambda home=None: True)
+    monkeypatch.setattr(agent_runner.shutil, "which", lambda name: None)
+
+    assert agent_runner._resolve_codex_cli() == "/tmp/managed-codex"
+
+
+def test_resolve_codex_cli_desktop_managed_requires_vendor(monkeypatch, tmp_path):
+    import agent_runner
+
+    global_codex = tmp_path / "global-codex"
+    global_codex.write_text("#!/bin/sh\n")
+
+    monkeypatch.setenv("CODEX_BIN", str(global_codex))
+    monkeypatch.setattr(agent_runner, "_desktop_product_requested", lambda home=None: True)
+    monkeypatch.setattr(agent_runner, "_managed_codex_binary", lambda home=None: "/tmp/managed-codex")
+    monkeypatch.setattr(agent_runner, "_managed_codex_vendor_present", lambda home=None: False)
+    monkeypatch.setattr(agent_runner.shutil, "which", lambda name: "/usr/local/bin/codex")
+
+    assert agent_runner._resolve_codex_cli() == ""
+
+
+def test_resolve_codex_cli_desktop_managed_does_not_fallback_to_global(monkeypatch, tmp_path):
+    import agent_runner
+
+    global_codex = tmp_path / "global-codex"
+    global_codex.write_text("#!/bin/sh\n")
+
+    monkeypatch.setenv("CODEX_BIN", str(global_codex))
+    monkeypatch.setattr(agent_runner, "_desktop_product_requested", lambda home=None: True)
+    monkeypatch.setattr(agent_runner, "_managed_codex_binary", lambda home=None: "")
+    monkeypatch.setattr(agent_runner.shutil, "which", lambda name: "/usr/local/bin/codex")
+
+    assert agent_runner._resolve_codex_cli() == ""
+
+
 def test_build_interactive_client_command_preserves_claude_flags(tmp_path, monkeypatch):
     import agent_runner
 
@@ -606,14 +647,20 @@ def test_run_automation_prompt_ignores_legacy_task_profile_routing_overrides(mon
     assert captured["cmd"][captured["cmd"].index("--effort") + 1] == "max"
 
 
-def test_run_automation_prompt_falls_back_when_configured_backend_is_unavailable(monkeypatch, tmp_path):
+def test_run_automation_prompt_fails_closed_when_configured_backend_is_unavailable(monkeypatch, tmp_path):
     import agent_runner
 
     monkeypatch.setattr(agent_runner, "_resolve_claude_cli", lambda: "")
     monkeypatch.setattr(agent_runner, "_resolve_codex_cli", lambda: "/tmp/fake-codex")
     monkeypatch.setattr(agent_runner, "_load_client_bootstrap_prompt", lambda client: "You are NEXO.")
     monkeypatch.setattr(agent_runner, "_codex_managed_initial_messages_enabled", lambda: False)
-    monkeypatch.setattr(agent_runner, "_record_automation_run", lambda **kwargs: (True, ""))
+    recorded = {}
+
+    def fake_record(**kwargs):
+        recorded.update(kwargs)
+        return True, ""
+
+    monkeypatch.setattr(agent_runner, "_record_automation_run", fake_record)
     monkeypatch.setattr(agent_runner, "load_client_preferences", lambda: {
         "interactive_clients": {"claude_code": True, "codex": True, "claude_desktop": False},
         "default_terminal_client": "claude_code",
@@ -631,33 +678,20 @@ def test_run_automation_prompt_falls_back_when_configured_backend_is_unavailable
         },
     })
 
-    captured = {}
+    with pytest.raises(agent_runner.AutomationBackendUnavailableError) as exc:
+        agent_runner.run_automation_prompt(
+            "Fallback path",
+            caller="test/harness",
+            cwd=tmp_path,
+            output_format="text",
+        )
 
-    def fake_run(cmd, **kwargs):
-        captured["cmd"] = cmd
-        out_idx = cmd.index("-o") + 1
-        with open(cmd[out_idx], "w", encoding="utf-8") as fh:
-            fh.write("FALLBACK OK")
-        return subprocess.CompletedProcess(cmd, 0, _codex_json_usage(), "")
-
-    monkeypatch.setattr(agent_runner.subprocess, "run", fake_run)
-
-    result = agent_runner.run_automation_prompt(
-        "Fallback path",
-        caller="test/harness",
-        cwd=tmp_path,
-        output_format="text",
-    )
-
-    assert result.stdout == "FALLBACK OK"
-    assert captured["cmd"][:2] == ["/tmp/fake-codex", "exec"]
-    assert captured["cmd"][captured["cmd"].index("-m") + 1] == "gpt-5.4"
-    config_values = [captured["cmd"][idx + 1] for idx, part in enumerate(captured["cmd"]) if part == "-c"]
-    # v5.10.0: resonance_map tier (test/harness -> maximo) drives the
-    # effort now, not client_runtime_profiles. For MAXIMO + codex that
-    # is "xhigh". client_runtime_profiles still supplies the model when
-    # resonance_map leaves it empty, but effort is always mapped.
-    assert 'model_reasoning_effort="xhigh"' in config_values
+    assert "fallback blocked" in str(exc.value)
+    assert recorded["backend"] == "claude_code"
+    assert recorded["provider"] == "anthropic"
+    assert recorded["returncode"] == 2
+    assert recorded["telemetry"]["raw"]["event"] == "backend_unavailable"
+    assert "fallback_blocked" in recorded["telemetry"]["warnings"]
 
 
 def test_probe_automation_backend_reports_disabled(monkeypatch):

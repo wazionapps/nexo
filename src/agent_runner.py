@@ -24,8 +24,12 @@ from client_preferences import (
     BACKEND_NONE,
     CLIENT_CLAUDE_CODE,
     CLIENT_CODEX,
+    client_to_provider,
     TERMINAL_CLIENT_KEYS,
     load_client_preferences,
+    _desktop_product_requested,
+    _managed_codex_binary,
+    _managed_codex_vendor_present,
     normalize_client_key,
     resolve_automation_backend,
     resolve_client_runtime_profile,
@@ -53,6 +57,10 @@ class TerminalClientUnavailableError(AgentRunnerError):
 
 class AutomationBackendUnavailableError(AgentRunnerError):
     """Raised when the configured automation backend is unavailable."""
+
+
+def _automation_provider_for_backend(backend: str) -> str:
+    return client_to_provider(backend) or ""
 
 def _canonical_pricing_model(model: str) -> str:
     lowered = str(model or "").strip().lower()
@@ -199,6 +207,7 @@ def _record_automation_start(
     *,
     caller: str,
     backend: str,
+    provider: str = "",
     session_type: str,
     task_profile: str,
     model: str,
@@ -225,14 +234,15 @@ def _record_automation_start(
         cur = conn.execute(
             """
             INSERT INTO automation_runs (
-                caller, backend, session_type, task_profile, model,
+                caller, backend, provider, session_type, task_profile, model,
                 reasoning_effort, resonance_tier, cwd, output_format,
                 prompt_chars, status, started_at, pid
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'running', datetime('now'), ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'running', datetime('now'), ?)
             """,
             (
                 caller or "",
                 backend,
+                provider or _automation_provider_for_backend(backend),
                 session_type or "headless",
                 task_profile or "default",
                 model or "",
@@ -339,6 +349,7 @@ def _record_automation_end(
 def _record_automation_run(
     *,
     backend: str,
+    provider: str = "",
     task_profile: str,
     model: str,
     reasoning_effort: str,
@@ -359,6 +370,7 @@ def _record_automation_run(
     row_id, err = _record_automation_start(
         caller=caller,
         backend=backend,
+        provider=provider or _automation_provider_for_backend(backend),
         session_type=session_type,
         task_profile=task_profile,
         model=model,
@@ -378,14 +390,57 @@ def _record_automation_run(
     )
 
 
+def _record_backend_unavailable(
+    *,
+    backend: str,
+    caller: str,
+    cwd: Path,
+    prompt: str,
+) -> None:
+    profile = resolve_client_runtime_profile(backend)
+    _record_automation_run(
+        backend=backend,
+        provider=_automation_provider_for_backend(backend),
+        task_profile="default",
+        model=profile.get("model", ""),
+        reasoning_effort=profile.get("reasoning_effort", ""),
+        cwd=cwd,
+        output_format="text",
+        prompt=prompt,
+        returncode=2,
+        duration_ms=0,
+        telemetry={
+            "telemetry_source": "backend_unavailable",
+            "cost_source": "missing",
+            "usage": {},
+            "warnings": ["backend_unavailable", "fallback_blocked"],
+            "raw": {
+                "event": "backend_unavailable",
+                "backend": backend,
+                "provider": _automation_provider_for_backend(backend),
+                "fallback_policy": "fail_closed",
+            },
+        },
+        caller=caller,
+        session_type="headless",
+    )
+
+
 def _resolve_claude_cli() -> str:
     return _shared_resolve_claude_cli()
 
 
 def _resolve_codex_cli() -> str:
+    home = Path.home()
+    if _desktop_product_requested(home):
+        managed_path = _managed_codex_binary(home)
+        return managed_path if managed_path and _managed_codex_vendor_present(home) else ""
     env_path = os.environ.get("CODEX_BIN", "").strip()
     if env_path and Path(env_path).exists():
         return env_path
+    managed_path = _managed_codex_binary(home)
+    if managed_path and _managed_codex_vendor_present(home):
+        return managed_path
     return shutil.which("codex") or ""
 
 
@@ -790,6 +845,7 @@ def run_automation_interactive(
     row_id, _record_err = _record_automation_start(
         caller=caller,
         backend=resolved_client,
+        provider=_automation_provider_for_backend(resolved_client),
         session_type=session_type,
         task_profile="",
         model="",
@@ -905,15 +961,6 @@ def _backend_is_available(backend: str) -> bool:
 
 
 def _resolve_available_backend(selected_backend: str, *, preferences: dict | None = None) -> str:
-    if _backend_is_available(selected_backend):
-        return selected_backend
-    prefs = preferences or load_client_preferences()
-    preferred = resolve_automation_backend(preferences=prefs)
-    for candidate in (preferred, CLIENT_CLAUDE_CODE, CLIENT_CODEX):
-        if candidate == selected_backend or candidate == BACKEND_NONE:
-            continue
-        if _backend_is_available(candidate):
-            return candidate
     return selected_backend
 
 
@@ -1153,6 +1200,17 @@ def run_automation_prompt(
     if selected_backend == BACKEND_NONE:
         raise AutomationBackendUnavailableError("Automation backend is disabled in config.")
     selected_backend = _resolve_available_backend(selected_backend, preferences=prefs)
+    if not _backend_is_available(selected_backend):
+        cwd_path = Path(cwd).expanduser().resolve() if cwd else Path.cwd()
+        _record_backend_unavailable(
+            backend=selected_backend,
+            caller=caller,
+            cwd=cwd_path,
+            prompt=prompt,
+        )
+        raise AutomationBackendUnavailableError(
+            f"{selected_backend} automation backend selected but launcher is not installed; fallback blocked."
+        )
 
     # Resonance map decides (model, effort) for every call. ``caller`` is
     # MANDATORY — every script that invokes the automation backend must be
@@ -1342,6 +1400,7 @@ def run_automation_prompt(
         telemetry["automation_contract"] = automation_contract
         recorded, record_error = _record_automation_run(
             backend=selected_backend,
+            provider=_automation_provider_for_backend(selected_backend),
             task_profile=task_profile,
             model=resolved_model,
             reasoning_effort=resolved_effort,
@@ -1420,6 +1479,7 @@ def run_automation_prompt(
             telemetry["automation_contract"] = automation_contract
             recorded, record_error = _record_automation_run(
                 backend=selected_backend,
+                provider=_automation_provider_for_backend(selected_backend),
                 task_profile=task_profile,
                 model=resolved_model,
                 reasoning_effort=resolved_effort,

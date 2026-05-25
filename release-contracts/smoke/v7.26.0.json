@@ -1,0 +1,151 @@
+{
+  "release_line": "v7.26",
+  "version": "7.26.0",
+  "generated_at": "2026-05-25T02:12:01.923839+00:00",
+  "ok": true,
+  "groups": [
+    {
+      "id": "provider_runtime_preferences",
+      "description": "Provider runtime preferences map Anthropic to Claude Code and OpenAI to Codex",
+      "command": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_provider_runtime.py",
+        "tests/test_client_preferences.py::test_provider_runtime_maps_openai_to_codex_without_byok",
+        "tests/test_client_preferences.py::test_apply_client_preferences_provider_selection_updates_backend",
+        "tests/test_preferences_cli.py::test_provider_select_openai_updates_chat_and_automation_runtime"
+      ],
+      "targets": [
+        "tests/test_provider_runtime.py",
+        "tests/test_client_preferences.py::test_provider_runtime_maps_openai_to_codex_without_byok",
+        "tests/test_client_preferences.py::test_apply_client_preferences_provider_selection_updates_backend",
+        "tests/test_preferences_cli.py::test_provider_select_openai_updates_chat_and_automation_runtime"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 5.8,
+      "stdout": ".....                                                                    [100%]Running teardown with pytest sessionfinish...\n\n5 passed in 0.73s\n",
+      "stderr": ""
+    },
+    {
+      "id": "managed_codex_fail_closed",
+      "description": "Desktop-managed Codex detection and install fail closed to managed runtime artifacts",
+      "command": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_agent_runner.py::test_resolve_codex_cli_desktop_managed_does_not_fallback_to_global",
+        "tests/test_agent_runner.py::test_resolve_codex_cli_desktop_managed_requires_vendor",
+        "tests/test_client_preferences.py::test_detect_installed_clients_desktop_managed_requires_codex_vendor",
+        "tests/test_client_sync.py::test_sync_codex_desktop_managed_ignores_global_codex_without_vendor",
+        "tests/test_client_sync.py::test_ensure_codex_installed_desktop_managed_does_not_call_host_npm",
+        "tests/test_desktop_managed_claude_deferral.py::test_desktop_managed_detection_uses_only_managed_client_binaries",
+        "tests/test_desktop_managed_claude_deferral.py::test_desktop_managed_installers_never_call_host_npm_after_managed_failure"
+      ],
+      "targets": [
+        "tests/test_agent_runner.py::test_resolve_codex_cli_desktop_managed_does_not_fallback_to_global",
+        "tests/test_agent_runner.py::test_resolve_codex_cli_desktop_managed_requires_vendor",
+        "tests/test_client_preferences.py::test_detect_installed_clients_desktop_managed_requires_codex_vendor",
+        "tests/test_client_sync.py::test_sync_codex_desktop_managed_ignores_global_codex_without_vendor",
+        "tests/test_client_sync.py::test_ensure_codex_installed_desktop_managed_does_not_call_host_npm",
+        "tests/test_desktop_managed_claude_deferral.py::test_desktop_managed_detection_uses_only_managed_client_binaries",
+        "tests/test_desktop_managed_claude_deferral.py::test_desktop_managed_installers_never_call_host_npm_after_managed_failure"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 2.47,
+      "stdout": ".......                                                                  [100%]Running teardown with pytest sessionfinish...\n\n7 passed in 0.54s\n",
+      "stderr": ""
+    },
+    {
+      "id": "automation_session_provider_metadata",
+      "description": "Codex automation and interactive sessions keep provider/client metadata",
+      "command": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_agent_runner.py::test_codex_backend_records_caller_session_and_contract",
+        "tests/test_agent_runner.py::test_run_automation_prompt_fails_closed_when_configured_backend_is_unavailable",
+        "tests/test_session_claude_aliases.py"
+      ],
+      "targets": [
+        "tests/test_agent_runner.py::test_codex_backend_records_caller_session_and_contract",
+        "tests/test_agent_runner.py::test_run_automation_prompt_fails_closed_when_configured_backend_is_unavailable",
+        "tests/test_session_claude_aliases.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 4.95,
+      "stdout": "............                                                             [100%]Running teardown with pytest sessionfinish...\n\n12 passed in 2.71s\n",
+      "stderr": ""
+    },
+    {
+      "id": "schema_cron_provider_metadata",
+      "description": "Schema migrations and cron wrapper expose provider metadata",
+      "command": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_migrations.py",
+        "tests/test_cron_wrapper_contract.py"
+      ],
+      "targets": [
+        "tests/test_migrations.py",
+        "tests/test_cron_wrapper_contract.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 8.05,
+      "stdout": ".................                                                        [100%]Running teardown with pytest sessionfinish...\n\n17 passed in 5.77s\n",
+      "stderr": ""
+    },
+    {
+      "id": "packaged_codex_bundle",
+      "description": "npm package includes the Codex wrapper and native vendor tarballs",
+      "command": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_desktop_managed_claude_deferral.py::test_npm_package_includes_codex_bundle_directory"
+      ],
+      "targets": [
+        "tests/test_desktop_managed_claude_deferral.py::test_npm_package_includes_codex_bundle_directory"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 2.46,
+      "stdout": ".                                                                        [100%]Running teardown with pytest sessionfinish...\n\n1 passed in 0.12s\n",
+      "stderr": ""
+    },
+    {
+      "id": "release_surface_contract",
+      "description": "Release-facing public surfaces and contract metadata stay aligned for v7.26.0",
+      "command": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "scripts/verify_release_readiness.py",
+        "--ci",
+        "--contract",
+        "release-contracts/v7.26.0.json",
+        "--require-contract-complete"
+      ],
+      "targets": [
+        "scripts/verify_release_readiness.py",
+        "--ci",
+        "--contract",
+        "release-contracts/v7.26.0.json",
+        "--require-contract-complete"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 38.24,
+      "stdout": "[sync-release-artifacts] OK\n........................................................................ [ 31%]\n........................................................................ [ 63%]\n........................................................................ [ 94%]\n............                                                             [100%]Running teardown with pytest sessionfinish...\n\n228 passed in 34.43s\n[client-parity] docs OK\n[client-parity] parity tests OK\n[release-readiness] changelog OK (7.26.0)\n[release-readiness] repo public surfaces OK (/Users/franciscoc/Documents/_PhpstormProjects/nexo)\n[release-readiness] duplicate artifact hygiene OK (/Users/franciscoc/Documents/_PhpstormProjects/nexo)\n[release-readiness] $ /opt/homebrew/opt/python@3.14/bin/python3.14 scripts/sync_release_artifacts.py --check\n[release-readiness] $ /opt/homebrew/opt/python@3.14/bin/python3.14 scripts/verify_client_parity.py\n[release-readiness] website skipped (missing /Users/franciscoc/Documents/_PhpstormProjects/nexo-gh-pages)\n[release-readiness] publication state OK (status=ready, checklist_complete=True)\n[release-readiness] contract OK (release-contracts/v7.26.0.json, release_line=v7.26, target_version=7.26.0, gates=5)\n[release-readiness] OK\n",
+      "stderr": ""
+    }
+  ]
+}

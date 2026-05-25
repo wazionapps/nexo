@@ -15,6 +15,7 @@ import os
 import subprocess
 import sys
 import time
+from pathlib import Path
 
 import pytest
 
@@ -138,6 +139,33 @@ def test_handle_startup_registers_alias_automatically():
     out = handle_startup(task="startup binds alias", session_token=uuid)
     sid = [l for l in out.splitlines() if l.startswith("SID: ")][0].split("SID: ", 1)[1].strip()
     assert _resolve(uuid) == sid
+
+
+def test_codex_startup_does_not_autodetect_or_alias_stale_claude_uuid():
+    from db import get_db
+    from tools_sessions import handle_startup
+
+    stale_uuid = "stale-claude-session-for-codex"
+    coordination = Path(os.environ["NEXO_HOME"]) / "coordination"
+    coordination.mkdir(parents=True, exist_ok=True)
+    (coordination / ".claude-session-id").write_text(stale_uuid + "\n", encoding="utf-8")
+
+    out = handle_startup(task="codex startup", session_client="codex")
+    sid = [l for l in out.splitlines() if l.startswith("SID: ")][0].split("SID: ", 1)[1].strip()
+
+    row = get_db().execute(
+        "SELECT claude_session_id, external_session_id, session_client, session_provider FROM sessions WHERE sid=?",
+        (sid,),
+    ).fetchone()
+    assert row["claude_session_id"] == ""
+    assert row["external_session_id"] == ""
+    assert row["session_client"] == "codex"
+    assert row["session_provider"] == "openai"
+    count = get_db().execute(
+        "SELECT COUNT(*) FROM session_claude_aliases WHERE sid=?",
+        (sid,),
+    ).fetchone()[0]
+    assert count == 0
 
 
 def test_multi_conversation_scenario_end_to_end():

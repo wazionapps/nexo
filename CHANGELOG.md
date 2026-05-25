@@ -1,5 +1,14 @@
 # Changelog
 
+## [7.26.0] - 2026-05-25
+
+### Added — provider runtime parity
+
+- **NEXO Brain now has a first-class provider runtime contract for Anthropic Claude and OpenAI Codex.** Preferences normalize `selected_chat_provider`, `automation_provider`, provider health, fallback policy, and provider-to-client mapping without mixing model-account login with BYOK/API-key connections.
+- **Automation, sessions, crons, and Desktop-managed setup now preserve provider metadata.** Runs record provider/client snapshots, provider switches fail closed for background automation, sessions can expose the active provider, and cron wrappers keep the provider used for each run.
+- **Desktop-managed installations can provision Codex from the bundled offline package path.** Brain detects the managed Codex binary, installs the wrapper/native vendor bundle when Desktop ships it, and keeps Claude/Codex setup symmetric for macOS and Windows-managed runtimes.
+- **Coverage:** full Brain pytest, provider runtime preferences, agent runner fail-closed behavior, provider CLI, session metadata, cron wrapper provider logging, Desktop-managed setup deferral, and legacy migration hardening.
+
 ## [7.25.6] - 2026-05-24
 
 ### Fixed — Local Memory update migration hardening

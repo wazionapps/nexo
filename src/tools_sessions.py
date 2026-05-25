@@ -12,6 +12,7 @@ import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from core_prompts import render_core_prompt
+from client_preferences import client_to_provider, normalize_provider_key
 from db import (
     register_session, update_session, complete_session,
     get_active_sessions, clean_stale_sessions, search_sessions,
@@ -582,6 +583,7 @@ def handle_startup(
     claude_session_id: str = "",
     session_token: str = "",
     session_client: str = "",
+    session_provider: str = "",
     conversation_id: str = "",
 ) -> str:
     """Full startup sequence: register, clean, report.
@@ -593,12 +595,16 @@ def handle_startup(
                       other clients may pass a synthetic durable ID when useful.
                       Enables automatic inbox detection when hook-backed clients provide one.
         session_client: Optional client label such as `claude_code` or `codex`.
+        session_provider: Optional provider label such as `anthropic` or `openai`.
     """
     _set_interactive_db_timeout()
     sid = _generate_sid()
     startup_warnings: list[str] = []
     cleaned = _safe_interactive("stale-session cleanup", clean_stale_sessions, 0, startup_warnings)
     linked_session_id = (session_token or claude_session_id or "").strip()
+    inferred_client = (session_client or "").strip()
+    if not inferred_client and claude_session_id and not session_token:
+        inferred_client = "claude_code"
     # v6.0.7 hotfix: when the caller did not pass an explicit UUID, fall back to
     # the Claude Code SessionStart UUID written by the SessionStart hook to
     # <NEXO_HOME>/coordination/.claude-session-id. This fixes the "unknown
@@ -606,15 +612,13 @@ def handle_startup(
     # nexo_startup() without propagating the hook payload (bug revisited
     # after PR #208 — PR #208 covered the hook side; this covers the
     # startup side so every session row is born correlated).
-    if not linked_session_id:
+    if not linked_session_id and (not inferred_client or inferred_client == "claude_code"):
         linked_session_id = _autodetect_claude_session_id()
-    inferred_client = (session_client or "").strip()
-    if not inferred_client and claude_session_id and not session_token:
-        inferred_client = "claude_code"
     if not inferred_client and linked_session_id:
         # If we recovered the UUID from the coordination file, the only
         # client that writes there is Claude Code.
         inferred_client = "claude_code"
+    inferred_provider = normalize_provider_key(session_provider) or client_to_provider(inferred_client)
     conversation = str(conversation_id or "").strip()
     conflicts = []
     if conversation:
@@ -623,7 +627,7 @@ def handle_startup(
             conn = get_db()
             rows = conn.execute(
                 """
-                SELECT sid, task, last_update_epoch, external_session_id, session_client
+                SELECT sid, task, last_update_epoch, external_session_id, session_client, session_provider
                 FROM sessions
                 WHERE conversation_id = ? AND last_update_epoch > ?
                 ORDER BY last_update_epoch DESC
@@ -638,9 +642,10 @@ def handle_startup(
         lambda: register_session(
             sid,
             task,
-            claude_session_id=linked_session_id,
+            claude_session_id=linked_session_id if inferred_client == "claude_code" else "",
             external_session_id=linked_session_id,
             session_client=inferred_client,
+            session_provider=inferred_provider,
             conversation_id=conversation,
         ),
         None,
@@ -668,7 +673,7 @@ def handle_startup(
     # Backward-compatible: if the alias table does not yet exist (older
     # DB), register_claude_session_alias returns False silently and
     # the legacy sessions.claude_session_id column stays authoritative.
-    if linked_session_id:
+    if linked_session_id and inferred_client == "claude_code":
         try:
             from hook_guardrails import register_claude_session_alias
             from db import get_db as _get_db
@@ -712,7 +717,7 @@ def handle_startup(
             age = _format_age(row["last_update_epoch"])
             lines.append(
                 f"  {row['sid']} ({age}) — {row['task']} "
-                f"[client={row.get('session_client') or '?'} external={row.get('external_session_id') or '?'}]"
+                f"[provider={row.get('session_provider') or '?'} client={row.get('session_client') or '?'} external={row.get('external_session_id') or '?'}]"
             )
 
     if memory_maintenance and not memory_maintenance.get("ok"):

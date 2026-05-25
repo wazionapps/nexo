@@ -1117,6 +1117,28 @@ def _m41_automation_sessions_columns(conn):
     )
 
 
+def _m69_provider_runtime_metadata(conn):
+    """Add provider/runtime metadata required for Anthropic/OpenAI parity."""
+    if not _table_exists(conn, "automation_runs"):
+        _m28_automation_runs(conn)
+    if not _table_exists(conn, "cron_runs"):
+        _m17_cron_runs(conn)
+
+    if _table_exists(conn, "automation_runs"):
+        _migrate_add_column(conn, "automation_runs", "provider", "TEXT DEFAULT ''")
+        _migrate_add_column(conn, "automation_runs", "runtime_version", "TEXT DEFAULT ''")
+        _migrate_add_column(conn, "automation_runs", "runtime_session_id", "TEXT DEFAULT ''")
+        _migrate_add_index(conn, "idx_automation_runs_provider", "automation_runs", "provider")
+    if _table_exists(conn, "cron_runs"):
+        _migrate_add_column(conn, "cron_runs", "provider", "TEXT DEFAULT ''")
+        _migrate_add_column(conn, "cron_runs", "backend", "TEXT DEFAULT ''")
+        _migrate_add_column(conn, "cron_runs", "runtime_snapshot", "TEXT DEFAULT '{}'")
+        _migrate_add_index(conn, "idx_cron_runs_provider", "cron_runs", "provider")
+    if _table_exists(conn, "sessions"):
+        _migrate_add_column(conn, "sessions", "session_provider", "TEXT DEFAULT ''")
+        _migrate_add_index(conn, "idx_sessions_provider", "sessions", "session_provider")
+
+
 def _m42_v6_0_1_hotfix(conn):
     """v6.0.1 hotfix — last_heartbeat_ts on sessions + hook_inbox_reminders.
 
@@ -2247,6 +2269,7 @@ MIGRATIONS = [
     (66, "transcript_index", _m66_transcript_index),
     (67, "diary_quality_backfill_repair", _m67_diary_quality_backfill_repair),
     (68, "memory_fabric_index", _m68_memory_fabric_index),
+    (69, "provider_runtime_metadata", _m69_provider_runtime_metadata),
 ]
 
 

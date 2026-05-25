@@ -10,6 +10,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import tarfile
 from pathlib import Path
 
 from calibration_runtime import load_runtime_calibration
@@ -80,6 +81,7 @@ except Exception:
 
 
 CLAUDE_CODE_NPM_PACKAGE = "@anthropic-ai/claude-code"
+CODEX_NPM_PACKAGE = "@openai/codex"
 DEFAULT_ASSISTANT_NAME = "Nova"
 HOOK_TIMEOUTS_BY_EVENT = {
     "SessionStart": 40,
@@ -235,6 +237,159 @@ def _managed_claude_prefix(user_home: Path | None = None) -> Path:
     return home / ".nexo" / "runtime" / "bootstrap" / "npm-global"
 
 
+def _brain_bundle_root() -> Path:
+    return Path(__file__).resolve().parents[1]
+
+
+def _platform_slug() -> str:
+    if sys.platform.startswith("darwin"):
+        os_part = "darwin"
+    elif sys.platform.startswith("linux"):
+        os_part = "linux"
+    elif sys.platform.startswith("win"):
+        os_part = "win32"
+    else:
+        os_part = sys.platform
+    machine = __import__("platform").machine().lower()
+    if machine in {"x86_64", "amd64"}:
+        arch = "x64"
+    elif machine in {"aarch64", "arm64"}:
+        arch = "arm64"
+    else:
+        arch = machine
+    return f"{os_part}-{arch}"
+
+
+def _install_npm_package_from_bundle(
+    *,
+    bundle_dir: Path,
+    wrapper_pattern: str,
+    package_name: str,
+    managed_prefix: Path,
+    env: dict[str, str],
+    attempts: list[str],
+) -> bool:
+    if not bundle_dir.is_dir():
+        return False
+    all_tgz = sorted(item for item in bundle_dir.iterdir() if item.name.endswith(".tgz"))
+    wrapper_re = re.compile(wrapper_pattern)
+    wrapper = next((item for item in all_tgz if wrapper_re.match(item.name)), None)
+    if not wrapper:
+        return False
+    slug = _platform_slug()
+    native_packs = [
+        item
+        for item in all_tgz
+        if item != wrapper and (f"-{slug}.tgz" in item.name or f"-{slug}-" in item.name)
+    ]
+    tgz_paths = [wrapper, *native_packs] if native_packs else [wrapper]
+    desktop_node, bundled_npm_cli = _bundled_npm_runtime()
+    if desktop_node and bundled_npm_cli:
+        cmd = [
+            desktop_node,
+            bundled_npm_cli,
+            "install",
+            "-g",
+            "--prefix",
+            str(managed_prefix),
+            "--offline",
+            "--no-audit",
+            "--no-fund",
+            *(str(item) for item in tgz_paths),
+        ]
+        run_env = {**env, "ELECTRON_RUN_AS_NODE": "1"}
+    else:
+        cmd = [
+            "npm",
+            "install",
+            "-g",
+            "--prefix",
+            str(managed_prefix),
+            "--offline",
+            "--no-audit",
+            "--no-fund",
+            *(str(item) for item in tgz_paths),
+        ]
+        run_env = env
+    try:
+        install = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=300,
+            env=run_env,
+        )
+        if install.returncode == 0:
+            return True
+        attempts.append((install.stderr or install.stdout or f"{package_name} bundled install failed").strip())
+    except Exception as exc:
+        attempts.append(f"{package_name} bundled install failed: {exc}")
+    return False
+
+
+def _install_codex_vendor_from_bundle(*, bundle_dir: Path, managed_prefix: Path, attempts: list[str]) -> bool:
+    package_roots = [
+        managed_prefix / "lib" / "node_modules" / "@openai" / "codex",
+        managed_prefix / "node_modules" / "@openai" / "codex",
+    ]
+    package_root = next((item for item in package_roots if item.exists()), package_roots[0])
+    if not package_root.exists() or not bundle_dir.is_dir():
+        return False
+    slug = _platform_slug()
+    native_packs = sorted(
+        item for item in bundle_dir.iterdir()
+        if item.name.endswith(".tgz") and (f"-{slug}.tgz" in item.name or f"-{slug}-" in item.name)
+    )
+    if not native_packs:
+        attempts.append(f"no bundled Codex native vendor found for {slug}")
+        return False
+    vendor_dest = package_root / "vendor"
+    vendor_dest.mkdir(parents=True, exist_ok=True)
+    for pack in native_packs:
+        try:
+            with tarfile.open(pack, "r:gz") as archive:
+                members = [member for member in archive.getmembers() if member.name.startswith("package/vendor/")]
+                for member in members:
+                    relative = Path(member.name).relative_to("package/vendor")
+                    target = vendor_dest / relative
+                    if member.isdir():
+                        target.mkdir(parents=True, exist_ok=True)
+                        continue
+                    if not member.isfile():
+                        continue
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    source = archive.extractfile(member)
+                    if source is None:
+                        continue
+                    with source, target.open("wb") as out:
+                        shutil.copyfileobj(source, out)
+                    try:
+                        target.chmod(member.mode)
+                    except Exception:
+                        pass
+            return True
+        except Exception as exc:
+            attempts.append(f"Codex native vendor extract failed for {pack.name}: {exc}")
+    return False
+
+
+def _codex_vendor_present(managed_prefix: Path) -> bool:
+    package_roots = [
+        managed_prefix / "lib" / "node_modules" / "@openai" / "codex",
+        managed_prefix / "node_modules" / "@openai" / "codex",
+    ]
+    for package_root in package_roots:
+        vendor_root = package_root / "vendor"
+        if not vendor_root.exists():
+            continue
+        try:
+            if any(candidate.is_file() for candidate in vendor_root.rglob("bin/codex*")):
+                return True
+        except Exception:
+            continue
+    return False
+
+
 def _desktop_product_requested(user_home: Path | None = None) -> bool:
     if str(os.environ.get("NEXO_DESKTOP_MANAGED", "")).strip() == "1":
         return True
@@ -287,6 +442,13 @@ def _installed_client_path(client_key: str, *, user_home: Path | None = None) ->
     if info.get("installed"):
         return str(info.get("path") or "")
     return ""
+
+
+def _sync_codex_binary(home_path: Path) -> str:
+    if _desktop_product_requested(home_path):
+        info = detect_installed_clients(user_home=home_path).get("codex", {})
+        return str(info.get("path") or "") if info.get("installed") else ""
+    return shutil.which("codex") or ""
 
 
 def ensure_claude_code_installed(*, user_home: str | os.PathLike[str] | None = None) -> dict:
@@ -468,6 +630,167 @@ def ensure_claude_code_installed(*, user_home: str | os.PathLike[str] | None = N
         "path": "",
         "attempts": attempts,
         "error": error,
+    }
+
+
+def ensure_codex_installed(*, user_home: str | os.PathLike[str] | None = None) -> dict:
+    home_path = Path(user_home).expanduser() if user_home else _user_home()
+    desktop_managed = _desktop_product_requested(home_path)
+    managed_prefix = _managed_claude_prefix(home_path)
+    existing = _installed_client_path("codex", user_home=home_path)
+    if existing and (not desktop_managed or _codex_vendor_present(managed_prefix)):
+        return {
+            "ok": True,
+            "client": "codex",
+            "installed": True,
+            "changed": False,
+            "action": "already_installed_managed" if desktop_managed else "already_installed",
+            "path": existing,
+            "attempts": [],
+        }
+
+    attempts: list[str] = []
+    if existing and desktop_managed:
+        attempts.append("managed Codex wrapper exists but native vendor is missing; repairing bundled vendor")
+    env = _cli_install_env(home_path)
+    env.setdefault("npm_config_prefix", str(managed_prefix))
+    env["PATH"] = os.pathsep.join(
+        [str(managed_prefix / "bin"), *(item for item in str(env.get("PATH", "")).split(os.pathsep) if item)]
+    )
+
+    desktop_node, bundled_npm_cli = _bundled_npm_runtime()
+    bundle_dir = _brain_bundle_root() / "codex"
+    if desktop_managed and not (desktop_node and bundled_npm_cli):
+        vendor_installed = _install_codex_vendor_from_bundle(
+            bundle_dir=bundle_dir,
+            managed_prefix=managed_prefix,
+            attempts=attempts,
+        )
+        installed_after_vendor = _installed_client_path("codex", user_home=home_path)
+        if installed_after_vendor and vendor_installed:
+            return {
+                "ok": True,
+                "client": "codex",
+                "installed": True,
+                "changed": True,
+                "action": "installed_bundled_vendor",
+                "path": installed_after_vendor,
+                "attempts": attempts,
+            }
+        return {
+            "ok": False,
+            "client": "codex",
+            "installed": False,
+            "changed": False,
+            "action": "failed",
+            "path": "",
+            "attempts": attempts,
+            "error": (
+                "Desktop-managed Codex install requires the NEXO Desktop bundled Codex runtime; "
+                "global `npm -g` fallbacks are disabled."
+            ),
+        }
+
+    wrapper_installed = _install_npm_package_from_bundle(
+        bundle_dir=bundle_dir,
+        wrapper_pattern=r"^openai-codex-\d+\.\d+\.\d+\.tgz$",
+        package_name=CODEX_NPM_PACKAGE,
+        managed_prefix=managed_prefix,
+        env=env,
+        attempts=attempts,
+    )
+    vendor_installed = _install_codex_vendor_from_bundle(bundle_dir=bundle_dir, managed_prefix=managed_prefix, attempts=attempts)
+    installed_after_bundle = _installed_client_path("codex", user_home=home_path)
+    if installed_after_bundle and vendor_installed:
+        return {
+            "ok": True,
+            "client": "codex",
+            "installed": True,
+            "changed": True,
+            "action": "installed_via_bundled_tarballs",
+            "path": installed_after_bundle,
+            "attempts": attempts,
+        }
+    if wrapper_installed and not vendor_installed:
+        attempts.append("bundled Codex wrapper installed but native vendor extraction failed; falling back to online install")
+
+    if desktop_node and bundled_npm_cli:
+        try:
+            install = subprocess.run(
+                [
+                    desktop_node,
+                    bundled_npm_cli,
+                    "install",
+                    "-g",
+                    "--prefix",
+                    str(managed_prefix),
+                    CODEX_NPM_PACKAGE,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=300,
+                env={**env, "ELECTRON_RUN_AS_NODE": "1"},
+            )
+            if install.returncode != 0:
+                attempts.append((install.stderr or install.stdout or "bundled npm install failed").strip())
+        except Exception as exc:
+            attempts.append(f"bundled npm install failed: {exc}")
+        installed_after_npm = _installed_client_path("codex", user_home=home_path)
+        if installed_after_npm and (not desktop_managed or _codex_vendor_present(managed_prefix)):
+            return {
+                "ok": True,
+                "client": "codex",
+                "installed": True,
+                "changed": True,
+                "action": "installed_via_bundled_npm",
+                "path": installed_after_npm,
+                "attempts": attempts,
+            }
+        if installed_after_npm and desktop_managed:
+            attempts.append("managed Codex wrapper installed but native vendor is missing after bundled npm install")
+
+    if desktop_managed:
+        error = (
+            "Desktop-managed Codex install did not produce the managed "
+            "`~/.nexo/runtime/bootstrap/npm-global/bin/codex` binary."
+        )
+        return {
+            "ok": False,
+            "client": "codex",
+            "installed": False,
+            "changed": False,
+            "action": "failed",
+            "path": "",
+            "attempts": attempts,
+            "error": error,
+        }
+
+    install_error = ""
+    try:
+        install = subprocess.run(
+            ["npm", "install", "-g", "--prefix", str(managed_prefix), CODEX_NPM_PACKAGE],
+            capture_output=True,
+            text=True,
+            timeout=180,
+            env=env,
+        )
+        if install.returncode != 0:
+            install_error = (install.stderr or install.stdout or "npm install failed").strip()
+            attempts.append(install_error)
+    except Exception as exc:
+        install_error = f"npm install failed: {exc}"
+        attempts.append(install_error)
+
+    installed_path = _installed_client_path("codex", user_home=home_path)
+    return {
+        "ok": bool(installed_path),
+        "client": "codex",
+        "installed": bool(installed_path),
+        "changed": bool(installed_path),
+        "action": "installed" if installed_path else "failed",
+        "path": installed_path or "",
+        "attempts": attempts,
+        **({} if installed_path else {"error": install_error or "Codex install did not produce a `codex` binary in PATH"}),
     }
 
 
@@ -1334,7 +1657,7 @@ def sync_codex(
         operator_name=operator_name,
         client="codex",
     )
-    codex_bin = shutil.which("codex")
+    codex_bin = _sync_codex_binary(home_path)
     config_path = _codex_config_path(home_path)
     hooks_path = _codex_hooks_path(home_path)
     if not codex_bin:
@@ -1423,6 +1746,7 @@ def sync_all_clients(
     enabled_clients: list[str] | tuple[str, ...] | set[str] | None = None,
     preferences: dict | None = None,
     auto_install_missing_claude: bool = False,
+    auto_install_missing_codex: bool = False,
 ) -> dict:
     nexo_home_path = Path(nexo_home).expanduser() if nexo_home else _default_nexo_home()
     guardian_runtime_surfaces_result: dict = {
@@ -1469,6 +1793,8 @@ def sync_all_clients(
     install_results: dict[str, dict] = {}
     if auto_install_missing_claude and "claude_code" in enabled_set:
         install_results["claude_code"] = ensure_claude_code_installed(user_home=user_home)
+    if auto_install_missing_codex and "codex" in enabled_set:
+        install_results["codex"] = ensure_codex_installed(user_home=user_home)
 
     def _safe(label: str, fn) -> dict:
         if label not in enabled_set:

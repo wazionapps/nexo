@@ -41,6 +41,8 @@ def test_preferences_show_includes_automation_fields(tmp_path, monkeypatch, caps
     assert payload["automation_enabled"] is True
     assert payload["automation_backend"] == "claude_code"
     assert "codex" in payload["available_automation_backends"]
+    assert payload["selected_chat_provider"] == "anthropic"
+    assert "openai" in payload["available_providers"]
 
 
 def test_preferences_reenables_automation_with_default_terminal_backend(tmp_path, monkeypatch, capsys):
@@ -74,3 +76,27 @@ def test_preferences_reenables_automation_with_default_terminal_backend(tmp_path
     assert payload["automation_enabled"] is True
     assert payload["automation_backend"] == "codex"
 
+
+def test_provider_select_openai_updates_chat_and_automation_runtime(tmp_path, monkeypatch, capsys):
+    home = tmp_path / "nexo"
+    monkeypatch.setenv("NEXO_HOME", str(home))
+    _clear_modules()
+
+    import cli
+
+    rc = cli._provider(
+        SimpleNamespace(
+            provider_command="select",
+            provider="openai",
+            chat_only=False,
+            automation_only=False,
+            json=True,
+        )
+    )
+
+    assert rc == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["selected_chat_provider"] == "openai"
+    assert payload["automation_provider"] == "openai"
+    assert payload["automation_backend"] == "codex"
+    assert payload["default_terminal_client"] == "codex"

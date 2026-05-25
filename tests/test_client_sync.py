@@ -584,6 +584,43 @@ def test_sync_all_clients_treats_missing_codex_as_non_fatal(tmp_path, monkeypatc
     assert "pre_tool_use.py" in (home / ".codex" / "hooks.json").read_text()
 
 
+def test_sync_codex_desktop_managed_ignores_global_codex_without_vendor(tmp_path, monkeypatch):
+    import client_sync
+
+    runtime = _make_runtime(tmp_path)
+    home = tmp_path / "home"
+
+    monkeypatch.setenv("NEXO_DESKTOP_MANAGED", "1")
+    monkeypatch.setattr(client_sync.shutil, "which", lambda name: "/tmp/global-codex" if name == "codex" else None)
+    monkeypatch.setattr(
+        client_sync,
+        "detect_installed_clients",
+        lambda user_home=None: {
+            "claude_code": {"installed": False, "path": "", "detected_by": "missing"},
+            "codex": {"installed": False, "path": "", "detected_by": "missing"},
+            "claude_desktop": {"installed": False, "path": "", "detected_by": "missing"},
+        },
+    )
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("Desktop-managed Codex sync must not execute a global PATH codex")
+
+    monkeypatch.setattr(client_sync.subprocess, "run", fail_if_called)
+
+    result = client_sync.sync_codex(
+        nexo_home=runtime,
+        runtime_root=runtime,
+        operator_name="Atlas",
+        user_home=home,
+    )
+
+    assert result["ok"] is True
+    assert result["skipped"] is True
+    assert "codex binary not found" in result["reason"]
+    assert (home / ".codex" / "AGENTS.md").is_file()
+    assert "[mcp_servers.nexo]" in (home / ".codex" / "config.toml").read_text()
+
+
 def test_sync_all_clients_auto_installs_selected_claude_code_when_missing(tmp_path, monkeypatch):
     import client_sync
 
@@ -847,6 +884,72 @@ def test_ensure_claude_code_installed_desktop_managed_requires_bundled_runtime(m
     assert result["ok"] is False
     assert result["action"] == "managed_install_failed"
     assert "bundled Claude runtime" in result["error"]
+
+
+def test_ensure_codex_installed_desktop_managed_does_not_call_host_npm(monkeypatch, tmp_path):
+    import client_sync
+
+    home = tmp_path / "home"
+
+    monkeypatch.setenv("NEXO_DESKTOP_MANAGED", "1")
+    monkeypatch.delenv("NEXO_DESKTOP_NODE", raising=False)
+    monkeypatch.delenv("NEXO_DESKTOP_NPM_CLI", raising=False)
+    monkeypatch.setattr(client_sync, "_brain_bundle_root", lambda: tmp_path)
+    monkeypatch.setattr(
+        client_sync,
+        "detect_installed_clients",
+        lambda user_home=None: {
+            "claude_code": {"installed": False, "path": "", "detected_by": "missing"},
+            "codex": {"installed": False, "path": "", "detected_by": "missing"},
+            "claude_desktop": {"installed": False, "path": "", "detected_by": "missing"},
+        },
+    )
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("desktop-managed Codex install should not call host npm")
+
+    monkeypatch.setattr(client_sync.subprocess, "run", fail_if_called)
+
+    result = client_sync.ensure_codex_installed(user_home=home)
+
+    assert result["ok"] is False
+    assert result["action"] == "failed"
+    assert "global `npm -g` fallbacks are disabled" in result["error"]
+
+
+def test_codex_bundled_install_uses_wrapper_before_native_tarball(monkeypatch, tmp_path):
+    import client_sync
+
+    bundle = tmp_path / "codex"
+    bundle.mkdir()
+    wrapper = bundle / "openai-codex-0.133.0.tgz"
+    native = bundle / "openai-codex-0.133.0-darwin-arm64.tgz"
+    native.write_text("native")
+    wrapper.write_text("wrapper")
+    attempts = []
+    captured = {}
+
+    monkeypatch.setattr(client_sync, "_platform_slug", lambda: "darwin-arm64")
+    monkeypatch.setattr(client_sync, "_bundled_npm_runtime", lambda: ("", ""))
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = cmd
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(client_sync.subprocess, "run", fake_run)
+
+    assert client_sync._install_npm_package_from_bundle(
+        bundle_dir=bundle,
+        wrapper_pattern=r"^openai-codex-\d+\.\d+\.\d+\.tgz$",
+        package_name=client_sync.CODEX_NPM_PACKAGE,
+        managed_prefix=tmp_path / "prefix",
+        env={},
+        attempts=attempts,
+    ) is True
+
+    tgz_args = [Path(item).name for item in captured["cmd"] if str(item).endswith(".tgz")]
+    assert tgz_args == [wrapper.name, native.name]
+    assert attempts == []
 
 
 def test_sync_codex_falls_back_to_managed_config_when_cli_add_fails(tmp_path, monkeypatch):

@@ -61,13 +61,14 @@ def test_startup_autodetects_uuid_when_caller_forgets(hook_hotfix_runtime):
     assert "SID:" in out
     sid = out.split("SID:")[1].strip().split()[0]
     row = get_db().execute(
-        "SELECT claude_session_id, external_session_id, session_client FROM sessions WHERE sid = ?",
+        "SELECT claude_session_id, external_session_id, session_client, session_provider FROM sessions WHERE sid = ?",
         (sid,),
     ).fetchone()
     assert row is not None
     assert row["claude_session_id"] == uuid
     assert row["external_session_id"] == uuid
     assert row["session_client"] == "claude_code"
+    assert row["session_provider"] == "anthropic"
 
 
 def test_startup_explicit_token_takes_precedence(hook_hotfix_runtime):
@@ -82,6 +83,22 @@ def test_startup_explicit_token_takes_precedence(hook_hotfix_runtime):
         "SELECT claude_session_id FROM sessions WHERE sid = ?", (sid,)
     ).fetchone()
     assert row["claude_session_id"] == explicit_uuid
+
+
+def test_startup_records_openai_provider_for_codex_sessions(hook_hotfix_runtime):
+    from tools_sessions import handle_startup
+    from db import get_db
+
+    out = handle_startup(task="tests", session_token="codex-session-1", session_client="codex")
+    sid = out.split("SID:")[1].strip().split()[0]
+    row = get_db().execute(
+        "SELECT external_session_id, session_client, session_provider FROM sessions WHERE sid = ?",
+        (sid,),
+    ).fetchone()
+
+    assert row["external_session_id"] == "codex-session-1"
+    assert row["session_client"] == "codex"
+    assert row["session_provider"] == "openai"
 
 
 def test_startup_no_coordination_no_crash(hook_hotfix_runtime):

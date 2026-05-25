@@ -1,6 +1,6 @@
 {
   "name": "nexo-brain",
-  "version": "7.25.6",
+  "version": "7.26.0",
   "mcpName": "io.github.wazionapps/nexo",
   "description": "NEXO Brain — Shared brain for AI agents. Persistent memory, semantic RAG, natural forgetting, metacognitive guard, trust scoring, 150+ MCP tools. Works with Claude Code, Codex, Claude Desktop & any MCP client. 100% local, free.",
   "homepage": "https://nexo-brain.com",
@@ -65,6 +65,11 @@
       "name": "@anthropic-ai/claude-code",
       "type": "npm-global",
       "optional": false
+    },
+    {
+      "name": "@openai/codex",
+      "type": "npm-global",
+      "optional": true
     }
   ],
   "engines": {
@@ -87,6 +92,7 @@
     "!templates/**/__pycache__",
     "!templates/**/*.pyc",
     "!templates/**/*.pyo",
+    "codex/",
     ".claude-plugin/",
     ".mcp.json",
     "hooks/hooks.json",

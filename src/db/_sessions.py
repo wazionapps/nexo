@@ -19,6 +19,16 @@ import re
 _SID_EXACT = re.compile(r'^nexo-\d+-\d+$')
 _SID_SEARCH = re.compile(r'nexo-\d+-\d+')
 
+
+def _provider_from_session_client(value: str | None) -> str:
+    candidate = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if candidate in {"anthropic", "claude", "claude_code", "claudecode"}:
+        return "anthropic"
+    if candidate in {"openai", "codex", "openai_codex"}:
+        return "openai"
+    return ""
+
+
 def _validate_sid(sid: str) -> str:
     """Validate and sanitize SID. Extracts clean SID if embedded in text."""
     if not sid:
@@ -41,6 +51,7 @@ def register_session(
     *,
     external_session_id: str = "",
     session_client: str = "",
+    session_provider: str = "",
     conversation_id: str = "",
 ) -> dict:
     """Register or re-register a session."""
@@ -48,27 +59,49 @@ def register_session(
     conn = get_db()
     now = now_epoch()
     linked_session_id = (external_session_id or claude_session_id or "").strip()
-    conn.execute(
-        "INSERT OR REPLACE INTO sessions (sid, task, started_epoch, last_update_epoch, local_time, claude_session_id, external_session_id, session_client, conversation_id) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (
-            sid,
-            task,
-            now,
-            now,
-            local_time_str(),
-            linked_session_id,
-            linked_session_id,
-            (session_client or "").strip(),
-            (conversation_id or "").strip(),
+    provider = _provider_from_session_client(session_provider) or _provider_from_session_client(session_client)
+    try:
+        conn.execute(
+            "INSERT OR REPLACE INTO sessions (sid, task, started_epoch, last_update_epoch, local_time, claude_session_id, external_session_id, session_client, session_provider, conversation_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                sid,
+                task,
+                now,
+                now,
+                local_time_str(),
+                linked_session_id,
+                linked_session_id,
+                (session_client or "").strip(),
+                provider,
+                (conversation_id or "").strip(),
+            )
         )
-    )
+    except sqlite3.OperationalError as exc:
+        if "session_provider" not in str(exc):
+            raise
+        conn.execute(
+            "INSERT OR REPLACE INTO sessions (sid, task, started_epoch, last_update_epoch, local_time, claude_session_id, external_session_id, session_client, conversation_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                sid,
+                task,
+                now,
+                now,
+                local_time_str(),
+                linked_session_id,
+                linked_session_id,
+                (session_client or "").strip(),
+                (conversation_id or "").strip(),
+            )
+        )
     conn.commit()
     return {
         "sid": sid,
         "task": task,
         "external_session_id": linked_session_id,
         "session_client": (session_client or "").strip(),
+        "session_provider": provider,
         "conversation_id": (conversation_id or "").strip(),
     }
 
@@ -115,11 +148,20 @@ def get_active_sessions() -> list[dict]:
     """Get all sessions updated within STALE threshold."""
     conn = get_db()
     cutoff = now_epoch() - SESSION_STALE_SECONDS
-    rows = conn.execute(
-        "SELECT sid, task, started_epoch, last_update_epoch, local_time, conversation_id "
-        "FROM sessions WHERE last_update_epoch > ?",
-        (cutoff,)
-    ).fetchall()
+    try:
+        rows = conn.execute(
+            "SELECT sid, task, started_epoch, last_update_epoch, local_time, conversation_id, session_provider "
+            "FROM sessions WHERE last_update_epoch > ?",
+            (cutoff,)
+        ).fetchall()
+    except sqlite3.OperationalError as exc:
+        if "session_provider" not in str(exc):
+            raise
+        rows = conn.execute(
+            "SELECT sid, task, started_epoch, last_update_epoch, local_time, conversation_id "
+            "FROM sessions WHERE last_update_epoch > ?",
+            (cutoff,)
+        ).fetchall()
     return [dict(r) for r in rows]
 
 
@@ -248,11 +290,20 @@ def search_sessions(keyword: str) -> list[dict]:
     """Find sessions whose task contains keyword (case-insensitive)."""
     conn = get_db()
     cutoff = now_epoch() - SESSION_STALE_SECONDS
-    rows = conn.execute(
-        "SELECT sid, task, last_update_epoch, local_time, conversation_id FROM sessions "
-        "WHERE last_update_epoch > ? AND LOWER(task) LIKE ?",
-        (cutoff, f"%{keyword.lower()}%")
-    ).fetchall()
+    try:
+        rows = conn.execute(
+            "SELECT sid, task, last_update_epoch, local_time, conversation_id, session_provider FROM sessions "
+            "WHERE last_update_epoch > ? AND LOWER(task) LIKE ?",
+            (cutoff, f"%{keyword.lower()}%")
+        ).fetchall()
+    except sqlite3.OperationalError as exc:
+        if "session_provider" not in str(exc):
+            raise
+        rows = conn.execute(
+            "SELECT sid, task, last_update_epoch, local_time, conversation_id FROM sessions "
+            "WHERE last_update_epoch > ? AND LOWER(task) LIKE ?",
+            (cutoff, f"%{keyword.lower()}%")
+        ).fetchall()
     return [dict(r) for r in rows]
 
 
