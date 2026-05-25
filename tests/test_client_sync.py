@@ -466,7 +466,7 @@ def test_sync_codex_uses_codex_cli_when_available(tmp_path, monkeypatch):
     config_text = config_path.read_text()
     assert 'model = "gpt-5.5"' in config_text
     assert 'model_reasoning_effort = "xhigh"' in config_text
-    assert "initial_messages = [{ role = \"system\"" in config_text
+    assert "initial_messages" not in config_text
     assert "[nexo.codex]" in config_text
     assert "bootstrap_managed = true" in config_text
     assert "mcp_managed = true" in config_text

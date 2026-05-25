@@ -1,5 +1,14 @@
 # Changelog
 
+## [7.27.3] - 2026-05-25
+
+### Fixed — OpenAI system-role compatibility
+
+- **OpenAI raw model calls no longer send `system` role chat messages.** Brain folds provider instructions into the user prompt for direct OpenAI/Codex-compatible raw calls, preventing `role 'system' is not supported on this model`.
+- **Codex-managed bootstrap no longer writes inline `initial_messages` system-role config.** The durable bootstrap remains in `AGENTS.md`, while `.codex/config.toml` is cleaned of legacy system-role blocks during sync.
+- **Codex launchers no longer pass system-role inline startup messages.** Interactive, exec, and automation launches keep provider/runtime parity without tripping OpenAI account models that reject system roles.
+- **Coverage:** OpenAI raw-call payload regression, Codex managed-config sync, agent runner launch arguments, CLI chat routing, client parity verification, and release-readiness verification.
+
 ## [7.27.2] - 2026-05-25
 
 ### Fixed — legacy OpenAI provider migration

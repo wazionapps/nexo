@@ -24,7 +24,7 @@ PARITY_TESTS = [
 REQUIRED_DOC_SNIPPETS = {
     "README.md": [
         "docs/client-parity-checklist.md",
-        "Managed via bootstrap + Codex config `initial_messages` + `mcp_servers.nexo`",
+        "Managed via bootstrap + Codex config `mcp_servers.nexo`",
         "Managed MCP-only shared-brain metadata",
         "Runtime doctor parity audit",
     ],

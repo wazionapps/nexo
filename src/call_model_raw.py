@@ -138,6 +138,22 @@ def _extract_openai_text(response) -> str:
         return ""
 
 
+def _openai_messages(prompt: str, system: str | None) -> list[dict]:
+    if system:
+        return [
+            {
+                "role": "user",
+                "content": (
+                    "Instructions:\n"
+                    f"{system}\n\n"
+                    "Task:\n"
+                    f"{prompt}"
+                ),
+            }
+        ]
+    return [{"role": "user", "content": prompt}]
+
+
 def _call_anthropic_raw(
     *,
     prompt: str,
@@ -214,10 +230,7 @@ def _call_openai_raw(
         raise ClassifierUnavailableError("openai: no OPENAI_API_KEY found")
 
     client = openai.OpenAI(api_key=api_key, timeout=timeout)
-    messages: list[dict] = []
-    if system:
-        messages.append({"role": "system", "content": system})
-    messages.append({"role": "user", "content": prompt})
+    messages = _openai_messages(prompt, system)
 
     try:
         response = client.chat.completions.create(

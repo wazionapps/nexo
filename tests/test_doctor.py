@@ -1286,6 +1286,65 @@ class TestRuntimeChecks:
         assert check.status == "degraded"
         assert any("mcp_servers.nexo" in item for item in check.evidence)
 
+    def test_client_bootstrap_parity_warns_when_codex_initial_messages_remain(self, nexo_home, monkeypatch):
+        from doctor.providers import runtime
+
+        schedule_file = nexo_home / "config" / "schedule.json"
+        schedule_file.parent.mkdir(parents=True, exist_ok=True)
+        schedule_file.write_text(json.dumps({
+            "interactive_clients": {
+                "claude_code": False,
+                "codex": True,
+                "claude_desktop": False,
+            },
+            "default_terminal_client": "codex",
+            "automation_enabled": False,
+            "automation_backend": "none",
+        }))
+        codex_home = nexo_home / ".codex"
+        codex_home.mkdir(parents=True, exist_ok=True)
+        (codex_home / "AGENTS.md").write_text(
+            "<!-- nexo-codex-agents-version: 1.1.0 -->\n"
+            "******CORE******\n<!-- nexo:core:start -->\ncore\n<!-- nexo:core:end -->\n"
+            "******USER******\n<!-- nexo:user:start -->\nuser\n<!-- nexo:user:end -->\n"
+        )
+        (codex_home / "config.toml").write_text(
+            'initial_messages = [{ role = "system", content = "NEXO" }]\n\n'
+            '[nexo.codex]\n'
+            'bootstrap_managed = true\n'
+            'mcp_managed = true\n\n'
+            '[mcp_servers.nexo]\n'
+            'command = "python3"\n'
+            'args = ["-m", "src.server"]\n'
+        )
+        (codex_home / "hooks.json").write_text(json.dumps({
+            "hooks": {
+                "PreToolUse": [
+                    {
+                        "matcher": "*",
+                        "hooks": [
+                            {
+                                "type": "command",
+                                "command": "python3 -m src.hooks.pre_tool_use",
+                            }
+                        ],
+                    }
+                ]
+            }
+        }))
+
+        monkeypatch.setattr(runtime, "SCHEDULE_FILE", schedule_file)
+        monkeypatch.setattr(runtime, "detect_installed_clients", lambda user_home=None: {
+            "claude_code": {"installed": True},
+            "codex": {"installed": True},
+            "claude_desktop": {"installed": False},
+        })
+        monkeypatch.setattr(runtime.Path, "home", lambda: nexo_home)
+
+        check = runtime.check_client_bootstrap_parity()
+        assert check.status == "degraded"
+        assert any("legacy `initial_messages`" in item for item in check.evidence)
+
     def test_protocol_compliance_uses_latest_weekly_summary(self, nexo_home, monkeypatch):
         from doctor.providers import runtime
 

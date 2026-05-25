@@ -978,12 +978,10 @@ def _sync_codex_managed_config(
     else:
         payload["features"] = {"hooks": True}
 
-    payload["initial_messages"] = [
-        {
-            "role": "system",
-            "content": bootstrap_prompt,
-        }
-    ] if bootstrap_prompt else []
+    # Codex model APIs used by some accounts reject system-role bootstrap
+    # messages. Keep the durable bootstrap in AGENTS.md and remove any legacy
+    # initial_messages block written by older NEXO versions.
+    payload.pop("initial_messages", None)
 
     nexo_table = payload.setdefault("nexo", {})
     codex_table = nexo_table.setdefault("codex", {})

@@ -966,13 +966,13 @@ class TestChatCommand:
         assert result.returncode == 0
         payload = json.loads(out_file.read_text())
         argv = payload["argv"]
-        assert argv[:5] == ["--sandbox", "danger-full-access", "--ask-for-approval", "never", "-c"]
-        assert argv[5].startswith('initial_messages=[{role="system",content=')
-        assert ["-m", "gpt-5.5"] == argv[6:8]
+        assert argv[:4] == ["--sandbox", "danger-full-access", "--ask-for-approval", "never"]
+        assert not any(str(part).startswith("initial_messages=") for part in argv)
+        assert ["-m", "gpt-5.5"] == argv[4:6]
         # v6.0.4 — codex effort resolves via resonance_map (default tier "alto"
         # -> codex="high"). Previous assertion tested the legacy flow that
         # read reasoning_effort=xhigh straight from client_runtime_profiles.
-        assert ["-c", 'model_reasoning_effort="high"'] == argv[8:10]
+        assert ["-c", 'model_reasoning_effort="high"'] == argv[6:8]
         assert argv[-3:-1] == ["-C", str(workspace)]
         assert "nexo_startup" in argv[-1]
         assert "nexo_heartbeat" in argv[-1]

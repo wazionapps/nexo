@@ -625,10 +625,6 @@ def _codex_managed_initial_messages_enabled() -> bool:
     )
 
 
-def _codex_initial_messages_config(prompt_text: str) -> str:
-    return f'initial_messages=[{{role="system",content={json.dumps(prompt_text, ensure_ascii=False)}}}]'
-
-
 def _codex_interactive_launch_flags() -> list[str]:
     return ["--sandbox", "danger-full-access", "--ask-for-approval", "never"]
 
@@ -752,9 +748,6 @@ def build_interactive_client_command(
                 "Codex launcher not found in PATH. Install `codex` first or reconfigure NEXO."
             )
         cmd = [codex_bin, *_codex_interactive_launch_flags()]
-        bootstrap_prompt = _load_client_bootstrap_prompt(CLIENT_CODEX)
-        if bootstrap_prompt and not _codex_managed_initial_messages_enabled():
-            cmd.extend(["-c", _codex_initial_messages_config(bootstrap_prompt)])
         if resolved_model:
             cmd.extend(["-m", resolved_model])
         if resolved_effort:
@@ -915,9 +908,6 @@ def build_followup_terminal_shell_command(
             )
         target_cwd = str(Path(cwd).expanduser()) if cwd else str(Path.home())
         cmd = [codex_bin, *_codex_interactive_launch_flags()]
-        bootstrap_prompt = _load_client_bootstrap_prompt(CLIENT_CODEX)
-        if bootstrap_prompt and not _codex_managed_initial_messages_enabled():
-            cmd.extend(["-c", _codex_initial_messages_config(bootstrap_prompt)])
         if resolved_model:
             cmd.extend(["-m", resolved_model])
         if resolved_effort:
@@ -1451,9 +1441,6 @@ def run_automation_prompt(
                 "-o",
                 str(output_path),
             ]
-            bootstrap_prompt = _load_client_bootstrap_prompt(CLIENT_CODEX)
-            if bootstrap_prompt and not _codex_managed_initial_messages_enabled():
-                cmd.extend(["-c", _codex_initial_messages_config(bootstrap_prompt)])
             if resolved_model:
                 cmd.extend(["-m", resolved_model])
             if resolved_effort:

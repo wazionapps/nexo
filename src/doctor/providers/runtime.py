@@ -2228,6 +2228,11 @@ def check_client_bootstrap_parity(fix: bool = False) -> DoctorCheck:
                 severity = "warn"
                 evidence.append(f"codex config missing managed `mcp_servers.nexo` at {codex_config.get('path')}")
                 repair_plan.append("Re-sync Codex so manual sessions keep the shared brain even if `codex mcp add` state drifts")
+            elif codex_config.get("exists") and codex_config.get("has_initial_messages"):
+                status = "degraded"
+                severity = "warn"
+                evidence.append(f"codex config still has legacy `initial_messages` at {codex_config.get('path')}")
+                repair_plan.append("Run `nexo clients sync --client codex` so Codex uses the AGENTS.md bootstrap without legacy system-role startup messages")
             elif codex_config.get("exists"):
                 evidence.append(
                     "codex config bootstrap managed"

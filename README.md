@@ -18,7 +18,7 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.27.2` is the current packaged-runtime line. Patch release over v7.27.1 - legacy Codex preferences now migrate to OpenAI correctly, and the F0.6 config-folder transition keeps reading existing `config/schedule.json` before it is moved.
+Version `7.27.3` is the current packaged-runtime line. Patch release over v7.27.2 - OpenAI raw calls and Codex-managed bootstrap no longer send system-role messages, preventing account-model failures while preserving Anthropic/OpenAI provider parity.
 
 Previously in `7.27.1`: patch release over v7.27.0 - lifecycle stop calls skip external provider session UUIDs safely, and provider runtime selection keeps chat plus automation aligned to the same Anthropic/OpenAI account.
 
@@ -413,7 +413,7 @@ Version `5.0.0` closes the loop between memory, decisions, outcomes, and reusabl
 |------------|-------------|-------|----------------|
 | Shared brain / MCP runtime | Yes | Yes | Yes |
 | Managed bootstrap document | `~/.claude/CLAUDE.md` | `~/.codex/AGENTS.md` | Not applicable |
-| Global startup bootstrap sync | Native via hooks + bootstrap | Managed via bootstrap + Codex config `initial_messages` + `mcp_servers.nexo` | Managed MCP-only shared-brain metadata |
+| Global startup bootstrap sync | Native via hooks + bootstrap | Managed via bootstrap + Codex config `mcp_servers.nexo` | Managed MCP-only shared-brain metadata |
 | `nexo chat` terminal client | Yes | Yes | No |
 | Background automation backend | Recommended | Supported | No |
 | Raw transcript source for Deep Sleep | Yes | Yes | No |

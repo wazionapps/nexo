@@ -181,3 +181,55 @@ def test_anthropic_missing_key(monkeypatch, force_claude_code):
     monkeypatch.setattr("call_model_raw._resolve_anthropic_key", lambda: "")
     with pytest.raises(ClassifierUnavailableError, match="no ANTHROPIC_API_KEY"):
         call_model_raw("Q?")
+
+
+def test_openai_folds_system_prompt_into_user_message(monkeypatch):
+    from call_model_raw import call_model_raw
+    import client_preferences as cp
+    import resonance_map
+    import sys
+
+    captured = {}
+
+    monkeypatch.setattr(cp, "load_client_preferences", lambda: {
+        "automation_backend": cp.CLIENT_CODEX,
+        "automation_enabled": True,
+    })
+    monkeypatch.setattr(cp, "resolve_automation_backend", lambda preferences=None: cp.CLIENT_CODEX)
+    monkeypatch.setattr(resonance_map, "resolve_model_and_effort", lambda **kwargs: ("gpt-5.5", "low"))
+    monkeypatch.setattr("call_model_raw._resolve_openai_key", lambda: "sk-test-key")
+
+    class FakeOpenAI:
+        class APITimeoutError(Exception): pass
+        class RateLimitError(Exception): pass
+        class APIConnectionError(Exception): pass
+        class APIStatusError(Exception):
+            status_code = 400
+
+        class OpenAI:
+            def __init__(self, *a, **k): pass
+
+            class _Chat:
+                class _Completions:
+                    def create(self, **kwargs):
+                        captured.update(kwargs)
+                        message = type("Message", (), {"content": "yes"})()
+                        choice = type("Choice", (), {"message": message})()
+                        return type("Response", (), {"choices": [choice]})()
+
+                completions = _Completions()
+
+            chat = _Chat()
+
+    sys.modules["openai"] = FakeOpenAI
+
+    out = call_model_raw("Answer yes.", system="Return only yes or no.")
+
+    assert out == "yes"
+    assert captured["messages"] == [
+        {
+            "role": "user",
+            "content": "Instructions:\nReturn only yes or no.\n\nTask:\nAnswer yes.",
+        }
+    ]
+    assert all(message["role"] != "system" for message in captured["messages"])

@@ -105,9 +105,8 @@ def test_build_interactive_client_command_uses_codex_when_selected(tmp_path, mon
         "never",
     ]
     assert "--full-auto" not in cmd
-    assert cmd[5:7] == ["-c", 'initial_messages=[{role="system",content="You are NEXO."}]']
-    assert cmd[7:9] == ["-m", "gpt-5.5"]
-    assert cmd[9:11] == ["-c", 'model_reasoning_effort="xhigh"']
+    assert cmd[5:7] == ["-m", "gpt-5.5"]
+    assert cmd[7:9] == ["-c", 'model_reasoning_effort="xhigh"']
     assert cmd[-3:] == ["-C", str(tmp_path), "Start NEXO now."]
 
 
@@ -364,7 +363,7 @@ def test_run_automation_prompt_uses_codex_exec_output_file(monkeypatch, tmp_path
     model_idx = captured["cmd"].index("-m") + 1
     assert captured["cmd"][model_idx] == "gpt-5.5"
     config_values = [captured["cmd"][idx + 1] for idx, part in enumerate(captured["cmd"]) if part == "-c"]
-    assert 'initial_messages=[{role="system",content="You are NEXO."}]' in config_values
+    assert not any("initial_messages=" in value for value in config_values)
     assert 'model_reasoning_effort="xhigh"' in config_values
     prompt = captured["cmd"][-1]
     assert "supervised NEXO automation child" in prompt
@@ -751,7 +750,7 @@ def test_codex_backend_maps_legacy_opus_hint_to_configured_profile(monkeypatch, 
     #     it in: test/harness=MAXIMO → codex effort "xhigh".
     assert captured["cmd"][captured["cmd"].index("-m") + 1] == "gpt-5.5"
     config_values = [captured["cmd"][idx + 1] for idx, part in enumerate(captured["cmd"]) if part == "-c"]
-    assert 'initial_messages=[{role="system",content="You are NEXO."}]' in config_values
+    assert not any("initial_messages=" in value for value in config_values)
     assert 'model_reasoning_effort="xhigh"' in config_values
 
 
@@ -796,7 +795,7 @@ def test_codex_backend_uses_configured_profile_when_model_is_empty(monkeypatch, 
     # drives the values to gpt-5.5/xhigh in v5.10.0 and onwards.
     assert captured["cmd"][captured["cmd"].index("-m") + 1] == "gpt-5.5"
     config_values = [captured["cmd"][idx + 1] for idx, part in enumerate(captured["cmd"]) if part == "-c"]
-    assert 'initial_messages=[{role="system",content="You are NEXO."}]' in config_values
+    assert not any("initial_messages=" in value for value in config_values)
     assert 'model_reasoning_effort="xhigh"' in config_values
 
 
