@@ -53,14 +53,15 @@ SMOKE_GROUPS = [
         "description": "Schema migrations and cron wrapper expose provider metadata",
         "targets": [
             "tests/test_migrations.py",
-            "tests/test_cron_wrapper_contract.py",
+            "tests/test_cron_wrapper_contract.py::test_cron_wrapper_records_provider_runtime_metadata",
         ],
     },
     {
         "id": "packaged_codex_bundle",
-        "description": "npm package stays publishable while the repo/Desktop bundle retains Codex native vendor tarballs",
+        "description": "npm package stays publishable while repo/Desktop artifacts retain Codex native vendor tarballs",
         "targets": [
             "tests/test_desktop_managed_claude_deferral.py::test_npm_package_keeps_public_codex_bundle_publishable",
+            "tests/test_desktop_managed_claude_deferral.py::test_repo_retains_codex_native_tarballs_for_desktop_bundle",
         ],
     },
     {

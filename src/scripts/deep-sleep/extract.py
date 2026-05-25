@@ -318,6 +318,7 @@ def analyze_session(
             output_format="text",
             append_system_prompt=json_system_prompt,
             allowed_tools="Read,Grep,Bash",
+            bare_mode=False,
         )
 
         if result.returncode != 0:
@@ -348,6 +349,7 @@ def analyze_session(
                 timeout=120,
                 output_format="text",
                 append_system_prompt=json_system_prompt,
+                bare_mode=False,
             )
             if convert_result.returncode == 0:
                 debug_output = convert_result.stdout

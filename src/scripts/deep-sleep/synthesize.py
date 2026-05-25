@@ -247,6 +247,7 @@ def main():
             timeout=CLAUDE_TIMEOUT,
             output_format="text",
             allowed_tools="Read,Grep,Bash",
+            bare_mode=False,
         )
 
         if result.returncode != 0:

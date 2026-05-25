@@ -5,7 +5,8 @@ import re
 
 SOURCE = Path(__file__).resolve().parents[1] / "bin" / "nexo-brain.js"
 TEXT = SOURCE.read_text(encoding="utf-8")
-PACKAGE = json.loads((Path(__file__).resolve().parents[1] / "package.json").read_text(encoding="utf-8"))
+ROOT = Path(__file__).resolve().parents[1]
+PACKAGE = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
 
 
 def test_desktop_managed_defers_claude_install_until_final_sync():
@@ -51,3 +52,15 @@ def test_npm_package_keeps_public_codex_bundle_publishable():
     assert "codex/openai-codex-0.133.0.tgz" in files
     assert "codex/" not in files
     assert not any(re.search(r"codex/.*-(darwin|linux|win32)-", entry) for entry in files)
+
+
+def test_repo_retains_codex_native_tarballs_for_desktop_bundle():
+    names = {item.name for item in (ROOT / "codex").glob("openai-codex-0.133.0-*.tgz")}
+    assert {
+        "openai-codex-0.133.0-darwin-arm64.tgz",
+        "openai-codex-0.133.0-darwin-x64.tgz",
+        "openai-codex-0.133.0-linux-arm64.tgz",
+        "openai-codex-0.133.0-linux-x64.tgz",
+        "openai-codex-0.133.0-win32-arm64.tgz",
+        "openai-codex-0.133.0-win32-x64.tgz",
+    }.issubset(names)

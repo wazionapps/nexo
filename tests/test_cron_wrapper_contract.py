@@ -31,6 +31,29 @@ def _create_cron_runs_db(db_path: Path) -> None:
     conn.close()
 
 
+def _create_cron_runs_db_with_provider_metadata(db_path: Path) -> None:
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        """
+        CREATE TABLE cron_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            cron_id TEXT NOT NULL,
+            started_at TEXT NOT NULL,
+            ended_at TEXT,
+            exit_code INTEGER,
+            summary TEXT,
+            error TEXT,
+            duration_secs REAL,
+            provider TEXT DEFAULT '',
+            backend TEXT DEFAULT '',
+            runtime_snapshot TEXT DEFAULT '{}'
+        )
+        """
+    )
+    conn.commit()
+    conn.close()
+
+
 def test_cron_wrapper_writes_completed_row(tmp_path):
     nexo_home = tmp_path / "nexo"
     db_dir = nexo_home / "runtime" / "data"
@@ -61,6 +84,57 @@ def test_cron_wrapper_writes_completed_row(tmp_path):
     assert row[3] == "cron-ok"
     assert row[4] == ""
     assert row[5] is not None
+
+
+def test_cron_wrapper_records_provider_runtime_metadata(tmp_path):
+    nexo_home = tmp_path / "nexo"
+    db_dir = nexo_home / "runtime" / "data"
+    config_dir = nexo_home / "personal" / "config"
+    db_dir.mkdir(parents=True)
+    config_dir.mkdir(parents=True)
+    db_path = db_dir / "nexo.db"
+    _create_cron_runs_db_with_provider_metadata(db_path)
+    (config_dir / "schedule.json").write_text(
+        json.dumps(
+            {
+                "automation_backend": "claude_code",
+                "provider_runtime": {
+                    "selected_chat_provider": "openai",
+                    "automation_provider": "openai",
+                    "automation_backend": "codex",
+                    "fallback_policy": {"automation": "fail_closed"},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        ["bash", str(WRAPPER), "deep-sleep", "bash", "-lc", "echo provider-ok"],
+        capture_output=True,
+        text=True,
+        timeout=10,
+        env={**os.environ, "NEXO_HOME": str(nexo_home)},
+    )
+
+    assert result.returncode == 0, result.stderr
+
+    conn = sqlite3.connect(db_path)
+    row = conn.execute(
+        "SELECT provider, backend, runtime_snapshot, summary FROM cron_runs"
+    ).fetchone()
+    conn.close()
+
+    assert row is not None
+    provider, backend, runtime_snapshot, summary = row
+    assert provider == "openai"
+    assert backend == "codex"
+    assert summary == "provider-ok"
+    snapshot = json.loads(runtime_snapshot)
+    assert snapshot["selected_chat_provider"] == "openai"
+    assert snapshot["automation_provider"] == "openai"
+    assert snapshot["automation_backend"] == "codex"
+    assert snapshot["fallback_policy"]["automation"] == "fail_closed"
 
 
 def test_cron_wrapper_spools_when_db_write_fails(tmp_path):

@@ -569,7 +569,7 @@ def generate_briefing(prompt: str) -> tuple[str, str]:
         output_format="json",
         append_system_prompt=render_core_prompt("morning-agent-json-output"),
         allowed_tools="Read,Glob,Grep",
-        bare_mode=True,
+        bare_mode=False,
     )
     if result.returncode != 0:
         detail = (result.stderr or result.stdout or "").strip()

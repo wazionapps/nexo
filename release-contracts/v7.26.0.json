@@ -97,7 +97,7 @@
       "evidence_required": [
         "automation_runs stores backend provider metadata",
         "interactive sessions store provider/client metadata",
-        "cron wrapper records the selected automation provider/backend"
+        "cron wrapper records the selected automation provider/backend/runtime_snapshot"
       ]
     },
     {
@@ -105,8 +105,8 @@
       "title": "Brain repo and Desktop bundle ship Codex vendor tarballs while npm stays publishable",
       "status": "complete",
       "evidence_required": [
-        "npm pack includes codex/openai-codex-0.133.0.tgz",
-        "repo release artifacts include darwin, linux, and win32 native Codex tarballs for Desktop bundling",
+        "npm pack intentionally includes only codex/openai-codex-0.133.0.tgz so the public npm publish stays below registry limits",
+        "repo release artifacts retain darwin, linux, and win32 native Codex tarballs for Desktop bundling",
         "Desktop release artifact verification confirms the native Codex vendor tarball for each platform",
         "release readiness blocks incomplete public surfaces before tag publish"
       ]

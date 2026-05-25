@@ -1,23 +1,22 @@
-"""Tests for run_automation_prompt(bare_mode=...) and API key resolution.
+"""Tests for legacy run_automation_prompt(bare_mode=...) handling.
 
 Context: Claude Code 2.1.x auto-loads ``~/.claude/CLAUDE.md`` and runs a
 handful of background processes (hook sync, plugin refresh, keychain
 probe) on every invocation. On the reference install that adds ~7 seconds
 of latency to each call — which is why Session 1 of deep-sleep took 57
-minutes before v5.9.2. The ``--bare`` flag skips all of that, at the cost
-of requiring an explicit ANTHROPIC_API_KEY in the env.
+minutes before v5.9.2. The ``--bare`` flag skips all of that, but v7.26
+keeps it behind an explicit legacy escape hatch so provider-runtime
+automation does not silently switch from account login to API-key auth.
 
 What this suite locks down:
 
 - ``_resolve_anthropic_api_key`` looks at ``ANTHROPIC_API_KEY`` env, then
   ``~/.claude/anthropic-api-key.txt``, then ``~/.nexo/config``.
-- ``BARE_MODE_SAFE_CALLERS`` contains only callers that use no MCP tools.
-- When ``bare_mode=True`` and a key is available, the command includes
-  ``--bare`` and the env carries ``ANTHROPIC_API_KEY``.
-- When ``bare_mode=None`` and the caller is in the safe set, bare is
-  auto-enabled.
-- When bare is requested but no key is available, the command falls back
-  to the normal path silently (not a raise).
+- ``BARE_MODE_SAFE_CALLERS`` is empty; Deep Sleep must not auto-enable it.
+- ``bare_mode=True`` falls back to normal account auth unless
+  ``NEXO_ALLOW_ANTHROPIC_API_BARE=1`` is explicitly set.
+- When the legacy escape hatch is enabled and a key is missing, the command
+  falls back to the normal path silently (not a raise).
 - ``--bare`` replaces ``--dangerously-skip-permissions`` in the command
   line (claude 2.1.x rejects them together because bare implies skip).
 """
@@ -44,9 +43,20 @@ def _fake_completed(returncode: int = 0, stdout: str = "", stderr: str = "") -> 
     )
 
 
-def test_bare_mode_safe_callers_contains_deep_sleep():
-    assert "deep-sleep/extract" in agent_runner.BARE_MODE_SAFE_CALLERS
-    assert "deep-sleep/synthesize" in agent_runner.BARE_MODE_SAFE_CALLERS
+def test_bare_mode_safe_callers_excludes_deep_sleep():
+    assert "deep-sleep/extract" not in agent_runner.BARE_MODE_SAFE_CALLERS
+    assert "deep-sleep/synthesize" not in agent_runner.BARE_MODE_SAFE_CALLERS
+
+
+def test_deep_sleep_and_morning_agent_disable_bare_mode_at_call_sites():
+    root = Path(__file__).resolve().parents[1]
+    for relpath in [
+        "src/scripts/deep-sleep/extract.py",
+        "src/scripts/deep-sleep/synthesize.py",
+        "src/scripts/nexo-morning-agent.py",
+    ]:
+        text = (root / relpath).read_text(encoding="utf-8")
+        assert "bare_mode=False" in text, f"{relpath} must not use Anthropic API-key bare mode"
 
 
 def test_bare_mode_safe_callers_excludes_mcp_using_callers():
@@ -88,11 +98,12 @@ def test_resolve_api_key_returns_empty_when_missing(monkeypatch, tmp_path):
     assert agent_runner._resolve_anthropic_api_key() == ""
 
 
-def test_bare_mode_explicit_true_activates_bare_and_injects_key(monkeypatch):
-    """bare_mode=True + an available API key must add --bare to the cmd
-    and drop --dangerously-skip-permissions (they are mutually exclusive
-    in claude 2.1.x)."""
+def test_bare_mode_explicit_true_without_escape_hatch_uses_account_auth(monkeypatch):
+    """bare_mode=True must not silently switch Desktop/provider automation
+    onto ANTHROPIC_API_KEY. The legacy API-key path requires an explicit
+    environment escape hatch."""
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-bare-test")
+    monkeypatch.delenv("NEXO_ALLOW_ANTHROPIC_API_BARE", raising=False)
 
     captured = {}
 
@@ -118,13 +129,42 @@ def test_bare_mode_explicit_true_activates_bare_and_injects_key(monkeypatch):
 
     assert result.returncode == 0
     assert "CRITICAL LANGUAGE CONTRACT" in captured["cmd"][2]
+    assert "--bare" not in captured["cmd"]
+    assert "--dangerously-skip-permissions" in captured["cmd"]
+    assert captured["env"].get("ANTHROPIC_API_KEY") is None
+
+
+def test_bare_mode_escape_hatch_activates_bare_and_injects_key(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-bare-test")
+    monkeypatch.setenv("NEXO_ALLOW_ANTHROPIC_API_BARE", "1")
+
+    captured = {}
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = cmd
+        captured["env"] = kwargs.get("env", {})
+        return _fake_completed(stdout='{"type":"result","result":"ok"}')
+
+    monkeypatch.setattr(agent_runner, "_resolve_claude_cli", lambda: "/fake/claude")
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setitem(sys.modules, "enforcement_engine", None)
+
+    result = agent_runner.run_automation_prompt(
+        "hello",
+        caller="personal/legacy-bare-test",
+        backend="claude_code",
+        bare_mode=True,
+    )
+
+    assert result.returncode == 0
     assert "--bare" in captured["cmd"]
     assert "--dangerously-skip-permissions" not in captured["cmd"]
     assert captured["env"].get("ANTHROPIC_API_KEY") == "sk-bare-test"
 
 
-def test_bare_mode_auto_enabled_for_safe_caller(monkeypatch):
+def test_bare_mode_not_auto_enabled_for_deep_sleep(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-auto")
+    monkeypatch.setenv("NEXO_ALLOW_ANTHROPIC_API_BARE", "1")
     captured = {}
 
     def fake_run(cmd, **kwargs):
@@ -135,14 +175,17 @@ def test_bare_mode_auto_enabled_for_safe_caller(monkeypatch):
     monkeypatch.setattr(subprocess, "run", fake_run)
     monkeypatch.setitem(sys.modules, "enforcement_engine", None)
 
-    # bare_mode not passed → defaults to None → auto-enables for safe caller
+    # bare_mode not passed -> defaults to None. Deep Sleep is no longer in the
+    # safe set, so it must use account-auth Claude/Codex even if an API key
+    # and the legacy escape hatch exist.
     agent_runner.run_automation_prompt(
         "hello",
         caller="deep-sleep/synthesize",
         backend="claude_code",
     )
     assert "CRITICAL LANGUAGE CONTRACT" in captured["cmd"][2]
-    assert "--bare" in captured["cmd"]
+    assert "--bare" not in captured["cmd"]
+    assert "--dangerously-skip-permissions" in captured["cmd"]
 
 
 def test_bare_mode_not_auto_enabled_for_unsafe_caller(monkeypatch):
@@ -170,6 +213,7 @@ def test_bare_mode_not_auto_enabled_for_unsafe_caller(monkeypatch):
 
 def test_bare_mode_falls_back_silently_without_key(monkeypatch, tmp_path):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("NEXO_ALLOW_ANTHROPIC_API_BARE", "1")
     monkeypatch.setattr(
         agent_runner,
         "_ANTHROPIC_API_KEY_SEARCH_PATHS",

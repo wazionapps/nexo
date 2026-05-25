@@ -1058,7 +1058,7 @@ _ANTHROPIC_API_KEY_SEARCH_PATHS = (
 
 
 def _resolve_anthropic_api_key() -> str:
-    """Locate an Anthropic API key for bare-mode invocations.
+    """Locate a legacy Anthropic API key for opt-in bare-mode invocations.
 
     ``claude --bare`` skips macOS Keychain auth entirely, so the child
     must find the API key in ``ANTHROPIC_API_KEY`` or via ``apiKeyHelper``.
@@ -1086,15 +1086,16 @@ def _resolve_anthropic_api_key() -> str:
     return ""
 
 
-# Callers for which bare_mode=True is safe. The child's only allowed_tools
-# must be file/grep/shell (no ``mcp__nexo__*``), otherwise --bare's opt-out
-# of plugin sync / MCP bootstrap breaks the run. Extract/synthesize fit
-# this profile: they read transcripts + shared-context and emit JSON, no
-# NEXO tool calls.
-BARE_MODE_SAFE_CALLERS: frozenset[str] = frozenset({
-    "deep-sleep/extract",
-    "deep-sleep/synthesize",
-})
+def _allow_anthropic_api_key_bare_mode() -> bool:
+    value = os.environ.get("NEXO_ALLOW_ANTHROPIC_API_BARE", "").strip().lower()
+    return value in {"1", "true", "yes", "on"}
+
+
+# v7.26 provider-runtime contract: Desktop-managed automation must use the
+# selected account runtime (Claude Code or Codex), not an Anthropic API key
+# side path. Bare mode remains a hidden legacy opt-in for controlled local
+# experiments only via NEXO_ALLOW_ANTHROPIC_API_BARE=1.
+BARE_MODE_SAFE_CALLERS: frozenset[str] = frozenset()
 
 # Execution contracts keep background agents disciplined without polluting
 # machine-only child calls that must return strict JSON.
@@ -1314,13 +1315,13 @@ def run_automation_prompt(
         # completes in seconds.
         #
         # Selection rules:
-        #   - bare_mode=True explicit → trust the caller.
+        #   - bare_mode=True explicit → allow only when the legacy API-key
+        #     escape hatch is enabled.
         #   - bare_mode=None (default) + caller in BARE_MODE_SAFE_CALLERS
-        #     → auto-enable.
+        #     → auto-enable. v7.26 keeps this set empty for provider parity.
         #   - bare_mode=False → never.
-        #   - --bare disables keychain auth, so we must provide an
-        #     ANTHROPIC_API_KEY. If one cannot be located, fall back to
-        #     normal mode with a warning on stderr rather than failing.
+        #   - --bare disables keychain auth, so the legacy path requires
+        #     ANTHROPIC_API_KEY. If disabled or missing, use normal account auth.
         resolved_bare = False
         if bare_mode is True:
             resolved_bare = True
@@ -1329,12 +1330,14 @@ def run_automation_prompt(
 
         bare_api_key = ""
         if resolved_bare:
-            bare_api_key = _resolve_anthropic_api_key()
-            if not bare_api_key:
-                # Silent fallback: we would rather take the slower path
-                # than force the caller to fail-closed on an env quirk.
+            if not _allow_anthropic_api_key_bare_mode():
                 resolved_bare = False
-
+            else:
+                bare_api_key = _resolve_anthropic_api_key()
+                if not bare_api_key:
+                    # Silent fallback: we would rather take the slower path
+                    # than force the caller to fail-closed on an env quirk.
+                    resolved_bare = False
         # Headless claude -p does NOT reliably honour permissions.allow from
         # settings.json for MCP tool calls — it can stall waiting for an
         # approval that will never come in non-interactive mode. All NEXO
@@ -1351,6 +1354,8 @@ def run_automation_prompt(
             run_env = dict(run_env)
             run_env["ANTHROPIC_API_KEY"] = bare_api_key
         else:
+            run_env = dict(run_env)
+            run_env.pop("ANTHROPIC_API_KEY", None)
             cmd.append("--dangerously-skip-permissions")
         if resolved_model:
             cmd.extend(["--model", resolved_model])
