@@ -9,7 +9,8 @@ evidence-based and reproducible without relying on operator memory.
 # 1. Run the full pre-release wrapper. Fail means do not tag.
 scripts/pre-release-verify.sh --release vX.Y.Z
 
-# 2. If all checks pass, cut the release.
+# 2. If all checks pass, record the verified commit and cut the release.
+git rev-parse HEAD
 git tag vX.Y.Z && git push origin vX.Y.Z
 ```
 
@@ -49,9 +50,12 @@ CI). `--help` prints the full flag list.
    entry under `## [vX.Y.Z] — YYYY-MM-DD` with the usual
    Added/Changed/Fixed sections.
 3. `scripts/pre-release-verify.sh --release vX.Y.Z` → must exit 0.
-4. Commit the bump on `main`. Tag `vX.Y.Z` and push the tag.
-5. GitHub Action publishes to npm.
-6. For Desktop coordination, `scripts/sync_release_artifacts.py` picks
+4. Record the green smoke commit with `git rev-parse HEAD`. The tag
+   must point to that exact commit; do not tag a later or earlier SHA
+   without rerunning the release smoke on that SHA.
+5. Commit the bump on `main`. Tag `vX.Y.Z` and push the tag.
+6. GitHub Action publishes to npm.
+7. For Desktop coordination, `scripts/sync_release_artifacts.py` picks
    up the new package metadata — run it before cutting the Desktop
    release.
 
