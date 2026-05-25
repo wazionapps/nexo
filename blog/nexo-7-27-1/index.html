@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.27.1: provider lifecycle hotfix</title>
+<meta name="description" content="NEXO Brain v7.27.1 fixes provider lifecycle close handling and keeps Anthropic/OpenAI account selection aligned across chat and automation.">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-27-1/">
+<meta name="robots" content="index, follow">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.27.1: provider lifecycle hotfix","datePublished":"2026-05-25","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head>
+<body>
+<main class="section-compact">
+<div class="container" style="max-width:860px;">
+<a href="/blog/">Back to blog</a>
+<p class="section-label">Release notes</p>
+<h1>NEXO 7.27.1 - provider lifecycle hotfix</h1>
+<p>v7.27.1 is a focused Desktop-managed Brain patch for provider-account sessions. Lifecycle stop calls now skip external Anthropic/OpenAI child-session UUIDs safely instead of treating them as internal Brain session IDs.</p>
+<p>The provider runtime also keeps chat and automation aligned to the same selected Anthropic/OpenAI account. If no verified account remains active, background automation fails closed instead of silently trying a stale provider.</p>
+<p>This release is bundled by NEXO Desktop 0.41.2 so existing 0.41.1 users receive a real newer update with the provider lifecycle and account-selection fixes.</p>
+<pre><code>nexo provider status
+nexo provider select openai
+nexo preferences --chat-provider openai --automation-provider openai</code></pre>
+<p><a href="/changelog/#v7271">Read the full v7.27.1 changelog</a></p>
+</div>
+</main>
+</body>
+</html>

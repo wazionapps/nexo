@@ -76,7 +76,24 @@ def _resolve_core_runner(script_name: str) -> Path:
 
 def _resolve_automation_backend() -> str:
     data = _load_schedule()
-    return str(data.get("automation_backend", "claude_code") or "claude_code")
+    provider_runtime = data.get("provider_runtime") if isinstance(data.get("provider_runtime"), dict) else {}
+    selected = str(provider_runtime.get("selected_chat_provider") or "").strip().lower()
+    backend_raw = str(provider_runtime.get("automation_backend") or data.get("automation_backend") or "claude_code").strip().lower()
+    provider_raw = str(provider_runtime.get("automation_provider") or "").strip().lower()
+    automation_enabled = data.get("automation_enabled", True) is not False
+    if (
+        not automation_enabled
+        or backend_raw in {"none", "off", "disabled", "false", "0"}
+        or provider_raw in {"none", "off", "disabled", "false", "0"}
+    ):
+        return "none"
+    provider = (
+        {"anthropic": "anthropic", "openai": "openai"}.get(selected)
+        or {"anthropic": "anthropic", "openai": "openai"}.get(provider_raw)
+        or {"claude_code": "anthropic", "codex": "openai"}.get(backend_raw)
+        or "anthropic"
+    )
+    return {"anthropic": "claude_code", "openai": "codex"}.get(provider, "claude_code")
 
 
 def _load_bootstrap_prompt() -> str:

@@ -337,6 +337,23 @@ def _schedule_defaults() -> dict:
         "default_terminal_client": "claude_code",
         "automation_enabled": True,
         "automation_backend": "claude_code",
+        "provider_runtime": {
+            "schema_version": 1,
+            "selected_chat_provider": "anthropic",
+            "automation_provider": "anthropic",
+            "automation_backend": "claude_code",
+            "providers": {
+                "anthropic": {"client": "claude_code"},
+                "openai": {"client": "codex"},
+            },
+            "fallback_policy": {"chat": "ask", "automation": "fail_closed"},
+            "last_provider_change": {
+                "changed_at": None,
+                "from_provider": None,
+                "to_provider": None,
+                "source": None,
+            },
+        },
         "client_runtime_profiles": {
             "claude_code": {
                 "model": DEFAULT_CLAUDE_CODE_MODEL,

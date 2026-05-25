@@ -608,6 +608,16 @@ def test_stop_nexo_session_resolves_orphan_alias_to_registered_session():
     assert row is None
 
 
+def test_stop_nexo_session_skips_unregistered_provider_uuid():
+    from plugins.lifecycle_events import handle_nexo_lifecycle_stop_nexo_session
+
+    ack = json.loads(handle_nexo_lifecycle_stop_nexo_session("76712eee-a9fe-4b40-b8a2-cf3d1495f0e6"))
+    assert ack["status"] == "ok"
+    assert ack["stopped_session_ids"] == []
+    assert ack["skipped"] is True
+    assert ack["reason"] == "no-registered-nexo-session"
+
+
 def test_complete_canonical_returns_session_not_linked_reason_for_unregistered_session():
     res = _call(
         event_id="evt-unregistered-complete",

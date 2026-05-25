@@ -116,8 +116,10 @@ def test_apply_client_preferences_backend_override_updates_provider_runtime():
     )
 
     assert schedule["automation_backend"] == "codex"
+    assert schedule["provider_runtime"]["selected_chat_provider"] == "openai"
     assert schedule["provider_runtime"]["automation_provider"] == "openai"
     assert schedule["provider_runtime"]["automation_backend"] == "codex"
+    assert schedule["default_terminal_client"] == "codex"
 
 
 def test_apply_client_preferences_backend_override_can_return_to_claude():
@@ -137,8 +139,10 @@ def test_apply_client_preferences_backend_override_can_return_to_claude():
     )
 
     assert schedule["automation_backend"] == "claude_code"
+    assert schedule["provider_runtime"]["selected_chat_provider"] == "anthropic"
     assert schedule["provider_runtime"]["automation_provider"] == "anthropic"
     assert schedule["provider_runtime"]["automation_backend"] == "claude_code"
+    assert schedule["default_terminal_client"] == "claude_code"
 
 
 def test_apply_client_preferences_automation_provider_none_survives_reload():
@@ -174,9 +178,30 @@ def test_provider_runtime_selected_chat_provider_drives_terminal_client():
     )
 
     assert prefs["provider_runtime"]["selected_chat_provider"] == "openai"
+    assert prefs["provider_runtime"]["automation_provider"] == "openai"
+    assert prefs["provider_runtime"]["automation_backend"] == "codex"
+    assert prefs["automation_backend"] == "codex"
     assert prefs["interactive_clients"]["codex"] is True
     assert prefs["default_terminal_client"] == "codex"
     assert client_preferences.resolve_terminal_client(preferences=prefs) == "codex"
+
+
+def test_resolve_automation_backend_normalizes_raw_provider_runtime_conflict():
+    import client_preferences
+
+    raw = {
+        "default_terminal_client": "claude_code",
+        "automation_backend": "claude_code",
+        "provider_runtime": {
+            "selected_chat_provider": "openai",
+            "automation_provider": "anthropic",
+            "automation_backend": "claude_code",
+        },
+    }
+
+    assert client_preferences.resolve_selected_chat_provider(preferences=raw) == "openai"
+    assert client_preferences.resolve_automation_provider(preferences=raw) == "openai"
+    assert client_preferences.resolve_automation_backend(preferences=raw) == "codex"
 
 
 def test_apply_client_preferences_keeps_default_and_last_terminal_client_separate():

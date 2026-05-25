@@ -218,7 +218,15 @@ def handle_nexo_lifecycle_stop_nexo_session(
         from tools_sessions import handle_stop
 
         raw_sid = str(sid or "").strip()
-        stop_sids = lifecycle_events.registered_stop_session_ids(raw_sid) or [raw_sid]
+        stop_sids = lifecycle_events.registered_stop_session_ids(raw_sid)
+        if not stop_sids:
+            return json.dumps({
+                "status": "ok",
+                "sid": raw_sid,
+                "stopped_session_ids": [],
+                "skipped": True,
+                "reason": "no-registered-nexo-session",
+            }, ensure_ascii=False)
         messages = [handle_stop(stop_sid) for stop_sid in stop_sids]
         return json.dumps({
             "status": "ok",

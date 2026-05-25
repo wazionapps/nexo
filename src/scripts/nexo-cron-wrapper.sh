@@ -63,11 +63,33 @@ for candidate in (
     except Exception:
         continue
 
-provider_runtime = schedule.get("provider_runtime") if isinstance(schedule.get("provider_runtime"), dict) else {}
-backend = str(provider_runtime.get("automation_backend") or schedule.get("automation_backend") or "claude_code").strip().lower()
-provider = str(provider_runtime.get("automation_provider") or "").strip().lower()
-if provider not in {"anthropic", "openai", "none"}:
-    provider = {"claude_code": "anthropic", "codex": "openai", "none": "none"}.get(backend, "")
+for import_root in (
+    nexo_home / "core",
+    nexo_home / "core" / "src",
+    nexo_home / "src",
+):
+    if import_root.exists():
+        sys.path.insert(0, str(import_root))
+try:
+    from client_preferences import normalize_client_preferences  # type: ignore
+    prefs = normalize_client_preferences(schedule)
+    provider_runtime = prefs.get("provider_runtime") if isinstance(prefs.get("provider_runtime"), dict) else {}
+    provider = str(provider_runtime.get("automation_provider") or "none").strip().lower()
+    backend = str(prefs.get("automation_backend") or provider_runtime.get("automation_backend") or "none").strip().lower()
+except Exception:
+    provider_runtime = schedule.get("provider_runtime") if isinstance(schedule.get("provider_runtime"), dict) else {}
+    selected = str(provider_runtime.get("selected_chat_provider") or "").strip().lower()
+    backend_raw = str(provider_runtime.get("automation_backend") or schedule.get("automation_backend") or "claude_code").strip().lower()
+    provider_raw = str(provider_runtime.get("automation_provider") or "").strip().lower()
+    automation_enabled = schedule.get("automation_enabled", True) is not False
+    backend_map = {"claude_code": "anthropic", "codex": "openai", "none": "none"}
+    provider_map = {"anthropic": "anthropic", "openai": "openai", "none": "none"}
+    if (not automation_enabled) or backend_raw in {"none", "off", "disabled", "false", "0"} or provider_raw in {"none", "off", "disabled", "false", "0"}:
+        provider = "none"
+        backend = "none"
+    else:
+        provider = provider_map.get(selected) or provider_map.get(provider_raw) or backend_map.get(backend_raw, "anthropic")
+        backend = {"anthropic": "claude_code", "openai": "codex", "none": "none"}.get(provider, "claude_code")
 snapshot = {
     "selected_chat_provider": provider_runtime.get("selected_chat_provider") or "",
     "automation_provider": provider,

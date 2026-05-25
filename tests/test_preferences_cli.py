@@ -100,3 +100,24 @@ def test_provider_select_openai_updates_chat_and_automation_runtime(tmp_path, mo
     assert payload["automation_provider"] == "openai"
     assert payload["automation_backend"] == "codex"
     assert payload["default_terminal_client"] == "codex"
+
+
+def test_provider_select_rejects_split_chat_automation_flags(tmp_path, monkeypatch, capsys):
+    home = tmp_path / "nexo"
+    monkeypatch.setenv("NEXO_HOME", str(home))
+    _clear_modules()
+
+    import cli
+
+    rc = cli._provider(
+        SimpleNamespace(
+            provider_command="select",
+            provider="openai",
+            chat_only=True,
+            automation_only=False,
+            json=True,
+        )
+    )
+
+    assert rc == 2
+    assert "same provider" in capsys.readouterr().err

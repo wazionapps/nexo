@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.27.1] - 2026-05-25
+
+### Fixed — provider lifecycle hotfix
+
+- **Lifecycle stop calls now skip external provider session UUIDs safely.** Desktop-managed Anthropic/OpenAI child sessions no longer produce retryable Brain errors when the visible conversation closes.
+- **Provider runtime remains single-provider for chat and automation.** Brain preferences normalize Desktop account selection so background jobs follow the same Anthropic/OpenAI account choice as interactive conversations, or fail closed when no provider is active.
+- **Coverage:** lifecycle event regressions, provider preference/CLI parity tests, client parity verification, and Desktop-managed release checks for the bundled Brain version.
+
 ## [7.27.0] - 2026-05-25
 
 ### Fixed — provider parity and GPT-5.5 defaults

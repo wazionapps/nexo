@@ -2519,6 +2519,7 @@ def _preferences(args):
         PROVIDER_KEYS,
         PROVIDER_NONE,
         load_client_preferences,
+        normalize_provider_key,
         normalize_default_terminal_client,
         save_client_preferences,
     )
@@ -2551,6 +2552,18 @@ def _preferences(args):
     if automation_backend and automation_provider:
         print(
             "[NEXO] Use either --automation-provider or --automation-backend, not both.",
+            file=sys.stderr,
+        )
+        return 2
+    normalized_chat_provider = normalize_provider_key(chat_provider)
+    normalized_automation_provider = normalize_provider_key(automation_provider)
+    if (
+        normalized_chat_provider in PROVIDER_KEYS
+        and normalized_automation_provider in PROVIDER_KEYS
+        and normalized_chat_provider != normalized_automation_provider
+    ):
+        print(
+            "[NEXO] Chat and background automation must use the same provider.",
             file=sys.stderr,
         )
         return 2
@@ -2668,12 +2681,16 @@ def _provider(args):
         if target not in PROVIDER_KEYS:
             print(f"[NEXO] Unknown provider '{target}'. Valid values: {', '.join(PROVIDER_KEYS)}.", file=sys.stderr)
             return 2
-        chat_provider = None if getattr(args, "automation_only", False) else target
-        automation_provider = None if getattr(args, "chat_only", False) else target
+        if getattr(args, "automation_only", False) or getattr(args, "chat_only", False):
+            print(
+                "[NEXO] Provider selection is unified: chat and background automation use the same provider.",
+                file=sys.stderr,
+            )
+            return 2
         save_client_preferences(
-            selected_chat_provider=chat_provider,
-            automation_provider=automation_provider,
-            automation_user_override=True if automation_provider is not None else None,
+            selected_chat_provider=target,
+            automation_provider=target,
+            automation_user_override=True,
         )
         prefs = load_client_preferences()
         provider_runtime = prefs.get("provider_runtime") if isinstance(prefs.get("provider_runtime"), dict) else {}
