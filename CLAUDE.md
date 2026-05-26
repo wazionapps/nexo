@@ -13,3 +13,5 @@ Before parity-related changes are considered done, run:
 ```bash
 python3 scripts/verify_client_parity.py
 ```
+
+Before any NEXO Desktop release that touches chat, renderer, or lifecycle behavior, run the installed-app live chat soak and require `LIVE_SOAK_OK`. The report must show at least 15 successful turns, a successful `sub-agent-task` turn, `archiveRestore.ok=true`, a successful `05-after-restore` turn, and screenshots for the send/final/archive/restore steps.

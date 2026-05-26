@@ -50,6 +50,26 @@ These are product-controlled prompt bodies, not personal scaffolds:
 - If a template no longer reflects the runtime contract, update the template and the consuming docs/tests together.
 - Do not create parallel template trees under `personal/` that shadow the product contract without a specific reason.
 
+## Desktop Release Gates
+
+Any NEXO Desktop release that touches chat, renderer, or lifecycle behavior must run the installed-app live chat soak before tagging or publishing installers:
+
+```bash
+node scripts/live-chat-soak.js --app /Applications/NEXO\ Desktop.app/Contents/MacOS/NEXO\ Desktop
+```
+
+Required evidence:
+
+- stdout contains `LIVE_SOAK_OK`
+- `artifacts/report.json` has `turns.length >= 15`
+- every `turn.result.ok` is `true`
+- one successful turn label includes `sub-agent-task`
+- `archiveRestore.ok` is `true`
+- `05-after-restore.result.ok` is `true`
+- screenshots exist for each send/final/archive/restore step
+
+If the soak returns `LIVE_SOAK_FAIL`, the release is blocked until the failing UI state is fixed and the gate is rerun.
+
 ## Worked Starting Points
 
 Use these as the canonical first move instead of cloning an old operator file.
