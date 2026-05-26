@@ -1429,6 +1429,65 @@ def test_extract_touched_files_drops_dictionary_artifacts():
     assert files == ["/tmp/real-target.py"]
 
 
+def test_process_pre_tool_event_blocks_large_punctual_ui_diff(guardrail_env, tmp_path):
+    db, hook_guardrails = _reload_guardrail_stack()
+    db.init_db()
+    db.register_session(
+        "nexo-3001-4001",
+        "minimal delta UI edit",
+        external_session_id="claude-minimal-delta-1",
+        session_client="claude_code",
+    )
+    target = tmp_path / "Splash.jsx"
+    target.write_text("\n".join(f"line {idx}" for idx in range(12)), encoding="utf-8")
+
+    result = hook_guardrails.process_pre_tool_event(
+        {
+            "session_id": "claude-minimal-delta-1",
+            "tool_name": "Edit",
+            "prompt": "añade el texto Cargando... al splash",
+            "tool_input": {
+                "file_path": str(target),
+                "old_string": "\n".join(f"line {idx}" for idx in range(12)),
+                "new_string": "\n".join(f"changed {idx}" for idx in range(12)),
+            },
+        }
+    )
+
+    assert result["status"] == "blocked"
+    assert result["blocks"][0]["reason_code"] == "minimal_delta_scope_creep"
+    assert result["blocks"][0]["minimal_delta"]["changed_lines"] > 8
+
+
+def test_process_pre_tool_event_warns_on_soft_punctual_ui_diff(guardrail_env, tmp_path):
+    db, hook_guardrails = _reload_guardrail_stack()
+    db.init_db()
+    db.register_session(
+        "nexo-3002-4002",
+        "minimal delta UI edit",
+        external_session_id="claude-minimal-delta-2",
+        session_client="claude_code",
+    )
+    target = tmp_path / "Header.jsx"
+    target.write_text("a\nb\nc\nd\n", encoding="utf-8")
+
+    result = hook_guardrails.process_pre_tool_event(
+        {
+            "session_id": "claude-minimal-delta-2",
+            "tool_name": "Edit",
+            "prompt": "fix the wording in the header label",
+            "tool_input": {
+                "file_path": str(target),
+                "old_string": "a\nb\nc\nd\n",
+                "new_string": "a\nB\nc\nD\n",
+            },
+        }
+    )
+
+    assert result["status"] == "warn"
+    assert result["warnings"][0]["reason_code"] == "minimal_delta_soft_envelope"
+
+
 def test_extract_bash_touched_files_drops_glob_and_substitution_artifacts():
     _, hook_guardrails = _reload_guardrail_stack()
 

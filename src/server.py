@@ -92,7 +92,7 @@ from tools_automation_sessions import (
     handle_session_log_create,
     handle_session_log_close,
 )
-from plugins.cortex import handle_cortex_check
+from plugins.cortex import handle_cortex_check, handle_cortex_decide
 from plugins.guard import handle_guard_check
 from plugins.protocol import (
     handle_confidence_check,
@@ -629,6 +629,42 @@ def nexo_cortex_check(
         constraints,
         evidence_refs,
         verification_step,
+    )
+
+
+@mcp.tool
+def nexo_cortex_decide(
+    goal: str,
+    alternatives: str,
+    task_type: str = "execute",
+    impact_level: str = "high",
+    context_hint: str = "",
+    area: str = "",
+    constraints: str = "[]",
+    evidence_refs: str = "[]",
+    session_id: str = "",
+    task_id: str = "",
+    linked_outcome_id: int = 0,
+    goal_profile_id: str = "",
+    goal_id: str = "",
+    auto_create_outcome: bool = False,
+) -> str:
+    """Evaluate concrete alternatives for a high-impact task and persist the recommendation."""
+    return handle_cortex_decide(
+        goal,
+        alternatives,
+        task_type,
+        impact_level,
+        context_hint,
+        area,
+        constraints,
+        evidence_refs,
+        session_id,
+        task_id,
+        linked_outcome_id,
+        goal_profile_id,
+        goal_id,
+        auto_create_outcome,
     )
 
 

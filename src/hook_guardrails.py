@@ -19,6 +19,11 @@ from plugins.guard import _load_conditioned_learnings, _normalize_path_token
 from protocol_settings import get_protocol_strictness
 from product_mode import core_writes_allowed, is_protected_runtime_core_path
 
+try:
+    from guardrails.minimal_delta import evaluate as _minimal_delta_evaluate
+except Exception:  # pragma: no cover - guardrail must never break the hook import
+    _minimal_delta_evaluate = None
+
 READ_LIKE_TOOLS = {"Read"}
 WRITE_LIKE_TOOLS = {"Edit", "MultiEdit", "Write"}
 DELETE_LIKE_TOOLS = {"Delete"}
@@ -637,6 +642,72 @@ def _extract_touched_files(tool_input) -> list[str]:
             seen.add(normalized)
             unique.append(item)
     return unique
+
+
+def _minimal_delta_prompt_text(payload: dict, tool_input: dict) -> str:
+    parts: list[str] = []
+    for key in ("prompt", "user_prompt", "context_hint", "user_text"):
+        value = payload.get(key)
+        if isinstance(value, str) and value.strip():
+            parts.append(value.strip())
+    for key in ("prompt", "user_prompt", "context_hint", "user_text"):
+        value = tool_input.get(key)
+        if isinstance(value, str) and value.strip():
+            parts.append(value.strip())
+    tail = payload.get("transcript_tail")
+    if isinstance(tail, list):
+        for item in tail[-6:]:
+            if isinstance(item, str) and item.strip():
+                parts.append(item.strip())
+            elif isinstance(item, dict):
+                text = item.get("text") or item.get("content")
+                if isinstance(text, str) and text.strip():
+                    parts.append(text.strip())
+    return "\n".join(parts)
+
+
+def _read_existing_text(filepath: str) -> str:
+    try:
+        return Path(filepath).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
+
+
+def _collect_minimal_delta_warning_or_block(payload: dict, *, tool_name: str, files: list[str]) -> dict | None:
+    if _minimal_delta_evaluate is None or tool_name not in {"Edit", "MultiEdit", "Write"}:
+        return None
+    tool_input = payload.get("tool_input")
+    if not isinstance(tool_input, dict):
+        return None
+    prompt_text = _minimal_delta_prompt_text(payload, tool_input)
+    if not prompt_text:
+        return None
+    target_path = str(tool_input.get("file_path") or tool_input.get("path") or (files[0] if files else "")).strip()
+    if not target_path:
+        return None
+
+    if tool_name == "Write":
+        old_text = _read_existing_text(target_path)
+        new_text = str(tool_input.get("content") or "")
+    elif tool_name == "MultiEdit":
+        edits = tool_input.get("edits")
+        if not isinstance(edits, list):
+            return None
+        old_text = "\n".join(str(edit.get("old_string") or "") for edit in edits if isinstance(edit, dict))
+        new_text = "\n".join(str(edit.get("new_string") or "") for edit in edits if isinstance(edit, dict))
+    else:
+        old_text = str(tool_input.get("old_string") or "")
+        new_text = str(tool_input.get("new_string") or "")
+    if not new_text or old_text == new_text:
+        return None
+
+    try:
+        decision = _minimal_delta_evaluate(prompt_text, target_path, old_text, new_text)
+    except Exception:
+        return None
+    if decision.get("decision") not in {"warn", "block"}:
+        return None
+    return decision
 
 
 def _extract_bash_command(tool_input) -> str:
@@ -1575,6 +1646,39 @@ def process_pre_tool_event(payload: dict) -> dict:
     sid = _resolve_nexo_sid(conn, claude_sid)
     open_task = _find_any_open_task(conn, sid) if sid else None
     warnings: list[dict] = []
+    minimal_delta = _collect_minimal_delta_warning_or_block(
+        payload,
+        tool_name=tool_name,
+        files=files,
+    )
+    if minimal_delta and minimal_delta.get("decision") == "block":
+        return {
+            "ok": True,
+            "session_id": sid,
+            "tool_name": tool_name,
+            "operation": op,
+            "strictness": strictness,
+            "blocks": [
+                {
+                    "file": minimal_delta.get("target_path", ""),
+                    "reason_code": "minimal_delta_scope_creep",
+                    "severity": "error",
+                    "debt_type": "minimal_delta_scope_creep",
+                    "minimal_delta": minimal_delta,
+                }
+            ],
+            "warnings": warnings,
+            "status": "blocked",
+        }
+    if minimal_delta and minimal_delta.get("decision") == "warn":
+        warnings.append(
+            {
+                "file": minimal_delta.get("target_path", ""),
+                "reason_code": "minimal_delta_soft_envelope",
+                "severity": "warn",
+                "minimal_delta": minimal_delta,
+            }
+        )
     legacy_memory_blocks = _collect_legacy_memory_write_blocks(
         conn,
         sid=sid,

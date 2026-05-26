@@ -4,7 +4,7 @@ Phase 2 Protocol Enforcer Phase C (Layer 2) item R14. Plan doc 1 reads:
 
   IF the last user message -> cognitive_sentiment.is_correction = true
      OR valence < -0.4
-  AND nexo_learning_add does NOT appear in the next 3 tool calls
+  AND nexo_learning_add does NOT appear in the next 2 tool calls
   THEN inject the obligation.
 
 Implementation contract:
@@ -17,7 +17,7 @@ Implementation contract:
     False. Downstream R28 (system prompt) and the auto_capture hook
     still cover the gap; we would rather miss a correction than
     harass the agent with false-positive R14 injections.
-  - The "3-tool-calls window" state lives in the caller
+  - The "2-tool-calls window" state lives in the caller
     (HeadlessEnforcer / Desktop EnforcementEngine). This module only
     exposes the pure decision function and the structured injection
     prompt.
@@ -37,7 +37,7 @@ POSITIVE_LABEL = "negative_feedback"
 INJECTION_PROMPT_TEMPLATE = render_core_prompt("r14-correction-learning-injection")
 
 
-DEFAULT_WINDOW_TOOL_CALLS = 3
+DEFAULT_WINDOW_TOOL_CALLS = 2
 
 
 def detect_correction(user_text: str, *, classifier=None) -> bool:

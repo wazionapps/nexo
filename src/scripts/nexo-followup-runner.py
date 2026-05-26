@@ -33,6 +33,8 @@ import re
 import sqlite3
 import subprocess
 import sys
+from difflib import SequenceMatcher
+from email.utils import parsedate_to_datetime
 from datetime import datetime, date, timedelta
 from pathlib import Path
 
@@ -79,6 +81,8 @@ MAX_STALE_TRIAGE_PER_RUN = 8
 MAX_NEEDS_OPERATOR_BRIEFING = 12
 DEFAULT_ASSISTANT_NAME = "Nova"
 DEFAULT_OPERATOR_LANGUAGE = "en"
+DEFAULT_STEADY_STATE_IMAP_HOURS = 12
+DEFAULT_DUPLICATE_NOTE_THRESHOLD = 0.9
 
 # ── Logging ─────────────────────────────────────────────────────────────
 def log(msg: str):
@@ -101,6 +105,159 @@ def load_state() -> dict:
 
 def save_state(state: dict):
     STATE_FILE.write_text(json.dumps(state, indent=2))
+
+
+def load_runner_config() -> dict:
+    config = {
+        "steady_state_imap_hours": DEFAULT_STEADY_STATE_IMAP_HOURS,
+        "duplicate_note_threshold": DEFAULT_DUPLICATE_NOTE_THRESHOLD,
+    }
+    config_path = NEXO_HOME / "personal" / "config" / "followup-runner.json"
+    if config_path.exists():
+        try:
+            raw = json.loads(config_path.read_text())
+            if isinstance(raw, dict):
+                config.update(raw)
+        except Exception as exc:
+            log(f"Failed to read followup-runner config ({exc})")
+    try:
+        config["steady_state_imap_hours"] = float(
+            os.environ.get("NEXO_FOLLOWUP_STEADY_STATE_IMAP_HOURS", config["steady_state_imap_hours"])
+        )
+    except (TypeError, ValueError):
+        config["steady_state_imap_hours"] = DEFAULT_STEADY_STATE_IMAP_HOURS
+    try:
+        config["duplicate_note_threshold"] = float(
+            os.environ.get("NEXO_FOLLOWUP_DUPLICATE_NOTE_THRESHOLD", config["duplicate_note_threshold"])
+        )
+    except (TypeError, ValueError):
+        config["duplicate_note_threshold"] = DEFAULT_DUPLICATE_NOTE_THRESHOLD
+    return config
+
+
+def _normalise_note_text(value: str) -> str:
+    text = re.sub(r"\s+", " ", str(value or "").strip().lower())
+    text = re.sub(r"\b\d{4}-\d{2}-\d{2}(?:[t ][0-9:.+-z]+)?\b", "<date>", text)
+    text = re.sub(r"\b[0-9]{6,}(?:\.[0-9]+)?\b", "<num>", text)
+    return text
+
+
+def _note_similarity(left: str, right: str) -> float:
+    left_norm = _normalise_note_text(left)
+    right_norm = _normalise_note_text(right)
+    if not left_norm or not right_norm:
+        return 0.0
+    return SequenceMatcher(None, left_norm, right_norm).ratio()
+
+
+def _latest_email_gap_hours() -> float | None:
+    email_db = NEXO_HOME / "runtime" / "nexo-email" / "nexo-email.db"
+    if not email_db.exists():
+        return None
+    try:
+        conn = sqlite3.connect(str(email_db))
+        row = conn.execute(
+            "SELECT received_at FROM emails WHERE received_at IS NOT NULL "
+            "ORDER BY received_at DESC LIMIT 1"
+        ).fetchone()
+        conn.close()
+    except Exception:
+        return None
+    if not row or not row[0]:
+        return None
+    raw = str(row[0]).strip().replace("Z", "+00:00")
+    try:
+        received = datetime.fromisoformat(raw)
+    except ValueError:
+        try:
+            received = parsedate_to_datetime(raw)
+        except (TypeError, ValueError):
+            return None
+    if received.tzinfo is not None:
+        received = received.astimezone().replace(tzinfo=None)
+    return max(0.0, (datetime.now() - received).total_seconds() / 3600)
+
+
+def _db_change_marker() -> dict:
+    if not NEXO_DB.exists():
+        return {}
+    try:
+        conn = sqlite3.connect(str(NEXO_DB))
+        row = conn.execute(
+            "SELECT COUNT(*), COALESCE(MAX(updated_at), 0) FROM followups "
+            "WHERE UPPER(status) NOT LIKE 'COMPLETED%' AND UPPER(status) != 'DELETED'"
+        ).fetchone()
+        history = conn.execute(
+            "SELECT COALESCE(MAX(created_at), 0) FROM item_history "
+            "WHERE actor IS NULL OR actor != 'followup-runner'"
+        ).fetchone()
+        conn.close()
+    except Exception:
+        return {}
+    return {
+        "active_followups": int(row[0] or 0) if row else 0,
+        "max_followup_updated_at": float(row[1] or 0) if row else 0,
+        "max_non_runner_history_at": float(history[0] or 0) if history else 0,
+    }
+
+
+def _recent_runner_notes(fu_id: str, *, limit: int = 4) -> list[str]:
+    try:
+        conn = sqlite3.connect(str(NEXO_DB))
+        rows = conn.execute(
+            "SELECT note FROM item_history "
+            "WHERE item_type='followup' AND item_id=? AND actor='followup-runner' "
+            "ORDER BY created_at DESC LIMIT ?",
+            (fu_id, limit),
+        ).fetchall()
+        conn.close()
+    except Exception:
+        return []
+    return [str(row[0] or "") for row in rows if str(row[0] or "").strip()]
+
+
+def _is_duplicate_steady_state(followup: dict, *, threshold: float) -> bool:
+    notes = _recent_runner_notes(str(followup.get("id") or ""))
+    if not notes:
+        return False
+    current = "\n".join(
+        part
+        for part in (
+            str(followup.get("description") or "").strip(),
+            str(followup.get("verification") or "").strip(),
+            str(followup.get("reasoning") or "").strip(),
+        )
+        if part
+    )
+    if current and max(_note_similarity(current, note) for note in notes) >= threshold:
+        return True
+    if len(notes) >= 2 and _note_similarity(notes[0], notes[1]) >= threshold:
+        return True
+    return False
+
+
+def split_steady_state_skips(actionable: list[dict], state: dict, config: dict) -> tuple[list[dict], list[dict]]:
+    """Skip repeated no-op followups when email and DB state have not moved."""
+    marker = _db_change_marker()
+    previous_marker = (state.get("_meta") or {}).get("last_db_change_marker")
+    email_gap = _latest_email_gap_hours()
+    threshold = float(config.get("duplicate_note_threshold") or DEFAULT_DUPLICATE_NOTE_THRESHOLD)
+    imap_hours = float(config.get("steady_state_imap_hours") or DEFAULT_STEADY_STATE_IMAP_HOURS)
+    steady_state = bool(marker and previous_marker == marker and email_gap is not None and email_gap < imap_hours)
+    if not steady_state:
+        return actionable, []
+
+    kept = []
+    skipped = []
+    for followup in actionable:
+        if _is_duplicate_steady_state(followup, threshold=threshold):
+            skipped.append(followup)
+        else:
+            kept.append(followup)
+    if skipped:
+        ids = ", ".join(str(item.get("id") or "") for item in skipped)
+        log(f"Steady-state auto-skip: {ids} (IMAP gap {email_gap:.1f}h, DB marker unchanged)")
+    return kept, skipped
 
 
 # ── DB access ───────────────────────────────────────────────────────────
@@ -670,6 +827,8 @@ def release_lock():
 def get_recent_activity(hours: int = 24) -> str:
     """Build a summary of what the runner did in the last N hours."""
     lines = []
+    config = load_runner_config()
+    duplicate_threshold = float(config.get("duplicate_note_threshold") or DEFAULT_DUPLICATE_NOTE_THRESHOLD)
     try:
         conn = sqlite3.connect(str(NEXO_DB))
         conn.row_factory = sqlite3.Row
@@ -698,13 +857,25 @@ def get_recent_activity(hours: int = 24) -> str:
         if notes:
             lines.append("\nFOLLOWUP NOTES WRITTEN (last 24h):")
             seen = set()
+            compressed = 0
             for n in notes:
                 fid = str(n["followup_id"] or "")
                 if fid in seen:
                     continue
                 seen.add(fid)
                 note_text = str(n["note"] or "")[:150]
+                previous = conn.execute(
+                    "SELECT note FROM item_history "
+                    "WHERE item_type='followup' AND item_id=? AND actor='followup-runner' "
+                    "AND created_at < ? ORDER BY created_at DESC LIMIT 1",
+                    (fid, n["created_at"]),
+                ).fetchone()
+                if previous and _note_similarity(str(previous["note"] or ""), note_text) >= duplicate_threshold:
+                    compressed += 1
+                    note_text = f"{note_text} [nota similar compactada]"
                 lines.append(f"  {fid}: {note_text}")
+            if compressed:
+                lines.append(f"  ({compressed} notas duplicadas compactadas; umbral={duplicate_threshold:.2f})")
 
         conn.close()
     except Exception as e:
@@ -799,8 +970,10 @@ def main():
         return
 
     state = load_state()
+    runner_config = load_runner_config()
     groups = get_all_active_followups(state)
     all_actionable = list(groups["actionable"])
+    all_actionable, steady_skipped = split_steady_state_skips(all_actionable, state, runner_config)
     cooled = groups.get("cooled_down", [])
     stale_triage = groups.get("stale_triage", [])
 
@@ -835,6 +1008,23 @@ def main():
         record_attempt(state, fid, "stale_review")
 
     results = []
+    for fu in steady_skipped:
+        fid = str(fu.get("id") or "")
+        if not fid:
+            continue
+        record_attempt(state, fid, "steady_state")
+        results.append(
+            {
+                "id": fid,
+                "status": "checked",
+                "summary": (
+                    "Auto-skip steady-state: marcador DB sin cambios desde el ciclo anterior, "
+                    f"último IMAP <{runner_config.get('steady_state_imap_hours')}h y nota previa similar."
+                ),
+                "needs_attention": False,
+                "options": None,
+            }
+        )
 
     if all_actionable:
         # Clean previous results
@@ -940,10 +1130,14 @@ def main():
     else:
         log("No followups at all. Runner direct email path removed.")
 
+    if steady_skipped:
+        RESULTS_FILE.write_text(json.dumps({"results": results}, indent=2, ensure_ascii=False))
+
     # Save state with attempts + last run
     if "_meta" not in state:
         state["_meta"] = {}
     state["_meta"]["last_run"] = datetime.now().isoformat()
+    state["_meta"]["last_db_change_marker"] = _db_change_marker()
     save_state(state)
 
     log("Done.")

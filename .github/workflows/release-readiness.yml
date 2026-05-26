@@ -36,5 +36,11 @@ jobs:
       - name: Run verify_release_readiness.py
         run: python3 scripts/verify_release_readiness.py --ci
 
+      - name: Audit release workflows for silent error masking
+        # NF-DS-A1CAB803: publish/release steps must not hide real failures
+        # behind `|| true`, `|| echo`, or `continue-on-error: true`. The
+        # script exits 1 on any FAIL finding, gating the PR/push to main.
+        run: python3 scripts/audit-release-workflows.py "$GITHUB_WORKSPACE"
+
       - name: Pin benchmark + contract structure tests
         run: PYTHONPATH=src pytest tests/test_release_readiness_baseline.py -v

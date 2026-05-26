@@ -408,10 +408,10 @@ class HeadlessEnforcer:
         self._guardian_mode_cache: dict[str, str] = {}
         # R14 state — opened on a detected correction, counts down by one each
         # tool call. When it reaches zero without a nexo_learning_add we
-        # enqueue the R14 reminder. The window guard is "3 tool calls" per
-        # plan doc 1; make it overridable via the env for field tuning.
+        # enqueue the R14 reminder and persist a correction-learning debt.
         self._r14_window_remaining = 0
         self._r14_correction_seen_for_turn = False
+        self._r14_correction_text = ""
         # R25 — last user message is inspected for an explicit permit token
         # ("force OK", "si borra", etc). Populated by on_user_message.
         self._r25_last_user_text = ""
@@ -706,6 +706,7 @@ class HeadlessEnforcer:
             return
         self._r14_window_remaining = _R14_WINDOW
         self._r14_correction_seen_for_turn = True
+        self._r14_correction_text = text or ""
         _logger.info("[R14 %s] correction detected; window opened for %d tool calls",
                      mode.upper(), self._r14_window_remaining)
         # v7.7 Gap 7.2 — wire on_event so the map's
@@ -856,6 +857,7 @@ class HeadlessEnforcer:
             _logger.info("[R14] satisfied by learning_add; closing window")
             self._r14_window_remaining = 0
             self._r14_correction_seen_for_turn = False
+            self._r14_correction_text = ""
             return
         self._r14_window_remaining -= 1
         if self._r14_window_remaining > 0:
@@ -867,7 +869,35 @@ class HeadlessEnforcer:
         else:
             self._enqueue(_R14_PROMPT, "r14:correction-window-exhausted", rule_id="R14_correction_learning")
             _logger.info("[R14 %s] enqueued correction reminder", mode.upper())
+        if self._session_id:
+            try:
+                from db import create_protocol_debt, list_protocol_debts, record_session_correction_requirement  # type: ignore
+
+                record_session_correction_requirement(
+                    self._session_id,
+                    self._r14_correction_text,
+                    source="r14_window_exhausted",
+                )
+                existing = list_protocol_debts(
+                    status="open",
+                    session_id=self._session_id,
+                    debt_type="missing_learning_after_correction",
+                    limit=1,
+                )
+                if not existing:
+                    create_protocol_debt(
+                        self._session_id,
+                        "missing_learning_after_correction",
+                        severity="error",
+                        evidence=(
+                            "R14 detected a user correction and the 2-tool-call "
+                            "learning window expired without nexo_learning_add."
+                        ),
+                    )
+            except Exception:
+                pass
         self._r14_correction_seen_for_turn = False
+        self._r14_correction_text = ""
 
     def on_assistant_text(self, text: str, *, declared_detector=None, has_open_task=None):
         """R16 — scan assistant message for done-claim with open protocol_task.

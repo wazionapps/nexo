@@ -15,6 +15,7 @@ def test_server_exposes_protocol_runtime_tools(isolated_db):
 
     expected = (
         "nexo_cortex_check",
+        "nexo_cortex_decide",
         "nexo_continuity_snapshot_write",
         "nexo_continuity_snapshot_read",
         "nexo_continuity_resume_bundle",

@@ -1,5 +1,15 @@
 # Changelog
 
+## [7.27.4] - 2026-05-26
+
+### Fixed — protocol guard and followup reliability
+
+- **Correction learning is persisted when the learning window expires.** R14 now records an open correction-learning requirement and protocol debt instead of relying only on a transient reminder.
+- **Protocol analysis tasks cannot close with untracked P0/P1 findings.** Analyze closures now compare report artifacts with durable followup references so critical findings cannot disappear after an audit.
+- **Followup runner avoids repeated steady-state noise.** The runner can skip duplicate no-op notes when email and database state have not changed, while still keeping changed followups actionable.
+- **Cortex decision support is exposed as a first-class tool.** Brain now exports the decision helper through the MCP server surface.
+- **Coverage:** hook guardrails, protocol closure gates, server tool exports, headless enforcement, and followup-runner steady-state handling.
+
 ## [7.27.3] - 2026-05-25
 
 ### Fixed — OpenAI system-role compatibility

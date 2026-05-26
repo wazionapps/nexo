@@ -787,6 +787,93 @@ def test_task_close_accepts_external_done_with_real_world_verification():
     assert row["status"] == "done"
 
 
+def test_task_close_blocks_analyze_report_p0_p1_without_followup_refs(tmp_path):
+    from db import get_db
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    report = tmp_path / "audit.md"
+    report.write_text(
+        "# Audit\n\n"
+        "- P0: production checkout is broken\n"
+        "- **P1**: support replies can be dropped\n",
+        encoding="utf-8",
+    )
+
+    sid = _register_session("nexo-1003-2003e")
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Analyze audit findings",
+            task_type="analyze",
+            area="protocol",
+            evidence_refs=json.dumps([str(report)]),
+            verification_step="read generated report",
+        )
+    )
+
+    closed = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="done",
+            evidence="Generated and reviewed the audit report with actionable P0/P1 findings.",
+        )
+    )
+
+    assert closed["ok"] is False
+    assert closed["blocked_by"] == "analyze_p0_p1_followup_gate"
+    assert closed["findings"] == 2
+    assert closed["followup_refs"] == 0
+    assert closed["missing_followups"] == 2
+    count = get_db().execute(
+        "SELECT COUNT(*) FROM protocol_debt WHERE task_id = ? AND debt_type = 'analyze_p0_p1_followups_missing' AND status = 'open'",
+        (opened["task_id"],),
+    ).fetchone()[0]
+    assert count == 1
+
+
+def test_task_close_accepts_analyze_report_p0_p1_with_matching_followup_refs(tmp_path):
+    from db import get_db
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    report = tmp_path / "audit.md"
+    report.write_text(
+        "## P0: release gate bypasses evidence\n\n"
+        "1. P1: analyzer report misses workflow links\n",
+        encoding="utf-8",
+    )
+
+    sid = _register_session("nexo-1003-2003f")
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Analyze audit findings",
+            task_type="analyze",
+            area="protocol",
+            evidence_refs=json.dumps([str(report)]),
+            verification_step="read generated report",
+        )
+    )
+
+    closed = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="done",
+            evidence="Generated and reviewed the audit report; each P0/P1 item has a durable followup reference.",
+            evidence_refs=json.dumps([str(report), "NF-AUDIT-P0-1", "NF-AUDIT-P1-1"]),
+        )
+    )
+
+    assert closed["ok"] is True
+    assert closed["status"] == "clean"
+    row = get_db().execute(
+        "SELECT status FROM protocol_tasks WHERE task_id = ?",
+        (opened["task_id"],),
+    ).fetchone()
+    assert row["status"] == "done"
+
+
 def test_task_close_rejects_invalid_outcome_without_mutating_task():
     from db import get_db
     from plugins.protocol import handle_task_open, handle_task_close

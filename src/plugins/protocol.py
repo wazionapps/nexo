@@ -61,6 +61,13 @@ R03_TRIVIAL_EVIDENCE_PATTERN = re.compile(
     r"terminado|arreglado|cerrado|solved|resuelto)\s*[\.!]*\s*$",
     re.IGNORECASE,
 )
+P0_P1_FINDING_PATTERN = re.compile(
+    r"^\s*(?:#{1,6}\s+|[-*+]\s+|\d+[.)]\s+)?(?:\*\*)?"
+    r"(P[01])(?:\*\*)?\s*(?:[:\-–—\])\)]|\b)",
+    re.IGNORECASE,
+)
+FOLLOWUP_REF_PATTERN = re.compile(r"\bNF-[A-Z0-9][A-Z0-9-]*\b", re.IGNORECASE)
+ANALYZE_ARTIFACT_SUFFIXES = {".md", ".markdown", ".txt"}
 
 
 def _is_trivial_evidence(text: str) -> tuple[bool, str]:
@@ -83,6 +90,54 @@ def _is_trivial_evidence(text: str) -> tuple[bool, str]:
     if len(stripped) < R03_MIN_EVIDENCE_CHARS:
         return True, f"too_short (<{R03_MIN_EVIDENCE_CHARS} chars, got {len(stripped)})"
     return False, ""
+
+
+def _existing_analyze_artifact_paths(refs: list[str]) -> list[Path]:
+    paths_found: list[Path] = []
+    seen: set[str] = set()
+    for ref in refs:
+        clean = str(ref or "").strip()
+        if not clean or clean.lower().startswith("followup_id"):
+            continue
+        if ":" in clean and not clean.startswith("/"):
+            prefix, value = clean.split(":", 1)
+            if prefix.strip().lower() in {"file", "path", "artifact", "report"}:
+                clean = value.strip()
+        candidate = Path(os.path.expanduser(clean))
+        if not candidate.is_file() or candidate.suffix.lower() not in ANALYZE_ARTIFACT_SUFFIXES:
+            continue
+        resolved = str(candidate.resolve())
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        paths_found.append(candidate)
+    return paths_found
+
+
+def _count_p0_p1_findings(paths_found: list[Path]) -> tuple[int, list[dict]]:
+    total = 0
+    artifacts: list[dict] = []
+    for path in paths_found:
+        findings = 0
+        try:
+            with path.open("r", encoding="utf-8", errors="replace") as fh:
+                for line in fh:
+                    if P0_P1_FINDING_PATTERN.search(line):
+                        findings += 1
+        except OSError:
+            continue
+        if findings:
+            total += findings
+            artifacts.append({"path": str(path), "findings": findings})
+    return total, artifacts
+
+
+def _count_followup_refs(refs: list[str]) -> int:
+    seen: set[str] = set()
+    for ref in refs:
+        for match in FOLLOWUP_REF_PATTERN.findall(str(ref or "")):
+            seen.add(match.upper())
+    return len(seen)
 
 
 def _external_real_world_text(task: dict, *parts: str) -> str:
@@ -1493,6 +1548,7 @@ def handle_task_close(
     if extra_refs:
         refs_line = "Evidence refs: " + ", ".join(extra_refs)
         clean_evidence = f"{clean_evidence}\n{refs_line}".strip() if clean_evidence else refs_line
+    all_evidence_refs = [*_parse_list(task.get("evidence_refs") or "[]"), *extra_refs]
     files_changed_list = _parse_list(files_changed)
     planned_files = _parse_list(task.get("files") or "[]")
     effective_files = files_changed_list or planned_files
@@ -1507,6 +1563,46 @@ def handle_task_close(
         task_type=task.get("task_type", ""),
         high_stakes=bool(task.get("response_high_stakes")),
     )
+
+    if (task.get("task_type") or "").strip() == "analyze" and clean_outcome == "done":
+        artifact_paths = _existing_analyze_artifact_paths(all_evidence_refs)
+        finding_count, finding_artifacts = _count_p0_p1_findings(artifact_paths)
+        followup_ref_count = _count_followup_refs(all_evidence_refs)
+        if finding_count > followup_ref_count:
+            missing = finding_count - followup_ref_count
+            debt = _ensure_open_debt(
+                task["session_id"],
+                task_id,
+                "analyze_p0_p1_followups_missing",
+                severity="error",
+                evidence=(
+                    f"Analyze task produced {finding_count} P0/P1 finding(s) in report artifact(s) "
+                    f"but evidence_refs only contained {followup_ref_count} followup id(s); "
+                    f"{missing} actionable finding(s) would be left without durable followup. "
+                    f"Artifacts: {json.dumps(finding_artifacts, ensure_ascii=False)}"
+                ),
+                debts=debts_created,
+            )
+            return json.dumps(
+                {
+                    "ok": False,
+                    "error": "Cannot close analyze task as 'done' while P0/P1 report findings lack followup refs.",
+                    "hint": (
+                        "Create one followup for each P0/P1 finding and pass those followup IDs in evidence_refs, "
+                        "then retry nexo_task_close."
+                    ),
+                    "task_id": task_id,
+                    "blocked_by": "analyze_p0_p1_followup_gate",
+                    "debt_id": debt.get("id"),
+                    "debt_type": "analyze_p0_p1_followups_missing",
+                    "findings": finding_count,
+                    "followup_refs": followup_ref_count,
+                    "missing_followups": missing,
+                    "artifacts": finding_artifacts,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
 
     pending_corrections = list_session_correction_requirements(
         session_id=task["session_id"],

@@ -57,6 +57,41 @@ def test_on_user_message_r14_off_still_updates_r25_text():
     assert enforcer._r25_last_user_text == "borra eso por favor"
 
 
+def test_r14_exhaustion_records_correction_debt_without_keyword_detector():
+    """R14 must use the semantic detector path and escalate after its window."""
+    import db
+    from enforcement_engine import HeadlessEnforcer
+
+    sid = "nexo-4100-5100"
+    db.register_session(sid, "r14 correction debt")
+
+    enforcer = HeadlessEnforcer()
+    enforcer.set_session_id(sid)
+    enforcer.on_user_message(
+        "Te has equivocado; captura el aprendizaje.",
+        correction_detector=lambda _text: True,
+    )
+    enforcer.on_tool_call("Read", {"file_path": "/tmp/a.py"})
+    assert not db.list_protocol_debts(
+        status="open",
+        session_id=sid,
+        debt_type="missing_learning_after_correction",
+        limit=1,
+    )
+
+    enforcer.on_tool_call("Bash", {"command": "true"})
+
+    debt = db.list_protocol_debts(
+        status="open",
+        session_id=sid,
+        debt_type="missing_learning_after_correction",
+        limit=1,
+    )
+    pending = db.list_session_correction_requirements(session_id=sid, status="open", limit=1)
+    assert debt and debt[0]["severity"] == "error"
+    assert pending and pending[0]["source"] == "r14_window_exhausted"
+
+
 def test_enqueue_tags_carry_canonical_rule_id_for_telemetry():
     """Telemetry aggregation requires every enqueue to carry `rule_id`."""
     from enforcement_engine import HeadlessEnforcer
