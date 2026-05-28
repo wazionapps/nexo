@@ -13,7 +13,17 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from fastmcp.server.middleware import Middleware
-from fastmcp.tools import ToolResult
+# v7.27.5 — fastmcp 3.x mantiene ToolResult exportado en fastmcp.tools
+# (vía __init__.py re-export de .tool.ToolResult), pero algunas builds
+# intermedias tras la transición 2.x→3.x perdieron el re-export y el import
+# simple falla con `ImportError: cannot import name 'ToolResult' from
+# 'fastmcp.tools'`. Fallback al path canónico .tools.tool para sobrevivir
+# tanto a la versión nueva como a las builds inestables. Confirmado live en
+# máquina virgen Win10 22H2 Azure VM 2026-05-28.
+try:
+    from fastmcp.tools import ToolResult  # noqa: F401
+except ImportError:
+    from fastmcp.tools.tool import ToolResult  # type: ignore[no-redef]
 
 import paths
 

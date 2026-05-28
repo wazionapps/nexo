@@ -1,6 +1,10 @@
 # NEXO Brain — runtime dependencies
 # Core (required)
-fastmcp>=2.9.0
+# v7.27.5 — cap fastmcp <3.2.0 hasta validar 3.2.x. Builds intermedias 3.x
+# perdieron el re-export de ToolResult desde fastmcp.tools (live failure
+# en Win10 22H2 Azure VM 2026-05-28). Mantenemos el fallback de import en
+# src/runtime_versioning.py por defensa-en-profundidad.
+fastmcp>=2.9.0,<3.2.0
 numpy
 tomli; python_version < "3.11"
 
