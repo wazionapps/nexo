@@ -18,6 +18,15 @@ const PRESERVED_FLAG_ENV_KEYS = [
   "NEXO_SKIP_MODEL_WARMUP",
   "NEXO_NO_LAUNCHD",
   "NEXO_INSTALL_NO_LAUNCHD",
+  // v0.41.23 — forward the bundled-node hints so client_sync.py
+  // _bundled_npm_runtime() can resolve a real Linux node + npm-cli.js inside
+  // WSL and actually install claude/codex under NEXO_DESKTOP_MANAGED=1.
+  // Without these surviving the `env -i` reset below, the managed install
+  // hard-returns managed_install_failed and installs NOTHING → claude/codex
+  // absent → `claude --version` exit 127 → the Connect buttons open no
+  // browser on a fresh Windows install. (Learning #638.)
+  "NEXO_DESKTOP_NODE",
+  "NEXO_DESKTOP_NPM_CLI",
 ];
 
 function isWindowsHost(platform = process.platform) {
