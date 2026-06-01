@@ -321,7 +321,7 @@ def _onboard_steps() -> list[dict]:
     return [
         {
             "id": "name",
-            "prompt": {"es": "¿Cómo te llamamos?", "en": "What should we call you?"},
+            "prompt": {"es": "¿Cómo te llamas?", "en": "What's your name?"},
             "hint": {
                 "es": "Tu nombre corto, el que usarás en el día a día.",
                 "en": "Your short name, the one we'll use day to day.",

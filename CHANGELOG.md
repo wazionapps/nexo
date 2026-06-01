@@ -1,5 +1,12 @@
 # Changelog
 
+## [7.27.5] - 2026-06-01
+
+### Fixed — Desktop onboarding wording
+
+- **Desktop onboarding asks for the user's name directly in Spanish.** The Brain-provided onboarding step now says `¿Cómo te llamas?` instead of `¿Cómo te llamamos?`, matching the Desktop fallback copy and avoiding ambiguous wording in Spanish installs.
+- **Coverage:** `tests/test_desktop_bridge.py` pins the Spanish and English prompt strings used by the Desktop onboarding bridge.
+
 ## [7.27.4] - 2026-05-26
 
 ### Fixed — protocol guard and followup reliability
