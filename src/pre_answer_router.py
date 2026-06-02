@@ -490,6 +490,7 @@ _SOURCE_PLANS: dict[str, SourcePlan] = {
             SourceStep("protocol_tasks", timeout_ms=240),
             SourceStep("workflows", timeout_ms=260),
             SourceStep("change_log", timeout_ms=260),
+            SourceStep("causal_graph", timeout_ms=120, max_chars=900),
             SourceStep("diary", timeout_ms=260),
         ),
         fallback=(
@@ -952,6 +953,7 @@ def default_source_adapters() -> dict[str, SourceAdapter]:
         "protocol_tasks": _source_protocol_tasks,
         "workflows": _source_workflows,
         "change_log": _source_change_log,
+        "causal_graph": _source_causal_graph,
         "diary": _source_diary,
         "transcripts": _source_transcripts,
         "memory": _source_memory,
@@ -1324,6 +1326,53 @@ def _source_change_log(request: SourceRequest) -> SourceResult:
 
     rows = search_changes(query=request.query, files=request.files, days=45)[:4]
     return _rows_result("change_log", rows, ("id", "files", "what_changed", "why", "created_at"), request.max_chars)
+
+
+def _source_causal_graph(request: SourceRequest) -> SourceResult:
+    try:
+        import causal_graph
+    except Exception as exc:
+        return SourceResult(source="causal_graph", ok=False, skipped=True, aborted_reason="source_error", error=str(exc))
+
+    refs: list[tuple[str, str]] = []
+    for raw in (request.files or "").split(","):
+        clean = raw.strip()
+        if clean:
+            refs.append(("file", clean))
+    if not refs:
+        for match in _PATHISH_RE.findall(request.query or ""):
+            refs.append(("file", match))
+        for match in re.findall(r"\b[\w.-]+(?:/[\w.@+-]+)+\b", request.query or ""):
+            refs.append(("file", match))
+    if not refs:
+        return SourceResult(source="causal_graph")
+
+    rendered_parts: list[str] = []
+    evidence_refs: list[str] = []
+    result_count = 0
+    for ref_type, ref in refs[:3]:
+        result = causal_graph.query_edges(
+            ref_type=ref_type,
+            ref=ref,
+            project_key=request.area,
+            include_historical=False,
+            limit=4,
+        )
+        if not result.get("has_evidence"):
+            continue
+        result_count += len(result.get("edges") or [])
+        rendered_parts.append(causal_graph.render_query_result(result, max_chars=request.max_chars))
+        for edge in result.get("edges") or []:
+            props = edge.get("properties_dict") or {}
+            evidence_refs.extend(str(item) for item in props.get("evidence_refs") or [] if str(item).strip())
+    if not rendered_parts:
+        return SourceResult(source="causal_graph")
+    return SourceResult(
+        source="causal_graph",
+        rendered="\n".join(rendered_parts),
+        evidence_refs=list(dict.fromkeys(evidence_refs)),
+        result_count=result_count,
+    )
 
 
 def _source_diary(request: SourceRequest) -> SourceResult:

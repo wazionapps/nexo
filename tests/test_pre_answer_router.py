@@ -68,6 +68,7 @@ def test_pre_answer_router_intent_matrix_multilingual(fake_pre_answer_semantic_r
         "protocol_tasks",
         "workflows",
         "change_log",
+        "causal_graph",
         "diary",
     ]
     assert prior_plan.fallback[0].name == "transcripts"
@@ -204,6 +205,54 @@ def test_pre_answer_router_prior_work_uses_operational_stores_before_transcript(
     assert calls.index("transcripts") > calls.index("diary")
     assert result.should_inject is True
     assert result.evidence_refs == ["transcript:1"]
+
+
+def test_prior_work_uses_causal_graph_without_new_intent_detector(fake_pre_answer_semantic_router):
+    import causal_graph
+    import pre_answer_router as router
+
+    causal_graph.upsert_active_edge(
+        source_type="file",
+        source_ref="src/pre_answer_router.py",
+        relation="causal:verified_by",
+        target_type="test",
+        target_ref="tests/test_pre_answer_router.py",
+        reason_public="The pre-answer router change was verified by causal graph tests.",
+        evidence_refs=["pytest:pre_answer_router"],
+        project_key="nexo",
+        confidence=0.95,
+    )
+    fake_pre_answer_semantic_router.labels_by_text = {
+        "por que toque src/pre_answer_router.py": "prior_work",
+    }
+
+    def empty_source(name):
+        return lambda request: router.SourceResult(source=name)
+
+    def transcript_should_not_run(request):
+        raise AssertionError("transcript fallback should not run when causal graph has evidence")
+
+    result = router.route_pre_answer(
+        "por que toque src/pre_answer_router.py",
+        area="nexo",
+        budget_ms=1500,
+        source_adapters={
+            "recent_context": empty_source("recent_context"),
+            "evidence_ledger": empty_source("evidence_ledger"),
+            "commitments": empty_source("commitments"),
+            "protocol_tasks": empty_source("protocol_tasks"),
+            "workflows": empty_source("workflows"),
+            "change_log": empty_source("change_log"),
+            "diary": empty_source("diary"),
+            "transcripts": transcript_should_not_run,
+        },
+    )
+
+    causal = next(source for source in result.sources if source.source == "causal_graph")
+    assert result.intent == "prior_work"
+    assert causal.has_evidence is True
+    assert result.should_inject is True
+    assert "pytest:pre_answer_router" in result.evidence_refs
 
 
 def test_pre_answer_router_operator_continuity_questions_use_semantic_router(fake_pre_answer_semantic_router):

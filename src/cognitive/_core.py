@@ -643,6 +643,9 @@ def _init_tables(conn: sqlite3.Connection):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_kg_edges_source ON kg_edges(source_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_kg_edges_target ON kg_edges(target_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_kg_edges_relation ON kg_edges(relation)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_kg_edges_source_relation_active ON kg_edges(source_id, relation, valid_until)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_kg_edges_target_relation_active ON kg_edges(target_id, relation, valid_until)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_kg_edges_relation_active ON kg_edges(relation, valid_until)")
 
     conn.commit()
 

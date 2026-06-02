@@ -2236,6 +2236,50 @@ def _m68_memory_fabric_index(conn):
     )
 
 
+def _m71_causal_edge_candidates(conn):
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS causal_edge_candidates (
+            candidate_uid TEXT PRIMARY KEY,
+            created_at REAL NOT NULL,
+            updated_at REAL NOT NULL,
+            source_type TEXT NOT NULL,
+            source_ref TEXT NOT NULL,
+            relation TEXT NOT NULL,
+            target_type TEXT NOT NULL,
+            target_ref TEXT NOT NULL,
+            reason_public TEXT DEFAULT '',
+            evidence_refs_json TEXT DEFAULT '[]',
+            source_event_uid TEXT DEFAULT '',
+            producer TEXT NOT NULL,
+            project_key TEXT DEFAULT '',
+            privacy_level TEXT DEFAULT 'normal',
+            confidence REAL DEFAULT 0.5,
+            status TEXT DEFAULT 'proposed',
+            review_reason TEXT DEFAULT '',
+            promoted_edge_uid TEXT DEFAULT '',
+            metadata_json TEXT DEFAULT '{}'
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_causal_candidates_status_updated "
+        "ON causal_edge_candidates(status, updated_at)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_causal_candidates_source "
+        "ON causal_edge_candidates(source_type, source_ref, status)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_causal_candidates_target "
+        "ON causal_edge_candidates(target_type, target_ref, status)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_causal_candidates_project "
+        "ON causal_edge_candidates(project_key, status, updated_at)"
+    )
+
+
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
     (2, "followups_reasoning", _m2_followups_reasoning),
@@ -2307,6 +2351,7 @@ MIGRATIONS = [
     (68, "memory_fabric_index", _m68_memory_fabric_index),
     (69, "provider_runtime_metadata", _m69_provider_runtime_metadata),
     (70, "commitments", _m70_commitments),
+    (71, "causal_edge_candidates", _m71_causal_edge_candidates),
 ]
 
 
