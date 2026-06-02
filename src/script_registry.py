@@ -935,6 +935,7 @@ def list_scripts(include_core: bool = False) -> list[dict]:
             or bool(contract.get("toggleable_core"))
         )
         entry["supports_extra_instructions"] = bool(contract.get("supports_extra_instructions"))
+        entry["supports_automation_preferences"] = bool(contract.get("supports_automation_preferences"))
         entry["operator_extra_instructions"] = str(metadata.get("operator_extra_instructions") or "")
         entry["runtime_contract"] = contract
         entry["available"] = bool(contract.get("available", True))
@@ -2928,6 +2929,20 @@ def set_script_extra_instructions(name_or_path: str, instructions: str) -> dict:
 def set_automation_instructions(name_or_path: str, instructions: str) -> dict:
     """Stable contract wrapper for automation operator notes."""
     return set_script_extra_instructions(name_or_path, instructions)
+
+
+def get_automation_preference_contract(name_or_path: str) -> dict:
+    """Return schema + current structured preferences for a product automation."""
+    from automation_preferences import get_automation_preferences
+
+    return get_automation_preferences(name_or_path)
+
+
+def set_automation_preference_contract(name_or_path: str, payload: dict) -> dict:
+    """Persist structured preferences without touching extra instructions."""
+    from automation_preferences import set_automation_preferences
+
+    return set_automation_preferences(name_or_path, payload)
 
 
 def set_script_schedule_override(

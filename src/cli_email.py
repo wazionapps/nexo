@@ -222,6 +222,7 @@ def _account_to_public_dict(account: dict) -> dict:
     if not isinstance(metadata, dict):
         metadata = {}
     legacy_migrated = bool(metadata.get("migrated_from_legacy_email_config"))
+    signature = str(metadata.get("signature") or "").strip()
     return {
         "id": account.get("id"),
         "label": account.get("label"),
@@ -244,6 +245,8 @@ def _account_to_public_dict(account: dict) -> dict:
         "is_default": bool(account.get("is_default")),
         "has_credential": bool(account.get("credential_service")
                                and account.get("credential_key")),
+        "signature_configured": bool(signature),
+        "signature_preview": " ".join(signature.split())[:120],
     }
 
 
@@ -626,6 +629,82 @@ def cmd_email_set_enabled(args) -> int:
     return 0
 
 
+def cmd_email_signature(args) -> int:
+    json_mode = bool(getattr(args, "json", False))
+    account_id, label = _selector_from_args(args)
+    if account_id is None and not label:
+        msg = _selector_usage("signature")
+        if json_mode:
+            _emit_json({"ok": False, "message": msg})
+        else:
+            print(msg)
+        return 1
+
+    from db import init_db
+    from db._email_accounts import add_email_account, get_email_account, get_email_account_by_id
+
+    init_db()
+    acc = get_email_account_by_id(account_id) if account_id is not None else get_email_account(label)
+    if not acc:
+        selector = f"id={account_id}" if account_id is not None else label
+        msg = f"Account '{selector}' not found."
+        if json_mode:
+            _emit_json({"ok": False, "message": msg})
+        else:
+            print(f"✗ {msg}")
+        return 1
+
+    metadata = dict(acc.get("metadata") or {})
+    wants_set = any([
+        getattr(args, "text", None) is not None,
+        bool(getattr(args, "stdin", False)),
+        bool(getattr(args, "clear", False)),
+    ])
+    if wants_set:
+        if getattr(args, "clear", False):
+            metadata.pop("signature", None)
+        elif getattr(args, "stdin", False):
+            metadata["signature"] = sys.stdin.read().strip()
+        else:
+            metadata["signature"] = str(getattr(args, "text", "") or "").strip()
+        acc = add_email_account(
+            label=acc.get("label", ""),
+            email=acc.get("email", ""),
+            imap_host=acc.get("imap_host", ""),
+            imap_port=int(acc.get("imap_port") or 993),
+            smtp_host=acc.get("smtp_host", ""),
+            smtp_port=int(acc.get("smtp_port") or 465),
+            credential_service=acc.get("credential_service", ""),
+            credential_key=acc.get("credential_key", ""),
+            operator_email=acc.get("operator_email", ""),
+            trusted_domains=list(acc.get("trusted_domains") or []),
+            role=acc.get("role", "both"),
+            enabled=bool(acc.get("enabled", True)),
+            metadata=metadata,
+            account_type=acc.get("account_type", "agent"),
+            description=acc.get("description", ""),
+            can_read=bool(acc.get("can_read")),
+            can_send=bool(acc.get("can_send")),
+            is_default=bool(acc.get("is_default")),
+        )
+
+    signature = str((acc.get("metadata") or {}).get("signature") or "").strip()
+    payload = {
+        "ok": True,
+        "account": _account_to_public_dict(acc),
+        "signature": signature,
+        "cleared": wants_set and not bool(signature),
+    }
+    if json_mode:
+        _emit_json(payload)
+    else:
+        if wants_set:
+            print("Signature cleared." if not signature else "Signature saved.")
+        else:
+            print(signature or "(no signature configured)")
+    return 0
+
+
 def register_email_parser(subparsers) -> None:
     """Hook called by cli.py to add the `email` subcommand tree."""
     p = subparsers.add_parser("email", help="Manage NEXO email accounts")
@@ -704,6 +783,21 @@ def register_email_parser(subparsers) -> None:
     s.add_argument("--json", dest="json", action="store_true")
     s.set_defaults(func=cmd_email_set_enabled, enabled=False)
 
+    s = sub.add_parser("signature", help="Read or edit the signature for an account")
+    s.add_argument("label_pos", nargs="?", default=None,
+                   help="Account label (legacy positional)")
+    s.add_argument("--label", dest="label", default=None)
+    s.add_argument("--id", dest="account_id", type=int, default=None)
+    sig_group = s.add_mutually_exclusive_group()
+    sig_group.add_argument("--text", dest="text", default=None,
+                           help="Signature text to save")
+    sig_group.add_argument("--stdin", dest="stdin", action="store_true",
+                           help="Read signature text from stdin")
+    sig_group.add_argument("--clear", dest="clear", action="store_true",
+                           help="Clear the saved signature")
+    s.add_argument("--json", dest="json", action="store_true")
+    s.set_defaults(func=cmd_email_signature)
+
 
 __all__ = [
     "cmd_email_setup",
@@ -712,5 +806,6 @@ __all__ = [
     "cmd_email_test",
     "cmd_email_remove",
     "cmd_email_set_enabled",
+    "cmd_email_signature",
     "register_email_parser",
 ]

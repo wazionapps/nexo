@@ -1059,6 +1059,89 @@ def _automations_set_schedule(args):
     return 0
 
 
+def _automations_preference_schema(args):
+    from automation_preferences import get_automation_preference_schema, search_automation_preference_schema
+
+    query = str(getattr(args, "query", "") or "").strip()
+    schema = get_automation_preference_schema(args.name)
+    payload = {
+        "ok": True,
+        "name": args.name,
+        "schema": schema,
+        "matches": search_automation_preference_schema(args.name, query) if query else [],
+    }
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0
+    print(schema.get("title") or args.name)
+    for group in list(schema.get("groups") or []):
+        print(f"\n{group.get('label') or group.get('id')}")
+        for item in list(group.get("items") or []):
+            marker = " (unavailable)" if item.get("disabled") else ""
+            print(f"  - {item.get('label') or item.get('id')}{marker}")
+    return 0
+
+
+def _automations_preferences(args):
+    from script_registry import get_automation_preference_contract, set_automation_preference_contract
+
+    has_payload = any([
+        str(getattr(args, "payload", "") or "").strip(),
+        str(getattr(args, "payload_file", "") or "").strip(),
+        bool(getattr(args, "payload_stdin", False)),
+    ])
+    if has_payload:
+        payload, error_code = _load_json_payload_arg(args, command_name="automations preferences")
+        if error_code is not None:
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+            return error_code
+        result = set_automation_preference_contract(args.name, payload)
+    else:
+        result = get_automation_preference_contract(args.name)
+    if args.json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return 0 if result.get("ok", True) else 1
+    if not result.get("ok", True):
+        print(result.get("error", "Could not update automation preferences"), file=sys.stderr)
+        return 1
+    prefs = result.get("preferences") or {}
+    values = prefs.get("values") if isinstance(prefs, dict) else {}
+    print(f"Content preferences for {result.get('name') or args.name}:")
+    for key, value in sorted((values or {}).items()):
+        print(f"  {key}: {value}")
+    return 0
+
+
+def _morning_briefing(args):
+    from morning_briefing import latest_morning_briefing, mark_desktop_state
+
+    command = str(getattr(args, "morning_briefing_command", "") or "").strip()
+    if command == "latest":
+        result = latest_morning_briefing(include_non_sent=bool(getattr(args, "include_non_sent", False)))
+    elif command in {"mark-shown", "mark-opened", "mark-dismissed"}:
+        action = command.replace("mark-", "")
+        result = mark_desktop_state(action, briefing_id=getattr(args, "briefing_id", None))
+    else:
+        result = {"ok": False, "error": "Unknown morning briefing command."}
+
+    if getattr(args, "json", False):
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return 0 if result.get("ok", True) else 1
+    if not result.get("ok", True):
+        print(result.get("error", "Could not read morning briefing"), file=sys.stderr)
+        return 1
+    briefing = result.get("briefing")
+    if not briefing:
+        print("No morning briefing is available yet.")
+        return 0
+    print(briefing.get("subject") or "Morning briefing")
+    body = str(briefing.get("body_text") or "").strip()
+    if body:
+        print()
+        print(body)
+    return 0
+
+
 def _agents_list(args):
     from script_registry import list_agents
 
@@ -4069,6 +4152,34 @@ def main():
     automations_schedule_group.add_argument("--reset", action="store_true", help="Restore the shipped default cadence")
     automations_schedule_p.add_argument("--json", action="store_true", help="JSON output")
 
+    automations_schema_p = automations_sub.add_parser(
+        "preference-schema",
+        help="Read structured content options for an automation",
+    )
+    automations_schema_p.add_argument("name", help="Automation name or path")
+    automations_schema_p.add_argument("--query", default="", help="Local search inside the preference options")
+    automations_schema_p.add_argument("--json", action="store_true", help="JSON output")
+
+    automations_preferences_p = automations_sub.add_parser(
+        "preferences",
+        help="Read or update structured content preferences for an automation",
+    )
+    automations_preferences_p.add_argument("name", help="Automation name or path")
+    automations_preferences_p.add_argument("--payload", default="", help="JSON object to persist")
+    automations_preferences_p.add_argument("--payload-file", default="", help="Path to a JSON object to persist")
+    automations_preferences_p.add_argument("--payload-stdin", action="store_true", help="Read JSON object from stdin")
+    automations_preferences_p.add_argument("--json", action="store_true", help="JSON output")
+
+    morning_briefing_parser = sub.add_parser("morning-briefing", help="Read the latest operator morning briefing")
+    morning_briefing_sub = morning_briefing_parser.add_subparsers(dest="morning_briefing_command")
+    morning_latest_p = morning_briefing_sub.add_parser("latest", help="Show the latest sent morning briefing")
+    morning_latest_p.add_argument("--include-non-sent", action="store_true", help="Include failed/in-progress rows for diagnostics")
+    morning_latest_p.add_argument("--json", action="store_true", help="JSON output")
+    for mark_command in ("mark-shown", "mark-opened", "mark-dismissed"):
+        mark_p = morning_briefing_sub.add_parser(mark_command, help=f"{mark_command.replace('-', ' ')} for Desktop")
+        mark_p.add_argument("--id", dest="briefing_id", type=int, default=None, help="Specific briefing id")
+        mark_p.add_argument("--json", action="store_true", help="JSON output")
+
     core_schedules_parser = sub.add_parser("core-schedules", help="Manage structural core cron cadences")
     core_schedules_sub = core_schedules_parser.add_subparsers(dest="core_schedules_command")
 
@@ -4658,7 +4769,16 @@ def main():
             return _automations_set_instructions(args)
         elif args.automations_command == "schedule":
             return _automations_set_schedule(args)
+        elif args.automations_command == "preference-schema":
+            return _automations_preference_schema(args)
+        elif args.automations_command == "preferences":
+            return _automations_preferences(args)
         automations_parser.print_help()
+        return 0
+    elif args.command == "morning-briefing":
+        if args.morning_briefing_command in {"latest", "mark-shown", "mark-opened", "mark-dismissed"}:
+            return _morning_briefing(args)
+        morning_briefing_parser.print_help()
         return 0
     elif args.command == "core-schedules":
         if args.core_schedules_command == "list":

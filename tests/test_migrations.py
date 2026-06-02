@@ -12,6 +12,7 @@ from db._schema import (
     _m74_entity_live_profiles,
     _m75_failure_prevention_ledger,
     _m76_semantic_layers,
+    _m77_morning_briefing_presentation,
     run_migrations,
 )
 
@@ -47,7 +48,7 @@ def test_migrations_idempotent():
     db_mod.run_migrations()
     db_mod.run_migrations()
     version = db_mod.get_schema_version()
-    assert version >= 76
+    assert version >= 77
 
 
 def test_m76_semantic_layers_migration_is_idempotent_and_constrained():
@@ -129,6 +130,46 @@ def test_m76_semantic_layers_migration_is_idempotent_and_constrained():
             """,
             (now, now),
         )
+
+
+def test_m77_morning_briefing_presentation_migrates_existing_table():
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute(
+        """CREATE TABLE morning_briefing_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            local_date TEXT NOT NULL,
+            recipient TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'in_progress',
+            subject TEXT DEFAULT '',
+            send_output TEXT DEFAULT '',
+            error TEXT DEFAULT '',
+            started_at TEXT DEFAULT (datetime('now')),
+            finished_at TEXT DEFAULT NULL,
+            updated_at TEXT DEFAULT (datetime('now')),
+            UNIQUE(local_date, recipient)
+        )"""
+    )
+    conn.execute(
+        "INSERT INTO morning_briefing_runs (local_date, recipient, status, subject) "
+        "VALUES ('2026-06-02', 'user@example.com', 'sent', 'Old')"
+    )
+
+    _m77_morning_briefing_presentation(conn)
+    _m77_morning_briefing_presentation(conn)
+
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(morning_briefing_runs)").fetchall()}
+    assert {
+        "body_text",
+        "body_html",
+        "artifact_json",
+        "desktop_shown_at",
+        "desktop_opened_at",
+        "desktop_dismissed_at",
+    } <= columns
+    row = conn.execute("SELECT subject, body_text FROM morning_briefing_runs").fetchone()
+    assert row["subject"] == "Old"
+    assert row["body_text"] == ""
 
 
 def test_m75_failure_prevention_ledger_is_idempotent_and_constrained():

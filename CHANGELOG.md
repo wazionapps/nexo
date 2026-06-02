@@ -1,5 +1,22 @@
 # Changelog
 
+## [7.29.0] - 2026-06-03
+
+### Added - morning briefing preferences and email presentation
+
+- **Morning briefing now has structured content preferences.** Users can choose what the daily email should include or skip from a Desktop-friendly settings surface, while forced internal sections stay protected.
+- **Morning briefing results are now saved for Desktop.** The latest sent summary is available to Home and the overlay with shown, opened, and dismissed state so non-technical users can re-open it without looking for an email.
+- **Email replies and briefings now support account signatures.** Brain stores per-account signatures, appends them safely to outgoing messages, and exposes a simple preview for Desktop.
+
+### Changed - safer daily email generation
+
+- **The morning agent now emits a presentation contract.** It accepts `subject`, `body_text`, and optional sanitized `body_html`, keeping email output readable while preserving plain-text fallbacks.
+- **Automation settings expose supported preference schemas.** Desktop can discover which automations have user-editable content settings instead of hard-coding technical internals.
+
+### Fixed - migration and contract coverage
+
+- **Schema 77 installs the morning briefing presentation tables on fresh installs and updates.** Release coverage now verifies preference persistence, email presentation sanitization, signatures, CLI contracts, and the Desktop-facing briefing lookup flow.
+
 ## [7.28.0] - 2026-06-02
 
 ### Added - cognitive memory architecture wave

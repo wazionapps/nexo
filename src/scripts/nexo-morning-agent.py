@@ -47,6 +47,7 @@ if str(_repo_src) not in sys.path:
     sys.path.insert(0, str(_repo_src))
 
 from agent_runner import AutomationBackendUnavailableError, run_automation_prompt
+from automation_preferences import format_automation_preferences_prompt_block
 from automation_controls import (
     format_operator_extra_instructions_block,
     get_operator_briefing_recipient_status,
@@ -56,9 +57,16 @@ from automation_controls import (
 )
 from client_preferences import resolve_automation_backend, resolve_client_runtime_profile
 from core_prompts import render_core_prompt
+from email_presentation import build_email_presentation, normalize_agent_email_payload
 from email_sent_events import format_recent_sent_email_block, recent_sent_emails
+from morning_briefing import (
+    LATEST_MARKDOWN_FILE,
+    ensure_morning_briefing_runs_table as _ensure_briefing_schema,
+    mark_morning_briefing_sent as _persist_morning_briefing_sent,
+    write_latest_briefing_artifacts,
+)
 import db as nexo_db
-from paths import data_dir, logs_dir, operations_dir
+from paths import data_dir, logs_dir
 from runtime_home import export_resolved_nexo_home
 
 NEXO_HOME = export_resolved_nexo_home()
@@ -66,7 +74,7 @@ LOG_DIR = logs_dir()
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 LOG_FILE = LOG_DIR / "morning-agent.log"
 STATE_FILE = data_dir() / "morning-agent-state.json"
-LATEST_BRIEFING_FILE = operations_dir() / "morning-briefing-latest.md"
+LATEST_BRIEFING_FILE = LATEST_MARKDOWN_FILE
 CALLER = "morning_agent"
 CLI_TIMEOUT = 1500
 MAX_DUE_ITEMS = 8
@@ -105,29 +113,7 @@ def _morning_db_connection():
 
 
 def _ensure_morning_briefing_runs_table(conn) -> None:
-    conn.execute(
-        """CREATE TABLE IF NOT EXISTS morning_briefing_runs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            local_date TEXT NOT NULL,
-            recipient TEXT NOT NULL,
-            status TEXT NOT NULL DEFAULT 'in_progress',
-            subject TEXT DEFAULT '',
-            send_output TEXT DEFAULT '',
-            error TEXT DEFAULT '',
-            started_at TEXT DEFAULT (datetime('now')),
-            finished_at TEXT DEFAULT NULL,
-            updated_at TEXT DEFAULT (datetime('now')),
-            UNIQUE(local_date, recipient)
-        )"""
-    )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_morning_briefing_runs_date "
-        "ON morning_briefing_runs(local_date)"
-    )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_morning_briefing_runs_status "
-        "ON morning_briefing_runs(status)"
-    )
+    _ensure_briefing_schema(conn)
 
 
 def _row_dict(row) -> dict:
@@ -189,8 +175,14 @@ def _claim_morning_briefing_send(local_date: str, recipient: str, *, force: bool
             ON CONFLICT(local_date, recipient) DO UPDATE SET
                 status = 'in_progress',
                 subject = '',
+                body_text = '',
+                body_html = '',
+                artifact_json = '',
                 send_output = '',
                 error = '',
+                desktop_shown_at = NULL,
+                desktop_opened_at = NULL,
+                desktop_dismissed_at = NULL,
                 started_at = excluded.started_at,
                 finished_at = NULL,
                 updated_at = excluded.updated_at
@@ -226,8 +218,14 @@ def _claim_morning_briefing_send(local_date: str, recipient: str, *, force: bool
             UPDATE morning_briefing_runs
             SET status = 'in_progress',
                 subject = '',
+                body_text = '',
+                body_html = '',
+                artifact_json = '',
                 send_output = '',
                 error = '',
+                desktop_shown_at = NULL,
+                desktop_opened_at = NULL,
+                desktop_dismissed_at = NULL,
                 started_at = ?,
                 finished_at = NULL,
                 updated_at = ?
@@ -268,24 +266,25 @@ def _record_existing_morning_briefing_sent(local_date: str, recipient: str, stat
     conn.commit()
 
 
-def _mark_morning_briefing_sent(local_date: str, recipient: str, *, subject: str, send_output: str) -> None:
-    now = datetime.now().astimezone().isoformat()
-    conn = _morning_db_connection()
-    _ensure_morning_briefing_runs_table(conn)
-    conn.execute(
-        """
-        UPDATE morning_briefing_runs
-        SET status = 'sent',
-            subject = ?,
-            send_output = ?,
-            error = '',
-            finished_at = ?,
-            updated_at = ?
-        WHERE local_date = ? AND recipient = ?
-        """,
-        (str(subject or ""), str(send_output or ""), now, now, str(local_date or ""), str(recipient or "")),
+def _mark_morning_briefing_sent(
+    local_date: str,
+    recipient: str,
+    *,
+    subject: str,
+    body_text: str,
+    body_html: str,
+    send_output: str,
+    artifact_payload: dict | None = None,
+) -> None:
+    _persist_morning_briefing_sent(
+        local_date=local_date,
+        recipient=recipient,
+        subject=subject,
+        body_text=body_text,
+        body_html=body_html,
+        send_output=send_output,
+        artifact_payload=artifact_payload,
     )
-    conn.commit()
 
 
 def _mark_morning_briefing_failed(local_date: str, recipient: str, *, error: str) -> None:
@@ -548,7 +547,7 @@ def _extract_json_payload(raw_text: str) -> dict:
     raise RuntimeError("Morning agent returned invalid JSON output.")
 
 
-def generate_briefing(prompt: str) -> tuple[str, str]:
+def generate_briefing(prompt: str):
     backend = resolve_automation_backend()
     profile = resolve_client_runtime_profile(backend) if backend != "none" else {"model": "", "reasoning_effort": ""}
     profile_label = profile.get("model") or "default"
@@ -576,33 +575,42 @@ def generate_briefing(prompt: str) -> tuple[str, str]:
         raise RuntimeError(detail or f"automation backend exited {result.returncode}")
 
     payload = _extract_json_payload(result.stdout or "")
-    subject = str(payload.get("subject") or "").strip()
-    body = str(payload.get("body") or "").strip()
-    if not subject or not body:
-        raise RuntimeError("Morning agent output is missing subject/body.")
-    return subject, body
+    try:
+        return normalize_agent_email_payload(payload)
+    except RuntimeError as exc:
+        raise RuntimeError("Morning agent output is missing subject/body.") from exc
 
 
-def write_latest_briefing(*, recipient: str, subject: str, body: str) -> None:
-    LATEST_BRIEFING_FILE.parent.mkdir(parents=True, exist_ok=True)
-    rendered = (
-        f"# Morning briefing\n\n"
-        f"- Generated at: {datetime.now().astimezone().isoformat()}\n"
-        f"- To: {recipient}\n"
-        f"- Subject: {subject}\n\n"
-        f"{body}\n"
+def write_latest_briefing(
+    *,
+    recipient: str,
+    subject: str,
+    body_text: str,
+    body_html: str,
+    local_date: str = "",
+    run_id: int | None = None,
+) -> dict:
+    return write_latest_briefing_artifacts(
+        recipient=recipient,
+        subject=subject,
+        body_text=body_text,
+        body_html=body_html,
+        local_date=local_date,
+        run_id=run_id,
     )
-    LATEST_BRIEFING_FILE.write_text(rendered, encoding="utf-8")
 
 
-def send_briefing(*, recipient: str, subject: str, body: str) -> str:
+def send_briefing(*, recipient: str, subject: str, body_text: str, body_html: str) -> str:
     sender = get_send_reply_script_path(local_script_dir=_script_dir)
     if not sender.exists():
         raise RuntimeError(f"nexo-send-reply.py not found at {sender}")
 
     tmp_fd, tmp_path = tempfile.mkstemp(prefix="morning-briefing-", suffix=".txt")
     os.close(tmp_fd)
-    Path(tmp_path).write_text(body, encoding="utf-8")
+    html_fd, html_path = tempfile.mkstemp(prefix="morning-briefing-", suffix=".html")
+    os.close(html_fd)
+    Path(tmp_path).write_text(body_text, encoding="utf-8")
+    Path(html_path).write_text(body_html, encoding="utf-8")
     try:
         result = subprocess.run(
             [
@@ -614,6 +622,12 @@ def send_briefing(*, recipient: str, subject: str, body: str) -> str:
                 subject,
                 "--body-file",
                 tmp_path,
+                "--html-file",
+                html_path,
+                "--audience",
+                "operator",
+                "--message-kind",
+                "morning_briefing",
             ],
             capture_output=True,
             text=True,
@@ -621,6 +635,7 @@ def send_briefing(*, recipient: str, subject: str, body: str) -> str:
         )
     finally:
         Path(tmp_path).unlink(missing_ok=True)
+        Path(html_path).unlink(missing_ok=True)
 
     if result.returncode != 0:
         detail = (result.stderr or result.stdout or "").strip()
@@ -668,27 +683,61 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         context = collect_context(profile)
+        extra_blocks = "\n".join(
+            block
+            for block in [
+                format_automation_preferences_prompt_block("morning-agent"),
+                format_operator_extra_instructions_block("morning-agent"),
+            ]
+            if block.strip()
+        )
         prompt = build_prompt(
             context,
-            extra_instructions_block=format_operator_extra_instructions_block("morning-agent"),
+            extra_instructions_block=extra_blocks,
         )
-        subject, body = generate_briefing(prompt)
-        body = append_recent_sent_email_block(body)
-        write_latest_briefing(recipient=recipient or "[dry-run]", subject=subject, body=body)
+        presentation = generate_briefing(prompt)
+        body_text = append_recent_sent_email_block(presentation.body_text)
+        if body_text != presentation.body_text:
+            presentation = build_email_presentation(subject=presentation.subject, body_text=body_text)
+        artifact_payload = write_latest_briefing(
+            recipient=recipient or "[dry-run]",
+            subject=presentation.subject,
+            body_text=presentation.body_text,
+            body_html=presentation.body_html,
+            local_date=today,
+        )
 
         if args.dry_run:
-            print(json.dumps({"subject": subject, "body": body}, indent=2, ensure_ascii=False))
+            print(json.dumps({
+                "subject": presentation.subject,
+                "body": presentation.body_text,
+                "body_text": presentation.body_text,
+                "body_html": presentation.body_html,
+            }, indent=2, ensure_ascii=False))
             return 0
 
         log(f"Sending morning briefing to {recipient}...")
-        send_output = send_briefing(recipient=recipient, subject=subject, body=body)
-        _mark_morning_briefing_sent(today, recipient, subject=subject, send_output=send_output)
+        send_output = send_briefing(
+            recipient=recipient,
+            subject=presentation.subject,
+            body_text=presentation.body_text,
+            body_html=presentation.body_html,
+        )
+        _mark_morning_briefing_sent(
+            today,
+            recipient,
+            subject=presentation.subject,
+            body_text=presentation.body_text,
+            body_html=presentation.body_html,
+            send_output=send_output,
+            artifact_payload=artifact_payload,
+        )
         _clear_active_claim()
         save_state({
             "last_sent_date": today,
             "last_sent_at": datetime.now().astimezone().isoformat(),
             "last_recipient": recipient,
-            "last_subject": subject,
+            "last_subject": presentation.subject,
             "last_send_output": send_output,
         })
         log("Morning briefing sent.")

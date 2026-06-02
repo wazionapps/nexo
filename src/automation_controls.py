@@ -672,10 +672,17 @@ def get_script_runtime_contract(name: str) -> dict[str, Any]:
         blocked_reason = str(recipient_status.get("reason") or "")
         blocked_reason_code = str(recipient_status.get("reason_code") or "")
 
+    try:
+        from automation_preferences import supports_automation_preferences
+        preferences_supported = supports_automation_preferences(clean_name)
+    except Exception:
+        preferences_supported = False
+
     return {
         "name": clean_name,
         "toggleable_core": is_toggleable_core_script(clean_name),
         "supports_extra_instructions": supports_operator_extra_instructions(clean_name),
+        "supports_automation_preferences": preferences_supported,
         "schedule_configurable": bool(schedule_state.get("schedule_configurable")),
         "schedule_type": str(schedule_state.get("schedule_type") or ""),
         "schedule_source": str(schedule_state.get("schedule_source") or ""),

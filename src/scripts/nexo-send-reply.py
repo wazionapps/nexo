@@ -47,6 +47,7 @@ if str(_repo_src) not in sys.path:
 from paths import nexo_email_dir
 from runtime_home import export_resolved_nexo_home
 from email_sent_events import record_sent_email
+from email_presentation import build_email_presentation, signature_from_config, text_to_html_fragment
 
 NEXO_HOME = export_resolved_nexo_home()
 EMAIL_BASE_DIR = nexo_email_dir()
@@ -440,6 +441,8 @@ def build_parser():
     parser.add_argument("--references", default="")
     parser.add_argument("--body-file", required=True, help="Plain text body file")
     parser.add_argument("--html-file", default="", help="HTML body file (optional)")
+    parser.add_argument("--audience", default="", help="Message audience label for continuity metadata")
+    parser.add_argument("--message-kind", default="", help="Message kind label for continuity metadata")
     parser.add_argument("--quote-file", default="")
     parser.add_argument("--quote-from", default="")
     parser.add_argument("--quote-date", default="")
@@ -465,35 +468,25 @@ def main(argv=None):
     if thread:
         body_text = f"{body_text}{thread}"
 
-    # HTML body
-    body_html = None
+    # HTML body. Any agent-provided HTML is treated as untrusted and normalized
+    # through email_presentation before SMTP or continuity records see it.
     html_thread = build_html_thread(args.thread_file)
     if args.html_file and Path(args.html_file).exists():
         html_content = Path(args.html_file).read_text(encoding="utf-8").strip()
-        html_quote = build_html_quoted(args.quote_file, args.quote_from, args.quote_date)
-        body_html = f"""<!DOCTYPE html>
-<html><head><meta charset="utf-8"></head>
-<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:14px;color:#333;line-height:1.6;">
-{html_content}
-{html_quote}
-{html_thread}
-</body></html>"""
+        html_fragment = html_content
     else:
-        # Auto-generate HTML from plain text
-        escaped_body = html.escape(Path(args.body_file).read_text(encoding="utf-8").strip())
-        paragraphs = escaped_body.split("\n\n")
-        html_body = "".join(f"<p>{p.replace(chr(10), '<br>')}</p>" for p in paragraphs)
-        html_quote = build_html_quoted(args.quote_file, args.quote_from, args.quote_date)
-        signature = html.escape(_signature_label(config))
-        body_html = f"""<!DOCTYPE html>
-<html><head><meta charset="utf-8"></head>
-<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:14px;color:#333;line-height:1.6;">
-{html_body}
-{html_quote}
-{html_thread}
-<hr style="border:none;border-top:1px solid #ddd;margin:20px 0;">
-<p style="color:#888;font-size:11px;">{signature}</p>
-</body></html>"""
+        html_fragment = text_to_html_fragment(reply_body)
+    html_quote = build_html_quoted(args.quote_file, args.quote_from, args.quote_date)
+    html_fragment = f"{html_fragment}{html_quote}{html_thread}"
+    presentation = build_email_presentation(
+        subject=args.subject,
+        body_text=body_text,
+        body_html=html_fragment,
+        signature=signature_from_config(config, fallback=_signature_label(config)),
+        include_signature=True,
+    )
+    body_text = presentation.body_text
+    body_html = presentation.body_html
 
     try:
         msg_id, raw_message = send_email(
@@ -531,6 +524,8 @@ def main(argv=None):
                     "sent_copy_saved": sent_copy_saved,
                     "lifecycle_event": lifecycle_event,
                     "account_label": (args.account_label or "").strip(),
+                    "audience": (args.audience or "").strip(),
+                    "message_kind": (args.message_kind or "").strip(),
                 },
             )
         except Exception as sent_event_exc:

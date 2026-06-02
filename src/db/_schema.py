@@ -2758,6 +2758,23 @@ def _m76_semantic_layers(conn):
     _migrate_add_index(conn, "idx_semantic_layer_sources_kind", "semantic_layer_source_refs", "source_kind, validation_status")
 
 
+def _m77_morning_briefing_presentation(conn):
+    """Persist sanitized briefing bodies and Desktop read-state."""
+    _m58_morning_briefing_runs(conn)
+    _migrate_add_column(conn, "morning_briefing_runs", "body_text", "TEXT DEFAULT ''")
+    _migrate_add_column(conn, "morning_briefing_runs", "body_html", "TEXT DEFAULT ''")
+    _migrate_add_column(conn, "morning_briefing_runs", "artifact_json", "TEXT DEFAULT ''")
+    _migrate_add_column(conn, "morning_briefing_runs", "desktop_shown_at", "TEXT DEFAULT NULL")
+    _migrate_add_column(conn, "morning_briefing_runs", "desktop_opened_at", "TEXT DEFAULT NULL")
+    _migrate_add_column(conn, "morning_briefing_runs", "desktop_dismissed_at", "TEXT DEFAULT NULL")
+    _migrate_add_index(
+        conn,
+        "idx_morning_briefing_runs_desktop",
+        "morning_briefing_runs",
+        "status, desktop_shown_at, finished_at",
+    )
+
+
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
     (2, "followups_reasoning", _m2_followups_reasoning),
@@ -2835,6 +2852,7 @@ MIGRATIONS = [
     (74, "entity_live_profiles", _m74_entity_live_profiles),
     (75, "failure_prevention_ledger", _m75_failure_prevention_ledger),
     (76, "semantic_layers", _m76_semantic_layers),
+    (77, "morning_briefing_presentation", _m77_morning_briefing_presentation),
 ]
 
 
