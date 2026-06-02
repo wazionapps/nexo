@@ -238,3 +238,15 @@ def test_sentiment_intent_routes_through_semantic_router(fake_semantic_router):
     assert result["available"] is True
     assert result["label"] == "correction"
     assert fake_semantic_router[-1]["decision_kind"] == "sentiment_intent"
+
+
+def test_pre_answer_intent_routes_through_semantic_router(fake_semantic_router):
+    import pre_answer_router as mod
+
+    fake_semantic_router.labels_by_kind["pre_answer_intent"] = "schedule_commitment"
+    importlib.reload(mod)
+    result = mod.classify_intent("qué quedó pendiente del release Brain?")
+    assert result.intent == "schedule_commitment"
+    assert fake_semantic_router[-1]["decision_kind"] == "pre_answer_intent"
+    assert fake_semantic_router[-1]["labels"] == mod.PRE_ANSWER_INTENTS
+    assert fake_semantic_router[-1]["allow_remote_fallback"] is False

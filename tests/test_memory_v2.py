@@ -286,6 +286,30 @@ def test_memory_maintenance_processes_queue_and_reports_health(isolated_db):
     assert tool_health["tables"]["memory_observations"] is True
 
 
+def test_memory_health_fails_when_observation_queue_breaches_sla(isolated_db):
+    import db
+
+    event = db.record_memory_event(
+        event_type="tool_write",
+        source_type="tool",
+        source_id="tool-old-pending",
+        session_id="nexo-old-pending",
+        tool_name="Edit",
+        file_paths=["src/old_pending.py"],
+        idempotency_key="tool-old-pending",
+        created_at=1000.0,
+    )
+
+    health = db.memory_observation_health(pending_sla_seconds=3600, now=1000.0 + 7200.0)
+
+    assert event["ok"] is True
+    assert health["ok"] is False
+    assert health["queue_sla"]["pending_sla_ok"] is False
+    assert health["queue_sla"]["pending_older_than_sla"] == 1
+    assert health["queue_sla"]["oldest_pending"]["event_uid"] == event["event_uid"]
+    assert any(warning["code"] == "pending_sla_breached" for warning in health["warnings"])
+
+
 def test_memory_health_reports_degraded_fts_table(isolated_db):
     import db
 

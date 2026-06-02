@@ -1238,6 +1238,37 @@ def test_doctor_local_index_hygiene_repairs_removed_root_residue(tmp_path):
     assert conn.execute("SELECT COUNT(*) AS total FROM local_index_errors WHERE asset_id='asset_removed'").fetchone()["total"] == 0
 
 
+def test_local_index_hygiene_quick_scan_reports_truncation(tmp_path, monkeypatch):
+    monkeypatch.setattr(api, "DEFAULT_HYGIENE_QUICK_SCAN_LIMIT", 1)
+    root = tmp_path / "docs"
+    root.mkdir()
+    conn = get_local_context_db()
+    conn.execute(
+        """
+        INSERT INTO local_index_roots(root_path, display_path, mode, depth, status, created_at, updated_at)
+        VALUES (?, ?, 'normal', 2, 'active', 1, 1)
+        """,
+        (api.norm_path(str(root)), str(root)),
+    )
+    root_id = conn.execute("SELECT id FROM local_index_roots WHERE root_path=?", (api.norm_path(str(root)),)).fetchone()["id"]
+    for index in range(2):
+        path = root / f"note-{index}.txt"
+        conn.execute(
+            """
+            INSERT INTO local_assets(asset_id, root_id, path, display_path, parent_path, volume_id, status, first_seen_at, last_seen_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, '/', 'active', 1, 1, 1)
+            """,
+            (f"asset_quick_{index}", root_id, str(path), str(path), str(root)),
+        )
+    conn.commit()
+
+    result = api.local_index_hygiene(fix=False, quick=True)
+
+    assert result["quick"] is True
+    assert result["privacy"]["truncated"] is True
+    assert result["privacy"]["residue"]["scan_limit"] == 1
+
+
 def test_pause_stops_scan_until_resume(tmp_path):
     root = tmp_path / "docs"
     root.mkdir()

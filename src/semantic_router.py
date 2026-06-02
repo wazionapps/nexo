@@ -30,6 +30,7 @@ the decision carries. This is also what Desktop will consume via the
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -79,7 +80,7 @@ class RouterResult:
 # Decision kinds + policy table
 # ---------------------------------------------------------------------------
 #
-# The plan enumerates 18 decision_kinds that need to route through here. They
+# The plan enumerates the decision_kinds that need to route through here. They
 # fall into two families:
 #
 #   TEXTUAL     — the first-line local classifier is good enough; the
@@ -111,6 +112,7 @@ TEXTUAL_KINDS: tuple[str, ...] = (
     "reply_event_type",
     "query_intent",
     "sentiment_intent",
+    "pre_answer_intent",
 )
 
 
@@ -136,9 +138,20 @@ _POLICY: dict[str, dict[str, Any]] = {
         "reasoner_mode": "multipass_local",
         "reasoner_threshold": 0.75,
         "allow_remote_fallback": True,
+        "allow_cold_local_load": True,
     }
     for kind in TEXTUAL_KINDS
 }
+
+_POLICY["pre_answer_intent"].update(
+    {
+        # Pre-answer sits on the user-visible latency path. Use the local
+        # semantic classifier when it is already warm, but do not cold-load a
+        # heavy model before answering unless explicitly enabled.
+        "allow_remote_fallback": True,
+        "allow_cold_local_load": False,
+    }
+)
 
 _POLICY.update(
     {
@@ -148,6 +161,7 @@ _POLICY.update(
             "reasoner_mode": "cached_llm",
             "reasoner_threshold": 0.60,
             "allow_remote_fallback": True,
+            "allow_cold_local_load": True,
         }
         for kind in CODE_AWARE_KINDS
     }
@@ -176,6 +190,7 @@ def _run_fast_local(
     context: str = "",
     labels: tuple[str, ...],
     confidence_floor: float,
+    allow_cold_load: bool = True,
 ) -> RouterResult | None:
     """Try ``LocalZeroShotClassifier``. Return None on unavailable or
     below-threshold so the router advances.
@@ -187,12 +202,14 @@ def _run_fast_local(
     when present, and fall back to question for simple direct callers.
     """
     try:
-        from classifier_local import LocalZeroShotClassifier
+        from classifier_local import get_shared_zero_shot_classifier, is_local_classifier_warm
     except Exception as exc:  # pragma: no cover — install not ready
         _logger.debug("semantic_router: classifier_local unavailable (%s)", exc)
         return None
 
-    clf = LocalZeroShotClassifier(confidence_floor=confidence_floor)
+    if not allow_cold_load and not is_local_classifier_warm():
+        return None
+    clf = get_shared_zero_shot_classifier(confidence_floor=confidence_floor)
     classifier_input = (context or "").strip() or question
     result = clf.classify(classifier_input, labels)
     if result is None:
@@ -375,6 +392,28 @@ def _normalize_remote_answer(
 # ---------------------------------------------------------------------------
 
 
+def _env_bool(name: str, *, default: bool) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return str(raw or "").strip().lower() in {"1", "true", "yes", "on", "enabled"}
+
+
+def _allow_cold_local_load(decision_kind: str, policy: dict[str, Any]) -> bool:
+    default = bool(policy.get("allow_cold_local_load", True))
+    if decision_kind == "pre_answer_intent":
+        return _env_bool("NEXO_PRE_ANSWER_ALLOW_COLD_SEMANTIC_LOAD", default=default)
+    return default
+
+
+def _local_classifier_warm() -> bool:
+    try:
+        from classifier_local import is_local_classifier_warm
+    except Exception:
+        return False
+    return is_local_classifier_warm()
+
+
 def route(
     *,
     decision_kind: str,
@@ -407,6 +446,7 @@ def route(
     labels_tuple: tuple[str, ...] | None = (
         tuple(labels) if labels else None
     )
+    allow_cold_load = _allow_cold_local_load(decision_kind, policy)
 
     # Step 1 — fast_local for textual families only.
     if policy["fast_local_threshold"] is not None and labels_tuple:
@@ -415,20 +455,27 @@ def route(
             context=context,
             labels=labels_tuple,
             confidence_floor=float(policy["fast_local_threshold"]),
+            allow_cold_load=allow_cold_load,
         )
         if fast is not None:
             fast.decision_kind = decision_kind
             return fast
 
     # Step 2 — semantic_reasoner (Mode A or B depending on policy).
-    reasoned = _run_semantic_reasoner(
-        decision_kind=decision_kind,
-        question=question,
-        labels=labels_tuple,
-        context=context,
-        mode=str(policy["reasoner_mode"]),
-        confidence_floor=float(policy["reasoner_threshold"]),
-    )
+    reasoned = None
+    if not (
+        str(policy["reasoner_mode"]) == "multipass_local"
+        and not allow_cold_load
+        and not _local_classifier_warm()
+    ):
+        reasoned = _run_semantic_reasoner(
+            decision_kind=decision_kind,
+            question=question,
+            labels=labels_tuple,
+            context=context,
+            mode=str(policy["reasoner_mode"]),
+            confidence_floor=float(policy["reasoner_threshold"]),
+        )
     if reasoned is not None and reasoned.ok:
         return reasoned
 

@@ -3842,12 +3842,16 @@ def check_local_index_hygiene(fix: bool = False) -> DoctorCheck:
     try:
         from local_context import api as local_context_api
 
-        result = local_context_api.local_index_hygiene(fix=fix)
+        try:
+            result = local_context_api.local_index_hygiene(fix=fix, quick=not fix)
+        except TypeError:
+            result = local_context_api.local_index_hygiene(fix=fix)
         residue = result.get("residue") or {}
         cleanup = result.get("cleanup") or {}
         privacy = result.get("privacy") or {}
         privacy_residue = privacy.get("residue") or {}
         privacy_cleanup = privacy.get("cleanup") or {}
+        privacy_truncated = bool(privacy.get("truncated") or privacy_residue.get("truncated"))
         suspect_roots = [str(path) for path in result.get("removed_roots") or []]
         residue_total = sum(int(residue.get(key, 0) or 0) for key in ("assets", "jobs", "errors", "dirs", "checkpoints"))
         cleanup_total = sum(int(cleanup.get(key, 0) or 0) for key in ("assets", "jobs", "errors", "dirs", "checkpoints"))
@@ -3859,9 +3863,11 @@ def check_local_index_hygiene(fix: bool = False) -> DoctorCheck:
             "cleanup=" + json.dumps(cleanup, sort_keys=True),
             "privacy_residue=" + json.dumps(privacy_residue, sort_keys=True),
             "privacy_cleanup=" + json.dumps(privacy_cleanup, sort_keys=True),
+            "quick_scan=" + str(bool(result.get("quick") or privacy.get("quick"))),
+            "privacy_truncated=" + str(privacy_truncated),
         ]
         evidence.extend(f"root={path}" for path in suspect_roots[:5])
-        if residue_total == 0 and privacy_residue_total == 0 and not suspect_roots:
+        if residue_total == 0 and privacy_residue_total == 0 and not suspect_roots and not privacy_truncated:
             return DoctorCheck(
                 id="runtime.local_index_hygiene",
                 tier="runtime",
@@ -3889,7 +3895,7 @@ def check_local_index_hygiene(fix: bool = False) -> DoctorCheck:
             severity="warn",
             summary="Local memory index has stale or private residue",
             evidence=evidence,
-            repair_plan=["Run `nexo doctor --tier runtime --fix` to purge stale local memory roots and private local-memory residue"],
+            repair_plan=["Run `nexo doctor --tier runtime --fix` to purge stale local memory roots/private residue, or run a full local_index_hygiene scan outside release readiness"],
             escalation_prompt="Local memory may contain stale or private index payloads that should be purged before indexing continues.",
         )
     except Exception as exc:

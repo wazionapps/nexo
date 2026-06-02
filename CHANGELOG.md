@@ -1,5 +1,15 @@
 # Changelog
 
+## [7.27.6] - 2026-06-01
+
+### Added — operational memory continuity
+
+- **Commitments now persist as first-class memory links.** R17 promise detection records durable commitments with session, evidence, dedupe, and action-link fields so future promises can be retrieved and closed instead of living only in a transient reminder window.
+- **Pre-answer continuity routes now consult real evidence.** Questions like `qué prometí?`, `qué queda pendiente?`, and `por qué toqué src/pre_answer_router.py` route to commitments, operational evidence, and Memory Observations instead of falling through to generic/file-location behavior.
+- **Memory convergence is visible in health checks.** `nexo_memory_health` now reports a queue SLA and fails when old pending observation rows prove captured events are not becoming searchable memory.
+- **Saved-not-used auditing measures real Local Context use.** The audit now reads `local_context_usage_events.used_before_response` instead of treating legacy `local_context_queries` as proof that indexed memory was actually injected before an answer.
+- **Coverage:** commitment ledger, R17 persistence, pre-answer continuity intents, Memory Observations evidence retrieval, queue SLA health, Local Context usage auditing, release parity tests, and Brain/Desktop contract gates.
+
 ## [7.27.5] - 2026-06-01
 
 ### Fixed — Desktop onboarding wording

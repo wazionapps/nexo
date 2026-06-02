@@ -183,6 +183,31 @@ def _local_context_db(path: Path, *, with_query: bool) -> None:
     conn.close()
 
 
+def _local_context_usage_db(path: Path, *, used_before_response: bool = True) -> None:
+    conn = _db(
+        path,
+        """
+        CREATE TABLE local_context_usage_events (
+            event_id TEXT PRIMARY KEY,
+            created_at REAL NOT NULL,
+            used_before_response INTEGER NOT NULL DEFAULT 0,
+            result_count INTEGER NOT NULL DEFAULT 0,
+            evidence_refs_count INTEGER NOT NULL DEFAULT 0
+        );
+        """,
+    )
+    conn.execute(
+        """
+        INSERT INTO local_context_usage_events(
+            event_id, created_at, used_before_response, result_count, evidence_refs_count
+        ) VALUES ('u1', 2001, ?, 3, 2)
+        """,
+        (1 if used_before_response else 0,),
+    )
+    conn.commit()
+    conn.close()
+
+
 def _email_db(path: Path) -> None:
     conn = _db(
         path,
@@ -205,6 +230,7 @@ def _config(
     main_db: Path,
     local_context_db: Path,
     email_db: Path,
+    local_context_usage_db: Path | None = None,
     live_tools=frozenset({"nexo_alpha"}),
 ) -> SavedNotUsedConfig:
     transcript_root = tmp_path / "transcripts"
@@ -226,6 +252,7 @@ def _config(
     return SavedNotUsedConfig(
         nexo_db_path=main_db,
         local_context_db_path=local_context_db,
+        local_context_usage_db_path=local_context_usage_db,
         email_db_path=email_db,
         transcript_roots=(transcript_root,),
         desktop_conversations_path=desktop / "conversations.json",
@@ -248,6 +275,28 @@ def test_flags_local_context_saved_without_query_and_ignores_empty_legacy_tables
     alerts = {item["alert_id"]: item for item in report["findings"]}
     assert alerts["local_context_saved_not_used"]["severity"] == "P0"
     assert "local_context_legacy_tables_non_empty" not in alerts
+
+
+def test_local_context_usage_events_prevent_false_saved_not_used_p0(tmp_path):
+    main = tmp_path / "nexo.db"
+    local = tmp_path / "local-context.db"
+    usage = tmp_path / "local-context-usage.db"
+    email = tmp_path / "nexo-email.db"
+    _base_main_db(main).close()
+    _local_context_db(local, with_query=False)
+    _local_context_usage_db(usage, used_before_response=True)
+    _email_db(email)
+
+    report = audit_saved_not_used(
+        _config(tmp_path, main_db=main, local_context_db=local, local_context_usage_db=usage, email_db=email)
+    )
+
+    alerts = {item["alert_id"]: item for item in report["findings"]}
+    row = next(item for item in report["stores"] if item["store_id"] == "local_context")
+    assert "local_context_saved_not_used" not in alerts
+    assert row["severity"] == "OK"
+    assert row["evidence"]["usage_events"]["used_before_response_count"] == 1
+    assert row["evidence"]["query_count"] == 0
 
 
 def test_covers_required_stores_and_detects_unconsumed_fixtures(tmp_path):
@@ -273,8 +322,10 @@ def test_covers_required_stores_and_detects_unconsumed_fixtures(tmp_path):
     conn.commit()
     conn.close()
     _local_context_db(local, with_query=True)
+    usage = tmp_path / "local-context-usage.db"
+    _local_context_usage_db(usage, used_before_response=True)
     _email_db(email)
-    cfg = _config(tmp_path, main_db=main, local_context_db=local, email_db=email)
+    cfg = _config(tmp_path, main_db=main, local_context_db=local, local_context_usage_db=usage, email_db=email)
     (cfg.cron_spool_dir / "followup-runner-1.json").write_text("{}", encoding="utf-8")
     cfg.desktop_continuity_queue_path.write_text(json.dumps([{"id": "q1"}]), encoding="utf-8")
 
@@ -321,9 +372,20 @@ def test_plugins_ok_when_catalog_matches_live(tmp_path):
     conn.commit()
     conn.close()
     _local_context_db(local, with_query=True)
+    usage = tmp_path / "local-context-usage.db"
+    _local_context_usage_db(usage, used_before_response=True)
     _email_db(email)
 
-    report = audit_saved_not_used(_config(tmp_path, main_db=main, local_context_db=local, email_db=email, live_tools=frozenset({"nexo_alpha"})))
+    report = audit_saved_not_used(
+        _config(
+            tmp_path,
+            main_db=main,
+            local_context_db=local,
+            local_context_usage_db=usage,
+            email_db=email,
+            live_tools=frozenset({"nexo_alpha"}),
+        )
+    )
 
     plugin_row = next(row for row in report["stores"] if row["store_id"] == "plugins_catalog_live")
     assert plugin_row["severity"] == "OK"

@@ -42,6 +42,7 @@ DEFAULT_ROUTER_MAX_CHARS = int(os.environ.get("NEXO_LOCAL_CONTEXT_ROUTER_MAX_CHA
 DEFAULT_MAX_JOB_ATTEMPTS = int(os.environ.get("NEXO_LOCAL_INDEX_MAX_JOB_ATTEMPTS", "3") or "3")
 DEFAULT_SQLITE_BUSY_RETRY_ATTEMPTS = int(os.environ.get("NEXO_LOCAL_CONTEXT_BUSY_RETRY_ATTEMPTS", "5") or "5")
 DEFAULT_SQLITE_BUSY_RETRY_DELAY_SECONDS = float(os.environ.get("NEXO_LOCAL_CONTEXT_BUSY_RETRY_DELAY_SECONDS", "0.35") or "0.35")
+DEFAULT_HYGIENE_QUICK_SCAN_LIMIT = int(os.environ.get("NEXO_LOCAL_INDEX_HYGIENE_QUICK_SCAN_LIMIT", "5000") or "5000")
 INITIAL_INDEX_COMPLETE_KEY = "initial_index_complete"
 INITIAL_INDEX_STARTED_AT_KEY = "initial_index_started_at"
 PERFORMANCE_PROFILE_KEY = "performance_profile"
@@ -1329,8 +1330,20 @@ def _purge_asset_ids(conn, asset_ids: list[str]) -> dict:
     return counts
 
 
-def _privacy_unsafe_asset_ids(conn) -> list[str]:
-    rows = conn.execute("SELECT asset_id, path, privacy_class FROM local_assets").fetchall()
+def _bounded_fetchall(conn, sql: str, params: tuple[Any, ...] = (), *, max_rows: int | None = None) -> tuple[list[Any], bool]:
+    if max_rows is None or max_rows <= 0:
+        return conn.execute(sql, params).fetchall(), False
+    rows = conn.execute(f"{sql} LIMIT ?", (*params, max_rows + 1)).fetchall()
+    truncated = len(rows) > max_rows
+    return rows[:max_rows], truncated
+
+
+def _privacy_unsafe_asset_ids(conn, *, max_rows: int | None = None) -> tuple[list[str], bool]:
+    rows, truncated = _bounded_fetchall(
+        conn,
+        "SELECT asset_id, path, privacy_class FROM local_assets",
+        max_rows=max_rows,
+    )
     override_prefixes = _active_user_override_prefixes_conn(conn)
     unsafe: list[str] = []
     for row in rows:
@@ -1340,30 +1353,40 @@ def _privacy_unsafe_asset_ids(conn) -> list[str]:
             continue
         if should_skip_file(path) or privacy_class in {"private_profile_blocked", "system_blocked", "sensitive_inventory_only"}:
             unsafe.append(str(row["asset_id"]))
-    return unsafe
+    return unsafe, truncated
 
 
-def _privacy_unsafe_dir_ids(conn) -> list[str]:
-    rows = conn.execute("SELECT dir_id, path FROM local_index_dirs").fetchall()
+def _privacy_unsafe_dir_ids(conn, *, max_rows: int | None = None) -> tuple[list[str], bool]:
+    rows, truncated = _bounded_fetchall(
+        conn,
+        "SELECT dir_id, path FROM local_index_dirs",
+        max_rows=max_rows,
+    )
     override_prefixes = _active_user_override_prefixes_conn(conn)
-    return [
+    unsafe = [
         str(row["dir_id"])
         for row in rows
         if should_skip_tree(str(row["path"] or "")) and not _path_under_any_prefix(str(row["path"] or ""), override_prefixes)
     ]
+    return unsafe, truncated
 
 
-def _content_secret_asset_ids(conn) -> list[str]:
-    rows = conn.execute(
-        """
+def _content_secret_asset_ids(conn, *, max_rows: int | None = None) -> tuple[list[str], bool]:
+    sql = """
         SELECT c.asset_id, c.text
         FROM local_chunks c
         JOIN local_assets a ON a.asset_id=c.asset_id
         WHERE a.status='active'
           AND COALESCE(a.privacy_class, 'normal')='normal'
-        ORDER BY c.asset_id, c.chunk_index
-        """
-    ).fetchall()
+    """
+    params: tuple[Any, ...] = ()
+    if max_rows is None or max_rows <= 0:
+        rows = conn.execute(sql + " ORDER BY c.asset_id, c.chunk_index", params).fetchall()
+        truncated = False
+    else:
+        rows = conn.execute(sql + " LIMIT ?", (max_rows + 1,)).fetchall()
+        truncated = len(rows) > max_rows
+        rows = rows[:max_rows]
     secret_ids: set[str] = set()
     for row in rows:
         asset_id = str(row["asset_id"])
@@ -1371,7 +1394,7 @@ def _content_secret_asset_ids(conn) -> list[str]:
             continue
         if contains_secret(str(row["text"] or "")):
             secret_ids.add(asset_id)
-    return sorted(secret_ids)
+    return sorted(secret_ids), truncated
 
 
 def _mark_content_secret_assets(conn, asset_ids: list[str]) -> int:
@@ -1419,12 +1442,21 @@ def _mark_content_secret_assets(conn, asset_ids: list[str]) -> int:
     return len(unique_ids)
 
 
-def local_index_privacy_hygiene(*, fix: bool = False) -> dict:
+def local_index_privacy_hygiene(*, fix: bool = False, quick: bool = False) -> dict:
     conn = _conn()
-    asset_ids = _privacy_unsafe_asset_ids(conn)
-    dir_ids = _privacy_unsafe_dir_ids(conn)
-    content_secret_ids = _content_secret_asset_ids(conn)
-    residue = {"assets": len(asset_ids), "dirs": len(dir_ids), "content_secret_assets": len(content_secret_ids)}
+    max_rows = None if fix or not quick else DEFAULT_HYGIENE_QUICK_SCAN_LIMIT
+    asset_ids, assets_truncated = _privacy_unsafe_asset_ids(conn, max_rows=max_rows)
+    dir_ids, dirs_truncated = _privacy_unsafe_dir_ids(conn, max_rows=max_rows)
+    content_secret_ids, chunks_truncated = _content_secret_asset_ids(conn, max_rows=max_rows)
+    truncated = bool(assets_truncated or dirs_truncated or chunks_truncated)
+    residue = {
+        "assets": len(asset_ids),
+        "dirs": len(dir_ids),
+        "content_secret_assets": len(content_secret_ids),
+        "truncated": truncated,
+        "quick": bool(quick and not fix),
+        "scan_limit": int(max_rows or 0),
+    }
     cleanup = {"assets": 0, "jobs": 0, "errors": 0, "chunks": 0, "embeddings": 0, "entities": 0, "relations": 0, "versions": 0, "dirs": 0, "content_secret_assets": 0}
     if fix:
         cleanup.update(_purge_asset_ids(conn, asset_ids))
@@ -1437,10 +1469,10 @@ def local_index_privacy_hygiene(*, fix: bool = False) -> dict:
         conn.commit()
         if asset_ids or dir_ids or content_secret_ids:
             log_event("warn", "privacy_hygiene_repaired", "Local memory privacy hygiene repaired", cleanup=cleanup)
-    return {"ok": True, "fix": fix, "residue": residue, "cleanup": cleanup}
+    return {"ok": True, "fix": fix, "quick": bool(quick and not fix), "truncated": truncated, "residue": residue, "cleanup": cleanup}
 
 
-def local_index_hygiene(*, fix: bool = False) -> dict:
+def local_index_hygiene(*, fix: bool = False, quick: bool = False) -> dict:
     conn = _conn()
     removed_paths: list[str] = []
     for row in conn.execute("SELECT id, root_path, source, status FROM local_index_roots").fetchall():
@@ -1455,10 +1487,10 @@ def local_index_hygiene(*, fix: bool = False) -> dict:
     if fix:
         cleanup = _purge_removed_root_payloads(conn)
     conn.commit()
-    privacy = local_index_privacy_hygiene(fix=fix)
+    privacy = local_index_privacy_hygiene(fix=fix, quick=quick and not fix)
     if fix and (removed_paths or any(int(cleanup.get(key, 0) or 0) for key in ("assets", "jobs", "errors", "dirs", "checkpoints"))):
         log_event("info", "index_hygiene_repaired", "Local memory index hygiene repaired", roots=[redact_path(path) for path in removed_paths], cleanup=cleanup)
-    return {"ok": True, "fix": fix, "removed_roots": removed_paths, "residue": before, "cleanup": cleanup, "privacy": privacy}
+    return {"ok": True, "fix": fix, "quick": bool(quick and not fix), "removed_roots": removed_paths, "residue": before, "cleanup": cleanup, "privacy": privacy}
 
 
 def repair_index_hygiene() -> dict:

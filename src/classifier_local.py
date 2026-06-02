@@ -213,11 +213,55 @@ class LocalZeroShotClassifier:
         )
 
 
+_SHARED_CLASSIFIER_LOCK = threading.Lock()
+_SHARED_CLASSIFIERS: dict[tuple[str, str], LocalZeroShotClassifier] = {}
+
+
+def get_shared_zero_shot_classifier(
+    *,
+    model_id: str = MODEL_ID,
+    revision: str = MODEL_REVISION,
+    confidence_floor: float = DEFAULT_CONFIDENCE_FLOOR,
+) -> LocalZeroShotClassifier:
+    """Return the process-wide classifier wrapper for this pinned model.
+
+    The underlying transformer pipeline is still lazy-loaded, but once it is
+    warm all semantic callers share it instead of creating fresh wrappers.
+    """
+    key = (model_id, revision)
+    with _SHARED_CLASSIFIER_LOCK:
+        classifier = _SHARED_CLASSIFIERS.get(key)
+        if classifier is None:
+            classifier = LocalZeroShotClassifier(
+                model_id=model_id,
+                revision=revision,
+                confidence_floor=confidence_floor,
+            )
+            _SHARED_CLASSIFIERS[key] = classifier
+        else:
+            classifier.confidence_floor = confidence_floor
+        return classifier
+
+
+def is_local_classifier_warm(
+    *,
+    model_id: str = MODEL_ID,
+    revision: str = MODEL_REVISION,
+) -> bool:
+    """Return True only when this process already has a loaded pipeline."""
+    key = (model_id, revision)
+    with _SHARED_CLASSIFIER_LOCK:
+        classifier = _SHARED_CLASSIFIERS.get(key)
+        return bool(classifier is not None and classifier._pipe is not None)
+
+
 __all__ = [
     "LocalZeroShotClassifier",
     "ClassificationResult",
     "MODEL_ID",
     "MODEL_REVISION",
     "DEFAULT_CONFIDENCE_FLOOR",
+    "get_shared_zero_shot_classifier",
+    "is_local_classifier_warm",
     "is_local_classifier_available_with_install_state",
 ]

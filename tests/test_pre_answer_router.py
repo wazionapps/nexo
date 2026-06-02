@@ -1,10 +1,39 @@
 from __future__ import annotations
 
 import json
+import sys
 import time
+from types import SimpleNamespace
+
+import pytest
 
 
-def test_pre_answer_router_intent_matrix_multilingual():
+@pytest.fixture
+def fake_pre_answer_semantic_router(monkeypatch):
+    class RouterCalls(list):
+        labels_by_text: dict[str, str] = {}
+
+    calls = RouterCalls()
+    calls.labels_by_text = {}
+
+    def route(**kwargs):
+        calls.append(kwargs)
+        text = str(kwargs.get("context") or "").strip()
+        label = calls.labels_by_text.get(text, "general")
+        return SimpleNamespace(
+            ok=True,
+            label=label,
+            verdict=label,
+            confidence=0.93,
+            route_used="semantic_reasoner",
+            error=None,
+        )
+
+    monkeypatch.setitem(sys.modules, "semantic_router", SimpleNamespace(route=route))
+    return calls
+
+
+def test_pre_answer_router_intent_matrix_multilingual(fake_pre_answer_semantic_router):
     import pre_answer_router as router
 
     cases = [
@@ -14,24 +43,36 @@ def test_pre_answer_router_intent_matrix_multilingual():
         ("recuerdas la decision sobre local context?", "memory_question"),
         ("did you do that in another terminal?", "identity_authorship"),
         ("recuérdame mañana revisar el deadline", "schedule_commitment"),
+        ("qué prometí hacer?", "schedule_commitment"),
+        ("qué queda pendiente?", "schedule_commitment"),
+        ("por qué toqué src/pre_answer_router.py", "prior_work"),
         ("diagnostica por que NEXO MCP runtime no arranca", "runtime_diagnosis"),
         ("hola, dime una frase corta", "general"),
     ]
+    fake_pre_answer_semantic_router.labels_by_text = dict(cases)
 
     for text, expected in cases:
         result = router.classify_intent(text)
         assert result.intent == expected, (text, result)
 
+    assert len(fake_pre_answer_semantic_router) == len(cases)
+    assert all(call["decision_kind"] == "pre_answer_intent" for call in fake_pre_answer_semantic_router)
+    assert all(tuple(call["labels"]) == router.PRE_ANSWER_INTENTS for call in fake_pre_answer_semantic_router)
+    assert all(call["allow_remote_fallback"] is False for call in fake_pre_answer_semantic_router)
+
     prior_plan = router.plan_sources("prior_work")
     assert [step.name for step in prior_plan.primary] == [
         "recent_context",
         "evidence_ledger",
+        "commitments",
         "protocol_tasks",
         "workflows",
         "change_log",
         "diary",
     ]
     assert prior_plan.fallback[0].name == "transcripts"
+    schedule_plan = router.plan_sources("schedule_commitment")
+    assert schedule_plan.primary[0].name == "commitments"
 
 
 def test_pre_answer_router_deadline_skips_slow_local_context():
@@ -110,10 +151,13 @@ def test_pre_answer_router_logs_route_event_without_raw_secret():
     assert "query" not in events[0]
 
 
-def test_pre_answer_router_prior_work_uses_operational_stores_before_transcript():
+def test_pre_answer_router_prior_work_uses_operational_stores_before_transcript(fake_pre_answer_semantic_router):
     import pre_answer_router as router
 
     calls = []
+    fake_pre_answer_semantic_router.labels_by_text = {
+        "ya hiciste lo del pre answer router?": "prior_work",
+    }
 
     def empty_source(name):
         def _inner(request):
@@ -137,6 +181,7 @@ def test_pre_answer_router_prior_work_uses_operational_stores_before_transcript(
         source_adapters={
             "recent_context": empty_source("recent_context"),
             "evidence_ledger": empty_source("evidence_ledger"),
+            "commitments": empty_source("commitments"),
             "protocol_tasks": empty_source("protocol_tasks"),
             "workflows": empty_source("workflows"),
             "change_log": empty_source("change_log"),
@@ -147,9 +192,10 @@ def test_pre_answer_router_prior_work_uses_operational_stores_before_transcript(
     )
 
     assert result.intent == "prior_work"
-    assert calls[:6] == [
+    assert calls[:7] == [
         "recent_context",
         "evidence_ledger",
+        "commitments",
         "protocol_tasks",
         "workflows",
         "change_log",
@@ -158,6 +204,224 @@ def test_pre_answer_router_prior_work_uses_operational_stores_before_transcript(
     assert calls.index("transcripts") > calls.index("diary")
     assert result.should_inject is True
     assert result.evidence_refs == ["transcript:1"]
+
+
+def test_pre_answer_router_operator_continuity_questions_use_semantic_router(fake_pre_answer_semantic_router):
+    import pre_answer_router as router
+
+    cases = {
+        "qué hice ayer?": "prior_work",
+        "qué prometí hacer?": "schedule_commitment",
+        "qué queda pendiente?": "schedule_commitment",
+        "por qué toqué src/pre_answer_router.py": "prior_work",
+    }
+    fake_pre_answer_semantic_router.labels_by_text = dict(cases)
+
+    for query, expected in cases.items():
+        result = router.classify_intent(query)
+        assert result.intent == expected, (query, result.intent, result.scores, result.features)
+        assert result.features["semantic_route"] == 1.0
+
+    assert [call["context"] for call in fake_pre_answer_semantic_router] == list(cases)
+
+
+def test_pre_answer_cold_start_continuity_questions_do_not_route_general(monkeypatch):
+    import pre_answer_router as router
+
+    class NoRoute:
+        ok = False
+        label = None
+        verdict = None
+        confidence = 0.0
+        route_used = "no_route"
+        error = "semantic_unavailable"
+
+    calls = []
+
+    def no_route(**kwargs):
+        calls.append(kwargs)
+        return NoRoute()
+
+    monkeypatch.setitem(sys.modules, "semantic_router", SimpleNamespace(route=no_route))
+
+    for query in ("qué prometí hacer?", "qué queda pendiente?"):
+        result = router.classify_intent(query)
+        assert result.intent == "memory_question"
+        assert result.features["conservative_continuity_fallback"] == 1.0
+
+    for query in ("qué hora es?", "what is 2+2?", "did it rain yesterday?"):
+        result = router.classify_intent(query)
+        assert result.intent == "general"
+        assert "conservative_continuity_fallback" not in result.features
+
+    operator_past = router.classify_intent("what did you do yesterday?")
+    assert operator_past.intent == "memory_question"
+    assert operator_past.features["conservative_continuity_fallback"] == 1.0
+
+    rationale = router.classify_intent("por qué toqué src/pre_answer_router.py")
+    assert rationale.intent == "prior_work"
+    assert rationale.features["conservative_continuity_fallback"] == 1.0
+
+    location = router.classify_intent("where is src/pre_answer_router.py located?")
+    assert location.intent == "file_location"
+
+    assert all(call["decision_kind"] == "pre_answer_intent" for call in calls)
+
+
+def test_pre_answer_cold_start_commitment_question_consults_commitments(monkeypatch, isolated_db):
+    import db
+    import pre_answer_router as router
+
+    class NoRoute:
+        ok = False
+        label = None
+        verdict = None
+        confidence = 0.0
+        route_used = "no_route"
+        error = "semantic_unavailable"
+
+    monkeypatch.setitem(sys.modules, "semantic_router", SimpleNamespace(route=lambda **kwargs: NoRoute()))
+    created = db.create_commitment(
+        statement="Enviar informe de auditoria multiagente",
+        session_id="nexo-cold-commitment",
+        project_key="nexo",
+        source_type="test",
+        source_id="cold-commitment",
+    )
+
+    result = router.route_pre_answer(
+        "qué prometí?",
+        sid="nexo-cold-commitment",
+        area="nexo",
+        budget_ms=1200,
+    )
+
+    assert created["ok"] is True
+    assert result.intent == "memory_question"
+    assert result.should_inject is True
+    assert "commitments" in [source.source for source in result.sources]
+    assert any(ref == f"commitments:{created['id']}" for ref in result.evidence_refs)
+
+
+def test_pre_answer_cold_start_general_questions_do_not_inject_open_commitments(monkeypatch, isolated_db):
+    import db
+    import pre_answer_router as router
+
+    class NoRoute:
+        ok = False
+        label = None
+        verdict = None
+        confidence = 0.0
+        route_used = "no_route"
+        error = "semantic_unavailable"
+
+    monkeypatch.setitem(sys.modules, "semantic_router", SimpleNamespace(route=lambda **kwargs: NoRoute()))
+    created = db.create_commitment(
+        statement="Enviar informe de auditoria multiagente",
+        session_id="nexo-cold-general",
+        project_key="nexo",
+        source_type="test",
+        source_id="cold-general",
+    )
+
+    for query in ("qué hora es?", "what is 2+2?", "did it rain yesterday?"):
+        result = router.route_pre_answer(
+            query,
+            sid="nexo-cold-general",
+            area="nexo",
+            budget_ms=1200,
+        )
+        assert created["ok"] is True
+        assert result.intent == "general"
+        assert result.should_inject is False
+        assert "commitments" not in [source.source for source in result.sources]
+        assert f"commitments:{created['id']}" not in result.evidence_refs
+
+
+def test_pre_answer_cognitive_source_uses_memory_observations_with_evidence(isolated_db):
+    import db
+    import pre_answer_router as router
+
+    event = db.record_memory_event(
+        event_type="protocol_task_done",
+        source_type="protocol_task",
+        source_id="PT-COGNITIVE",
+        session_id="nexo-cognitive",
+        project_key="nexo",
+        metadata={"goal": "Fix pre answer cognitive observations", "outcome": "done"},
+        idempotency_key="pt-cognitive",
+        created_at=1000.0,
+    )
+    db.process_memory_observation_queue(limit=10)
+
+    result = router._source_cognitive(
+        router.SourceRequest(query="cognitive observations", intent="memory_question", area="nexo")
+    )
+
+    assert result.result_count >= 1
+    assert f"memory_event:{event['event_uid']}" in result.evidence_refs
+    assert "Fix pre answer cognitive observations" in result.rendered
+
+
+def test_pre_answer_schedule_commitment_consults_commitment_ledger(
+    isolated_db,
+    fake_pre_answer_semantic_router,
+):
+    import db
+    import pre_answer_router as router
+
+    created = db.create_commitment(
+        statement="Revisar el release de Brain con benchmark CAS",
+        session_id="nexo-commitment-router",
+        project_key="nexo",
+        source_type="test",
+        source_id="commitment-router",
+    )
+    fake_pre_answer_semantic_router.labels_by_text = {
+        "qué prometí revisar del release Brain?": "schedule_commitment",
+    }
+
+    result = router.route_pre_answer(
+        "qué prometí revisar del release Brain?",
+        sid="nexo-commitment-router",
+        area="nexo",
+        budget_ms=1200,
+    )
+
+    assert created["ok"] is True
+    assert result.intent == "schedule_commitment"
+    assert "commitments" in [source.source for source in result.sources]
+    assert any(ref == f"commitments:{created['id']}" for ref in result.evidence_refs)
+
+
+def test_pre_answer_schedule_commitment_falls_back_to_open_commitments(
+    isolated_db,
+    fake_pre_answer_semantic_router,
+):
+    import db
+    import pre_answer_router as router
+
+    created = db.create_commitment(
+        statement="Enviar informe de auditoria multiagente",
+        session_id="nexo-open-commitment",
+        project_key="nexo",
+        source_type="test",
+        source_id="open-commitment",
+    )
+    fake_pre_answer_semantic_router.labels_by_text = {
+        "qué prometí?": "schedule_commitment",
+    }
+
+    result = router.route_pre_answer(
+        "qué prometí?",
+        sid="nexo-open-commitment",
+        area="nexo",
+        budget_ms=1200,
+    )
+
+    assert created["ok"] is True
+    assert result.intent == "schedule_commitment"
+    assert any(ref == f"commitments:{created['id']}" for ref in result.evidence_refs)
 
 
 def test_pre_answer_router_transcripts_use_index_before_raw_fallback(monkeypatch):

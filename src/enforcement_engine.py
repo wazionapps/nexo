@@ -14,6 +14,7 @@ import queue
 import subprocess
 import threading
 import time
+import hashlib
 from pathlib import Path
 import re
 import paths
@@ -420,6 +421,7 @@ class HeadlessEnforcer:
         self._r17_window_remaining = 0
         self._r17_promise_seen_for_turn = False
         self._r17_first_tool_call_in_window = True
+        self._r17_commitment_ids: list[str] = []
         # R24 stale-memory state — incremented externally via notify_
         # stale_memory_cited (e.g. from R07 when age_days >= threshold).
         # Counts down on each tool call; fires when it reaches zero
@@ -1048,13 +1050,106 @@ class HeadlessEnforcer:
         self._r17_window_remaining = _R17_WINDOW
         self._r17_promise_seen_for_turn = True
         self._r17_first_tool_call_in_window = True
+        self._record_r17_commitment(text or "")
         _logger.info("[R17 %s] promise detected; window open %d", mode.upper(), _R17_WINDOW)
+
+    def _record_r17_commitment(self, text: str) -> None:
+        statement = (text or "").strip()
+        if not statement:
+            return
+        try:
+            from db import create_commitment, record_memory_event
+        except Exception:
+            return
+        source_id = hashlib.sha1(
+            f"{self._session_id or ''}|{statement[:800]}".encode("utf-8", errors="ignore"),
+            usedforsecurity=False,
+        ).hexdigest()[:24]
+        memory_event_uid = ""
+        try:
+            event = record_memory_event(
+                event_type="assistant_promise_detected",
+                source_type="commitment",
+                source_id=source_id,
+                session_id=self._session_id or "",
+                actor=self._session_id or "nexo",
+                metadata={"statement": statement[:800], "rule_id": "R17_promise_debt"},
+                raw_ref=f"commitment:{source_id}",
+                confidence=0.72,
+                idempotency_key=f"r17-commitment:{source_id}",
+            )
+            memory_event_uid = str(event.get("event_uid") or "") if isinstance(event, dict) else ""
+        except Exception as exc:  # noqa: BLE001
+            _logger.debug("R17 commitment memory event skipped: %s", exc)
+        try:
+            result = create_commitment(
+                statement=statement,
+                source_type="assistant_text",
+                source_id=source_id,
+                memory_event_uid=memory_event_uid,
+                session_id=self._session_id or "",
+                owner="agent",
+                status="active",
+                confidence=0.72,
+                evidence_ref=f"memory_event:{memory_event_uid}" if memory_event_uid else "",
+                metadata={"rule_id": "R17_promise_debt"},
+            )
+            commitment_id = str(result.get("id") or "")
+            if commitment_id and commitment_id not in self._r17_commitment_ids:
+                self._r17_commitment_ids.append(commitment_id)
+        except Exception as exc:  # noqa: BLE001
+            _logger.debug("R17 commitment create skipped: %s", exc)
+
+    def _mark_r17_commitments_in_progress(self, tool_name: str) -> None:
+        if not self._r17_commitment_ids:
+            return
+        try:
+            from db import update_commitment_status
+        except Exception:
+            return
+        for commitment_id in list(self._r17_commitment_ids)[-5:]:
+            try:
+                update_commitment_status(
+                    commitment_id,
+                    status="in_progress",
+                    evidence_ref=f"tool:{tool_name}",
+                    metadata={"last_tool_seen": tool_name},
+                )
+            except Exception as exc:  # noqa: BLE001
+                _logger.debug("R17 commitment progress update skipped: %s", exc)
+
+    def _resolve_r17_commitments_from_task_close(self, tool_input) -> None:
+        payload = tool_input if isinstance(tool_input, dict) else {}
+        sid = str(payload.get("sid") or self._session_id or "")
+        task_id = str(payload.get("task_id") or "")
+        evidence_text = " ".join(
+            str(payload.get(field) or "")
+            for field in ("evidence", "summary", "change_summary", "outcome_notes", "result", "verification")
+        ).strip()
+        if not sid or not evidence_text:
+            return
+        try:
+            from db import resolve_matching_commitments
+        except Exception:
+            return
+        try:
+            resolve_matching_commitments(
+                session_id=sid,
+                evidence_text=evidence_text,
+                action_ref_type="protocol_task" if task_id else "",
+                action_ref_id=task_id,
+                evidence_ref=f"protocol_task:{task_id}" if task_id else "nexo_task_close",
+                status="fulfilled",
+            )
+        except Exception as exc:  # noqa: BLE001
+            _logger.debug("R17 commitment resolution skipped: %s", exc)
 
     def _advance_r17_window(self, tool_name: str):
         if not self._r17_promise_seen_for_turn:
             return
         if self._r17_first_tool_call_in_window:
             self._r17_first_tool_call_in_window = False
+            self._mark_r17_commitments_in_progress(tool_name)
             return
         self._r17_window_remaining -= 1
         if self._r17_window_remaining > 0:
@@ -2190,6 +2285,7 @@ class HeadlessEnforcer:
         if name == "nexo_task_close":
             self.reset_task_cycle("nexo_task_open")
             self._start_post_close_cooldown()
+            self._resolve_r17_commitments_from_task_close(tool_input)
 
         # v7.7 Gap 1 — autonomous detector for multi_step_task_detected.
         # The event was dispatched by the map but nothing ever raised it.

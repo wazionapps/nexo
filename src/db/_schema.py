@@ -1139,6 +1139,42 @@ def _m69_provider_runtime_metadata(conn):
         _migrate_add_index(conn, "idx_sessions_provider", "sessions", "session_provider")
 
 
+def _m70_commitments(conn):
+    """Durable promise/commitment index linked to existing action artifacts."""
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS commitments (
+            id TEXT PRIMARY KEY,
+            created_at REAL NOT NULL,
+            updated_at REAL NOT NULL,
+            closed_at REAL DEFAULT NULL,
+            source_type TEXT NOT NULL DEFAULT '',
+            source_id TEXT DEFAULT '',
+            memory_event_uid TEXT DEFAULT '',
+            session_id TEXT DEFAULT '',
+            conversation_id TEXT DEFAULT '',
+            project_key TEXT DEFAULT '',
+            statement TEXT NOT NULL,
+            owner TEXT DEFAULT 'agent',
+            deadline TEXT DEFAULT '',
+            status TEXT DEFAULT 'active',
+            confidence REAL DEFAULT 0.5,
+            action_ref_type TEXT DEFAULT '',
+            action_ref_id TEXT DEFAULT '',
+            outcome_id INTEGER DEFAULT NULL,
+            evidence_ref TEXT DEFAULT '',
+            dedupe_key TEXT DEFAULT '',
+            metadata_json TEXT DEFAULT '{}'
+        )
+        """
+    )
+    _migrate_add_index(conn, "idx_commitments_status", "commitments", "status, deadline, updated_at")
+    _migrate_add_index(conn, "idx_commitments_session", "commitments", "session_id, status, updated_at")
+    _migrate_add_index(conn, "idx_commitments_source", "commitments", "source_type, source_id")
+    _migrate_add_index(conn, "idx_commitments_action", "commitments", "action_ref_type, action_ref_id")
+    _migrate_add_index(conn, "idx_commitments_dedupe", "commitments", "dedupe_key")
+
+
 def _m42_v6_0_1_hotfix(conn):
     """v6.0.1 hotfix — last_heartbeat_ts on sessions + hook_inbox_reminders.
 
@@ -2270,6 +2306,7 @@ MIGRATIONS = [
     (67, "diary_quality_backfill_repair", _m67_diary_quality_backfill_repair),
     (68, "memory_fabric_index", _m68_memory_fabric_index),
     (69, "provider_runtime_metadata", _m69_provider_runtime_metadata),
+    (70, "commitments", _m70_commitments),
 ]
 
 

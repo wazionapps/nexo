@@ -83,12 +83,12 @@ def _collect_local_votes(
     vote aggregator can still detect quorum problems.
     """
     try:
-        from classifier_local import LocalZeroShotClassifier
+        from classifier_local import get_shared_zero_shot_classifier
     except Exception as exc:  # pragma: no cover
         _logger.debug("semantic_reasoner: classifier_local unavailable (%s)", exc)
         return []
 
-    clf = LocalZeroShotClassifier(confidence_floor=0.0)
+    clf = get_shared_zero_shot_classifier(confidence_floor=0.0)
     votes: list[tuple[str, float, dict[str, float]]] = []
     for template in _PROMPT_PERTURBATIONS:
         prompt = template.format(q=question)

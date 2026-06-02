@@ -33,7 +33,7 @@ Used for textual decision kinds (`session_end_intent`, `r14_correction`,
 `r16_declared_done`, `r17_promise_debt`, `autonomy_mandate`,
 `guard_verbal_ack`, `r34_identity_coherence`, `followup_operator_attention`,
 `drive_signal_type`, `drive_area`, `reply_event_type`, `query_intent`,
-`sentiment_intent`).
+`sentiment_intent`, `pre_answer_intent`).
 
 - Reuses the already-pinned `LocalZeroShotClassifier`.
 - Model id + revision: **see
@@ -131,7 +131,7 @@ local-only behaviour for a specific decision.
 
 ## Wiring status
 
-- [x] `src/semantic_router.py` — 18 decision_kinds registered.
+- [x] `src/semantic_router.py` — 19 decision_kinds registered.
 - [x] `src/semantic_reasoner.py` — Modes A + B implemented.
 - [x] `docs/semantic-reasoner-model-notes.md` — this file.
 - [x] `tests/test_semantic_router.py` — policy + routing tests.

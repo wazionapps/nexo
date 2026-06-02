@@ -39,6 +39,7 @@ INJECTING_INTENTS = set(PRE_ANSWER_INTENTS) - {"general"}
 DEFAULT_BUDGET_MS = 2500
 DEFAULT_TOKEN_BUDGET = 2500
 MAX_SOURCE_WORKERS = int(os.environ.get("NEXO_PRE_ANSWER_SOURCE_WORKERS", "6") or "6")
+PRE_ANSWER_SEMANTIC_DECISION_KIND = "pre_answer_intent"
 
 _WORD_RE = re.compile(r"[a-z0-9_./:@-]+")
 _PLAIN_WORD_RE = re.compile(r"[a-z0-9_]+")
@@ -46,6 +47,59 @@ _PATHISH_RE = re.compile(
     r"(?:(?:~|\.{1,2}|/)[\w./@+-]+|[\w.-]+\.(?:py|js|ts|tsx|jsx|md|json|db|sqlite|yml|yaml|txt|csv))"
 )
 _DATEISH_RE = re.compile(r"\b(?:\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?|\d{4}-\d{2}-\d{2})\b")
+_COLD_CONTINUITY_STEMS: tuple[str, ...] = (
+    "promet",
+    "promise",
+    "commit",
+    "compromis",
+    "pendient",
+    "pending",
+    "followup",
+    "deadline",
+    "recordatorio",
+    "reminder",
+    "hice",
+    "hiciste",
+    "hicimos",
+    "hecho",
+    "toque",
+    "toqu",
+    "tocado",
+    "touched",
+)
+_COLD_COMMITMENT_STEMS: tuple[str, ...] = (
+    "promet",
+    "promise",
+    "commit",
+    "compromis",
+    "pendient",
+    "pending",
+    "followup",
+    "deadline",
+    "recordatorio",
+    "reminder",
+)
+_COLD_OPERATOR_TOKENS: frozenset[str] = frozenset(
+    {
+        "i",
+        "me",
+        "my",
+        "you",
+        "your",
+        "we",
+        "our",
+        "yo",
+        "mi",
+        "mis",
+        "me",
+        "tu",
+        "tus",
+        "nosotros",
+        "nuestro",
+        "nuestra",
+        "nero",
+    }
+)
 _SECRET_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     (
         re.compile(
@@ -297,7 +351,7 @@ _INTENT_FEATURE_WEIGHTS: dict[str, dict[str, float]] = {
     "modify_existing": {"modify": 1.30, "existing_ref": 0.70, "location": 0.20, "past_work": 0.20},
     "memory_question": {"memory": 1.40, "past_work": 0.20, "identity": 0.15},
     "identity_authorship": {"identity": 1.20, "past_work": 0.65},
-    "schedule_commitment": {"schedule": 1.55, "past_work": 0.10},
+    "schedule_commitment": {"schedule": 1.55, "past_work": 0.10, "memory": 0.20},
     "runtime_diagnosis": {"runtime": 1.55, "location": 0.15},
 }
 
@@ -432,6 +486,7 @@ _SOURCE_PLANS: dict[str, SourcePlan] = {
         primary=(
             SourceStep("recent_context", timeout_ms=240),
             SourceStep("evidence_ledger", timeout_ms=260),
+            SourceStep("commitments", timeout_ms=180),
             SourceStep("protocol_tasks", timeout_ms=240),
             SourceStep("workflows", timeout_ms=260),
             SourceStep("change_log", timeout_ms=260),
@@ -470,6 +525,9 @@ _SOURCE_PLANS: dict[str, SourcePlan] = {
     "memory_question": SourcePlan(
         intent="memory_question",
         primary=(
+            SourceStep("commitments", timeout_ms=180),
+            SourceStep("reminders", timeout_ms=260),
+            SourceStep("followups", timeout_ms=260),
             SourceStep("diary", timeout_ms=280),
             SourceStep("evidence_ledger", timeout_ms=260),
             SourceStep("memory", timeout_ms=500),
@@ -485,6 +543,7 @@ _SOURCE_PLANS: dict[str, SourcePlan] = {
         primary=(
             SourceStep("recent_context", timeout_ms=240),
             SourceStep("evidence_ledger", timeout_ms=260),
+            SourceStep("commitments", timeout_ms=180),
             SourceStep("diary", timeout_ms=280),
             SourceStep("change_log", timeout_ms=300),
             SourceStep("transcripts", timeout_ms=700),
@@ -494,6 +553,7 @@ _SOURCE_PLANS: dict[str, SourcePlan] = {
     "schedule_commitment": SourcePlan(
         intent="schedule_commitment",
         primary=(
+            SourceStep("commitments", timeout_ms=180),
             SourceStep("reminders", timeout_ms=260),
             SourceStep("followups", timeout_ms=260),
             SourceStep("workflows", timeout_ms=280),
@@ -522,8 +582,81 @@ _EXECUTOR: concurrent.futures.ThreadPoolExecutor | None = None
 
 
 def classify_intent(query: str, *, current_context: str = "") -> IntentClassification:
-    """Classify the turn using multilingual concept overlap, not phrase rules."""
+    """Classify the turn through the semantic router first.
+
+    The legacy concept-overlap scorer remains only as a degraded fallback for
+    installs where the local semantic stack is unavailable.
+    """
     text = f"{query or ''}\n{current_context or ''}".strip()
+    semantic = _classify_intent_semantic(text)
+    if semantic is not None:
+        return semantic
+    fallback = _classify_intent_fallback(text)
+    conservative = _conservative_continuity_fallback(text, fallback)
+    if conservative is not None:
+        return conservative
+    if _demote_cold_generic_continuity(text, fallback):
+        return IntentClassification(
+            intent="general",
+            confidence=0.0,
+            scores={**fallback.scores, "semantic_unavailable": 1.0},
+            features={
+                **fallback.features,
+                "cold_generic_continuity_demoted": 1.0,
+            },
+            language_hints=fallback.language_hints,
+        )
+    return fallback
+
+
+def _classify_intent_semantic(text: str) -> IntentClassification | None:
+    if not text or not _pre_answer_semantic_intent_enabled():
+        return None
+    try:
+        from semantic_router import route as semantic_route
+    except Exception:
+        return None
+
+    result = semantic_route(
+        decision_kind=PRE_ANSWER_SEMANTIC_DECISION_KIND,
+        question=(
+            "Classify the user's pre-answer need into exactly one label. "
+            "prior_work means previous actions, reasons, evidence, or why an artifact was touched. "
+            "file_location means where a file/project/artifact is. "
+            "modify_existing means editing or continuing an existing artifact. "
+            "memory_question means asking remembered facts, decisions, or context. "
+            "identity_authorship means who did something, which session/client acted, or Nero authorship. "
+            "schedule_commitment means promises, pending commitments, reminders, deadlines, or future follow-up. "
+            "runtime_diagnosis means diagnosing NEXO/Brain/Desktop/runtime/tools. "
+            "general means no pre-answer continuity evidence is needed."
+        ),
+        context=text,
+        labels=PRE_ANSWER_INTENTS,
+        allow_remote_fallback=_pre_answer_semantic_remote_enabled(),
+    )
+    if not getattr(result, "ok", False):
+        return None
+
+    label = str(getattr(result, "label", None) or getattr(result, "verdict", "") or "").strip()
+    if label not in PRE_ANSWER_INTENTS:
+        return None
+
+    confidence = _coerce_confidence(getattr(result, "confidence", 0.0), default=0.75)
+    normalized = _normalize(text)
+    tokens = _plain_tokens(normalized)
+    return IntentClassification(
+        intent=label,
+        confidence=confidence if label != "general" else min(confidence, 0.2),
+        scores={label: round(confidence, 4)},
+        features={
+            "semantic_route": 1.0,
+            "semantic_confidence": round(confidence, 4),
+        },
+        language_hints=_language_hints(tokens),
+    )
+
+
+def _classify_intent_fallback(text: str) -> IntentClassification:
     normalized = _normalize(text)
     tokens = _plain_tokens(normalized)
     features = {name: _feature_score(tokens, terms) for name, terms in _FEATURE_LEXICON.items()}
@@ -561,6 +694,108 @@ def classify_intent(query: str, *, current_context: str = "") -> IntentClassific
         features={name: round(score, 4) for name, score in features.items() if score > 0},
         language_hints=_language_hints(tokens),
     )
+
+
+def _conservative_continuity_fallback(
+    text: str,
+    fallback: IntentClassification,
+) -> IntentClassification | None:
+    """Route short operator continuity questions to safe evidence sources.
+
+    This fallback is only a cold-start safety net. The semantic router remains
+    the primary detector; here we require an operational anchor so generic
+    questions do not inject unrelated memory or open commitments.
+    """
+    normalized = _normalize(text)
+    tokens = _plain_tokens(normalized)
+    if not tokens:
+        return None
+    question_like = "?" in text or normalized.startswith(("que ", "qué ", "what ", "which ", "who ", "quien ", "donde ", "where ", "why ", "por que ", "por qué "))
+    if not question_like or len(tokens) > 9:
+        return None
+    pathish = bool(_PATHISH_RE.search(normalized))
+    if (
+        fallback.intent == "file_location"
+        and pathish
+        and fallback.features.get("location", 0.0) <= 0.95
+    ):
+        return IntentClassification(
+            intent="prior_work",
+            confidence=0.40,
+            scores={"prior_work": 0.40, "semantic_unavailable": 1.0},
+            features={"conservative_continuity_fallback": 1.0, "path_context": 1.0},
+            language_hints=_language_hints(tokens),
+        )
+    if fallback.intent in {"file_location", "modify_existing", "runtime_diagnosis"} and fallback.confidence >= 0.60:
+        return None
+    if pathish and fallback.intent == "file_location":
+        return None
+    if not _cold_continuity_anchor(tokens):
+        return None
+    return IntentClassification(
+        intent="memory_question",
+        confidence=0.35,
+        scores={"memory_question": 0.35, "semantic_unavailable": 1.0},
+        features={"conservative_continuity_fallback": 1.0},
+        language_hints=_language_hints(tokens),
+    )
+
+
+def _cold_continuity_anchor(tokens: Iterable[str]) -> bool:
+    token_list = list(tokens)
+    if not token_list:
+        return False
+    if any(token.startswith(stem) for token in token_list for stem in _COLD_CONTINUITY_STEMS):
+        return True
+    if _COLD_OPERATOR_TOKENS.intersection(token_list):
+        return _feature_score(token_list, _FEATURE_LEXICON["past_work"]) >= 0.60
+    return False
+
+
+def _demote_cold_generic_continuity(text: str, fallback: IntentClassification) -> bool:
+    if fallback.intent not in {"prior_work", "memory_question"}:
+        return False
+    normalized = _normalize(text)
+    tokens = _plain_tokens(normalized)
+    if not tokens or len(tokens) > 9:
+        return False
+    question_like = "?" in text or normalized.startswith(("que ", "qué ", "what ", "which ", "who ", "quien ", "donde ", "where ", "why ", "por que ", "por qué "))
+    if not question_like:
+        return False
+    if _PATHISH_RE.search(normalized):
+        return False
+    return not _cold_continuity_anchor(tokens)
+
+
+def _cold_commitment_question(text: str) -> bool:
+    tokens = _plain_tokens(_normalize(text))
+    if not tokens:
+        return False
+    if any(token.startswith(stem) for token in tokens for stem in _COLD_COMMITMENT_STEMS):
+        return True
+    return _feature_score(tokens, _FEATURE_LEXICON["schedule"]) >= 0.60
+
+
+def _pre_answer_semantic_intent_enabled() -> bool:
+    value = os.environ.get("NEXO_PRE_ANSWER_SEMANTIC_INTENT", "1")
+    return str(value or "").strip().lower() not in {"0", "false", "no", "off", "disabled"}
+
+
+def _pre_answer_semantic_remote_enabled() -> bool:
+    value = os.environ.get("NEXO_PRE_ANSWER_SEMANTIC_REMOTE", "0")
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on", "enabled"}
+
+
+def _coerce_confidence(value: Any, *, default: float) -> float:
+    try:
+        parsed = float(value)
+    except Exception:
+        return default
+    if parsed < 0.0:
+        return 0.0
+    if parsed > 1.0:
+        return 1.0
+    return parsed
 
 
 def plan_sources(intent: str) -> SourcePlan:
@@ -725,6 +960,7 @@ def default_source_adapters() -> dict[str, SourceAdapter]:
         "filesystem": _source_filesystem,
         "guard_context": _source_guard_context,
         "cognitive": _source_cognitive,
+        "commitments": _source_commitments,
         "continuity": _source_continuity,
         "reminders": _source_reminders,
         "followups": _source_followups,
@@ -1354,13 +1590,69 @@ def _source_guard_context(request: SourceRequest) -> SourceResult:
 
 
 def _source_cognitive(request: SourceRequest) -> SourceResult:
-    rows = _query_table_like(
-        "memory_observations",
+    from memory_retrieval import memory_search
+
+    result = memory_search(
         request.query,
-        columns=("title", "summary", "content", "source"),
+        project_hint=request.area,
+        depth="evidence",
         limit=4,
+        process_queue=True,
     )
-    return _rows_result("cognitive", rows, ("id", "title", "summary", "source"), request.max_chars)
+    candidates = result.get("candidates") or []
+    if not candidates:
+        return SourceResult(source="cognitive")
+    lines = []
+    refs: list[str] = []
+    for item in candidates[:4]:
+        refs.extend(str(ref) for ref in item.get("evidence_refs") or [])
+        lines.append(
+            "- "
+            + " | ".join(
+                part
+                for part in (
+                    f"type={item.get('type')}" if item.get("type") else "",
+                    f"subject={_clip(str(item.get('subject') or ''), 160)}" if item.get("subject") else "",
+                    f"summary={_clip(str(item.get('summary') or ''), 320)}" if item.get("summary") else "",
+                )
+                if part
+            )
+        )
+    return SourceResult(
+        source="cognitive",
+        rendered=_clip("\n".join(lines), request.max_chars),
+        evidence_refs=list(dict.fromkeys(refs)),
+        result_count=len(candidates),
+    )
+
+
+def _source_commitments(request: SourceRequest) -> SourceResult:
+    from db import list_commitments
+
+    rows = list_commitments(
+        query=request.query,
+        status="",
+        session_id=request.sid if request.intent == "identity_authorship" else "",
+        project_key=request.area,
+        limit=6,
+    )
+    if not rows and (
+        request.intent == "schedule_commitment"
+        or (request.intent == "memory_question" and _cold_commitment_question(request.query))
+    ):
+        rows = list_commitments(
+            query="",
+            status="open",
+            session_id=request.sid,
+            project_key=request.area,
+            limit=6,
+        )
+    return _rows_result(
+        "commitments",
+        rows,
+        ("id", "status", "deadline", "owner", "statement", "action_ref_type", "action_ref_id", "evidence_ref"),
+        request.max_chars,
+    )
 
 
 def _source_continuity(request: SourceRequest) -> SourceResult:

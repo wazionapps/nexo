@@ -1028,7 +1028,7 @@ def backfill_memory_observations(
     return {"ok": True, "sources": sorted(requested), "seen": seen, "created_or_updated": created}
 
 
-def memory_observation_health() -> dict:
+def memory_observation_health(*, pending_sla_seconds: int = 3600, now: float | None = None) -> dict:
     conn = _core().get_db()
     tables = {
         "memory_events": _table_exists(conn, "memory_events"),
@@ -1044,11 +1044,40 @@ def memory_observation_health() -> dict:
     if tables["memory_observations"]:
         counts["observations"] = int(conn.execute("SELECT COUNT(*) FROM memory_observations").fetchone()[0])
         latest["observation_created_at"] = conn.execute("SELECT MAX(created_at) FROM memory_observations").fetchone()[0]
+    pending_sla = max(1, int(pending_sla_seconds or 3600))
+    pending_older_than_sla = 0
+    oldest_pending = None
+    max_pending_age_seconds = 0.0
     if tables["memory_observation_queue"]:
         rows = conn.execute(
             "SELECT status, COUNT(*) AS cnt FROM memory_observation_queue GROUP BY status"
         ).fetchall()
         counts["queue"] = {row["status"]: int(row["cnt"]) for row in rows}
+        stamp = float(now if now is not None else _core().now_epoch())
+        stale_cutoff = stamp - pending_sla
+        pending_older_than_sla = int(
+            conn.execute(
+                """
+                SELECT COUNT(*)
+                  FROM memory_observation_queue
+                 WHERE status IN ('pending', 'failed')
+                   AND created_at <= ?
+                """,
+                (stale_cutoff,),
+            ).fetchone()[0]
+        )
+        oldest = conn.execute(
+            """
+            SELECT event_uid, status, created_at, updated_at, last_error
+              FROM memory_observation_queue
+             WHERE status IN ('pending', 'failed')
+             ORDER BY created_at ASC, id ASC
+             LIMIT 1
+            """
+        ).fetchone()
+        if oldest:
+            oldest_pending = dict(oldest)
+            max_pending_age_seconds = max(0.0, stamp - float(oldest["created_at"] or stamp))
 
     fts_enabled = _is_virtual_fts_table(conn, "memory_observations_fts")
     fts_queryable = False
@@ -1061,12 +1090,33 @@ def memory_observation_health() -> dict:
 
     missing_required = [name for name in ("memory_events", "memory_observations", "memory_observation_queue") if not tables[name]]
     failed_queue = int(counts["queue"].get("failed", 0))
+    warnings = []
+    if pending_older_than_sla:
+        warnings.append(
+            {
+                "code": "pending_sla_breached",
+                "pending_older_than_sla": pending_older_than_sla,
+                "pending_sla_seconds": pending_sla,
+                "max_pending_age_seconds": max_pending_age_seconds,
+                "oldest_pending": oldest_pending,
+            }
+        )
+    if failed_queue:
+        warnings.append({"code": "queue_failed", "failed": failed_queue})
     return {
-        "ok": not missing_required and failed_queue == 0,
+        "ok": not missing_required and failed_queue == 0 and pending_older_than_sla == 0,
         "tables": tables,
         "missing_required": missing_required,
         "counts": counts,
         "latest": latest,
+        "queue_sla": {
+            "pending_sla_seconds": pending_sla,
+            "pending_sla_ok": pending_older_than_sla == 0,
+            "pending_older_than_sla": pending_older_than_sla,
+            "oldest_pending": oldest_pending,
+            "max_pending_age_seconds": max_pending_age_seconds,
+        },
+        "warnings": warnings,
         "fts_enabled": fts_enabled,
         "fts_degraded": tables["memory_observations_fts"] and not fts_enabled,
         "fts_queryable": fts_queryable,

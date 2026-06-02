@@ -48,7 +48,7 @@ def _install_stub_classifier(monkeypatch, results):
     def factory(**kwargs):  # noqa: ARG001 — accept the same kwargs as real class
         return _StubClassifier(results)
 
-    monkeypatch.setattr(classifier_local, "LocalZeroShotClassifier", factory)
+    monkeypatch.setattr(classifier_local, "get_shared_zero_shot_classifier", factory)
 
 
 def test_multipass_majority_vote_accepts_two_of_three(monkeypatch):
@@ -147,7 +147,11 @@ def test_multipass_local_classifies_context_when_present(monkeypatch):
                 latency_ms=1.0,
             )
 
-    monkeypatch.setattr(classifier_local, "LocalZeroShotClassifier", RecordingClassifier)
+    monkeypatch.setattr(
+        classifier_local,
+        "get_shared_zero_shot_classifier",
+        lambda **_kwargs: RecordingClassifier(),
+    )
 
     result = sr.reason(
         decision_kind="r14_correction",

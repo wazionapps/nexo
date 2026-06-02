@@ -56,6 +56,7 @@ _outcomes = _load_submodule("db._outcomes")
 _goal_profiles = _load_submodule("db._goal_profiles")
 _continuity = _load_submodule("db._continuity")
 _memory_v2 = _load_submodule("db._memory_v2")
+_commitments = _load_submodule("db._commitments")
 
 # Core: connection, constants, init, utils
 from db._core import (
@@ -108,6 +109,13 @@ from db._memory_v2 import (
     memory_observation_health,
     maintain_memory_observations,
     memory_observation_stats,
+)
+
+from db._commitments import (
+    create_commitment,
+    list_commitments,
+    update_commitment_status,
+    resolve_matching_commitments,
 )
 
 # PostToolUse inbox-reminder rate limit (v6.0.1)

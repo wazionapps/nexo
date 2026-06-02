@@ -34,6 +34,7 @@ def test_all_textual_kinds_are_registered():
         "reply_event_type",
         "query_intent",
         "sentiment_intent",
+        "pre_answer_intent",
     }
     assert set(sr.TEXTUAL_KINDS) == expected
 
@@ -82,6 +83,119 @@ def test_code_aware_family_skips_fast_local_and_uses_cached_llm():
         assert policy["fast_local_threshold"] is None
 
 
+def test_pre_answer_intent_does_not_cold_load_local_classifier(monkeypatch):
+    import semantic_router as sr
+
+    calls = {"fast": None, "reasoner": False, "remote": False}
+
+    def fake_fast_local(**kwargs):
+        calls["fast"] = kwargs
+        return None
+
+    def fake_reasoner(**kwargs):
+        calls["reasoner"] = True
+        return _fake_router_result(
+            ok=True,
+            decision_kind=kwargs["decision_kind"],
+            verdict="prior_work",
+            label="prior_work",
+            confidence=0.90,
+            route_used="semantic_reasoner",
+        )
+
+    def fake_remote(**kwargs):
+        calls["remote"] = True
+        return None
+
+    monkeypatch.setattr(sr, "_run_fast_local", fake_fast_local)
+    monkeypatch.setattr(sr, "_run_semantic_reasoner", fake_reasoner)
+    monkeypatch.setattr(sr, "_run_remote_fallback", fake_remote)
+    monkeypatch.setattr(sr, "_local_classifier_warm", lambda: False)
+
+    result = sr.route(
+        decision_kind="pre_answer_intent",
+        question="classify pre-answer",
+        context="qué prometí para mañana",
+        labels=("prior_work", "schedule_commitment", "general"),
+        allow_remote_fallback=False,
+    )
+
+    assert calls["fast"]["allow_cold_load"] is False
+    assert calls["reasoner"] is False
+    assert calls["remote"] is False
+    assert result.ok is False
+    assert result.route_used == "no_route"
+
+
+def test_pre_answer_intent_can_enable_cold_load_explicitly(monkeypatch):
+    import semantic_router as sr
+
+    calls = {"fast": None}
+
+    def fake_fast_local(**kwargs):
+        calls["fast"] = kwargs
+        return _fake_router_result(
+            ok=True,
+            decision_kind="pre_answer_intent",
+            verdict="schedule_commitment",
+            label="schedule_commitment",
+            confidence=0.88,
+            route_used="fast_local",
+        )
+
+    monkeypatch.setenv("NEXO_PRE_ANSWER_ALLOW_COLD_SEMANTIC_LOAD", "1")
+    monkeypatch.setattr(sr, "_run_fast_local", fake_fast_local)
+    monkeypatch.setattr(sr, "_run_semantic_reasoner", lambda **kwargs: None)
+    monkeypatch.setattr(sr, "_run_remote_fallback", lambda **kwargs: None)
+    monkeypatch.setattr(sr, "_local_classifier_warm", lambda: False)
+
+    result = sr.route(
+        decision_kind="pre_answer_intent",
+        question="classify pre-answer",
+        context="qué prometí para mañana",
+        labels=("prior_work", "schedule_commitment", "general"),
+    )
+
+    assert calls["fast"]["allow_cold_load"] is True
+    assert result.ok is True
+    assert result.label == "schedule_commitment"
+
+
+def test_pre_answer_intent_can_enable_remote_fallback_explicitly(monkeypatch):
+    import semantic_router as sr
+
+    calls = {"remote": False}
+
+    def fake_remote(**kwargs):
+        calls["remote"] = True
+        return _fake_router_result(
+            ok=True,
+            decision_kind=kwargs["decision_kind"],
+            verdict="schedule_commitment",
+            label="schedule_commitment",
+            confidence=0.72,
+            route_used="remote_fallback",
+            degraded=True,
+        )
+
+    monkeypatch.setattr(sr, "_run_fast_local", lambda **kwargs: None)
+    monkeypatch.setattr(sr, "_run_semantic_reasoner", lambda **kwargs: None)
+    monkeypatch.setattr(sr, "_run_remote_fallback", fake_remote)
+    monkeypatch.setattr(sr, "_local_classifier_warm", lambda: False)
+
+    result = sr.route(
+        decision_kind="pre_answer_intent",
+        question="classify pre-answer",
+        context="qué prometí para mañana",
+        labels=("prior_work", "schedule_commitment", "general"),
+        allow_remote_fallback=True,
+    )
+
+    assert calls["remote"] is True
+    assert result.ok is True
+    assert result.label == "schedule_commitment"
+
+
 def test_policy_kinds_are_documented():
     """Drift check: every registered kind must be mentioned in the
     semantic-reasoner model notes so docs cannot silently go stale."""
@@ -112,7 +226,7 @@ def _fake_router_result(**kwargs):
 def test_route_returns_fast_local_result_when_confidence_is_high(monkeypatch):
     import semantic_router as sr
 
-    def fake_fast_local(*, question, context, labels, confidence_floor):
+    def fake_fast_local(*, question, context, labels, confidence_floor, allow_cold_load=True):
         return _fake_router_result(
             ok=True,
             decision_kind="",
@@ -406,7 +520,11 @@ def test_fast_local_classifies_context_not_static_prompt(monkeypatch):
                 latency_ms=1.0,
             )
 
-    fake_module = SimpleNamespace(LocalZeroShotClassifier=FakeClassifier)
+    fake_classifier = FakeClassifier(confidence_floor=0.0)
+    fake_module = SimpleNamespace(
+        get_shared_zero_shot_classifier=lambda confidence_floor: fake_classifier,
+        is_local_classifier_warm=lambda: True,
+    )
     monkeypatch.setitem(sys.modules, "classifier_local", fake_module)
 
     result = sr._run_fast_local(

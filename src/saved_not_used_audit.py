@@ -44,6 +44,7 @@ class SavedNotUsedConfig:
 
     nexo_db_path: Path | None = None
     local_context_db_path: Path | None = None
+    local_context_usage_db_path: Path | None = None
     email_db_path: Path | None = None
     transcript_roots: tuple[Path, ...] = ()
     desktop_conversations_path: Path | None = None
@@ -89,11 +90,13 @@ def default_config() -> SavedNotUsedConfig:
     if paths is not None:
         nexo_db = _safe_path_call(paths.resolve_db_path)
         local_context = Path(os.environ.get("NEXO_LOCAL_CONTEXT_DB", "")) if os.environ.get("NEXO_LOCAL_CONTEXT_DB") else _safe_path_call(lambda: paths.memory_dir() / "local-context.db")
+        local_context_usage = Path(os.environ.get("NEXO_LOCAL_CONTEXT_USAGE_DB", "")) if os.environ.get("NEXO_LOCAL_CONTEXT_USAGE_DB") else _safe_path_call(lambda: paths.memory_dir() / "local-context-usage.db")
         email_db = _safe_path_call(lambda: paths.nexo_email_dir() / "nexo-email.db")
         cron_spool = _safe_path_call(lambda: paths.operations_dir() / "cron-spool")
     else:
         nexo_db = home / "runtime" / "data" / "nexo.db"
         local_context = home / "runtime" / "memory" / "local-context.db"
+        local_context_usage = home / "runtime" / "memory" / "local-context-usage.db"
         email_db = home / "runtime" / "nexo-email" / "nexo-email.db"
         cron_spool = home / "runtime" / "operations" / "cron-spool"
 
@@ -106,6 +109,7 @@ def default_config() -> SavedNotUsedConfig:
     return SavedNotUsedConfig(
         nexo_db_path=nexo_db,
         local_context_db_path=local_context,
+        local_context_usage_db_path=local_context_usage,
         email_db_path=email_db,
         transcript_roots=transcript_roots,
         desktop_conversations_path=desktop_dir / "conversations.json",
@@ -197,7 +201,7 @@ def _audit_local_context(cfg: SavedNotUsedConfig) -> tuple[StoreAuditRow, list[S
     producer = "nexo-local-index.py -> local_context.api"
     consumer = "nexo_context_router / nexo_local_context / pre_action_context"
     risk = "Local index is written but may not be consulted before answering."
-    test = "local_assets/chunks/entities > 0 requires a recent local_context_queries row."
+    test = "local_assets/chunks/entities > 0 requires recent used_before_response usage events."
     if not cfg.local_context_db_path or not cfg.local_context_db_path.exists():
         row = _row("local_context", producer, store, consumer, "", "", risk, test, "missing", "P2", {"path_exists": False})
         return row, []
@@ -207,14 +211,19 @@ def _audit_local_context(cfg: SavedNotUsedConfig) -> tuple[StoreAuditRow, list[S
         write_counts = {table: _count(conn, table) for table in LOCAL_CONTEXT_WRITE_TABLES}
         query_count = _count(conn, "local_context_queries")
         last_write = _max_many(conn, [(table, ("updated_at", "last_seen_at", "created_at")) for table in LOCAL_CONTEXT_WRITE_TABLES])
-        last_use = _max_timestamp(conn, "local_context_queries", ("created_at", "updated_at"))
+        legacy_last_use = _max_timestamp(conn, "local_context_queries", ("created_at", "updated_at"))
         evidence.update({"write_counts": write_counts, "query_count": query_count})
+    usage_stats = _local_context_usage_stats(cfg)
+    last_use = usage_stats.get("latest_used_before_response_at") or legacy_last_use
+    real_use_count = int(usage_stats.get("used_before_response_count") or 0)
+    evidence["usage_events"] = usage_stats
+    evidence["legacy_last_use"] = legacy_last_use
 
     findings: list[SavedNotUsedFinding] = []
     total_writes = sum(write_counts.values())
     status = "ok"
     severity = "OK"
-    if total_writes and not query_count:
+    if total_writes and not real_use_count:
         status = "saved_not_used"
         severity = "P0"
         findings.append(
@@ -271,6 +280,38 @@ def _audit_local_context(cfg: SavedNotUsedConfig) -> tuple[StoreAuditRow, list[S
         )
 
     return _row("local_context", producer, store, consumer, last_write, last_use, risk, test, status, severity, evidence), findings
+
+
+def _local_context_usage_stats(cfg: SavedNotUsedConfig) -> dict[str, Any]:
+    usage_path = cfg.local_context_usage_db_path
+    if usage_path is None and cfg.local_context_db_path is not None:
+        usage_path = cfg.local_context_db_path.with_name("local-context-usage.db")
+    evidence = {
+        "path": _path_text(usage_path),
+        "path_exists": bool(usage_path and usage_path.exists()),
+        "total": 0,
+        "used_before_response_count": 0,
+        "latest_at": "",
+        "latest_used_before_response_at": "",
+    }
+    if not usage_path or not usage_path.exists():
+        return evidence
+    with _connect(usage_path) as conn:
+        table = "local_context_usage_events"
+        if not _table_exists(conn, table):
+            return evidence
+        evidence["total"] = _count(conn, table)
+        evidence["used_before_response_count"] = _count_where(conn, table, "COALESCE(used_before_response,0) != 0")
+        evidence["latest_at"] = _max_timestamp(conn, table, ("created_at",))
+        try:
+            row = conn.execute(
+                f"SELECT MAX(created_at) AS value FROM {_quote(table)} WHERE COALESCE(used_before_response,0) != 0"
+            ).fetchone()
+            if row and row["value"] not in (None, ""):
+                evidence["latest_used_before_response_at"] = _time_text(row["value"])
+        except sqlite3.Error:
+            pass
+    return evidence
 
 
 def _audit_memory_pipeline(cfg: SavedNotUsedConfig) -> tuple[StoreAuditRow, list[SavedNotUsedFinding]]:

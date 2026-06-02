@@ -1,9 +1,11 @@
 # NEXO Brain
 
-> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v7.27.3). NEXO Desktop is a separate closed-source companion app distributed at nexo-desktop.com; its source does not ship in this repo. Mentions of "NEXO Desktop" in changelog entries describe coordinated client releases that consume the Brain CLI / MCP contract. For the commercial Desktop product, contact info@wazion.com.
+> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v7.27.6). NEXO Desktop is a separate closed-source companion app distributed at nexo-desktop.com; its source does not ship in this repo. Mentions of "NEXO Desktop" in changelog entries describe coordinated client releases that consume the Brain CLI / MCP contract. For the commercial Desktop product, contact info@wazion.com.
 
 NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. It adds a local shared brain across supported clients, configurable terminal and automation backends, recovery-aware background jobs, startup preflight, runtime self-healing, smarter retrieval defaults, long-horizon overnight analysis, and 150+ MCP tools.
 
+v7.27.6: patch release. Operational memory continuity now persists detected promises as commitments, routes `qué prometí?` / pending / why-touched questions through evidence-backed memory, fails memory health when observation queues breach SLA, and audits Local Context usage from real pre-answer telemetry.
+v7.27.5: patch release. Desktop onboarding asks for the user's name directly in Spanish with `¿Cómo te llamas?`, matching Desktop fallback copy.
 v7.27.3: patch release. OpenAI raw calls and Codex-managed bootstrap no longer send system-role messages, preventing `role 'system' is not supported on this model` while preserving Anthropic/OpenAI provider parity.
 v7.27.2: patch release. Legacy Codex preferences now migrate to OpenAI correctly, and the F0.6 config-folder transition keeps reading existing config/schedule.json before it is moved.
 v7.27.1: patch release. Lifecycle stop calls skip external provider session UUIDs safely, and provider runtime selection keeps chat plus automation aligned to the same Anthropic/OpenAI account.
