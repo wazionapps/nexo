@@ -3,6 +3,12 @@ import json
 
 from db import create_entity, search_entities, list_entities, update_entity, delete_entity
 
+try:
+    from entity_live_profile import redact_entity_value
+except Exception:  # pragma: no cover - tiny bootstrap fallback
+    def redact_entity_value(value):
+        return str(value or "")[:1200]
+
 
 def _json_arg(value: str, default):
     if not value:
@@ -14,6 +20,22 @@ def _json_arg(value: str, default):
             return [part.strip() for part in str(value).split(",") if part.strip()]
         return default
 
+
+def _value_preview(entity: dict) -> str:
+    """Do not print canonical entity values unless they were explicitly public."""
+    value = entity.get("value") or ""
+    access = str(entity.get("access_mode") or "unknown").strip().lower()
+    if access == "public":
+        return redact_entity_value(value)[:220]
+    return "[redacted_entity_value]"
+
+
+def _notes_preview(entity: dict) -> str:
+    notes = str(entity.get("notes") or "").strip()
+    if not notes:
+        return ""
+    return f" — {redact_entity_value(notes)[:220]}"
+
 def handle_entity_search(query: str, type: str = "") -> str:
     """Search entities by name or value. Optional type filter."""
     results = search_entities(query, type)
@@ -21,9 +43,9 @@ def handle_entity_search(query: str, type: str = "") -> str:
         return "No results."
     lines = []
     for e in results:
-        notes = f" — {e['notes']}" if e.get("notes") else ""
+        notes = _notes_preview(e)
         access = f" [{e.get('access_mode')}]" if e.get("access_mode") and e.get("access_mode") != "unknown" else ""
-        lines.append(f"  [{e['id']}] ({e['type']}) {e['name']}{access}: {e['value']}{notes}")
+        lines.append(f"  [{e['id']}] ({e['type']}) {e['name']}{access}: {_value_preview(e)}{notes}")
     return f"ENTIDADES ({len(results)}):\n" + "\n".join(lines)
 
 def handle_entity_create(
@@ -108,9 +130,9 @@ def handle_entity_list(type: str = "") -> str:
     for t, entities in grouped.items():
         lines.append(f"\n  [{t.upper()}]")
         for e in entities:
-            notes = f" — {e['notes']}" if e.get("notes") else ""
+            notes = _notes_preview(e)
             access = f" [{e.get('access_mode')}]" if e.get("access_mode") and e.get("access_mode") != "unknown" else ""
-            lines.append(f"    [{e['id']}] {e['name']}{access}: {e['value']}{notes}")
+            lines.append(f"    [{e['id']}] {e['name']}{access}: {_value_preview(e)}{notes}")
     return f"ENTIDADES ({len(results)}):" + "\n".join(lines)
 
 TOOLS = [

@@ -151,6 +151,24 @@ class TestExportToGraphml:
         assert "<html>" not in xml
         assert "&lt;html&gt;" in xml
 
+    def test_export_redacts_sensitive_node_refs_and_properties(self, isolated_db):
+        import knowledge_graph as kg
+        kg.upsert_node(
+            "entity",
+            "/Users/franciscoc/private 192.168.1.5",
+            "Secret token=raw-secret-value",
+            {"provider_payload": {"secret": "secret-after-marker"}, "path": "/Users/franciscoc/private"},
+        )
+        from knowledge_graph import export_to_graphml, export_to_jsonld
+
+        payload = json.dumps(export_to_jsonld(), ensure_ascii=False)
+        xml = export_to_graphml()
+        combined = payload + "\n" + xml
+        assert "/Users/franciscoc" not in combined
+        assert "192.168.1.5" not in combined
+        assert "raw-secret-value" not in combined
+        assert "secret-after-marker" not in combined
+
 
 # ── Multi-edge graph + multiple relations on same source ─────────────────
 

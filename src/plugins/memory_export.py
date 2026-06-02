@@ -16,6 +16,19 @@ import user_state_model
 from db import get_db
 from memory_backends import get_backend, list_backends
 
+try:
+    from semantic_layers import redact_value as _redact_value
+except Exception:  # pragma: no cover - bootstrap fallback
+    def _redact_value(value, *, max_chars=4000):
+        return str(value or "")[:max_chars]
+
+
+_SENSITIVE_EXPORT_KEYS = {
+    "api_key", "apikey", "token", "secret", "password", "authorization",
+    "bearer", "credential", "cred_ref", "provider_payload", "raw_prompt",
+    "raw_response", "transcript", "file_path", "path",
+}
+
 
 def _nexo_home() -> Path:
     return Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo"))).expanduser()
@@ -26,16 +39,40 @@ def _write(path: Path, text: str) -> None:
     path.write_text(text, encoding="utf-8")
 
 
+def _safe_text(value: object, *, max_chars: int = 500) -> str:
+    return _redact_value(value, max_chars=max_chars)
+
+
+def _safe_value(value, *, _depth: int = 0):
+    if _depth > 5:
+        return "[redacted_depth]"
+    if value is None or isinstance(value, (bool, int, float)):
+        return value
+    if isinstance(value, dict):
+        clean = {}
+        for key, item in value.items():
+            raw_key = str(key or "").strip().lower()
+            safe_key = _safe_text(key, max_chars=120) or "field"
+            if raw_key in _SENSITIVE_EXPORT_KEYS:
+                clean[safe_key] = "[redacted]"
+            else:
+                clean[safe_key] = _safe_value(item, _depth=_depth + 1)
+        return clean
+    if isinstance(value, (list, tuple, set)):
+        return [_safe_value(item, _depth=_depth + 1) for item in list(value)[:100]]
+    return _safe_text(value, max_chars=800)
+
+
 def handle_auto_flush_recent(limit: int = 20, session_id: str = "") -> str:
     rows = compaction_memory.list_auto_flushes(session_id=session_id, limit=limit)
     if not rows:
         return "No auto-flush records."
     lines = [f"AUTO-FLUSH — {len(rows)} record(s):", ""]
     for row in rows:
-        lines.append(f"  #{row['id']} {row['created_at']} [{row.get('session_id','unknown')}]")
-        lines.append(f"    {row.get('summary','')[:220]}")
+        lines.append(f"  #{row['id']} {_safe_text(row['created_at'], max_chars=80)} [{_safe_text(row.get('session_id','unknown'), max_chars=120)}]")
+        lines.append(f"    {_safe_text(row.get('summary',''), max_chars=220)}")
         if row.get("next_step"):
-            lines.append(f"    next: {row['next_step'][:160]}")
+            lines.append(f"    next: {_safe_text(row['next_step'], max_chars=160)}")
     return "\n".join(lines)
 
 
@@ -118,8 +155,8 @@ def handle_memory_export(format: str = "markdown", output_dir: str = "") -> str:
         "\n".join(
             ["# Learnings", ""]
             + [
-                f"- #{item['id']} [{item.get('category','general')}] {item['title']} "
-                f"({item.get('status','active')}, updated {item.get('updated_at','')})"
+                f"- #{item['id']} [{_safe_text(item.get('category','general'), max_chars=80)}] {_safe_text(item['title'])} "
+                f"({_safe_text(item.get('status','active'), max_chars=40)}, updated {_safe_text(item.get('updated_at',''), max_chars=80)})"
                 for item in learnings
             ]
         ),
@@ -129,8 +166,8 @@ def handle_memory_export(format: str = "markdown", output_dir: str = "") -> str:
         "\n".join(
             ["# Decisions", ""]
             + [
-                f"- #{item['id']} [{item.get('domain','other')}] {item['decision']} "
-                f"({item.get('confidence','medium')}, {item.get('status','pending_review')})"
+                f"- #{item['id']} [{_safe_text(item.get('domain','other'), max_chars=80)}] {_safe_text(item['decision'])} "
+                f"({_safe_text(item.get('confidence','medium'), max_chars=40)}, {_safe_text(item.get('status','pending_review'), max_chars=40)})"
                 for item in decisions
             ]
         ),
@@ -141,12 +178,12 @@ def handle_memory_export(format: str = "markdown", output_dir: str = "") -> str:
             ["# Claims", ""]
             + [
                 f"- #{item['id']} [{item.get('verification_status','unverified')}] "
-                f"{item.get('freshness_state','?')}({item.get('freshness_score',0)}): {item['text']}"
+                f"{_safe_text(item.get('freshness_state','?'), max_chars=40)}({item.get('freshness_score',0)}): {_safe_text(item['text'])}"
                 for item in claims
             ]
             + ["", "## Attention", ""]
             + [
-                f"- #{item['id']} [{', '.join(item.get('lint_reasons', []))}] {item['text']}"
+                f"- #{item['id']} [{_safe_text(', '.join(item.get('lint_reasons', [])), max_chars=120)}] {_safe_text(item['text'])}"
                 for item in claim_lint
             ]
         ),
@@ -156,7 +193,7 @@ def handle_memory_export(format: str = "markdown", output_dir: str = "") -> str:
         "\n".join(
             ["# Media Memory", ""]
             + [
-                f"- #{item['id']} [{item['media_type']}] {item['title']} :: {item.get('file_path') or item.get('url') or 'n/a'}"
+                f"- #{item['id']} [{_safe_text(item['media_type'], max_chars=40)}] {_safe_text(item['title'])} :: {_safe_text(item.get('file_path') or item.get('url') or 'n/a')}"
                 for item in media
             ]
         ),
@@ -166,8 +203,8 @@ def handle_memory_export(format: str = "markdown", output_dir: str = "") -> str:
         "\n".join(
             ["# Auto Flush", ""]
             + [
-                f"- #{item['id']} [{item.get('session_id','unknown')}] {item.get('created_at','')}: "
-                f"{item.get('summary','')}"
+                f"- #{item['id']} [{_safe_text(item.get('session_id','unknown'), max_chars=120)}] {_safe_text(item.get('created_at',''), max_chars=80)}: "
+                f"{_safe_text(item.get('summary',''))}"
                 for item in flushes
             ]
         ),
@@ -178,19 +215,19 @@ def handle_memory_export(format: str = "markdown", output_dir: str = "") -> str:
             [
                 "# User State",
                 "",
-                f"- Current: {user_state['state_label']} ({user_state['confidence']})",
+                f"- Current: {_safe_text(user_state['state_label'], max_chars=80)} ({user_state['confidence']})",
                 f"- Trust: {user_state['trust_score']}",
-                f"- Guidance: {user_state['guidance']}",
+                f"- Guidance: {_safe_text(user_state['guidance'])}",
                 "",
                 "## Signals",
             ]
-            + [f"- {key}: {value}" for key, value in user_state["signals"].items()]
+            + [f"- {_safe_text(key, max_chars=120)}: {_safe_text(value)}" for key, value in user_state["signals"].items()]
             + ["", "## History", ""]
-            + [f"- {item['created_at']} :: {item['state_label']} ({item['confidence']})" for item in user_history]
+            + [f"- {_safe_text(item['created_at'], max_chars=80)} :: {_safe_text(item['state_label'], max_chars=80)} ({item['confidence']})" for item in user_history]
         ),
     )
-    _write(root / "cognitive.json", json.dumps(cognitive_stats, indent=2, sort_keys=True))
-    return f"Memory export written to {root}"
+    _write(root / "cognitive.json", json.dumps(_safe_value(cognitive_stats), indent=2, sort_keys=True))
+    return f"Memory export written to {_safe_text(root)}"
 
 
 TOOLS = [

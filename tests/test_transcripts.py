@@ -61,3 +61,31 @@ def test_transcript_search_and_read(monkeypatch, tmp_path):
     assert "TRANSCRIPT claude_code:session-wifi.jsonl" in read_text
     assert "Tengo problemas con el WiFi de DIGI" in read_text
     assert "router, ONT y soporte de DIGI" in read_text
+
+
+def test_transcript_tools_redact_paths_and_secrets(monkeypatch, tmp_path):
+    home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(home))
+
+    transcript_path = home / ".claude" / "projects" / "secret" / "session-secret.jsonl"
+    rows = [
+        {
+            "type": "user",
+            "uuid": "u1",
+            "message": {"content": "Use token=raw-secret-value from /Users/franciscoc/private and 192.168.1.9"},
+        },
+    ]
+    transcript_path.parent.mkdir(parents=True, exist_ok=True)
+    transcript_path.write_text("\n".join(json.dumps(row) for row in rows) + "\n")
+
+    import transcript_utils
+    import tools_transcripts
+
+    importlib.reload(transcript_utils)
+    importlib.reload(tools_transcripts)
+
+    read_text = tools_transcripts.handle_transcript_read(session_ref="claude_code:session-secret.jsonl", max_messages=10)
+    assert "/Users/franciscoc" not in read_text
+    assert "raw-secret-value" not in read_text
+    assert "192.168.1.9" not in read_text
+    assert "[redacted_path]" in read_text

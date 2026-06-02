@@ -70,11 +70,11 @@ def handle_failure_prevention_ingest(
     return _dump(result)
 
 
-def handle_failure_prevention_cases(failure_uid: str = "", status: str = "", limit: int = 20) -> str:
+def handle_failure_prevention_cases(failure_uid: str = "", status: str = "", limit: int = 20, surface: str = "audit") -> str:
     """List failure prevention cases or return one case by uid."""
     if failure_uid:
-        return _dump(get_failure_case(failure_uid))
-    return _dump({"cases": list_failure_cases(status=status, limit=limit)})
+        return _dump(get_failure_case(failure_uid, surface=surface))
+    return _dump({"cases": list_failure_cases(status=status, limit=limit, surface=surface)})
 
 
 def handle_failure_source_validate(source_type: str, source_ref: str) -> str:

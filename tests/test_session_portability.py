@@ -113,3 +113,63 @@ def test_session_export_bundle_writes_machine_readable_payload(tmp_path):
     assert bundle["open_protocol_tasks"][0]["task_id"] == "PT-1"
     assert bundle["open_workflow_goals"][0]["goal_id"] == "WG-1"
     assert bundle["open_workflow_runs"][0]["run_id"] == "WR-1"
+
+
+def test_session_export_bundle_redacts_recent_context_body(tmp_path):
+    from db import capture_context_event
+    from tools_sessions import handle_session_export_bundle
+
+    sid = _seed_portable_session()
+    capture_context_event(
+        session_id=sid,
+        event_type="tool_output",
+        title="Close v3 release body leak check",
+        body="Raw body from /Users/franciscoc/private token=raw-secret-value",
+        source_id="test",
+    )
+    export_path = tmp_path / "bundle.json"
+    handle_session_export_bundle(sid, str(export_path))
+
+    exported = export_path.read_text()
+    assert "Raw body" not in exported
+    assert "/Users/franciscoc" not in exported
+    assert "raw-secret-value" not in exported
+    assert "[redacted_payload]" in exported
+
+
+def test_session_portable_context_redacts_recent_context_body():
+    from db import capture_context_event
+    from tools_sessions import handle_session_portable_context
+
+    sid = _seed_portable_session()
+    capture_context_event(
+        session_id=sid,
+        event_type="tool_output",
+        title="Close v3 release portable leak check",
+        body="Portable raw body from /Users/franciscoc/private token=raw-secret-value",
+        source_id="test",
+    )
+
+    text = handle_session_portable_context(sid)
+    assert "Portable raw body" not in text
+    assert "/Users/franciscoc" not in text
+    assert "raw-secret-value" not in text
+    assert "[redacted_payload]" in text
+
+
+def test_heartbeat_redacts_inbox_and_pending_questions():
+    from db import ask_question, register_session, send_message
+    from tools_sessions import handle_heartbeat
+
+    sender = "nexo-3001-4001"
+    target = "nexo-3001-4002"
+    register_session(sender, "sender task", session_client="codex")
+    register_session(target, "target task", session_client="codex")
+    send_message(sender, target, "message /Users/franciscoc/private token=raw-secret-value 192.168.1.8")
+    ask_question(sender, target, "question /Users/franciscoc/private token=raw-secret-value 192.168.1.8")
+
+    text = handle_heartbeat(target, "target task", context_hint="")
+    assert "/Users/franciscoc" not in text
+    assert "raw-secret-value" not in text
+    assert "192.168.1.8" not in text
+    assert "[redacted_path]" in text

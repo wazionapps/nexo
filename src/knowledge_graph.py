@@ -273,6 +273,43 @@ def extract_subgraph(center_id: int, depth: int = 2) -> dict:
 
 import json as _json
 
+try:
+    from semantic_layers import redact_value as _redact_value
+except Exception:  # pragma: no cover - bootstrap fallback
+    def _redact_value(value, *, max_chars=4000):
+        return str(value or "")[:max_chars]
+
+
+_SENSITIVE_EXPORT_KEYS = {
+    "api_key", "apikey", "token", "secret", "password", "authorization",
+    "bearer", "credential", "cred_ref", "provider_payload", "raw_prompt",
+    "raw_response", "transcript",
+}
+
+
+def _safe_export_text(value: object, *, max_chars: int = 500) -> str:
+    return _redact_value(value, max_chars=max_chars)
+
+
+def _safe_export_value(value: object, *, _depth: int = 0) -> object:
+    if _depth > 5:
+        return "[redacted_depth]"
+    if value is None or isinstance(value, (bool, int, float)):
+        return value
+    if isinstance(value, dict):
+        safe = {}
+        for key, item in value.items():
+            raw_key = str(key or "").strip().lower()
+            clean_key = _safe_export_text(key, max_chars=120) or "field"
+            if raw_key in _SENSITIVE_EXPORT_KEYS:
+                safe[clean_key] = "[redacted]"
+            else:
+                safe[clean_key] = _safe_export_value(item, _depth=_depth + 1)
+        return safe
+    if isinstance(value, (list, tuple, set)):
+        return [_safe_export_value(item, _depth=_depth + 1) for item in list(value)[:100]]
+    return _safe_export_text(value, max_chars=800)
+
 
 def export_to_jsonld(*, as_of: str = "") -> dict:
     """Export the active or historical KG to a JSON-LD document.
@@ -322,10 +359,10 @@ def export_to_jsonld(*, as_of: str = "") -> dict:
             props = {}
         nodes_by_id[n["id"]] = {
             "@id": f"nexo:node:{n['id']}",
-            "@type": f"nexo:{n['node_type']}",
-            "label": n.get("label") or "",
-            "node_ref": n.get("node_ref") or "",
-            "properties": props,
+            "@type": f"nexo:{_safe_export_text(n['node_type'], max_chars=80)}",
+            "label": _safe_export_text(n.get("label") or ""),
+            "node_ref": _safe_export_text(n.get("node_ref") or ""),
+            "properties": _safe_export_value(props),
         }
 
     for e in edges:
@@ -333,18 +370,18 @@ def export_to_jsonld(*, as_of: str = "") -> dict:
         tgt_id = e["target_id"]
         if src_id not in nodes_by_id or tgt_id not in nodes_by_id:
             continue  # orphan edge — skip
-        relation_key = f"nexo:{e['relation']}"
+        relation_key = f"nexo:{_safe_export_text(e['relation'], max_chars=80)}"
         edge_payload = {
             "@id": f"nexo:edge:{e['id']}",
             "target": f"nexo:node:{tgt_id}",
             "weight": float(e.get("weight") or 0.0),
             "confidence": float(e.get("confidence") or 0.0),
-            "valid_from": e.get("valid_from"),
-            "valid_until": e.get("valid_until"),
+            "valid_from": _safe_export_text(e.get("valid_from"), max_chars=80),
+            "valid_until": _safe_export_text(e.get("valid_until"), max_chars=80),
         }
         nodes_by_id[src_id].setdefault(relation_key, []).append(edge_payload)
 
-    snapshot_label = as_of.strip() if as_of and as_of.strip() else "active"
+    snapshot_label = _safe_export_text(as_of.strip(), max_chars=120) if as_of and as_of.strip() else "active"
     return {
         "@context": {
             "nexo": "https://nexo-brain.com/kg/v1#",
@@ -394,7 +431,7 @@ def export_to_graphml(*, as_of: str = "") -> str:
         ).fetchall()
 
     def _xml_escape(value: object) -> str:
-        text = "" if value is None else str(value)
+        text = _safe_export_text(value)
         return (
             text.replace("&", "&amp;")
             .replace("<", "&lt;")

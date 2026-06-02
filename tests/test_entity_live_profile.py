@@ -189,3 +189,25 @@ def test_entity_live_profile_plugin_returns_redacted_json(isolated_db):
     assert payload["profile_version"] == "entity_live_profile.v1"
     assert payload["entity_key"].startswith("entity:")
     assert payload["authority"]["non_authoritative_cache"] is True
+
+
+def test_legacy_entity_list_redacts_non_public_values(isolated_db):
+    from plugins.entities import handle_entity_create, handle_entity_list, handle_entity_search
+
+    created = handle_entity_create(
+        "Secret Service",
+        "service",
+        "token=raw-secret-value /Users/franciscoc/private",
+        notes="note /Users/franciscoc/private",
+        aliases="secret-service,svc-secret",
+        metadata='{"source": "test"}',
+    )
+
+    assert "Entity created" in created
+    listed = handle_entity_list()
+    searched = handle_entity_search("Secret Service")
+    combined = listed + "\n" + searched
+
+    assert "raw-secret-value" not in combined
+    assert "/Users/franciscoc" not in combined
+    assert "[redacted_entity_value]" in combined

@@ -73,6 +73,44 @@ def __getattr__(name: str):
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
     return resolver()
 
+
+try:
+    from semantic_layers import redact_value as _redact_packet_value
+except Exception:  # pragma: no cover - semantic layer may not be initialized at bootstrap
+    def _redact_packet_value(value, *, max_chars=4000):
+        return str(value or "")[:max_chars]
+
+
+_SENSITIVE_PACKET_KEYS = {
+    "body", "text_raw", "tool_input", "tool_output", "provider_payload",
+    "raw_prompt", "raw_response", "transcript", "messages", "content_raw",
+    "summary", "context_summary",
+}
+
+
+def _safe_packet_text(value, *, max_chars: int = 600) -> str:
+    return _redact_packet_value(value, max_chars=max_chars)
+
+
+def _safe_packet_payload(value, *, _depth: int = 0):
+    if _depth > 5:
+        return "[redacted_depth]"
+    if value is None or isinstance(value, (bool, int, float)):
+        return value
+    if isinstance(value, dict):
+        clean = {}
+        for key, item in value.items():
+            raw_key = str(key or "").strip().lower()
+            safe_key = _safe_packet_text(key, max_chars=120) or "field"
+            if raw_key in _SENSITIVE_PACKET_KEYS:
+                clean[safe_key] = "[redacted_payload]"
+            else:
+                clean[safe_key] = _safe_packet_payload(item, _depth=_depth + 1)
+        return clean
+    if isinstance(value, (list, tuple, set)):
+        return [_safe_packet_payload(item, _depth=_depth + 1) for item in list(value)[:100]]
+    return _safe_packet_text(value)
+
 _keepalive_threads: dict[str, threading.Event] = {}  # sid → stop_event
 
 
@@ -314,7 +352,7 @@ def _session_portability_bundle(sid: str = "") -> dict:
         "checkpoint": dict(checkpoint) if checkpoint else {},
         "latest_diary": dict(diary) if diary else {},
         "diary_draft": dict(draft) if draft else {},
-        "recent_context": recent_context,
+        "recent_context": _safe_packet_payload(recent_context),
         "open_protocol_tasks": protocol_tasks,
         "open_workflow_goals": workflow_goals,
         "open_workflow_runs": workflow_runs,
@@ -472,9 +510,9 @@ def handle_session_portable_context(sid: str = "") -> str:
             [
                 "",
                 "Checkpoint:",
-                f"- Goal: {checkpoint.get('current_goal') or checkpoint.get('task') or '(none)'}",
-                f"- Next: {checkpoint.get('next_step') or '(none)'}",
-                f"- Files: {checkpoint.get('active_files') or '[]'}",
+                f"- Goal: {_safe_packet_text(checkpoint.get('current_goal') or checkpoint.get('task') or '(none)')}",
+                f"- Next: {_safe_packet_text(checkpoint.get('next_step') or '(none)')}",
+                f"- Files: {_safe_packet_text(checkpoint.get('active_files') or '[]')}",
             ]
         )
     if diary:
@@ -482,9 +520,9 @@ def handle_session_portable_context(sid: str = "") -> str:
             [
                 "",
                 "Latest diary:",
-                f"- Summary: {diary.get('summary') or '(none)'}",
-                f"- Pending: {diary.get('pending') or '(none)'}",
-                f"- Context next: {diary.get('context_next') or '(none)'}",
+                f"- Summary: {_safe_packet_text(diary.get('summary') or '(none)')}",
+                f"- Pending: {_safe_packet_text(diary.get('pending') or '(none)')}",
+                f"- Context next: {_safe_packet_text(diary.get('context_next') or '(none)')}",
             ]
         )
     elif draft:
@@ -492,33 +530,33 @@ def handle_session_portable_context(sid: str = "") -> str:
             [
                 "",
                 "Diary draft:",
-                f"- Summary draft: {draft.get('summary_draft') or '(none)'}",
-                f"- Context hint: {draft.get('last_context_hint') or '(none)'}",
+                f"- Summary draft: {_safe_packet_text(draft.get('summary_draft') or '(none)')}",
+                f"- Context hint: {_safe_packet_text(draft.get('last_context_hint') or '(none)')}",
             ]
         )
     recent_context = bundle.get("recent_context") or {}
     if recent_context.get("has_matches"):
-        lines.extend(["", format_pre_action_context_bundle(recent_context, compact=True)])
+        lines.extend(["", format_pre_action_context_bundle(_safe_packet_payload(recent_context), compact=True)])
 
     protocol_tasks = bundle.get("open_protocol_tasks") or []
     if protocol_tasks:
         lines.extend(["", "Open protocol tasks:"])
         for item in protocol_tasks[:5]:
-            lines.append(f"- {item['task_id']}: {item['goal']} [{item['task_type']}/{item['status']}]")
+            lines.append(f"- {item['task_id']}: {_safe_packet_text(item['goal'])} [{item['task_type']}/{item['status']}]")
 
     goals = bundle.get("open_workflow_goals") or []
     if goals:
         lines.extend(["", "Open goals:"])
         for item in goals[:5]:
-            lines.append(f"- {item['goal_id']}: {item['title']} [{item['status']}] -> {item['next_action'] or '(no next action)'}")
+            lines.append(f"- {item['goal_id']}: {_safe_packet_text(item['title'])} [{item['status']}] -> {_safe_packet_text(item['next_action'] or '(no next action)')}")
 
     runs = bundle.get("open_workflow_runs") or []
     if runs:
         lines.extend(["", "Open workflows:"])
         for item in runs[:5]:
             lines.append(
-                f"- {item['run_id']}: {item['goal']} [{item['status']}] "
-                f"step={item['current_step_key'] or '?'} next={item['next_action'] or '(none)'}"
+                f"- {item['run_id']}: {_safe_packet_text(item['goal'])} [{item['status']}] "
+                f"step={item['current_step_key'] or '?'} next={_safe_packet_text(item['next_action'] or '(none)')}"
             )
 
     return "\n".join(lines)
@@ -531,14 +569,15 @@ def handle_session_export_bundle(sid: str = "", path: str = "") -> str:
         return json.dumps(bundle, ensure_ascii=False)
 
     session_id = bundle["session"]["sid"]
+    safe_bundle = _safe_packet_payload(bundle)
     export_path = Path(path).expanduser() if path else (_session_portability_dir() / f"{session_id}.json")
     export_path.parent.mkdir(parents=True, exist_ok=True)
-    export_path.write_text(json.dumps(bundle, indent=2, ensure_ascii=False) + "\n")
+    export_path.write_text(json.dumps(safe_bundle, indent=2, ensure_ascii=False) + "\n")
     return json.dumps(
         {
             "ok": True,
             "sid": session_id,
-            "path": str(export_path),
+            "path": _safe_packet_text(export_path),
             "open_protocol_tasks": len(bundle.get("open_protocol_tasks") or []),
             "open_workflow_goals": len(bundle.get("open_workflow_goals") or []),
             "open_workflow_runs": len(bundle.get("open_workflow_runs") or []),
@@ -747,15 +786,15 @@ def handle_startup(
         lines.append("PENDING MESSAGES:")
         for m in inbox:
             age = _format_age(m["created_epoch"])
-            lines.append(f"  [{m['from_sid']}] ({age}): {m['text']}")
+            lines.append(f"  [{m['from_sid']}] ({age}): {_safe_packet_text(m['text'])}")
 
     briefing_excerpt, briefing_path = _read_session_briefing_excerpt()
     if briefing_excerpt:
         lines.append("")
         lines.append("SESSION BRIEFING:")
         for raw_line in briefing_excerpt.splitlines():
-            lines.append(f"  {raw_line}")
-        lines.append(f"  Full briefing: {briefing_path}")
+            lines.append(f"  {_safe_packet_text(raw_line)}")
+        lines.append(f"  Full briefing: {_safe_packet_text(briefing_path)}")
 
     try:
         from memory_layer_audit import audit_memory_layers, format_memory_layer_warnings
@@ -973,7 +1012,7 @@ def _handle_heartbeat_inner(sid: str, task: str, context_hint: str = '') -> str:
         parts.append("MESSAGES:")
         for m in inbox:
             age = _format_age(m["created_epoch"])
-            parts.append(f"  [{m['from_sid']}] ({age}): {m['text']}")
+            parts.append(f"  [{m['from_sid']}] ({age}): {_safe_packet_text(m['text'])}")
 
     questions = _safe_interactive("pending-question lookup", lambda: get_pending_questions(sid), [], heartbeat_warnings)
     if questions:
@@ -981,7 +1020,7 @@ def _handle_heartbeat_inner(sid: str, task: str, context_hint: str = '') -> str:
         parts.append("PENDING QUESTIONS (respond with nexo_answer):")
         for q in questions:
             age = _format_age(q["created_epoch"])
-            parts.append(f"  {q['qid']} de {q['from_sid']} ({age}): {q['question']}")
+            parts.append(f"  {q['qid']} de {q['from_sid']} ({age}): {_safe_packet_text(q['question'])}")
 
     recent_query = (context_hint or task or "").strip()
     if recent_query:
@@ -999,7 +1038,7 @@ def _handle_heartbeat_inner(sid: str, task: str, context_hint: str = '') -> str:
         )
         if bundle.get("has_matches"):
             parts.append("")
-            parts.append(format_pre_action_context_bundle(bundle, compact=True))
+            parts.append(format_pre_action_context_bundle(_safe_packet_payload(bundle), compact=True))
         if _heartbeat_heavy_feature_enabled("NEXO_HEARTBEAT_LOCAL_CONTEXT", default=False) and append_local_context_evidence is not None:
             local_rendered = _safe_interactive_timed(
                 "local context lookup",
@@ -1337,9 +1376,9 @@ def handle_context_packet(area: str, files: str = "") -> str:
     if learnings:
         parts.append("## KNOWN ERRORS — DO NOT REPEAT")
         for l in learnings:
-            parts.append(f"  L#{l['id']}: {l['title']}")
+            parts.append(f"  L#{l['id']}: {_safe_packet_text(l['title'])}")
             # First 200 chars of content
-            parts.append(f"    {l['content'][:200]}")
+            parts.append(f"    {_safe_packet_text(l['content'], max_chars=200)}")
         parts.append("")
 
     # 2. Last 5 changes in this area
@@ -1350,9 +1389,9 @@ def handle_context_packet(area: str, files: str = "") -> str:
     if changes:
         parts.append("## RECENT CHANGES")
         for c in changes:
-            parts.append(f"  C#{c['id']}: {c['what_changed'][:150]}")
+            parts.append(f"  C#{c['id']}: {_safe_packet_text(c['what_changed'], max_chars=150)}")
             if c['why']:
-                parts.append(f"    Why: {c['why'][:100]}")
+                parts.append(f"    Why: {_safe_packet_text(c['why'], max_chars=100)}")
         parts.append("")
 
     # 3. Active followups for this area
@@ -1374,7 +1413,7 @@ def handle_context_packet(area: str, files: str = "") -> str:
     if followups:
         parts.append("## ACTIVE FOLLOWUPS")
         for f in followups:
-            parts.append(f"  {f['id']}: {f['description'][:150]} (date: {f['date']})")
+            parts.append(f"  {f['id']}: {_safe_packet_text(f['description'], max_chars=150)} (date: {_safe_packet_text(f['date'], max_chars=80)})")
         parts.append("")
 
     # 4. Preferences related to this area
@@ -1386,7 +1425,7 @@ def handle_context_packet(area: str, files: str = "") -> str:
         if prefs:
             parts.append("## PREFERENCES")
             for p in prefs:
-                parts.append(f"  {p['key']}: {p['value'][:150]}")
+                parts.append(f"  {_safe_packet_text(p['key'], max_chars=120)}: {_safe_packet_text(p['value'], max_chars=150)}")
             parts.append("")
     except Exception:
         pass
@@ -1396,7 +1435,7 @@ def handle_context_packet(area: str, files: str = "") -> str:
         hot_bundle = build_pre_action_context(query=area, hours=24, limit=4)
         if hot_bundle.get("has_matches"):
             parts.append("## RECENT HOT CONTEXT (24H)")
-            parts.append(format_pre_action_context_bundle(hot_bundle, compact=True))
+            parts.append(format_pre_action_context_bundle(_safe_packet_payload(hot_bundle), compact=True))
             parts.append("")
     except Exception:
         pass
@@ -1414,7 +1453,8 @@ def handle_context_packet(area: str, files: str = "") -> str:
         if results:
             parts.append("## RELEVANT COGNITIVE MEMORIES")
             for r in results:
-                parts.append(f"  [{r['source_type']}] {r['source_title'] or r['content'][:80]}")
+                title = r.get("source_title") or str(r.get("content") or "")[:80]
+                parts.append(f"  [{_safe_packet_text(r['source_type'], max_chars=80)}] {_safe_packet_text(title, max_chars=120)}")
             parts.append("")
     except Exception:
         pass
@@ -1582,7 +1622,7 @@ def handle_smart_startup_query() -> str:
             hot_bundle = build_pre_action_context(query=composite_query, hours=24, limit=4)
             if hot_bundle.get("has_matches"):
                 lines.append("")
-                lines.append(format_pre_action_context_bundle(hot_bundle, compact=True))
+                lines.append(format_pre_action_context_bundle(_safe_packet_payload(hot_bundle), compact=True))
         except Exception:
             pass
 

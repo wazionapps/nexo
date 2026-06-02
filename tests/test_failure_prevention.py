@@ -260,6 +260,30 @@ def test_metadata_and_action_fields_are_redacted_before_persisting(isolated_db):
     assert "secret-after-marker" not in json.dumps(antibody["metadata"])
 
 
+def test_failure_case_outputs_filter_surface_and_sanitize_refs(isolated_db):
+    _, fp = _reload_stack()
+    case = fp.ingest_failure(
+        failure_type="privacy",
+        area="nexo /Users/franciscoc/private 192.168.1.5",
+        primary_source_type="test_failure",
+        primary_source_ref="test:tests/test_failure_prevention.py::test_failure_case_outputs_filter_surface_and_sanitize_refs",
+        symptom="Output should redact /Users/franciscoc/private token=raw-secret-value",
+        severity="p1",
+        privacy_level="sensitive",
+        metadata={"safe": "path /Users/franciscoc/private and 192.168.1.5"},
+    )
+
+    pre_action = fp.get_failure_case(case["failure_uid"], surface="pre_action")
+    assert pre_action == {}
+
+    audit_case = fp.get_failure_case(case["failure_uid"], surface="audit")
+    dumped = json.dumps(audit_case, ensure_ascii=False)
+    assert "/Users/franciscoc" not in dumped
+    assert "192.168.1.5" not in dumped
+    assert "raw-secret-value" not in dumped
+    assert "[redacted_path]" in dumped
+
+
 def test_sensitive_refs_are_rejected(isolated_db):
     _, fp = _reload_stack()
 

@@ -45,6 +45,7 @@ CASE_STATUSES = {
     "expired", "rolled_back", "conflict_review",
 }
 PRIVACY_LEVELS = {"public", "normal", "private", "sensitive", "secret"}
+SURFACES = {"pre_action", "debug_local", "audit", "runtime_internal", "export"}
 ACTION_TYPES = {
     "learning_resolve", "test_add", "benchmark_case_add",
     "guard_rule_proposal", "predictive_context_rule", "docs_update",
@@ -210,6 +211,11 @@ def _normalize_privacy(value: str) -> str:
     return clean if clean in PRIVACY_LEVELS else "normal"
 
 
+def _normalize_surface(value: str) -> str:
+    clean = str(value or "audit").strip().lower()
+    return clean if clean in SURFACES else "audit"
+
+
 def _normalize_confidence(value: float | int | str) -> float:
     try:
         raw = float(value)
@@ -275,6 +281,76 @@ def field_evidence(
         "confidence": _normalize_confidence(confidence),
         "privacy_level": _normalize_privacy(privacy_level),
     }
+
+
+def _surface_allowed(surface: str, allowed_surfaces: Any, *, privacy_level: str) -> bool:
+    clean_surface = _normalize_surface(surface)
+    privacy = _normalize_privacy(privacy_level)
+    if privacy == "secret" and clean_surface not in {"audit", "runtime_internal"}:
+        return False
+    if privacy in {"private", "sensitive"} and clean_surface in {"pre_action", "export"}:
+        return False
+    allowed = set(_as_list(allowed_surfaces))
+    if not allowed:
+        allowed = set(_allowed_surfaces(privacy_level=privacy, status="candidate"))
+    return clean_surface in allowed
+
+
+def _safe_refs(value: Any) -> list[str]:
+    return [redact_value(ref) for ref in _as_list(value) if redact_value(ref)]
+
+
+def _safe_field(value: Any) -> Any:
+    if not isinstance(value, dict):
+        return value
+    clean = dict(value)
+    if "value_redacted" in clean:
+        clean["value_redacted"] = redact_value(clean.get("value_redacted"))
+    if "value_ref" in clean:
+        clean["value_ref"] = redact_value(clean.get("value_ref"))
+    if "source_refs" in clean:
+        clean["source_refs"] = _safe_refs(clean.get("source_refs"))
+    return clean
+
+
+def _safe_case(case: dict[str, Any], *, surface: str = "audit") -> dict[str, Any]:
+    if not case:
+        return {}
+    if not _surface_allowed(surface, case.get("allowed_surfaces"), privacy_level=str(case.get("privacy_level") or "normal")):
+        return {}
+    clean = dict(case)
+    for key in ("entity_refs", "source_event_refs", "evidence_refs", "antibody_refs"):
+        clean[key] = _safe_refs(clean.get(key))
+    for key in ("primary_source_ref", "area"):
+        clean[key] = redact_value(clean.get(key))
+    for key in (
+        "symptom", "trigger", "missed_signal", "wrong_assumption",
+        "root_cause", "corrective_action",
+    ):
+        clean[key] = _safe_field(clean.get(key))
+    clean["learning_resolution"] = sanitize_metadata(clean.get("learning_resolution") or {})
+    clean["metadata"] = sanitize_metadata(clean.get("metadata") or {})
+    return clean
+
+
+def _safe_source_event(event: dict[str, Any]) -> dict[str, Any]:
+    if not event:
+        return {}
+    clean = dict(event)
+    clean["source_ref"] = redact_value(clean.get("source_ref"))
+    clean["evidence_refs"] = _safe_refs(clean.get("evidence_refs"))
+    clean["metadata"] = sanitize_metadata(clean.get("metadata") or {})
+    return clean
+
+
+def _safe_antibody(antibody: dict[str, Any]) -> dict[str, Any]:
+    if not antibody:
+        return {}
+    clean = dict(antibody)
+    for key in ("target_ref", "action_payload_ref", "verification_ref", "approved_ref", "rollback_ref"):
+        clean[key] = redact_value(clean.get(key))
+    clean["metadata"] = sanitize_metadata(clean.get("metadata") or {})
+    return clean
 
 
 def _ref_prefix(ref: str) -> str:
@@ -653,8 +729,8 @@ def ingest_failure(
         "source_event_inserted": source_inserted,
         "validated": validated,
         "validation_error": str(validation.get("validation_error") or ""),
-        "case": _case_from_row(case_row),
-        "source_event": _source_event_from_row(event_row),
+        "case": _safe_case(_case_from_row(case_row), surface="audit"),
+        "source_event": _safe_source_event(_source_event_from_row(event_row)),
     }
 
 
@@ -851,10 +927,10 @@ def propose_antibody_action(
     data = dict(row) if row else {}
     if data:
         data["metadata"] = _load_json(str(data.pop("metadata_json") or ""), {})
-    return {"ok": True, "antibody_uid": antibody_uid, "antibody": data, "learning_resolution": learning_resolution}
+    return {"ok": True, "antibody_uid": antibody_uid, "antibody": _safe_antibody(data), "learning_resolution": sanitize_metadata(learning_resolution)}
 
 
-def list_failure_cases(*, status: str = "", limit: int = 20, conn: sqlite3.Connection | None = None) -> list[dict[str, Any]]:
+def list_failure_cases(*, status: str = "", limit: int = 20, surface: str = "audit", conn: sqlite3.Connection | None = None) -> list[dict[str, Any]]:
     conn = conn or get_db()
     _ensure_tables(conn)
     clauses = []
@@ -867,14 +943,15 @@ def list_failure_cases(*, status: str = "", limit: int = 20, conn: sqlite3.Conne
         f"SELECT * FROM failure_prevention_cases {where} ORDER BY updated_at DESC LIMIT ?",
         params + [max(1, int(limit or 20))],
     ).fetchall()
-    return [_case_from_row(row) for row in rows]
+    cases = [_safe_case(_case_from_row(row), surface=surface) for row in rows]
+    return [case for case in cases if case]
 
 
-def get_failure_case(failure_uid: str, *, conn: sqlite3.Connection | None = None) -> dict[str, Any]:
+def get_failure_case(failure_uid: str, *, surface: str = "audit", conn: sqlite3.Connection | None = None) -> dict[str, Any]:
     conn = conn or get_db()
     _ensure_tables(conn)
     row = conn.execute("SELECT * FROM failure_prevention_cases WHERE failure_uid = ?", (failure_uid,)).fetchone()
-    return _case_from_row(row)
+    return _safe_case(_case_from_row(row), surface=surface)
 
 
 def mark_false_positive(
