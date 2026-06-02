@@ -7,6 +7,7 @@ Verifies:
 """
 
 import os
+import json
 import sqlite3
 import tempfile
 from pathlib import Path
@@ -106,3 +107,40 @@ def test_fresh_install_has_all_columns(tmp_path, monkeypatch):
     cols = _columns(conn, "entities")
     for col in ("aliases", "metadata", "source", "confidence", "access_mode"):
         assert col in cols, f"{col} missing in fresh install"
+
+
+def test_entity_crud_uses_extended_columns(isolated_db):
+    from db import create_entity, search_entities, update_entity
+
+    entity_id = create_entity(
+        name="Maria iMac",
+        type="host",
+        value=json.dumps({"hostname": "maria-imac"}),
+        aliases=["equipo de maria", "maria-imac.local"],
+        metadata={"privacy_level": "private"},
+        source="manual",
+        confidence=0.9,
+        access_mode="read_only",
+    )
+
+    rows = search_entities("equipo maria")
+    assert rows
+    row = next(item for item in rows if item["id"] == entity_id)
+    assert json.loads(row["aliases"]) == ["equipo de maria", "maria-imac.local"]
+    assert json.loads(row["metadata"])["privacy_level"] == "private"
+    assert row["access_mode"] == "read_only"
+    assert row["source"] == "manual"
+    assert row["confidence"] == 0.9
+
+    update_entity(
+        entity_id,
+        aliases=["nora-host"],
+        metadata={"privacy_level": "normal"},
+        access_mode="read_write",
+        confidence=0.7,
+    )
+    updated = next(item for item in search_entities("nora-host") if item["id"] == entity_id)
+    assert json.loads(updated["aliases"]) == ["nora-host"]
+    assert json.loads(updated["metadata"])["privacy_level"] == "normal"
+    assert updated["access_mode"] == "read_write"
+    assert updated["confidence"] == 0.7

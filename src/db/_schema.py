@@ -2397,6 +2397,104 @@ def _m73_operational_state_snapshots(conn):
     _migrate_add_index(conn, "idx_operational_state_expires", "operational_state_snapshots", "expires_at")
 
 
+def _m74_entity_live_profiles(conn):
+    """EntityLiveProfile cache plus managed asset/context update bridges.
+
+    The tables below are deliberately non-authoritative. Entity identity,
+    artifacts, local evidence, and history remain owned by their existing
+    stores; this migration only adds cache/bridge/event surfaces.
+    """
+    _m11_artifact_registry(conn)
+    _m59_memory_events(conn)
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS entity_profile_cache (
+            profile_uid TEXT PRIMARY KEY,
+            profile_version TEXT NOT NULL DEFAULT 'entity_live_profile.v1',
+            entity_key TEXT NOT NULL,
+            canonical_kind TEXT DEFAULT '',
+            canonical_name TEXT DEFAULT '',
+            source_refs_hash TEXT NOT NULL,
+            input_hash TEXT NOT NULL,
+            profile_redacted_json TEXT NOT NULL DEFAULT '{}',
+            source_refs_json TEXT NOT NULL DEFAULT '[]',
+            stale_status TEXT NOT NULL DEFAULT 'unknown',
+            privacy_level TEXT NOT NULL DEFAULT 'normal',
+            allowed_surfaces_json TEXT NOT NULL DEFAULT '[]',
+            last_verified_at REAL,
+            expires_at REAL,
+            created_at REAL NOT NULL,
+            updated_at REAL NOT NULL,
+            UNIQUE(entity_key, profile_version, source_refs_hash, input_hash)
+        )
+        """
+    )
+    _migrate_add_index(conn, "idx_entity_profile_cache_entity", "entity_profile_cache", "entity_key, profile_version")
+    _migrate_add_index(conn, "idx_entity_profile_cache_expires", "entity_profile_cache", "expires_at")
+    _migrate_add_index(conn, "idx_entity_profile_cache_stale", "entity_profile_cache", "stale_status, expires_at")
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS nexo_managed_assets (
+            asset_uid TEXT PRIMARY KEY,
+            artifact_id INTEGER REFERENCES artifact_registry(id) ON DELETE SET NULL,
+            entity_key TEXT NOT NULL,
+            project_key TEXT DEFAULT '',
+            asset_kind TEXT NOT NULL DEFAULT 'other',
+            provider_ref TEXT DEFAULT '',
+            provider_redacted TEXT DEFAULT '',
+            external_ref_hash TEXT DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'planned',
+            source_refs_json TEXT NOT NULL DEFAULT '[]',
+            privacy_level TEXT NOT NULL DEFAULT 'normal',
+            last_verified_at REAL,
+            created_at REAL NOT NULL,
+            updated_at REAL NOT NULL,
+            metadata_json TEXT NOT NULL DEFAULT '{}'
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_nexo_managed_assets_provider_external
+        ON nexo_managed_assets(provider_ref, external_ref_hash)
+        WHERE provider_ref != '' AND external_ref_hash != ''
+        """
+    )
+    conn.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_nexo_managed_assets_artifact
+        ON nexo_managed_assets(artifact_id)
+        WHERE artifact_id IS NOT NULL
+        """
+    )
+    _migrate_add_index(conn, "idx_nexo_managed_assets_entity", "nexo_managed_assets", "entity_key")
+    _migrate_add_index(conn, "idx_nexo_managed_assets_project", "nexo_managed_assets", "project_key")
+    _migrate_add_index(conn, "idx_nexo_managed_assets_status", "nexo_managed_assets", "status")
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS asset_context_updated (
+            event_uid TEXT PRIMARY KEY,
+            entity_key TEXT NOT NULL,
+            asset_uid TEXT NOT NULL,
+            artifact_id INTEGER,
+            project_key TEXT DEFAULT '',
+            change_type TEXT NOT NULL,
+            source_refs_json TEXT NOT NULL DEFAULT '[]',
+            privacy_level TEXT NOT NULL DEFAULT 'normal',
+            redaction_applied INTEGER NOT NULL DEFAULT 1,
+            created_at REAL NOT NULL,
+            memory_event_uid TEXT DEFAULT ''
+        )
+        """
+    )
+    _migrate_add_index(conn, "idx_asset_context_updated_entity", "asset_context_updated", "entity_key, created_at")
+    _migrate_add_index(conn, "idx_asset_context_updated_asset", "asset_context_updated", "asset_uid, created_at")
+    _migrate_add_index(conn, "idx_asset_context_updated_artifact", "asset_context_updated", "artifact_id, created_at")
+
+
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
     (2, "followups_reasoning", _m2_followups_reasoning),
@@ -2471,6 +2569,7 @@ MIGRATIONS = [
     (71, "causal_edge_candidates", _m71_causal_edge_candidates),
     (72, "memory_utility", _m72_memory_utility),
     (73, "operational_state_snapshots", _m73_operational_state_snapshots),
+    (74, "entity_live_profiles", _m74_entity_live_profiles),
 ]
 
 

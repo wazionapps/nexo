@@ -2,11 +2,14 @@
 
 import sqlite3
 
+import pytest
+
 import db as db_mod
 from db._schema import (
     _m65_diary_quality,
     _m67_diary_quality_backfill_repair,
     _m68_memory_fabric_index,
+    _m74_entity_live_profiles,
 )
 
 
@@ -27,6 +30,8 @@ def test_init_db_creates_core_tables():
         "hot_context", "recent_events", "memory_events",
         "memory_observations", "memory_observation_queue",
         "memory_observations_fts",
+        "entity_profile_cache", "nexo_managed_assets",
+        "asset_context_updated",
     }
     assert expected.issubset(tables), f"Missing tables: {expected - tables}"
 
@@ -36,7 +41,115 @@ def test_migrations_idempotent():
     db_mod.run_migrations()
     db_mod.run_migrations()
     version = db_mod.get_schema_version()
-    assert version >= 62
+    assert version >= 74
+
+
+def test_m74_entity_live_profiles_migration_is_idempotent_and_constrained():
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+
+    _m74_entity_live_profiles(conn)
+    _m74_entity_live_profiles(conn)
+
+    tables = {
+        row["name"]
+        for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+    }
+    assert {"entity_profile_cache", "nexo_managed_assets", "asset_context_updated", "memory_events"} <= tables
+
+    now = 1780400000.0
+    conn.execute(
+        """
+        INSERT INTO entity_profile_cache (
+            profile_uid, profile_version, entity_key, source_refs_hash, input_hash,
+            created_at, updated_at
+        ) VALUES ('p1', 'entity_live_profile.v1', 'entity:1', 'refs', 'input', ?, ?)
+        """,
+        (now, now),
+    )
+    with pytest.raises(sqlite3.IntegrityError):
+        conn.execute(
+            """
+            INSERT INTO entity_profile_cache (
+                profile_uid, profile_version, entity_key, source_refs_hash, input_hash,
+                created_at, updated_at
+            ) VALUES ('p2', 'entity_live_profile.v1', 'entity:1', 'refs', 'input', ?, ?)
+            """,
+            (now, now),
+        )
+
+    conn.execute("INSERT INTO artifact_registry(kind, canonical_name) VALUES ('service', 'Demo')")
+    artifact_id = conn.execute("SELECT id FROM artifact_registry").fetchone()["id"]
+    conn.execute(
+        """
+        INSERT INTO nexo_managed_assets (
+            asset_uid, artifact_id, entity_key, provider_ref, external_ref_hash,
+            created_at, updated_at
+        ) VALUES ('ma1', ?, 'entity:1', '', '', ?, ?)
+        """,
+        (artifact_id, now, now),
+    )
+    with pytest.raises(sqlite3.IntegrityError):
+        conn.execute(
+            """
+            INSERT INTO nexo_managed_assets (
+                asset_uid, artifact_id, entity_key, created_at, updated_at
+            ) VALUES ('ma2', ?, 'entity:1', ?, ?)
+            """,
+            (artifact_id, now, now),
+        )
+
+    conn.execute(
+        """
+        INSERT INTO nexo_managed_assets (
+            asset_uid, entity_key, provider_ref, external_ref_hash, created_at, updated_at
+        ) VALUES ('ma-empty-1', 'entity:1', '', '', ?, ?)
+        """,
+        (now, now),
+    )
+    conn.execute(
+        """
+        INSERT INTO nexo_managed_assets (
+            asset_uid, entity_key, provider_ref, external_ref_hash, created_at, updated_at
+        ) VALUES ('ma-empty-2', 'entity:1', '', '', ?, ?)
+        """,
+        (now, now),
+    )
+    conn.execute(
+        """
+        INSERT INTO nexo_managed_assets (
+            asset_uid, entity_key, provider_ref, external_ref_hash, created_at, updated_at
+        ) VALUES ('ma-provider-1', 'entity:1', 'cloudflare', 'abc', ?, ?)
+        """,
+        (now, now),
+    )
+    with pytest.raises(sqlite3.IntegrityError):
+        conn.execute(
+            """
+            INSERT INTO nexo_managed_assets (
+                asset_uid, entity_key, provider_ref, external_ref_hash, created_at, updated_at
+            ) VALUES ('ma-provider-2', 'entity:2', 'cloudflare', 'abc', ?, ?)
+            """,
+            (now, now),
+        )
+
+    conn.execute(
+        """
+        INSERT INTO asset_context_updated (
+            event_uid, entity_key, asset_uid, change_type, created_at
+        ) VALUES ('ACU-1', 'entity:1', 'ma1', 'updated', ?)
+        """,
+        (now,),
+    )
+    with pytest.raises(sqlite3.IntegrityError):
+        conn.execute(
+            """
+            INSERT INTO asset_context_updated (
+                event_uid, entity_key, asset_uid, change_type, created_at
+            ) VALUES ('ACU-1', 'entity:1', 'ma1', 'updated', ?)
+            """,
+            (now,),
+        )
 
 
 def test_m65_diary_quality_backfills_legacy_defaults_and_archive():
