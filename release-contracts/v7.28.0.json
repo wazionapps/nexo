@@ -1,0 +1,131 @@
+{
+  "release_line": "v7.28",
+  "target_version": "7.28.0",
+  "scope_owner": "NEXO",
+  "distribution": {
+    "git_updates_on": "merge_to_main",
+    "packaged_release_on": "tag_publish"
+  },
+  "required_repo_files": [
+    "package.json",
+    "CHANGELOG.md",
+    "README.md",
+    "llms.txt",
+    ".well-known/llms.txt",
+    "sitemap.xml",
+    "index.html",
+    "blog/index.html",
+    "blog/nexo-7-28-0/index.html",
+    "changelog/index.html",
+    "release-contracts/v7.28.0.json",
+    "release-contracts/smoke/v7.28.0.json",
+    "scripts/sync_release_artifacts.py",
+    "scripts/verify_release_readiness.py",
+    "scripts/pre-release-verify.sh",
+    ".claude-plugin/plugin.json",
+    "clawhub-skill/SKILL.md",
+    "openclaw-plugin/package.json",
+    "openclaw-plugin/package-lock.json",
+    "openclaw-plugin/src/mcp-bridge.ts",
+    "src/db/_schema.py",
+    "src/memory_executive.py",
+    "src/causal_graph.py",
+    "src/memory_utility.py",
+    "src/pre_answer_router.py",
+    "src/pre_answer_runtime.py",
+    "src/entity_live_profile.py",
+    "src/failure_prevention.py",
+    "src/semantic_layers.py",
+    "src/tools_sessions.py",
+    "src/tools_transcripts.py",
+    "tests/test_runtime_budget_policy.py",
+    "benchmarks/runtime_pack/results/latest_summary.json"
+  ],
+  "required_website_files": [
+    "index.html",
+    "blog/index.html",
+    "blog/nexo-7-28-0/index.html",
+    "changelog/index.html",
+    "llms.txt",
+    ".well-known/llms.txt",
+    "sitemap.xml"
+  ],
+  "smoke": {
+    "required_groups": [
+      "runtime_memory_benchmark",
+      "pre_answer_hot_paths",
+      "privacy_export_hardening",
+      "fresh_install_schema_76",
+      "update_schema_75_to_76",
+      "release_surface_contract"
+    ],
+    "max_age_hours": 72
+  },
+  "publication": {
+    "status": "ready",
+    "checklist_complete": true,
+    "blockers": []
+  },
+  "gates": [
+    {
+      "id": "runtime_memory_benchmark",
+      "title": "Memory architecture wave is covered by the runtime memory benchmark",
+      "status": "complete",
+      "evidence_required": [
+        "benchmarks/runtime_pack/results/latest_summary.json reports release_gate.status=pass",
+        "Covered spec refs include 01 through 10",
+        "No benchmark case failures are present"
+      ]
+    },
+    {
+      "id": "pre_answer_hot_paths",
+      "title": "Pre-answer continuity paths stay fast and evidence-backed",
+      "status": "complete",
+      "evidence_required": [
+        "Semantic layers read paths do not mutate schema in hot answer flows",
+        "Transcript fallback is bounded and avoids heavy indexing before a response",
+        "Runtime budget policy constrains escalation"
+      ]
+    },
+    {
+      "id": "privacy_export_hardening",
+      "title": "User-facing and exportable memory surfaces redact private payloads",
+      "status": "complete",
+      "evidence_required": [
+        "Session portability redacts raw context and body payloads",
+        "Transcript, KG, memory export, entity, and failure-prevention surfaces avoid raw private values",
+        "Privacy/export regression tests pass"
+      ]
+    },
+    {
+      "id": "fresh_install_schema_76",
+      "title": "Fresh installs bootstrap the v76 schema with semantic layer support",
+      "status": "complete",
+      "evidence_required": [
+        "A clean runtime reaches schema version 76",
+        "semantic_layers data is available after bootstrap",
+        "No legacy database state is required"
+      ]
+    },
+    {
+      "id": "update_schema_75_to_76",
+      "title": "Existing installs update from schema 75 to 76 without losing user continuity",
+      "status": "complete",
+      "evidence_required": [
+        "Update path migrates from schema 75 to 76",
+        "Existing session and diary data are preserved",
+        "semantic_layers data is created or preserved after update"
+      ]
+    },
+    {
+      "id": "public_release_surfaces",
+      "title": "Public release surfaces and integration artifacts are aligned for v7.28.0",
+      "status": "complete",
+      "evidence_required": [
+        "README, llms, homepage, blog index, blog post, changelog page, and sitemap reference v7.28.0",
+        "Claude plugin, ClawHub skill, and OpenClaw package metadata reference 7.28.0",
+        "Release smoke and readiness checks validate the v7.28.0 contract before tag publish"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.28.0: cognitive memory architecture</title>
+<meta name="description" content="NEXO Brain v7.28.0 strengthens cognitive memory with authorship, reasons, operational state, semantic layers, failure prevention, and release-gated update/fresh install checks.">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-28-0/">
+<meta name="robots" content="index, follow">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.28.0: cognitive memory architecture","datePublished":"2026-06-02","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head>
+<body>
+<main class="section-compact">
+<div class="container" style="max-width:860px;">
+<a href="/blog/">Back to blog</a>
+<p class="section-label">Release notes</p>
+<h1>NEXO 7.28.0 - cognitive memory architecture</h1>
+<p>v7.28.0 is a Brain minor release focused on memory quality. The runtime now has explicit structures for action authorship, reasons, operational state, runtime budget, entity live profiles, failure prevention, semantic layers, and memory utility so future answers can connect what happened, why it happened, and what should be reused.</p>
+<p>The release adds a Memory Executive and a runtime memory benchmark gate covering ten cognitive specs. That gate is designed to catch regressions where memory data exists but is not actually usable before an answer.</p>
+<p>Pre-answer routing also stays safer and faster: hot paths avoid heavy transcript fallback, semantic caches reduce keyword-only matching, and export/context surfaces redact sensitive payloads, raw snippets, paths, and private values by default.</p>
+<p>Release readiness for v7.28.0 requires both a clean schema-76 fresh install and an update path from schema 75 to 76 that preserves existing sessions and diary rows while adding semantic-layer data.</p>
+<pre><code>python3 scripts/verify_release_readiness.py --ci --contract release-contracts/v7.28.0.json --require-smoke --require-contract-complete
+scripts/pre-release-verify.sh --release v7.28.0</code></pre>
+<p><a href="/changelog/#v7280">Read the full v7.28.0 changelog</a></p>
+</div>
+</main>
+</body>
+</html>

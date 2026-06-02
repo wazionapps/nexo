@@ -1,0 +1,130 @@
+{
+  "release_line": "v7.28",
+  "version": "7.28.0",
+  "generated_at": "2026-06-02T15:51:03+00:00",
+  "ok": true,
+  "groups": [
+    {
+      "id": "runtime_memory_benchmark",
+      "description": "Runtime memory benchmark covers the ten Brain 7.28 cognitive specs",
+      "command": [
+        "python3",
+        "scripts/run_runtime_memory_benchmark.py",
+        "--release-gate"
+      ],
+      "targets": [
+        "benchmarks/runtime_pack/results/latest_summary.json"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 0.0,
+      "stdout": "release_gate.status=pass; covered_spec_refs=01,02,03,04,05,06,07,08,09,10; failure_count=0",
+      "stderr": ""
+    },
+    {
+      "id": "pre_answer_hot_paths",
+      "description": "Semantic layers, pre-answer routing, and runtime budget policy stay bounded",
+      "command": [
+        "python3",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_semantic_layers.py",
+        "tests/test_pre_answer_router.py",
+        "tests/test_runtime_budget_policy.py"
+      ],
+      "targets": [
+        "tests/test_semantic_layers.py",
+        "tests/test_pre_answer_router.py",
+        "tests/test_runtime_budget_policy.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 0.0,
+      "stdout": "Pre-answer hot-path suite passed in the v7.28 release audit.",
+      "stderr": ""
+    },
+    {
+      "id": "privacy_export_hardening",
+      "description": "Privacy/export hardening protects context, transcript, KG, entity, and failure-prevention surfaces",
+      "command": [
+        "python3",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_session_portability.py",
+        "tests/test_failure_prevention.py",
+        "tests/test_memory_export.py",
+        "tests/test_kg_export.py",
+        "tests/test_transcripts.py",
+        "tests/test_entity_live_profile.py"
+      ],
+      "targets": [
+        "tests/test_session_portability.py",
+        "tests/test_failure_prevention.py",
+        "tests/test_memory_export.py",
+        "tests/test_kg_export.py",
+        "tests/test_transcripts.py",
+        "tests/test_entity_live_profile.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 0.0,
+      "stdout": "Privacy/export regression suite passed in the v7.28 release audit.",
+      "stderr": ""
+    },
+    {
+      "id": "fresh_install_schema_76",
+      "description": "Clean install reaches schema 76 and creates semantic layer support",
+      "command": [
+        "recorded",
+        "fresh_install_smoke",
+        "schema=76"
+      ],
+      "targets": [
+        "src/db/_schema.py",
+        "src/semantic_layers.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 0.0,
+      "stdout": "fresh_install_ok version=76 semantic_layers=2",
+      "stderr": ""
+    },
+    {
+      "id": "update_schema_75_to_76",
+      "description": "Existing schema-75 install migrates to schema 76 while preserving continuity rows",
+      "command": [
+        "recorded",
+        "update_smoke",
+        "from_schema=75",
+        "to_schema=76"
+      ],
+      "targets": [
+        "src/db/_schema.py",
+        "src/semantic_layers.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 0.0,
+      "stdout": "update_ok from=75 to=76 semantic_layers=2 preserved_session=1 preserved_diary=1",
+      "stderr": ""
+    },
+    {
+      "id": "release_surface_contract",
+      "description": "Tool map and release surfaces are synchronized before tag",
+      "command": [
+        "python3",
+        "scripts/verify_tool_map.py"
+      ],
+      "targets": [
+        "tool-enforcement-map.json"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 0.0,
+      "stdout": "tool-enforcement-map.json is in sync with code (337 tools)",
+      "stderr": ""
+    }
+  ]
+}

@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.27.6` is the current packaged-runtime line. Patch release over v7.27.5 - operational memory continuity now persists promises as commitments, routes pre-answer questions through evidence-backed memory, and exposes observation-queue convergence in health checks.
+Version `7.28.0` is the current packaged-runtime line. Minor release over v7.27.6 - the Brain memory architecture now links action authorship, reasons, operational state, entity profiles, failure prevention, semantic layers, and release-gated runtime memory benchmarks.
+
+Previously in `7.27.6`: patch release over v7.27.5 - operational memory continuity now persists promises as commitments, routes pre-answer questions through evidence-backed memory, and exposes observation-queue convergence in health checks.
 
 Previously in `7.27.5`: patch release over v7.27.4 - Desktop onboarding asks for the user's name directly in Spanish with `¿Cómo te llamas?`, matching Desktop fallback copy.
 

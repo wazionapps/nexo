@@ -1,5 +1,23 @@
 # Changelog
 
+## [7.28.0] - 2026-06-02
+
+### Added - cognitive memory architecture wave
+
+- **Memory Executive adds a release-gated 10-spec cognitive benchmark.** Brain now tracks whether short-, medium-, and long-horizon memory improvements are covered by reproducible runtime scenarios before release.
+- **Operational memory now has structured reasons, ownership, and state.** The new executive, causal graph, utility ledger, operational-state policy, runtime-budget policy, entity live profiles, failure-prevention ledger, semantic layers, and pre-answer hot paths connect actions to who did them, why they happened, what changed, and what should be reused later.
+- **Semantic layers cache cross-thread meaning without keyword-only matching.** Brain can attach concepts, intents, decisions, and operational links to memory surfaces so multilingual or differently worded followups still retrieve the right context.
+
+### Changed - release-safe runtime behavior
+
+- **Pre-answer continuity stays fast and evidence-first.** Hot paths avoid heavy transcript fallback, only escalate when useful, and keep local runtime budget limits explicit.
+- **Fresh installs and updates are both first-class release gates.** The v7.28.0 release contract requires a clean schema-76 bootstrap plus an update path from schema 75 to 76 that preserves sessions, diary rows, and semantic-layer data.
+
+### Fixed - privacy and release gates
+
+- **Export and context surfaces redact sensitive payloads by default.** Session portability, transcripts, knowledge graph export, memory export, entity surfaces, and failure-prevention reports now strip raw prompts, paths, payloads, snippets, and private values from user-facing/exportable output.
+- **Release readiness now carries explicit evidence for memory, privacy, update, fresh install, and public-surface alignment.** The release contract and smoke artifact are checked before tagging.
+
 ## [7.27.6] - 2026-06-01
 
 ### Added — operational memory continuity
