@@ -2280,6 +2280,91 @@ def _m71_causal_edge_candidates(conn):
     )
 
 
+def _m72_memory_utility(conn):
+    """Append-only memory usefulness ledger and idempotent delta applications."""
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS memory_use_events (
+            event_uid TEXT PRIMARY KEY,
+            created_at REAL NOT NULL,
+            retrieval_trace_id TEXT DEFAULT '',
+            route_event_id TEXT DEFAULT '',
+            session_id TEXT DEFAULT '',
+            conversation_id TEXT DEFAULT '',
+            project_key TEXT DEFAULT '',
+            client TEXT DEFAULT '',
+            consumer_ref TEXT DEFAULT '',
+            memory_ref TEXT NOT NULL,
+            memory_kind TEXT NOT NULL,
+            source_ref TEXT DEFAULT '',
+            query_hash TEXT DEFAULT '',
+            query_preview_redacted TEXT DEFAULT '',
+            context_kind TEXT DEFAULT '',
+            use_stage TEXT NOT NULL DEFAULT 'retrieved',
+            outcome TEXT NOT NULL DEFAULT 'unknown',
+            used_in_answer INTEGER NOT NULL DEFAULT 0,
+            cited_in_answer INTEGER NOT NULL DEFAULT 0,
+            acted_on INTEGER NOT NULL DEFAULT 0,
+            validated_by_ref TEXT DEFAULT '',
+            evidence_refs_json TEXT DEFAULT '[]',
+            reason_code TEXT DEFAULT '',
+            delta_json TEXT DEFAULT '{}',
+            policy_version TEXT DEFAULT 'memory_utility_v1',
+            confidence REAL DEFAULT 0.5,
+            privacy_level TEXT DEFAULT 'normal',
+            redaction_applied INTEGER NOT NULL DEFAULT 0,
+            metadata_json TEXT DEFAULT '{}'
+        )
+        """
+    )
+    _migrate_add_index(conn, "idx_memory_use_events_memory_created", "memory_use_events", "memory_ref, created_at")
+    _migrate_add_index(conn, "idx_memory_use_events_memory_reason", "memory_use_events", "memory_ref, reason_code, created_at")
+    _migrate_add_index(conn, "idx_memory_use_events_trace_stage", "memory_use_events", "retrieval_trace_id, use_stage")
+    _migrate_add_index(conn, "idx_memory_use_events_query_created", "memory_use_events", "query_hash, created_at")
+    _migrate_add_index(conn, "idx_memory_use_events_stage_outcome", "memory_use_events", "use_stage, outcome, created_at")
+    _migrate_add_index(conn, "idx_memory_use_events_policy_created", "memory_use_events", "policy_version, created_at")
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS memory_utility_applications (
+            application_uid TEXT PRIMARY KEY,
+            created_at REAL NOT NULL,
+            memory_ref TEXT NOT NULL,
+            memory_kind TEXT NOT NULL,
+            target_field TEXT NOT NULL,
+            policy_version TEXT NOT NULL,
+            reason_code TEXT NOT NULL,
+            event_uids_hash TEXT NOT NULL,
+            event_uids_json TEXT NOT NULL DEFAULT '[]',
+            old_value REAL,
+            new_value REAL,
+            delta REAL NOT NULL DEFAULT 0,
+            applied INTEGER NOT NULL DEFAULT 0,
+            rolled_back INTEGER NOT NULL DEFAULT 0,
+            rollback_ref TEXT DEFAULT '',
+            metadata_json TEXT DEFAULT '{}'
+        )
+        """
+    )
+    _migrate_add_index(conn, "idx_memory_utility_app_memory", "memory_utility_applications", "memory_ref, created_at")
+    _migrate_add_index(conn, "idx_memory_utility_app_policy", "memory_utility_applications", "policy_version, created_at")
+    _migrate_add_index(conn, "idx_memory_utility_app_rollback", "memory_utility_applications", "rolled_back, created_at")
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS memory_utility_application_events (
+            application_uid TEXT NOT NULL,
+            event_uid TEXT NOT NULL,
+            memory_ref TEXT NOT NULL,
+            target_field TEXT NOT NULL,
+            policy_version TEXT NOT NULL,
+            UNIQUE(event_uid, memory_ref, target_field, policy_version)
+        )
+        """
+    )
+    _migrate_add_index(conn, "idx_memory_utility_app_events_event", "memory_utility_application_events", "event_uid")
+
+
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
     (2, "followups_reasoning", _m2_followups_reasoning),
@@ -2352,6 +2437,7 @@ MIGRATIONS = [
     (69, "provider_runtime_metadata", _m69_provider_runtime_metadata),
     (70, "commitments", _m70_commitments),
     (71, "causal_edge_candidates", _m71_causal_edge_candidates),
+    (72, "memory_utility", _m72_memory_utility),
 ]
 
 
