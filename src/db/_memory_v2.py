@@ -129,6 +129,55 @@ def _redact_value(value: Any) -> tuple[Any, bool]:
     return value, False
 
 
+def _memory_executive_shadow_decision(
+    *,
+    event_uid: str,
+    source_type: str,
+    source_id: str,
+    event_type: str,
+    actor: str,
+    session_id: str,
+    project_key: str,
+    text: str,
+    metadata: dict[str, Any],
+    privacy_level: str,
+    idempotency_key: str,
+    created_at: float,
+) -> dict[str, Any]:
+    try:
+        from memory_executive import audit_record, decide
+    except Exception as exc:
+        return {"error": f"memory_executive_unavailable:{_truncate(str(exc), 160)}"}
+
+    raw_refs = metadata.get("evidence_refs") or metadata.get("evidence_ref") or []
+    if isinstance(raw_refs, str):
+        evidence_refs = [raw_refs]
+    elif isinstance(raw_refs, (list, tuple, set)):
+        evidence_refs = [str(item) for item in raw_refs if str(item).strip()]
+    else:
+        evidence_refs = []
+    event = {
+        "event_uid": event_uid,
+        "source_type": source_type,
+        "source_id": source_id,
+        "event_type": event_type,
+        "actor": actor,
+        "session_id": session_id,
+        "project_key": project_key,
+        "text": _truncate(text, 1200),
+        "metadata": metadata,
+        "evidence_refs": evidence_refs,
+        "privacy_level": privacy_level,
+        "idempotency_key": idempotency_key,
+        "created_at": str(created_at),
+    }
+    try:
+        decision = decide(event, shadow_mode=True)
+        return audit_record(event, decision)
+    except Exception as exc:
+        return {"error": f"memory_executive_error:{_truncate(str(exc), 160)}"}
+
+
 def _stable_hash(value: Any) -> str:
     if value in (None, ""):
         return ""
@@ -282,6 +331,35 @@ def record_memory_event(
         idempotency_key=idempotency_key,
         created_at=now,
     )
+    executive_text = " ".join(
+        str(part or "").strip()
+        for part in (
+            clean_meta.get("summary") if isinstance(clean_meta, dict) else "",
+            clean_meta.get("statement") if isinstance(clean_meta, dict) else "",
+            clean_meta.get("goal") if isinstance(clean_meta, dict) else "",
+            clean_meta.get("outcome") if isinstance(clean_meta, dict) else "",
+            clean_command,
+            clean_raw_ref,
+        )
+        if str(part or "").strip()
+    )
+    if isinstance(clean_meta, dict) and "memory_executive" not in clean_meta:
+        clean_meta["memory_executive"] = _memory_executive_shadow_decision(
+            event_uid=uid,
+            source_type=clean_source_type,
+            source_id=_truncate(source_id, 200),
+            event_type=clean_event_type,
+            actor=_truncate(actor, 120),
+            session_id=_truncate(session_id, 160),
+            project_key=_truncate(project_key, 120),
+            text=executive_text,
+            metadata=clean_meta,
+            privacy_level="secret" if redaction_applied else (privacy_level or "normal"),
+            idempotency_key=idempotency_key or uid,
+            created_at=now,
+        )
+        if clean_meta["memory_executive"].get("decision_kind") == "quarantine":
+            enqueue_observation = False
 
     try:
         cursor = conn.execute(
