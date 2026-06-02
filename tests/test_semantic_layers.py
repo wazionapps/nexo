@@ -1,4 +1,5 @@
 import json
+import sqlite3
 
 
 def _conn():
@@ -543,3 +544,28 @@ def test_semantic_layers_plugin_list_validates_sources_before_returning(isolated
     )
 
     assert listed["layers"] == []
+
+
+def test_semantic_layers_select_does_not_migrate_missing_schema(monkeypatch):
+    import semantic_layers
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+
+    def migration_should_not_run(*args, **kwargs):
+        raise AssertionError("read path must not run migrations")
+
+    monkeypatch.setattr("db._schema.run_migrations", migration_should_not_run)
+    selected = semantic_layers.select_semantic_layers(
+        query="continue",
+        intent_bundle={"intent_kind": "resume_workflow"},
+        budget_policy={"budget_tier": "quick"},
+        surface="pre_answer",
+        scope_hint={"scope_type": "session", "scope_id": "s1"},
+        conn=conn,
+    )
+
+    assert selected == {"ok": True, "layers": [], "rendered": "", "reason": "schema_missing"}
+    assert conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='semantic_layers'"
+    ).fetchone() is None

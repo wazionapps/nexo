@@ -155,6 +155,9 @@ def test_budget_policy_single_escalation_only():
                 "evidence_refs": ["filesystem:missing-file.md"],
                 "result_count": 1,
             },
+            "memory": lambda request: (_ for _ in ()).throw(AssertionError("quick escalation must not call memory")),
+            "transcripts": lambda request: (_ for _ in ()).throw(AssertionError("quick escalation must not call transcripts")),
+            "local_context": lambda request: (_ for _ in ()).throw(AssertionError("quick escalation must not call local_context")),
         },
     )
 
@@ -162,6 +165,12 @@ def test_budget_policy_single_escalation_only():
     assert result["escalated_from"] == "quick"
     assert result["escalated_to"] == "standard"
     assert result["should_inject"] is True
+    policy = result["runtime_budget_policy"]
+    assert "filesystem" in policy["allowed_sources"]
+    assert "memory" not in policy["allowed_sources"]
+    assert "transcripts" not in policy["allowed_sources"]
+    assert "local_context" not in policy["allowed_sources"]
+    assert {"memory", "transcripts", "local_context"} <= set(policy["forbidden_sources"])
 
 
 def test_budget_policy_no_query_preview_in_route_telemetry():

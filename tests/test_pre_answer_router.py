@@ -512,3 +512,33 @@ def test_pre_answer_router_transcripts_use_index_before_raw_fallback(monkeypatch
     assert result.result_count == 1
     assert "needle indexed continuity request" in result.rendered
     assert result.evidence_refs == ["transcript_index:1"]
+
+
+def test_pre_answer_router_transcripts_do_not_index_or_raw_fallback(monkeypatch):
+    import pre_answer_router as router
+    import tools_transcripts
+    import transcript_index
+
+    monkeypatch.setattr(
+        transcript_index,
+        "ensure_transcript_index",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("pre-answer must not warm transcript index")),
+    )
+    monkeypatch.setattr(
+        transcript_index,
+        "index_recent_transcripts",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("pre-answer must not index transcripts")),
+    )
+    monkeypatch.setattr(
+        tools_transcripts,
+        "handle_transcript_search",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("pre-answer must not scan raw transcripts")),
+    )
+
+    result = router._source_transcripts(
+        router.SourceRequest(query="no indexed rows here", intent="prior_work")
+    )
+
+    assert result.source == "transcripts"
+    assert result.rendered == ""
+    assert result.result_count == 0

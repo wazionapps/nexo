@@ -132,12 +132,15 @@ def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
         return False
 
 
-def _ensure_schema(conn: sqlite3.Connection) -> None:
+def _ensure_schema(conn: sqlite3.Connection, *, migrate: bool = True) -> bool:
     if _table_exists(conn, "semantic_layers") and _table_exists(conn, "semantic_layer_source_refs"):
-        return
+        return True
+    if not migrate:
+        return False
     from db._schema import run_migrations
 
     run_migrations(conn)
+    return _table_exists(conn, "semantic_layers") and _table_exists(conn, "semantic_layer_source_refs")
 
 
 def redact_value(value: Any, *, max_chars: int = 4000) -> str:
@@ -885,7 +888,8 @@ def validate_semantic_layer_sources(
     mark_stale: bool = True,
 ) -> dict[str, Any]:
     conn = conn or _conn()
-    _ensure_schema(conn)
+    if not _ensure_schema(conn, migrate=False):
+        return {"ok": False, "error": "schema_missing", "layer_uid": str(layer_uid or "").strip()}
     clean_uid = str(layer_uid or "").strip()
     row = conn.execute("SELECT * FROM semantic_layers WHERE layer_uid=?", (clean_uid,)).fetchone()
     if not row:
@@ -950,7 +954,8 @@ def get_semantic_layer(
     conn: sqlite3.Connection | None = None,
 ) -> dict[str, Any]:
     conn = conn or _conn()
-    _ensure_schema(conn)
+    if not _ensure_schema(conn, migrate=False):
+        return {"ok": False, "error": "schema_missing"}
     try:
         clean_scope, clean_id = _normalize_scope(scope_type, scope_id)
         clean_kind = _normalize_layer_kind(layer_kind)
@@ -1007,7 +1012,8 @@ def select_semantic_layers(
     conn: sqlite3.Connection | None = None,
 ) -> dict[str, Any]:
     conn = conn or _conn()
-    _ensure_schema(conn)
+    if not _ensure_schema(conn, migrate=False):
+        return {"ok": True, "layers": [], "rendered": "", "reason": "schema_missing"}
     scope_hint = dict(scope_hint or {})
     budget_policy = dict(budget_policy or {})
     intent_bundle = dict(intent_bundle or {})
@@ -1080,7 +1086,8 @@ def list_semantic_layers(
     conn: sqlite3.Connection | None = None,
 ) -> list[dict[str, Any]]:
     conn = conn or _conn()
-    _ensure_schema(conn)
+    if not _ensure_schema(conn, migrate=False):
+        return []
     clauses: list[str] = []
     params: list[Any] = []
     if scope_type:

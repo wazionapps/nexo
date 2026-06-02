@@ -19,6 +19,7 @@ import subprocess
 import time
 import unicodedata
 from dataclasses import dataclass, field, replace
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
@@ -1610,11 +1611,48 @@ def _source_diary(request: SourceRequest) -> SourceResult:
 
 def _source_transcripts(request: SourceRequest) -> SourceResult:
     try:
-        from transcript_index import ensure_transcript_index, search_transcript_index
+        import db
+        from transcript_index import _row_ref_matches
+        from transcript_utils import _score_text_match, _tokenize
         from transcript_utils import MAX_TRANSCRIPT_HOURS
 
-        ensure_transcript_index(hours=MAX_TRANSCRIPT_HOURS, limit=1000, min_user_messages=1)
-        indexed_rows = search_transcript_index(request.query, hours=MAX_TRANSCRIPT_HOURS, limit=4)
+        conn = db.get_db()
+        table = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='transcript_index'"
+        ).fetchone()
+        if table is None:
+            return SourceResult(source="transcripts", skipped=True, aborted_reason="source_unavailable")
+
+        rows = [
+            dict(row)
+            for row in conn.execute(
+                "SELECT * FROM transcript_index ORDER BY modified_at DESC LIMIT 5000"
+            ).fetchall()
+        ]
+        cutoff = datetime.now() - timedelta(hours=max(1, int(MAX_TRANSCRIPT_HOURS or 72)))
+        query_tokens = _tokenize(request.query)
+        indexed_rows: list[dict[str, Any]] = []
+        for row in rows:
+            modified = str(row.get("modified_at") or "")
+            if modified:
+                try:
+                    if datetime.fromisoformat(modified) < cutoff:
+                        continue
+                except Exception:
+                    pass
+            haystack = " ".join(
+                str(row.get(field) or "")
+                for field in ("sanitized_summary", "display_name", "session_id", "conversation_id", "path_ref", "metadata_json")
+            )
+            score = _score_text_match(query_tokens, haystack) if query_tokens else 0.0
+            if _row_ref_matches(request.query, row):
+                score = max(score, 2.0)
+            if score <= 0:
+                continue
+            row["_score"] = round(score, 4)
+            indexed_rows.append(row)
+        indexed_rows.sort(key=lambda row: (float(row.get("_score") or 0), str(row.get("modified_at") or "")), reverse=True)
+        indexed_rows = indexed_rows[:4]
         if indexed_rows:
             indexed_result = _rows_result(
                 "transcript_index",
@@ -1628,20 +1666,9 @@ def _source_transcripts(request: SourceRequest) -> SourceResult:
                 evidence_refs=indexed_result.evidence_refs,
                 result_count=indexed_result.result_count,
             )
-    except Exception:
-        pass
-
-    from tools_transcripts import handle_transcript_search
-
-    rendered = handle_transcript_search(request.query, hours=72, limit=4)
-    if rendered.startswith("No transcript matches"):
-        return SourceResult(source="transcripts")
-    return SourceResult(
-        source="transcripts",
-        rendered=_clip(rendered, request.max_chars),
-        evidence_refs=["transcripts:search"],
-        result_count=max(1, rendered.count("\n- ")),
-    )
+    except Exception as exc:
+        return SourceResult(source="transcripts", ok=False, skipped=True, aborted_reason="source_error", error=str(exc))
+    return SourceResult(source="transcripts")
 
 
 def _source_memory(request: SourceRequest) -> SourceResult:

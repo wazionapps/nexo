@@ -307,6 +307,13 @@ def select_budget_policy(
             tier = forced
             reasons.append("tier_escalated" if escalated_from else "tier_forced")
     spec = _tier_spec(tier)
+    if escalated_from == "quick" and tier == "standard":
+        spec = dict(spec)
+        spec["allowed_sources"] = tuple(
+            source for source in tuple(spec.get("allowed_sources") or ()) if source not in HEAVY_SOURCES
+        )
+        spec["forbidden_sources"] = tuple(sorted(set(tuple(spec.get("forbidden_sources") or ())) | HEAVY_SOURCES))
+        reasons.append("quick_escalation_heavy_sources_blocked")
     required_checks = list(spec.get("required_checks") or ())
     clean_area = _clean(area)
     op_verification = _clean(operational_state.get("verification_requirement"))
