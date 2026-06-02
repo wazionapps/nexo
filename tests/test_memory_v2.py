@@ -249,13 +249,30 @@ def test_memory_redacts_metadata_and_observation_payloads(isolated_db):
 
     event = db.list_memory_events(source_type="tool", source_id="tool-secret")[0]
     db.process_memory_observation_queue(limit=10)
-    observation = db.list_memory_observations(query="secret.py")[0]
+    observations = db.list_memory_observations(query="secret.py")
 
     assert event["redaction_applied"] is True
     assert secret not in json.dumps(event, ensure_ascii=False)
     assert "[REDACTED]" in event["metadata"]["summary"]
+    assert event["metadata"]["memory_executive"]["decision_kind"] == "quarantine"
+    assert event["metadata"]["memory_executive"]["redaction_policy"] == "drop"
+    assert observations == []
+
+    observation = db.upsert_memory_observation(
+        {
+            "observation_uid": "MO-test-redacted-observation",
+            "observation_type": "code_change",
+            "subject": "manual redaction smoke",
+            "summary": f"Observation summary with {secret}",
+            "facts": {"note": f"facts also include {secret}"},
+            "evidence_refs": ["memory_event:test-redaction"],
+            "entities": ["src/observation.py"],
+            "metadata": {"raw": f"metadata has {secret}"},
+        }
+    )
     assert secret not in json.dumps(observation, ensure_ascii=False)
     assert "[REDACTED]" in observation["summary"]
+    assert observation["metadata"]["redaction_applied"] is True
 
 
 def test_memory_maintenance_processes_queue_and_reports_health(isolated_db):

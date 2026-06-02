@@ -10,6 +10,8 @@ from db._schema import (
     _m67_diary_quality_backfill_repair,
     _m68_memory_fabric_index,
     _m74_entity_live_profiles,
+    _m75_failure_prevention_ledger,
+    run_migrations,
 )
 
 
@@ -32,6 +34,8 @@ def test_init_db_creates_core_tables():
         "memory_observations_fts",
         "entity_profile_cache", "nexo_managed_assets",
         "asset_context_updated",
+        "failure_prevention_cases", "failure_source_events",
+        "antibody_actions",
     }
     assert expected.issubset(tables), f"Missing tables: {expected - tables}"
 
@@ -41,7 +45,149 @@ def test_migrations_idempotent():
     db_mod.run_migrations()
     db_mod.run_migrations()
     version = db_mod.get_schema_version()
-    assert version >= 74
+    assert version >= 75
+
+
+def test_m75_failure_prevention_ledger_is_idempotent_and_constrained():
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+
+    _m75_failure_prevention_ledger(conn)
+    _m75_failure_prevention_ledger(conn)
+
+    tables = {
+        row["name"]
+        for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+    }
+    assert {
+        "failure_prevention_cases",
+        "failure_source_events",
+        "antibody_actions",
+        "outcomes",
+        "protocol_debt",
+        "hook_runs",
+        "session_correction_requirements",
+        "memory_events",
+    } <= tables
+
+    now = 1780402400.0
+    conn.execute(
+        """
+        INSERT INTO failure_prevention_cases (
+            failure_uid, failure_type, primary_source_type, primary_source_ref,
+            opened_at, updated_at, review_due_at, expires_at, last_triggered_at
+        ) VALUES (
+            'failure-1', 'workflow', 'test_failure', 'test:tests/test_failure_prevention.py::x',
+            ?, ?, ?, ?, ?
+        )
+        """,
+        (now, now, now + 1, now + 2, now),
+    )
+    with pytest.raises(sqlite3.IntegrityError):
+        conn.execute(
+            """
+            INSERT INTO failure_prevention_cases (
+                failure_uid, failure_type, primary_source_type, primary_source_ref,
+                opened_at, updated_at, review_due_at, expires_at, last_triggered_at
+            ) VALUES (
+                'failure-1', 'workflow', 'test_failure', 'test:tests/test_failure_prevention.py::x',
+                ?, ?, ?, ?, ?
+            )
+            """,
+            (now, now, now + 1, now + 2, now),
+        )
+
+    conn.execute(
+        """
+        INSERT INTO failure_source_events (
+            source_event_uid, failure_uid, source_type, source_ref,
+            observed_at, validated, created_at, updated_at
+        ) VALUES ('source-1', 'failure-1', 'test_failure', 'test:tests/test_failure_prevention.py::x', ?, 1, ?, ?)
+        """,
+        (now, now, now),
+    )
+    with pytest.raises(sqlite3.IntegrityError):
+        conn.execute(
+            """
+            INSERT INTO failure_source_events (
+                source_event_uid, failure_uid, source_type, source_ref,
+                observed_at, validated, created_at, updated_at
+            ) VALUES ('source-1', 'failure-1', 'test_failure', 'test:tests/test_failure_prevention.py::x', ?, 1, ?, ?)
+            """,
+            (now, now, now),
+        )
+
+    conn.execute(
+        """
+        INSERT INTO antibody_actions (
+            antibody_uid, failure_uid, action_type, target_system, target_ref,
+            review_due_at, expires_at, created_at, updated_at
+        ) VALUES ('antibody-1', 'failure-1', 'docs_update', 'docs', 'evidence:docs', ?, ?, ?, ?)
+        """,
+        (now + 1, now + 2, now, now),
+    )
+    with pytest.raises(sqlite3.IntegrityError):
+        conn.execute(
+            """
+            INSERT INTO antibody_actions (
+                antibody_uid, failure_uid, action_type, target_system, target_ref,
+                review_due_at, expires_at, created_at, updated_at
+            ) VALUES ('antibody-1', 'failure-1', 'docs_update', 'docs', 'evidence:docs', ?, ?, ?, ?)
+            """,
+            (now + 1, now + 2, now, now),
+        )
+    with pytest.raises(sqlite3.IntegrityError):
+        conn.execute(
+            """
+            INSERT INTO antibody_actions (
+                antibody_uid, failure_uid, action_type, target_system, target_ref,
+                review_due_at, expires_at, created_at, updated_at
+            ) VALUES ('antibody-empty-target', 'failure-1', 'docs_update', 'docs', '', ?, ?, ?, ?)
+            """,
+            (now + 1, now + 2, now, now),
+        )
+
+
+def test_run_migrations_from_v70_reaches_v75_without_losing_existing_rows():
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute(
+        """
+        CREATE TABLE schema_migrations (
+            version INTEGER PRIMARY KEY,
+            name TEXT NOT NULL,
+            applied_at TEXT DEFAULT (datetime('now'))
+        )
+        """
+    )
+    conn.executemany(
+        "INSERT INTO schema_migrations(version, name) VALUES (?, ?)",
+        [(version, f"legacy_{version}") for version in range(1, 71)],
+    )
+    from db._schema import _m32_outcomes
+
+    _m32_outcomes(conn)
+    conn.execute(
+        """
+        INSERT INTO outcomes (
+            action_type, description, expected_result, deadline
+        ) VALUES ('legacy', 'legacy outcome', 'preserved', '2026-06-03T00:00:00')
+        """
+    )
+    conn.commit()
+
+    run_migrations(conn)
+    run_migrations(conn)
+
+    version = conn.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0]
+    assert version >= 75
+    assert conn.execute("SELECT COUNT(*) FROM outcomes").fetchone()[0] == 1
+    tables = {
+        row["name"]
+        for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+    }
+    assert {"failure_prevention_cases", "failure_source_events", "antibody_actions"} <= tables
+    assert conn.execute("SELECT COUNT(*) FROM schema_migrations WHERE version = 75").fetchone()[0] == 1
 
 
 def test_m74_entity_live_profiles_migration_is_idempotent_and_constrained():

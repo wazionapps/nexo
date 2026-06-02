@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 import plugin_loader  # noqa: E402
 from plugin_loader import (  # noqa: E402
     _collect_declared_plugin_tool_names,
+    _collect_declared_plugin_names_from_map,
     verify_plugin_in_inventory,
 )
 
@@ -58,6 +59,12 @@ def test_plugin_matching_map_entry_passes(tmp_path, monkeypatch):
     assert "matched" in reason
 
 
+def test_repo_map_plugin_colon_sources_are_inventory_entries():
+    names = _collect_declared_plugin_names_from_map()
+    assert "nexo_cortex_check" in names
+    assert "nexo_failure_prevention_ingest" in names
+
+
 def test_map_unavailable_soft_passes(tmp_path, monkeypatch):
     # Plugin declares a tool. Map unreadable → soft pass (empty set).
     path = _write_plugin(tmp_path, "soft.py", 'X = "nexo_anything"\n')
@@ -72,3 +79,18 @@ def test_collect_tool_names_regex_basic(tmp_path):
     p = _write_plugin(tmp_path, "x.py", src)
     names = _collect_declared_plugin_tool_names(str(p))
     assert names == {"nexo_foo_bar", "nexo_baz"}
+
+
+def test_collect_tool_names_handles_single_quotes_and_digits(tmp_path):
+    src = "TOOLS = [(handler, 'nexo_stray_2_tool', 'desc')]\n"
+    p = _write_plugin(tmp_path, "x.py", src)
+    names = _collect_declared_plugin_tool_names(str(p))
+    assert names == {"nexo_stray_2_tool"}
+
+
+def test_single_quoted_unmapped_tool_is_rejected(tmp_path, monkeypatch):
+    path = _write_plugin(tmp_path, "stray.py", "TOOLS = [(handler, 'nexo_stray_2_tool', 'desc')]\n")
+    monkeypatch.setattr(plugin_loader, "_collect_declared_plugin_names_from_map", lambda: {"nexo_other_tool"})
+    ok, reason = verify_plugin_in_inventory("stray.py", str(path))
+    assert ok is False
+    assert "not present in tool-enforcement-map" in reason

@@ -147,7 +147,13 @@ def isolated_db(tmp_path, monkeypatch):
         "local_context_db": test_local_context_db,
     }
 
-    # Cleanup
+    # Cleanup background source workers before closing SQLite connections.
+    try:
+        import pre_answer_router
+        pre_answer_router.shutdown_executor(wait=True)
+    except Exception:
+        pass
+
     db_core.close_db()
     if local_context_db is not None:
         local_context_db.close_local_context_db()

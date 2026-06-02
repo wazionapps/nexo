@@ -72,10 +72,14 @@ def _collect_declared_plugin_names_from_map() -> set[str]:
         with open(map_path, "r", encoding="utf-8") as fh:
             data = _json.load(fh)
         tools = data.get("tools") or {}
-        return {
-            name for name, meta in tools.items()
-            if isinstance(meta, dict) and meta.get("source") in ("plugin", "personal_plugin")
-        }
+        names: set[str] = set()
+        for name, meta in tools.items():
+            if not isinstance(meta, dict):
+                continue
+            source = str(meta.get("source") or "")
+            if source in {"plugin", "personal_plugin"} or source.startswith(("plugin:", "personal_plugin:")):
+                names.add(name)
+        return names
     except Exception:
         return set()
 
@@ -89,7 +93,7 @@ def _collect_declared_plugin_tool_names(plugin_path: str) -> set[str]:
         import re as _re
         with open(plugin_path, "r", encoding="utf-8") as fh:
             source = fh.read()
-        return set(_re.findall(r'"(nexo_[a-z_]+)"', source))
+        return set(_re.findall(r"""['"](nexo_[a-z0-9_]+)['"]""", source))
     except Exception:
         return set()
 

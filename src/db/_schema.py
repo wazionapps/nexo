@@ -2495,6 +2495,144 @@ def _m74_entity_live_profiles(conn):
     _migrate_add_index(conn, "idx_asset_context_updated_artifact", "asset_context_updated", "artifact_id, created_at")
 
 
+def _m75_failure_prevention_ledger(conn):
+    """FailurePrevention ledger for autopsy candidates and antibody proposals.
+
+    This is deliberately a non-authoritative coordination layer. Canonical
+    rules, outcomes, guard checks, protocol debt, hook runs, corrections, and
+    memory events remain owned by their existing tables.
+    """
+    _m6_error_guard_tables(conn)
+    _m8_adaptive_log_and_somatic(conn)
+    _m22_protocol_discipline_tables(conn)
+    _m32_outcomes(conn)
+    _m39_hook_runs(conn)
+    _m56_session_correction_requirements(conn)
+    _m59_memory_events(conn)
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS failure_prevention_cases (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            failure_uid TEXT NOT NULL UNIQUE,
+            policy_version TEXT NOT NULL DEFAULT 'failure_prevention.v1',
+            failure_type TEXT NOT NULL DEFAULT 'other',
+            area TEXT DEFAULT '',
+            entity_refs_json TEXT NOT NULL DEFAULT '[]',
+            primary_source_type TEXT NOT NULL,
+            primary_source_ref TEXT NOT NULL,
+            source_event_refs_json TEXT NOT NULL DEFAULT '[]',
+            evidence_refs_json TEXT NOT NULL DEFAULT '[]',
+            symptom_json TEXT NOT NULL DEFAULT '{}',
+            trigger_json TEXT NOT NULL DEFAULT '{}',
+            missed_signal_json TEXT NOT NULL DEFAULT '{}',
+            wrong_assumption_json TEXT NOT NULL DEFAULT '{}',
+            root_cause_json TEXT NOT NULL DEFAULT '{}',
+            corrective_action_json TEXT NOT NULL DEFAULT '{}',
+            severity TEXT NOT NULL DEFAULT 'p3',
+            frequency_count INTEGER NOT NULL DEFAULT 0,
+            confidence REAL NOT NULL DEFAULT 0.0,
+            status TEXT NOT NULL DEFAULT 'candidate',
+            learning_resolution_json TEXT NOT NULL DEFAULT '{}',
+            antibody_refs_json TEXT NOT NULL DEFAULT '[]',
+            privacy_level TEXT NOT NULL DEFAULT 'normal',
+            allowed_surfaces_json TEXT NOT NULL DEFAULT '["debug_local","audit"]',
+            opened_at REAL NOT NULL,
+            updated_at REAL NOT NULL,
+            review_due_at REAL NOT NULL,
+            expires_at REAL NOT NULL,
+            false_positive_count INTEGER NOT NULL DEFAULT 0,
+            last_triggered_at REAL NOT NULL,
+            metadata_json TEXT NOT NULL DEFAULT '{}',
+            CHECK(severity IN ('p0','p1','p2','p3','p4')),
+            CHECK(status IN (
+                'candidate','analyzing','action_required','antibody_pending',
+                'verifying','verified','resolved','rejected','false_positive',
+                'expired','rolled_back','conflict_review'
+            )),
+            CHECK(privacy_level IN ('public','normal','private','sensitive','secret')),
+            CHECK(frequency_count >= 0),
+            CHECK(false_positive_count >= 0),
+            CHECK(confidence >= 0.0 AND confidence <= 1.0)
+        )
+        """
+    )
+    _migrate_add_index(conn, "idx_failure_cases_area_status", "failure_prevention_cases", "area, status")
+    _migrate_add_index(conn, "idx_failure_cases_severity_status", "failure_prevention_cases", "severity, status")
+    _migrate_add_index(conn, "idx_failure_cases_status_review", "failure_prevention_cases", "status, review_due_at")
+    _migrate_add_index(conn, "idx_failure_cases_updated", "failure_prevention_cases", "updated_at")
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS failure_source_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_event_uid TEXT NOT NULL UNIQUE,
+            failure_uid TEXT NOT NULL,
+            policy_version TEXT NOT NULL DEFAULT 'failure_prevention.v1',
+            source_type TEXT NOT NULL,
+            source_ref TEXT NOT NULL,
+            evidence_refs_json TEXT NOT NULL DEFAULT '[]',
+            observed_at REAL NOT NULL,
+            validated INTEGER NOT NULL DEFAULT 0,
+            validator TEXT DEFAULT '',
+            validation_error TEXT DEFAULT '',
+            privacy_level TEXT NOT NULL DEFAULT 'normal',
+            created_at REAL NOT NULL,
+            updated_at REAL NOT NULL,
+            metadata_json TEXT NOT NULL DEFAULT '{}',
+            FOREIGN KEY(failure_uid) REFERENCES failure_prevention_cases(failure_uid) ON DELETE CASCADE,
+            CHECK(validated IN (0, 1)),
+            CHECK(privacy_level IN ('public','normal','private','sensitive','secret'))
+        )
+        """
+    )
+    _migrate_add_index(conn, "idx_failure_source_events_failure", "failure_source_events", "failure_uid")
+    _migrate_add_index(conn, "idx_failure_source_events_type", "failure_source_events", "source_type")
+    _migrate_add_index(conn, "idx_failure_source_events_observed", "failure_source_events", "observed_at")
+    _migrate_add_index(conn, "idx_failure_source_events_ref", "failure_source_events", "source_type, source_ref")
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS antibody_actions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            antibody_uid TEXT NOT NULL UNIQUE,
+            failure_uid TEXT NOT NULL,
+            policy_version TEXT NOT NULL DEFAULT 'failure_prevention.v1',
+            action_type TEXT NOT NULL,
+            target_system TEXT NOT NULL,
+            target_ref TEXT NOT NULL,
+            action_payload_ref TEXT DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'proposed',
+            activation_policy TEXT NOT NULL DEFAULT 'candidate_only',
+            required_verification TEXT DEFAULT '',
+            verification_ref TEXT DEFAULT '',
+            verification_status TEXT NOT NULL DEFAULT 'missing',
+            approved_by TEXT DEFAULT '',
+            approved_ref TEXT DEFAULT '',
+            rollback_ref TEXT DEFAULT '',
+            review_due_at REAL NOT NULL,
+            expires_at REAL NOT NULL,
+            privacy_level TEXT NOT NULL DEFAULT 'normal',
+            created_at REAL NOT NULL,
+            updated_at REAL NOT NULL,
+            applied_at REAL,
+            verified_at REAL,
+            metadata_json TEXT NOT NULL DEFAULT '{}',
+            FOREIGN KEY(failure_uid) REFERENCES failure_prevention_cases(failure_uid) ON DELETE CASCADE,
+            CHECK(target_ref != ''),
+            CHECK(status IN ('proposed','approved','applied','verifying','verified','rejected','expired','rolled_back','false_positive')),
+            CHECK(activation_policy IN ('candidate_only','shadow','warn','block_after_verification','manual_approval_required')),
+            CHECK(verification_status IN ('missing','pending','passed','failed','not_applicable')),
+            CHECK(privacy_level IN ('public','normal','private','sensitive','secret'))
+        )
+        """
+    )
+    _migrate_add_index(conn, "idx_antibody_actions_failure", "antibody_actions", "failure_uid")
+    _migrate_add_index(conn, "idx_antibody_actions_status", "antibody_actions", "status")
+    _migrate_add_index(conn, "idx_antibody_actions_target", "antibody_actions", "action_type, target_system, target_ref")
+    _migrate_add_index(conn, "idx_antibody_actions_verification", "antibody_actions", "verification_status, review_due_at")
+
+
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
     (2, "followups_reasoning", _m2_followups_reasoning),
@@ -2570,6 +2708,7 @@ MIGRATIONS = [
     (72, "memory_utility", _m72_memory_utility),
     (73, "operational_state_snapshots", _m73_operational_state_snapshots),
     (74, "entity_live_profiles", _m74_entity_live_profiles),
+    (75, "failure_prevention_ledger", _m75_failure_prevention_ledger),
 ]
 
 

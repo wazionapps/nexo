@@ -1223,6 +1223,15 @@ def _executor() -> concurrent.futures.ThreadPoolExecutor:
     return _EXECUTOR
 
 
+def shutdown_executor(*, wait: bool = True) -> None:
+    """Stop source workers before shared runtime resources are closed."""
+    global _EXECUTOR
+    executor = _EXECUTOR
+    _EXECUTOR = None
+    if executor is not None:
+        executor.shutdown(wait=wait, cancel_futures=True)
+
+
 def _manual_intent(intent: str) -> IntentClassification:
     clean = (intent or "").strip()
     if clean not in PRE_ANSWER_INTENTS:
@@ -2086,4 +2095,5 @@ __all__ = [
     "redact_secrets",
     "render_route",
     "route_pre_answer",
+    "shutdown_executor",
 ]

@@ -81,6 +81,40 @@
       },
       "triggers_after": []
     },
+    "nexo_antibody_propose": {
+      "description": "Record a proposed failure-prevention antibody action without executing it",
+      "category": "failure_prevention",
+      "source": "plugin:failure_prevention",
+      "requires": [
+        "failure_prevention_cases"
+      ],
+      "provides": [
+        "antibody_actions"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_antibody_rollback": {
+      "description": "Mark a failure-prevention antibody proposal as rolled back and inactive",
+      "category": "failure_prevention",
+      "source": "plugin:failure_prevention",
+      "requires": [
+        "antibody_actions"
+      ],
+      "provides": [
+        "antibody_actions"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
     "nexo_agent_create": {
       "description": "Register a new agent",
       "category": "agent",
@@ -204,6 +238,23 @@
       "source": "plugin:personal_scripts",
       "requires": [],
       "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_asset_context_updated": {
+      "description": "Record a redacted managed asset context update",
+      "category": "entity_live_profile",
+      "source": "plugin:entity_live_profile",
+      "requires": [
+        "asset_context_updated"
+      ],
+      "provides": [
+        "asset_context_updated"
+      ],
       "internal_calls": [],
       "enforcement": {
         "level": "none",
@@ -1571,6 +1622,21 @@
       },
       "triggers_after": []
     },
+    "nexo_entity_live_profile": {
+      "description": "Build a redacted non-authoritative EntityLiveProfile",
+      "category": "entity_live_profile",
+      "source": "plugin:entity_live_profile",
+      "requires": [],
+      "provides": [
+        "entity_profile_cache"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
     "nexo_entity_search": {
       "description": "Search entities",
       "category": "entity",
@@ -1590,6 +1656,23 @@
       "source": "plugin:entities",
       "requires": [],
       "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_managed_asset_upsert": {
+      "description": "Link a managed asset to an existing artifact/entity",
+      "category": "entity_live_profile",
+      "source": "plugin:entity_live_profile",
+      "requires": [
+        "nexo_managed_assets"
+      ],
+      "provides": [
+        "nexo_managed_assets"
+      ],
       "internal_calls": [],
       "enforcement": {
         "level": "none",
@@ -1802,6 +1885,70 @@
       "description": "Update followup fields",
       "category": "followups",
       "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_failure_prevention_cases": {
+      "description": "List failure-prevention cases or inspect one case by uid",
+      "category": "failure_prevention",
+      "source": "plugin:failure_prevention",
+      "requires": [
+        "failure_prevention_cases"
+      ],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_failure_prevention_false_positive": {
+      "description": "Mark a failure-prevention case or antibody as a false-positive signal",
+      "category": "failure_prevention",
+      "source": "plugin:failure_prevention",
+      "requires": [
+        "failure_prevention_cases"
+      ],
+      "provides": [
+        "failure_prevention_cases",
+        "antibody_actions"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_failure_prevention_ingest": {
+      "description": "Create or reinforce a redacted non-authoritative failure-prevention case",
+      "category": "failure_prevention",
+      "source": "plugin:failure_prevention",
+      "requires": [],
+      "provides": [
+        "failure_prevention_cases",
+        "failure_source_events"
+      ],
+      "internal_calls": [
+        "learning_resolver.resolve_learning_candidate"
+      ],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_failure_source_validate": {
+      "description": "Validate a failure source reference without mutating state",
+      "category": "failure_prevention",
+      "source": "plugin:failure_prevention",
       "requires": [],
       "provides": [],
       "internal_calls": [],
