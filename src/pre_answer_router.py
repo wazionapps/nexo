@@ -394,9 +394,11 @@ class SourceRequest:
     conversation_id: str = ""
     area: str = ""
     files: str = ""
+    surface: str = "pre_answer"
     max_chars: int = 1200
     token_budget: int = DEFAULT_TOKEN_BUDGET
     current_context: str = ""
+    budget_policy: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -504,6 +506,7 @@ _SOURCE_PLANS: dict[str, SourcePlan] = {
     "prior_work": SourcePlan(
         intent="prior_work",
         primary=(
+            SourceStep("semantic_layers", timeout_ms=120, max_chars=900),
             SourceStep("recent_context", timeout_ms=240),
             SourceStep("evidence_ledger", timeout_ms=260),
             SourceStep("commitments", timeout_ms=180),
@@ -533,6 +536,7 @@ _SOURCE_PLANS: dict[str, SourcePlan] = {
     "modify_existing": SourcePlan(
         intent="modify_existing",
         primary=(
+            SourceStep("semantic_layers", timeout_ms=120, max_chars=900),
             SourceStep("project_atlas", timeout_ms=140),
             SourceStep("guard_context", timeout_ms=160),
             SourceStep("change_log", timeout_ms=300),
@@ -546,6 +550,7 @@ _SOURCE_PLANS: dict[str, SourcePlan] = {
     "memory_question": SourcePlan(
         intent="memory_question",
         primary=(
+            SourceStep("semantic_layers", timeout_ms=120, max_chars=900),
             SourceStep("commitments", timeout_ms=180),
             SourceStep("reminders", timeout_ms=260),
             SourceStep("followups", timeout_ms=260),
@@ -562,6 +567,7 @@ _SOURCE_PLANS: dict[str, SourcePlan] = {
     "identity_authorship": SourcePlan(
         intent="identity_authorship",
         primary=(
+            SourceStep("semantic_layers", timeout_ms=120, max_chars=900),
             SourceStep("recent_context", timeout_ms=240),
             SourceStep("evidence_ledger", timeout_ms=260),
             SourceStep("commitments", timeout_ms=180),
@@ -574,6 +580,7 @@ _SOURCE_PLANS: dict[str, SourcePlan] = {
     "schedule_commitment": SourcePlan(
         intent="schedule_commitment",
         primary=(
+            SourceStep("semantic_layers", timeout_ms=120, max_chars=900),
             SourceStep("commitments", timeout_ms=180),
             SourceStep("reminders", timeout_ms=260),
             SourceStep("followups", timeout_ms=260),
@@ -979,9 +986,11 @@ def route_pre_answer(
                     conversation_id=conversation_id,
                     area=area,
                     files=files,
+                    surface=str((budget_policy or {}).get("surface") or "pre_answer"),
                     max_chars=step.max_chars,
                     token_budget=token_budget,
                     current_context=current_context,
+                    budget_policy=dict(budget_policy or {}),
                 )
                 result = _run_source_step(adapter, request, step, budget)
                 sources.append(result)
@@ -1092,6 +1101,7 @@ def render_route(
 
 def default_source_adapters() -> dict[str, SourceAdapter]:
     return {
+        "semantic_layers": _source_semantic_layers,
         "recent_context": _source_recent_context,
         "evidence_ledger": _source_evidence_ledger,
         "protocol_tasks": _source_protocol_tasks,
@@ -1435,6 +1445,53 @@ def _try_record_route_event(event: dict[str, Any]) -> None:
         conn.commit()
     except Exception:
         return
+
+
+def _source_semantic_layers(request: SourceRequest) -> SourceResult:
+    """Read fresh semantic layers only; never build or recompress in pre-answer."""
+    try:
+        from semantic_layers import select_semantic_layers
+    except Exception as exc:
+        return SourceResult(
+            source="semantic_layers",
+            ok=False,
+            skipped=True,
+            aborted_reason="source_error",
+            error=str(exc),
+        )
+
+    scope_hint: dict[str, str] = {}
+    if request.sid:
+        scope_hint = {"scope_type": "session", "scope_id": request.sid}
+    elif request.conversation_id:
+        scope_hint = {"scope_type": "conversation", "scope_id": request.conversation_id}
+    if not scope_hint:
+        return SourceResult(source="semantic_layers")
+
+    result = select_semantic_layers(
+        query=request.query,
+        intent_bundle={"intent_kind": request.intent},
+        budget_policy=request.budget_policy,
+        surface=request.surface,
+        scope_hint=scope_hint,
+    )
+    layers = result.get("layers") or []
+    rendered = str(result.get("rendered") or "")
+    if not layers or not rendered.strip():
+        return SourceResult(source="semantic_layers")
+
+    refs: list[str] = []
+    for layer in layers:
+        for ref in (layer.get("source_refs") or []) + (layer.get("evidence_refs") or []):
+            clean = str(ref or "").strip()
+            if clean and clean not in refs:
+                refs.append(clean)
+    return SourceResult(
+        source="semantic_layers",
+        rendered=_clip(rendered, request.max_chars),
+        evidence_refs=refs,
+        result_count=len(layers),
+    )
 
 
 def _source_recent_context(request: SourceRequest) -> SourceResult:

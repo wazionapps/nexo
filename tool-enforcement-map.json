@@ -3857,6 +3857,89 @@
       },
       "triggers_after": []
     },
+    "nexo_semantic_layer_get": {
+      "description": "Get one fresh semantic layer after surface/privacy filtering",
+      "category": "semantic_layers",
+      "source": "plugin:semantic_layers",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_semantic_layers_build": {
+      "description": "Build or refresh redacted non-authoritative semantic layers",
+      "category": "semantic_layers",
+      "source": "plugin:semantic_layers",
+      "requires": [],
+      "provides": [
+        "semantic_layers",
+        "semantic_layer_source_refs"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_semantic_layers_list": {
+      "description": "List semantic layers visible on the requested surface",
+      "category": "semantic_layers",
+      "source": "plugin:semantic_layers",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_semantic_layers_mark_stale": {
+      "description": "Mark semantic layers stale by source reference",
+      "category": "semantic_layers",
+      "source": "plugin:semantic_layers",
+      "requires": [],
+      "provides": [
+        "semantic_layers"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_semantic_layers_select": {
+      "description": "Select semantic layers for a structured intent and scope",
+      "category": "semantic_layers",
+      "source": "plugin:semantic_layers",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_semantic_layers_validate": {
+      "description": "Validate semantic layer source references",
+      "category": "semantic_layers",
+      "source": "plugin:semantic_layers",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
     "nexo_skill_apply": {
       "description": "Apply a skill in guide/execute/hybrid mode",
       "category": "skill",

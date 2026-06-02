@@ -450,6 +450,23 @@ def handle_session_portable_context(sid: str = "") -> str:
     ]
     if session.get("external_session_id"):
         lines.append(f"External session: {session['external_session_id']}")
+
+    try:
+        from semantic_layers import select_semantic_layers
+
+        semantic = select_semantic_layers(
+            query=session.get("task") or "",
+            intent_bundle={"intent_kind": "resume_workflow"},
+            budget_policy={"budget_tier": "standard", "max_rendered_chars": 1800},
+            surface="portable_context",
+            scope_hint={"scope_type": "session", "scope_id": session["sid"]},
+            requested_layers=["headline", "brief", "next_action", "risks", "source_map"],
+        )
+        if semantic.get("rendered"):
+            lines.extend(["", "Semantic layers:", str(semantic["rendered"])])
+    except Exception:
+        pass
+
     if checkpoint:
         lines.extend(
             [

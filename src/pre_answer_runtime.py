@@ -14,6 +14,7 @@ RUNTIME_BUDGET_POLICY_VERSION = "runtime_budget_v1"
 
 HEAVY_SOURCES = {"memory", "cognitive", "local_context", "transcripts"}
 CANONICAL_ROUTER_SOURCES = {
+    "semantic_layers",
     "recent_context",
     "evidence_ledger",
     "commitments",
@@ -152,7 +153,7 @@ def _tier_spec(tier: str) -> dict[str, Any]:
             "max_rendered_chars": 900,
             "max_sources": 2,
             "max_source_timeout_ms": 140,
-            "allowed_sources": ("project_atlas", "system_catalog", "recent_context"),
+            "allowed_sources": ("semantic_layers", "project_atlas", "system_catalog", "recent_context"),
             "forbidden_sources": tuple(sorted(HEAVY_SOURCES | {"remote_llm"})),
             "required_sources": (),
             "fallback_policy": "primary_only",
@@ -204,6 +205,7 @@ def _tier_spec(tier: str) -> dict[str, Any]:
         "max_sources": 5,
         "max_source_timeout_ms": 500,
         "allowed_sources": (
+            "semantic_layers",
             "commitments",
             "reminders",
             "followups",

@@ -62,6 +62,7 @@ def test_pre_answer_router_intent_matrix_multilingual(fake_pre_answer_semantic_r
 
     prior_plan = router.plan_sources("prior_work")
     assert [step.name for step in prior_plan.primary] == [
+        "semantic_layers",
         "recent_context",
         "evidence_ledger",
         "commitments",
@@ -73,7 +74,8 @@ def test_pre_answer_router_intent_matrix_multilingual(fake_pre_answer_semantic_r
     ]
     assert prior_plan.fallback[0].name == "transcripts"
     schedule_plan = router.plan_sources("schedule_commitment")
-    assert schedule_plan.primary[0].name == "commitments"
+    assert schedule_plan.primary[0].name == "semantic_layers"
+    assert schedule_plan.primary[1].name == "commitments"
 
 
 def test_pre_answer_router_deadline_skips_slow_local_context():

@@ -2633,6 +2633,131 @@ def _m75_failure_prevention_ledger(conn):
     _migrate_add_index(conn, "idx_antibody_actions_verification", "antibody_actions", "verification_status, review_due_at")
 
 
+def _m76_semantic_layers(conn):
+    """SemanticLayers cache for compact, source-backed continuity.
+
+    The tables are deliberately non-authoritative. Original facts remain owned
+    by diary, workflow, task, evidence, memory, transcript-index and continuity
+    stores; these rows only cache redacted views with source fingerprints.
+    """
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS session_diary (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT NOT NULL,
+            created_at TEXT DEFAULT (datetime('now')),
+            decisions TEXT NOT NULL DEFAULT '',
+            discarded TEXT,
+            pending TEXT,
+            context_next TEXT,
+            mental_state TEXT,
+            domain TEXT,
+            user_signals TEXT,
+            summary TEXT NOT NULL DEFAULT ''
+        )
+        """
+    )
+    _m4_session_diary_columns(conn)
+    _m7_diary_source_and_draft(conn)
+    _m22_protocol_discipline_tables(conn)
+    _m24_durable_workflow_runtime(conn)
+    _m25_workflow_goal_stack(conn)
+    _m30_hot_context_memory(conn)
+    _m54_continuity_snapshots(conn)
+    _m59_memory_events(conn)
+    _m60_memory_observations(conn)
+    _m66_transcript_index(conn)
+    _m70_commitments(conn)
+    _m74_entity_live_profiles(conn)
+    _m75_failure_prevention_ledger(conn)
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS semantic_layers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            layer_uid TEXT NOT NULL UNIQUE,
+            scope_type TEXT NOT NULL,
+            scope_id TEXT NOT NULL,
+            layer_kind TEXT NOT NULL,
+            policy_version TEXT NOT NULL DEFAULT 'semantic_layers_v1',
+            status TEXT NOT NULL DEFAULT 'fresh',
+            quality_state TEXT NOT NULL DEFAULT 'complete',
+            value_redacted TEXT NOT NULL DEFAULT '',
+            value_ref TEXT NOT NULL DEFAULT '',
+            token_size INTEGER NOT NULL DEFAULT 0,
+            source_refs_json TEXT NOT NULL DEFAULT '[]',
+            evidence_refs_json TEXT NOT NULL DEFAULT '[]',
+            source_fingerprint TEXT NOT NULL,
+            content_hash TEXT NOT NULL,
+            privacy_level TEXT NOT NULL DEFAULT 'normal',
+            allowed_surfaces_json TEXT NOT NULL DEFAULT '[]',
+            confidence REAL NOT NULL DEFAULT 0.0,
+            coverage REAL NOT NULL DEFAULT 0.0,
+            generated_by TEXT NOT NULL DEFAULT '',
+            generator_version TEXT NOT NULL DEFAULT 'continuity_layer_builder_v1',
+            generated_at REAL NOT NULL,
+            updated_at REAL NOT NULL,
+            source_max_updated_at TEXT NOT NULL DEFAULT '',
+            expires_at REAL NOT NULL DEFAULT 0,
+            stale_at REAL NOT NULL DEFAULT 0,
+            stale_reason TEXT NOT NULL DEFAULT '',
+            metadata_json TEXT NOT NULL DEFAULT '{}',
+            CHECK(scope_type IN (
+                'session','conversation','workflow','workflow_goal',
+                'protocol_task','release','project_entity'
+            )),
+            CHECK(layer_kind IN (
+                'headline','brief','timeline','decisions','commitments',
+                'files','evidence','risks','next_action','semantic_tags',
+                'source_map'
+            )),
+            CHECK(status IN ('fresh','stale','expired','invalid')),
+            CHECK(quality_state IN (
+                'complete','partial','degraded','conflicted',
+                'source_missing','invalid'
+            )),
+            CHECK(privacy_level IN ('public','normal','private','sensitive','secret')),
+            CHECK(confidence >= 0.0 AND confidence <= 1.0),
+            CHECK(coverage >= 0.0 AND coverage <= 1.0),
+            CHECK(token_size >= 0),
+            UNIQUE(scope_type, scope_id, layer_kind, source_fingerprint, policy_version)
+        )
+        """
+    )
+    _migrate_add_index(conn, "idx_semantic_layers_scope_kind_status", "semantic_layers", "scope_type, scope_id, layer_kind, status, updated_at")
+    _migrate_add_index(conn, "idx_semantic_layers_scope_status", "semantic_layers", "scope_type, scope_id, status, updated_at")
+    _migrate_add_index(conn, "idx_semantic_layers_fingerprint", "semantic_layers", "source_fingerprint")
+    _migrate_add_index(conn, "idx_semantic_layers_stale", "semantic_layers", "status, stale_at")
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS semantic_layer_source_refs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            layer_uid TEXT NOT NULL,
+            source_ref TEXT NOT NULL,
+            source_kind TEXT NOT NULL,
+            source_version TEXT NOT NULL,
+            source_updated_at TEXT NOT NULL DEFAULT '',
+            privacy_level TEXT NOT NULL DEFAULT 'normal',
+            required_for_layer INTEGER NOT NULL DEFAULT 1,
+            validation_status TEXT NOT NULL DEFAULT 'ok',
+            validation_error TEXT NOT NULL DEFAULT '',
+            created_at REAL NOT NULL,
+            updated_at REAL NOT NULL,
+            metadata_json TEXT NOT NULL DEFAULT '{}',
+            FOREIGN KEY(layer_uid) REFERENCES semantic_layers(layer_uid) ON DELETE CASCADE,
+            CHECK(required_for_layer IN (0, 1)),
+            CHECK(validation_status IN ('ok','missing','changed','invalid','unsupported')),
+            CHECK(privacy_level IN ('public','normal','private','sensitive','secret')),
+            UNIQUE(layer_uid, source_ref, source_version)
+        )
+        """
+    )
+    _migrate_add_index(conn, "idx_semantic_layer_sources_layer", "semantic_layer_source_refs", "layer_uid")
+    _migrate_add_index(conn, "idx_semantic_layer_sources_ref", "semantic_layer_source_refs", "source_ref")
+    _migrate_add_index(conn, "idx_semantic_layer_sources_kind", "semantic_layer_source_refs", "source_kind, validation_status")
+
+
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
     (2, "followups_reasoning", _m2_followups_reasoning),
@@ -2709,6 +2834,7 @@ MIGRATIONS = [
     (73, "operational_state_snapshots", _m73_operational_state_snapshots),
     (74, "entity_live_profiles", _m74_entity_live_profiles),
     (75, "failure_prevention_ledger", _m75_failure_prevention_ledger),
+    (76, "semantic_layers", _m76_semantic_layers),
 ]
 
 

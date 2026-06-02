@@ -11,6 +11,7 @@ from db._schema import (
     _m68_memory_fabric_index,
     _m74_entity_live_profiles,
     _m75_failure_prevention_ledger,
+    _m76_semantic_layers,
     run_migrations,
 )
 
@@ -36,6 +37,7 @@ def test_init_db_creates_core_tables():
         "asset_context_updated",
         "failure_prevention_cases", "failure_source_events",
         "antibody_actions",
+        "semantic_layers", "semantic_layer_source_refs",
     }
     assert expected.issubset(tables), f"Missing tables: {expected - tables}"
 
@@ -45,7 +47,88 @@ def test_migrations_idempotent():
     db_mod.run_migrations()
     db_mod.run_migrations()
     version = db_mod.get_schema_version()
-    assert version >= 75
+    assert version >= 76
+
+
+def test_m76_semantic_layers_migration_is_idempotent_and_constrained():
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+
+    _m76_semantic_layers(conn)
+    _m76_semantic_layers(conn)
+
+    tables = {
+        row["name"]
+        for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+    }
+    assert {"semantic_layers", "semantic_layer_source_refs", "workflow_runs", "transcript_index"} <= tables
+
+    now = 1780408200.0
+    conn.execute(
+        """
+        INSERT INTO semantic_layers (
+            layer_uid, scope_type, scope_id, layer_kind, policy_version,
+            status, quality_state, value_redacted, token_size,
+            source_refs_json, evidence_refs_json, source_fingerprint,
+            content_hash, privacy_level, allowed_surfaces_json, confidence,
+            coverage, generated_at, updated_at
+        ) VALUES (
+            'SL-test', 'workflow', 'WF-test', 'next_action', 'semantic_layers_v1',
+            'fresh', 'complete', 'Next action', 2,
+            '["workflow_run:WF-test"]', '[]', 'fp1',
+            'ch1', 'normal', '["pre_answer"]', 0.8,
+            1.0, ?, ?
+        )
+        """,
+        (now, now),
+    )
+    with pytest.raises(sqlite3.IntegrityError):
+        conn.execute(
+            """
+            INSERT INTO semantic_layers (
+                layer_uid, scope_type, scope_id, layer_kind, policy_version,
+                status, quality_state, value_redacted, token_size,
+                source_refs_json, evidence_refs_json, source_fingerprint,
+                content_hash, privacy_level, allowed_surfaces_json, confidence,
+                coverage, generated_at, updated_at
+            ) VALUES (
+                'SL-test-2', 'workflow', 'WF-test', 'next_action', 'semantic_layers_v1',
+                'fresh', 'complete', 'Next action', 2,
+                '["workflow_run:WF-test"]', '[]', 'fp1',
+                'ch2', 'normal', '["pre_answer"]', 0.8,
+                1.0, ?, ?
+            )
+            """,
+            (now, now),
+        )
+    with pytest.raises(sqlite3.IntegrityError):
+        conn.execute(
+            """
+            INSERT INTO semantic_layers (
+                layer_uid, scope_type, scope_id, layer_kind, source_fingerprint,
+                content_hash, generated_at, updated_at, confidence
+            ) VALUES ('SL-bad', 'workflow', 'WF-test', 'next_action', 'fp2', 'ch3', ?, ?, 2.0)
+            """,
+            (now, now),
+        )
+
+    conn.execute(
+        """
+        INSERT INTO semantic_layer_source_refs (
+            layer_uid, source_ref, source_kind, source_version, created_at, updated_at
+        ) VALUES ('SL-test', 'workflow_run:WF-test', 'workflow_run', 'v1', ?, ?)
+        """,
+        (now, now),
+    )
+    with pytest.raises(sqlite3.IntegrityError):
+        conn.execute(
+            """
+            INSERT INTO semantic_layer_source_refs (
+                layer_uid, source_ref, source_kind, source_version, created_at, updated_at
+            ) VALUES ('SL-test', 'workflow_run:WF-test', 'workflow_run', 'v1', ?, ?)
+            """,
+            (now, now),
+        )
 
 
 def test_m75_failure_prevention_ledger_is_idempotent_and_constrained():
@@ -148,7 +231,7 @@ def test_m75_failure_prevention_ledger_is_idempotent_and_constrained():
         )
 
 
-def test_run_migrations_from_v70_reaches_v75_without_losing_existing_rows():
+def test_run_migrations_from_v70_reaches_v76_without_losing_existing_rows():
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
     conn.execute(
@@ -180,14 +263,59 @@ def test_run_migrations_from_v70_reaches_v75_without_losing_existing_rows():
     run_migrations(conn)
 
     version = conn.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0]
-    assert version >= 75
+    assert version >= 76
     assert conn.execute("SELECT COUNT(*) FROM outcomes").fetchone()[0] == 1
     tables = {
         row["name"]
         for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
     }
-    assert {"failure_prevention_cases", "failure_source_events", "antibody_actions"} <= tables
+    assert {
+        "failure_prevention_cases", "failure_source_events", "antibody_actions",
+        "semantic_layers", "semantic_layer_source_refs",
+    } <= tables
     assert conn.execute("SELECT COUNT(*) FROM schema_migrations WHERE version = 75").fetchone()[0] == 1
+    assert conn.execute("SELECT COUNT(*) FROM schema_migrations WHERE version = 76").fetchone()[0] == 1
+
+
+def test_run_migrations_from_v75_reaches_v76_without_losing_existing_rows():
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute(
+        """
+        CREATE TABLE schema_migrations (
+            version INTEGER PRIMARY KEY,
+            name TEXT NOT NULL,
+            applied_at TEXT DEFAULT (datetime('now'))
+        )
+        """
+    )
+    conn.executemany(
+        "INSERT INTO schema_migrations(version, name) VALUES (?, ?)",
+        [(version, f"legacy_{version}") for version in range(1, 76)],
+    )
+    from db._schema import _m22_protocol_discipline_tables
+
+    _m22_protocol_discipline_tables(conn)
+    conn.execute(
+        """
+        INSERT INTO protocol_tasks (
+            task_id, session_id, goal, task_type, status
+        ) VALUES ('PT-existing', 's1', 'preserve task', 'edit', 'open')
+        """
+    )
+    conn.commit()
+
+    run_migrations(conn)
+    run_migrations(conn)
+
+    assert conn.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0] >= 76
+    assert conn.execute("SELECT COUNT(*) FROM protocol_tasks WHERE task_id='PT-existing'").fetchone()[0] == 1
+    assert conn.execute("SELECT COUNT(*) FROM schema_migrations WHERE version = 76").fetchone()[0] == 1
+    tables = {
+        row["name"]
+        for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+    }
+    assert {"semantic_layers", "semantic_layer_source_refs"} <= tables
 
 
 def test_m74_entity_live_profiles_migration_is_idempotent_and_constrained():
