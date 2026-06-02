@@ -18,7 +18,7 @@ import re
 import subprocess
 import time
 import unicodedata
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
@@ -445,6 +445,14 @@ class PreAnswerRoute:
     aborted_reason: str = ""
     telemetry: dict[str, Any] = field(default_factory=dict)
     classification: IntentClassification | None = None
+    budget_policy: dict[str, Any] = field(default_factory=dict)
+    required_sources_count: int = 0
+    missing_required_sources_count: int = 0
+    optional_sources_skipped_count: int = 0
+    required_source_timeouts: list[str] = field(default_factory=list)
+    must_disclose_gap: bool = False
+    gap_disclosed: bool = False
+    decision_signal: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -464,6 +472,18 @@ class PreAnswerRoute:
             },
             "sources": [source.to_dict() for source in self.sources],
             "telemetry": dict(self.telemetry),
+            "budget_policy": dict(self.budget_policy),
+            "budget_tier": self.budget_policy.get("budget_tier", ""),
+            "budget_decision_uid": self.budget_policy.get("budget_decision_uid", ""),
+            "policy_version": self.budget_policy.get("policy_version", ""),
+            "first_response_deadline_ms": int(self.budget_policy.get("first_response_deadline_ms") or 0),
+            "required_sources_count": int(self.required_sources_count),
+            "missing_required_sources_count": int(self.missing_required_sources_count),
+            "optional_sources_skipped_count": int(self.optional_sources_skipped_count),
+            "required_source_timeouts": list(self.required_source_timeouts),
+            "must_disclose_gap": bool(self.must_disclose_gap),
+            "gap_disclosed": bool(self.gap_disclosed),
+            "decision_signal": self.decision_signal,
             "classification": {
                 "intent": self.classification.intent,
                 "confidence": round(float(self.classification.confidence), 4),
@@ -580,6 +600,87 @@ _SOURCE_PLANS: dict[str, SourcePlan] = {
 }
 
 _EXECUTOR: concurrent.futures.ThreadPoolExecutor | None = None
+
+
+def _as_budget_list(policy: dict[str, Any], key: str) -> tuple[str, ...]:
+    value = policy.get(key) if isinstance(policy, dict) else ()
+    if isinstance(value, str):
+        value = [item.strip() for item in value.split(",")]
+    if not isinstance(value, (list, tuple, set)):
+        return ()
+    return tuple(str(item).strip() for item in value if str(item or "").strip())
+
+
+def _budget_int(policy: dict[str, Any], key: str, default: int) -> int:
+    try:
+        value = int(policy.get(key))
+    except Exception:
+        return default
+    return value if value >= 0 else default
+
+
+def _step_allowed(step: SourceStep, *, allowed: set[str], forbidden: set[str], required: set[str]) -> bool:
+    if step.name in forbidden:
+        return False
+    if not allowed:
+        return True
+    return step.name in allowed or step.name in required
+
+
+def _budgeted_step(step: SourceStep, *, max_source_timeout_ms: int) -> SourceStep:
+    timeout = step.timeout_ms
+    if max_source_timeout_ms > 0:
+        timeout = min(timeout, max_source_timeout_ms)
+    return replace(step, timeout_ms=max(1, int(timeout)))
+
+
+def _apply_budget_policy_to_plan(
+    source_plan: SourcePlan,
+    policy: dict[str, Any] | None,
+    adapters: dict[str, SourceAdapter],
+) -> SourcePlan:
+    if not policy:
+        return source_plan
+    allowed = set(_as_budget_list(policy, "allowed_sources"))
+    forbidden = set(_as_budget_list(policy, "forbidden_sources"))
+    required = set(_as_budget_list(policy, "required_sources"))
+    max_sources = _budget_int(policy, "max_sources", len(source_plan.all_steps()) or 999)
+    max_source_timeout_ms = _budget_int(policy, "max_source_timeout_ms", 0)
+    fallback_policy = str(policy.get("fallback_policy") or "")
+    if max_sources <= 0:
+        return SourcePlan(intent=source_plan.intent)
+
+    selected: list[SourceStep] = []
+    selected_names: set[str] = set()
+
+    def _append(step: SourceStep) -> None:
+        if len(selected) >= max_sources or step.name in selected_names:
+            return
+        if step.name not in adapters:
+            return
+        if not _step_allowed(step, allowed=allowed, forbidden=forbidden, required=required):
+            return
+        selected.append(_budgeted_step(step, max_source_timeout_ms=max_source_timeout_ms))
+        selected_names.add(step.name)
+
+    for required_name in required:
+        if required_name in forbidden or required_name not in adapters:
+            continue
+        _append(SourceStep(required_name, timeout_ms=max_source_timeout_ms or 300))
+    for step in source_plan.primary:
+        _append(step)
+    if fallback_policy != "primary_only":
+        for step in source_plan.fallback:
+            _append(step)
+
+    primary: list[SourceStep] = []
+    fallback: list[SourceStep] = []
+    for step in selected:
+        if step.phase == "fallback":
+            fallback.append(step)
+        else:
+            primary.append(step)
+    return SourcePlan(intent=source_plan.intent, primary=tuple(primary), fallback=tuple(fallback))
 
 
 def classify_intent(query: str, *, current_context: str = "") -> IntentClassification:
@@ -816,6 +917,8 @@ def route_pre_answer(
     current_context: str = "",
     source_adapters: dict[str, SourceAdapter] | None = None,
     telemetry_sink: TelemetrySink | None = None,
+    budget_policy: dict[str, Any] | None = None,
+    classification_override: IntentClassification | None = None,
 ) -> PreAnswerRoute:
     """Route a user turn through pre-answer context sources.
 
@@ -823,11 +926,19 @@ def route_pre_answer(
     entries, never exceptions that block the user-visible answer.
     """
     started = time.monotonic()
-    classification = classify_intent(query, current_context=current_context) if intent == "auto" else _manual_intent(intent)
-    source_plan = plan_sources(classification.intent)
+    classification = (
+        classification_override
+        if classification_override is not None
+        else classify_intent(query, current_context=current_context)
+        if intent == "auto"
+        else _manual_intent(intent)
+    )
+    base_source_plan = plan_sources(classification.intent)
     budget = _DeadlineBudget(budget_ms)
     adapters = dict(default_source_adapters())
     adapters.update(source_adapters or {})
+    source_plan = _apply_budget_policy_to_plan(base_source_plan, budget_policy, adapters)
+    required_sources = set(_as_budget_list(budget_policy or {}, "required_sources"))
 
     sources: list[SourceResult] = []
     evidence_refs: list[str] = []
@@ -880,14 +991,34 @@ def route_pre_answer(
                     evidence_refs.extend(result.evidence_refs or [f"{result.source}:inline"])
 
     elapsed_ms = (time.monotonic() - started) * 1000
+    consulted_or_evident = {source.source for source in sources if not source.skipped or source.has_evidence}
+    required_source_timeouts = [
+        source.source
+        for source in sources
+        if source.source in required_sources
+        and source.skipped
+        and source.aborted_reason in {"timeout", "deadline_exhausted", "source_unavailable", "source_error"}
+    ]
+    missing_required = sorted(required_sources - consulted_or_evident)
+    missing_required_count = len(set(missing_required) | set(required_source_timeouts))
+    optional_sources_skipped_count = sum(1 for source in sources if source.skipped and source.source not in required_sources)
     rendered = render_route(
         query=query,
         classification=classification,
         sources=sources,
         token_budget=token_budget,
     )
+    max_rendered_chars = _budget_int(budget_policy or {}, "max_rendered_chars", 0)
+    if max_rendered_chars > 0:
+        rendered = _clip(rendered, max_rendered_chars)
+    elif budget_policy and max_rendered_chars == 0:
+        rendered = ""
     should_inject = classification.intent in INJECTING_INTENTS and any(source.has_evidence for source in sources)
-    aborted_reason = _route_aborted_reason(sources, budget)
+    if not rendered:
+        should_inject = False
+    aborted_reason = "required_source_timeout" if required_source_timeouts else _route_aborted_reason(sources, budget)
+    must_disclose_gap = bool((budget_policy or {}).get("must_disclose_gap") or missing_required_count)
+    decision_signal = "defer" if missing_required_count and (budget_policy or {}).get("fallback_policy") == "mandatory_fail_closed" else ""
     telemetry = _build_route_event(
         query=query,
         route_intent=classification.intent,
@@ -901,6 +1032,11 @@ def route_pre_answer(
         area=area,
         files=files,
         aborted_reason=aborted_reason,
+        budget_policy=budget_policy or {},
+        required_sources_count=len(required_sources),
+        missing_required_sources_count=missing_required_count,
+        optional_sources_skipped_count=optional_sources_skipped_count,
+        gap_disclosed=False,
     )
     _emit_telemetry(telemetry, telemetry_sink)
 
@@ -918,6 +1054,14 @@ def route_pre_answer(
         aborted_reason=aborted_reason,
         telemetry=telemetry,
         classification=classification,
+        budget_policy=dict(budget_policy or {}),
+        required_sources_count=len(required_sources),
+        missing_required_sources_count=missing_required_count,
+        optional_sources_skipped_count=optional_sources_skipped_count,
+        required_source_timeouts=list(dict.fromkeys(required_source_timeouts)),
+        must_disclose_gap=must_disclose_gap,
+        gap_disclosed=False,
+        decision_signal=decision_signal,
     )
 
 
@@ -1194,18 +1338,33 @@ def _build_route_event(
     area: str,
     files: str,
     aborted_reason: str,
+    budget_policy: dict[str, Any] | None = None,
+    required_sources_count: int = 0,
+    missing_required_sources_count: int = 0,
+    optional_sources_skipped_count: int = 0,
+    gap_disclosed: bool = False,
 ) -> dict[str, Any]:
     consulted = [source.source for source in sources if not source.skipped]
     skipped = [source.source for source in sources if source.skipped]
+    policy = budget_policy or {}
     return {
         "event": "pre_answer_route",
         "query_hash": hashlib.sha256(str(query or "").encode("utf-8", errors="ignore")).hexdigest(),
-        "query_preview": redact_secrets(query, max_chars=160),
         "intent": route_intent,
         "confidence": round(float(confidence), 4),
         "should_inject": bool(should_inject),
         "elapsed_ms": round(float(elapsed_ms), 2),
         "budget_ms": int(budget_ms or DEFAULT_BUDGET_MS),
+        "budget_tier": str(policy.get("budget_tier") or ""),
+        "budget_decision_uid": str(policy.get("budget_decision_uid") or ""),
+        "policy_version": str(policy.get("policy_version") or ""),
+        "surface": str(policy.get("surface") or ""),
+        "risk_level": str(policy.get("risk_level") or ""),
+        "first_response_deadline_ms": int(policy.get("first_response_deadline_ms") or 0),
+        "required_sources_count": int(required_sources_count),
+        "missing_required_sources_count": int(missing_required_sources_count),
+        "optional_sources_skipped_count": int(optional_sources_skipped_count),
+        "gap_disclosed": bool(gap_disclosed),
         "sources_consulted": consulted,
         "sources_skipped": skipped,
         "source_stats": [

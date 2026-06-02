@@ -1358,8 +1358,8 @@ def nexo_pre_answer_route(
     conversation_id: str = "",
     area: str = "",
     files: str = "",
-    budget_ms: int = 2500,
-    token_budget: int = 2500,
+    budget_ms: int = 0,
+    token_budget: int = 0,
     current_context: str = "",
     client: str = "mcp",
 ) -> str:

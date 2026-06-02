@@ -22,6 +22,8 @@ def test_cognitive_control_observatory_is_read_only(isolated_db):
         source="local_context",
         route_stage="pre_answer:shadow",
         intent="file_location",
+        budget_tier="quick",
+        elapsed_ms=50,
         created_at=1000.0,
     )
 
@@ -38,6 +40,8 @@ def test_cognitive_control_observatory_is_read_only(isolated_db):
     assert payload["read_only"] is True
     assert payload["phase_coverage"]["phase_0_observatory"] is True
     assert payload["local_context"]["usage"]["by_source"]["local_context"] == 1
+    assert payload["runtime_budgets"]["by_tier"]["quick"]["sample_count"] == 1
+    assert payload["runtime_budgets"]["by_tier"]["quick"]["p95_elapsed_ms"] == 50
     assert payload["learnings"]["active"] == 1
     assert payload["followups"]["counts"]["active"] == 1
     assert payload["intraday_memory"]["health"]["counts"]["events"] == 1

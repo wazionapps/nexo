@@ -49,6 +49,28 @@ def test_pre_answer_cli_route_accepts_stdin_payload_without_argv_payload(tmp_pat
     assert usage_db.exists()
 
 
+def test_pre_answer_cli_route_uses_auto_budget_when_not_overridden(tmp_path):
+    usage_db = tmp_path / "usage.db"
+    payload = {
+        "query": "hola, dime una frase corta",
+        "intent": "general",
+        "source": "test-cli",
+    }
+
+    result = _run_cli(
+        ["pre-answer", "route", "--json", "--payload-stdin"],
+        input_text=json.dumps(payload),
+        env={"NEXO_LOCAL_CONTEXT_USAGE_DB": str(usage_db)},
+    )
+
+    assert result.returncode == 0, result.stderr
+    data = json.loads(result.stdout)
+    assert data["ok"] is True
+    assert data["budget_tier"] == "instant"
+    assert data["deadline_ms"] == 80
+    assert data["runtime_budget_policy"]["policy_version"] == "runtime_budget_v1"
+
+
 def test_pre_answer_cli_route_rejects_invalid_json():
     result = _run_cli(["pre-answer", "route", "--json", "--payload", "{bad"])
 

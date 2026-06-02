@@ -204,12 +204,14 @@ def build_cognitive_control_observatory(
             "usage": local_usage,
             "status": local_status,
         },
+        "runtime_budgets": local_usage.get("runtime_budget_metrics") or {},
         "learnings": learning_summary,
         "followups": followup_summary,
         "intraday_memory": intraday_summary,
     }
     payload["summary"] = {
         "local_context_events": int(local_usage.get("total_events") or 0),
+        "runtime_budget_tiers": len((local_usage.get("runtime_budget_metrics") or {}).get("by_tier") or {}),
         "active_learnings": int(learning_summary.get("active") or 0),
         "active_followups": int((followup_summary.get("counts") or {}).get("active") or 0),
         "intraday_facts": int(intraday_summary.get("intraday_facts_window") or 0),

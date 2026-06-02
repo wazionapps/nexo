@@ -146,9 +146,9 @@ def test_pre_answer_router_logs_route_event_without_raw_secret():
     assert secret not in telemetry_blob
     assert github_secret not in telemetry_blob
     assert "plain123" not in telemetry_blob
+    assert "query_preview" not in telemetry_blob
     assert secret not in result_blob
     assert github_secret not in result_blob
-    assert "[REDACTED_SECRET]" in telemetry_blob
     assert events[0]["query_hash"]
     assert "query" not in events[0]
 

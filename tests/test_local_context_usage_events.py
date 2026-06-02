@@ -126,6 +126,183 @@ def test_record_router_usage_marks_deadline_abortions_as_timeouts():
     assert result["event"]["timed_out"] is True
 
 
+def test_record_router_usage_records_source_stats_with_budget_fields():
+    payload = {
+        "ok": True,
+        "intent": "file_location",
+        "should_inject": False,
+        "evidence_refs": [],
+        "budget_tier": "quick",
+        "budget_decision_uid": "bd-source",
+        "policy_version": "runtime_budget_v1",
+        "first_response_deadline_ms": 300,
+        "source_stats": [
+            {
+                "source": "project_atlas",
+                "phase": "primary",
+                "ok": True,
+                "elapsed_ms": 12,
+                "result_count": 0,
+                "evidence_refs_count": 0,
+                "aborted_reason": "",
+            }
+        ],
+        "runtime_budget_policy": {
+            "budget_tier": "quick",
+            "budget_decision_uid": "bd-source",
+            "policy_version": "runtime_budget_v1",
+            "surface": "pre_answer",
+            "risk_level": "low",
+            "allowed_sources": ["project_atlas"],
+        },
+    }
+
+    result = usage_events.record_router_usage("where is file", payload, elapsed_ms=20, deadline_ms=300)
+    events = usage_events.list_recent_events(limit=5)
+
+    assert result["ok"] is True
+    assert events[0]["source"] == "pre_answer_router"
+    assert any(event["source"] == "project_atlas" and event["budget_tier"] == "quick" for event in events)
+
+
+def test_usage_events_fresh_schema_has_budget_columns(isolated_db):
+    query = "release status"
+    result = usage_events.record_usage_event(
+        query=query,
+        source="pre_answer_router",
+        budget_tier="critical",
+        budget_decision_uid="bd1",
+        policy_version="runtime_budget_v1",
+        surface="pre_answer",
+        risk_level="critical",
+        first_response_deadline_ms=1500,
+        required_sources_count=3,
+        missing_required_sources_count=1,
+        optional_sources_skipped_count=2,
+        gap_disclosed=True,
+        privacy_level="private",
+    )
+
+    assert result["ok"] is True
+    event = result["event"]
+    assert event["budget_tier"] == "critical"
+    assert event["missing_required_sources_count"] == 1
+
+
+def test_usage_events_legacy_schema_gets_budget_columns(tmp_path):
+    usage_db = tmp_path / "legacy_usage.db"
+    conn = sqlite3.connect(usage_db)
+    conn.execute(
+        f"""
+        CREATE TABLE {usage_events.USAGE_TABLE} (
+            event_id TEXT PRIMARY KEY,
+            created_at REAL NOT NULL,
+            client TEXT NOT NULL DEFAULT '',
+            tool TEXT NOT NULL DEFAULT '',
+            source TEXT NOT NULL DEFAULT 'local_context',
+            route_stage TEXT NOT NULL DEFAULT '',
+            intent TEXT NOT NULL DEFAULT '',
+            query_hash TEXT NOT NULL DEFAULT '',
+            elapsed_ms INTEGER NOT NULL DEFAULT 0,
+            deadline_ms INTEGER NOT NULL DEFAULT 0,
+            timed_out INTEGER NOT NULL DEFAULT 0,
+            result_count INTEGER NOT NULL DEFAULT 0,
+            should_inject INTEGER NOT NULL DEFAULT 0,
+            injected_chars INTEGER NOT NULL DEFAULT 0,
+            evidence_refs_count INTEGER NOT NULL DEFAULT 0,
+            aborted_reason TEXT NOT NULL DEFAULT '',
+            used_before_response INTEGER NOT NULL DEFAULT 0,
+            index_count INTEGER NOT NULL DEFAULT 0,
+            index_phase TEXT NOT NULL DEFAULT '',
+            error TEXT NOT NULL DEFAULT '',
+            metadata_json TEXT NOT NULL DEFAULT '{{}}'
+        )
+        """
+    )
+    conn.commit()
+    conn.close()
+
+    result = usage_events.record_usage_event(
+        query="legacy",
+        budget_tier="quick",
+        policy_version="runtime_budget_v1",
+        db_path=usage_db,
+    )
+
+    assert result["ok"] is True
+    conn = sqlite3.connect(usage_db)
+    conn.row_factory = sqlite3.Row
+    columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({usage_events.USAGE_TABLE})").fetchall()}
+    row = conn.execute(f"SELECT budget_tier, policy_version FROM {usage_events.USAGE_TABLE}").fetchone()
+    conn.close()
+    assert "budget_tier" in columns
+    assert "gap_disclosed" in columns
+    assert row["budget_tier"] == "quick"
+    assert row["policy_version"] == "runtime_budget_v1"
+
+
+def test_usage_events_metadata_blocks_raw_payload_keys(isolated_db):
+    secret = "sk_live_1234567890abcdef"
+    result = usage_events.record_usage_event(
+        query=f"private {secret}",
+        metadata={
+            "query": f"private {secret}",
+            "query_preview": "preview",
+            "payload": {"text": "raw private"},
+            "messages": ["raw"],
+            "safe": "ok",
+        },
+    )
+
+    assert result["ok"] is True
+    rows = usage_events.list_recent_events(limit=1)
+    metadata = json.loads(rows[0]["metadata_json"])
+    assert metadata["query"] == "[redacted]"
+    assert metadata["query_preview"] == "[redacted]"
+    assert metadata["payload"] == "[redacted]"
+    assert metadata["messages"] == "[redacted]"
+    assert metadata["safe"] == "ok"
+    assert secret not in rows[0]["metadata_json"]
+
+
+def test_usage_events_observatory_metrics_by_tier_and_source(isolated_db):
+    usage_events.record_usage_event(
+        source="project_atlas",
+        budget_tier="quick",
+        elapsed_ms=10,
+        timed_out=False,
+        injected_chars=0,
+        created_at=1000.0,
+    )
+    usage_events.record_usage_event(
+        source="project_atlas",
+        budget_tier="quick",
+        elapsed_ms=30,
+        timed_out=True,
+        injected_chars=100,
+        created_at=1001.0,
+    )
+    usage_events.record_usage_event(
+        source="evidence_ledger",
+        budget_tier="critical",
+        elapsed_ms=100,
+        timed_out=True,
+        missing_required_sources_count=1,
+        created_at=1002.0,
+    )
+
+    summary = usage_events.summarize_usage(window_seconds=86400, now_ts=1100.0)
+    quick = summary["runtime_budget_metrics"]["by_tier"]["quick"]
+    source = summary["runtime_budget_metrics"]["by_tier_source"]["quick"]["project_atlas"]
+
+    assert quick["sample_count"] == 2
+    assert quick["p50_elapsed_ms"] == 10
+    assert quick["p95_elapsed_ms"] == 30
+    assert quick["timeout_rate"] == 0.5
+    assert source["sample_count"] == 2
+    assert summary["runtime_budget_metrics"]["critical_missing_required_count"] == 1
+
+
 def test_pre_answer_local_context_shadow_records_without_inject(monkeypatch):
     import local_context.api as local_context_api
     import pre_answer_router as router
