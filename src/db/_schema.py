@@ -2365,6 +2365,38 @@ def _m72_memory_utility(conn):
     _migrate_add_index(conn, "idx_memory_utility_app_events_event", "memory_utility_application_events", "event_uid")
 
 
+def _m73_operational_state_snapshots(conn):
+    """Operational state policy snapshots by area/scope."""
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS operational_state_snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            policy_uid TEXT NOT NULL UNIQUE,
+            policy_version TEXT NOT NULL,
+            created_at REAL NOT NULL,
+            area_key TEXT NOT NULL,
+            scope_key TEXT NOT NULL,
+            task_type TEXT DEFAULT '',
+            caution_level TEXT NOT NULL,
+            communication_mode TEXT NOT NULL,
+            detail_mode TEXT NOT NULL,
+            verification_requirement TEXT NOT NULL,
+            autonomy_limit TEXT NOT NULL,
+            area_risk TEXT NOT NULL,
+            reason_codes_json TEXT NOT NULL DEFAULT '[]',
+            source_refs_json TEXT NOT NULL DEFAULT '[]',
+            privacy_level TEXT NOT NULL DEFAULT 'normal',
+            input_hash TEXT NOT NULL,
+            expires_at REAL NOT NULL,
+            decay_policy_json TEXT NOT NULL DEFAULT '{}'
+        )
+        """
+    )
+    _migrate_add_index(conn, "idx_operational_state_area_created", "operational_state_snapshots", "area_key, created_at")
+    _migrate_add_index(conn, "idx_operational_state_scope", "operational_state_snapshots", "scope_key, created_at")
+    _migrate_add_index(conn, "idx_operational_state_expires", "operational_state_snapshots", "expires_at")
+
+
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
     (2, "followups_reasoning", _m2_followups_reasoning),
@@ -2438,6 +2470,7 @@ MIGRATIONS = [
     (70, "commitments", _m70_commitments),
     (71, "causal_edge_candidates", _m71_causal_edge_candidates),
     (72, "memory_utility", _m72_memory_utility),
+    (73, "operational_state_snapshots", _m73_operational_state_snapshots),
 ]
 
 

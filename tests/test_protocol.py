@@ -130,6 +130,34 @@ def test_task_open_requires_decision_support_for_high_stakes_action():
     assert "alternatives" in payload["next_action"].lower()
 
 
+def test_task_open_consumes_operational_state_release_gate():
+    from plugins.protocol import handle_task_open
+
+    sid = _register_session("nexo-1012-3012")
+    payload = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Run the release verification step",
+            task_type="execute",
+            area="release",
+            plan='["prepare", "verify", "record evidence"]',
+            evidence_refs='["release spec"]',
+            verification_step="run release gates",
+            stakes="high",
+            context_hint="Release work must be safe for update and fresh install users",
+        )
+    )
+
+    assert payload["ok"] is True
+    state = payload["operational_state"]
+    assert state["area_key"] == "release"
+    assert state["verification_requirement"] == "release_gate"
+    assert state["autonomy_limit"] == "propose"
+    assert "Verifico doble" in state["visible_guidance"]
+    assert "TENSION" not in state["visible_guidance"]
+    assert "max_caution" not in state["visible_guidance"]
+
+
 @pytest.mark.parametrize(
     ("goal", "context_hint"),
     [

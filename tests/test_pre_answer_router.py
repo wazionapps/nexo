@@ -94,6 +94,7 @@ def test_pre_answer_router_deadline_skips_slow_local_context():
     started = time.monotonic()
     result = router.route_pre_answer(
         "donde esta el archivo audit-router-memory.md",
+        intent="file_location",
         budget_ms=80,
         source_adapters={
             "project_atlas": empty_project_atlas,

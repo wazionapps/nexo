@@ -41,6 +41,7 @@ from plugins.cortex import evaluate_cortex_state
 from plugins.guard import handle_guard_check
 from protocol_settings import get_protocol_strictness
 from tools_sessions import handle_heartbeat
+from user_state_model import OPERATIONAL_SOURCE_PREFIXES, build_operational_state_policy
 
 try:
     from tools_hot_context import append_local_context_evidence
@@ -1254,6 +1255,19 @@ def handle_task_open(
         verification_step=state["verification_step"],
         stakes=stakes,
     )
+    operational_state = build_operational_state_policy(
+        area=area.strip() or "general",
+        task_type=clean_type,
+        source_refs=[
+            ref
+            for ref in state["evidence_refs"]
+            if isinstance(ref, str) and ref.split(":", 1)[0] in OPERATIONAL_SOURCE_PREFIXES
+        ],
+        response_contract=response_contract,
+        current_instruction=context_hint.strip() or clean_goal,
+        auto_collect=True,
+        persist=True,
+    )
     recent_bundle = build_pre_action_context(
         query=" | ".join(part for part in [clean_goal, context_hint.strip()] if part),
         session_id=sid.strip(),
@@ -1297,6 +1311,8 @@ def handle_task_open(
         ),
     }
     must_verify = clean_type in ACTION_TASKS or response_contract["mode"] == "verify"
+    if clean_type in ACTION_TASKS and operational_state.get("verification_requirement") in {"single", "double", "external", "release_gate"}:
+        must_verify = True
     must_change_log = clean_type in {"edit", "execute"} and bool(files_list)
     must_learning_if_corrected = True
     must_write_diary_on_close = clean_type in ACTION_TASKS
@@ -1378,6 +1394,12 @@ def handle_task_open(
         next_action = "Review the anticipatory warnings before proceeding."
     elif decision_support["required"]:
         next_action = "Generate 2-3 concrete alternatives and run nexo_cortex_decide before acting."
+    elif operational_state.get("autonomy_limit") == "defer":
+        next_action = "Defer until the operational evidence is sufficient."
+    elif operational_state.get("autonomy_limit") == "ask":
+        next_action = "Ask for the missing operational input before acting."
+    elif operational_state.get("autonomy_limit") == "propose":
+        next_action = operational_state.get("visible_guidance") or "Propose the plan before acting."
     elif cortex["mode"] == "ask":
         next_action = "Ask for the missing information before acting."
     elif cortex["mode"] == "propose":
@@ -1426,6 +1448,21 @@ def handle_task_open(
             ),
         },
         "response_contract": response_contract,
+        "operational_state": {
+            "policy_uid": operational_state.get("policy_uid", ""),
+            "policy_version": operational_state.get("policy_version", ""),
+            "area_key": operational_state.get("area_key", ""),
+            "scope_key": operational_state.get("scope_key", ""),
+            "caution_level": operational_state.get("caution_level", ""),
+            "communication_mode": operational_state.get("communication_mode", ""),
+            "detail_mode": operational_state.get("detail_mode", ""),
+            "verification_requirement": operational_state.get("verification_requirement", ""),
+            "autonomy_limit": operational_state.get("autonomy_limit", ""),
+            "area_risk": operational_state.get("area_risk", ""),
+            "reason_codes": operational_state.get("reason_codes", []),
+            "source_refs": operational_state.get("source_refs", []),
+            "visible_guidance": operational_state.get("visible_guidance", ""),
+        },
         "decision_support": decision_support,
         "recent_context": {
             "has_matches": bool(recent_bundle.get("has_matches") or recent_excerpt.strip()),
