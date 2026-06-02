@@ -1,7 +1,8 @@
 {
-  "generated_at": "2026-04-10T14:06:55.449677+00:00",
+  "generated_at": "2026-06-02T09:55:49.924040+00:00",
   "benchmark": "nexo_runtime_pack",
   "catalog_version": "2026-04-10",
+  "profile": "release",
   "scope_note": "Small reproducible operator benchmark focused on runtime-backed recall and continuity, not a universal agent benchmark.",
   "catalog_scenario_count": 13,
   "scenarios": [
@@ -222,6 +223,223 @@
       ]
     }
   ],
+  "case_summary": {
+    "case_count": 10,
+    "case_set_hash": "788b250dd5988cc4a38f9b46a3a388b5afda70ed4ee731cd14b1d9c2fda02aed",
+    "required_spec_refs": [
+      "01",
+      "02",
+      "03",
+      "04",
+      "05",
+      "06",
+      "07",
+      "08",
+      "09",
+      "10"
+    ],
+    "covered_spec_refs": [
+      "01",
+      "02",
+      "03",
+      "04",
+      "05",
+      "06",
+      "07",
+      "08",
+      "09",
+      "10"
+    ],
+    "missing_spec_refs": [],
+    "categories": {
+      "memory_executive": 1,
+      "causal_graph": 1,
+      "memory_utility": 1,
+      "runtime_benchmark": 1,
+      "predictive_recall": 1,
+      "operational_state": 1,
+      "runtime_budget": 1,
+      "entity_live_profile": 1,
+      "failure_prevention": 1,
+      "semantic_layers": 1
+    },
+    "cases": [
+      {
+        "case_id": "01_memory_executive_routing",
+        "version": "1",
+        "scenario_id": "structured_domain_recall",
+        "category": "memory_executive",
+        "spec_refs": [
+          "01"
+        ],
+        "weight": 1.0,
+        "fixture_kind": "synthetic",
+        "fixture_hash": "e61a632a73ab95d5347074b1caa9358803477f9a81bf5d22288c7fe159d79e5c",
+        "scorer": "exact_refs",
+        "source_file": "benchmarks/runtime_pack/cases/wave-7.28-memory.json"
+      },
+      {
+        "case_id": "02_causal_graph_refs",
+        "version": "1",
+        "scenario_id": "decision_rationale_recall",
+        "category": "causal_graph",
+        "spec_refs": [
+          "02"
+        ],
+        "weight": 1.0,
+        "fixture_kind": "synthetic",
+        "fixture_hash": "650ed942366929c7fce96c3e4819fb673314ddfde9793375af6550f0a88b3199",
+        "scorer": "exact_refs",
+        "source_file": "benchmarks/runtime_pack/cases/wave-7.28-memory.json"
+      },
+      {
+        "case_id": "03_memory_utility_feedback",
+        "version": "1",
+        "scenario_id": "related_context_stitching",
+        "category": "memory_utility",
+        "spec_refs": [
+          "03"
+        ],
+        "weight": 1.0,
+        "fixture_kind": "synthetic",
+        "fixture_hash": "a73e2864f88d8d3586fe7098b653546c5d93703e84ce9d5ea5dac24d0c82c1de",
+        "scorer": "rubric",
+        "source_file": "benchmarks/runtime_pack/cases/wave-7.28-memory.json"
+      },
+      {
+        "case_id": "04_runtime_pack_coverage",
+        "version": "1",
+        "scenario_id": "adversarial_noise_rejection",
+        "category": "runtime_benchmark",
+        "spec_refs": [
+          "04"
+        ],
+        "weight": 1.0,
+        "fixture_kind": "synthetic",
+        "fixture_hash": "f00903a49eb8d761c03d1214b67a01ffd82098794c3f1562d393747b0e6b472e",
+        "scorer": "exact_refs",
+        "source_file": "benchmarks/runtime_pack/cases/wave-7.28-memory.json"
+      },
+      {
+        "case_id": "05_predictive_recall_plan",
+        "version": "1",
+        "scenario_id": "interrupted_task_resume",
+        "category": "predictive_recall",
+        "spec_refs": [
+          "05"
+        ],
+        "weight": 1.0,
+        "fixture_kind": "synthetic",
+        "fixture_hash": "44e693d58984684e139b910be2d5c430021c3260451e921e0137c300919c53a3",
+        "scorer": "rubric",
+        "source_file": "benchmarks/runtime_pack/cases/wave-7.28-memory.json"
+      },
+      {
+        "case_id": "06_operational_state_visibility",
+        "version": "1",
+        "scenario_id": "prioritization_quality",
+        "category": "operational_state",
+        "spec_refs": [
+          "06"
+        ],
+        "weight": 1.0,
+        "fixture_kind": "synthetic",
+        "fixture_hash": "c722e84827650a4faf0123b85ce9781b010d1078c7fd80e2ed7d27a153e6c018",
+        "scorer": "rubric",
+        "source_file": "benchmarks/runtime_pack/cases/wave-7.28-memory.json"
+      },
+      {
+        "case_id": "07_runtime_budget_hot_path",
+        "version": "1",
+        "scenario_id": "adversarial_noise_rejection",
+        "category": "runtime_budget",
+        "spec_refs": [
+          "07"
+        ],
+        "weight": 1.0,
+        "fixture_kind": "synthetic",
+        "fixture_hash": "d15e94b1dfb93b04dcc29ec05d0ed0f395a6efb3a0500c16344a0ef5378eba01",
+        "scorer": "exact_refs",
+        "source_file": "benchmarks/runtime_pack/cases/wave-7.28-memory.json"
+      },
+      {
+        "case_id": "08_entity_live_profile_cache",
+        "version": "1",
+        "scenario_id": "structured_domain_recall",
+        "category": "entity_live_profile",
+        "spec_refs": [
+          "08"
+        ],
+        "weight": 1.0,
+        "fixture_kind": "synthetic",
+        "fixture_hash": "9ac720047ea9facb568405d99e7ef33466042b84881c9b189a1d63f1d7bc29d5",
+        "scorer": "exact_refs",
+        "source_file": "benchmarks/runtime_pack/cases/wave-7.28-memory.json"
+      },
+      {
+        "case_id": "09_failure_prevention_case",
+        "version": "1",
+        "scenario_id": "repeat_error_avoidance",
+        "category": "failure_prevention",
+        "spec_refs": [
+          "09"
+        ],
+        "weight": 1.0,
+        "fixture_kind": "synthetic",
+        "fixture_hash": "861757a2fffb8089acea1b06da5c924452670d4942fe24cca92010c4f2a95c62",
+        "scorer": "rubric",
+        "source_file": "benchmarks/runtime_pack/cases/wave-7.28-memory.json"
+      },
+      {
+        "case_id": "10_semantic_layer_stale",
+        "version": "1",
+        "scenario_id": "multi_session_continuity",
+        "category": "semantic_layers",
+        "spec_refs": [
+          "10"
+        ],
+        "weight": 1.0,
+        "fixture_kind": "synthetic",
+        "fixture_hash": "3f34dd724f2bd68a8bba714f0e5ac5a6620d6b929fb71c405dc3b1d3d5b8d6cc",
+        "scorer": "exact_refs",
+        "source_file": "benchmarks/runtime_pack/cases/wave-7.28-memory.json"
+      }
+    ],
+    "failures": [],
+    "ok": true
+  },
+  "release_gate": {
+    "id": "runtime_memory_benchmark",
+    "mode": "block",
+    "status": "pass",
+    "required_spec_refs": [
+      "01",
+      "02",
+      "03",
+      "04",
+      "05",
+      "06",
+      "07",
+      "08",
+      "09",
+      "10"
+    ],
+    "covered_spec_refs": [
+      "01",
+      "02",
+      "03",
+      "04",
+      "05",
+      "06",
+      "07",
+      "08",
+      "09",
+      "10"
+    ],
+    "missing_spec_refs": [],
+    "failure_count": 0,
+    "failures": []
+  },
   "runs": [
     {
       "run_id": "2026-04-10-operator-runtime-matrix-v5-foundations",

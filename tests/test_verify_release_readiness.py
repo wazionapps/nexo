@@ -148,6 +148,44 @@ def _seed_smoke_artifact(root: Path, version: str, *, groups: list[dict] | None 
     (smoke_dir / f"v{version}.json").write_text(json.dumps(payload), encoding="utf-8")
 
 
+def _seed_runtime_memory_benchmark_summary(
+    root: Path,
+    *,
+    status: str = "pass",
+    mode: str = "block",
+    missing: list[str] | None = None,
+    failures: list[str] | None = None,
+):
+    missing = missing or []
+    failures = failures or []
+    spec_refs = [f"{index:02d}" for index in range(1, 11)]
+    covered = [ref for ref in spec_refs if ref not in missing]
+    summary_dir = root / "benchmarks" / "runtime_pack" / "results"
+    summary_dir.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "profile": "release",
+        "case_summary": {
+            "case_count": len(covered),
+            "required_spec_refs": spec_refs,
+            "covered_spec_refs": covered,
+            "missing_spec_refs": missing,
+            "failures": failures,
+            "ok": not missing and not failures,
+        },
+        "release_gate": {
+            "id": "runtime_memory_benchmark",
+            "mode": mode,
+            "status": status,
+            "required_spec_refs": spec_refs,
+            "covered_spec_refs": covered,
+            "missing_spec_refs": missing,
+            "failure_count": len(failures),
+            "failures": failures,
+        },
+    }
+    (summary_dir / "latest_summary.json").write_text(json.dumps(payload), encoding="utf-8")
+
+
 def test_check_contract_accepts_valid_contract(tmp_path):
     module = _load_module()
     website_root = tmp_path / "site"
@@ -182,6 +220,86 @@ def test_check_contract_accepts_valid_contract(tmp_path):
         require_complete=True,
         repo_root=tmp_path,
     )
+
+
+def test_check_contract_runs_runtime_memory_benchmark_gate(tmp_path):
+    module = _load_module()
+    website_root = tmp_path / "site"
+    website_root.mkdir()
+    (tmp_path / "repo-artifact.txt").write_text("ok", encoding="utf-8")
+    (website_root / "index.html").write_text("ok", encoding="utf-8")
+    _seed_runtime_memory_benchmark_summary(tmp_path)
+
+    contract = {
+        "release_line": "v7.28",
+        "target_version": "7.28.0",
+        "distribution": {
+            "git_updates_on": "merge_to_main",
+            "packaged_release_on": "tag_publish",
+        },
+        "required_repo_files": ["repo-artifact.txt"],
+        "required_website_files": ["index.html"],
+        "gates": [
+            {
+                "id": "runtime_memory_benchmark",
+                "title": "Runtime memory benchmark",
+                "status": "complete",
+                "evidence_required": ["benchmarks/runtime_pack/results/latest_summary.json"],
+            }
+        ],
+    }
+
+    module._check_contract(
+        contract,
+        contract_path=tmp_path / "contract.json",
+        website_root=website_root,
+        nexo_home=tmp_path / "nexo-home",
+        require_complete=True,
+        repo_root=tmp_path,
+    )
+
+
+def test_check_contract_blocks_runtime_memory_benchmark_failures(tmp_path):
+    module = _load_module()
+    website_root = tmp_path / "site"
+    website_root.mkdir()
+    (tmp_path / "repo-artifact.txt").write_text("ok", encoding="utf-8")
+    (website_root / "index.html").write_text("ok", encoding="utf-8")
+    _seed_runtime_memory_benchmark_summary(
+        tmp_path,
+        status="block",
+        missing=["02"],
+        failures=["missing spec coverage: 02"],
+    )
+
+    contract = {
+        "release_line": "v7.28",
+        "target_version": "7.28.0",
+        "distribution": {
+            "git_updates_on": "merge_to_main",
+            "packaged_release_on": "tag_publish",
+        },
+        "required_repo_files": ["repo-artifact.txt"],
+        "required_website_files": ["index.html"],
+        "gates": [
+            {
+                "id": "runtime_memory_benchmark",
+                "title": "Runtime memory benchmark",
+                "status": "complete",
+                "evidence_required": ["benchmarks/runtime_pack/results/latest_summary.json"],
+            }
+        ],
+    }
+
+    with pytest.raises(SystemExit, match="runtime memory benchmark did not pass"):
+        module._check_contract(
+            contract,
+            contract_path=tmp_path / "contract.json",
+            website_root=website_root,
+            nexo_home=tmp_path / "nexo-home",
+            require_complete=True,
+            repo_root=tmp_path,
+        )
 
 
 def test_check_contract_rejects_wrong_distribution(tmp_path):

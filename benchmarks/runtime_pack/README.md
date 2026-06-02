@@ -1,6 +1,6 @@
 # NEXO Runtime Benchmark Pack
 
-Generated: 2026-04-10T14:06:55.449677+00:00
+Generated: 2026-06-02T09:55:49.924040+00:00
 
 ## What this is
 
@@ -37,6 +37,16 @@ Generated: 2026-04-10T14:06:55.449677+00:00
 - `prioritization_quality` — Prioritization quality (queue_optimization)
   - Detail: `benchmarks/scenarios/prioritization-quality.md`
 
+## Machine-readable case coverage
+
+- Profile: `release`
+- Cases: 10
+- Case set hash: `788b250dd5988cc4a38f9b46a3a388b5afda70ed4ee731cd14b1d9c2fda02aed`
+- Required specs: 01, 02, 03, 04, 05, 06, 07, 08, 09, 10
+- Covered specs: 01, 02, 03, 04, 05, 06, 07, 08, 09, 10
+- Missing specs: (none)
+- Release gate: `pass` (block)
+
 ## Latest run — Operator Runtime Matrix v5 Foundations
 
 - Date: 2026-04-10
@@ -65,5 +75,6 @@ Generated: 2026-04-10T14:06:55.449677+00:00
 ## Artifacts
 
 - Catalog: `benchmarks/runtime_pack/scenario_catalog.json`
+- Cases: `benchmarks/runtime_pack/cases`
 - Latest summary: `benchmarks/runtime_pack/results/latest_summary.json`
 - Latest run file: `benchmarks/runtime_pack/results/2026-04-10-operator-runtime-matrix-v5-foundations.json`

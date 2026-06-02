@@ -23,9 +23,12 @@ def _load_module():
 def test_build_runtime_pack_summarizes_checked_in_runs(tmp_path):
     module = _load_module()
     catalog = tmp_path / "scenario_catalog.json"
+    cases_dir = tmp_path / "cases"
     results_dir = tmp_path / "results"
+    cases_dir.mkdir()
     results_dir.mkdir()
 
+    specs = [f"{index:02d}" for index in range(1, 11)]
     catalog.write_text(
         json.dumps(
             {
@@ -37,6 +40,29 @@ def test_build_runtime_pack_summarizes_checked_in_runs(tmp_path):
                     {"id": "s2", "title": "Scenario 2", "detail_markdown": "benchmarks/scenarios/s2.md"},
                     {"id": "s3", "title": "Scenario 3", "detail_markdown": "benchmarks/scenarios/s3.md"},
                 ],
+            }
+        )
+    )
+    (cases_dir / "cases.json").write_text(
+        json.dumps(
+            {
+                "cases": [
+                    {
+                        "case_id": f"case_{spec}",
+                        "version": "1",
+                        "scenario_id": "s1",
+                        "category": "memory",
+                        "spec_refs": [spec],
+                        "weight": 1.0,
+                        "fixture_kind": "synthetic",
+                        "fixture_hash": f"hash-{spec}",
+                        "setup_seed": f"seed-{spec}",
+                        "prompt": f"Prompt for {spec}",
+                        "scorer": "exact_refs",
+                        "rubric": ["has expected refs"],
+                    }
+                    for spec in specs
+                ]
             }
         )
     )
@@ -66,7 +92,7 @@ def test_build_runtime_pack_summarizes_checked_in_runs(tmp_path):
         )
     )
 
-    summary = module.build_runtime_pack(catalog, results_dir)
+    summary = module.build_runtime_pack(catalog, results_dir, cases_dir=cases_dir, profile="release")
 
     assert summary["latest_run"]["run_id"] == "2026-04-10-example"
     assert summary["latest_run"]["scenario_count"] == 2
@@ -75,6 +101,70 @@ def test_build_runtime_pack_summarizes_checked_in_runs(tmp_path):
     assert summary["latest_run"]["baselines"][0]["id"] == "nexo"
     assert summary["latest_run"]["baselines"][0]["score_pct"] == 75.0
     assert summary["latest_run"]["baselines"][1]["score_pct"] == 25.0
+    assert summary["profile"] == "release"
+    assert summary["case_summary"]["case_count"] == 10
+    assert summary["case_summary"]["covered_spec_refs"] == specs
+    assert summary["case_summary"]["missing_spec_refs"] == []
+    assert summary["release_gate"]["status"] == "pass"
+    assert summary["release_gate"]["mode"] == "block"
+
+
+def test_runtime_pack_case_validation_blocks_missing_spec_coverage(tmp_path):
+    module = _load_module()
+    catalog = tmp_path / "scenario_catalog.json"
+    cases_dir = tmp_path / "cases"
+    results_dir = tmp_path / "results"
+    cases_dir.mkdir()
+    results_dir.mkdir()
+
+    catalog.write_text(
+        json.dumps(
+            {
+                "catalog_version": "2026-04-10",
+                "benchmark": "nexo_runtime_pack",
+                "scope_note": "Operator runtime benchmark.",
+                "scenarios": [{"id": "s1", "title": "Scenario 1", "detail_markdown": "benchmarks/scenarios/s1.md"}],
+            }
+        )
+    )
+    (cases_dir / "cases.json").write_text(
+        json.dumps(
+            {
+                "cases": [
+                    {
+                        "case_id": "case_01",
+                        "version": "1",
+                        "scenario_id": "s1",
+                        "category": "memory",
+                        "spec_refs": ["01"],
+                        "weight": 1.0,
+                        "fixture_kind": "synthetic",
+                        "fixture_hash": "hash-01",
+                        "setup_seed": "seed-01",
+                        "prompt": "Prompt for 01",
+                        "scorer": "exact_refs",
+                        "rubric": ["has expected refs"],
+                    }
+                ]
+            }
+        )
+    )
+    (results_dir / "2026-04-10-example.json").write_text(
+        json.dumps(
+            {
+                "run_id": "2026-04-10-example",
+                "title": "Example Run",
+                "date": "2026-04-10",
+                "scenarios": ["s1"],
+                "baselines": [{"id": "nexo", "label": "NEXO", "scenario_results": {"s1": "pass"}}],
+            }
+        )
+    )
+
+    summary = module.build_runtime_pack(catalog, results_dir, cases_dir=cases_dir, profile="release")
+
+    assert summary["case_summary"]["missing_spec_refs"] == ["02", "03", "04", "05", "06", "07", "08", "09", "10"]
+    assert summary["release_gate"]["status"] == "block"
 
 
 def test_render_markdown_includes_runtime_pack_sections():
@@ -82,11 +172,21 @@ def test_render_markdown_includes_runtime_pack_sections():
     markdown = module.render_markdown(
         {
             "generated_at": "2026-04-10T12:00:00+00:00",
+            "profile": "release",
             "scope_note": "Operator runtime benchmark.",
             "scenarios": [
                 {"id": "s1", "title": "Scenario 1", "category": "memory", "detail_markdown": "benchmarks/scenarios/s1.md"},
                 {"id": "s2", "title": "Scenario 2", "category": "workflow", "detail_markdown": "benchmarks/scenarios/s2.md"},
             ],
+            "case_summary": {
+                "case_count": 10,
+                "case_set_hash": "abc123",
+                "required_spec_refs": ["01", "02"],
+                "covered_spec_refs": ["01", "02"],
+                "missing_spec_refs": [],
+                "failures": [],
+            },
+            "release_gate": {"status": "pass", "mode": "block"},
             "latest_run": {
                 "run_id": "2026-04-10-example",
                 "title": "Example Run",
@@ -110,4 +210,6 @@ def test_render_markdown_includes_runtime_pack_sections():
     assert "| NEXO | 75.0 | 1 | 1 | 0 |" in markdown
     assert "### Latest run notes" in markdown
     assert "- Conservative manual run." in markdown
+    assert "## Machine-readable case coverage" in markdown
+    assert "- Release gate: `pass` (block)" in markdown
     assert "Grade scale: `pass = 1.0`, `partial = 0.5`, `fail = 0.0`." in markdown

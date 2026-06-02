@@ -39,6 +39,9 @@ DEFAULT_NEXO_HOME_CANDIDATES = (
     Path.home() / ".nexo",
     Path.home() / "claude",
 )
+RUNTIME_MEMORY_GATE_ID = "runtime_memory_benchmark"
+RUNTIME_MEMORY_BENCHMARK_SUMMARY = ROOT / "benchmarks" / "runtime_pack" / "results" / "latest_summary.json"
+RUNTIME_MEMORY_REQUIRED_SPEC_REFS = tuple(f"{index:02d}" for index in range(1, 11))
 
 
 def _run(cmd: list[str], *, env: dict[str, str] | None = None) -> None:
@@ -710,6 +713,52 @@ def _check_publication_state(contract: dict, *, require_complete: bool) -> None:
     )
 
 
+def _check_runtime_memory_benchmark_gate(repo_root: Path = ROOT) -> None:
+    summary_path = repo_root / RUNTIME_MEMORY_BENCHMARK_SUMMARY.relative_to(ROOT)
+    if not summary_path.is_file():
+        raise SystemExit(f"[release-readiness] runtime memory benchmark summary missing: {summary_path}")
+
+    try:
+        summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"[release-readiness] invalid runtime memory benchmark JSON: {exc}") from exc
+    if not isinstance(summary, dict):
+        raise SystemExit("[release-readiness] runtime memory benchmark summary must be a JSON object")
+
+    release_gate = summary.get("release_gate")
+    case_summary = summary.get("case_summary")
+    if not isinstance(release_gate, dict):
+        raise SystemExit("[release-readiness] runtime memory benchmark summary missing release_gate")
+    if not isinstance(case_summary, dict):
+        raise SystemExit("[release-readiness] runtime memory benchmark summary missing case_summary")
+
+    gate_id = str(release_gate.get("id", "") or "").strip()
+    mode = str(release_gate.get("mode", "") or "").strip().lower()
+    status = str(release_gate.get("status", "") or "").strip().lower()
+    if gate_id != RUNTIME_MEMORY_GATE_ID:
+        raise SystemExit(f"[release-readiness] runtime memory benchmark gate id mismatch: {gate_id!r}")
+    if mode != "block":
+        raise SystemExit(f"[release-readiness] runtime memory benchmark must run in block mode for release, found {mode!r}")
+    if status != "pass":
+        raise SystemExit(f"[release-readiness] runtime memory benchmark did not pass: {status or 'missing'}")
+
+    covered = {str(ref).strip() for ref in release_gate.get("covered_spec_refs") or [] if str(ref).strip()}
+    missing = {str(ref).strip() for ref in release_gate.get("missing_spec_refs") or [] if str(ref).strip()}
+    missing.update(str(ref).strip() for ref in case_summary.get("missing_spec_refs") or [] if str(ref).strip())
+    missing.update(ref for ref in RUNTIME_MEMORY_REQUIRED_SPEC_REFS if ref not in covered)
+    if missing:
+        raise SystemExit("[release-readiness] runtime memory benchmark missing spec coverage:\n- " + "\n- ".join(sorted(missing)))
+
+    failures = list(release_gate.get("failures") or []) + list(case_summary.get("failures") or [])
+    if failures:
+        raise SystemExit("[release-readiness] runtime memory benchmark has failures:\n- " + "\n- ".join(map(str, failures)))
+
+    print(
+        "[release-readiness] runtime memory benchmark OK "
+        f"(cases={case_summary.get('case_count', 'unknown')}, summary={summary_path.relative_to(repo_root)})"
+    )
+
+
 def _check_contract(
     contract: dict,
     *,
@@ -771,6 +820,8 @@ def _check_contract(
             raise SystemExit(f"[release-readiness] gate {gate_id} has invalid status {status!r}")
         if not isinstance(evidence_required, list) or not evidence_required:
             raise SystemExit(f"[release-readiness] gate {gate_id} missing evidence_required list")
+        if gate_id == RUNTIME_MEMORY_GATE_ID:
+            _check_runtime_memory_benchmark_gate(repo_root=repo_root)
         if require_complete and status != "complete":
             incomplete.append(f"{gate_id} ({status})")
 
