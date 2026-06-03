@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.30.3` is the current packaged-runtime line. Patch release over v7.30.2 - release closeout now protects the freshly written runtime backup from technical pruning and validates protocol evidence against the canonical `runtime/data/nexo.db` layout.
+Version `7.30.4` is the current packaged-runtime line. Patch release over v7.30.3 - local runtime update post-sync now gives bounded Memory Fabric repair enough time to finish, and headless automations now treat `nexo_stop` as a terminal close so followup/deep-sleep runners do not reopen no-op protocol loops.
+
+Previously in `7.30.3`: patch release over v7.30.2 - release closeout now protects the freshly written runtime backup from technical pruning and validates protocol evidence against the canonical `runtime/data/nexo.db` layout.
 
 Previously in `7.30.2`: patch release over v7.30.1 - Deep Sleep now fails closed on partial nightly runs, carries complete learning context into synthesis, writes an explicit agent start packet, and creates governed followups with verification, priority, owner, and date fields.
 

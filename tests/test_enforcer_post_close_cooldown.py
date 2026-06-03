@@ -60,3 +60,34 @@ def test_post_close_cooldown_suppresses_periodic_reinjection(monkeypatch):
     enforcer.check_periodic()
 
     assert _protocol_tags(enforcer) == []
+
+
+def test_nexo_stop_is_terminal_for_headless_periodic_checks(monkeypatch):
+    monkeypatch.setenv("NEXO_ENFORCER_POST_CLOSE_COOLDOWN_SECONDS", "60")
+
+    from enforcement_engine import HeadlessEnforcer
+
+    enforcer = HeadlessEnforcer()
+    enforcer._on_start = [
+        {
+            "tool": "nexo_task_open",
+            "rule": {"threshold": 1},
+            "enf": {"inject_prompt": "Execute nexo_task_open."},
+        }
+    ]
+    enforcer._conditional = [
+        {
+            "tool": "nexo_task_open",
+            "rule": {"threshold": 1},
+            "enf": {"inject_prompt": "Execute nexo_task_open before more work."},
+        }
+    ]
+    enforcer.user_message_count = 3
+    enforcer._conditional_counters["nexo_task_open"] = 3
+
+    enforcer.on_tool_call("nexo_stop")
+    enforcer.check_periodic()
+
+    assert enforcer._session_stopped is True
+    assert enforcer._post_close_cooldown_active() is True
+    assert _protocol_tags(enforcer) == []

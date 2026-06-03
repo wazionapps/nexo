@@ -98,6 +98,7 @@ TEMPLATE_FILE = _RESOLVED_REPO_DIR / "templates" / "CLAUDE.md.template"
 
 CHECK_COOLDOWN_SECONDS = 3600  # 1 hour
 GIT_TIMEOUT_SECONDS = 4  # stay well under the 5s total budget
+RUNTIME_POST_SYNC_TIMEOUT_SECONDS = 180
 CRITICAL_BACKUP_TABLES = ("learnings", "session_diary", "guard_checks", "protocol_debt")
 LOCAL_CONTEXT_BACKUP_TABLES = (
     "local_index_roots",
@@ -4883,7 +4884,7 @@ def _run_runtime_post_sync(dest: Path = NEXO_HOME, progress_fn=None) -> tuple[bo
             cwd=str(dest),
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=RUNTIME_POST_SYNC_TIMEOUT_SECONDS,
             env=env,
         )
         if init_result.returncode != 0:

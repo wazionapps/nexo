@@ -1,0 +1,89 @@
+{
+  "release_line": "v7.30",
+  "target_version": "7.30.4",
+  "scope_owner": "NEXO",
+  "distribution": {
+    "git_updates_on": "merge_to_main",
+    "packaged_release_on": "tag_publish"
+  },
+  "required_repo_files": [
+    "package.json",
+    "CHANGELOG.md",
+    "README.md",
+    "llms.txt",
+    ".well-known/llms.txt",
+    "index.html",
+    "blog/index.html",
+    "blog/nexo-7-30-4/index.html",
+    "changelog/index.html",
+    "sitemap.xml",
+    "release-contracts/v7.30.4.json",
+    "release-contracts/smoke/v7.30.4.json",
+    "scripts/sync_release_artifacts.py",
+    "scripts/verify_release_readiness.py",
+    "scripts/verify_client_parity.py",
+    ".claude-plugin/plugin.json",
+    "clawhub-skill/SKILL.md",
+    "openclaw-plugin/package.json",
+    "openclaw-plugin/package-lock.json",
+    "openclaw-plugin/src/mcp-bridge.ts",
+    "src/auto_update.py",
+    "src/enforcement_engine.py",
+    "tests/test_runtime_update_contract.py",
+    "tests/test_enforcer_post_close_cooldown.py"
+  ],
+  "required_website_files": [
+    "index.html",
+    "blog/index.html",
+    "blog/nexo-7-30-4/index.html",
+    "changelog/index.html",
+    "llms.txt",
+    ".well-known/llms.txt",
+    "sitemap.xml"
+  ],
+  "smoke": {
+    "required_groups": [
+      "runtime_post_sync_timeout_budget",
+      "headless_stop_terminal",
+      "release_surface_contract"
+    ],
+    "max_age_hours": 72
+  },
+  "publication": {
+    "status": "ready",
+    "checklist_complete": true,
+    "blockers": []
+  },
+  "gates": [
+    {
+      "id": "runtime_post_sync_timeout_budget",
+      "title": "Runtime post-sync has enough budget for bounded Memory Fabric repair",
+      "status": "complete",
+      "evidence_required": [
+        "auto_update.py defines RUNTIME_POST_SYNC_TIMEOUT_SECONDS",
+        "_run_runtime_post_sync uses that constant instead of the old 60-second literal",
+        "tests/test_runtime_update_contract.py covers the timeout budget"
+      ]
+    },
+    {
+      "id": "headless_stop_terminal",
+      "title": "Headless automations do not reopen protocol loops after nexo_stop",
+      "status": "complete",
+      "evidence_required": [
+        "HeadlessEnforcer records nexo_stop as a terminal automation-cycle signal",
+        "check_periodic suppresses periodic and conditional reminders after nexo_stop",
+        "tests/test_enforcer_post_close_cooldown.py covers the stop-loop regression"
+      ]
+    },
+    {
+      "id": "public_release_surfaces",
+      "title": "Public release surfaces and integration artifacts are aligned for v7.30.4",
+      "status": "complete",
+      "evidence_required": [
+        "README, llms, homepage, blog index, blog post, changelog page, and sitemap reference v7.30.4",
+        "Claude plugin, ClawHub skill, and OpenClaw package metadata reference 7.30.4",
+        "Release smoke and readiness checks validate the v7.30.4 contract before tag publish"
+      ]
+    }
+  ]
+}

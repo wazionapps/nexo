@@ -98,6 +98,28 @@ def test_runtime_post_sync_keeps_client_sync_and_classifier_bootstrap_enabled(mo
     assert sync_calls[0]["auto_install_missing_claude"] is True
 
 
+def test_runtime_post_sync_allows_bounded_memory_fabric_repair_time(monkeypatch, tmp_path):
+    au = _reload_auto_update(monkeypatch, tmp_path)
+    _install_post_sync_stubs(monkeypatch, au, sync_ok=True)
+    timeouts: list[int] = []
+
+    def _fake_run(cmd, *args, **kwargs):
+        if len(cmd) >= 2 and cmd[1] == "-c":
+            timeouts.append(kwargs.get("timeout"))
+            return SimpleNamespace(returncode=0, stdout="{}\n", stderr="")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(au.subprocess, "run", _fake_run)
+
+    ok, actions = au._run_runtime_post_sync(tmp_path)
+
+    assert ok is True
+    assert "db+personal-sync" in actions
+    assert timeouts
+    assert timeouts[0] == au.RUNTIME_POST_SYNC_TIMEOUT_SECONDS
+    assert au.RUNTIME_POST_SYNC_TIMEOUT_SECONDS >= 180
+
+
 def test_runtime_post_sync_reports_memory_fabric_repair_and_unreconciled_rows(monkeypatch, tmp_path):
     au = _reload_auto_update(monkeypatch, tmp_path)
     _install_post_sync_stubs(monkeypatch, au, sync_ok=True)

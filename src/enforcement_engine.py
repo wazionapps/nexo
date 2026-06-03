@@ -475,6 +475,10 @@ class HeadlessEnforcer:
         # per task cycle. Cleared on skill_match OR task_close.
         self._multi_step_event_fired: bool = False
         self._post_close_cooldown_until: float = 0.0
+        # A headless nexo_stop is terminal for the automation cycle. Once
+        # seen, periodic/conditional reminders stay suppressed so cron
+        # runners can reach TURN_END instead of reopening the task loop.
+        self._session_stopped: bool = False
         try:
             self._post_close_cooldown_seconds = max(
                 0,
@@ -2287,6 +2291,10 @@ class HeadlessEnforcer:
             self._start_post_close_cooldown()
             self._resolve_r17_commitments_from_task_close(tool_input)
 
+        if name == "nexo_stop":
+            self._session_stopped = True
+            self._start_post_close_cooldown()
+
         # v7.7 Gap 1 — autonomous detector for multi_step_task_detected.
         # The event was dispatched by the map but nothing ever raised it.
         # Heuristic: three or more edit/execute/delegate calls within the
@@ -2602,6 +2610,9 @@ class HeadlessEnforcer:
             _logger.info("POST_CLOSE_COOLDOWN: cleared %d queued protocol injection(s)", removed)
 
     def check_periodic(self):
+        if getattr(self, "_session_stopped", False):
+            _logger.info("SESSION_STOPPED: periodic checks suppressed (nexo_stop seen)")
+            return
         if self._post_close_cooldown_active():
             _logger.info("POST_CLOSE_COOLDOWN: periodic checks suppressed")
             return

@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.30.4: local update completion and runner closeout</title>
+<meta name="description" content="NEXO Brain v7.30.4 prevents valid local runtime updates from rolling back and stops headless followup/deep-sleep runners from reopening no-op loops after nexo_stop.">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-30-4/">
+<meta name="robots" content="index, follow">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.30.4: local update completion and runner closeout","datePublished":"2026-06-03","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head>
+<body>
+<main class="section-compact">
+<div class="container" style="max-width:860px;">
+<a href="/blog/">Back to blog</a>
+<p class="section-label">Release notes</p>
+<h1>NEXO 7.30.4 - local update completion and runner closeout</h1>
+<p>v7.30.4 is a focused Brain patch over v7.30.3. It fixes a local update closeout failure where the post-sync runtime initialization could roll back after 60 seconds even though the bounded Memory Fabric repair was healthy and completed shortly after that limit.</p>
+<p>The updater now uses an explicit <code>RUNTIME_POST_SYNC_TIMEOUT_SECONDS</code> budget of 180 seconds for the database, personal schedule, skill, script, and Memory Fabric reconciliation subprocess.</p>
+<p>It also treats <code>nexo_stop</code> as terminal in headless automation cycles, so followup-runner, Deep Sleep, and cron sessions can finish cleanly instead of reopening a protocol reminder loop after a no-op close.</p>
+<p>This keeps local update completion aligned with real installed runtimes that have substantial transcript and historical diary indexes, without weakening backup validation or public release gates.</p>
+<pre><code>pytest -q tests/test_runtime_update_contract.py::test_runtime_post_sync_allows_bounded_memory_fabric_repair_time
+pytest -q tests/test_enforcer_post_close_cooldown.py::test_nexo_stop_is_terminal_for_headless_periodic_checks
+NEXO_HOME=~/.nexo NEXO_CODE=&lt;repo&gt;/src node bin/nexo.js update</code></pre>
+<p><a href="/changelog/#v7304">Read the full v7.30.4 changelog</a></p>
+</div>
+</main>
+</body>
+</html>

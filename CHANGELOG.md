@@ -1,5 +1,14 @@
 # Changelog
 
+## [7.30.4] - 2026-06-03
+
+### Fixed - local runtime update completion and headless runner closeout
+
+- **Runtime post-sync now has enough time for bounded Memory Fabric repair.** The updater raises the post-sync initialization budget to 180 seconds, preventing a valid update from rolling back when `memory_fabric.repair_memory_fabric()` takes slightly over the old 60-second limit on real local history.
+- **The timeout budget is now explicit and tested.** `RUNTIME_POST_SYNC_TIMEOUT_SECONDS` is covered by `tests/test_runtime_update_contract.py`, so future edits do not silently reintroduce the 60-second rollback trap.
+- **Headless automation stop is now terminal.** `HeadlessEnforcer` treats `nexo_stop` as the end of an automatic cycle, suppressing periodic protocol reminders after a clean stop so `followup-runner`, Deep Sleep, and cron automations do not reopen a no-op loop.
+- **The stop-loop regression is pinned.** `tests/test_enforcer_post_close_cooldown.py` now covers the exact `nexo_stop` path that previously let `nexo_task_open` reminders reappear after a clean headless close.
+
 ## [7.30.3] - 2026-06-03
 
 ### Fixed - release closeout backup validation

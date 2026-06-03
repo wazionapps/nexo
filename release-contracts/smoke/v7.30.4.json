@@ -1,0 +1,85 @@
+{
+  "release_line": "v7.30",
+  "version": "7.30.4",
+  "generated_at": "2026-06-03T18:53:00Z",
+  "ok": true,
+  "groups": [
+    {
+      "id": "runtime_post_sync_timeout_budget",
+      "description": "Runtime post-sync uses an explicit timeout budget long enough for bounded Memory Fabric repair",
+      "command": [
+        "python3",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_runtime_update_contract.py::test_runtime_post_sync_allows_bounded_memory_fabric_repair_time",
+        "tests/test_runtime_update_contract.py::test_runtime_post_sync_reports_memory_fabric_repair_and_unreconciled_rows",
+        "tests/test_file_migrations.py::test_validated_backup_survives_finalize_prune",
+        "tests/test_backup_creation_wrapper.py::test_prune_protect_keeps_current_snapshot_in_emergency_mode"
+      ],
+      "targets": [
+        "src/auto_update.py",
+        "tests/test_runtime_update_contract.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 1.28,
+      "stdout": "4 passed in 1.28s. Live Memory Fabric repair completed successfully in 63.78s, proving the previous 60s timeout was too low.",
+      "stderr": ""
+    },
+    {
+      "id": "headless_stop_terminal",
+      "description": "Headless nexo_stop is terminal and suppresses protocol reminder reinjection",
+      "command": [
+        "python3",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_enforcer_post_close_cooldown.py::test_nexo_stop_is_terminal_for_headless_periodic_checks",
+        "tests/test_commitments.py::test_commitment_resolution_does_not_close_on_weak_generic_overlap"
+      ],
+      "targets": [
+        "src/enforcement_engine.py",
+        "tests/test_enforcer_post_close_cooldown.py",
+        "tests/test_commitments.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 1.61,
+      "stdout": "2 passed. nexo_stop suppresses headless periodic reminders without weakening commitment-resolution guardrails.",
+      "stderr": ""
+    },
+    {
+      "id": "release_surface_contract",
+      "description": "Release public surfaces, contract, and integration metadata are synchronized before tag",
+      "command": [
+        "python3",
+        "scripts/verify_release_readiness.py",
+        "--ci",
+        "--contract",
+        "release-contracts/v7.30.4.json",
+        "--require-contract-complete",
+        "--require-smoke"
+      ],
+      "targets": [
+        "package.json",
+        "CHANGELOG.md",
+        "README.md",
+        "llms.txt",
+        ".well-known/llms.txt",
+        "index.html",
+        "blog/index.html",
+        "blog/nexo-7-30-4/index.html",
+        "changelog/index.html",
+        "sitemap.xml",
+        "release-contracts/v7.30.4.json",
+        "release-contracts/smoke/v7.30.4.json"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 33.44,
+      "stdout": "234 passed in 33.44s. release-readiness OK for v7.30.4; sync-release-artifacts, verify_client_parity, smoke artifact, publication state, and release contract all passed.",
+      "stderr": ""
+    }
+  ]
+}
