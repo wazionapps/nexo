@@ -83,14 +83,14 @@ MORNING_AGENT_SCHEMA: dict[str, Any] = {
                     "type": "boolean",
                     "label": "News",
                     "default": False,
-                    "help": "A short set of public headlines from the configured news feed. If the feed is unreachable, NEXO simply says it was unavailable.",
+                    "help": "A short set of current public headlines from the configured news feed, included only when the source can be verified.",
                 },
                 {
                     "id": "weather",
                     "type": "boolean",
                     "label": "Weather",
                     "default": True,
-                    "help": "Today's weather from the location saved in Desktop or your residence in the profile.",
+                    "help": "Today's weather from the location saved in Desktop or your residence in the profile, included only when the forecast can be verified.",
                 },
             ],
         },
@@ -348,8 +348,12 @@ def format_automation_preferences_prompt_block(name_or_path: str) -> str:
     return (
         "\n== STRUCTURED CONTENT PREFERENCES FOR THIS AUTOMATION ==\n"
         f"{compact}\n"
+        "Morning briefing intent: act like a professional personal assistant preparing the operator for the day. "
+        "Do not merely list available records; filter, rank, and explain what deserves attention first.\n"
+        "Adapt the emphasis from the operator profile, role, recent activity, and context. "
+        "Do not ask the user to choose a user type manually and do not assume a profession unless the context supports it.\n"
         "Use these preferences to decide what to include, omit, and emphasize. "
-        "Disabled/unavailable data sources must not be invented.\n"
+        "Disabled/unavailable data sources must not be invented; news and weather require verified collected data.\n"
     )
 
 

@@ -20,6 +20,15 @@ def _load_morning_agent(name: str = "nexo_morning_agent_contract_test"):
     return module
 
 
+def test_morning_agent_prompt_sets_start_of_day_assistant_intent():
+    prompt = (SRC.parent / "templates" / "core-prompts" / "morning-agent.md").read_text(encoding="utf-8")
+
+    assert "start-of-day briefing" in prompt
+    assert "professional personal assistant" in prompt
+    assert "Do not ask the operator to choose a user type" in prompt
+    assert "Include news and weather only when verified collected data exists" in prompt
+
+
 class _Result:
     returncode = 0
     stderr = ""

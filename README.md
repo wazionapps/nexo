@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.30.0` is the current packaged-runtime line. Minor release over v7.29.0 - morning briefing preferences now support weather/news, selectable weekdays, safer SMTP certificates, Opus 4.8 defaults, and an agent-facing preference catalog so NEXO can explain or change supported settings by chat.
+Version `7.30.1` is the current packaged-runtime line. Patch release over v7.30.0 - morning briefings now behave more like a start-of-day assistant, explain news/weather as verified optional sources, and keep user type inference inside NEXO instead of asking the user to choose a role manually.
+
+Previously in `7.30.0`: minor release over v7.29.0 - morning briefing preferences now support weather/news, selectable weekdays, safer SMTP certificates, Opus 4.8 defaults, and an agent-facing preference catalog so NEXO can explain or change supported settings by chat.
 
 Previously in `7.29.0`: minor release over v7.28.0 - the morning briefing now has structured content preferences, Desktop-facing briefing presentation state, and per-account email signature support.
 

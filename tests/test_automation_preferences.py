@@ -100,4 +100,7 @@ def test_preferences_prompt_block_is_json_and_blocks_unavailable_data(isolated_h
 
     assert values["weather"] is True
     assert values["format"] == "bullets"
+    assert "professional personal assistant" in block
+    assert "Do not ask the user to choose a user type manually" in block
     assert "must not be invented" in block
+    assert "news and weather require verified collected data" in block

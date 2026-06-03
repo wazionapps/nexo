@@ -1,5 +1,17 @@
 # Changelog
 
+## [7.30.1] - 2026-06-03
+
+### Changed - morning briefing intent
+
+- **The morning briefing now frames itself as a start-of-day assistant.** The Brain prompt tells the agent to filter, rank, and connect what matters so the operator starts the day prepared instead of receiving a flat technical list.
+- **Briefings adapt from real context instead of a manual user-type setting.** NEXO now explicitly infers the useful angle from profile, recent activity, and preferences, while staying general when context is thin.
+
+### Fixed - optional source clarity
+
+- **News and weather are treated as verified optional sources.** The automation preference prompt now states that disabled or unavailable data must not be invented, and that news/weather require verified collected data before appearing in the briefing.
+- **Desktop-facing help text has clearer source expectations.** News and weather preference help now explains that external data is included only when the source can be verified.
+
 ## [7.30.0] - 2026-06-03
 
 ### Added - agent-facing preferences and smarter briefings
