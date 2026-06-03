@@ -124,7 +124,7 @@ def resolve_declared_schedule(cron: dict) -> dict:
     resolved = dict(schedule)
     strategy = str(cron.get("schedule_strategy") or resolved.pop("strategy", "")).strip().lower()
     if strategy != "machine_weekly_spread":
-        return resolved
+        return _normalize_declared_weekdays(resolved)
 
     if not {"hour", "minute", "weekday"} <= resolved.keys():
         return resolved
@@ -144,6 +144,41 @@ def resolve_declared_schedule(cron: dict) -> dict:
         "hour": hour,
         "minute": minute,
     }
+
+
+def _normalize_weekdays(value) -> list[int] | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        parts = [part.strip() for part in value.replace("+", ",").split(",")]
+    elif isinstance(value, (list, tuple, set)):
+        parts = list(value)
+    else:
+        return None
+    selected: set[int] = set()
+    for part in parts:
+        try:
+            selected.add(int(part) % 7)
+        except Exception:
+            continue
+    if len(selected) >= 7:
+        return []
+    order = (1, 2, 3, 4, 5, 6, 0)
+    return [day for day in order if day in selected]
+
+
+def _normalize_declared_weekdays(schedule: dict) -> dict:
+    result = dict(schedule or {})
+    weekdays = _normalize_weekdays(result.get("weekdays"))
+    if weekdays is None and "weekday" in result:
+        weekdays = _normalize_weekdays([result.get("weekday")])
+    if weekdays:
+        result.pop("weekday", None)
+        result["weekdays"] = weekdays
+    elif weekdays == []:
+        result.pop("weekday", None)
+        result.pop("weekdays", None)
+    return result
 
 
 def load_enabled_crons() -> list[dict]:
@@ -276,7 +311,7 @@ def default_max_catchup_age(cron: dict) -> int:
         interval = int(cron["interval_seconds"])
         return max(interval * 4, interval + 900)
     schedule = cron.get("schedule") or {}
-    if "weekday" in schedule:
+    if "weekday" in schedule or "weekdays" in schedule:
         return 14 * 86400
     if "hour" in schedule and "minute" in schedule:
         return 48 * 3600
@@ -478,14 +513,34 @@ def legacy_state_runs(*, state_file: Path = STATE_FILE) -> dict[str, datetime]:
     return parsed
 
 
-def last_scheduled_time(calendar: dict, now: datetime | None = None) -> datetime:
+def last_scheduled_time(calendar: dict | list, now: datetime | None = None) -> datetime:
     now = now or datetime.now().astimezone(_local_timezone())
     if now.tzinfo is None:
         now = now.replace(tzinfo=_local_timezone())
 
+    if isinstance(calendar, list):
+        candidates = [
+            last_scheduled_time(item, now)
+            for item in calendar
+            if isinstance(item, dict)
+        ]
+        if candidates:
+            return max(candidates)
+        return now
+
     hour = int(calendar.get("hour", calendar.get("Hour", 0)))
     minute = int(calendar.get("minute", calendar.get("Minute", 0)))
     weekday = calendar.get("weekday", calendar.get("Weekday"))
+    weekdays = calendar.get("weekdays") or calendar.get("Weekdays")
+    normalized_weekdays = _normalize_weekdays(weekdays)
+    if normalized_weekdays:
+        base_calendar = dict(calendar)
+        base_calendar.pop("weekdays", None)
+        base_calendar.pop("Weekdays", None)
+        return max(
+            last_scheduled_time({**base_calendar, "weekday": day}, now)
+            for day in normalized_weekdays
+        )
 
     today_at = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
     if weekday is not None:

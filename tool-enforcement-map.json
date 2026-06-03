@@ -3,6 +3,46 @@
   "version": "2.2.0",
   "description": "Canonical map of all NEXO Brain MCP tools with enforcement rules, dependency chains, and behavioral hints. Source of truth for Protocol Enforcer (Desktop + headless). v2.1 adds schema support for Phase 2 event-driven rules (R01-R33): server_side_rules at tool level, per-rule mode (shadow|soft|hard), core_rule flag, and new rule types (pre_tool_intent, post_user_message, on_output_classify, before_tool_strict_block). Backward-compatible: executors that only handle v2.0 rule types ignore the new fields.",
   "tools": {
+    "nexo_desktop_preferences_catalog": {
+      "description": "List Desktop/Brain preferences the agent can explain or change",
+      "category": "preferences",
+      "source": "plugin:desktop_preferences",
+      "requires": [],
+      "provides": ["preference_catalog"],
+      "internal_calls": [],
+      "enforcement": {"level": "none", "rules": []},
+      "triggers_after": []
+    },
+    "nexo_desktop_preference_get": {
+      "description": "Read one Desktop/Brain preference by id or alias",
+      "category": "preferences",
+      "source": "plugin:desktop_preferences",
+      "requires": ["preference_catalog"],
+      "provides": ["preference_value"],
+      "internal_calls": [],
+      "enforcement": {"level": "none", "rules": []},
+      "triggers_after": []
+    },
+    "nexo_desktop_preference_explain": {
+      "description": "Explain a Desktop/Brain preference in operator-friendly terms",
+      "category": "preferences",
+      "source": "plugin:desktop_preferences",
+      "requires": ["preference_catalog"],
+      "provides": ["preference_explanation"],
+      "internal_calls": [],
+      "enforcement": {"level": "none", "rules": []},
+      "triggers_after": []
+    },
+    "nexo_desktop_preference_set": {
+      "description": "Set one supported Desktop/Brain preference or preview with dry_run",
+      "category": "preferences",
+      "source": "plugin:desktop_preferences",
+      "requires": ["preference_catalog"],
+      "provides": ["preference_value"],
+      "internal_calls": [],
+      "enforcement": {"level": "standard", "rules": []},
+      "triggers_after": []
+    },
     "nexo_adaptive_decay": {
       "description": "Trigger inter-session tension decay",
       "category": "adaptive",

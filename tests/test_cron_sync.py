@@ -277,6 +277,40 @@ def test_build_plist_uses_machine_staggered_weekly_schedule(tmp_path, monkeypatc
     assert plist["StartCalendarInterval"] == {"Hour": 3, "Minute": 33, "Weekday": 3}
 
 
+def test_build_plist_supports_multiple_selected_weekdays(tmp_path, monkeypatch):
+    from crons import sync as cron_sync
+
+    source_root = tmp_path / "repo-src"
+    runtime_root = tmp_path / "nexo-home"
+    (source_root / "scripts").mkdir(parents=True)
+    (runtime_root / "runtime" / "logs").mkdir(parents=True)
+
+    script = source_root / "scripts" / "nexo-morning-agent.py"
+    script.write_text("print('ok')\n")
+    wrapper = source_root / "scripts" / "nexo-cron-wrapper.sh"
+    wrapper.write_text("#!/bin/bash\nexit 0\n")
+    wrapper.chmod(0o755)
+
+    monkeypatch.setattr(cron_sync, "SOURCE_ROOT", source_root)
+    monkeypatch.setattr(cron_sync, "RUNTIME_ROOT", runtime_root)
+    monkeypatch.setenv("NEXO_HOME", str(runtime_root))
+    monkeypatch.setattr(cron_sync, "NEXO_HOME", runtime_root)
+    monkeypatch.setattr(cron_sync, "LOG_DIR", runtime_root / "runtime" / "logs")
+
+    plist = cron_sync.build_plist(
+        {
+            "id": "morning-agent",
+            "script": "scripts/nexo-morning-agent.py",
+            "schedule": {"hour": 7, "minute": 0, "weekdays": [2, 6]},
+        }
+    )
+
+    assert plist["StartCalendarInterval"] == [
+        {"Hour": 7, "Minute": 0, "Weekday": 2},
+        {"Hour": 7, "Minute": 0, "Weekday": 6},
+    ]
+
+
 def test_load_manifest_skips_disabled_optionals(tmp_path, monkeypatch):
     from crons import sync as cron_sync
 

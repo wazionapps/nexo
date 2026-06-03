@@ -2001,6 +2001,75 @@ def _relocate_resonance_tiers_contract(dest: Path = NEXO_HOME) -> list[str]:
     return actions
 
 
+def _refresh_resonance_tiers_model_defaults(dest: Path = NEXO_HOME) -> list[str]:
+    """Upgrade persisted resonance contracts that still use old NEXO defaults.
+
+    Existing users keep a public ``resonance_tiers.json`` contract in their
+    personal brain. Source defaults alone do not update that file, so known
+    Opus defaults must be migrated in place while custom models are left alone.
+    """
+    actions: list[str] = []
+    source_path = Path(__file__).resolve().parent / "resonance_tiers.json"
+    try:
+        source_payload = json.loads(source_path.read_text())
+    except Exception as exc:
+        return [f"resonance-default-refresh-warning:source:{exc.__class__.__name__}"]
+
+    target_paths = [
+        dest / "personal" / "brain" / "resonance_tiers.json",
+        dest / "brain" / "resonance_tiers.json",
+    ]
+    old_prefixes = ("claude-opus-4-6", "claude-opus-4-7")
+
+    for target_path in target_paths:
+        try:
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            if target_path.is_file():
+                payload = json.loads(target_path.read_text())
+            else:
+                if target_path != target_paths[0]:
+                    continue
+                payload = json.loads(json.dumps(source_payload))
+        except Exception as exc:
+            actions.append(f"resonance-default-refresh-warning:read:{target_path.name}:{exc.__class__.__name__}")
+            continue
+
+        changed = False
+        tiers = payload.get("tiers") if isinstance(payload, dict) else {}
+        source_tiers = source_payload.get("tiers") if isinstance(source_payload, dict) else {}
+        if not isinstance(tiers, dict) or not isinstance(source_tiers, dict):
+            continue
+
+        for tier_name, tier_payload in tiers.items():
+            if not isinstance(tier_payload, dict):
+                continue
+            claude = tier_payload.get("claude_code")
+            source_claude = (source_tiers.get(tier_name) or {}).get("claude_code") if isinstance(source_tiers.get(tier_name), dict) else {}
+            if not isinstance(claude, dict) or not isinstance(source_claude, dict):
+                continue
+            model = str(claude.get("model") or "").strip()
+            tier_changed = False
+            if model and model.startswith(old_prefixes):
+                claude["model"] = str(source_claude.get("model") or "claude-opus-4-8")
+                tier_changed = True
+            if tier_changed and not str(claude.get("effort") or "").strip() and source_claude.get("effort"):
+                claude["effort"] = str(source_claude.get("effort"))
+            changed = changed or tier_changed
+
+        if "default_tier" not in payload and source_payload.get("default_tier"):
+            payload["default_tier"] = source_payload.get("default_tier")
+            changed = True
+
+        if changed or not target_path.is_file():
+            try:
+                target_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
+                actions.append(f"resonance-default-refresh:{target_path.name}")
+            except Exception as exc:
+                actions.append(f"resonance-default-refresh-warning:write:{target_path.name}:{exc.__class__.__name__}")
+
+    return actions
+
+
 def _bootstrap_profile_from_calibration_meta(dest: Path = NEXO_HOME) -> list[str]:
     """Create ``brain/profile.json`` from ``calibration.json`` fields when the
     profile file does not exist yet.
@@ -5044,6 +5113,9 @@ def _run_runtime_post_sync(dest: Path = NEXO_HOME, progress_fn=None) -> tuple[bo
         _emit_progress(progress_fn, "Relocating resonance_tiers contract to brain/...")
         reloc_actions = _relocate_resonance_tiers_contract(dest)
         for action in reloc_actions:
+            actions.append(action)
+        refresh_actions = _refresh_resonance_tiers_model_defaults(dest)
+        for action in refresh_actions:
             actions.append(action)
     except Exception as exc:
         actions.append(f"resonance-contract-relocate-warning:{exc.__class__.__name__}")

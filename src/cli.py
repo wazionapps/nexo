@@ -1037,11 +1037,19 @@ def _automations_set_schedule(args):
         interval_seconds = int(args.every_seconds)
     elif getattr(args, "daily_at", None):
         daily_at = str(args.daily_at).strip()
+    if getattr(args, "weekdays", None) and not daily_at:
+        result = {"ok": False, "error": "--weekdays can only be used with --daily-at"}
+        if args.json:
+            print(json.dumps(result, indent=2, ensure_ascii=False))
+            return 1
+        print(result["error"], file=sys.stderr)
+        return 1
 
     result = set_automation_schedule(
         args.name,
         interval_seconds=interval_seconds,
         daily_at=daily_at,
+        weekdays=getattr(args, "weekdays", None),
         clear=bool(getattr(args, "reset", False)),
     )
     if args.json:
@@ -2612,6 +2620,28 @@ def _preferences(args):
         _load_user_default_resonance,
     )
 
+    action = str(getattr(args, "preferences_action", "") or "").strip().lower()
+    if action in {"catalog", "get", "set", "explain"}:
+        from preference_catalog import build_preference_catalog, explain_preference, set_preference
+
+        if action == "catalog":
+            payload = build_preference_catalog(
+                include_values=bool(getattr(args, "include_values", False)),
+                query=str(getattr(args, "query", "") or "").strip() or None,
+            )
+        elif action in {"get", "explain"}:
+            pref_id = str(getattr(args, "preferences_id", "") or "").strip()
+            payload = explain_preference(pref_id)
+        else:
+            pref_id = str(getattr(args, "preferences_id", "") or "").strip()
+            value = getattr(args, "preferences_value", None)
+            payload = set_preference(pref_id, value, dry_run=bool(getattr(args, "dry_run", False)))
+        if getattr(args, "json", False):
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+        else:
+            print(json.dumps(payload, ensure_ascii=False))
+        return 0 if payload.get("ok", True) else 1
+
     prefs = load_client_preferences()
     if not isinstance(prefs, dict):
         prefs = {}
@@ -4150,6 +4180,7 @@ def main():
     automations_schedule_group.add_argument("--every-seconds", type=int, help="Run the automation every N seconds")
     automations_schedule_group.add_argument("--daily-at", type=str, help="Run the automation every day at HH:MM (24h)")
     automations_schedule_group.add_argument("--reset", action="store_true", help="Restore the shipped default cadence")
+    automations_schedule_p.add_argument("--weekdays", default=None, help="Optional calendar days, e.g. Mon-Fri or Tue,Sat")
     automations_schedule_p.add_argument("--json", action="store_true", help="JSON output")
 
     automations_schema_p = automations_sub.add_parser(
@@ -4281,6 +4312,12 @@ def main():
         "preferences",
         help="Read or change NEXO user preferences (resonance, default client, ...)",
     )
+    preferences_parser.add_argument("preferences_action", nargs="?", choices=["catalog", "get", "set", "explain"], help="Catalog operation")
+    preferences_parser.add_argument("preferences_id", nargs="?", help="Preference id or alias")
+    preferences_parser.add_argument("preferences_value", nargs="?", help="Value for `preferences set`")
+    preferences_parser.add_argument("--query", default="", help="Filter catalog entries")
+    preferences_parser.add_argument("--include-values", action="store_true", help="Include current values in catalog output")
+    preferences_parser.add_argument("--dry-run", action="store_true", help="Preview a preference change")
     preferences_parser.add_argument(
         "--resonance",
         choices=["maximo", "alto", "medio", "bajo"],

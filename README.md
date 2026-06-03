@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.29.0` is the current packaged-runtime line. Minor release over v7.28.0 - the morning briefing now has structured content preferences, Desktop-facing briefing presentation state, and per-account email signature support.
+Version `7.30.0` is the current packaged-runtime line. Minor release over v7.29.0 - morning briefing preferences now support weather/news, selectable weekdays, safer SMTP certificates, Opus 4.8 defaults, and an agent-facing preference catalog so NEXO can explain or change supported settings by chat.
+
+Previously in `7.29.0`: minor release over v7.28.0 - the morning briefing now has structured content preferences, Desktop-facing briefing presentation state, and per-account email signature support.
 
 Previously in `7.28.0`: minor release over v7.27.6 - the Brain memory architecture now links action authorship, reasons, operational state, entity profiles, failure prevention, semantic layers, and release-gated runtime memory benchmarks.
 

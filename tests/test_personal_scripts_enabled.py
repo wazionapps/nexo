@@ -326,26 +326,27 @@ def test_toggleable_core_script_calendar_schedule_override_round_trip(isolated_h
         } if name == "morning-agent" else {},
     )
 
-    result = sr.set_script_schedule_override("morning-agent", daily_at="08:15")
+    result = sr.set_script_schedule_override("morning-agent", daily_at="08:15", weekdays="Mon-Fri")
     assert result["ok"] is True
     assert result["schedule_type"] == "calendar"
     assert result["schedule_source"] == "override"
-    assert result["effective_schedule_label"] == "08:15 daily"
+    assert result["effective_schedule_label"] == "08:15 Mon,Tue,Wed,Thu,Fri"
+    assert result["schedule"] == {"hour": 8, "minute": 15, "weekdays": [1, 2, 3, 4, 5]}
 
     schedule_path = isolated_home / "personal" / "config" / "schedule.json"
     payload = json.loads(schedule_path.read_text())
-    assert payload["core_automation_overrides"]["morning-agent"]["schedule"] == {"hour": 8, "minute": 15}
+    assert payload["core_automation_overrides"]["morning-agent"]["schedule"] == {"hour": 8, "minute": 15, "weekdays": [1, 2, 3, 4, 5]}
 
     status = sr.get_personal_script_status("morning-agent")
     assert status["ok"] is True
     assert status["schedule_type"] == "calendar"
-    assert status["effective_schedule_label"] == "08:15 daily"
+    assert status["effective_schedule_label"] == "08:15 Mon,Tue,Wed,Thu,Fri"
 
     rows = sr.list_scripts(include_core=True)
     target = next(r for r in rows if r["name"] == "morning-agent")
     assert target["schedule_configurable"] is True
     assert target["schedule_type"] == "calendar"
-    assert target["effective_schedule_label"] == "08:15 daily"
+    assert target["effective_schedule_label"] == "08:15 Mon,Tue,Wed,Thu,Fri"
 
     reset = sr.set_script_schedule_override("morning-agent", clear=True)
     assert reset["ok"] is True
@@ -382,6 +383,10 @@ def test_toggleable_core_script_calendar_schedule_override_validates_format(isol
     result = sr.set_script_schedule_override("morning-agent", daily_at="25:99")
     assert result["ok"] is False
     assert "HH:MM" in result["error"]
+
+    result = sr.set_script_schedule_override("morning-agent", daily_at="08:00", weekdays="noday")
+    assert result["ok"] is False
+    assert "weekdays" in result["error"]
 
 
 def test_list_scripts_include_core_surfaces_last_cron_run_for_core_entry(isolated_home):

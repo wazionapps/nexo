@@ -44,6 +44,58 @@ _CORE_AUTOMATION_SCHEDULES: dict[str, dict[str, Any]] = {
 }
 
 EXTRA_INSTRUCTIONS_METADATA_KEY = "operator_extra_instructions"
+_WEEKDAY_ORDER = (1, 2, 3, 4, 5, 6, 0)
+_WEEKDAY_LABELS = {
+    0: "Sun",
+    1: "Mon",
+    2: "Tue",
+    3: "Wed",
+    4: "Thu",
+    5: "Fri",
+    6: "Sat",
+}
+_WEEKDAY_ALIASES = {
+    "0": 0,
+    "7": 0,
+    "sun": 0,
+    "sunday": 0,
+    "domingo": 0,
+    "dom": 0,
+    "1": 1,
+    "mon": 1,
+    "monday": 1,
+    "lunes": 1,
+    "lun": 1,
+    "2": 2,
+    "tue": 2,
+    "tuesday": 2,
+    "martes": 2,
+    "mar": 2,
+    "3": 3,
+    "wed": 3,
+    "wednesday": 3,
+    "miercoles": 3,
+    "miércoles": 3,
+    "mie": 3,
+    "mié": 3,
+    "4": 4,
+    "thu": 4,
+    "thursday": 4,
+    "jueves": 4,
+    "jue": 4,
+    "5": 5,
+    "fri": 5,
+    "friday": 5,
+    "viernes": 5,
+    "vie": 5,
+    "6": 6,
+    "sat": 6,
+    "saturday": 6,
+    "sabado": 6,
+    "sábado": 6,
+    "sab": 6,
+    "sáb": 6,
+}
 
 
 _EMAIL_REQUIRED_SCRIPTS: dict[str, dict[str, Any]] = {
@@ -192,6 +244,98 @@ def get_core_manifest_cron(name: str) -> dict[str, Any]:
     return {}
 
 
+def _normalize_weekdays(value: Any) -> list[int] | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        raw = value.strip().lower()
+        if not raw or raw in {"all", "daily", "everyday", "cada dia", "cada día"}:
+            return []
+        parts = [part.strip() for part in raw.replace(";", ",").replace("|", ",").replace("+", ",").split(",")]
+    elif isinstance(value, (list, tuple, set)):
+        parts = list(value)
+    else:
+        return None
+
+    selected: set[int] = set()
+    invalid = False
+    for part in parts:
+        key = str(part).strip().lower()
+        if not key:
+            continue
+        if "-" in key:
+            left, right = [piece.strip() for piece in key.split("-", 1)]
+            start = _WEEKDAY_ALIASES.get(left)
+            end = _WEEKDAY_ALIASES.get(right)
+            if start is not None and end is not None:
+                ordered = list(_WEEKDAY_ORDER)
+                start_index = ordered.index(start)
+                end_index = ordered.index(end)
+                if start_index <= end_index:
+                    selected.update(ordered[start_index:end_index + 1])
+                else:
+                    selected.update(ordered[start_index:] + ordered[:end_index + 1])
+                continue
+            invalid = True
+            continue
+        if key in _WEEKDAY_ALIASES:
+            selected.add(_WEEKDAY_ALIASES[key])
+            continue
+        try:
+            day_number = int(key)
+            if 0 <= day_number <= 7:
+                selected.add(day_number % 7)
+                continue
+        except Exception:
+            pass
+        invalid = True
+    if invalid:
+        return None
+    if len(selected) >= 7:
+        return []
+    return [day for day in _WEEKDAY_ORDER if day in selected]
+
+
+def _schedule_weekdays(schedule: dict[str, Any]) -> list[int]:
+    if not isinstance(schedule, dict):
+        return []
+    normalized = _normalize_weekdays(schedule.get("weekdays"))
+    if normalized is not None:
+        return normalized
+    if "weekday" in schedule:
+        normalized = _normalize_weekdays([schedule.get("weekday")])
+        return normalized or []
+    return []
+
+
+def _apply_weekdays_to_schedule(schedule: dict[str, Any], weekdays: list[int] | None) -> dict[str, Any]:
+    next_schedule = dict(schedule)
+    next_schedule.pop("weekday", None)
+    if weekdays:
+        next_schedule["weekdays"] = weekdays
+    else:
+        next_schedule.pop("weekdays", None)
+    return next_schedule
+
+
+def _same_calendar_schedule(left: dict[str, Any], right: dict[str, Any]) -> bool:
+    def normalized(payload: dict[str, Any]) -> dict[str, Any]:
+        out = dict(payload or {})
+        weekdays = _schedule_weekdays(out)
+        out.pop("weekday", None)
+        out.pop("weekdays", None)
+        if weekdays:
+            out["weekdays"] = weekdays
+        return out
+
+    return normalized(left) == normalized(right)
+
+
+def _normalize_calendar_schedule(schedule: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(schedule or {})
+    return _apply_weekdays_to_schedule(normalized, _schedule_weekdays(normalized))
+
+
 def _format_interval_label(interval_seconds: int) -> str:
     interval = max(1, int(interval_seconds or 0))
     if interval % 3600 == 0:
@@ -210,12 +354,9 @@ def _format_calendar_label(schedule: dict[str, Any]) -> str:
     except Exception:
         return ""
     label = f"{hour:02d}:{minute:02d}"
-    if "weekday" in schedule:
-        try:
-            weekday = int(schedule.get("weekday", 0))
-        except Exception:
-            weekday = 0
-        label += f" weekday={weekday}"
+    weekdays = _schedule_weekdays(schedule)
+    if weekdays:
+        label += " " + ",".join(_WEEKDAY_LABELS.get(day, str(day)) for day in weekdays)
     else:
         label += " daily"
     return label
@@ -232,13 +373,15 @@ def _decorate_schedule_state(*, base_cron: dict[str, Any], effective_cron: dict[
         }
     schedule = effective_cron.get("schedule")
     if isinstance(schedule, dict) and schedule:
+        normalized_schedule = _normalize_calendar_schedule(schedule)
+        normalized_default = _normalize_calendar_schedule(dict(base_cron.get("schedule") or {}))
         return {
             "schedule_type": "calendar",
             "interval_seconds": 0,
             "default_interval_seconds": 0,
-            "schedule": dict(schedule),
-            "default_schedule": dict(base_cron.get("schedule") or {}),
-            "effective_schedule_label": _format_calendar_label(schedule),
+            "schedule": normalized_schedule,
+            "default_schedule": normalized_default,
+            "effective_schedule_label": _format_calendar_label(normalized_schedule),
             "schedule_source": source,
         }
     return {
@@ -354,6 +497,7 @@ def set_core_automation_schedule(
     *,
     interval_seconds: int | None = None,
     daily_at: str | None = None,
+    weekdays: Any = None,
     clear: bool = False,
 ) -> dict[str, Any]:
     clean_name = _normalize_name(name)
@@ -382,10 +526,15 @@ def set_core_automation_schedule(
             parsed_daily_at = _parse_daily_at(daily_at or "")
             if not parsed_daily_at:
                 return {"ok": False, "error": "daily_at must use HH:MM (24h) format"}
+            normalized_weekdays = _normalize_weekdays(weekdays)
+            if weekdays is not None and normalized_weekdays is None:
+                return {"ok": False, "error": "weekdays must be a comma-separated list like Mon-Fri or Tue,Sat"}
             default_schedule = dict(base_cron.get("schedule") or {})
             next_schedule = dict(default_schedule)
             next_schedule.update(parsed_daily_at)
-            next_override = {} if next_schedule == default_schedule else {"schedule": next_schedule}
+            if normalized_weekdays is not None:
+                next_schedule = _apply_weekdays_to_schedule(next_schedule, normalized_weekdays)
+            next_override = {} if _same_calendar_schedule(next_schedule, default_schedule) else {"schedule": next_schedule}
         else:
             try:
                 normalized_interval = int(interval_seconds or 0)
@@ -420,6 +569,8 @@ def set_core_automation_schedule(
         "schedule_type": str(state.get("schedule_type") or ""),
         "schedule_source": str(state.get("schedule_source") or ""),
         "effective_schedule_label": str(state.get("effective_schedule_label") or ""),
+        "schedule": state.get("schedule"),
+        "default_schedule": state.get("default_schedule"),
         "interval_seconds": int(state.get("interval_seconds", 0) or 0),
         "default_interval_seconds": int(state.get("default_interval_seconds", 0) or 0),
         "minimum_interval_seconds": int(state.get("minimum_interval_seconds", 0) or 0),
@@ -687,6 +838,8 @@ def get_script_runtime_contract(name: str) -> dict[str, Any]:
         "schedule_type": str(schedule_state.get("schedule_type") or ""),
         "schedule_source": str(schedule_state.get("schedule_source") or ""),
         "effective_schedule_label": str(schedule_state.get("effective_schedule_label") or ""),
+        "schedule": schedule_state.get("schedule"),
+        "default_schedule": schedule_state.get("default_schedule"),
         "interval_seconds": int(schedule_state.get("interval_seconds", 0) or 0),
         "default_interval_seconds": int(schedule_state.get("default_interval_seconds", 0) or 0),
         "minimum_interval_seconds": int(schedule_state.get("minimum_interval_seconds", 0) or 0),
@@ -737,6 +890,7 @@ def get_operator_profile() -> dict[str, Any]:
     language = "en"
     operator_email = ""
     operator_accounts: list[dict] = []
+    profile_payload: dict[str, Any] = {}
 
     try:
         from calibration_runtime import load_runtime_calibration
@@ -763,6 +917,13 @@ def get_operator_profile() -> dict[str, Any]:
                 or str(payload.get("lang") or "").strip()
                 or language
             )
+        profile_path = brain_dir() / "profile.json"
+        if profile_path.exists():
+            loaded_profile = json.loads(profile_path.read_text())
+            if isinstance(loaded_profile, dict):
+                profile_payload = loaded_profile
+                operator_name = str(loaded_profile.get("name") or operator_name).strip() or operator_name
+                language = str(loaded_profile.get("language") or language).strip() or language
     except Exception:
         pass
 
@@ -797,6 +958,15 @@ def get_operator_profile() -> dict[str, Any]:
         "operator_email": operator_email,
         "operator_aliases": aliases,
         "operator_accounts": operator_accounts,
+        "current_residence": profile_payload.get("current_residence"),
+        "timezone": profile_payload.get("timezone"),
+        "location": profile_payload.get("location"),
+        "coordinates": profile_payload.get("coordinates"),
+        "latitude": profile_payload.get("latitude"),
+        "longitude": profile_payload.get("longitude"),
+        "role": profile_payload.get("role"),
+        "technical_level": profile_payload.get("technical_level"),
+        "news_rss_url": profile_payload.get("news_rss_url"),
     }
 
 

@@ -300,6 +300,7 @@ def _run_startup_preflight_sync() -> None:
 _ESSENTIAL_MCP_STARTUP_PLUGINS = (
     "cards.py",
     "doctor.py",
+    "desktop_preferences.py",
     "episodic_memory.py",
     "evolution.py",
     "lifecycle_events.py",

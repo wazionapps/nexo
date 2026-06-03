@@ -38,8 +38,12 @@ import signal
 import subprocess
 import sys
 import tempfile
+import urllib.parse
+import urllib.request
+import xml.etree.ElementTree as ET
 from datetime import date, datetime
 from pathlib import Path
+from typing import Any
 
 _script_dir = Path(__file__).resolve().parent
 _repo_src = _script_dir.parent
@@ -47,7 +51,7 @@ if str(_repo_src) not in sys.path:
     sys.path.insert(0, str(_repo_src))
 
 from agent_runner import AutomationBackendUnavailableError, run_automation_prompt
-from automation_preferences import format_automation_preferences_prompt_block
+from automation_preferences import format_automation_preferences_prompt_block, get_automation_preferences
 from automation_controls import (
     format_operator_extra_instructions_block,
     get_operator_briefing_recipient_status,
@@ -82,6 +86,8 @@ MAX_ACTIVE_ITEMS = 8
 MAX_DIARY_ITEMS = 6
 MORNING_BRIEFING_STALE_HOURS = 12
 _ACTIVE_CLAIM: dict[str, str] = {}
+HTTP_TIMEOUT = 7
+DEFAULT_NEWS_RSS_URL = "https://news.google.com/rss?hl=es&gl=ES&ceid=ES:es"
 
 
 def log(message: str) -> None:
@@ -447,7 +453,250 @@ def _serialize_recent_sent_emails(*, limit: int = 8) -> list[dict]:
     return result
 
 
-def collect_context(profile: dict) -> dict:
+def _fetch_json_url(url: str, *, timeout: int = HTTP_TIMEOUT) -> dict:
+    request = urllib.request.Request(
+        url,
+        headers={"User-Agent": "NEXO-Morning-Agent/1.0"},
+    )
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        raw = response.read(512_000)
+    payload = json.loads(raw.decode("utf-8", errors="replace"))
+    return payload if isinstance(payload, dict) else {}
+
+
+def _fetch_text_url(url: str, *, timeout: int = HTTP_TIMEOUT) -> str:
+    request = urllib.request.Request(
+        url,
+        headers={"User-Agent": "NEXO-Morning-Agent/1.0"},
+    )
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        return response.read(512_000).decode("utf-8", errors="replace")
+
+
+def _desktop_settings_candidates() -> list[Path]:
+    home = Path.home()
+    candidates = [
+        Path(os.environ.get("NEXO_DESKTOP_SETTINGS", "")),
+        Path(os.environ.get("NEXO_DESKTOP_USER_DATA", "")) / "app-settings.json",
+        home / "Library" / "Application Support" / "nexo-desktop-mvp" / "app-settings.json",
+        home / "Library" / "Application Support" / "NEXO Desktop" / "app-settings.json",
+        home / "Library" / "Application Support" / "nexo-desktop" / "app-settings.json",
+    ]
+    return [candidate for candidate in candidates if str(candidate)]
+
+
+def _read_desktop_settings() -> dict:
+    for candidate in _desktop_settings_candidates():
+        try:
+            if candidate.is_file():
+                payload = json.loads(candidate.read_text())
+                if isinstance(payload, dict):
+                    return payload
+        except Exception:
+            continue
+    return {}
+
+
+def _normalize_location_candidate(value: object) -> dict:
+    if not value:
+        return {}
+    candidate = value
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return {}
+        try:
+            candidate = json.loads(text)
+        except Exception:
+            return {"name": text}
+    if not isinstance(candidate, dict):
+        return {}
+    lat = candidate.get("lat", candidate.get("latitude"))
+    lon = candidate.get("lon", candidate.get("longitude"))
+    name = str(candidate.get("name") or candidate.get("display") or candidate.get("city") or "").strip()
+    try:
+        lat_value = float(lat)
+        lon_value = float(lon)
+    except Exception:
+        lat_value = None
+        lon_value = None
+    if lat_value is not None and lon_value is not None:
+        return {"lat": lat_value, "lon": lon_value, "name": name}
+    return {"name": name} if name else {}
+
+
+def _geocode_location_name(name: str, *, language: str = "es") -> dict:
+    clean = str(name or "").strip()
+    if not clean:
+        return {}
+    params = urllib.parse.urlencode({
+        "name": clean,
+        "count": "1",
+        "language": "en" if str(language).lower().startswith("en") else "es",
+        "format": "json",
+    })
+    payload = _fetch_json_url(f"https://geocoding-api.open-meteo.com/v1/search?{params}")
+    hit = (payload.get("results") or [None])[0]
+    if not isinstance(hit, dict):
+        return {}
+    try:
+        lat = float(hit.get("latitude"))
+        lon = float(hit.get("longitude"))
+    except Exception:
+        return {}
+    label_parts = [
+        str(hit.get("name") or clean).strip(),
+        str(hit.get("admin1") or "").strip(),
+        str(hit.get("country") or "").strip(),
+    ]
+    return {
+        "lat": lat,
+        "lon": lon,
+        "name": ", ".join(part for part in label_parts if part),
+    }
+
+
+def _resolve_weather_location(profile: dict) -> dict:
+    settings = _read_desktop_settings()
+    app = settings.get("app") if isinstance(settings.get("app"), dict) else {}
+    app_loc = app.get("location") if isinstance(app.get("location"), dict) else {}
+    language = str(app.get("ui_language") or profile.get("language") or "es")
+
+    explicit = _normalize_location_candidate(app_loc)
+    if explicit.get("lat") is not None and explicit.get("lon") is not None:
+        return explicit
+    if explicit.get("name"):
+        try:
+            geocoded = _geocode_location_name(str(explicit.get("name")), language=language)
+            if geocoded:
+                return geocoded
+        except Exception:
+            pass
+
+    desktop_profile = settings.get("profile") if isinstance(settings.get("profile"), dict) else {}
+    for source in [
+        desktop_profile.get("current_residence"),
+        profile.get("current_residence"),
+        profile.get("location"),
+        profile.get("coordinates"),
+    ]:
+        candidate = _normalize_location_candidate(source)
+        if candidate.get("lat") is not None and candidate.get("lon") is not None:
+            return candidate
+        if candidate.get("name"):
+            try:
+                geocoded = _geocode_location_name(str(candidate.get("name")), language=language)
+                if geocoded:
+                    return geocoded
+            except Exception:
+                continue
+
+    direct = _normalize_location_candidate({
+        "latitude": profile.get("latitude"),
+        "longitude": profile.get("longitude"),
+        "name": profile.get("current_residence") or "",
+    })
+    return direct
+
+
+def _weather_code_label(code: object) -> str:
+    try:
+        value = int(code)
+    except Exception:
+        return ""
+    if value == 0:
+        return "clear"
+    if value in {1, 2, 3}:
+        return "partly cloudy"
+    if value in {45, 48}:
+        return "fog"
+    if value in {51, 53, 55, 56, 57}:
+        return "drizzle"
+    if value in {61, 63, 65, 66, 67, 80, 81, 82}:
+        return "rain"
+    if value in {71, 73, 75, 77, 85, 86}:
+        return "snow"
+    if value in {95, 96, 99}:
+        return "storm"
+    return "unknown"
+
+
+def _collect_weather(profile: dict) -> dict:
+    try:
+        loc = _resolve_weather_location(profile)
+        if not loc or loc.get("lat") is None or loc.get("lon") is None:
+            return {"available": False, "error": "no_location"}
+        params = urllib.parse.urlencode({
+            "latitude": loc["lat"],
+            "longitude": loc["lon"],
+            "current_weather": "true",
+            "daily": "temperature_2m_max,temperature_2m_min,precipitation_probability_max",
+            "timezone": "auto",
+        })
+        payload = _fetch_json_url(f"https://api.open-meteo.com/v1/forecast?{params}")
+        current = payload.get("current_weather") if isinstance(payload.get("current_weather"), dict) else {}
+        daily = payload.get("daily") if isinstance(payload.get("daily"), dict) else {}
+        if not current:
+            return {"available": False, "error": "weather_unavailable", "location": loc.get("name") or ""}
+        code = current.get("weathercode")
+        return {
+            "available": True,
+            "source": "open-meteo",
+            "location": loc.get("name") or "",
+            "temperature_c": current.get("temperature"),
+            "weather_code": code,
+            "weather": _weather_code_label(code),
+            "high_c": (daily.get("temperature_2m_max") or [None])[0],
+            "low_c": (daily.get("temperature_2m_min") or [None])[0],
+            "precipitation_probability_max": (daily.get("precipitation_probability_max") or [None])[0],
+        }
+    except Exception as exc:
+        return {"available": False, "error": str(exc)[:240]}
+
+
+def _collect_news(profile: dict) -> dict:
+    try:
+        rss_url = str(profile.get("news_rss_url") or os.environ.get("NEXO_NEWS_RSS_URL") or DEFAULT_NEWS_RSS_URL).strip()
+        if not rss_url:
+            return {"available": False, "error": "no_news_source"}
+        xml_text = _fetch_text_url(rss_url)
+        root = ET.fromstring(xml_text)
+        items: list[dict] = []
+        for item in root.findall(".//item"):
+            title = _clean_text(item.findtext("title"), limit=220)
+            link = str(item.findtext("link") or "").strip()
+            source = _clean_text(item.findtext("source"), limit=80)
+            published = _clean_text(item.findtext("pubDate"), limit=120)
+            if title:
+                items.append({
+                    "title": title,
+                    "source": source,
+                    "published": published,
+                    "url": link[:500],
+                })
+            if len(items) >= 6:
+                break
+        return {
+            "available": bool(items),
+            "source": rss_url,
+            "headlines": items,
+            "error": "" if items else "empty_feed",
+        }
+    except Exception as exc:
+        return {"available": False, "error": str(exc)[:240], "headlines": []}
+
+
+def _collect_external_context(profile: dict, preferences: dict | None) -> dict:
+    values = preferences if isinstance(preferences, dict) else {}
+    external: dict[str, Any] = {}
+    if values.get("weather"):
+        external["weather"] = _collect_weather(profile)
+    if values.get("news"):
+        external["news"] = _collect_news(profile)
+    return external
+
+
+def collect_context(profile: dict, preferences: dict | None = None) -> dict:
     nexo_db.init_db()
     due_followups = _serialize_followups("due", limit=MAX_DUE_ITEMS)
     due_followup_ids = {row["id"] for row in due_followups}
@@ -464,6 +713,7 @@ def collect_context(profile: dict) -> dict:
         if row["id"] not in due_reminder_ids
     ][:MAX_ACTIVE_ITEMS]
     recent_sent = _serialize_recent_sent_emails()
+    external = _collect_external_context(profile, preferences)
     return {
         "generated_at": datetime.now().astimezone().isoformat(),
         "today": date.today().isoformat(),
@@ -471,6 +721,9 @@ def collect_context(profile: dict) -> dict:
             "name": str(profile.get("operator_name") or "the operator"),
             "language": str(profile.get("language") or "en"),
             "email": str(profile.get("operator_email") or ""),
+            "role": str(profile.get("role") or ""),
+            "technical_level": str(profile.get("technical_level") or ""),
+            "residence": str(profile.get("current_residence") or ""),
         },
         "assistant": {
             "name": str(profile.get("assistant_name") or "Nova"),
@@ -481,6 +734,7 @@ def collect_context(profile: dict) -> dict:
         "active_followups": active_followups,
         "recent_diaries": _serialize_diaries(limit=MAX_DIARY_ITEMS),
         "recent_sent_emails_24h": recent_sent,
+        "external": external,
         "counts": {
             "due_reminders": len(due_reminders),
             "active_reminders": len(active_reminders),
@@ -682,7 +936,13 @@ def main(argv: list[str] | None = None) -> int:
         _set_active_claim(today, recipient)
 
     try:
-        context = collect_context(profile)
+        preference_contract = get_automation_preferences("morning-agent")
+        preference_values = (
+            (preference_contract.get("preferences") or {}).get("values")
+            if isinstance(preference_contract, dict)
+            else {}
+        )
+        context = collect_context(profile, preference_values if isinstance(preference_values, dict) else {})
         extra_blocks = "\n".join(
             block
             for block in [

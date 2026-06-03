@@ -253,6 +253,7 @@ def handle_automation_schedule(
     name: str,
     every_seconds: int = 0,
     daily_at: str = "",
+    weekdays: str = "",
     clear: bool = False,
 ) -> str:
     init_db()
@@ -262,6 +263,7 @@ def handle_automation_schedule(
             name,
             interval_seconds=interval_seconds,
             daily_at=str(daily_at or "").strip() or None,
+            weekdays=str(weekdays or "").strip() or None,
             clear=bool(clear),
         ),
         ensure_ascii=False,

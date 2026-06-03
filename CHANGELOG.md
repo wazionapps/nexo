@@ -1,5 +1,24 @@
 # Changelog
 
+## [7.30.0] - 2026-06-03
+
+### Added - agent-facing preferences and smarter briefings
+
+- **NEXO can now list, explain, and change supported Desktop/Brain preferences by chat.** The new preference catalog exposes Brain profile fields, morning briefing content choices, client/runtime preferences, and the morning briefing schedule through CLI and MCP tools so non-technical users do not need to open settings manually.
+- **Morning briefing weather and news are real data sources.** Weather uses the saved Desktop/profile location with Open-Meteo fallback geocoding, while news can pull public RSS headlines; unavailable external data is reported as unavailable instead of failing the whole briefing.
+- **Calendar automations can run on selected weekdays.** Product automations now support schedules such as `07:00 Mon-Fri` or `07:00 Tue,Sat`, and the macOS launchd, cron, systemd, recovery, CLI, Desktop bridge, and tests all understand the same contract.
+
+### Changed - runtime defaults and user-facing controls
+
+- **Claude Code defaults move to `claude-opus-4-8`.** Updates migrate persisted NEXO default resonance contracts from Opus 4.6/4.7 to Opus 4.8 while preserving custom models; Codex stays on verified `gpt-5.5` efforts.
+- **The morning briefing no longer asks for “user type”.** Tone and relevance should come from the user profile and live context, not from a confusing manual role selector.
+- **Structured preference help is part of the schema.** Every morning briefing option now carries plain-language help text for Desktop and chat.
+
+### Fixed - morning briefing reliability
+
+- **SMTP sending uses the packaged CA bundle when available.** This fixes the certificate verification failure that could make the morning briefing show as “Última ejecución con error” even after the briefing itself was generated.
+- **Weekday input rejects invalid day names.** Empty/all still means daily, but unrecognized tokens now fail clearly instead of silently becoming every day.
+
 ## [7.29.0] - 2026-06-03
 
 ### Added - morning briefing preferences and email presentation

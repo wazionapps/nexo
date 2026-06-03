@@ -419,6 +419,43 @@ def _copy_into_runtime(src: Path) -> Path:
     return dest
 
 
+def _calendar_weekdays(schedule: dict) -> list[int]:
+    raw = schedule.get("weekdays") or schedule.get("Weekdays")
+    if raw is None and "weekday" in schedule:
+        raw = [schedule.get("weekday")]
+    if raw is None and "Weekday" in schedule:
+        raw = [schedule.get("Weekday")]
+    if isinstance(raw, str):
+        parts = [part.strip() for part in raw.replace("+", ",").split(",")]
+    elif isinstance(raw, (list, tuple, set)):
+        parts = list(raw)
+    else:
+        return []
+    selected: set[int] = set()
+    for part in parts:
+        try:
+            selected.add(int(part) % 7)
+        except Exception:
+            continue
+    if len(selected) >= 7:
+        return []
+    return [day for day in (1, 2, 3, 4, 5, 6, 0) if day in selected]
+
+
+def _launchd_calendar_intervals(schedule: dict) -> dict | list[dict]:
+    base = {}
+    if "hour" in schedule:
+        base["Hour"] = schedule["hour"]
+    if "minute" in schedule:
+        base["Minute"] = schedule["minute"]
+    weekdays = _calendar_weekdays(schedule)
+    if weekdays:
+        if len(weekdays) == 1:
+            return {**base, "Weekday": weekdays[0]}
+        return [{**base, "Weekday": day} for day in weekdays]
+    return base
+
+
 def build_plist(cron: dict) -> dict:
     """Build a macOS LaunchAgent plist dict from a manifest entry."""
     cron_id = cron["id"]
@@ -480,15 +517,8 @@ def build_plist(cron: dict) -> dict:
     if "interval_seconds" in cron and not cron.get("keep_alive"):
         plist["StartInterval"] = cron["interval_seconds"]
     elif "schedule" in cron and not cron.get("keep_alive"):
-        cal = {}
         s = resolve_declared_schedule(cron)
-        if "hour" in s:
-            cal["Hour"] = s["hour"]
-        if "minute" in s:
-            cal["Minute"] = s["minute"]
-        if "weekday" in s:
-            cal["Weekday"] = s["weekday"]
-        plist["StartCalendarInterval"] = cal
+        plist["StartCalendarInterval"] = _launchd_calendar_intervals(s)
 
     return plist
 
@@ -513,9 +543,9 @@ def _cron_schedule(cron: dict) -> str | None:
         s = resolve_declared_schedule(cron)
         hour, minute = int(s.get("hour", 0)), int(s.get("minute", 0))
         weekday = "*"
-        if "weekday" in s:
-            raw_weekday = int(s["weekday"])
-            weekday = "0" if raw_weekday == 7 else str(raw_weekday)
+        weekdays = _calendar_weekdays(s)
+        if weekdays:
+            weekday = ",".join("0" if int(day) == 7 else str(int(day) % 7) for day in weekdays)
         return f"{minute} {hour} * * {weekday}"
     return None
 
@@ -916,10 +946,13 @@ StandardError=append:{stderr_log}
         elif "schedule" in cron:
             s = resolve_declared_schedule(cron)
             h, m = s.get("hour", 0), s.get("minute", 0)
-            if "weekday" in s:
-                # Manifest weekday uses launchd convention: 0=Sunday … 6=Saturday (7=Sunday alias)
+            weekdays = _calendar_weekdays(s)
+            if weekdays:
                 days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-                timer_spec = f"OnCalendar={days[s['weekday']]} *-*-* {h:02d}:{m:02d}:00"
+                timer_spec = "\n".join(
+                    f"OnCalendar={days[int(day) % 7]} *-*-* {h:02d}:{m:02d}:00"
+                    for day in weekdays
+                )
             else:
                 timer_spec = f"OnCalendar=*-*-* {h:02d}:{m:02d}:00"
         else:

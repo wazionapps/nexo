@@ -160,6 +160,34 @@ def _message_id_domain(config: dict) -> str:
     return "localhost"
 
 
+def _make_smtp_ssl_context() -> ssl.SSLContext:
+    """Build a verified TLS context that survives macOS Python CA quirks."""
+    candidates: list[str] = []
+    try:
+        import certifi  # type: ignore
+
+        candidates.append(certifi.where())
+    except Exception:
+        pass
+    candidates.extend([
+        os.environ.get("SSL_CERT_FILE", ""),
+        "/etc/ssl/cert.pem",
+        "/usr/local/etc/openssl/cert.pem",
+        "/usr/local/etc/openssl@3/cert.pem",
+        "/opt/homebrew/etc/openssl@3/cert.pem",
+    ])
+    for cafile in candidates:
+        if not cafile:
+            continue
+        try:
+            path = Path(cafile)
+            if path.is_file():
+                return ssl.create_default_context(cafile=str(path))
+        except Exception:
+            continue
+    return ssl.create_default_context()
+
+
 def classify_reply_event(body_text):
     normalized = normalize_reply_text(body_text).lower()
     if not normalized:
@@ -403,7 +431,7 @@ def send_email(config, to, cc, subject, body_text, body_html, in_reply_to, refer
         else:
             clean_recipients.append(r.strip())
 
-    context = ssl.create_default_context()
+    context = _make_smtp_ssl_context()
     server = smtplib.SMTP_SSL(config["smtp_host"], config["smtp_port"], context=context)
     server.login(config["email"], config["password"])
     server.sendmail(config["email"], clean_recipients, msg.as_string())

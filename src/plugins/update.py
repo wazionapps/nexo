@@ -1829,9 +1829,13 @@ def handle_update(
             from client_sync import sync_all_clients
             from client_preferences import normalize_client_preferences
             from model_defaults import heal_runtime_profiles
+            from auto_update import _refresh_resonance_tiers_model_defaults
 
             schedule_path = paths.config_dir() / "schedule.json"
             schedule_payload = json.loads(schedule_path.read_text()) if schedule_path.exists() else {}
+            for action in _refresh_resonance_tiers_model_defaults(NEXO_HOME):
+                _emit_progress(progress_fn, action)
+                steps_done.append("resonance-default-refresh")
             # Heal Claude-family models written into Codex profile by earlier
             # buggy versions.  Must run BEFORE normalize so healed values
             # propagate into the saved preferences.

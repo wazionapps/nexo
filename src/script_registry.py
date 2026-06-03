@@ -946,6 +946,8 @@ def list_scripts(include_core: bool = False) -> list[dict]:
         entry["schedule_type"] = str(contract.get("schedule_type") or "")
         entry["schedule_source"] = str(contract.get("schedule_source") or "")
         entry["effective_schedule_label"] = str(contract.get("effective_schedule_label") or "")
+        entry["schedule"] = contract.get("schedule")
+        entry["default_schedule"] = contract.get("default_schedule")
         entry["interval_seconds"] = int(contract.get("interval_seconds", 0) or 0)
         entry["default_interval_seconds"] = int(contract.get("default_interval_seconds", 0) or 0)
         entry["minimum_interval_seconds"] = int(contract.get("minimum_interval_seconds", 0) or 0)
@@ -2950,6 +2952,7 @@ def set_script_schedule_override(
     *,
     interval_seconds: int | None = None,
     daily_at: str | None = None,
+    weekdays=None,
     clear: bool = False,
 ) -> dict:
     from automation_controls import set_core_automation_schedule
@@ -2964,6 +2967,7 @@ def set_script_schedule_override(
         script.get("name", name_or_path),
         interval_seconds=interval_seconds,
         daily_at=daily_at,
+        weekdays=weekdays,
         clear=clear,
     )
 
@@ -2973,6 +2977,7 @@ def set_automation_schedule(
     *,
     interval_seconds: int | None = None,
     daily_at: str | None = None,
+    weekdays=None,
     clear: bool = False,
 ) -> dict:
     """Stable contract wrapper for automation cadence overrides."""
@@ -2980,6 +2985,7 @@ def set_automation_schedule(
         name_or_path,
         interval_seconds=interval_seconds,
         daily_at=daily_at,
+        weekdays=weekdays,
         clear=clear,
     )
 

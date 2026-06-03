@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.30.0: agent-facing preferences</title>
+<meta name="description" content="NEXO Brain v7.30.0 adds an agent-facing preference catalog, Opus 4.8 defaults, selected weekday automation schedules, safer SMTP certificates, and weather/news morning briefing context.">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-30-0/">
+<meta name="robots" content="index, follow">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.30.0: agent-facing preferences","datePublished":"2026-06-03","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head>
+<body>
+<main class="section-compact">
+<div class="container" style="max-width:860px;">
+<a href="/blog/">Back to blog</a>
+<p class="section-label">Release notes</p>
+<h1>NEXO 7.30.0 - agent-facing preferences</h1>
+<p>v7.30.0 is a Brain minor release focused on making NEXO easier to operate for non-technical users. The agent can now list, explain, and change supported preferences by chat, including morning briefing content, schedule, client defaults, and selected profile settings.</p>
+<p>The morning briefing can include weather and public news when enabled. Weather uses the location saved in Desktop or the profile, while unavailable external data is treated as a missing source instead of failing the full briefing.</p>
+<p>Automation schedules now support selected weekdays such as <code>07:00 Mon-Fri</code> or <code>07:00 Tue,Sat</code>. The same contract is handled by CLI, Desktop IPC, launchd, cron, systemd, and catch-up recovery.</p>
+<p>Claude Code defaults now move from Opus 4.7 to <code>claude-opus-4-8</code> while Codex stays on the verified <code>gpt-5.5</code> tiers. Existing default resonance contracts migrate safely, but custom model selections are preserved.</p>
+<p>This release also fixes the certificate verification path used by SMTP sending, addressing cases where the morning briefing was generated but showed as a failed execution during email delivery.</p>
+<pre><code>python3 scripts/sync_release_artifacts.py --release-version 7.30.0 --check
+scripts/pre-release-verify.sh --release v7.30.0</code></pre>
+<p><a href="/changelog/#v7300">Read the full v7.30.0 changelog</a></p>
+</div>
+</main>
+</body>
+</html>

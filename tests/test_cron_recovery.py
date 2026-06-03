@@ -474,3 +474,16 @@ def test_resolve_declared_schedule_spreads_weekly_machine_schedule(tmp_path, mon
     })
 
     assert resolved == {"weekday": 3, "hour": 3, "minute": 33}
+
+
+def test_last_scheduled_time_accepts_multiple_weekdays(monkeypatch):
+    import cron_recovery
+
+    monkeypatch.setattr(cron_recovery, "_local_timezone", lambda: timezone.utc)
+
+    last = cron_recovery.last_scheduled_time(
+        {"hour": 7, "minute": 0, "weekdays": [2, 6]},
+        now=datetime(2026, 6, 3, 8, 0, tzinfo=timezone.utc),
+    )
+
+    assert last == datetime(2026, 6, 2, 7, 0, tzinfo=timezone.utc)
