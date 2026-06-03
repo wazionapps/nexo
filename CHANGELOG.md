@@ -1,5 +1,15 @@
 # Changelog
 
+## [7.30.6] - 2026-06-04
+
+### Fixed - Deep Sleep retention and log rotation
+
+- **Deep Sleep now bounds its operational workspace automatically.** Brain keeps the 3 newest `backup-nexo.db` files, the 3 newest `backup-cognitive.db` files, and the 7 newest analyzed context dumps while preserving unfinished contexts for retry/debugging.
+- **Existing installs clean themselves during update.** The auto-update Deep Sleep heal path now runs the retention policy, so old users recover space immediately after updating instead of waiting for manual cleanup.
+- **Nightly runs and daily sleep cleanup both enforce retention.** The Deep Sleep wrapper runs cleanup at startup, early-success exits, and final success; the general sleep housekeeping also runs the same policy as a safety net.
+- **Deep Sleep logs are truncated safely in place.** Oversized sleep/deep-sleep logs keep a recent tail under the configured cap instead of growing forever.
+- **Regression tests pin the retention contract.** New tests cover dry-run/apply behavior, legacy `operations/deep-sleep` layout, analyzed-context preservation, DB backup retention, log rotation, and update-time cleanup.
+
 ## [7.30.5] - 2026-06-03
 
 ### Changed - morning preparation release

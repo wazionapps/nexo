@@ -23,6 +23,14 @@ mkdir -p "$LOG_DIR" "$DEEP_SLEEP_DIR"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_DIR/deep-sleep.log"; }
 
+run_retention() {
+    if ! python3 "$SCRIPT_DIR/deep-sleep/retention.py" --apply --quiet >> "$LOG_DIR/deep-sleep.log" 2>&1; then
+        log "Retention warning: Deep Sleep cleanup failed"
+    fi
+}
+
+run_retention
+
 # Read watermark (last processed timestamp)
 SINCE=""
 if [ -f "$WATERMARK_FILE" ]; then
@@ -46,6 +54,7 @@ if [ ! -f "$DEEP_SLEEP_DIR/$RUN_ID-context.txt" ]; then
     log "No context file generated. Skipping."
     echo "$UNTIL" > "$WATERMARK_FILE"
     log "Watermark updated to $UNTIL (no sessions to process)"
+    run_retention
     exit 0
 fi
 
@@ -58,6 +67,7 @@ if [ "$SESSIONS" -eq 0 ]; then
     log "No sessions found. Skipping."
     echo "$UNTIL" > "$WATERMARK_FILE"
     log "Watermark updated to $UNTIL (no sessions)"
+    run_retention
     exit 0
 fi
 
@@ -96,3 +106,4 @@ fi
 echo "$UNTIL" > "$WATERMARK_FILE"
 log "Watermark updated to $UNTIL"
 log "=== Deep Sleep v2 complete (run_id=$RUN_ID) ==="
+run_retention

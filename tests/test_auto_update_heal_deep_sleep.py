@@ -166,3 +166,24 @@ def test_heal_swallows_db_errors(tmp_path, monkeypatch):
     actions = au._heal_deep_sleep_runtime(home)
     # Either a clean no-op or a benign warning — never a raise.
     assert isinstance(actions, list)
+
+
+def test_heal_applies_deep_sleep_retention_for_existing_installs(tmp_path, monkeypatch):
+    home = tmp_path / "nexo"
+    deep_sleep_dir = home / "runtime" / "operations" / "deep-sleep"
+    for day in range(1, 6):
+        run_id = f"2026-05-{day:02d}-050000"
+        path = deep_sleep_dir / f"{run_id}-backup-cognitive.db"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"x" * 128)
+
+    log_dir = home / "runtime" / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    (log_dir / "deep-sleep.log").write_text("line\n" * 400000, encoding="utf-8")
+
+    au = _reload_auto_update(monkeypatch, home)
+    actions = au._heal_deep_sleep_runtime(home)
+
+    assert any(action.startswith("retention:") for action in actions)
+    assert len(list(deep_sleep_dir.glob("*-backup-cognitive.db"))) == 3
+    assert (log_dir / "deep-sleep.log").stat().st_size < 1024 * 1024

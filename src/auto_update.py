@@ -2275,6 +2275,21 @@ def _heal_deep_sleep_runtime(dest: Path = NEXO_HOME) -> list[str]:
         except OSError:
             pass
 
+    # (5) Bound Deep Sleep operational artifacts for existing installs. Older
+    # versions accumulated DB backups and large context dumps indefinitely; this
+    # apply path runs on update so users do not have to wait for the next night.
+    try:
+        from deep_sleep_retention import prune_deep_sleep_runtime
+
+        report = prune_deep_sleep_runtime(nexo_home=dest, apply=True)
+        deleted = int(report.get("deleted_count") or 0)
+        rotated = int(report.get("logs_rotated") or 0)
+        freed = int(report.get("deleted_bytes") or 0) + int(report.get("log_bytes_trimmed") or 0)
+        if deleted or rotated:
+            actions.append(f"retention:{deleted}-deleted:{rotated}-logs:{freed}-bytes")
+    except Exception as exc:
+        actions.append(f"retention-warning:{exc.__class__.__name__}")
+
     return actions
 
 

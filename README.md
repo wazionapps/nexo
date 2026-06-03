@@ -18,7 +18,7 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.30.5` is the current packaged-runtime line. Patch release over v7.30.4 - the morning briefing is now Morning preparation, with automatic relevance, changes since yesterday, next actions, relevant public context, and chat-addressable preference settings for non-technical users.
+Version `7.30.6` is the current packaged-runtime line. Patch release over v7.30.5 - Deep Sleep now rotates its operational artifacts and logs automatically, keeping historical installs bounded without touching local-context memory.
 
 Previously in `7.30.4`: patch release over v7.30.3 - local runtime update post-sync now gives bounded Memory Fabric repair enough time to finish, and headless automations now treat `nexo_stop` as a terminal close so followup/deep-sleep runners do not reopen no-op protocol loops.
 

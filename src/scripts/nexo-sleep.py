@@ -41,6 +41,7 @@ if str(NEXO_CODE) not in sys.path:
 from agent_runner import AutomationBackendUnavailableError, run_automation_prompt
 from constants import AUTOMATION_SUBPROCESS_TIMEOUT
 from core_prompts import render_core_prompt
+from deep_sleep_retention import prune_deep_sleep_runtime
 import paths
 try:
     from client_preferences import resolve_user_model as _resolve_user_model
@@ -261,6 +262,9 @@ def stage_a_cleanup() -> dict:
         "a5_heartbeat_trimmed": False,
         "a6_reflection_trimmed": False,
         "a7_daemon_logs_deleted": 0,
+        "a9_deep_sleep_deleted": 0,
+        "a9_deep_sleep_freed_bytes": 0,
+        "a9_deep_sleep_logs_rotated": 0,
     }
 
     # A1: Delete daily_summaries/*.md >90 days
@@ -365,6 +369,16 @@ def stage_a_cleanup() -> dict:
                     f.unlink()
                 except Exception:
                     pass
+
+    # A9: Bound Deep Sleep operational artifacts and logs. This is safe to run
+    # daily: incomplete/unanalysed contexts are preserved for retry/debugging.
+    try:
+        deep_sleep_retention = prune_deep_sleep_runtime(nexo_home=NEXO_HOME, apply=True)
+        stats["a9_deep_sleep_deleted"] = int(deep_sleep_retention.get("deleted_count") or 0)
+        stats["a9_deep_sleep_freed_bytes"] = int(deep_sleep_retention.get("deleted_bytes") or 0)
+        stats["a9_deep_sleep_logs_rotated"] = int(deep_sleep_retention.get("logs_rotated") or 0)
+    except Exception as exc:
+        stats["a9_deep_sleep_warning"] = exc.__class__.__name__
 
     return stats
 
