@@ -60,6 +60,7 @@ import shutil
 import subprocess
 import sys
 import time
+from collections.abc import Iterable
 from pathlib import Path
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
@@ -465,6 +466,7 @@ def run_runtime_backup_prune(
     max_bytes: str | int | None = None,
     backups_root: Path | None = None,
     delete_all_technical: bool = False,
+    protect_paths: Iterable[str | Path] | None = None,
     timeout: int = 120,
 ) -> dict:
     """Run the technical-backup pruner. Safe no-op when the script is absent."""
@@ -487,6 +489,8 @@ def run_runtime_backup_prune(
     ]
     if delete_all_technical:
         args.append("--delete-all-technical")
+    for protected in protect_paths or ():
+        args.extend(["--protect", str(protected)])
     try:
         proc = subprocess.run(args, capture_output=True, text=True, timeout=timeout)
         report = json.loads(proc.stdout or "{}") if proc.stdout.strip().startswith("{") else {}
@@ -634,10 +638,13 @@ def create_backup_path(prefix: str, suffix: str = "", *, backups_root: Path | No
 def finalize_backup_snapshot(_path: Path | str | None = None, *, backups_root: Path | None = None) -> dict:
     """Post-snapshot cleanup; callers invoke after writing large artifacts."""
     root = Path(backups_root) if backups_root is not None else None
+    protect_paths = []
     if root is None and _path is not None:
         snapshot = Path(_path)
         root = snapshot.parent
-    return run_runtime_backup_prune(backups_root=root)
+    if _path is not None:
+        protect_paths.append(Path(_path))
+    return run_runtime_backup_prune(backups_root=root, protect_paths=protect_paths)
 
 
 def memory_dir() -> Path:

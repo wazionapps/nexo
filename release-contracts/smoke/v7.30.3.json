@@ -1,0 +1,102 @@
+{
+  "release_line": "v7.30",
+  "version": "7.30.3",
+  "generated_at": "2026-06-03T17:58:10Z",
+  "ok": true,
+  "groups": [
+    {
+      "id": "backup_snapshot_protection",
+      "description": "Runtime backup pruning keeps the snapshot currently being finalized",
+      "command": [
+        "python3",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_backup_creation_wrapper.py"
+      ],
+      "targets": [
+        "src/paths.py",
+        "src/scripts/prune_runtime_backups.py",
+        "tests/test_backup_creation_wrapper.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 2.81,
+      "stdout": "Covered by targeted suite: 9 passed in 2.81s across backup wrapper, validated backup, and release closeout DB path tests.",
+      "stderr": ""
+    },
+    {
+      "id": "validated_backup_closeout",
+      "description": "Validated DB backup survives finalize/prune before runtime update sync",
+      "command": [
+        "python3",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_file_migrations.py::test_validated_backup_survives_finalize_prune"
+      ],
+      "targets": [
+        "src/paths.py",
+        "src/auto_update.py",
+        "tests/test_file_migrations.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 2.81,
+      "stdout": "Focused regression passed in the 9-test targeted suite. Live reproduction returned ok=true and backup contained nexo.db.",
+      "stderr": ""
+    },
+    {
+      "id": "canonical_protocol_db_path",
+      "description": "Release closeout reads protocol evidence from runtime/data/nexo.db",
+      "command": [
+        "python3",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_verify_release_readiness.py::test_check_protocol_closeout_uses_runtime_data_db"
+      ],
+      "targets": [
+        "scripts/verify_release_readiness.py",
+        "tests/test_verify_release_readiness.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 2.81,
+      "stdout": "Focused closeout path passed in the 9-test targeted suite.",
+      "stderr": ""
+    },
+    {
+      "id": "release_surface_contract",
+      "description": "Release public surfaces, contract, and integration metadata are synchronized before tag",
+      "command": [
+        "python3",
+        "scripts/verify_release_readiness.py",
+        "--ci",
+        "--contract",
+        "release-contracts/v7.30.3.json",
+        "--require-contract-complete",
+        "--require-smoke"
+      ],
+      "targets": [
+        "package.json",
+        "CHANGELOG.md",
+        "README.md",
+        "llms.txt",
+        ".well-known/llms.txt",
+        "index.html",
+        "blog/index.html",
+        "blog/nexo-7-30-3/index.html",
+        "changelog/index.html",
+        "sitemap.xml",
+        "release-contracts/v7.30.3.json",
+        "release-contracts/smoke/v7.30.3.json"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 32.73,
+      "stdout": "release-readiness OK for v7.30.3 with contract and smoke; verify_client_parity ran 234 tests passed in 32.73s.",
+      "stderr": ""
+    }
+  ]
+}

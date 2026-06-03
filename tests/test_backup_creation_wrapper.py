@@ -53,7 +53,7 @@ def test_create_backup_dir_context_post_prunes_after_snapshot(tmp_path, monkeypa
         calls.clear()
         (backup / "payload.txt").write_text("snapshot")
 
-    assert calls == [{"backups_root": backup.parent}]
+    assert calls == [{"backups_root": backup.parent, "protect_paths": [backup]}]
 
 
 def test_adaptive_backup_cap_scales_with_disk_size(tmp_path, monkeypatch):
@@ -104,3 +104,25 @@ def test_aggressive_prune_deletes_only_nexo_technical_backups(tmp_path, monkeypa
     assert protected.is_dir()
     assert weekly.is_dir()
     assert hourly.is_file()
+
+
+def test_prune_protect_keeps_current_snapshot_in_emergency_mode(tmp_path, monkeypatch):
+    paths = _reload_paths(monkeypatch, tmp_path / "nexo-home")
+    root = paths.backups_dir()
+    root.mkdir(parents=True)
+    current = root / "pre-autoupdate-2026-06-03-175225"
+    current.mkdir()
+    (current / "nexo.db").write_text("current")
+    old = root / "pre-autoupdate-2026-06-03-160000"
+    old.mkdir()
+    (old / "nexo.db").write_text("old")
+
+    report = paths.run_runtime_backup_prune(
+        backups_root=root,
+        delete_all_technical=True,
+        protect_paths=[current],
+    )
+
+    assert report["ok"] is True
+    assert current.is_dir()
+    assert not old.exists()

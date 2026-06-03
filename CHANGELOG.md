@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.30.3] - 2026-06-03
+
+### Fixed - release closeout backup validation
+
+- **Runtime backup pruning now protects the snapshot being validated.** `paths.finalize_backup_snapshot()` passes the current backup path to the technical pruner, so disk-pressure cleanup cannot delete a freshly created `pre-autoupdate-*` snapshot before `_create_validated_db_backup()` checks `nexo.db`.
+- **Release final-closeout reads the canonical runtime database path.** `verify_release_readiness.py` now resolves the active `NEXO_HOME` through the shared path helper instead of assuming the legacy `~/.nexo/data/nexo.db` layout.
+- **Regression coverage pins the closeout failure.** Tests now cover protected emergency pruning, validated backup survival through finalize/prune, and protocol closeout against the modern `runtime/data/nexo.db` layout.
+
 ## [7.30.2] - 2026-06-03
 
 ### Fixed - Deep Sleep release-grade execution

@@ -2,6 +2,7 @@
 import os
 import sqlite3
 import sys
+from pathlib import Path
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
 
@@ -139,6 +140,35 @@ def test_backup_dbs_closes_connections_on_success(tmp_path, monkeypatch):
     tables = verify.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
     verify.close()
     assert any(row[0] == "t" for row in tables)
+
+
+def test_validated_backup_survives_finalize_prune(tmp_path, monkeypatch):
+    """The snapshot being validated must not be pruned before validation runs."""
+    import auto_update
+
+    data_dir = tmp_path / "runtime" / "data"
+    data_dir.mkdir(parents=True)
+    db_file = data_dir / "nexo.db"
+    conn = sqlite3.connect(str(db_file))
+    conn.execute("CREATE TABLE learnings (id INTEGER)")
+    conn.execute("CREATE TABLE session_diary (id INTEGER)")
+    conn.execute("CREATE TABLE guard_checks (id INTEGER)")
+    conn.execute("CREATE TABLE protocol_debt (id INTEGER)")
+    conn.execute("INSERT INTO learnings VALUES (1)")
+    conn.commit()
+    conn.close()
+
+    monkeypatch.setenv("NEXO_HOME", str(tmp_path))
+    monkeypatch.setattr(auto_update, "DATA_DIR", data_dir)
+    monkeypatch.setattr(auto_update, "NEXO_HOME", tmp_path)
+    monkeypatch.setattr(auto_update, "SRC_DIR", tmp_path / "src_nonexistent")
+
+    backup_dir, report = auto_update._create_validated_db_backup()
+
+    assert backup_dir is not None
+    assert report is not None
+    assert report["ok"] is True
+    assert (Path(backup_dir) / "nexo.db").is_file()
 
 
 def test_backup_dbs_closes_connections_on_corrupt_source(tmp_path, monkeypatch):

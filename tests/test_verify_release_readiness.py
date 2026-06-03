@@ -548,6 +548,16 @@ def test_check_protocol_closeout_accepts_done_task_with_change_log(tmp_path):
     module._check_protocol_closeout(nexo_home, "PT-200")
 
 
+def test_check_protocol_closeout_uses_runtime_data_db(tmp_path):
+    module = _load_module()
+    nexo_home = tmp_path / "nexo-home"
+    db_dir = nexo_home / "runtime" / "data"
+    db_dir.mkdir(parents=True)
+    _seed_closeout_db(db_dir / "nexo.db", task_id="PT-202")
+
+    module._check_protocol_closeout(nexo_home, "PT-202")
+
+
 def test_check_protocol_closeout_rejects_missing_change_log(tmp_path):
     module = _load_module()
     nexo_home = tmp_path / "nexo-home"

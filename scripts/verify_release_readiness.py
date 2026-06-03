@@ -28,6 +28,7 @@ SRC_ROOT = ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
+import paths as nexo_paths
 from tree_hygiene import find_duplicate_artifact_paths
 
 PACKAGE_JSON = ROOT / "package.json"
@@ -878,7 +879,15 @@ def _run_runtime_update(nexo_home: Path) -> None:
 
 
 def _check_protocol_closeout(nexo_home: Path, task_id: str) -> None:
-    db_path = nexo_home / "data" / "nexo.db"
+    old_home = os.environ.get("NEXO_HOME")
+    os.environ["NEXO_HOME"] = str(nexo_home)
+    try:
+        db_path = nexo_paths.db_path()
+    finally:
+        if old_home is None:
+            os.environ.pop("NEXO_HOME", None)
+        else:
+            os.environ["NEXO_HOME"] = old_home
     if not db_path.is_file():
         raise SystemExit(f"[release-readiness] runtime DB missing for protocol closeout: {db_path}")
 

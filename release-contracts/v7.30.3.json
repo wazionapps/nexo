@@ -1,0 +1,102 @@
+{
+  "release_line": "v7.30",
+  "target_version": "7.30.3",
+  "scope_owner": "NEXO",
+  "distribution": {
+    "git_updates_on": "merge_to_main",
+    "packaged_release_on": "tag_publish"
+  },
+  "required_repo_files": [
+    "package.json",
+    "CHANGELOG.md",
+    "README.md",
+    "llms.txt",
+    ".well-known/llms.txt",
+    "index.html",
+    "blog/index.html",
+    "blog/nexo-7-30-3/index.html",
+    "changelog/index.html",
+    "sitemap.xml",
+    "release-contracts/v7.30.3.json",
+    "release-contracts/smoke/v7.30.3.json",
+    "scripts/sync_release_artifacts.py",
+    "scripts/verify_release_readiness.py",
+    "scripts/verify_client_parity.py",
+    "scripts/pre-release-verify.sh",
+    ".claude-plugin/plugin.json",
+    "clawhub-skill/SKILL.md",
+    "openclaw-plugin/package.json",
+    "openclaw-plugin/package-lock.json",
+    "openclaw-plugin/src/mcp-bridge.ts",
+    "src/paths.py",
+    "src/scripts/prune_runtime_backups.py",
+    "tests/test_backup_creation_wrapper.py",
+    "tests/test_file_migrations.py",
+    "tests/test_verify_release_readiness.py"
+  ],
+  "required_website_files": [
+    "index.html",
+    "blog/index.html",
+    "blog/nexo-7-30-3/index.html",
+    "changelog/index.html",
+    "llms.txt",
+    ".well-known/llms.txt",
+    "sitemap.xml"
+  ],
+  "smoke": {
+    "required_groups": [
+      "backup_snapshot_protection",
+      "validated_backup_closeout",
+      "canonical_protocol_db_path",
+      "release_surface_contract"
+    ],
+    "max_age_hours": 72
+  },
+  "publication": {
+    "status": "ready",
+    "checklist_complete": true,
+    "blockers": []
+  },
+  "gates": [
+    {
+      "id": "backup_snapshot_protection",
+      "title": "Runtime backup pruning cannot remove the snapshot currently being finalized",
+      "status": "complete",
+      "evidence_required": [
+        "paths.finalize_backup_snapshot passes the current snapshot as a protected path",
+        "prune_runtime_backups.py accepts --protect and excludes protected paths from normal and emergency deletion",
+        "tests/test_backup_creation_wrapper.py covers protected emergency pruning"
+      ]
+    },
+    {
+      "id": "validated_backup_closeout",
+      "title": "Validated DB backup survives finalize/prune before update sync",
+      "status": "complete",
+      "evidence_required": [
+        "_create_validated_db_backup returns a backup_dir containing nexo.db",
+        "Critical table counts match between source and backup",
+        "tests/test_file_migrations.py covers the finalize/prune regression"
+      ]
+    },
+    {
+      "id": "canonical_protocol_db_path",
+      "title": "Release closeout reads protocol evidence from the canonical runtime DB",
+      "status": "complete",
+      "evidence_required": [
+        "verify_release_readiness.py resolves db_path through the shared paths helper under the target NEXO_HOME",
+        "Legacy data/nexo.db closeout compatibility remains covered",
+        "tests/test_verify_release_readiness.py covers runtime/data/nexo.db closeout"
+      ]
+    },
+    {
+      "id": "public_release_surfaces",
+      "title": "Public release surfaces and integration artifacts are aligned for v7.30.3",
+      "status": "complete",
+      "evidence_required": [
+        "README, llms, homepage, blog index, blog post, changelog page, and sitemap reference v7.30.3",
+        "Claude plugin, ClawHub skill, and OpenClaw package metadata reference 7.30.3",
+        "Release smoke and readiness checks validate the v7.30.3 contract before tag publish"
+      ]
+    }
+  ]
+}

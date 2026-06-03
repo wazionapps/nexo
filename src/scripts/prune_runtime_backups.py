@@ -261,6 +261,14 @@ def gather_entries(backups_root: Path) -> list[dict]:
     return items
 
 
+def path_key(path: str | Path) -> str:
+    candidate = Path(path)
+    try:
+        return str(candidate.resolve())
+    except OSError:
+        return str(candidate.absolute())
+
+
 def plan_prunes(
     items: list[dict],
     *,
@@ -420,11 +428,24 @@ def run(args: argparse.Namespace) -> int:
         local_context_keep=max(0, args.local_context_keep),
         hourly_keep=max(0, args.hourly_keep),
     )
+    protected_paths = {path_key(path) for path in (args.protect or [])}
+    protected_ids: set[int] = set()
+    if protected_paths:
+        protected_items = [item for item in items if path_key(item["path"]) in protected_paths]
+        protected_ids = {id(item) for item in protected_items}
+        if protected_ids:
+            to_delete = [item for item in to_delete if id(item) not in protected_ids]
+            keep_ids = {id(item) for item in to_keep}
+            to_keep.extend(item for item in protected_items if id(item) not in keep_ids)
 
     if args.delete_all_technical:
         delete_ids = {id(item) for item in to_delete}
         for item in items:
-            if item["class"] in {"TECHNICAL", "TEMPORARY"} and id(item) not in delete_ids:
+            if (
+                item["class"] in {"TECHNICAL", "TEMPORARY"}
+                and id(item) not in delete_ids
+                and id(item) not in protected_ids
+            ):
                 to_delete.append(item)
                 delete_ids.add(id(item))
         to_keep = [item for item in items if id(item) not in delete_ids]
@@ -447,6 +468,7 @@ def run(args: argparse.Namespace) -> int:
             "tmp_ttl_minutes": args.tmp_ttl_minutes,
             "local_context_keep": args.local_context_keep,
             "hourly_keep": args.hourly_keep,
+            "protected_paths": sorted(protected_paths),
             "restore_point_guard": restore_guard,
         },
         "totals": {
@@ -560,6 +582,7 @@ def main() -> int:
     ap.add_argument("--tmp-ttl-minutes", type=int, default=int(os.environ.get("NEXO_BACKUP_TMP_TTL_MINUTES", "30")), help="delete orphan temporary backup files older than this (default: 30)")
     ap.add_argument("--local-context-keep", type=int, default=int(os.environ.get("NEXO_LOCAL_CONTEXT_BACKUP_KEEP_LAST", "1")), help="local-context backup files to keep under the global cap (default: 1)")
     ap.add_argument("--hourly-keep", type=int, default=int(os.environ.get("NEXO_BACKUP_KEEP_LAST", "3")), help="hourly nexo DB backups to keep under the global cap (default: 3)")
+    ap.add_argument("--protect", action="append", default=[], help="backup path to keep even if it is otherwise prunable; repeat for multiple paths")
     args = ap.parse_args()
     try:
         return run(args)
