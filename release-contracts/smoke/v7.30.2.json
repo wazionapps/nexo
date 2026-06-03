@@ -103,6 +103,8 @@
         "tests/test_cognitive.py::test_reranker_respects_model_download_disabled"
       ],
       "targets": [
+        ".github/workflows/tests.yml",
+        ".github/workflows/publish.yml",
         "src/cognitive/_core.py",
         "scripts/verify_client_parity.py",
         "tests/test_cognitive.py"
@@ -140,8 +142,8 @@
       ],
       "returncode": 0,
       "ok": true,
-      "duration_seconds": 38.46,
-      "stdout": "release-readiness OK for v7.30.2 with contract and smoke; verify_client_parity ran 234 tests passed in 38.46s.",
+      "duration_seconds": 59.14,
+      "stdout": "release-readiness OK for v7.30.2 with contract and smoke; verify_client_parity ran 234 tests passed in 59.14s.",
       "stderr": ""
     }
   ]

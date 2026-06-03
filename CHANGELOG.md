@@ -12,7 +12,7 @@
 
 - **Deep Sleep action application now creates followups with operational governance fields.** New and duplicate followups receive default date, verification text, priority, owner, and internal flags so overnight findings become actionable work instead of loose notes.
 - **Release coverage now pins the Deep Sleep failure modes.** The release contract and tests cover sleep learning coverage, wrapper fail-closed behavior, agent start-packet startup injection, and followup governance.
-- **Release parity tests now stay offline for cognitive search reranking.** Client-parity verification forces the no-download model mode, and the cognitive reranker respects that flag so pre-release gates cannot hang on HuggingFace downloads.
+- **Release and CI tests now stay offline for cognitive search reranking.** Client-parity verification, the general Tests workflow, and the publish workflow force the no-download model mode, and the cognitive reranker respects that flag so release gates cannot hang on HuggingFace downloads.
 
 ## [7.30.1] - 2026-06-03
 

@@ -13,6 +13,8 @@
     "llms.txt",
     ".well-known/llms.txt",
     "sitemap.xml",
+    ".github/workflows/tests.yml",
+    ".github/workflows/publish.yml",
     "index.html",
     "blog/index.html",
     "blog/nexo-7-30-2/index.html",
@@ -113,6 +115,7 @@
       "status": "complete",
       "evidence_required": [
         "verify_client_parity.py sets NEXO_SKIP_COGNITIVE_MODEL_DOWNLOAD=1 for parity pytest",
+        "tests.yml and publish.yml set NEXO_SKIP_COGNITIVE_MODEL_DOWNLOAD=1 for full pytest in CI",
         "cognitive._core disables the reranker under the no-download flag",
         "tests/test_cognitive.py covers the reranker-disabled path and stubs reranking in search ranking unit tests"
       ]

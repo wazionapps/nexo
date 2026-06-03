@@ -11,6 +11,9 @@ on:
   push:
     branches: [main]
 
+env:
+  NEXO_SKIP_COGNITIVE_MODEL_DOWNLOAD: "1"
+
 jobs:
   pytest:
     name: pytest (tests/)
