@@ -1,5 +1,15 @@
 # Changelog
 
+## [7.30.5] - 2026-06-03
+
+### Changed - morning preparation release
+
+- **Morning briefing is now Morning preparation.** Brain treats the daily automation as a start-of-day assistant that ranks what changed, what matters, what can block the user, and what should be done next instead of dumping a flat checklist.
+- **Relevance is inferred by default.** The preference schema now includes automatic relevance, changes since yesterday, next actions, and plain-language external context settings so NEXO adapts from profile, recent work, emails, agenda, tasks, and saved preferences without asking for a manual user type.
+- **News becomes relevant public context.** Public headlines are selected from internal interest/location/profile queries, filtered by excluded topics, and included only when they are useful for the user's day. Users do not need to paste RSS URLs or understand sources.
+- **Chat can understand and change the new settings.** The preference catalog exposes the Morning preparation options, Spanish aliases, multi-select interests, exclusions, length, tone, delivery, and schedule-facing labels so the user's agent can explain or adjust preferences conversationally.
+- **Desktop gets the schema it needs for non-technical users.** Brain now provides help text and option metadata that Desktop can render as simple guided controls with no technical setup.
+
 ## [7.30.4] - 2026-06-03
 
 ### Fixed - local runtime update completion and headless runner closeout

@@ -1,0 +1,103 @@
+{
+  "release_line": "v7.30",
+  "target_version": "7.30.5",
+  "scope_owner": "NEXO",
+  "distribution": {
+    "git_updates_on": "merge_to_main",
+    "packaged_release_on": "tag_publish"
+  },
+  "required_repo_files": [
+    "package.json",
+    "CHANGELOG.md",
+    "README.md",
+    "llms.txt",
+    ".well-known/llms.txt",
+    "index.html",
+    "blog/index.html",
+    "blog/nexo-7-30-5/index.html",
+    "changelog/index.html",
+    "sitemap.xml",
+    "release-contracts/v7.30.5.json",
+    "release-contracts/smoke/v7.30.5.json",
+    "scripts/sync_release_artifacts.py",
+    "scripts/verify_release_readiness.py",
+    "scripts/verify_client_parity.py",
+    ".claude-plugin/plugin.json",
+    "clawhub-skill/SKILL.md",
+    "openclaw-plugin/package.json",
+    "openclaw-plugin/package-lock.json",
+    "openclaw-plugin/src/mcp-bridge.ts",
+    "src/automation_preferences.py",
+    "src/preference_catalog.py",
+    "src/scripts/nexo-morning-agent.py",
+    "templates/core-prompts/morning-agent.md",
+    "tests/test_automation_preferences.py",
+    "tests/test_preference_catalog.py",
+    "tests/test_morning_agent_contract.py"
+  ],
+  "required_website_files": [
+    "index.html",
+    "blog/index.html",
+    "blog/nexo-7-30-5/index.html",
+    "changelog/index.html",
+    "llms.txt",
+    ".well-known/llms.txt",
+    "sitemap.xml"
+  ],
+  "smoke": {
+    "required_groups": [
+      "morning_preparation_schema",
+      "relevant_public_context",
+      "chat_preference_catalog",
+      "release_surface_contract"
+    ],
+    "max_age_hours": 72
+  },
+  "publication": {
+    "status": "ready",
+    "checklist_complete": true,
+    "blockers": []
+  },
+  "gates": [
+    {
+      "id": "morning_preparation_schema",
+      "title": "Morning automation is modeled as start-of-day preparation, not a technical checklist",
+      "status": "complete",
+      "evidence_required": [
+        "automation_preferences.py publishes schema_version 2 with automatic relevance, changes since yesterday, and next actions",
+        "templates/core-prompts/morning-agent.md instructs the agent to rank impact, urgency, change, actionability, confidence, and user preference",
+        "tests/test_automation_preferences.py covers defaults, multi-select validation, and prompt contract"
+      ]
+    },
+    {
+      "id": "relevant_public_context",
+      "title": "Public context is inferred from profile and preferences without asking users for URLs",
+      "status": "complete",
+      "evidence_required": [
+        "nexo-morning-agent.py builds internal Google News RSS search queries from language, country, role, interests, and location/profile context",
+        "news_interests and excluded_topics are persisted as multi-choice preferences with automatic mode",
+        "tests/test_morning_agent_contract.py verifies relevant public context collection and excluded-topic filtering"
+      ]
+    },
+    {
+      "id": "chat_preference_catalog",
+      "title": "NEXO chat can list, explain, and change Morning preparation options",
+      "status": "complete",
+      "evidence_required": [
+        "preference_catalog.py exposes new Morning preparation options, multi-choice metadata, exclusive automatic selection, and Spanish aliases",
+        "Chat-facing preference entries include alias paths such as morning.news_interests and morning.excluded_topics",
+        "tests/test_preference_catalog.py covers catalog exposure and Spanish option alias coercion"
+      ]
+    },
+    {
+      "id": "public_release_surfaces",
+      "title": "Public release surfaces and integration artifacts are aligned for v7.30.5",
+      "status": "complete",
+      "evidence_required": [
+        "README, llms, homepage, blog index, blog post, changelog page, and sitemap reference v7.30.5",
+        "Claude plugin, ClawHub skill, and OpenClaw package metadata reference 7.30.5",
+        "Release smoke and readiness checks validate the v7.30.5 contract before tag publish"
+      ]
+    }
+  ]
+}

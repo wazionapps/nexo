@@ -14,20 +14,34 @@ SUPPORTED_AUTOMATIONS = {"morning-agent"}
 
 
 MORNING_AGENT_SCHEMA: dict[str, Any] = {
-    "schema_version": 1,
+    "schema_version": 2,
     "automation": "morning-agent",
-    "title": "Morning briefing content",
+    "title": "Morning preparation",
     "groups": [
         {
             "id": "content",
-            "label": "Content",
+            "label": "What NEXO watches",
             "items": [
+                {
+                    "id": "auto_relevance",
+                    "type": "boolean",
+                    "label": "Automatic relevance",
+                    "default": True,
+                    "help": "NEXO decides what matters by urgency, change, impact, confidence and whether there is a useful next action.",
+                },
                 {
                     "id": "priorities",
                     "type": "boolean",
                     "label": "Priorities",
                     "default": True,
-                    "help": "The most important things NEXO thinks you should look at first.",
+                    "help": "The most important things to look at first today.",
+                },
+                {
+                    "id": "changes_since_yesterday",
+                    "type": "boolean",
+                    "label": "What changed",
+                    "default": True,
+                    "help": "Recent changes, new information and moved work that may affect the day.",
                 },
                 {
                     "id": "agenda",
@@ -72,25 +86,75 @@ MORNING_AGENT_SCHEMA: dict[str, Any] = {
                     "help": "Things that may stop progress, need your decision or could become a problem.",
                 },
                 {
+                    "id": "next_actions",
+                    "type": "boolean",
+                    "label": "Next actions",
+                    "default": True,
+                    "help": "A practical closing list of what to do first, what can wait and what needs a decision.",
+                },
+                {
                     "id": "internal_refs",
                     "type": "boolean",
                     "label": "Internal references",
                     "default": False,
                     "help": "Technical file names, IDs or internal references. Keep this off for a cleaner human summary.",
                 },
-                {
-                    "id": "news",
-                    "type": "boolean",
-                    "label": "News",
-                    "default": False,
-                    "help": "A short set of current public headlines from the configured news feed, included only when the source can be verified.",
-                },
+            ],
+        },
+        {
+            "id": "external",
+            "label": "Day context",
+            "items": [
                 {
                     "id": "weather",
                     "type": "boolean",
                     "label": "Weather",
                     "default": True,
                     "help": "Today's weather from the location saved in Desktop or your residence in the profile, included only when the forecast can be verified.",
+                },
+                {
+                    "id": "news",
+                    "type": "boolean",
+                    "label": "Relevant public context",
+                    "default": True,
+                    "help": "Public headlines only when they are current, verifiable and useful for the operator's day, work, location or interests.",
+                },
+                {
+                    "id": "news_interests",
+                    "type": "multi_choice",
+                    "label": "Public context interests",
+                    "default": ["automatic"],
+                    "options": [
+                        "automatic",
+                        "business",
+                        "technology",
+                        "finance",
+                        "local",
+                        "health",
+                        "legal",
+                        "education",
+                        "real_estate",
+                        "science",
+                        "culture",
+                        "sports",
+                    ],
+                    "exclusive_options": ["automatic"],
+                    "help": "Use Automatic so NEXO infers useful topics, or choose areas you want watched in the morning.",
+                },
+                {
+                    "id": "excluded_topics",
+                    "type": "multi_choice",
+                    "label": "Topics to avoid",
+                    "default": [],
+                    "options": ["politics", "sports", "celebrity", "crime", "crypto", "market_noise"],
+                    "help": "Topics NEXO should avoid unless they are directly relevant to your work or safety.",
+                },
+                {
+                    "id": "why_shown",
+                    "type": "boolean",
+                    "label": "Explain why",
+                    "default": False,
+                    "help": "Adds a short reason when NEXO includes external context, useful while tuning the briefing.",
                 },
             ],
         },
@@ -176,6 +240,36 @@ def _iter_schema_items(schema: dict[str, Any]):
                 yield item
 
 
+def _normalize_multi_choice(raw_value: Any, item: dict[str, Any]) -> tuple[list[str], list[str]]:
+    options = [str(v) for v in list(item.get("options") or [])]
+    allowed = set(options)
+    warnings: list[str] = []
+    if isinstance(raw_value, (list, tuple, set)):
+        raw_items = list(raw_value)
+    else:
+        text = str(raw_value or "").strip()
+        if not text:
+            raw_items = []
+        else:
+            raw_items = [part.strip() for part in text.replace(";", ",").split(",")]
+    selected: list[str] = []
+    for raw_item in raw_items:
+        clean = str(raw_item or "").strip()
+        if not clean:
+            continue
+        if clean not in allowed:
+            warnings.append(f"{item.get('id')}: invalid option {clean}")
+            continue
+        if clean not in selected:
+            selected.append(clean)
+    exclusive = [str(v) for v in list(item.get("exclusive_options") or [])]
+    for exclusive_value in exclusive:
+        if exclusive_value in selected and len(selected) > 1:
+            selected = [exclusive_value]
+            break
+    return selected, warnings
+
+
 def default_automation_preferences(name: str) -> dict[str, Any]:
     schema = get_automation_preference_schema(name)
     values: dict[str, Any] = {}
@@ -218,6 +312,10 @@ def validate_automation_preferences(name: str, payload: dict[str, Any] | None) -
                 values[key] = clean
             else:
                 warnings.append(f"{key}: invalid choice")
+        elif kind in {"multi_choice", "multi-select", "multiselect"}:
+            selected, item_warnings = _normalize_multi_choice(raw_value, item)
+            values[key] = selected
+            warnings.extend(item_warnings)
         elif kind == "number":
             try:
                 values[key] = int(raw_value)
@@ -349,11 +447,16 @@ def format_automation_preferences_prompt_block(name_or_path: str) -> str:
         "\n== STRUCTURED CONTENT PREFERENCES FOR THIS AUTOMATION ==\n"
         f"{compact}\n"
         "Morning briefing intent: act like a professional personal assistant preparing the operator for the day. "
-        "Do not merely list available records; filter, rank, and explain what deserves attention first.\n"
+        "The result is a start-of-day preparation, not a settings checklist or a report dump.\n"
+        "Do not merely list available records; filter, rank, and explain what deserves attention first. "
+        "Score relevance by urgency, change since yesterday, impact, actionability, confidence, and user preference.\n"
         "Adapt the emphasis from the operator profile, role, recent activity, and context. "
         "Do not ask the user to choose a user type manually and do not assume a profession unless the context supports it.\n"
+        "If automatic relevance is enabled, omit low-value items even when their source is enabled. "
+        "Prefer a short Top 3, important changes, commitments, risks, and practical next actions.\n"
         "Use these preferences to decide what to include, omit, and emphasize. "
-        "Disabled/unavailable data sources must not be invented; news and weather require verified collected data.\n"
+        "Disabled/unavailable data sources must not be invented; news and weather require verified collected data. "
+        "Relevant public context should be included only when it helps the operator understand the day, their work, their location, or a declared interest.\n"
     )
 
 

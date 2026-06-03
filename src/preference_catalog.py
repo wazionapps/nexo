@@ -10,9 +10,17 @@ from typing import Any
 
 
 AUTOMATION_ITEM_ES = {
+    "auto_relevance": (
+        "Relevancia automática",
+        "NEXO decide qué merece aparecer usando urgencia, cambios, impacto, confianza y si hay una acción útil.",
+    ),
     "priorities": (
         "Prioridades",
         "Incluye las cosas más importantes del día: lo urgente, lo atrasado y lo que conviene resolver primero.",
+    ),
+    "changes_since_yesterday": (
+        "Cambios importantes",
+        "Incluye novedades recientes, cambios desde ayer y asuntos que se han movido mientras no estabas.",
     ),
     "agenda": (
         "Agenda",
@@ -38,13 +46,29 @@ AUTOMATION_ITEM_ES = {
         "Bloqueos y riesgos",
         "Señala bloqueos, riesgos o asuntos que pueden frenarte si no los atiendes.",
     ),
+    "next_actions": (
+        "Siguientes acciones",
+        "Cierra el resumen con pasos prácticos: qué mirar primero, qué puede esperar y qué decisión falta.",
+    ),
     "internal_refs": (
         "Referencias internas",
         "Incluye referencias internas útiles. Déjalo desactivado si prefieres un resumen más limpio.",
     ),
     "news": (
-        "Noticias",
-        "Añade titulares públicos. Si internet o la fuente de noticias falla, NEXO seguirá preparando el resumen.",
+        "Actualidad relevante",
+        "Añade contexto público solo si es actual, verificable y útil para tu día, trabajo, ubicación o intereses.",
+    ),
+    "news_interests": (
+        "Temas de actualidad",
+        "Temas que NEXO debe vigilar. Usa automático para que los infiera por tu contexto y hábitos.",
+    ),
+    "excluded_topics": (
+        "Temas a evitar",
+        "Temas que NEXO debe evitar salvo que sean directamente relevantes para tu trabajo o seguridad.",
+    ),
+    "why_shown": (
+        "Explicar por qué",
+        "Añade una frase breve explicando por qué una noticia o dato externo entra en el resumen.",
     ),
     "weather": (
         "Tiempo",
@@ -66,6 +90,48 @@ AUTOMATION_ITEM_ES = {
         "Días tranquilos",
         "Decide qué hacer cuando no hay novedades importantes.",
     ),
+}
+
+
+AUTOMATION_OPTION_ALIASES_ES = {
+    "news_interests": {
+        "automatic": ["automatico", "automático", "auto", "nexo decide", "por defecto"],
+        "business": ["empresa", "negocio", "negocios", "empresas", "economia", "economía"],
+        "technology": ["tecnologia", "tecnología", "ia", "inteligencia artificial", "software"],
+        "finance": ["finanzas", "financiero", "mercados", "bolsa"],
+        "local": ["local", "zona", "ciudad", "mallorca", "ubicacion", "ubicación"],
+        "health": ["salud", "sanidad", "medicina", "medico", "médico"],
+        "legal": ["legal", "leyes", "normativa", "justicia"],
+        "education": ["educacion", "educación", "formacion", "formación", "estudios"],
+        "real_estate": ["inmobiliario", "vivienda", "arquitectura", "urbanismo"],
+        "science": ["ciencia", "investigacion", "investigación", "innovacion", "innovación"],
+        "culture": ["cultura", "sociedad"],
+        "sports": ["deportes", "deporte"],
+    },
+    "excluded_topics": {
+        "politics": ["politica", "política", "partidos", "elecciones"],
+        "sports": ["deportes", "deporte", "futbol", "fútbol"],
+        "celebrity": ["famosos", "celebridades", "prensa rosa", "television", "televisión"],
+        "crime": ["sucesos", "crimen", "delitos"],
+        "crypto": ["cripto", "crypto", "bitcoin", "ethereum"],
+        "market_noise": ["ruido de mercado", "bolsa diaria", "mercados diarios"],
+    },
+    "length": {
+        "short": ["corto", "breve"],
+        "normal": ["normal", "medio"],
+        "detailed": ["detallado", "detalle", "mas detalle", "más detalle"],
+    },
+    "tone": {
+        "direct": ["directo"],
+        "warm": ["cercano", "calido", "cálido"],
+        "executive": ["ejecutivo", "directivo"],
+        "personal": ["personal"],
+    },
+    "format": {
+        "sections": ["secciones"],
+        "bullets": ["puntos", "lista", "bullets"],
+        "narrative": ["narrativo", "texto"],
+    },
 }
 
 
@@ -124,11 +190,43 @@ def _coerce_value(value: Any, entry: dict[str, Any]) -> Any:
         raw = str(value).strip().lower()
         return raw in {"1", "true", "yes", "on", "si", "sí", "activar", "enabled"}
     options = [str(option.get("value") if isinstance(option, dict) else option) for option in entry.get("options") or []]
+    aliases = entry.get("option_aliases") if isinstance(entry.get("option_aliases"), dict) else {}
+    alias_map: dict[str, str] = {}
+    for option in options:
+        alias_map[_fold(option)] = option
+        for alias in list((aliases.get(option) if isinstance(aliases.get(option), list) else []) or []):
+            alias_map[_fold(alias)] = option
+    if kind in {"multi_choice", "multi-select", "multiselect"}:
+        if isinstance(value, (list, tuple, set)):
+            raw_items = list(value)
+        else:
+            raw_items = [part.strip() for part in str(value or "").replace(";", ",").split(",")]
+        selected: list[str] = []
+        invalid: list[str] = []
+        for raw_item in raw_items:
+            text = str(raw_item or "").strip()
+            if not text:
+                continue
+            mapped = alias_map.get(_fold(text), text if text in options else "")
+            if not mapped:
+                invalid.append(text)
+                continue
+            if mapped not in selected:
+                selected.append(mapped)
+        if invalid:
+            raise ValueError(f"Invalid value '{invalid[0]}'. Valid values: {', '.join(options)}")
+        exclusive = [str(v) for v in list(entry.get("exclusive_options") or [])]
+        for exclusive_value in exclusive:
+            if exclusive_value in selected and len(selected) > 1:
+                selected = [exclusive_value]
+                break
+        return selected
     if options:
         raw = str(value).strip()
-        if raw not in options:
+        mapped = alias_map.get(_fold(raw), raw if raw in options else "")
+        if mapped not in options:
             raise ValueError(f"Invalid value '{raw}'. Valid values: {', '.join(options)}")
-        return raw
+        return mapped
     return value
 
 
@@ -192,6 +290,7 @@ def _automation_entries(*, include_values: bool, locale: str) -> list[dict[str, 
                 "aliases": [
                     f"morning-agent.{item_id}",
                     f"resumen.{item_id}",
+                    f"morning.{item_id}",
                     str(item.get("label") or ""),
                     item_id.replace("_", " "),
                     label,
@@ -202,6 +301,8 @@ def _automation_entries(*, include_values: bool, locale: str) -> list[dict[str, 
                 "help": help_text,
                 "type": str(item.get("type") or "text"),
                 "options": list(item.get("options") or []),
+                "exclusive_options": list(item.get("exclusive_options") or []),
+                "option_aliases": AUTOMATION_OPTION_ALIASES_ES.get(item_id, {}) if locale == "es" else {},
                 "writable": not bool(item.get("disabled")),
                 "storage": "personal_scripts.metadata.automation_preferences",
                 "path": item_id,

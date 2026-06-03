@@ -1,0 +1,101 @@
+{
+  "release_line": "v7.30",
+  "version": "7.30.5",
+  "generated_at": "2026-06-03T20:26:51Z",
+  "ok": true,
+  "groups": [
+    {
+      "id": "morning_preparation_schema",
+      "description": "Morning preparation schema v2 exposes automatic relevance, changes since yesterday, next actions, and plain-language prompt guidance",
+      "command": [
+        "python3",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_automation_preferences.py"
+      ],
+      "targets": [
+        "src/automation_preferences.py",
+        "tests/test_automation_preferences.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 0.48,
+      "stdout": "3 passed. Schema version 2 includes automatic relevance, changes since yesterday, next actions, multi-choice validation, and Morning preparation prompt contract.",
+      "stderr": ""
+    },
+    {
+      "id": "relevant_public_context",
+      "description": "Morning agent selects relevant public context from internal profile/preference queries without user-provided RSS URLs",
+      "command": [
+        "python3",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_morning_agent_contract.py"
+      ],
+      "targets": [
+        "src/scripts/nexo-morning-agent.py",
+        "templates/core-prompts/morning-agent.md",
+        "tests/test_morning_agent_contract.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 0.46,
+      "stdout": "3 passed. Relevant public context uses interest/location/profile queries, dedupes headlines, and filters excluded topics.",
+      "stderr": ""
+    },
+    {
+      "id": "chat_preference_catalog",
+      "description": "Chat preference catalog exposes and mutates Morning preparation options with Spanish aliases",
+      "command": [
+        "python3",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_preference_catalog.py"
+      ],
+      "targets": [
+        "src/preference_catalog.py",
+        "tests/test_preference_catalog.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 0.45,
+      "stdout": "3 passed. Catalog exposes Morning preparation options, multi-choice metadata, exclusive automatic selection, and Spanish aliases.",
+      "stderr": ""
+    },
+    {
+      "id": "release_surface_contract",
+      "description": "Release public surfaces, smoke artifact, and integration metadata are synchronized before tag",
+      "command": [
+        "python3",
+        "scripts/verify_release_readiness.py",
+        "--ci",
+        "--contract",
+        "release-contracts/v7.30.5.json",
+        "--require-contract-complete",
+        "--require-smoke"
+      ],
+      "targets": [
+        "package.json",
+        "CHANGELOG.md",
+        "README.md",
+        "llms.txt",
+        ".well-known/llms.txt",
+        "index.html",
+        "blog/index.html",
+        "blog/nexo-7-30-5/index.html",
+        "changelog/index.html",
+        "sitemap.xml",
+        "release-contracts/v7.30.5.json",
+        "release-contracts/smoke/v7.30.5.json"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 29.32,
+      "stdout": "234 passed in 29.32s. release-readiness OK for v7.30.5; sync-release-artifacts, verify_client_parity, smoke artifact, publication state, and release contract all passed.",
+      "stderr": ""
+    }
+  ]
+}

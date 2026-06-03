@@ -33,3 +33,19 @@ def test_preference_catalog_exposes_morning_agent_options(monkeypatch, tmp_path)
         "daily_at": "07:00",
         "weekdays": "Tue,Sat",
     }
+
+    news_catalog = build_preference_catalog(include_values=True, query="actualidad")
+    news_ids = {entry["id"] for entry in news_catalog["preferences"]}
+    assert "automation.morning-agent.news" in news_ids
+    assert "automation.morning-agent.news_interests" in news_ids
+
+    topics = set_preference("automation.morning-agent.news_interests", "tecnología, local", dry_run=True)
+    assert topics == {
+        "ok": True,
+        "dry_run": True,
+        "id": "automation.morning-agent.news_interests",
+        "value": ["technology", "local"],
+    }
+
+    excluded = set_preference("automation.morning-agent.excluded_topics", "deportes, cripto", dry_run=True)
+    assert excluded["value"] == ["sports", "crypto"]

@@ -38,6 +38,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import unicodedata
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -87,7 +88,42 @@ MAX_DIARY_ITEMS = 6
 MORNING_BRIEFING_STALE_HOURS = 12
 _ACTIVE_CLAIM: dict[str, str] = {}
 HTTP_TIMEOUT = 7
-DEFAULT_NEWS_RSS_URL = "https://news.google.com/rss?hl=es&gl=ES&ceid=ES:es"
+NEWS_MAX_HEADLINES = 8
+NEWS_MAX_FEEDS = 5
+NEWS_INTEREST_QUERY_ES = {
+    "business": "empresa economia negocios",
+    "technology": "tecnologia inteligencia artificial software",
+    "finance": "finanzas economia mercados",
+    "local": "actualidad local",
+    "health": "salud sanidad medicina",
+    "legal": "legal justicia normativa",
+    "education": "educacion universidad formacion",
+    "real_estate": "vivienda inmobiliario urbanismo",
+    "science": "ciencia investigacion innovacion",
+    "culture": "cultura sociedad",
+    "sports": "deportes",
+}
+NEWS_INTEREST_QUERY_EN = {
+    "business": "business economy companies",
+    "technology": "technology artificial intelligence software",
+    "finance": "finance economy markets",
+    "local": "local news",
+    "health": "health medicine healthcare",
+    "legal": "law regulation justice",
+    "education": "education university training",
+    "real_estate": "housing real estate urban planning",
+    "science": "science research innovation",
+    "culture": "culture society",
+    "sports": "sports",
+}
+NEWS_EXCLUDED_KEYWORDS = {
+    "politics": ["politica", "politics", "eleccion", "election", "partido", "congreso", "senado", "parliament"],
+    "sports": ["deporte", "sports", "futbol", "football", "liga", "tenis", "basket", "baloncesto"],
+    "celebrity": ["famos", "celebrity", "celebrit", "television", "tv", "influencer"],
+    "crime": ["crimen", "crime", "asesin", "homicid", "robo", "suceso", "detenido", "arrest"],
+    "crypto": ["crypto", "cripto", "bitcoin", "ethereum", "blockchain", "nft"],
+    "market_noise": ["bolsa", "stock", "stocks", "market", "mercado", "wall street", "ibex", "nasdaq"],
+}
 
 
 def log(message: str) -> None:
@@ -654,31 +690,177 @@ def _collect_weather(profile: dict) -> dict:
         return {"available": False, "error": str(exc)[:240]}
 
 
-def _collect_news(profile: dict) -> dict:
+def _fold_match(value: object) -> str:
+    normalized = unicodedata.normalize("NFKD", str(value or ""))
+    asciiish = "".join(ch for ch in normalized if not unicodedata.combining(ch))
+    return asciiish.casefold()
+
+
+def _preference_list(preferences: dict | None, key: str, default: list[str] | None = None) -> list[str]:
+    values = preferences if isinstance(preferences, dict) else {}
+    raw = values.get(key)
+    if isinstance(raw, (list, tuple, set)):
+        items = [str(item or "").strip() for item in raw]
+    elif raw:
+        items = [part.strip() for part in str(raw).replace(";", ",").split(",")]
+    else:
+        items = list(default or [])
+    result: list[str] = []
+    for item in items:
+        if item and item not in result:
+            result.append(item)
+    return result
+
+
+def _news_locale(profile: dict) -> tuple[str, str]:
+    language = str(profile.get("language") or "").strip().lower()
+    residence = _fold_match(profile.get("current_residence") or profile.get("location") or "")
+    if language.startswith("en"):
+        return "en", "US"
+    if any(token in residence for token in ["united states", "usa", "eeuu", "estados unidos"]):
+        return "en", "US"
+    return "es", "ES"
+
+
+def _news_feed_url(query: str, *, language: str, country: str) -> str:
+    lang = "en" if language.startswith("en") else "es"
+    params = {
+        "hl": lang,
+        "gl": country,
+        "ceid": f"{country}:{lang}",
+    }
+    clean_query = str(query or "").strip()
+    if clean_query:
+        params["q"] = clean_query
+        return f"https://news.google.com/rss/search?{urllib.parse.urlencode(params)}"
+    return f"https://news.google.com/rss?{urllib.parse.urlencode(params)}"
+
+
+def _profile_news_terms(profile: dict) -> list[str]:
+    role = _fold_match(profile.get("role") or profile.get("profession") or profile.get("job_title") or "")
+    residence = str(profile.get("current_residence") or profile.get("location") or "").strip()
+    terms: list[str] = []
+    role_queries = [
+        (["fundador", "founder", "ceo", "directivo", "manager", "business"], "empresa economia tecnologia"),
+        (["developer", "programador", "software", "technical", "tecnico", "engineer"], "tecnologia software inteligencia artificial"),
+        (["medic", "doctor", "clinica", "health", "sanidad"], "salud sanidad medicina"),
+        (["arquitect", "architecture", "inmobili", "real estate"], "vivienda urbanismo arquitectura"),
+        (["abog", "law", "legal"], "legal normativa justicia"),
+        (["educ", "profesor", "student", "estudiante"], "educacion formacion universidad"),
+        (["ventas", "sales", "commercial", "comercial"], "ventas clientes empresa"),
+        (["administr", "admin", "office"], "empresa laboral administracion"),
+    ]
+    for needles, query in role_queries:
+        if any(needle in role for needle in needles):
+            terms.append(query)
+            break
+    if residence:
+        terms.append(f"{residence} actualidad")
+    return terms
+
+
+def _news_queries(profile: dict, preferences: dict | None) -> tuple[list[dict[str, str]], list[str], list[str]]:
+    language, country = _news_locale(profile)
+    interests = _preference_list(preferences, "news_interests", ["automatic"])
+    excluded = _preference_list(preferences, "excluded_topics", [])
+    automatic = not interests or "automatic" in interests
+    query_map = NEWS_INTEREST_QUERY_EN if language.startswith("en") else NEWS_INTEREST_QUERY_ES
+    queries: list[dict[str, str]] = []
+
+    if automatic:
+        for term in _profile_news_terms(profile):
+            queries.append({"interest": "automatic", "query": term})
+        fallback = "business technology economy" if language.startswith("en") else "empresa tecnologia economia"
+        queries.append({"interest": "automatic", "query": fallback})
+
+    for interest in interests:
+        if interest == "automatic":
+            continue
+        query = query_map.get(interest)
+        if not query:
+            continue
+        if interest == "local":
+            residence = str(profile.get("current_residence") or profile.get("location") or "").strip()
+            if residence:
+                query = f"{residence} actualidad"
+        queries.append({"interest": interest, "query": query})
+
+    if not queries:
+        queries.append({"interest": "automatic", "query": ""})
+
+    deduped: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for query in queries:
+        key = _fold_match(query.get("query") or "") or "top"
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(query)
+        if len(deduped) >= NEWS_MAX_FEEDS:
+            break
+    return deduped, interests or ["automatic"], excluded
+
+
+def _headline_is_excluded(title: str, excluded_topics: list[str]) -> bool:
+    folded = _fold_match(title)
+    for topic in excluded_topics:
+        for keyword in NEWS_EXCLUDED_KEYWORDS.get(topic, []):
+            if _fold_match(keyword) in folded:
+                return True
+    return False
+
+
+def _parse_news_feed(xml_text: str, *, interest: str, excluded_topics: list[str]) -> list[dict]:
+    root = ET.fromstring(xml_text)
+    items: list[dict] = []
+    for item in root.findall(".//item"):
+        title = _clean_text(item.findtext("title"), limit=220)
+        if not title or _headline_is_excluded(title, excluded_topics):
+            continue
+        link = str(item.findtext("link") or "").strip()
+        source = _clean_text(item.findtext("source"), limit=80)
+        published = _clean_text(item.findtext("pubDate"), limit=120)
+        items.append({
+            "title": title,
+            "source": source,
+            "published": published,
+            "url": link[:500],
+            "interest": interest,
+        })
+    return items
+
+
+def _collect_news(profile: dict, preferences: dict | None = None) -> dict:
     try:
-        rss_url = str(profile.get("news_rss_url") or os.environ.get("NEXO_NEWS_RSS_URL") or DEFAULT_NEWS_RSS_URL).strip()
-        if not rss_url:
-            return {"available": False, "error": "no_news_source"}
-        xml_text = _fetch_text_url(rss_url)
-        root = ET.fromstring(xml_text)
+        language, country = _news_locale(profile)
+        queries, interests, excluded = _news_queries(profile, preferences)
         items: list[dict] = []
-        for item in root.findall(".//item"):
-            title = _clean_text(item.findtext("title"), limit=220)
-            link = str(item.findtext("link") or "").strip()
-            source = _clean_text(item.findtext("source"), limit=80)
-            published = _clean_text(item.findtext("pubDate"), limit=120)
-            if title:
-                items.append({
-                    "title": title,
-                    "source": source,
-                    "published": published,
-                    "url": link[:500],
-                })
-            if len(items) >= 6:
+        seen_titles: set[str] = set()
+        used_queries: list[str] = []
+        for query in queries:
+            feed_url = _news_feed_url(query.get("query") or "", language=language, country=country)
+            xml_text = _fetch_text_url(feed_url)
+            used_queries.append(query.get("query") or "top headlines")
+            for headline in _parse_news_feed(xml_text, interest=query.get("interest") or "automatic", excluded_topics=excluded):
+                key = _fold_match(headline.get("title") or "")
+                if not key or key in seen_titles:
+                    continue
+                seen_titles.add(key)
+                items.append(headline)
+                if len(items) >= NEWS_MAX_HEADLINES:
+                    break
+            if len(items) >= NEWS_MAX_HEADLINES:
                 break
         return {
             "available": bool(items),
-            "source": rss_url,
+            "source": "google-news-rss",
+            "mode": "relevant_public_context",
+            "language": language,
+            "country": country,
+            "interests": interests,
+            "excluded_topics": excluded,
+            "queries": used_queries,
+            "selection_rule": "Headlines are only useful if they relate to the operator's work, location, explicit interests or broad high-impact context.",
             "headlines": items,
             "error": "" if items else "empty_feed",
         }
@@ -692,7 +874,7 @@ def _collect_external_context(profile: dict, preferences: dict | None) -> dict:
     if values.get("weather"):
         external["weather"] = _collect_weather(profile)
     if values.get("news"):
-        external["news"] = _collect_news(profile)
+        external["news"] = _collect_news(profile, values)
     return external
 
 

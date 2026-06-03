@@ -27,6 +27,49 @@ def test_morning_agent_prompt_sets_start_of_day_assistant_intent():
     assert "professional personal assistant" in prompt
     assert "Do not ask the operator to choose a user type" in prompt
     assert "Include news and weather only when verified collected data exists" in prompt
+    assert "Public headlines are not a generic news block" in prompt
+
+
+def test_collect_news_uses_interests_and_exclusions(monkeypatch, tmp_path):
+    monkeypatch.setenv("NEXO_HOME", str(tmp_path / "nexo"))
+    module = _load_morning_agent("nexo_morning_agent_news_contract_test")
+    fetched_urls = []
+    xml = """<?xml version="1.0" encoding="UTF-8"?>
+    <rss><channel>
+      <item>
+        <title>Technology update for business teams</title>
+        <source>Example News</source>
+        <pubDate>Wed, 03 Jun 2026 07:00:00 GMT</pubDate>
+        <link>https://example.test/tech</link>
+      </item>
+      <item>
+        <title>Football result of the day</title>
+        <source>Sports News</source>
+        <pubDate>Wed, 03 Jun 2026 07:00:00 GMT</pubDate>
+        <link>https://example.test/sport</link>
+      </item>
+    </channel></rss>"""
+
+    def fake_fetch(url, **_kwargs):
+        fetched_urls.append(url)
+        return xml
+
+    monkeypatch.setattr(module, "_fetch_text_url", fake_fetch)
+    result = module._collect_news(
+        {"language": "es", "current_residence": "Mallorca", "role": "founder"},
+        {"news_interests": ["technology", "local"], "excluded_topics": ["sports"]},
+    )
+
+    assert result["available"] is True
+    assert result["source"] == "google-news-rss"
+    assert result["mode"] == "relevant_public_context"
+    assert result["interests"] == ["technology", "local"]
+    assert "sports" in result["excluded_topics"]
+    assert len(result["headlines"]) == 1
+    assert result["headlines"][0]["interest"] == "technology"
+    assert "Football" not in result["headlines"][0]["title"]
+    assert fetched_urls and "rss/search" in fetched_urls[0]
+    assert "NEXO_NEWS_RSS_URL" not in fetched_urls[0]
 
 
 class _Result:
