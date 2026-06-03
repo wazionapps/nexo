@@ -418,6 +418,10 @@ def _touch_existing_followup(
     date: str = "",
     reasoning_note: str = "",
     status: str = "",
+    verification: str = "",
+    priority: str = "",
+    internal: object = None,
+    owner: str = "",
 ) -> dict:
     cols = _table_columns(NEXO_DB, "followups")
     if not cols:
@@ -433,6 +437,15 @@ def _touch_existing_followup(
     desired_status = (status or "").strip()
     if desired_status and "status" in cols and desired_status != str(existing.get("status", "") or ""):
         updates["status"] = desired_status
+    existing_verification = str(existing.get("verification", "") or "").strip()
+    if verification and "verification" in cols and not existing_verification:
+        updates["verification"] = verification
+    if priority and "priority" in cols and priority != str(existing.get("priority", "") or ""):
+        updates["priority"] = priority
+    if internal is not None and "internal" in cols:
+        updates["internal"] = 1 if str(internal).strip().lower() in {"1", "true", "yes", "on"} else 0
+    if owner and "owner" in cols and owner != str(existing.get("owner", "") or ""):
+        updates["owner"] = owner
     note = reasoning_note or "Deep Sleep matched this followup semantically."
     changed = False
     if updates:
@@ -693,12 +706,52 @@ def add_learning(category: str, title: str, content: str) -> dict:
         return {"success": False, "error": str(e)}
 
 
-def create_followup(description: str, date: str = "", reasoning_note: str = "", status: str = "PENDING") -> dict:
+def _default_followup_date(date: str, *, status: str = "") -> str:
+    clean = str(date or "").strip()
+    if clean or str(status or "").strip().lower() == "archived":
+        return clean
+    return (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+
+
+def _default_followup_verification(description: str, verification: str = "") -> str:
+    clean = str(verification or "").strip()
+    if clean:
+        return clean
+    description_text = str(description or "").strip()
+    if not description_text:
+        return "Verify the Deep Sleep followup has a concrete deliverable or close it as invalid."
+    return f"Verify completion evidence for: {description_text[:180]}"
+
+
+def _normalize_followup_priority(priority: str = "", impact: str = "") -> str:
+    clean = str(priority or "").strip().lower()
+    if clean in {"critical", "high", "medium", "low"}:
+        return clean
+    impact_clean = str(impact or "").strip().lower()
+    if impact_clean in {"critical", "high", "medium", "low"}:
+        return impact_clean
+    return "medium"
+
+
+def create_followup(
+    description: str,
+    date: str = "",
+    reasoning_note: str = "",
+    status: str = "PENDING",
+    verification: str = "",
+    priority: str = "",
+    internal: object = 1,
+    owner: str = "agent",
+) -> dict:
     """Create a followup in nexo.db. Returns result dict."""
     if not NEXO_DB.exists():
         return {"success": False, "error": "nexo.db not found"}
     try:
         desired_status = (status or "PENDING").strip() or "PENDING"
+        desired_date = _default_followup_date(date, status=desired_status)
+        desired_verification = _default_followup_verification(description, verification)
+        desired_priority = _normalize_followup_priority(priority)
+        desired_owner = (owner or "agent").strip() or "agent"
         is_abandoned = description.strip().startswith("[Abandoned]")
         if not is_abandoned:
             matched = _find_similar_followup(description)
@@ -706,9 +759,13 @@ def create_followup(description: str, date: str = "", reasoning_note: str = "", 
                 return _touch_existing_followup(
                     matched,
                     description=description,
-                    date=date,
+                    date=desired_date,
                     reasoning_note=reasoning_note or "Deep Sleep matched this followup semantically.",
                     status=desired_status,
+                    verification=desired_verification,
+                    priority=desired_priority,
+                    internal=internal,
+                    owner=desired_owner,
                 )
 
         # Generate a deterministic ID — content fingerprint, not security-sensitive.
@@ -718,19 +775,26 @@ def create_followup(description: str, date: str = "", reasoning_note: str = "", 
             return _touch_existing_followup(
                 existing,
                 description=description,
-                date=date,
+                date=desired_date,
                 reasoning_note=reasoning_note or "Deep Sleep revisited this deterministic followup.",
                 status=desired_status,
+                verification=desired_verification,
+                priority=desired_priority,
+                internal=internal,
+                owner=desired_owner,
             )
 
         followup_result = nexo_db.create_followup(
             id=fid,
             description=description,
-            date=date or None,
-            verification="",
+            date=desired_date or None,
+            verification=desired_verification,
             status=desired_status,
             reasoning=reasoning_note or "Deep Sleep v2 overnight analysis",
             recurrence=None,
+            priority=desired_priority,
+            internal=internal,
+            owner=desired_owner,
         )
         if followup_result.get("error"):
             return {"success": False, "error": followup_result["error"]}
@@ -2113,10 +2177,15 @@ def apply_action(action: dict, run_id: str) -> dict:
         log_entry["details"] = result
 
     elif action_type == "followup_create":
+        description = content.get("description", content.get("title", ""))
         result = create_followup(
-            description=content.get("description", content.get("title", "")),
+            description=description,
             date=content.get("date", ""),
             reasoning_note=content.get("reasoning", content.get("why", "")),
+            verification=content.get("verification", content.get("success_signal", "")),
+            priority=_normalize_followup_priority(content.get("priority", ""), action.get("impact", "")),
+            internal=content.get("internal", 1),
+            owner=content.get("owner", "agent"),
         )
         log_entry["status"] = "applied" if result.get("success") else "error"
         log_entry["details"] = result

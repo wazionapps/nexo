@@ -57,6 +57,7 @@ def _check_docs() -> None:
 def _run_tests() -> None:
     env = os.environ.copy()
     env["PYTHONPATH"] = "src"
+    env["NEXO_SKIP_COGNITIVE_MODEL_DOWNLOAD"] = "1"
     cmd = [sys.executable, "-m", "pytest", "-q", *PARITY_TESTS]
     result = subprocess.run(cmd, cwd=ROOT, env=env)
     if result.returncode != 0:

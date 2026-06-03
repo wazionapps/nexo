@@ -63,6 +63,11 @@ COMPRESSED_MEMORIES_DIR = BRAIN_DIR / "compressed_memories"
 HEARTBEAT_LOG = COORD_DIR / "heartbeat-log.json"
 REFLECTION_LOG = COORD_DIR / "reflection-log.json"
 SLEEP_LOG = COORD_DIR / "sleep-log.json"
+SLEEP_HEALTH_FILE = COORD_DIR / "sleep-health.json"
+LEARNINGS_DUMP_FILE = COORD_DIR / "sleep-learnings-dump.json"
+LEARNINGS_CHUNKS_DIR = COORD_DIR / "sleep-learnings-chunks"
+MIN_LEARNING_COVERAGE_PCT = 95.0
+LEARNING_CHUNK_MAX_CHARS = 50000
 
 MEMORY_MD = paths.memory_dir() / "MEMORY.md"
 NEXO_DB = paths.db_path()
@@ -207,6 +212,41 @@ def append_sleep_log(entry: dict):
     if len(entries) > 90:
         entries = entries[-90:]
     save_json(SLEEP_LOG, entries)
+
+
+def write_sleep_health(
+    run_log: dict,
+    state: dict,
+    *,
+    status: str,
+    error: str = "",
+    actions: dict | None = None,
+) -> dict:
+    """Write a small machine-readable health file for startup/briefings."""
+    stage_b = run_log.get("stage_b") if isinstance(run_log, dict) else {}
+    if not isinstance(stage_b, dict):
+        stage_b = {}
+    coverage = {}
+    if isinstance(actions, dict):
+        coverage = actions.get("coverage") or {}
+    if not coverage and isinstance(stage_b, dict):
+        coverage = stage_b.get("coverage") or {}
+
+    health = {
+        "date": str(TODAY),
+        "status": status,
+        "generated_at": datetime.now().isoformat(),
+        "error": error,
+        "learnings_total": len(state.get("learnings", []) if isinstance(state, dict) else []),
+        "memory_md_lines": state.get("memory_md_lines", 0) if isinstance(state, dict) else 0,
+        "old_observations": state.get("claude_mem_old", 0) if isinstance(state, dict) else 0,
+        "stage_a": run_log.get("stage_a") if isinstance(run_log, dict) else None,
+        "stage_b": stage_b,
+        "coverage": coverage,
+        "last_run_marked_complete": status == "ok",
+    }
+    save_json(SLEEP_HEALTH_FILE, health)
+    return health
 
 
 # ─── Stage A: Mechanical cleanup (UNCHANGED from v1) ─────────────────────────
@@ -388,13 +428,108 @@ def should_dream(state: dict) -> bool:
     )
 
 
+def write_learning_context(state: dict) -> dict:
+    """Persist all learnings to files so Stage B never receives a truncated list."""
+    learnings = state.get("learnings", []) if isinstance(state, dict) else []
+    LEARNINGS_CHUNKS_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Remove stale chunks for today's run before rewriting them.
+    today_prefix = f"{TODAY}-chunk-"
+    for old_chunk in LEARNINGS_CHUNKS_DIR.glob(f"{today_prefix}*.json"):
+        try:
+            old_chunk.unlink()
+        except Exception:
+            pass
+
+    chunks: list[list[dict]] = []
+    current: list[dict] = []
+    current_chars = 2
+    for learning in learnings:
+        rendered = json.dumps(learning, ensure_ascii=False, separators=(",", ":"))
+        if current and current_chars + len(rendered) + 1 > LEARNING_CHUNK_MAX_CHARS:
+            chunks.append(current)
+            current = []
+            current_chars = 2
+        current.append(learning)
+        current_chars += len(rendered) + 1
+    if current or not chunks:
+        chunks.append(current)
+
+    chunk_files: list[str] = []
+    for index, chunk in enumerate(chunks, start=1):
+        chunk_path = LEARNINGS_CHUNKS_DIR / f"{TODAY}-chunk-{index:03d}.json"
+        save_json(
+            chunk_path,
+            {
+                "date": str(TODAY),
+                "chunk_index": index,
+                "chunk_count": len(chunks),
+                "learnings_total_declared": len(learnings),
+                "learnings_in_chunk": len(chunk),
+                "learnings": chunk,
+            },
+        )
+        chunk_files.append(str(chunk_path))
+
+    coverage = {
+        "learnings_visible_count": len(learnings),
+        "learnings_total_declared": len(learnings),
+        "coverage_pct": 100.0 if learnings or len(learnings) == 0 else 0.0,
+        "source_file": str(LEARNINGS_DUMP_FILE),
+        "chunk_count": len(chunk_files),
+    }
+    save_json(
+        LEARNINGS_DUMP_FILE,
+        {
+            "date": str(TODAY),
+            "generated_at": datetime.now().isoformat(),
+            "coverage": coverage,
+            "chunk_files": chunk_files,
+            "learnings": learnings,
+        },
+    )
+    return {
+        "dump_file": str(LEARNINGS_DUMP_FILE),
+        "chunk_files": chunk_files,
+        "coverage": coverage,
+    }
+
+
+def validate_actions_coverage(actions: dict, state: dict) -> tuple[bool, str]:
+    """Fail closed when Stage B did not inspect nearly all active learnings."""
+    expected_total = len(state.get("learnings", []) if isinstance(state, dict) else [])
+    if expected_total == 0:
+        return True, "no active learnings"
+
+    coverage = actions.get("coverage") if isinstance(actions, dict) else None
+    if not isinstance(coverage, dict):
+        return False, "sleep-actions.json is missing coverage metadata"
+
+    try:
+        visible_count = int(coverage.get("learnings_visible_count", 0) or 0)
+    except Exception:
+        visible_count = 0
+    try:
+        declared_total = int(coverage.get("learnings_total_declared", 0) or 0)
+    except Exception:
+        declared_total = 0
+    try:
+        coverage_pct = float(coverage.get("coverage_pct", 0.0) or 0.0)
+    except Exception:
+        coverage_pct = 0.0
+
+    if declared_total != expected_total:
+        return False, f"coverage declared {declared_total} learnings but state has {expected_total}"
+    if visible_count < expected_total:
+        return False, f"coverage only saw {visible_count}/{expected_total} learnings"
+    if coverage_pct < MIN_LEARNING_COVERAGE_PCT:
+        return False, f"coverage {coverage_pct:.1f}% is below {MIN_LEARNING_COVERAGE_PCT:.1f}%"
+    return True, "coverage ok"
+
+
 def dream(state: dict) -> dict:
     """The brain dreams — CLI does the intelligent work."""
-
-    # Truncate learnings JSON if too large
-    learnings_json = json.dumps(state["learnings"], ensure_ascii=False, indent=1)
-    if len(learnings_json) > 15000:
-        learnings_json = learnings_json[:15000] + "\n... (truncated)"
+    learning_context = write_learning_context(state)
 
     tasks = []
 
@@ -410,12 +545,30 @@ Write your findings to {COORD_DIR}/sleep-report.md with sections:
 - "## Stale candidates" — IDs of learnings that may be obsolete
 
 Also write a machine-readable file {COORD_DIR}/sleep-actions.json:
-{{"archive_ids": [1, 2, 3], "contradiction_pairs": [[4, 5]], "stale_ids": [6, 7]}}
+{{
+  "archive_ids": [1, 2, 3],
+  "contradiction_pairs": [[4, 5]],
+  "stale_ids": [6, 7],
+  "coverage": {{
+    "learnings_visible_count": {len(state['learnings'])},
+    "learnings_total_declared": {len(state['learnings'])},
+    "coverage_pct": 100.0,
+    "source_file": "{learning_context['dump_file']}",
+    "chunk_files_read": {json.dumps(learning_context['chunk_files'], ensure_ascii=False)}
+  }}
+}}
 
 The wrapper will execute the actual DB operations based on this JSON.
+The wrapper will fail closed if coverage is missing or below {MIN_LEARNING_COVERAGE_PCT:.0f}%.
 
-LEARNINGS:
-{learnings_json}""")
+LEARNINGS SOURCE:
+Read the full learning list from {learning_context['dump_file']}.
+If the file is too large for one read, read every chunk listed below and merge them by ID:
+{json.dumps(learning_context['chunk_files'], ensure_ascii=False, indent=2)}
+
+Do not infer duplicates/stale items from a partial list. If you cannot read at least
+{MIN_LEARNING_COVERAGE_PCT:.0f}% of the declared learnings, write empty archive/stale arrays
+and include coverage.blocking_reason explaining the read failure.""")
 
     if state["memory_md_lines"] > 170:
         tasks.append(f"""TASK 2: MEMORY.MD COMPRESSION ({state['memory_md_lines']} lines, limit 200)
@@ -461,20 +614,25 @@ The wrapper will handle the actual DB cleanup safely.""")
 
         if result.returncode != 0:
             log(f"Stage B: CLI error ({result.returncode}): {(result.stderr or '')[:300]}")
-            return {"error": result.returncode}
+            return {"error": result.returncode, "learning_context": learning_context}
 
         log(f"Stage B: Dreaming complete. Output: {len(result.stdout or '')} chars")
-        return {"ok": True, "output_len": len(result.stdout or "")}
+        return {
+            "ok": True,
+            "output_len": len(result.stdout or ""),
+            "learning_context": learning_context,
+            "coverage": learning_context["coverage"],
+        }
 
     except AutomationBackendUnavailableError as e:
         log(f"Stage B: automation backend unavailable: {e}")
-        return {"error": "backend-unavailable"}
+        return {"error": "backend-unavailable", "learning_context": learning_context}
     except subprocess.TimeoutExpired:
-        log("Stage B: CLI timed out (600s)")
-        return {"error": "timeout"}
+        log(f"Stage B: CLI timed out ({AUTOMATION_SUBPROCESS_TIMEOUT}s)")
+        return {"error": "timeout", "learning_context": learning_context}
     except Exception as e:
         log(f"Stage B: Exception: {e}")
-        return {"error": str(e)}
+        return {"error": str(e), "learning_context": learning_context}
 
 
 def execute_dream_actions(actions: dict, state: dict):
@@ -573,8 +731,11 @@ def main():
             start_phase = get_interrupted_phase()
 
         run_log = {"date": str(TODAY), "started": TIMESTAMP,
-                   "stage_a": None, "stage_b": None, "completed": None}
+                   "stage_a": None, "stage_b": None, "completed": None,
+                   "marked_complete": False}
         sleep_had_errors = False
+        sleep_error = ""
+        actions = None
 
         # Stage A: Housekeeping (mechanical)
         if start_phase == "stage_a":
@@ -598,22 +759,49 @@ def main():
                 log(f"Stage B: Dreaming failed ({dream_result['error']}). "
                     "Stage A cleanup completed successfully. Not marking catchup to allow retry.")
                 sleep_had_errors = True
+                sleep_error = str(dream_result["error"])
             else:
                 # Stage B2: Execute actions from CLI output
                 actions_file = COORD_DIR / "sleep-actions.json"
                 if actions_file.exists():
                     try:
                         actions = json.loads(actions_file.read_text())
-                        execute_dream_actions(actions, state)
+                        coverage_ok, coverage_reason = validate_actions_coverage(actions, state)
+                        run_log["stage_b"]["actions_file"] = str(actions_file)
+                        run_log["stage_b"]["coverage_ok"] = coverage_ok
+                        run_log["stage_b"]["coverage_reason"] = coverage_reason
+                        if not coverage_ok:
+                            log(f"Stage B2: Refusing dream actions: {coverage_reason}")
+                            sleep_had_errors = True
+                            sleep_error = coverage_reason
+                        else:
+                            execute_dream_actions(actions, state)
                     except Exception as e:
                         log(f"Stage B2: Error executing actions: {e}")
+                        sleep_had_errors = True
+                        sleep_error = str(e)
+                else:
+                    sleep_had_errors = True
+                    sleep_error = f"missing actions file: {actions_file}"
+                    run_log["stage_b"]["error"] = sleep_error
+                    log(f"Stage B2: {sleep_error}")
         else:
             log("Brain is clean -- no dreaming needed.")
             run_log["stage_b"] = {"skipped": True}
 
         # Done
         run_log["completed"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+        if sleep_had_errors:
+            run_log["status"] = "failed"
+            write_sleep_health(run_log, state, status="failed", error=sleep_error, actions=actions)
+            append_sleep_log(run_log)
+            log("NEXO Sleep v2 failed during Stage B; not marking today complete so the next trigger retries.")
+            sys.exit(1)
+
         mark_complete()
+        run_log["marked_complete"] = True
+        run_log["status"] = "ok"
+        write_sleep_health(run_log, state, status="ok", actions=actions)
         append_sleep_log(run_log)
         log(f"NEXO Sleep v2 complete at {run_log['completed']}")
 

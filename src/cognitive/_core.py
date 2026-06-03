@@ -666,6 +666,9 @@ def _get_reranker():
     """Lazy-load cross-encoder reranking model."""
     global _reranker
     if _reranker is None:
+        if _model_download_disabled():
+            _reranker = False
+            return None
         try:
             from local_models import build_fastembed_reranker
 

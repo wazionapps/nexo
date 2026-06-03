@@ -1,0 +1,131 @@
+{
+  "release_line": "v7.30",
+  "target_version": "7.30.2",
+  "scope_owner": "NEXO",
+  "distribution": {
+    "git_updates_on": "merge_to_main",
+    "packaged_release_on": "tag_publish"
+  },
+  "required_repo_files": [
+    "package.json",
+    "CHANGELOG.md",
+    "README.md",
+    "llms.txt",
+    ".well-known/llms.txt",
+    "sitemap.xml",
+    "index.html",
+    "blog/index.html",
+    "blog/nexo-7-30-2/index.html",
+    "changelog/index.html",
+    "release-contracts/v7.30.2.json",
+    "release-contracts/smoke/v7.30.2.json",
+    "scripts/sync_release_artifacts.py",
+    "scripts/verify_release_readiness.py",
+    "scripts/verify_client_parity.py",
+    "scripts/pre-release-verify.sh",
+    ".claude-plugin/plugin.json",
+    "clawhub-skill/SKILL.md",
+    "openclaw-plugin/package.json",
+    "openclaw-plugin/package-lock.json",
+    "openclaw-plugin/src/mcp-bridge.ts",
+    "src/cognitive/_core.py",
+    "src/scripts/nexo-sleep.py",
+    "src/scripts/nexo-deep-sleep.sh",
+    "src/scripts/deep-sleep/synthesize.py",
+    "src/scripts/deep-sleep/apply_findings.py",
+    "src/tools_sessions.py",
+    "tests/test_nexo_sleep.py",
+    "tests/test_deep_sleep_synthesize.py",
+    "tests/test_deep_sleep_apply.py",
+    "tests/test_cognitive.py",
+    "tests/test_hook_unknown_target_v607.py",
+    "tests/test_shell_runtime_path_contract.py"
+  ],
+  "required_website_files": [
+    "index.html",
+    "blog/index.html",
+    "blog/nexo-7-30-2/index.html",
+    "changelog/index.html",
+    "llms.txt",
+    ".well-known/llms.txt",
+    "sitemap.xml"
+  ],
+  "smoke": {
+    "required_groups": [
+      "deep_sleep_fail_closed",
+      "sleep_learning_coverage",
+      "agent_start_packet",
+      "followup_governance",
+      "release_test_offline",
+      "release_surface_contract"
+    ],
+    "max_age_hours": 72
+  },
+  "publication": {
+    "status": "ready",
+    "checklist_complete": true,
+    "blockers": []
+  },
+  "gates": [
+    {
+      "id": "deep_sleep_fail_closed",
+      "title": "Deep Sleep wrapper stops before watermark advancement when a phase fails",
+      "status": "complete",
+      "evidence_required": [
+        "nexo-deep-sleep.sh exits non-zero on extraction, synthesis, application, and audit phase failures",
+        "The wrapper does not copy extraction output as a fake synthesis fallback",
+        "Shell contract tests pass"
+      ]
+    },
+    {
+      "id": "sleep_learning_coverage",
+      "title": "Sleep-mode synthesis gets complete learning context or reports degraded health",
+      "status": "complete",
+      "evidence_required": [
+        "nexo-sleep.py writes a full learning dump and chunked context files",
+        "Stage B validates learning coverage metadata before marking complete",
+        "Startup surfaces sleep health warnings when synthesis fails"
+      ]
+    },
+    {
+      "id": "agent_start_packet",
+      "title": "Deep Sleep synthesis creates a compact startup packet for the next agent session",
+      "status": "complete",
+      "evidence_required": [
+        "synthesize.py writes YYYY-MM-DD-agent-start-packet.json",
+        "Startup prefers the packet before falling back to legacy synthesis text",
+        "Packet tests cover agenda, context packets, review items, and counts"
+      ]
+    },
+    {
+      "id": "followup_governance",
+      "title": "Deep Sleep generated followups include date, verification, priority, owner, and internal state",
+      "status": "complete",
+      "evidence_required": [
+        "apply_findings.py applies defaults for missing followup governance fields",
+        "Duplicate followups are updated with missing governance metadata",
+        "Followup application tests pass"
+      ]
+    },
+    {
+      "id": "release_test_offline",
+      "title": "Release parity tests cannot download cognitive models",
+      "status": "complete",
+      "evidence_required": [
+        "verify_client_parity.py sets NEXO_SKIP_COGNITIVE_MODEL_DOWNLOAD=1 for parity pytest",
+        "cognitive._core disables the reranker under the no-download flag",
+        "tests/test_cognitive.py covers the reranker-disabled path and stubs reranking in search ranking unit tests"
+      ]
+    },
+    {
+      "id": "public_release_surfaces",
+      "title": "Public release surfaces and integration artifacts are aligned for v7.30.2",
+      "status": "complete",
+      "evidence_required": [
+        "README, llms, homepage, blog index, blog post, changelog page, and sitemap reference v7.30.2",
+        "Claude plugin, ClawHub skill, and OpenClaw package metadata reference 7.30.2",
+        "Release smoke and readiness checks validate the v7.30.2 contract before tag publish"
+      ]
+    }
+  ]
+}

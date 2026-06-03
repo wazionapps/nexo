@@ -14,6 +14,7 @@ Covers two sides of the correlation:
 from __future__ import annotations
 
 import importlib
+import json
 import os
 import sys
 import time
@@ -128,6 +129,113 @@ def test_startup_includes_session_briefing_excerpt_when_present(hook_hotfix_runt
     assert "SESSION BRIEFING:" in out
     assert "Top priority: reconcile pending release notes" in out
     assert "Full briefing:" in out
+
+
+def test_startup_includes_sleep_health_warning_when_failed(hook_hotfix_runtime):
+    from tools_sessions import handle_startup
+
+    health = hook_hotfix_runtime / "coordination" / "sleep-health.json"
+    health.write_text(
+        json.dumps(
+            {
+                "date": "2026-06-03",
+                "status": "failed",
+                "error": "coverage only saw 41/100 learnings",
+                "coverage": {
+                    "learnings_visible_count": 41,
+                    "learnings_total_declared": 100,
+                    "coverage_pct": 41.0,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    out = handle_startup(task="tests")
+
+    assert "SLEEP HEALTH:" in out
+    assert "status=failed date=2026-06-03" in out
+    assert "coverage=41/100 (41.0%)" in out
+    assert "Full health:" in out
+
+
+def test_startup_includes_latest_deep_sleep_context(hook_hotfix_runtime):
+    from tools_sessions import handle_startup
+
+    deep_sleep = hook_hotfix_runtime / "runtime" / "operations" / "deep-sleep"
+    deep_sleep.mkdir(parents=True, exist_ok=True)
+    (deep_sleep / "2026-06-03-synthesis.json").write_text(
+        json.dumps(
+            {
+                "date": "2026-06-03",
+                "summary": "NEXO should continue release validation before touching runtime installs.",
+                "morning_agenda": [
+                    {
+                        "priority": "P0",
+                        "title": "Validate release gates",
+                        "description": "Run doctor, parity, and packaging checks.",
+                    }
+                ],
+                "context_packets": [
+                    {
+                        "topic": "Desktop release",
+                        "last_state": "Packaging passed; Windows smoke still pending.",
+                        "key_files": ["src/auto_update.py", "tests/test_runtime_update_contract.py"],
+                    }
+                ],
+                "actions": [
+                    {
+                        "action_class": "draft_for_morning",
+                        "content": {"title": "Decide whether to cut the next release."},
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    out = handle_startup(task="tests")
+
+    assert "DEEP SLEEP CONTEXT:" in out
+    assert "date=2026-06-03" in out
+    assert "summary=NEXO should continue release validation" in out
+    assert "agenda[P0]=Validate release gates" in out
+    assert "context=Desktop release: Packaging passed" in out
+    assert "files=src/auto_update.py, tests/test_runtime_update_contract.py" in out
+    assert "review=Decide whether to cut the next release." in out
+    assert "Full synthesis:" in out
+
+
+def test_startup_prefers_deep_sleep_agent_start_packet(hook_hotfix_runtime):
+    from tools_sessions import handle_startup
+
+    deep_sleep = hook_hotfix_runtime / "runtime" / "operations" / "deep-sleep"
+    deep_sleep.mkdir(parents=True, exist_ok=True)
+    (deep_sleep / "2026-06-03-synthesis.json").write_text(
+        json.dumps({"date": "2026-06-03", "summary": "stale synthesis"}),
+        encoding="utf-8",
+    )
+    (deep_sleep / "2026-06-03-agent-start-packet.json").write_text(
+        json.dumps(
+            {
+                "date": "2026-06-03",
+                "summary": "packet summary",
+                "agenda": [{"priority": "P1", "title": "Use packet", "description": "Prefer compact handoff."}],
+                "context_packets": [{"topic": "Packet topic", "last_state": "Ready."}],
+                "review_items": [{"title": "Review packet item"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    out = handle_startup(task="tests")
+
+    assert "DEEP SLEEP CONTEXT:" in out
+    assert "summary=packet summary" in out
+    assert "agenda[P1]=Use packet" in out
+    assert "context=Packet topic: Ready." in out
+    assert "review=Review packet item" in out
+    assert "stale synthesis" not in out
 
 
 # ──────────────────────────────────────────────────────────────────────

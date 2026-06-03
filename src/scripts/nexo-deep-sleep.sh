@@ -63,7 +63,10 @@ fi
 
 # Phase 2: Extract findings per session (configured automation backend)
 log "Phase 2: Extracting findings from $SESSIONS sessions..."
-python3 "$SCRIPT_DIR/deep-sleep/extract.py" "$RUN_ID" >> "$LOG_DIR/deep-sleep.log" 2>&1
+if ! python3 "$SCRIPT_DIR/deep-sleep/extract.py" "$RUN_ID" >> "$LOG_DIR/deep-sleep.log" 2>&1; then
+    log "Extraction failed. Watermark NOT updated (will retry next run)."
+    exit 1
+fi
 
 if [ ! -f "$DEEP_SLEEP_DIR/$RUN_ID-extractions.json" ]; then
     log "Extraction failed. Watermark NOT updated (will retry next run)."
@@ -72,16 +75,22 @@ fi
 
 # Phase 3: Cross-session synthesis (configured automation backend, one call)
 log "Phase 3: Synthesizing cross-session findings..."
-python3 "$SCRIPT_DIR/deep-sleep/synthesize.py" "$RUN_ID" >> "$LOG_DIR/deep-sleep.log" 2>&1
+if ! python3 "$SCRIPT_DIR/deep-sleep/synthesize.py" "$RUN_ID" >> "$LOG_DIR/deep-sleep.log" 2>&1; then
+    log "Synthesis failed. Watermark NOT updated (will retry next run)."
+    exit 1
+fi
 
 if [ ! -f "$DEEP_SLEEP_DIR/$RUN_ID-synthesis.json" ]; then
-    log "Synthesis failed. Falling back to extractions only."
-    cp "$DEEP_SLEEP_DIR/$RUN_ID-extractions.json" "$DEEP_SLEEP_DIR/$RUN_ID-synthesis.json"
+    log "Synthesis output missing. Watermark NOT updated (will retry next run)."
+    exit 1
 fi
 
 # Phase 4: Apply findings
 log "Phase 4: Applying findings..."
-python3 "$SCRIPT_DIR/deep-sleep/apply_findings.py" "$RUN_ID" >> "$LOG_DIR/deep-sleep.log" 2>&1
+if ! python3 "$SCRIPT_DIR/deep-sleep/apply_findings.py" "$RUN_ID" >> "$LOG_DIR/deep-sleep.log" 2>&1; then
+    log "Apply failed. Watermark NOT updated (will retry next run)."
+    exit 1
+fi
 
 # Update watermark on success
 echo "$UNTIL" > "$WATERMARK_FILE"

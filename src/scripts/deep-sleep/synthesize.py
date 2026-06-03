@@ -190,6 +190,62 @@ def backfill_engineering_actions(payload: dict) -> dict:
     return payload
 
 
+def _compact_action_title(action: dict) -> str:
+    content = action.get("content") if isinstance(action, dict) else {}
+    if isinstance(content, dict):
+        return str(content.get("title") or content.get("description") or "").strip()
+    return str(content or "").strip()
+
+
+def build_agent_start_packet(payload: dict, target_date: str) -> dict:
+    """Build a compact handoff packet for the next interactive agent startup."""
+    agenda = payload.get("morning_agenda") if isinstance(payload, dict) else []
+    packets = payload.get("context_packets") if isinstance(payload, dict) else []
+    actions = payload.get("actions") if isinstance(payload, dict) else []
+
+    review_items = []
+    if isinstance(actions, list):
+        for action in actions:
+            if not isinstance(action, dict):
+                continue
+            if action.get("action_class") != "draft_for_morning":
+                continue
+            title = _compact_action_title(action)
+            if title:
+                review_items.append(
+                    {
+                        "title": title,
+                        "action_type": action.get("action_type", ""),
+                        "impact": action.get("impact", ""),
+                        "confidence": action.get("confidence", 0),
+                    }
+                )
+
+    return {
+        "date": str(payload.get("date") or target_date),
+        "generated_at": datetime.now().isoformat(),
+        "source": "deep-sleep/synthesize",
+        "summary": str(payload.get("summary") or "").strip(),
+        "agenda": agenda[:5] if isinstance(agenda, list) else [],
+        "context_packets": packets[:5] if isinstance(packets, list) else [],
+        "review_items": review_items[:5],
+        "counts": {
+            "actions": len(actions) if isinstance(actions, list) else 0,
+            "agenda": len(agenda) if isinstance(agenda, list) else 0,
+            "context_packets": len(packets) if isinstance(packets, list) else 0,
+            "review_items": len(review_items),
+        },
+    }
+
+
+def write_agent_start_packet(payload: dict, target_date: str) -> Path:
+    """Persist a startup-ready Deep Sleep packet next to synthesis outputs."""
+    packet = build_agent_start_packet(payload, target_date)
+    packet_file = DEEP_SLEEP_DIR / f"{target_date}-agent-start-packet.json"
+    packet_file.write_text(json.dumps(packet, indent=2, ensure_ascii=False), encoding="utf-8")
+    return packet_file
+
+
 def main():
     target_date = sys.argv[1] if len(sys.argv) > 1 else datetime.now().strftime("%Y-%m-%d")
 
@@ -226,7 +282,9 @@ def main():
         output_file = DEEP_SLEEP_DIR / f"{target_date}-synthesis.json"
         with open(output_file, "w") as f:
             json.dump(output, f, indent=2, ensure_ascii=False)
+        packet_file = write_agent_start_packet(output, target_date)
         print(f"[synthesize] Output: {output_file}")
+        print(f"[synthesize] Agent start packet: {packet_file}")
         return
 
     # Build prompt
@@ -288,6 +346,7 @@ def main():
         output_file = DEEP_SLEEP_DIR / f"{target_date}-synthesis.json"
         with open(output_file, "w") as f:
             json.dump(parsed, f, indent=2, ensure_ascii=False)
+        packet_file = write_agent_start_packet(parsed, target_date)
 
         n_actions = len(parsed.get("actions", []))
         n_patterns = len(parsed.get("cross_session_patterns", []))
@@ -300,6 +359,7 @@ def main():
         print(f"  Morning agenda items: {n_agenda}")
         print(f"  Context packets: {n_packets}")
         print(f"[synthesize] Output: {output_file}")
+        print(f"[synthesize] Agent start packet: {packet_file}")
 
     except AutomationBackendUnavailableError as exc:
         print(f"[synthesize] Automation backend unavailable: {exc}", file=sys.stderr)

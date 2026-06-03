@@ -634,6 +634,192 @@ def _read_session_briefing_excerpt(max_lines: int = 6) -> tuple[str, str]:
     return excerpt, str(briefing_path)
 
 
+def _read_sleep_health_warning() -> tuple[list[str], str]:
+    """Return a compact warning when nightly sleep failed or degraded."""
+    health_path = paths.coordination_dir() / "sleep-health.json"
+    try:
+        payload = json.loads(health_path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, OSError, json.JSONDecodeError):
+        return [], str(health_path)
+
+    if not isinstance(payload, dict):
+        return [], str(health_path)
+    status = str(payload.get("status") or "").strip().lower()
+    if not status or status == "ok":
+        return [], str(health_path)
+
+    date_value = str(payload.get("date") or "").strip()
+    error = _safe_packet_text(payload.get("error") or "unknown", max_chars=180)
+    lines = [f"status={status} date={date_value or '?'} error={error}"]
+
+    coverage = payload.get("coverage") or {}
+    if isinstance(coverage, dict):
+        visible = coverage.get("learnings_visible_count")
+        total = coverage.get("learnings_total_declared")
+        pct = coverage.get("coverage_pct")
+        if visible is not None or total is not None or pct is not None:
+            lines.append(f"coverage={visible or 0}/{total or 0} ({pct or 0}%)")
+
+    return lines, str(health_path)
+
+
+def _latest_deep_sleep_synthesis() -> Path | None:
+    deep_sleep_dir = paths.operations_dir() / "deep-sleep"
+    try:
+        candidates = [
+            path
+            for path in deep_sleep_dir.glob("????-??-??-synthesis.json")
+            if path.is_file()
+        ]
+    except OSError:
+        return None
+    if not candidates:
+        return None
+    return max(candidates, key=lambda path: (path.name[:10], path.stat().st_mtime))
+
+
+def _latest_deep_sleep_start_packet() -> Path | None:
+    deep_sleep_dir = paths.operations_dir() / "deep-sleep"
+    try:
+        candidates = [
+            path
+            for path in deep_sleep_dir.glob("????-??-??-agent-start-packet.json")
+            if path.is_file()
+        ]
+    except OSError:
+        return None
+    if not candidates:
+        return None
+    return max(candidates, key=lambda path: (path.name[:10], path.stat().st_mtime))
+
+
+def _read_agent_start_packet(payload: dict, packet_path: Path) -> tuple[list[str], str]:
+    lines: list[str] = []
+    date_value = str(payload.get("date") or packet_path.name[:10]).strip()
+    summary = str(payload.get("summary") or "").strip()
+    if date_value:
+        lines.append(f"date={date_value}")
+    if summary:
+        lines.append(f"summary={_safe_packet_text(summary, max_chars=220)}")
+
+    agenda = payload.get("agenda") or []
+    if isinstance(agenda, list):
+        for item in agenda[:3]:
+            if not isinstance(item, dict):
+                continue
+            priority = str(item.get("priority") or "?").strip()
+            title = str(item.get("title") or "").strip()
+            description = str(item.get("description") or "").strip()
+            if title or description:
+                text = title if not description else f"{title} - {description}"
+                lines.append(f"agenda[{priority}]={_safe_packet_text(text, max_chars=220)}")
+
+    packets = payload.get("context_packets") or []
+    if isinstance(packets, list):
+        for packet in packets[:2]:
+            if not isinstance(packet, dict):
+                continue
+            topic = str(packet.get("topic") or "context").strip()
+            last_state = str(packet.get("last_state") or "").strip()
+            if topic or last_state:
+                text = topic if not last_state else f"{topic}: {last_state}"
+                lines.append(f"context={_safe_packet_text(text, max_chars=240)}")
+            files = packet.get("key_files") or []
+            if isinstance(files, list) and files:
+                rendered_files = ", ".join(str(file) for file in files[:4] if str(file).strip())
+                if rendered_files:
+                    lines.append(f"files={_safe_packet_text(rendered_files, max_chars=220)}")
+
+    review_items = payload.get("review_items") or []
+    if isinstance(review_items, list):
+        for item in review_items[:2]:
+            if not isinstance(item, dict):
+                continue
+            title = str(item.get("title") or "").strip()
+            if title:
+                lines.append(f"review={_safe_packet_text(title, max_chars=220)}")
+
+    return lines[:10], str(packet_path)
+
+
+def _read_deep_sleep_start_context() -> tuple[list[str], str]:
+    """Summarize the latest Deep Sleep synthesis for new agent sessions."""
+    packet_path = _latest_deep_sleep_start_packet()
+    if packet_path is not None:
+        try:
+            packet_payload = json.loads(packet_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            packet_payload = None
+        if isinstance(packet_payload, dict):
+            return _read_agent_start_packet(packet_payload, packet_path)
+
+    synthesis_path = _latest_deep_sleep_synthesis()
+    if synthesis_path is None:
+        return [], str(paths.operations_dir() / "deep-sleep")
+
+    try:
+        payload = json.loads(synthesis_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return [], str(synthesis_path)
+    if not isinstance(payload, dict):
+        return [], str(synthesis_path)
+
+    lines: list[str] = []
+    date_value = str(payload.get("date") or synthesis_path.name[:10]).strip()
+    summary = str(payload.get("summary") or "").strip()
+    if date_value:
+        lines.append(f"date={date_value}")
+    if summary:
+        lines.append(f"summary={_safe_packet_text(summary, max_chars=220)}")
+
+    agenda = payload.get("morning_agenda") or []
+    if isinstance(agenda, list):
+        for item in agenda[:3]:
+            if not isinstance(item, dict):
+                continue
+            priority = str(item.get("priority") or "?").strip()
+            title = str(item.get("title") or "").strip()
+            description = str(item.get("description") or "").strip()
+            if title or description:
+                text = title if not description else f"{title} - {description}"
+                lines.append(f"agenda[{priority}]={_safe_packet_text(text, max_chars=220)}")
+
+    packets = payload.get("context_packets") or []
+    if isinstance(packets, list):
+        for packet in packets[:2]:
+            if not isinstance(packet, dict):
+                continue
+            topic = str(packet.get("topic") or "context").strip()
+            last_state = str(packet.get("last_state") or "").strip()
+            if topic or last_state:
+                text = topic if not last_state else f"{topic}: {last_state}"
+                lines.append(f"context={_safe_packet_text(text, max_chars=240)}")
+            files = packet.get("key_files") or []
+            if isinstance(files, list) and files:
+                rendered_files = ", ".join(str(file) for file in files[:4] if str(file).strip())
+                if rendered_files:
+                    lines.append(f"files={_safe_packet_text(rendered_files, max_chars=220)}")
+
+    actions = payload.get("actions") or []
+    if isinstance(actions, list):
+        review_count = 0
+        for action in actions:
+            if review_count >= 2 or not isinstance(action, dict):
+                continue
+            if action.get("action_class") != "draft_for_morning":
+                continue
+            content = action.get("content") or {}
+            if isinstance(content, dict):
+                title = str(content.get("title") or content.get("description") or "").strip()
+            else:
+                title = str(content or "").strip()
+            if title:
+                lines.append(f"review={_safe_packet_text(title, max_chars=220)}")
+                review_count += 1
+
+    return lines[:10], str(synthesis_path)
+
+
 def handle_startup(
     task: str = "Startup",
     claude_session_id: str = "",
@@ -795,6 +981,22 @@ def handle_startup(
         for raw_line in briefing_excerpt.splitlines():
             lines.append(f"  {_safe_packet_text(raw_line)}")
         lines.append(f"  Full briefing: {_safe_packet_text(briefing_path)}")
+
+    sleep_health, sleep_health_path = _read_sleep_health_warning()
+    if sleep_health:
+        lines.append("")
+        lines.append("SLEEP HEALTH:")
+        for raw_line in sleep_health:
+            lines.append(f"  {_safe_packet_text(raw_line)}")
+        lines.append(f"  Full health: {_safe_packet_text(sleep_health_path)}")
+
+    start_context, start_context_path = _read_deep_sleep_start_context()
+    if start_context:
+        lines.append("")
+        lines.append("DEEP SLEEP CONTEXT:")
+        for raw_line in start_context:
+            lines.append(f"  {_safe_packet_text(raw_line)}")
+        lines.append(f"  Full synthesis: {_safe_packet_text(start_context_path)}")
 
     try:
         from memory_layer_audit import audit_memory_layers, format_memory_layer_warnings

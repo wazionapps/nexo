@@ -289,6 +289,78 @@ def test_create_followup_consolidates_semantic_duplicates(monkeypatch, tmp_path)
     assert history[0][2] == "deep-sleep"
 
 
+def test_create_followup_adds_governance_fields(monkeypatch, tmp_path):
+    apply_mod = _load_apply_module(monkeypatch, tmp_path)
+    nexo_home = Path(os.environ["NEXO_HOME"])
+    data_dir = nexo_home / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    import db
+
+    db.init_db()
+
+    result = apply_mod.create_followup(
+        "Implement a Deep Sleep startup packet validation check.",
+        reasoning_note="Recurring startup context loss detected overnight.",
+        priority="high",
+        owner="agent",
+        internal=1,
+    )
+
+    assert result["success"] is True
+
+    conn = sqlite3.connect(str(data_dir / "nexo.db"))
+    row = conn.execute(
+        "SELECT date, verification, priority, owner, internal FROM followups WHERE id = ?",
+        (result["id"],),
+    ).fetchone()
+    conn.close()
+
+    assert row[0]
+    assert "Verify completion evidence for:" in row[1]
+    assert row[2] == "high"
+    assert row[3] == "agent"
+    assert row[4] == 1
+
+
+def test_create_followup_updates_duplicate_governance_fields(monkeypatch, tmp_path):
+    apply_mod = _load_apply_module(monkeypatch, tmp_path)
+    nexo_home = Path(os.environ["NEXO_HOME"])
+    data_dir = nexo_home / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    import db
+
+    db.init_db()
+    db.create_followup(
+        id="NF-EXISTING-GOV",
+        description="Deep Sleep startup packet validation",
+        date="",
+        verification="",
+        reasoning="",
+    )
+
+    result = apply_mod.create_followup(
+        "Implement a Deep Sleep startup packet validation check.",
+        verification="Run startup and confirm DEEP SLEEP CONTEXT is populated.",
+        priority="high",
+        owner="agent",
+        internal=1,
+    )
+
+    assert result["success"] is True
+    assert result["id"] == "NF-EXISTING-GOV"
+
+    conn = sqlite3.connect(str(data_dir / "nexo.db"))
+    row = conn.execute(
+        "SELECT verification, priority, owner, internal FROM followups WHERE id = 'NF-EXISTING-GOV'",
+    ).fetchone()
+    conn.close()
+
+    assert row[0] == "Run startup and confirm DEEP SLEEP CONTEXT is populated."
+    assert row[1] == "high"
+    assert row[2] == "agent"
+    assert row[3] == 1
+
+
 def test_abandoned_followups_are_archived_not_active(monkeypatch, tmp_path):
     apply_mod = _load_apply_module(monkeypatch, tmp_path)
     nexo_home = Path(os.environ["NEXO_HOME"])

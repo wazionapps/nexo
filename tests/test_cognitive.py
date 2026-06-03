@@ -307,6 +307,7 @@ def test_spreading_activation_keeps_top_k_and_explains_auto_strategy(monkeypatch
     monkeypatch.setattr(_search, "_kg_boost_results", lambda results: results)
     monkeypatch.setattr(_search, "_auto_restore_snoozed", lambda db: None)
     monkeypatch.setattr(_search, "_rehearse_results", lambda results, skip_ids=None: None)
+    monkeypatch.setattr(_search, "rerank_results", lambda query, results, top_k=5: results[:top_k])
     monkeypatch.setattr(_search, "record_co_activation", lambda items: None)
     monkeypatch.setattr(_search, "_get_co_activated_neighbors", lambda ids, depth=1: {
         _search._canonical_co_id("stm", 3): 0.08,
@@ -454,6 +455,17 @@ def test_embedding_migration_reembeds_when_model_marker_changes(tmp_path, monkey
     assert migrated[0] == pytest.approx(0.25)
     assert marker == "new-multilingual-model"
     assert list(tmp_path.glob("cognitive.db.bak-embedding-*"))
+
+
+def test_reranker_respects_model_download_disabled(monkeypatch):
+    import importlib
+
+    _core = importlib.import_module("cognitive._core")
+    monkeypatch.setenv("NEXO_SKIP_COGNITIVE_MODEL_DOWNLOAD", "1")
+    monkeypatch.setattr(_core, "_reranker", None)
+
+    assert _core._get_reranker() is None
+    assert _core._reranker is False
 
 
 def test_rehearsal_profile_update_rewards_strong_recall():

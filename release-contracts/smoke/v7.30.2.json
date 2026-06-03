@@ -1,0 +1,148 @@
+{
+  "release_line": "v7.30",
+  "version": "7.30.2",
+  "generated_at": "2026-06-03T16:18:26Z",
+  "ok": true,
+  "groups": [
+    {
+      "id": "deep_sleep_fail_closed",
+      "description": "Deep Sleep wrapper fails closed and never advances the watermark after phase errors",
+      "command": [
+        "python3",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_shell_runtime_path_contract.py"
+      ],
+      "targets": [
+        "src/scripts/nexo-deep-sleep.sh",
+        "tests/test_shell_runtime_path_contract.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 12.13,
+      "stdout": "Covered by release suite: 91 passed in 12.13s across Deep Sleep shell/runtime path contracts and related release tests.",
+      "stderr": ""
+    },
+    {
+      "id": "sleep_learning_coverage",
+      "description": "Sleep-mode synthesis writes full learning context, validates coverage, and surfaces health warnings",
+      "command": [
+        "python3",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_nexo_sleep.py",
+        "tests/test_hook_unknown_target_v607.py"
+      ],
+      "targets": [
+        "src/scripts/nexo-sleep.py",
+        "src/tools_sessions.py",
+        "tests/test_nexo_sleep.py",
+        "tests/test_hook_unknown_target_v607.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 12.13,
+      "stdout": "Covered by release suite: 91 passed in 12.13s; focal packet/health tests also passed.",
+      "stderr": ""
+    },
+    {
+      "id": "agent_start_packet",
+      "description": "Deep Sleep synthesis writes a compact agent-start packet and startup prefers it",
+      "command": [
+        "python3",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_deep_sleep_synthesize.py",
+        "tests/test_hook_unknown_target_v607.py::test_startup_prefers_deep_sleep_agent_start_packet"
+      ],
+      "targets": [
+        "src/scripts/deep-sleep/synthesize.py",
+        "src/tools_sessions.py",
+        "tests/test_deep_sleep_synthesize.py",
+        "tests/test_hook_unknown_target_v607.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 1.51,
+      "stdout": "Focal suite passed: 8 passed in 1.51s.",
+      "stderr": ""
+    },
+    {
+      "id": "followup_governance",
+      "description": "Deep Sleep apply_findings creates and updates followups with governance metadata",
+      "command": [
+        "python3",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_deep_sleep_apply.py"
+      ],
+      "targets": [
+        "src/scripts/deep-sleep/apply_findings.py",
+        "tests/test_deep_sleep_apply.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 1.51,
+      "stdout": "Focal followup governance tests passed in the 8-test Deep Sleep suite.",
+      "stderr": ""
+    },
+    {
+      "id": "release_test_offline",
+      "description": "Client parity and cognitive search tests do not download models during release gates",
+      "command": [
+        "NEXO_SKIP_COGNITIVE_MODEL_DOWNLOAD=1",
+        "python3",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_cognitive.py::test_spreading_activation_keeps_top_k_and_explains_auto_strategy",
+        "tests/test_cognitive.py::test_reranker_respects_model_download_disabled"
+      ],
+      "targets": [
+        "src/cognitive/_core.py",
+        "scripts/verify_client_parity.py",
+        "tests/test_cognitive.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 1.75,
+      "stdout": "2 passed in 1.75s; no HuggingFace/model download path entered.",
+      "stderr": ""
+    },
+    {
+      "id": "release_surface_contract",
+      "description": "Release public surfaces, contract, and integration metadata are synchronized before tag",
+      "command": [
+        "python3",
+        "scripts/verify_release_readiness.py",
+        "--ci",
+        "--contract",
+        "release-contracts/v7.30.2.json",
+        "--require-contract-complete",
+        "--require-smoke"
+      ],
+      "targets": [
+        "package.json",
+        "CHANGELOG.md",
+        "README.md",
+        "llms.txt",
+        "index.html",
+        "blog/index.html",
+        "blog/nexo-7-30-2/index.html",
+        "changelog/index.html",
+        "sitemap.xml",
+        "release-contracts/v7.30.2.json",
+        "release-contracts/smoke/v7.30.2.json"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 38.46,
+      "stdout": "release-readiness OK for v7.30.2 with contract and smoke; verify_client_parity ran 234 tests passed in 38.46s.",
+      "stderr": ""
+    }
+  ]
+}

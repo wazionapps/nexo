@@ -29,6 +29,15 @@ def test_deep_sleep_script_uses_runtime_logs_dir() -> None:
     assert 'LOG_DIR="$NEXO_HOME/runtime/logs"' in text
 
 
+def test_deep_sleep_script_fails_closed_on_phase_errors() -> None:
+    text = _read("src/scripts/nexo-deep-sleep.sh")
+    assert 'if ! python3 "$SCRIPT_DIR/deep-sleep/extract.py" "$RUN_ID"' in text
+    assert 'if ! python3 "$SCRIPT_DIR/deep-sleep/synthesize.py" "$RUN_ID"' in text
+    assert 'if ! python3 "$SCRIPT_DIR/deep-sleep/apply_findings.py" "$RUN_ID"' in text
+    assert "Synthesis output missing. Watermark NOT updated" in text
+    assert "Falling back to extractions only" not in text
+
+
 def test_sleep_process_lock_is_cleaned_on_exit_and_shutdown_signals() -> None:
     text = _read("src/scripts/nexo-sleep.py")
     assert "atexit.register(_cleanup_process_lock)" in text

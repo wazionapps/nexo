@@ -103,3 +103,49 @@ def test_backfill_engineering_actions_adds_fix_followup():
     assert action["action_class"] == "auto_apply"
     assert action["content"]["description"].startswith("Add a pre-release validation script")
     assert action["dedupe_key"].startswith("engineering-fix:")
+
+
+def test_write_agent_start_packet_compacts_synthesis(monkeypatch, tmp_path):
+    module = _load_module()
+    deep_sleep_dir = tmp_path / "operations" / "deep-sleep"
+    deep_sleep_dir.mkdir(parents=True)
+    monkeypatch.setattr(module, "DEEP_SLEEP_DIR", deep_sleep_dir)
+
+    payload = {
+        "date": "2026-06-03",
+        "summary": "Continue the release without touching runtime core.",
+        "morning_agenda": [
+            {"priority": "P0", "title": "Run release gates", "description": "Verify package readiness."}
+        ],
+        "context_packets": [
+            {
+                "topic": "Deep Sleep",
+                "last_state": "P0 fixed; P1 pending.",
+                "key_files": ["src/scripts/nexo-sleep.py"],
+            }
+        ],
+        "actions": [
+            {
+                "action_type": "followup_create",
+                "action_class": "draft_for_morning",
+                "impact": "high",
+                "confidence": 0.76,
+                "content": {"title": "Decide release scope."},
+            }
+        ],
+    }
+
+    packet_file = module.write_agent_start_packet(payload, "2026-06-03")
+
+    packet = json.loads(packet_file.read_text(encoding="utf-8"))
+    assert packet["date"] == "2026-06-03"
+    assert packet["summary"].startswith("Continue the release")
+    assert packet["agenda"][0]["title"] == "Run release gates"
+    assert packet["context_packets"][0]["topic"] == "Deep Sleep"
+    assert packet["review_items"][0]["title"] == "Decide release scope."
+    assert packet["counts"] == {
+        "actions": 1,
+        "agenda": 1,
+        "context_packets": 1,
+        "review_items": 1,
+    }
