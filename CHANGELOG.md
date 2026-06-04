@@ -1,5 +1,14 @@
 # Changelog
 
+## [7.30.8] - 2026-06-04
+
+### Fixed - Deep Sleep session counts and local context fact extraction
+
+- **Deep Sleep now folds parallel Codex sub-agents into their parent thread.** Overnight analysis keeps the sub-agent content, but counts and analyzes the parent work thread once, preventing inflated session and finding counts such as the 2026-06-04 run where 11 transcript files were really 4 work threads.
+- **Codex transcript parsing preserves each sub-agent's own identity.** `extract_codex_session()` now keeps the first `session_meta` record as the thread identity and exposes parent-thread linkage, nickname, role, and source fields so downstream collection can distinguish real top-level sessions from spawned explorers.
+- **Local Context stops the `entity_facts` cartesian blow-up.** Facts are now attributed only to entities mentioned in the same chunk, with hard per-asset and value-length ceilings, preventing the runaway 337M-row / 255 GB `local-context.db` growth pattern without changing the schema.
+- **Existing oversized `entity_facts` rows still require the separate operational purge.** This release deploys the code fix; it does not delete the already-written rows or re-enable extraction on machines where it was paused for safety.
+
 ## [7.30.7] - 2026-06-04
 
 ### Fixed - release closeout contract for Deep Sleep retention

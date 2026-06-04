@@ -1,0 +1,98 @@
+{
+  "release_line": "v7.30",
+  "version": "7.30.8",
+  "generated_at": "2026-06-04T09:06:12Z",
+  "ok": true,
+  "groups": [
+    {
+      "id": "deep_sleep_subagent_dedup",
+      "description": "Deep Sleep folds parallel Codex sub-agents into their parent work thread without losing transcript content",
+      "command": [
+        "python3",
+        "-m",
+        "pytest",
+        "tests/test_deep_sleep_collect.py",
+        "-q"
+      ],
+      "targets": [
+        "src/transcript_utils.py",
+        "src/scripts/deep-sleep/collect.py",
+        "tests/test_deep_sleep_collect.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 0.75,
+      "stdout": "6 passed in 0.75s. Covers Codex session metadata extraction and Deep Sleep sub-agent folding.",
+      "stderr": ""
+    },
+    {
+      "id": "local_context_entity_facts_guard",
+      "description": "Local Context entity_facts writes are gated to entities mentioned in the same chunk and capped by release-safe limits",
+      "command": [
+        "python3",
+        "-m",
+        "pytest",
+        "tests/test_local_context.py",
+        "tests/test_local_context_entity_dossier.py",
+        "tests/test_local_context_health.py",
+        "tests/test_local_context_cli.py",
+        "-q"
+      ],
+      "targets": [
+        "src/local_context/api.py",
+        "tests/test_local_context.py",
+        "tests/test_local_context_entity_dossier.py",
+        "tests/test_local_context_health.py",
+        "tests/test_local_context_cli.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 17.13,
+      "stdout": "93 passed in 17.13s. Includes the entity_facts same-chunk attribution regression test plus focused Local Context coverage.",
+      "stderr": ""
+    },
+    {
+      "id": "client_parity_contract",
+      "description": "Client parity docs and tests remain aligned after the release changes",
+      "command": [
+        "python3",
+        "scripts/verify_client_parity.py"
+      ],
+      "targets": [
+        "scripts/verify_client_parity.py",
+        "templates/core-prompts/server-mcp-instructions.md",
+        ".claude-plugin/plugin.json",
+        "openclaw-plugin/package.json"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 33.88,
+      "stdout": "236 passed in 33.88s. [client-parity] docs OK; [client-parity] parity tests OK.",
+      "stderr": ""
+    },
+    {
+      "id": "release_surface_contract",
+      "description": "Release-facing integration artifacts are synchronized to v7.30.8",
+      "command": [
+        "python3",
+        "scripts/sync_release_artifacts.py",
+        "--release-version",
+        "7.30.8",
+        "--check"
+      ],
+      "targets": [
+        "package.json",
+        ".claude-plugin/plugin.json",
+        "clawhub-skill/SKILL.md",
+        "openclaw-plugin/package.json",
+        "openclaw-plugin/package-lock.json",
+        "openclaw-plugin/src/mcp-bridge.ts"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 0.0,
+      "stdout": "[sync-release-artifacts] OK",
+      "stderr": "ln: /Users/franciscoc/.ssh/ssh_auth_sock: File exists"
+    }
+  ]
+}

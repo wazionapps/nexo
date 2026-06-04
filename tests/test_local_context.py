@@ -264,6 +264,62 @@ def test_context_query_uses_entity_match_when_chunk_text_does_not_repeat_entity(
     assert context["entities"][0]["name"] == "Leebmann24"
 
 
+def test_replace_entity_facts_only_uses_entities_mentioned_in_same_chunk(tmp_path):
+    root = tmp_path / "facts"
+    root.mkdir()
+    note = root / "mixed.txt"
+    note.write_text("manual fixture", encoding="utf-8")
+
+    local_context.add_root(str(root))
+    conn = get_local_context_db()
+    root_id = conn.execute("SELECT id FROM local_index_roots WHERE root_path=?", (api.norm_path(str(root)),)).fetchone()["id"]
+    asset_id = api.stable_id("asset", api.norm_path(str(note)))
+    version_id = api.stable_id("ver", asset_id)
+    conn.execute(
+        """
+        INSERT INTO local_assets(asset_id, root_id, path, display_path, parent_path, volume_id, file_type, extension,
+          size_bytes, quick_fingerprint, depth, depth_reason, phase, status, privacy_class, permission_state,
+          first_seen_at, last_seen_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, '/', 'document', '.txt', 1, 'fp', 1, 'test', 'embeddings', 'active', 'normal', 'granted', 1, 1, 1)
+        """,
+        (asset_id, root_id, str(note), str(note), str(note.parent)),
+    )
+    conn.execute(
+        "INSERT INTO local_asset_versions(version_id, asset_id, quick_fingerprint, content_hash, size_bytes, modified_at_fs, summary, created_at) VALUES (?, ?, 'fp', '', 1, 1, 'summary', 1)",
+        (version_id, asset_id),
+    )
+    conn.execute(
+        "INSERT INTO local_chunks(chunk_id, asset_id, version_id, chunk_index, text, token_count, created_at) VALUES ('chunk_alpha', ?, ?, 0, ?, 4, 1)",
+        (asset_id, version_id, "Alpha Client\nrevenue: 100"),
+    )
+    conn.execute(
+        "INSERT INTO local_chunks(chunk_id, asset_id, version_id, chunk_index, text, token_count, created_at) VALUES ('chunk_beta', ?, ?, 1, ?, 4, 1)",
+        (asset_id, version_id, "Beta Project\nbudget: 200"),
+    )
+    conn.execute(
+        "INSERT INTO local_entities(entity_id, asset_id, version_id, name, entity_type, confidence, evidence, created_at) VALUES ('entity_alpha', ?, ?, 'Alpha Client', 'entity', 0.95, 'test', 1)",
+        (asset_id, version_id),
+    )
+    conn.execute(
+        "INSERT INTO local_entities(entity_id, asset_id, version_id, name, entity_type, confidence, evidence, created_at) VALUES ('entity_beta', ?, ?, 'Beta Project', 'entity', 0.95, 'test', 1)",
+        (asset_id, version_id),
+    )
+    conn.commit()
+
+    inserted = api._replace_entity_facts(conn, asset_id)
+    rows = conn.execute(
+        "SELECT entity_id, predicate, value, source_chunk_id FROM entity_facts WHERE source_asset_id=? ORDER BY entity_id, predicate",
+        (asset_id,),
+    ).fetchall()
+    facts = {(row["entity_id"], row["predicate"], row["value"], row["source_chunk_id"]) for row in rows}
+
+    assert inserted == 2
+    assert ("entity_alpha", "revenue", "100", "chunk_alpha") in facts
+    assert ("entity_beta", "budget", "200", "chunk_beta") in facts
+    assert all(not (entity_id == "entity_alpha" and source_chunk_id == "chunk_beta") for entity_id, _predicate, _value, source_chunk_id in facts)
+    assert all(not (entity_id == "entity_beta" and source_chunk_id == "chunk_alpha") for entity_id, _predicate, _value, source_chunk_id in facts)
+
+
 def test_context_query_entity_boost_prefers_matching_chunk_inside_long_asset(tmp_path):
     root = tmp_path / "project"
     root.mkdir()

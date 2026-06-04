@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.30.8: Deep Sleep and Local Context stability fixes</title>
+<meta name="description" content="NEXO Brain v7.30.8 folds Codex sub-agents into parent Deep Sleep threads and stops Local Context entity_facts cartesian growth.">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-30-8/">
+<meta name="robots" content="index, follow">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.30.8: Deep Sleep and Local Context stability fixes","datePublished":"2026-06-04","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head>
+<body>
+<main class="section-compact">
+<div class="container" style="max-width:860px;">
+<a href="/blog/">Back to blog</a>
+<p class="section-label">Release notes</p>
+<h1>NEXO 7.30.8 - Deep Sleep and Local Context stability fixes</h1>
+<p>v7.30.8 is a patch release over v7.30.7. It fixes two operational issues found during closeout: inflated Deep Sleep session counts from parallel Codex sub-agents, and runaway Local Context <code>entity_facts</code> growth caused by attributing every chunk candidate to every entity in a file.</p>
+<p>Deep Sleep now keeps sub-agent content but folds spawned explorers into the parent work thread before counting and analyzing sessions. The 2026-06-04 run that looked like 11 sessions resolves to 4 work threads with no transcript content lost.</p>
+<p>Local Context now writes facts only for entities actually mentioned in the same chunk, caps facts per asset, and drops paragraph-length values that are not useful facts. This release deploys the code fix; deleting already-written oversized rows remains a separate operational purge.</p>
+<pre><code>python3 -m pytest tests/test_deep_sleep_collect.py -q
+python3 scripts/verify_client_parity.py
+python3 -m py_compile src/local_context/api.py
+python3 scripts/verify_release_readiness.py --ci --contract release-contracts/v7.30.8.json --require-contract-complete --require-smoke</code></pre>
+<p><a href="/changelog/#v7308">Read the full v7.30.8 changelog</a></p>
+</div>
+</main>
+</body>
+</html>

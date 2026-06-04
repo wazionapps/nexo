@@ -1,6 +1,6 @@
 {
   "name": "@wazionapps/openclaw-memory-nexo-brain",
-  "version": "7.30.7",
+  "version": "7.30.8",
   "description": "OpenClaw native memory plugin powered by NEXO Brain — Atkinson-Shiffrin cognitive memory, semantic RAG, trust scoring, and metacognitive guard.",
   "type": "module",
   "main": "dist/index.js",

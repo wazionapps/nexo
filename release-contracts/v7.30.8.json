@@ -1,0 +1,92 @@
+{
+  "release_line": "v7.30",
+  "target_version": "7.30.8",
+  "scope_owner": "NEXO",
+  "distribution": {
+    "git_updates_on": "merge_to_main",
+    "packaged_release_on": "tag_publish"
+  },
+  "required_repo_files": [
+    "package.json",
+    "CHANGELOG.md",
+    "README.md",
+    "llms.txt",
+    ".well-known/llms.txt",
+    "index.html",
+    "blog/index.html",
+    "blog/nexo-7-30-8/index.html",
+    "changelog/index.html",
+    "sitemap.xml",
+    "release-contracts/v7.30.8.json",
+    "release-contracts/smoke/v7.30.8.json",
+    "scripts/sync_release_artifacts.py",
+    "scripts/verify_release_readiness.py",
+    "scripts/verify_client_parity.py",
+    ".claude-plugin/plugin.json",
+    "clawhub-skill/SKILL.md",
+    "openclaw-plugin/package.json",
+    "openclaw-plugin/package-lock.json",
+    "openclaw-plugin/src/mcp-bridge.ts",
+    "src/transcript_utils.py",
+    "src/scripts/deep-sleep/collect.py",
+    "src/local_context/api.py",
+    "tests/test_deep_sleep_collect.py",
+    "tests/test_local_context.py",
+    "tests/test_local_context_entity_dossier.py",
+    "tests/test_local_context_health.py"
+  ],
+  "required_website_files": [
+    "index.html",
+    "blog/index.html",
+    "blog/nexo-7-30-8/index.html",
+    "changelog/index.html",
+    "llms.txt",
+    ".well-known/llms.txt",
+    "sitemap.xml"
+  ],
+  "smoke": {
+    "required_groups": [
+      "deep_sleep_subagent_dedup",
+      "local_context_entity_facts_guard",
+      "release_surface_contract"
+    ],
+    "max_age_hours": 72
+  },
+  "publication": {
+    "status": "ready",
+    "checklist_complete": true,
+    "blockers": []
+  },
+  "gates": [
+    {
+      "id": "deep_sleep_subagent_dedup",
+      "title": "Deep Sleep folds parallel Codex sub-agents into parent work threads",
+      "status": "complete",
+      "evidence_required": [
+        "src/transcript_utils.py preserves first session_meta as the Codex thread identity and exposes parent_thread_id, agent_nickname, agent_role, and source fields",
+        "src/scripts/deep-sleep/collect.py folds spawned sub-agent transcripts into their parent session before counting and analysis",
+        "tests/test_deep_sleep_collect.py verifies sub-agent folding and transcript metadata handling"
+      ]
+    },
+    {
+      "id": "local_context_entity_facts_guard",
+      "title": "Local Context prevents entity_facts cartesian growth during fact replacement",
+      "status": "complete",
+      "evidence_required": [
+        "src/local_context/api.py attributes chunk facts only to entities mentioned in that chunk",
+        "src/local_context/api.py caps facts per asset with NEXO_ENTITY_FACTS_MAX_PER_ASSET and skips paragraph-length values with NEXO_ENTITY_FACT_MAX_VALUE_LEN",
+        "py_compile and focused Local Context tests pass without requiring a schema migration"
+      ]
+    },
+    {
+      "id": "release_surface_contract",
+      "title": "Public release surfaces and integration artifacts are aligned for v7.30.8",
+      "status": "complete",
+      "evidence_required": [
+        "README, llms, homepage, blog index, blog post, changelog page, and sitemap reference v7.30.8",
+        "Claude plugin, ClawHub skill, and OpenClaw package metadata reference 7.30.8",
+        "Release smoke and readiness checks validate the v7.30.8 contract before tag publish"
+      ]
+    }
+  ]
+}
