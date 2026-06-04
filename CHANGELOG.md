@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.30.10] - 2026-06-04
+
+### Fixed - packaged update repair baseline
+
+- **Packaged `nexo update` now stamps the repair baseline too.** npm-installed runtimes write `operations/last-repair-baseline.json` after successful import verification, including same-version idempotent maintenance runs.
+- **The self-heal contract now covers old and new users through the normal update path.** Users do not need a manual post-update command: the packaged updater syncs hooks/clients, verifies runtime imports, then marks the repaired point for historical doctor checks.
+- **Regression coverage pins the packaged path.** Tests now cover successful packaged updates, same-version maintenance, baseline write ordering after import verification, and the existing runtime post-sync baseline path.
+
 ## [7.30.9] - 2026-06-04
 
 ### Fixed - post-update repair baseline and release-safe doctor gates

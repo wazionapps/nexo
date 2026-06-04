@@ -331,6 +331,12 @@ def test_handle_packaged_update_reloads_launchagents_after_successful_bump(monke
         "write_restart_required_marker",
         lambda from_version, to_version, **_kw: {"path": f"/tmp/mcp-restart-required-{to_version}.json"},
     )
+    baseline_calls = []
+    monkeypatch.setattr(
+        update,
+        "_stamp_runtime_repair_baseline",
+        lambda source="": baseline_calls.append(source) or "runtime-repair-baseline",
+    )
 
     def fake_run(args, **kwargs):
         if args == ["npm", "install", "-g", "nexo-brain@latest"]:
@@ -347,6 +353,8 @@ def test_handle_packaged_update_reloads_launchagents_after_successful_bump(monke
     assert "Hooks: synced to NEXO_HOME" in result
     assert "Clients: configured client targets synced" in result
     assert "LaunchAgents: reloaded 3/3" in result
+    assert "Repair baseline: updated" in result
+    assert baseline_calls == ["plugins.update._handle_packaged_update"]
 
 
 def test_handle_packaged_update_uses_desktop_managed_npm_runtime(monkeypatch):
@@ -387,6 +395,7 @@ def test_handle_packaged_update_uses_desktop_managed_npm_runtime(monkeypatch):
         "write_restart_required_marker",
         lambda from_version, to_version, **_kw: {"path": f"/tmp/mcp-restart-required-{to_version}.json"},
     )
+    monkeypatch.setattr(update, "_stamp_runtime_repair_baseline", lambda source="": "runtime-repair-baseline")
     monkeypatch.setattr(update.Path, "exists", lambda self: str(self) in {desktop_node, bundled_npm_cli})
 
     captured = {}
@@ -428,6 +437,11 @@ def test_handle_packaged_update_finalizes_layout_before_import_verification(monk
         "_verify_import",
         lambda: (call_order.append("verify") or None),
     )
+    monkeypatch.setattr(
+        update,
+        "_stamp_runtime_repair_baseline",
+        lambda source="": call_order.append("baseline") or "runtime-repair-baseline",
+    )
     monkeypatch.setattr(update, "_sync_packaged_crons", lambda progress_fn=None: (True, None))
     monkeypatch.setattr(update, "_sync_hooks_to_home", lambda: None)
     monkeypatch.setattr(update, "_cleanup_retired_runtime_files", lambda: [])
@@ -459,15 +473,18 @@ def test_handle_packaged_update_finalizes_layout_before_import_verification(monk
     result = update._handle_packaged_update(include_clis=False)
 
     assert "UPDATE SUCCESSFUL (packaged install)" in result
-    assert call_order[:2] == ["finalize", "verify"]
+    assert call_order[:3] == ["finalize", "verify", "baseline"]
 
 
-def test_handle_packaged_update_runs_maintenance_when_version_unchanged(monkeypatch):
+def test_handle_packaged_update_runs_maintenance_when_version_unchanged(monkeypatch, tmp_path):
     from plugins import update
 
     versions = iter(["7.12.14", "7.12.14"])
     calls = []
+    runtime_home = tmp_path / "runtime"
+    runtime_home.mkdir()
 
+    monkeypatch.setattr(update, "NEXO_HOME", runtime_home)
     monkeypatch.setattr(update, "_read_version", lambda: next(versions))
     monkeypatch.setattr(update, "_backup_databases", lambda: ("backup-dir", None))
     monkeypatch.setattr(update, "_backup_code_tree", lambda: ("code-backup", None))
@@ -494,11 +511,16 @@ def test_handle_packaged_update_runs_maintenance_when_version_unchanged(monkeypa
 
     assert "UPDATE SUCCESSFUL (packaged install)" in result
     assert "Version: 7.12.14 (unchanged; idempotent maintenance)" in result
+    assert "Repair baseline: updated" in result
     assert "maintenance completed without an MCP restart" in result
     assert "migrations" in calls
     assert "layout" in calls
     assert "verify" in calls
     assert "pip" not in calls
+    baseline = runtime_home / "operations" / "last-repair-baseline.json"
+    assert baseline.is_file()
+    payload = json.loads(baseline.read_text())
+    assert payload["source"] == "plugins.update._handle_packaged_update"
 
 
 def _common_packaged_update_stubs(monkeypatch, update, versions):
@@ -514,6 +536,7 @@ def _common_packaged_update_stubs(monkeypatch, update, versions):
     monkeypatch.setattr(update, "_cleanup_retired_runtime_files", lambda: [])
     monkeypatch.setattr(update, "_update_runtime_dependencies", lambda progress_fn=None: [])
     monkeypatch.setattr(update, "_sync_packaged_clients", lambda: (True, None))
+    monkeypatch.setattr(update, "_stamp_runtime_repair_baseline", lambda source="": "runtime-repair-baseline")
     monkeypatch.setattr(
         update,
         "_reload_launch_agents_after_bump",

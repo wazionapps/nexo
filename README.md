@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.30.9` is the current packaged-runtime line. Patch release over v7.30.8 - post-update self-heal now stamps a verified repair baseline, and doctor release gates distinguish current installation failures from historical operator/session drift.
+Version `7.30.10` is the current packaged-runtime line. Patch release over v7.30.9 - packaged `nexo update` now stamps the verified repair baseline after import verification, including same-version maintenance runs.
+
+Previously in `7.30.9`: patch release over v7.30.8 - post-update self-heal now stamps a verified repair baseline, and doctor release gates distinguish current installation failures from historical operator/session drift.
 
 Previously in `7.30.8`: patch release over v7.30.7 - Deep Sleep now folds parallel Codex sub-agents into their parent thread and Local Context stops the `entity_facts` cartesian blow-up that created runaway sidecar databases.
 

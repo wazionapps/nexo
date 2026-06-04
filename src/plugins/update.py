@@ -152,6 +152,23 @@ NEXO_HOME = export_resolved_nexo_home()
 DATA_DIR = paths.data_dir()
 BACKUP_BASE = paths.backups_dir()
 TECHNICAL_BACKUP_KEEP = 5
+REPAIR_BASELINE_FILE = "last-repair-baseline.json"
+
+
+def _stamp_runtime_repair_baseline(source: str = "plugins.update") -> str:
+    operations_dir = NEXO_HOME / "operations"
+    operations_dir.mkdir(parents=True, exist_ok=True)
+    now = time.time()
+    payload = {
+        "last_repair_epoch": now,
+        "last_repair_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now)),
+        "source": source,
+        "reason": "verified runtime repair baseline after update/post-sync",
+    }
+    (operations_dir / REPAIR_BASELINE_FILE).write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
+    )
+    return "runtime-repair-baseline"
 
 
 def _env_int(name: str, default: int) -> int:
@@ -1454,6 +1471,13 @@ def _handle_packaged_update(progress_fn=None, *, include_clis: bool = True) -> s
     verify_err = _verify_import()
     if verify_err:
         errors.append(f"verification: {verify_err}")
+    repair_baseline_warning = None
+    if not verify_err:
+        try:
+            _emit_progress(progress_fn, "Stamping runtime repair baseline...")
+            _stamp_runtime_repair_baseline("plugins.update._handle_packaged_update")
+        except Exception as exc:
+            repair_baseline_warning = f"{exc.__class__.__name__}: {exc}"
 
     hook_sync_warning = None
     cron_sync_warning = None
@@ -1616,6 +1640,10 @@ def _handle_packaged_update(progress_fn=None, *, include_clis: bool = True) -> s
         lines.append("  Clients: configured client targets synced")
     else:
         lines.append(f"  WARNING: client sync: {client_sync_warning}")
+    if not repair_baseline_warning:
+        lines.append("  Repair baseline: updated")
+    else:
+        lines.append(f"  WARNING: repair baseline: {repair_baseline_warning}")
     if launchagent_reload_summary and launchagent_reload_summary.get("scanned"):
         if not launchagent_reload_warning:
             lines.append(
@@ -1765,6 +1793,12 @@ def handle_update(
         if verify_err:
             raise RuntimeError(f"Verification failed: {verify_err}")
         steps_done.append("verify")
+        try:
+            _emit_progress(progress_fn, "Stamping runtime repair baseline...")
+            _stamp_runtime_repair_baseline("plugins.update.handle_update")
+            steps_done.append("runtime-repair-baseline")
+        except Exception as e:
+            steps_done.append(f"runtime-repair-baseline-warning:{e.__class__.__name__}")
 
         # Step 8: Sync crons with manifest
         cron_sync_result = ""
@@ -1929,6 +1963,8 @@ def handle_update(
                 trailing.insert(2 if len(trailing) >= 2 else len(trailing), "  Crons: synced with manifest")
             if "client-sync" in steps_done:
                 trailing.append("  Clients: configured client targets synced")
+            if "runtime-repair-baseline" in steps_done:
+                trailing.append("  Repair baseline: updated")
             if trailing:
                 msg += "\n" + "\n".join(trailing)
             return msg
@@ -1954,6 +1990,8 @@ def handle_update(
         lines.extend(external_cli_lines)
         if "client-sync" in steps_done:
             lines.append("  Clients: configured client targets synced")
+        if "runtime-repair-baseline" in steps_done:
+            lines.append("  Repair baseline: updated")
         if versioned_runtime_summary and versioned_runtime_summary.get("ok"):
             lines.append(f"  Runtime activation: core/current -> versions/{new_version}")
         if version_prune_summary and version_prune_summary.get("pruned"):

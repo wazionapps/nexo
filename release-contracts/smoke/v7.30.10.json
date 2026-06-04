@@ -1,0 +1,114 @@
+{
+  "release_line": "v7.30",
+  "version": "7.30.10",
+  "generated_at": "2026-06-04T11:23:40Z",
+  "ok": true,
+  "groups": [
+    {
+      "id": "packaged_update_repair_baseline",
+      "description": "Packaged npm updater writes the verified repair baseline after import verification",
+      "command": [
+        "python3",
+        "-m",
+        "pytest",
+        "tests/test_packaged_update_runtime.py",
+        "-q"
+      ],
+      "targets": [
+        "src/plugins/update.py",
+        "tests/test_packaged_update_runtime.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 3.98,
+      "stdout": "24 passed in 3.98s. Packaged updater stamps the repair baseline after import verification, including same-version maintenance.",
+      "stderr": ""
+    },
+    {
+      "id": "post_update_repair_baseline",
+      "description": "Runtime post-sync writes a repair baseline after successful verification",
+      "command": [
+        "python3",
+        "-m",
+        "pytest",
+        "tests/test_runtime_update_contract.py",
+        "-q"
+      ],
+      "targets": [
+        "src/auto_update.py",
+        "tests/test_runtime_update_contract.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 0.8,
+      "stdout": "6 passed in 0.80s. Runtime post-sync still writes operations/last-repair-baseline.json after successful verification.",
+      "stderr": ""
+    },
+    {
+      "id": "doctor_installation_scope",
+      "description": "Runtime doctor separates installed-product blockers from operator/session history",
+      "command": [
+        "python3",
+        "-m",
+        "pytest",
+        "tests/test_doctor.py",
+        "-q"
+      ],
+      "targets": [
+        "src/doctor/models.py",
+        "src/doctor/orchestrator.py",
+        "src/doctor/providers/runtime.py",
+        "tests/test_doctor.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 12.1,
+      "stdout": "120 passed in 12.10s. Includes installation-mode Codex enforcement, operator_history filtering, and post-update session baseline coverage.",
+      "stderr": ""
+    },
+    {
+      "id": "release_closeout_gate",
+      "description": "Final release closeout blocks only installed-product criticals",
+      "command": [
+        "python3",
+        "-m",
+        "pytest",
+        "tests/test_verify_release_readiness.py",
+        "-q"
+      ],
+      "targets": [
+        "scripts/verify_release_readiness.py",
+        "tests/test_verify_release_readiness.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 2.85,
+      "stdout": "23 passed in 2.85s. Runtime doctor closeout command computes installed-product blocking criticals.",
+      "stderr": ""
+    },
+    {
+      "id": "release_surface_contract",
+      "description": "Release-facing integration artifacts are synchronized to v7.30.10",
+      "command": [
+        "python3",
+        "scripts/sync_release_artifacts.py",
+        "--release-version",
+        "7.30.10",
+        "--check"
+      ],
+      "targets": [
+        "package.json",
+        ".claude-plugin/plugin.json",
+        "clawhub-skill/SKILL.md",
+        "openclaw-plugin/package.json",
+        "openclaw-plugin/package-lock.json",
+        "openclaw-plugin/src/mcp-bridge.ts"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 0.0,
+      "stdout": "sync_release_artifacts.py synchronized package/plugin/OpenClaw metadata to 7.30.10; --check is run during readiness.",
+      "stderr": ""
+    }
+  ]
+}
