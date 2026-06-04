@@ -22,6 +22,7 @@ def isolated_home(tmp_path, monkeypatch):
     (home / "data").mkdir(parents=True)
     (home / "nexo-email").mkdir(parents=True)
     monkeypatch.setenv("NEXO_HOME", str(home))
+    monkeypatch.setenv("NEXO_EMAIL_CREDENTIAL_STORE", "sqlite")
     # Reload the DB stack in place so existing references held by other test
     # modules keep pointing at the same module objects instead of drifting.
     import db._core as db_core
@@ -35,6 +36,20 @@ def isolated_home(tmp_path, monkeypatch):
     from db import init_db
     init_db()
     yield home
+
+
+class FakeKeyring:
+    def __init__(self):
+        self.values = {}
+
+    def set_password(self, service, account, password):
+        self.values[(service, account)] = password
+
+    def get_password(self, service, account):
+        return self.values.get((service, account))
+
+    def delete_password(self, service, account):
+        self.values.pop((service, account), None)
 
 
 def test_add_and_list(isolated_home):
@@ -241,6 +256,32 @@ def test_loader_prefers_table_over_legacy_json(isolated_home):
     assert snapshot["_source"] == "email_accounts"
     assert snapshot["agent_account"]["email"] == "real@table.com"
     assert snapshot["default_operator_account"]["email"] == "owner@company.com"
+
+
+def test_email_credentials_use_keyring_marker_when_available(isolated_home, monkeypatch):
+    import types
+    from db._core import get_db
+    from email_credentials import KEYRING_MARKER_PREFIX, KEYRING_SERVICE, read_email_credential, store_email_credential
+
+    fake = FakeKeyring()
+    monkeypatch.setenv("NEXO_EMAIL_CREDENTIAL_STORE", "keyring")
+    monkeypatch.setitem(sys.modules, "keyring", types.SimpleNamespace(
+        set_password=fake.set_password,
+        get_password=fake.get_password,
+        delete_password=fake.delete_password,
+    ))
+
+    marker = store_email_credential("email", "primary", "sekret-1", "test email password")
+
+    assert marker.startswith(KEYRING_MARKER_PREFIX)
+    row = get_db().execute(
+        "SELECT value FROM credentials WHERE service='email' AND key='primary'"
+    ).fetchone()
+    assert row is not None
+    assert row[0] == marker
+    assert row[0] != "sekret-1"
+    assert fake.values[(KEYRING_SERVICE, "email:primary")] == "sekret-1"
+    assert read_email_credential("email", "primary") == "sekret-1"
 
 
 def test_loader_surfaces_sent_folder_from_account_metadata(isolated_home):

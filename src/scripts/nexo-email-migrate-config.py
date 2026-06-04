@@ -26,7 +26,6 @@ import json
 import os
 import re
 import sys
-import time
 from pathlib import Path
 
 
@@ -121,20 +120,14 @@ def main(argv: list[str]) -> int:
         print(f"[dry-run] credentials[{cred_service}/{cred_key}] = <password>")
         return 0
 
-    # Store credential
-    from db._core import get_db
-    conn = get_db()
-    now = time.time()
-    conn.execute(
-        """
-        INSERT INTO credentials (service, key, value, notes, created_at, updated_at)
-        VALUES (?, ?, ?, 'migrated from ~/.nexo/nexo-email/config.json (F1)', ?, ?)
-        ON CONFLICT(service, key) DO UPDATE SET
-            value = excluded.value, updated_at = excluded.updated_at
-        """,
-        (cred_service, cred_key, password, now, now),
+    from email_credentials import store_email_credential
+
+    store_email_credential(
+        cred_service,
+        cred_key,
+        password,
+        "migrated from ~/.nexo/nexo-email/config.json (F1)",
     )
-    conn.commit()
 
     if existing and not args.force:
         existing_metadata = existing.get("metadata") if isinstance(existing.get("metadata"), dict) else {}
@@ -194,7 +187,7 @@ def main(argv: list[str]) -> int:
             can_send=True,
         )
         print(f"✓ Cuenta agente '{args.label}' migrada ({account.get('email')}).")
-        print(f"  Password guardada en credentials[{cred_service}/{cred_key}].")
+        print(f"  Password guardada en el almacen de credenciales[{cred_service}/{cred_key}].")
         print(
             "  Metadata: "
             f"operator_aliases={len(legacy_operator_aliases)}, trusted_domains={len(trusted)}."

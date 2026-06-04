@@ -41,24 +41,11 @@ LEGACY_CONFIG_PATH = _legacy_config_path()
 
 
 def _get_credential(service: str, key: str) -> str:
-    """Fetch a password from the credentials table. Returns empty string
-    on any miss so the caller can log-and-skip instead of crashing a cron.
-    """
-    if not service or not key:
-        return ""
+    """Fetch a password from keyring marker or legacy credentials table."""
     try:
-        from db._core import get_db
-    except Exception:  # pragma: no cover
-        return ""
-    try:
-        conn = get_db()
-        row = conn.execute(
-            "SELECT value FROM credentials WHERE service = ? AND key = ?",
-            (service, key),
-        ).fetchone()
-        if row is None:
-            return ""
-        return str(row[0] or "")
+        from email_credentials import read_email_credential
+
+        return read_email_credential(service, key)
     except Exception as exc:  # pragma: no cover
         _logger.warning("credential lookup failed for %s/%s: %s", service, key, exc)
         return ""

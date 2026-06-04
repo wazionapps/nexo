@@ -21,7 +21,6 @@ from __future__ import annotations
 import getpass
 import json
 import sys
-import time
 from typing import Any
 
 
@@ -74,30 +73,16 @@ def _sent_folder_from_account(account: dict | None) -> str:
 
 
 def _store_credential(service: str, key: str, value: str) -> None:
-    """Write password to the `credentials` table (simple cleartext by
-    default — upgrading to keychain is a v7 follow-up). Never echo the
-    password back to stdout."""
-    from db._core import get_db
-    conn = get_db()
-    now = time.time()
-    conn.execute(
-        """
-        INSERT INTO credentials (service, key, value, notes, created_at, updated_at)
-        VALUES (?, ?, ?, 'email account password (nexo email setup)', ?, ?)
-        ON CONFLICT(service, key) DO UPDATE SET
-            value = excluded.value,
-            updated_at = excluded.updated_at
-        """,
-        (service, key, value, now, now),
-    )
-    conn.commit()
+    """Write password without echoing it back to stdout."""
+    from email_credentials import store_email_credential
+
+    store_email_credential(service, key, value, "email account password (nexo email setup)")
 
 
 def _delete_credential(service: str, key: str) -> None:
-    from db._core import get_db
-    conn = get_db()
-    conn.execute("DELETE FROM credentials WHERE service = ? AND key = ?", (service, key))
-    conn.commit()
+    from email_credentials import delete_email_credential
+
+    delete_email_credential(service, key)
 
 
 def cmd_email_setup(args) -> int:

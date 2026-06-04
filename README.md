@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.30.11` is the current packaged-runtime line. Patch release over v7.30.10 - the installer and npm postinstall path now stamp the verified repair baseline too, so the first update from older packaged installs is covered without a manual second run.
+Version `7.30.12` is the current packaged-runtime line. Patch release over v7.30.11 - Desktop-managed email credentials now resolve through the shared credential helper, so Email NEXO migrations and CLI reads use keychain-backed markers before legacy SQLite fallback.
+
+Previously in `7.30.11`: patch release over v7.30.10 - the installer and npm postinstall path now stamp the verified repair baseline too, so the first update from older packaged installs is covered without a manual second run.
 
 Previously in `7.30.10`: patch release over v7.30.9 - packaged `nexo update` now stamps the verified repair baseline after import verification, including same-version maintenance runs.
 

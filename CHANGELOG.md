@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.30.12] - 2026-06-04
+
+### Fixed - Desktop-managed email credentials
+
+- **Email account credentials now resolve through one shared helper.** CLI reads, email config loading, and the migration script all use the same keychain-first marker handling with legacy SQLite fallback.
+- **Desktop-managed Email NEXO setup no longer depends on flat secret files.** The migration path can preserve existing accounts while keeping passwords behind the credential service boundary.
+- **Regression coverage pins the credential marker path.** Email account tests now cover keyring-backed credentials in addition to legacy database reads.
+
 ## [7.30.11] - 2026-06-04
 
 ### Fixed - installer/postinstall repair baseline
