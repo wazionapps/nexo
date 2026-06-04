@@ -985,6 +985,30 @@ def check_db_size():
         size_mb = NEXO_DB.stat().st_size / (1024 * 1024)
         if size_mb > 100:
             finding("WARN", "database", f"nexo.db is {size_mb:.1f} MB — consider cleanup")
+    # Guard against runaway growth of the local context index. Root cause of the
+    # 2026-06-03 disk burst: local-context.db reached 268 GB unseen because the
+    # only DB checked here was nexo.db (learning #824). Surface oversized runtime
+    # DBs early — well before the total-disk WARN@80% / FAIL would trip.
+    try:
+        import paths as paths_module
+
+        local_ctx = paths_module.memory_dir() / "local-context.db"
+        if local_ctx.exists():
+            size_gb = local_ctx.stat().st_size / (1024 ** 3)
+            if size_gb > 60:
+                finding(
+                    "ERROR",
+                    "database",
+                    f"local-context.db is {size_gb:.1f} GB — local index runaway; purge + VACUUM (see roots/exclusions)",
+                )
+            elif size_gb > 25:
+                finding(
+                    "WARN",
+                    "database",
+                    f"local-context.db is {size_gb:.1f} GB — local index growing; review indexed roots/exclusions",
+                )
+    except Exception as exc:
+        finding("WARN", "database", f"Could not check local-context.db size: {exc}")
 
 
 def check_stale_sessions():
