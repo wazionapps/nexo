@@ -947,6 +947,131 @@ def _reconcile_finished_rows(conn, *, hours=24):
     return reconciled
 
 
+def _reconcile_replied_zombies(conn):
+    """Close 'processing'/'pending' emails that were ALREADY replied to before
+    the worker session marked them processed.
+
+    Failure mode (self-critiques 1111/1112, 25-may-2026): a worker session
+    sends the reply through ``nexo-send-reply.py`` but dies (exit -9) BEFORE
+    it flips the BD row to a terminal status. The stuck/zombie recovery then
+    resets the row to 'pending' and the daemon reinjects the MID, producing a
+    DUPLICATE reply to the operator.
+
+    This reconciler consults two durable signals that survive a session crash
+    and, if either says the operator was already answered, closes the row as
+    terminal ('processed') and logs a 'resolution' marker instead of letting it
+    be reinjected:
+      1. ``email_events`` lifecycle markers ('replied'/'resolution'/
+         'action_done') written by ``record_reply_lifecycle()`` at send time.
+      2. ``sent_email_events`` rows whose In-Reply-To / References point back at
+         the inbound ``message_id`` (the durable outbound ledger written by
+         ``record_sent_email()``).
+
+    Matching is strictly per inbound message_id, so a fresh message in an
+    already-answered thread (its own distinct MID) never false-positives.
+    """
+    if not _table_exists(conn, "emails"):
+        return []
+
+    cols = _email_table_columns(conn)
+    has_sent_ledger = _table_exists(conn, "sent_email_events")
+
+    rows = conn.execute(
+        """
+        SELECT message_id, subject, status
+        FROM emails
+        WHERE status IN ('processing', 'pending')
+        """
+    ).fetchall()
+
+    sanitized = []
+    for row in rows:
+        mid = row["message_id"]
+        if not mid:
+            continue
+
+        signal = None
+        sent_reference = None
+
+        # Signal 1 — in-DB lifecycle marker keyed to this inbound MID.
+        ev = conn.execute(
+            """
+            SELECT event, MAX(timestamp) AS ts
+            FROM email_events
+            WHERE email_id = ?
+              AND event IN ('replied', 'resolution', 'action_done')
+            """,
+            (mid,),
+        ).fetchone()
+        if ev and ev["ts"]:
+            signal = f"email_event:{ev['event']}"
+            sent_reference = ev["ts"]
+
+        # Signal 2 — durable outbound ledger pointing back at this MID.
+        if signal is None and has_sent_ledger:
+            sent = conn.execute(
+                """
+                SELECT message_id AS sent_mid, sent_at
+                FROM sent_email_events
+                WHERE in_reply_to = ?
+                   OR references_header LIKE '%' || ? || '%'
+                ORDER BY sent_at DESC
+                LIMIT 1
+                """,
+                (mid, mid),
+            ).fetchone()
+            if sent:
+                signal = "sent_email_events"
+                sent_reference = sent["sent_at"]
+
+        if signal is None:
+            continue
+
+        updates = ["status = 'processed'"]
+        if "completed_at" in cols:
+            updates.append(
+                "completed_at = COALESCE(completed_at, datetime('now','localtime'))"
+            )
+        if "error" in cols:
+            updates.append("error = NULL")
+        conn.execute(
+            f"""
+            UPDATE emails
+            SET {', '.join(updates)}
+            WHERE message_id = ?
+              AND status IN ('processing', 'pending')
+            """,
+            (mid,),
+        )
+        _insert_event(
+            conn,
+            mid,
+            "resolution",
+            "Sanitized: reply already sent before BD close (zombie reconcile)",
+            {
+                "reason": "already_replied_reconciled",
+                "previous_status": row["status"],
+                "signal": signal,
+                "sent_reference": sent_reference,
+            },
+        )
+        log.warning(
+            f"Sanitized already-replied zombie email: status={row['status']} "
+            f"signal={signal} subj={(row['subject'] or '')[:40]} [{mid}] — "
+            f"closed as 'processed', not reinjected"
+        )
+        sanitized.append(
+            {
+                "email_id": mid,
+                "subject": row["subject"],
+                "previous_status": row["status"],
+                "signal": signal,
+            }
+        )
+
+    return sanitized
+
+
 def _recent_debt_flagged(conn, email_id, *, hours=6):
     row = conn.execute(
         """
@@ -1153,6 +1278,9 @@ def scan_debt(db_path=EMAIL_DB_PATH, *, max_items=5):
         return ""
     live_reconciled = _reconcile_processing_rows(conn)
     finished_reconciled = _reconcile_finished_rows(conn)
+    # Close already-replied zombies BEFORE the 2h stuck-recovery below resets
+    # them to 'pending', so the daemon never reinjects a MID we already answered.
+    replied_sanitized = _reconcile_replied_zombies(conn)
 
     items = []
     now_label = datetime.now().isoformat(timespec="seconds")
@@ -1278,14 +1406,17 @@ def scan_debt(db_path=EMAIL_DB_PATH, *, max_items=5):
     conn.commit()
     conn.close()
 
-    if not items:
+    if not items and not replied_sanitized:
         return ""
 
-    lines = ["== PENDING EMAIL DEBT DETECTED ==", "Prioritize closing or clarifying these threads before ignoring them:"]
-    for item in items[:max_items]:
-        lines.append(f"- {item['label']} ({item['detail']})")
-    if len(items) > max_items:
-        lines.append(f"- ... and {len(items) - max_items} more item(s)")
+    lines = []
+    if items:
+        lines.append("== PENDING EMAIL DEBT DETECTED ==")
+        lines.append("Prioritize closing or clarifying these threads before ignoring them:")
+        for item in items[:max_items]:
+            lines.append(f"- {item['label']} ({item['detail']})")
+        if len(items) > max_items:
+            lines.append(f"- ... and {len(items) - max_items} more item(s)")
     if recovered:
         lines.append("")
         lines.append(f"Auto-recovery applied: {len(recovered)} processing-stuck email(s) were reset to pending.")
@@ -1293,6 +1424,12 @@ def scan_debt(db_path=EMAIL_DB_PATH, *, max_items=5):
         lines.append("")
         lines.append(
             f"Reconciled {len(sent_reconciled)} processing email(s) with already-sent reply events; no re-open applied."
+        )
+    if replied_sanitized:
+        lines.append("")
+        lines.append(
+            f"Sanitized {len(replied_sanitized)} already-replied email(s): closed as 'processed' "
+            f"to prevent duplicate operator replies (no reinjection)."
         )
     total_reconciled = len(live_reconciled) + len(finished_reconciled)
     if total_reconciled:
