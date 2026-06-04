@@ -227,3 +227,97 @@ def test_project_priority_signals_handles_optional_schema_columns(monkeypatch, t
 
     assert signals
     assert signals[0]["project"] == "wazion"
+
+
+def _make_session(
+    session_file: str,
+    *,
+    uid: str,
+    parent: str = "",
+    text: str = "work",
+    role: str = "",
+    nickname: str = "",
+    msgs: int = 3,
+    tools: int = 2,
+    client: str = "codex",
+) -> dict:
+    messages = [
+        {"role": "user" if i % 2 == 0 else "assistant", "index": i, "text": f"{text} {i}"}
+        for i in range(msgs)
+    ]
+    return {
+        "session_file": session_file,
+        "client": client,
+        "session_uid": uid,
+        "parent_thread_id": parent,
+        "thread_source": "subagent" if parent else "user",
+        "agent_role": role,
+        "agent_nickname": nickname,
+        "source": {"subagent": {"thread_spawn": {"parent_thread_id": parent}}} if parent else "cli",
+        "message_count": msgs,
+        "tool_use_count": tools,
+        "messages": messages,
+        "tool_uses": [{"tool": "rg", "file": "x"} for _ in range(tools)],
+        "modified": "2026-06-03T00:00:00",
+    }
+
+
+def test_dedupe_folds_subagents_into_parent_thread(monkeypatch, tmp_path):
+    collect = _load_collect_module(monkeypatch, tmp_path)
+
+    parent = _make_session("codex:parent.jsonl", uid="P", text="parent", msgs=4)
+    subs = [
+        _make_session(
+            f"codex:sub-{n}.jsonl", uid=f"S{n}", parent="P", text=f"explorer {n}",
+            role="explorer", nickname=name, msgs=3,
+        )
+        for n, name in enumerate(["Helmholtz", "Hume", "Godel", "Arendt"], 1)
+    ]
+    other = _make_session("codex:other.jsonl", uid="O", text="unrelated", msgs=5)
+    claude = _make_session("claude_code:cc.jsonl", uid="CC", text="claude work", msgs=2, client="claude_code")
+    claude["source"] = "claude_projects"
+
+    kept, report = collect.dedupe_sessions([parent, *subs, other, claude])
+    kept_ids = {s["session_file"] for s in kept}
+
+    # 7 inputs (parent + 4 sub-agents + other + claude) -> 3 real threads.
+    assert len(kept) == 3
+    assert kept_ids == {"codex:parent.jsonl", "codex:other.jsonl", "claude_code:cc.jsonl"}
+
+    rep = next(s for s in kept if s["session_file"] == "codex:parent.jsonl")
+    assert len(rep["folded_subagents"]) == 4
+    assert {f["agent_nickname"] for f in rep["folded_subagents"]} == {"Helmholtz", "Hume", "Godel", "Arendt"}
+    # No content lost: 4 own msgs + 4 fold labels + 4 explorers * 3 msgs each.
+    assert rep["message_count"] == 4 + 4 + 4 * 3
+
+    assert len(report) == 1
+    assert report[0]["root_thread"] == "P"
+    assert report[0]["count"] == 5
+    assert len(report[0]["folded"]) == 4
+
+
+def test_dedupe_groups_orphan_siblings_and_keeps_distinct(monkeypatch, tmp_path):
+    collect = _load_collect_module(monkeypatch, tmp_path)
+
+    # Parent thread "GONE" is not in the batch; its two sibling explorers must
+    # still collapse together rather than counting as two separate threads.
+    s1 = _make_session("codex:s1.jsonl", uid="A", parent="GONE", text="a", nickname="X", role="explorer")
+    s2 = _make_session("codex:s2.jsonl", uid="B", parent="GONE", text="b", nickname="Y", role="explorer")
+    distinct = _make_session("codex:d.jsonl", uid="D", text="d")
+
+    kept, report = collect.dedupe_sessions([s1, s2, distinct])
+    kept_ids = {s["session_file"] for s in kept}
+
+    assert len(kept) == 2
+    assert "codex:d.jsonl" in kept_ids
+    assert len(report) == 1
+    assert report[0]["root_thread"] == "GONE"
+    assert report[0]["count"] == 2
+
+    # Fully distinct top-level sessions are never merged.
+    a = _make_session("codex:x.jsonl", uid="X1", text="x")
+    b = _make_session("claude_code:y.jsonl", uid="Y1", text="y", client="claude_code")
+    kept2, report2 = collect.dedupe_sessions([a, b])
+    assert len(kept2) == 2
+    assert report2 == []
+    assert all(s.get("folded_subagents", []) == [] for s in kept2)

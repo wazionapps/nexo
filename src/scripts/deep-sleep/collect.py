@@ -155,6 +155,117 @@ def collect_transcripts_since(since_iso: str, until_iso: str = "") -> list[dict]
     return _transcripts.collect_transcripts_since(since_iso, until_iso)
 
 
+# ── Fold parallel sub-agent threads into their parent ──────────────────────
+
+
+def _is_subagent(session: dict) -> bool:
+    """True when a session was spawned as a sub-agent thread of another session."""
+    if str(session.get("thread_source", "")).strip().lower() == "subagent":
+        return True
+    if str(session.get("parent_thread_id", "") or "").strip():
+        return True
+    source = session.get("source")
+    return isinstance(source, dict) and "subagent" in source
+
+
+def _root_thread_key(session: dict, by_uid: dict[str, dict]) -> str:
+    """Resolve the top-of-tree thread for a session, following parent links.
+
+    Sub-agent rollouts carry ``parent_thread_id``; we walk up until we reach a
+    session with no parent (the real top-level thread). When the parent is not
+    part of this batch we still group siblings under the parent id so several
+    explorers spawned by the same (absent) parent collapse together. The walk is
+    bounded so a malformed/cyclic chain can never loop forever.
+    """
+    cur = session
+    for _ in range(16):
+        parent = str(cur.get("parent_thread_id", "") or "").strip()
+        if not parent:
+            break
+        nxt = by_uid.get(parent)
+        if nxt is None or nxt is cur:
+            return parent
+        cur = nxt
+    return str(cur.get("session_uid", "") or cur.get("session_file", ""))
+
+
+def dedupe_sessions(sessions: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Fold parallel sub-agent threads into their parent so each real thread is
+    analyzed and counted once instead of once per spawned explorer.
+
+    Sessions are grouped by their root thread (see :func:`_root_thread_key`).
+    Within a group the actual parent session is kept as the canonical thread
+    (falling back to a non-sub-agent member, then the earliest one); the folded
+    sub-agent transcripts are appended to the canonical session — so no content
+    is lost — and their ids/nicknames are recorded on the kept session
+    (``folded_subagents``) and in the returned report.
+
+    Returns ``(kept_sessions, dedupe_report)``. Distinct top-level threads are
+    never merged.
+    """
+    by_uid: dict[str, dict] = {}
+    for session in sessions:
+        uid = str(session.get("session_uid", "") or "").strip()
+        if uid:
+            by_uid.setdefault(uid, session)
+
+    groups: dict[str, list[dict]] = {}
+    order: list[str] = []
+    for session in sessions:
+        key = _root_thread_key(session, by_uid)
+        if key not in groups:
+            groups[key] = []
+            order.append(key)
+        groups[key].append(session)
+
+    kept: list[dict] = []
+    report: list[dict] = []
+    for key in order:
+        members = groups[key]
+        if len(members) == 1:
+            kept.append(members[0])
+            continue
+        representative = next(
+            (m for m in members if str(m.get("session_uid", "") or "") == key), None
+        )
+        if representative is None:
+            representative = next((m for m in members if not _is_subagent(m)), None)
+        if representative is None:
+            representative = min(members, key=lambda m: str(m.get("modified", "")))
+
+        folded = [m for m in members if m is not representative]
+        rep_messages = representative.setdefault("messages", [])
+        rep_tools = representative.setdefault("tool_uses", [])
+        for child in folded:
+            label = child.get("agent_nickname") or child["session_file"]
+            role = child.get("agent_role") or "subagent"
+            rep_messages.append({
+                "role": "user",
+                "index": 0,
+                "text": f"──── folded sub-agent thread: {label} ({role}) — {child['session_file']} ────",
+            })
+            rep_messages.extend(child.get("messages") or [])
+            rep_tools.extend(child.get("tool_uses") or [])
+        representative["message_count"] = len(rep_messages)
+        representative["tool_use_count"] = len(rep_tools)
+        representative["folded_subagents"] = [
+            {
+                "session_file": m["session_file"],
+                "agent_nickname": m.get("agent_nickname", ""),
+                "agent_role": m.get("agent_role", ""),
+            }
+            for m in folded
+        ]
+        kept.append(representative)
+        report.append({
+            "root_thread": key,
+            "kept": representative["session_file"],
+            "folded": [m["session_file"] for m in folded],
+            "count": len(members),
+        })
+    return kept, report
+
+
 # ── Database queries ──────────────────────────────────────────────────────
 
 
@@ -818,6 +929,17 @@ def main():
         sessions = collect_transcripts_since(fallback_since)
     print(f"  Found {len(sessions)} sessions")
 
+    # Fold parallel sub-agent rollouts into their parent thread so a single
+    # logical thread is not analyzed (and counted) once per spawned explorer,
+    # which otherwise inflates the finding count.
+    sessions, dedupe_report = dedupe_sessions(sessions)
+    folded_total = sum(len(item["folded"]) for item in dedupe_report)
+    if folded_total:
+        print(
+            f"  Folded {folded_total} sub-agent session(s) into "
+            f"{len(dedupe_report)} parent thread(s); {len(sessions)} unique threads remain"
+        )
+
     if not sessions:
         print(f"[collect] No new sessions found. Writing minimal context file.")
         output_file = DEEP_SLEEP_DIR / f"{run_id}-context.txt"
@@ -959,9 +1081,12 @@ def main():
                 "source": s.get("source", ""),
                 "session_path": s.get("session_path", ""),
                 "session_txt_file": session_txt_map.get(s["session_file"], ""),
+                "folded_subagents": s.get("folded_subagents", []),
             }
             for s in sessions
         ],
+        "sessions_folded": folded_total,
+        "dedupe_report": dedupe_report,
         "total_messages": sum(s["message_count"] for s in sessions),
         "total_tool_uses": sum(s["tool_use_count"] for s in sessions),
         "followups_active": len(followups),

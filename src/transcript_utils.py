@@ -208,6 +208,9 @@ def extract_claude_session(jsonl_path: Path, *, min_user_messages: int = MIN_USE
         "messages": messages,
         "tool_uses": tool_uses,
         "source": "claude_projects",
+        "session_uid": jsonl_path.stem,
+        "thread_source": "user",
+        "parent_thread_id": "",
     }
 
 
@@ -216,6 +219,7 @@ def extract_codex_session(jsonl_path: Path, *, min_user_messages: int = MIN_USER
     tool_uses = []
     user_msg_count = 0
     session_meta: dict = {}
+    spawn_meta: dict = {}
 
     try:
         with open(jsonl_path, "r") as f:
@@ -232,7 +236,16 @@ def extract_codex_session(jsonl_path: Path, *, min_user_messages: int = MIN_USER
                 data = payload.get("payload", {})
 
                 if item_type == "session_meta" and isinstance(data, dict):
-                    session_meta = data
+                    # A sub-agent rollout embeds two session_meta records: its
+                    # own first, then the parent it forked from. Keep the FIRST
+                    # as this thread's identity (last-wins would mislabel the
+                    # sub-agent as its parent) and remember whichever record
+                    # carries the sub-agent spawn linkage.
+                    if not session_meta:
+                        session_meta = data
+                    src = data.get("source")
+                    if not spawn_meta and isinstance(src, dict) and isinstance(src.get("subagent"), dict):
+                        spawn_meta = data
                     continue
 
                 if item_type == "event_msg" and isinstance(data, dict) and data.get("type") == "user_message":
@@ -280,6 +293,17 @@ def extract_codex_session(jsonl_path: Path, *, min_user_messages: int = MIN_USER
     if user_msg_count < _min_user_messages(min_user_messages):
         return None
 
+    spawn_source = (spawn_meta or session_meta).get("source")
+    thread_spawn: dict = {}
+    if isinstance(spawn_source, dict) and isinstance(spawn_source.get("subagent"), dict):
+        thread_spawn = spawn_source["subagent"].get("thread_spawn") or {}
+    parent_thread_id = str(
+        thread_spawn.get("parent_thread_id", "")
+        or session_meta.get("forked_from_id", "")
+        or ""
+    )
+    is_subagent = bool(thread_spawn) or str(session_meta.get("thread_source", "")).lower() == "subagent"
+
     return {
         "client": "codex",
         "session_file": _session_identifier("codex", jsonl_path.name),
@@ -294,6 +318,10 @@ def extract_codex_session(jsonl_path: Path, *, min_user_messages: int = MIN_USER
         "cwd": session_meta.get("cwd", ""),
         "originator": session_meta.get("originator", ""),
         "session_uid": session_meta.get("id", ""),
+        "thread_source": "subagent" if is_subagent else (session_meta.get("thread_source", "") or "user"),
+        "parent_thread_id": parent_thread_id,
+        "agent_nickname": str(session_meta.get("agent_nickname", "") or thread_spawn.get("agent_nickname", "") or ""),
+        "agent_role": str(session_meta.get("agent_role", "") or thread_spawn.get("agent_role", "") or ""),
     }
 
 
