@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEXO 7.30.12: Desktop-managed email credentials</title>
+    <meta name="description" content="NEXO Brain 7.30.12 centralizes Desktop-managed email credential reads through a keychain-first helper with legacy SQLite fallback.">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-30-12/">
+</head>
+<body>
+    <main>
+        <p><a href="/blog/">Back to blog</a></p>
+        <h1>NEXO 7.30.12: Desktop-managed email credentials</h1>
+        <p><strong>June 4, 2026.</strong> This patch prepares the Brain email layer for the managed Email NEXO assistant-account flow in Desktop.</p>
+        <h2>What changed</h2>
+        <ul>
+            <li>Email account reads, config loading, and migration now share a single credential helper.</li>
+            <li>The helper resolves keychain-backed credential markers first, then falls back to legacy SQLite secrets for older installs.</li>
+            <li>Tests now cover the keyring marker path so Desktop-managed email setup can migrate without exposing flat secret files.</li>
+        </ul>
+        <h2>Why it matters</h2>
+        <p>Email NEXO provisions a real IMAP/SMTP assistant mailbox from the backend, while Brain still has to read and use configured email accounts locally. 7.30.12 keeps that boundary clean: Desktop and migration code can store credentials through the managed credential service, and Brain reads them through one predictable helper.</p>
+        <p><a href="/changelog/#v73012">Read the full v7.30.12 changelog</a></p>
+    </main>
+</body>
+</html>
