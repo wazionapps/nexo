@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.30.11] - 2026-06-04
+
+### Fixed - installer/postinstall repair baseline
+
+- **The first packaged update from older runtimes now stamps the repair baseline from the new package.** `bin/nexo-brain.js` writes `runtime/operations/last-repair-baseline.json` after verified migration, same-version repair, and fresh install layout finalization, so users do not need to run a second update to clear pre-repair history.
+- **npm same-version reinstalls also refresh the baseline.** `bin/postinstall.js` no longer exits with no maintenance when the installed version already matches the package; it stamps the repair baseline before exiting.
+- **Regression coverage pins the installer path.** Tests now assert the installer and postinstall both preserve the baseline contract in addition to the packaged updater and runtime post-sync paths.
+
 ## [7.30.10] - 2026-06-04
 
 ### Fixed - packaged update repair baseline

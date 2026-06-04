@@ -691,6 +691,18 @@ def test_packaged_installer_syncs_runtime_package_metadata():
     )
 
 
+def test_packaged_installer_stamps_repair_baseline_after_verified_repairs():
+    installer = REPO_ROOT / "bin" / "nexo-brain.js"
+    text = installer.read_text(encoding="utf-8")
+
+    assert 'const REPAIR_BASELINE_FILE = "last-repair-baseline.json";' in text
+    assert "function stampRuntimeRepairBaseline(nexoHome = NEXO_HOME, source = \"bin.nexo-brain\")" in text
+    assert 'stampRuntimeRepairBaseline(NEXO_HOME, "bin.nexo-brain.migration")' in text
+    assert 'stampRuntimeRepairBaseline(NEXO_HOME, "bin.nexo-brain.same-version-repair")' in text
+    assert 'stampRuntimeRepairBaseline(NEXO_HOME, "bin.nexo-brain.install")' in text
+    assert 'log("  Repair baseline: updated.");' in text
+
+
 def test_packaged_installer_repairs_same_version_runtime_when_core_current_lags():
     installer = REPO_ROOT / "bin" / "nexo-brain.js"
     text = installer.read_text(encoding="utf-8")

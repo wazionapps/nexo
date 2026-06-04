@@ -949,6 +949,52 @@ function syncRuntimePackageMetadata(repoRoot = path.join(__dirname, ".."), runti
   }
 }
 
+const REPAIR_BASELINE_FILE = "last-repair-baseline.json";
+
+function _runtimeRepairBaselineDir(nexoHome = NEXO_HOME) {
+  const canonical = path.join(nexoHome, "runtime", "operations");
+  const legacy = path.join(nexoHome, "operations");
+  if (!fs.existsSync(path.join(nexoHome, "runtime")) && fs.existsSync(legacy)) {
+    return legacy;
+  }
+  return canonical;
+}
+
+function stampRuntimeRepairBaseline(nexoHome = NEXO_HOME, source = "bin.nexo-brain") {
+  try {
+    const operationsDir = _runtimeRepairBaselineDir(nexoHome);
+    fs.mkdirSync(operationsDir, { recursive: true });
+    const now = new Date();
+    const body = JSON.stringify({
+      last_repair_epoch: now.getTime() / 1000,
+      last_repair_at: now.toISOString().replace(/\.\d{3}Z$/, "Z"),
+      source,
+      reason: "verified runtime repair baseline after installer/postinstall repair",
+    }, null, 2) + "\n";
+    const baselinePath = path.join(operationsDir, REPAIR_BASELINE_FILE);
+    fs.writeFileSync(baselinePath, body);
+
+    const legacyDir = path.join(nexoHome, "operations");
+    const legacyPath = path.join(legacyDir, REPAIR_BASELINE_FILE);
+    if (legacyPath !== baselinePath && fs.existsSync(legacyDir)) {
+      try {
+        fs.writeFileSync(legacyPath, body);
+      } catch (_) {}
+    }
+    return { ok: true, path: baselinePath };
+  } catch (err) {
+    return { ok: false, error: String((err && err.message) || err) };
+  }
+}
+
+function logRepairBaselineStatus(result) {
+  if (result && result.ok) {
+    log("  Repair baseline: updated.");
+  } else {
+    log(`  Repair baseline warning: ${(result && result.error) || "unknown error"}`);
+  }
+}
+
 function resolveRuntimeConfigDir(nexoHome) {
   const canonical = path.join(nexoHome, "personal", "config");
   const legacy = path.join(nexoHome, "config");
@@ -3286,6 +3332,9 @@ async function runSetup() {
           throw new Error(`Runtime activation failed: ${migActivation.error}`);
         }
         log(`  Runtime activation: core/current -> versions/${currentVersion}`);
+        logRepairBaselineStatus(
+          stampRuntimeRepairBaseline(NEXO_HOME, "bin.nexo-brain.migration")
+        );
 
         // Keep the rendered template in-memory for version tracking, but do
         // not drop a loose reference file in NEXO_HOME root.
@@ -3439,6 +3488,9 @@ async function runSetup() {
       if (!syncLayoutFinalize.ok) {
         throw new Error(`F0.6 layout finalization failed: ${syncLayoutFinalize.error}`);
       }
+      logRepairBaselineStatus(
+        stampRuntimeRepairBaseline(NEXO_HOME, "bin.nexo-brain.same-version-repair")
+      );
 
       runDesktopAwareModelWarmup(syncPython, NEXO_HOME, { reason: "repair" });
       logMacPermissionsNotice(NEXO_HOME, syncPython);
@@ -5029,6 +5081,9 @@ See ~/.nexo/ for configuration.
   if (!layoutFinalize.ok) {
     throw new Error(`F0.6 layout finalization failed: ${layoutFinalize.error}`);
   }
+  logRepairBaselineStatus(
+    stampRuntimeRepairBaseline(NEXO_HOME, "bin.nexo-brain.install")
+  );
 
   console.log("");
   const readyMsg = t.ready(operatorName, aliasName);

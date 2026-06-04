@@ -245,3 +245,6 @@ def test_postinstall_runs_warmup_for_fresh_installs_and_honors_skip() -> None:
     assert '"warmup-models", "--postinstall"' in text
     assert "NEXO_SKIP_MODEL_WARMUP" in text
     assert "fresh install" in text
+    assert 'const REPAIR_BASELINE_FILE = "last-repair-baseline.json";' in text
+    assert 'function stampRuntimeRepairBaseline(source = "bin.postinstall")' in text
+    assert 'stampRuntimeRepairBaseline("bin.postinstall.same-version");' in text
