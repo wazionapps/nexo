@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.30.7] - 2026-06-04
+
+### Fixed - release closeout contract for Deep Sleep retention
+
+- **The Deep Sleep retention patch is republished with complete release evidence.** v7.30.7 carries the v7.30.6 runtime behavior plus the required smoke artifact and release contract so final closeout validates GitHub, npm, runtime update, doctor, and protocol evidence end-to-end.
+- **Release surfaces now point at the closeout-clean build.** Public pages, integration metadata, OpenClaw package metadata, and release contracts are aligned to v7.30.7 while preserving the v7.30.6 changelog for traceability.
+- **The publication workflow now treats missing smoke evidence as a release blocker.** This micro-release exists because v7.30.6 reached npm before the version-specific smoke artifact was present in the tagged tree.
+
 ## [7.30.6] - 2026-06-04
 
 ### Fixed - Deep Sleep retention and log rotation

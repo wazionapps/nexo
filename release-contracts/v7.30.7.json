@@ -1,0 +1,92 @@
+{
+  "release_line": "v7.30",
+  "target_version": "7.30.7",
+  "scope_owner": "NEXO",
+  "distribution": {
+    "git_updates_on": "merge_to_main",
+    "packaged_release_on": "tag_publish"
+  },
+  "required_repo_files": [
+    "package.json",
+    "CHANGELOG.md",
+    "README.md",
+    "llms.txt",
+    ".well-known/llms.txt",
+    "index.html",
+    "blog/index.html",
+    "blog/nexo-7-30-7/index.html",
+    "changelog/index.html",
+    "sitemap.xml",
+    "release-contracts/v7.30.7.json",
+    "release-contracts/smoke/v7.30.7.json",
+    "scripts/sync_release_artifacts.py",
+    "scripts/verify_release_readiness.py",
+    "scripts/verify_client_parity.py",
+    ".claude-plugin/plugin.json",
+    "clawhub-skill/SKILL.md",
+    "openclaw-plugin/package.json",
+    "openclaw-plugin/package-lock.json",
+    "openclaw-plugin/src/mcp-bridge.ts",
+    "src/deep_sleep_retention.py",
+    "src/scripts/deep-sleep/retention.py",
+    "src/scripts/nexo-deep-sleep.sh",
+    "src/scripts/nexo-sleep.py",
+    "src/auto_update.py",
+    "tests/test_deep_sleep_retention.py",
+    "tests/test_auto_update_heal_deep_sleep.py"
+  ],
+  "required_website_files": [
+    "index.html",
+    "blog/index.html",
+    "blog/nexo-7-30-7/index.html",
+    "changelog/index.html",
+    "llms.txt",
+    ".well-known/llms.txt",
+    "sitemap.xml"
+  ],
+  "smoke": {
+    "required_groups": [
+      "deep_sleep_retention_policy",
+      "update_heal_retention",
+      "release_surface_contract"
+    ],
+    "max_age_hours": 72
+  },
+  "publication": {
+    "status": "ready",
+    "checklist_complete": true,
+    "blockers": []
+  },
+  "gates": [
+    {
+      "id": "deep_sleep_retention_policy",
+      "title": "Deep Sleep operational artifacts are bounded without deleting unfinished work",
+      "status": "complete",
+      "evidence_required": [
+        "src/deep_sleep_retention.py keeps the newest DB backup families and analyzed contexts while preserving unfinished contexts",
+        "src/scripts/nexo-deep-sleep.sh runs retention at startup and successful exits",
+        "tests/test_deep_sleep_retention.py covers DB backup retention, analyzed-context pruning, unfinished-context preservation, log rotation, and legacy layout"
+      ]
+    },
+    {
+      "id": "update_heal_retention",
+      "title": "Existing installs apply Deep Sleep retention during update",
+      "status": "complete",
+      "evidence_required": [
+        "src/auto_update.py runs prune_deep_sleep_runtime during the Deep Sleep heal path",
+        "src/scripts/nexo-sleep.py runs the same retention policy during daily housekeeping",
+        "tests/test_auto_update_heal_deep_sleep.py verifies update-time cleanup for existing installs"
+      ]
+    },
+    {
+      "id": "release_surface_contract",
+      "title": "Public release surfaces and integration artifacts are aligned for v7.30.7",
+      "status": "complete",
+      "evidence_required": [
+        "README, llms, homepage, blog index, blog post, changelog page, and sitemap reference v7.30.7",
+        "Claude plugin, ClawHub skill, and OpenClaw package metadata reference 7.30.7",
+        "Release smoke and readiness checks validate the v7.30.7 contract before tag publish"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,85 @@
+{
+  "release_line": "v7.30",
+  "version": "7.30.7",
+  "generated_at": "2026-06-04T07:45:25Z",
+  "ok": true,
+  "groups": [
+    {
+      "id": "deep_sleep_retention_policy",
+      "description": "Deep Sleep retention keeps bounded DB backup/context/log state while preserving unfinished contexts",
+      "command": [
+        "python3",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_deep_sleep_retention.py"
+      ],
+      "targets": [
+        "src/deep_sleep_retention.py",
+        "src/scripts/deep-sleep/retention.py",
+        "src/scripts/nexo-deep-sleep.sh",
+        "tests/test_deep_sleep_retention.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 0.56,
+      "stdout": "3 passed in 0.56s. Covers DB backup retention, analyzed-context pruning, unfinished-context preservation, log rotation, and legacy operations/deep-sleep layout.",
+      "stderr": ""
+    },
+    {
+      "id": "update_heal_retention",
+      "description": "Existing installs apply Deep Sleep retention during auto-update heal",
+      "command": [
+        "python3",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_auto_update_heal_deep_sleep.py"
+      ],
+      "targets": [
+        "src/auto_update.py",
+        "src/scripts/nexo-sleep.py",
+        "tests/test_auto_update_heal_deep_sleep.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 0.97,
+      "stdout": "7 passed in 0.97s. Includes update-time Deep Sleep retention cleanup for existing installs.",
+      "stderr": ""
+    },
+    {
+      "id": "release_surface_contract",
+      "description": "Repo release surfaces, integration metadata, changelog, and client parity are synchronized for v7.30.7",
+      "command": [
+        "python3",
+        "scripts/verify_release_readiness.py",
+        "--ci",
+        "--contract",
+        "release-contracts/v7.30.7.json",
+        "--require-contract-complete",
+        "--require-smoke",
+        "--website-root",
+        "/tmp/nexo-gh-pages-missing-7.30.7"
+      ],
+      "targets": [
+        "package.json",
+        "CHANGELOG.md",
+        "README.md",
+        "llms.txt",
+        ".well-known/llms.txt",
+        "index.html",
+        "blog/index.html",
+        "blog/nexo-7-30-7/index.html",
+        "changelog/index.html",
+        "sitemap.xml",
+        "release-contracts/v7.30.7.json",
+        "release-contracts/smoke/v7.30.7.json"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 72.96,
+      "stdout": "234 passed in 72.96s. sync-release-artifacts OK, client-parity docs OK, parity tests OK, changelog OK (7.30.7), repo public surfaces OK, duplicate artifact hygiene OK, website skipped because the local gh-pages worktree is absent, smoke artifact OK, publication state OK, contract OK.",
+      "stderr": ""
+    }
+  ]
+}
