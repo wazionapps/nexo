@@ -55,6 +55,10 @@ ENTITY_DOSSIER_MAX_ASSETS = int(os.environ.get("NEXO_ENTITY_DOSSIER_MAX_ASSETS",
 ENTITY_DOSSIER_MAX_CHUNKS = int(os.environ.get("NEXO_ENTITY_DOSSIER_MAX_CHUNKS", "1200") or "1200")
 ENTITY_DOSSIER_MAX_FACTS = int(os.environ.get("NEXO_ENTITY_DOSSIER_MAX_FACTS", "3000") or "3000")
 ENTITY_FACT_MIN_CONFIDENCE = float(os.environ.get("NEXO_ENTITY_FACT_MIN_CONFIDENCE", "0.45") or "0.45")
+# Hard ceilings to stop the entity_facts cartesian blow-up (chunks × entities × candidates).
+# Without these a single document could emit thousands of facts; 258k assets produced 337M rows / 255 GB.
+ENTITY_FACTS_MAX_PER_ASSET = int(os.environ.get("NEXO_ENTITY_FACTS_MAX_PER_ASSET", "200") or "200")
+ENTITY_FACT_MAX_VALUE_LEN = int(os.environ.get("NEXO_ENTITY_FACT_MAX_VALUE_LEN", "240") or "240")
 ENTITY_FACTS_LLM_ENABLED = os.environ.get("NEXO_ENTITY_FACTS_LLM_ENABLED", "1").strip().lower() not in {"0", "false", "no", "off"}
 LOCAL_PRESENCE_MODEL_SPEC = "qwen3-0.6b-q4-local-presence"
 FOREGROUND_GOVERNOR_ENABLED = os.environ.get("NEXO_LOCAL_INDEX_FOREGROUND_GOVERNOR", "1").strip().lower() not in {"0", "false", "no", "off"}
@@ -3133,28 +3137,42 @@ def _replace_entity_facts(conn, asset_id: str) -> int:
     ).fetchall()
     inserted = 0
     for chunk in chunks:
+        if inserted >= ENTITY_FACTS_MAX_PER_ASSET:
+            break
         text = str(chunk["text"] or "")
         if not text or contains_secret(text):
             continue
         candidates = _fact_candidate_lines(text)
         if not candidates:
             candidates = [("mencion", sentence.strip(), 0.48) for sentence in re.split(r"(?<=[.!?])\s+", text) if sentence.strip()][:4]
+        chunk_id = str(chunk["chunk_id"] or "")
         for entity in entities_by_id.values():
+            if inserted >= ENTITY_FACTS_MAX_PER_ASSET:
+                break
             aliases = sorted(alias for alias in entity["aliases"] if alias)
-            direct = _chunk_mentions_entity(text, aliases)
+            # Only attribute a chunk's facts to entities actually mentioned in THAT chunk.
+            # Previously every candidate was attached to every entity in the asset (a
+            # chunks × entities × candidates cartesian product) which produced 337M junk
+            # rows / 255 GB. Gating on mention is both the size fix and the correctness fix.
+            if not _chunk_mentions_entity(text, aliases):
+                continue
             for predicate, value, base_confidence in candidates:
-                predicate = _strip_entity_aliases_from_predicate(predicate, aliases)
-                confidence = base_confidence if direct else min(base_confidence, 0.56)
-                if confidence < ENTITY_FACT_MIN_CONFIDENCE:
+                if inserted >= ENTITY_FACTS_MAX_PER_ASSET:
+                    break
+                # Drop paragraph-as-fact noise: real facts carry short values.
+                if len(value) > ENTITY_FACT_MAX_VALUE_LEN:
                     continue
+                if base_confidence < ENTITY_FACT_MIN_CONFIDENCE:
+                    continue
+                predicate = _strip_entity_aliases_from_predicate(predicate, aliases)
                 if _insert_entity_fact(
                     conn,
                     entity_id=entity["entity_id"],
                     predicate=predicate,
                     value=value,
                     source_asset_id=asset_id,
-                    source_chunk_id=str(chunk["chunk_id"] or ""),
-                    confidence=confidence,
+                    source_chunk_id=chunk_id,
+                    confidence=base_confidence,
                 ):
                     inserted += 1
     return inserted
