@@ -595,6 +595,25 @@ def test_check_smoke_artifact_rejects_missing_artifact(tmp_path):
         module._check_smoke_artifact("5.3.29", smoke_root=tmp_path / "smoke")
 
 
+def test_runtime_doctor_closeout_blocks_only_installed_product_criticals(tmp_path, monkeypatch):
+    module = _load_module()
+    captured = {}
+
+    def fake_run(cmd, *, env=None):
+        captured["cmd"] = cmd
+        captured["env"] = env
+
+    monkeypatch.setattr(module, "_run", fake_run)
+
+    module._run_runtime_doctor(tmp_path / "nexo-home")
+
+    inline = captured["cmd"][2]
+    assert "category" in inline
+    assert "installed_product" in inline
+    assert "blocking" in inline
+    assert "operator_history" not in inline
+
+
 def test_main_final_closeout_requires_protocol_task_id(tmp_path, monkeypatch):
     module = _load_module()
     nexo_home = tmp_path / "nexo-home"

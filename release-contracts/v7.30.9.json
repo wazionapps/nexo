@@ -1,0 +1,98 @@
+{
+  "release_line": "v7.30",
+  "target_version": "7.30.9",
+  "scope_owner": "NEXO",
+  "distribution": {
+    "git_updates_on": "merge_to_main",
+    "packaged_release_on": "tag_publish"
+  },
+  "required_repo_files": [
+    "package.json",
+    "CHANGELOG.md",
+    "README.md",
+    "llms.txt",
+    ".well-known/llms.txt",
+    "index.html",
+    "blog/index.html",
+    "blog/nexo-7-30-9/index.html",
+    "changelog/index.html",
+    "sitemap.xml",
+    "release-contracts/v7.30.9.json",
+    "release-contracts/smoke/v7.30.9.json",
+    "scripts/sync_release_artifacts.py",
+    "scripts/verify_release_readiness.py",
+    "scripts/verify_client_parity.py",
+    "src/doctor/models.py",
+    "src/doctor/orchestrator.py",
+    "src/doctor/providers/runtime.py",
+    "src/auto_update.py",
+    "tests/test_doctor.py",
+    "tests/test_verify_release_readiness.py",
+    "tests/test_runtime_update_contract.py"
+  ],
+  "required_website_files": [
+    "index.html",
+    "blog/index.html",
+    "blog/nexo-7-30-9/index.html",
+    "changelog/index.html",
+    "llms.txt",
+    ".well-known/llms.txt",
+    "sitemap.xml"
+  ],
+  "smoke": {
+    "required_groups": [
+      "doctor_installation_scope",
+      "post_update_repair_baseline",
+      "release_closeout_gate",
+      "release_surface_contract"
+    ],
+    "max_age_hours": 72
+  },
+  "publication": {
+    "status": "ready",
+    "checklist_complete": true,
+    "blockers": []
+  },
+  "gates": [
+    {
+      "id": "doctor_installation_scope",
+      "title": "Runtime doctor separates installed-product health from operator history",
+      "status": "complete",
+      "evidence_required": [
+        "DoctorCheck carries a conservative category default so unclassified critical checks still block",
+        "run_doctor propagates the diagnostic plane to runtime checks",
+        "installation_live filters operator_history checks while preserving installed-product blockers"
+      ]
+    },
+    {
+      "id": "post_update_repair_baseline",
+      "title": "Post-update self-heal writes a verified repair baseline",
+      "status": "complete",
+      "evidence_required": [
+        "_run_runtime_post_sync writes operations/last-repair-baseline.json only after import verification succeeds",
+        "Codex session history and protocol compliance checks respect the post-update repair baseline",
+        "Historical transcripts and protocol rows are not rewritten or deleted"
+      ]
+    },
+    {
+      "id": "release_closeout_gate",
+      "title": "Release closeout blocks installed-product criticals, not stale local history",
+      "status": "complete",
+      "evidence_required": [
+        "verify_release_readiness.py still runs the runtime doctor during final closeout",
+        "The closeout gate exits non-zero only for critical checks categorized as installed_product",
+        "Focused tests cover the installed-product blocker filter"
+      ]
+    },
+    {
+      "id": "release_surface_contract",
+      "title": "Public release surfaces and integration artifacts are aligned for v7.30.9",
+      "status": "complete",
+      "evidence_required": [
+        "README, llms, homepage, blog index, blog post, changelog page, and sitemap reference v7.30.9",
+        "Claude plugin, ClawHub skill, and OpenClaw package metadata reference 7.30.9",
+        "Release smoke and readiness checks validate the v7.30.9 contract before tag publish"
+      ]
+    }
+  ]
+}

@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.30.8` is the current packaged-runtime line. Patch release over v7.30.7 - Deep Sleep now folds parallel Codex sub-agents into their parent thread and Local Context stops the `entity_facts` cartesian blow-up that created runaway sidecar databases.
+Version `7.30.9` is the current packaged-runtime line. Patch release over v7.30.8 - post-update self-heal now stamps a verified repair baseline, and doctor release gates distinguish current installation failures from historical operator/session drift.
+
+Previously in `7.30.8`: patch release over v7.30.7 - Deep Sleep now folds parallel Codex sub-agents into their parent thread and Local Context stops the `entity_facts` cartesian blow-up that created runaway sidecar databases.
 
 Previously in `7.30.7`: patch release over v7.30.6 - the Deep Sleep retention update is republished with the required release smoke contract so final closeout, npm, GitHub, and runtime verification stay aligned.
 

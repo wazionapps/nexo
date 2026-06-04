@@ -899,7 +899,7 @@ def check_f06_migration_consistency() -> DoctorCheck:
     )
 
 
-def run_boot_checks(fix: bool = False) -> list[DoctorCheck]:
+def run_boot_checks(fix: bool = False, plane: str = "") -> list[DoctorCheck]:
     """Run all boot-tier checks."""
     checks = [
         safe_check(check_db_exists),

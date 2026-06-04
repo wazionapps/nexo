@@ -1789,6 +1789,104 @@ class TestRuntimeChecks:
         assert "PreToolUse enforcement is not installed" in check.summary
         assert any("missing managed PreToolUse hook" in item for item in check.evidence)
 
+    def test_codex_protocol_compliance_installation_mode_ignores_historical_rate(self, nexo_home, monkeypatch):
+        from doctor.providers import runtime
+
+        schedule_file = nexo_home / "config" / "schedule.json"
+        schedule_file.parent.mkdir(parents=True, exist_ok=True)
+        schedule_file.write_text(json.dumps({
+            "interactive_clients": {
+                "claude_code": False,
+                "codex": True,
+                "claude_desktop": False,
+            },
+            "default_terminal_client": "codex",
+            "automation_enabled": False,
+            "automation_backend": "none",
+        }))
+        codex_home = nexo_home / ".codex"
+        codex_home.mkdir(parents=True, exist_ok=True)
+        (codex_home / "hooks.json").write_text(json.dumps({
+            "hooks": {
+                "PreToolUse": [
+                    {
+                        "matcher": "^(Bash|shell_command|exec_command)$",
+                        "hooks": [
+                            {
+                                "type": "command",
+                                "command": f"NEXO_HOME={nexo_home} python3 {nexo_home}/hooks/pre_tool_use.py",
+                                "timeout": 8,
+                            }
+                        ],
+                    }
+                ]
+            }
+        }))
+        monkeypatch.setattr(runtime, "SCHEDULE_FILE", schedule_file)
+        monkeypatch.setattr(runtime.Path, "home", lambda: nexo_home)
+        monkeypatch.setattr(
+            runtime,
+            "_recent_codex_session_parity_status",
+            lambda **_kwargs: pytest.fail("installation mode must not inspect session history"),
+        )
+
+        check = runtime.check_codex_protocol_compliance(include_history=False)
+
+        assert check.status == "healthy"
+        assert check.category == "installed_product"
+        assert "live protocol enforcement is installed" in check.summary
+
+    def test_installation_live_filters_operator_history_checks(self):
+        from doctor.models import DoctorCheck
+        from doctor.providers import runtime
+
+        checks = [
+            DoctorCheck(
+                id="runtime.history",
+                tier="runtime",
+                status="critical",
+                severity="error",
+                summary="historical drift",
+                category="operator_history",
+            ),
+            DoctorCheck(
+                id="runtime.install",
+                tier="runtime",
+                status="healthy",
+                severity="info",
+                summary="installed state",
+            ),
+        ]
+
+        filtered = runtime._filter_runtime_checks_for_plane(checks, plane="installation_live")
+
+        assert [check.id for check in filtered] == ["runtime.install"]
+
+    def test_codex_session_history_respects_post_update_repair_baseline(self, nexo_home, monkeypatch):
+        from doctor.providers import runtime
+
+        baseline_epoch = time.time()
+        operations_dir = nexo_home / "operations"
+        operations_dir.mkdir(parents=True, exist_ok=True)
+        (operations_dir / "last-repair-baseline.json").write_text(json.dumps({
+            "last_repair_epoch": baseline_epoch,
+            "last_repair_at": datetime.datetime.utcfromtimestamp(baseline_epoch).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        }))
+        old_file = nexo_home / ".codex" / "sessions" / "2026" / "04" / "05" / "missing-startup.jsonl"
+        old_file.parent.mkdir(parents=True, exist_ok=True)
+        old_file.write_text(
+            json.dumps({"type": "session_meta", "payload": {"originator": "codex_cli_rs"}}) + "\n"
+            + json.dumps({"type": "event_msg", "payload": {"type": "user_message", "message": "hola"}}) + "\n"
+        )
+        os.utime(old_file, (baseline_epoch - 60, baseline_epoch - 60))
+
+        monkeypatch.setattr(runtime.Path, "home", lambda: nexo_home)
+
+        audit = runtime._recent_codex_session_parity_status(days=1)
+
+        assert audit["files"] == 0
+        assert audit["history_baseline_epoch"] == baseline_epoch
+
     def test_codex_conditioned_file_discipline_warns_on_read_without_protocol(self, nexo_home, monkeypatch):
         from doctor.providers import runtime
 
@@ -3294,7 +3392,7 @@ class TestOrchestrator:
     def test_tier_crash_is_caught_and_reported(self, nexo_home, monkeypatch):
         from doctor import orchestrator
 
-        def exploding_runner(fix=False):
+        def exploding_runner(fix=False, plane=""):
             raise RuntimeError("provider exploded")
 
         monkeypatch.setitem(orchestrator._TIER_RUNNERS, "boot", exploding_runner)
@@ -3309,7 +3407,7 @@ class TestOrchestrator:
     def test_partial_tier_crash_preserves_other_tiers(self, nexo_home, monkeypatch):
         from doctor import orchestrator
 
-        def exploding_runtime(fix=False):
+        def exploding_runtime(fix=False, plane=""):
             raise ValueError("runtime blew up")
 
         monkeypatch.setitem(orchestrator._TIER_RUNNERS, "runtime", exploding_runtime)

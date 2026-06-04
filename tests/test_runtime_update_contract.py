@@ -91,6 +91,8 @@ def test_runtime_post_sync_keeps_client_sync_and_classifier_bootstrap_enabled(mo
     assert "pip-deps" in actions
     assert "client-sync" in actions
     assert "classifier-install" in actions
+    assert "runtime-repair-baseline" in actions
+    assert (tmp_path / "operations" / "last-repair-baseline.json").is_file()
     assert classifier_calls == ["classifier"]
     assert len(sync_calls) == 1
     assert sync_calls[0]["nexo_home"] == tmp_path

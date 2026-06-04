@@ -859,8 +859,9 @@ def _run_runtime_doctor(nexo_home: Path) -> None:
                 "report = run_doctor(tier='runtime', fix=False, plane='installation_live'); "
                 "import sys; "
                 "bad = [c for c in report.checks if c.status in ('degraded','critical')]; "
-                "print(f'runtime doctor: {report.overall_status} ({len(bad)} issues)'); "
-                "sys.exit(1 if any(c.status == 'critical' for c in bad) else 0)"
+                "blocking = [c for c in report.checks if c.status == 'critical' and getattr(c, 'category', 'installed_product') == 'installed_product']; "
+                "print(f'runtime doctor: {report.overall_status} ({len(bad)} issues, {len(blocking)} blocking)'); "
+                "sys.exit(1 if blocking else 0)"
             ),
         ],
         env=env,

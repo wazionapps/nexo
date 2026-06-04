@@ -357,7 +357,7 @@ def check_learning_count() -> DoctorCheck:
         )
 
 
-def run_deep_checks(fix: bool = False) -> list[DoctorCheck]:
+def run_deep_checks(fix: bool = False, plane: str = "") -> list[DoctorCheck]:
     """Run all deep-tier checks. Read-only."""
     return [
         safe_check(check_self_audit_summary),

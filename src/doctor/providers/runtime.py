@@ -64,6 +64,47 @@ CORE_AUTOMATION_CALLERS_BY_CRON = {
     "morning-agent": ("morning_agent",),
     "sleep": ("sleep/nightly",),
 }
+REPAIR_BASELINE_FILE = "last-repair-baseline.json"
+
+
+def _post_update_repair_baseline_epoch() -> float:
+    path = paths.operations_dir() / REPAIR_BASELINE_FILE
+    if not path.is_file():
+        return 0.0
+    try:
+        payload = json.loads(path.read_text())
+    except Exception:
+        return 0.0
+    if not isinstance(payload, dict):
+        return 0.0
+    for key in ("last_repair_epoch", "timestamp_epoch"):
+        try:
+            value = float(payload.get(key) or 0)
+        except Exception:
+            value = 0.0
+        if value > 0:
+            return value
+    raw_iso = str(payload.get("last_repair_at") or payload.get("timestamp") or "").strip()
+    if not raw_iso:
+        return 0.0
+    try:
+        parsed = dt.datetime.fromisoformat(raw_iso.replace("Z", "+00:00"))
+    except Exception:
+        return 0.0
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=dt.timezone.utc)
+    return parsed.timestamp()
+
+
+def _history_cutoff_epoch(*, days: int) -> float:
+    return max(time.time() - (days * 86400), _post_update_repair_baseline_epoch())
+
+
+def _history_baseline_sqlite() -> str:
+    epoch = _post_update_repair_baseline_epoch()
+    if epoch <= 0:
+        return ""
+    return dt.datetime.fromtimestamp(epoch, tz=dt.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def _evolution_objective_payload() -> dict:
@@ -271,7 +312,7 @@ def _recent_codex_session_parity_status(*, days: int = 7, max_files: int = 24) -
         Path.home() / ".codex" / "sessions",
         Path.home() / ".codex" / "archived_sessions",
     ]
-    cutoff = time.time() - (days * 86400)
+    cutoff = _history_cutoff_epoch(days=days)
     candidates: list[tuple[float, Path]] = []
     for root in roots:
         if not root.exists():
@@ -288,6 +329,7 @@ def _recent_codex_session_parity_status(*, days: int = 7, max_files: int = 24) -
 
     status = {
         "files": len(files),
+        "history_baseline_epoch": _post_update_repair_baseline_epoch(),
         "bootstrap_sessions": 0,
         "startup_sessions": 0,
         "heartbeat_sessions": 0,
@@ -578,7 +620,7 @@ def _recent_codex_conditioned_file_discipline_status(*, days: int = 7, max_files
         Path.home() / ".codex" / "sessions",
         Path.home() / ".codex" / "archived_sessions",
     ]
-    cutoff = time.time() - (days * 86400)
+    cutoff = _history_cutoff_epoch(days=days)
     candidates: list[tuple[float, Path]] = []
     for root in roots:
         if not root.exists():
@@ -593,6 +635,7 @@ def _recent_codex_conditioned_file_discipline_status(*, days: int = 7, max_files
     candidates.sort(key=lambda item: item[0], reverse=True)
     files = candidates[:max_files]
     status["files"] = len(files)
+    status["history_baseline_epoch"] = _post_update_repair_baseline_epoch()
 
     for file_mtime, path in files:
         cwd = ""
@@ -2312,6 +2355,7 @@ def check_codex_session_parity() -> DoctorCheck:
             status="healthy",
             severity="info",
             summary="Codex session parity check skipped (Codex not selected)",
+            category="operator_history",
         )
 
     audit = _recent_codex_session_parity_status()
@@ -2329,6 +2373,7 @@ def check_codex_session_parity() -> DoctorCheck:
                 "Codex is selected, but there are no recent durable Codex sessions to inspect. "
                 "NEXO cannot prove that manual Codex sessions are entering the shared-brain startup flow."
             ),
+            category="operator_history",
         )
 
     evidence = [
@@ -2378,6 +2423,7 @@ def check_codex_session_parity() -> DoctorCheck:
             "Codex is selected, but recent durable Codex sessions are not consistently showing NEXO bootstrap markers or `nexo_startup`. "
             "Manual Codex sessions may still be starting too plain."
         ) if status != "healthy" else "",
+        category="operator_history",
     )
 
 
@@ -2400,6 +2446,7 @@ def check_bootstrap_reached_startup() -> DoctorCheck:
             status="healthy",
             severity="info",
             summary="Startup reachability skipped (Codex not selected)",
+            category="operator_history",
         )
 
     audit = _recent_codex_session_parity_status(days=1, max_files=48)
@@ -2425,6 +2472,7 @@ def check_bootstrap_reached_startup() -> DoctorCheck:
             evidence=evidence,
             repair_plan=["Start Codex through the managed NEXO launcher and re-run doctor"],
             escalation_prompt="NEXO cannot prove recent Codex sessions reached startup.",
+            category="operator_history",
         )
 
     status = "healthy" if missing == 0 else "critical"
@@ -2447,6 +2495,7 @@ def check_bootstrap_reached_startup() -> DoctorCheck:
         escalation_prompt=(
             "Codex sessions are starting without the shared-brain startup step, so memory/guard continuity is not guaranteed."
         ) if status != "healthy" else "",
+        category="operator_history",
     )
 
 
@@ -2468,6 +2517,7 @@ def check_codex_conditioned_file_discipline() -> DoctorCheck:
             status="healthy",
             severity="info",
             summary="Codex conditioned-file discipline check skipped (Codex not selected)",
+            category="operator_history",
         )
 
     audit = _recent_codex_conditioned_file_discipline_status()
@@ -2491,6 +2541,7 @@ def check_codex_conditioned_file_discipline() -> DoctorCheck:
             severity="info",
             summary="No active conditioned-file learnings defined for Codex session audits",
             evidence=evidence,
+            category="operator_history",
         )
 
     if audit["files"] == 0 or audit["conditioned_sessions"] == 0:
@@ -2501,6 +2552,7 @@ def check_codex_conditioned_file_discipline() -> DoctorCheck:
             severity="info",
             summary="No conditioned-file touches seen in recent Codex sessions",
             evidence=evidence + [f"conditioned touches: {audit['conditioned_touches']}"],
+            category="operator_history",
         )
 
     evidence.extend([
@@ -2595,10 +2647,11 @@ def check_codex_conditioned_file_discipline() -> DoctorCheck:
             "Codex sessions are touching conditioned files without the expected protocol/guard sequence. "
             "Until this is clean, parity with Claude hooks is still incomplete."
         ) if status != "healthy" else "",
+        category="operator_history",
     )
 
 
-def check_codex_protocol_compliance() -> DoctorCheck:
+def check_codex_protocol_compliance(include_history: bool = True) -> DoctorCheck:
     try:
         schedule = _load_json(SCHEDULE_FILE) if SCHEDULE_FILE.is_file() else {}
     except Exception:
@@ -2646,6 +2699,16 @@ def check_codex_protocol_compliance() -> DoctorCheck:
             ),
         )
 
+    if not include_history:
+        return DoctorCheck(
+            id="installation_live.codex_protocol_compliance",
+            tier="runtime",
+            status="healthy",
+            severity="info",
+            summary="Codex live protocol enforcement is installed",
+            evidence=[f"codex PreToolUse hook: managed ({hooks.get('pretool_matcher') or '*'})"],
+        )
+
     startup = _recent_codex_session_parity_status(days=1)
     conditioned = _recent_codex_conditioned_file_discipline_status(days=1)
     sessions = int(startup.get("files") or conditioned.get("files") or 0)
@@ -2659,6 +2722,7 @@ def check_codex_protocol_compliance() -> DoctorCheck:
             repair_plan=[
                 "Run Codex through the managed NEXO bootstrap so doctor can verify live protocol compliance",
             ],
+            category="operator_history",
         )
 
     startup_violation_sessions = 0
@@ -2709,6 +2773,7 @@ def check_codex_protocol_compliance() -> DoctorCheck:
         escalation_prompt=(
             "Codex CLI parity is not clean: recent sessions miss startup/heartbeat or bypass conditioned-file guard discipline."
         ) if status != "healthy" else "",
+        category="operator_history",
     )
 
 
@@ -2898,11 +2963,14 @@ def check_protocol_compliance() -> DoctorCheck:
                 debt_rows = None
                 if {"protocol_tasks", "protocol_debt"}.issubset(tables):
                     window = "-7 days"
+                    history_floor = _history_baseline_sqlite()
+                    task_floor_clause = " AND opened_at >= ?" if history_floor else ""
+                    task_params = (window, history_floor) if history_floor else (window,)
                     tasks = conn.execute(
-                        """SELECT * FROM protocol_tasks
-                           WHERE opened_at >= datetime('now', ?)
+                        f"""SELECT * FROM protocol_tasks
+                           WHERE opened_at >= datetime('now', ?){task_floor_clause}
                            ORDER BY opened_at DESC""",
-                        (window,),
+                        task_params,
                     ).fetchall()
                     protocol_debt_cols = {
                         row["name"] for row in conn.execute("PRAGMA table_info(protocol_debt)").fetchall()
@@ -2946,6 +3014,8 @@ def check_protocol_compliance() -> DoctorCheck:
                         task_status_expr = "'' AS task_status"
                         if "status" in protocol_task_cols:
                             task_status_expr = "pt.status AS task_status"
+                        debt_floor_clause = " AND pd.created_at >= ?" if history_floor else ""
+                        debt_params = (window, history_floor) if history_floor else (window,)
                         open_debts = conn.execute(
                             f"""SELECT
                                     pd.severity,
@@ -2956,9 +3026,9 @@ def check_protocol_compliance() -> DoctorCheck:
                                     {task_status_expr}
                                 FROM protocol_debt pd
                                 LEFT JOIN protocol_tasks pt ON pt.task_id = pd.task_id
-                                WHERE pd.status = 'open' AND pd.created_at >= datetime('now', ?)
+                                WHERE pd.status = 'open' AND pd.created_at >= datetime('now', ?){debt_floor_clause}
                                 ORDER BY pd.created_at DESC""",
-                            (window,),
+                            debt_params,
                         ).fetchall()
                         debt_counter: dict[tuple[str, str], int] = {}
                         for row in open_debts:
@@ -2987,12 +3057,13 @@ def check_protocol_compliance() -> DoctorCheck:
                     else:
                         debt_rows = [
                             dict(row) for row in conn.execute(
-                                """SELECT severity, debt_type, COUNT(*) AS total
+                                f"""SELECT severity, debt_type, COUNT(*) AS total
                                    FROM protocol_debt
                                    WHERE status = 'open' AND created_at >= datetime('now', ?)
+                                   {"AND created_at >= ?" if history_floor else ""}
                                    GROUP BY severity, debt_type
                                    ORDER BY total DESC, debt_type ASC""",
-                                (window,),
+                                (window, history_floor) if history_floor else (window,),
                             ).fetchall()
                         ]
                     has_cortex_evaluations = bool(
@@ -3010,15 +3081,32 @@ def check_protocol_compliance() -> DoctorCheck:
                             ).fetchall()
                         }
                         first_eval_row = conn.execute(
-                            """SELECT MIN(created_at) AS first_eval
+                            f"""SELECT MIN(created_at) AS first_eval
                                FROM cortex_evaluations
-                               WHERE created_at >= datetime('now', ?)""",
-                            (window,),
+                               WHERE created_at >= datetime('now', ?)
+                               {"AND created_at >= ?" if history_floor else ""}""",
+                            (window, history_floor) if history_floor else (window,),
                         ).fetchone()
                         if first_eval_row and first_eval_row["first_eval"]:
                             first_cortex_eval_at = str(first_eval_row["first_eval"])
             finally:
                 conn.close()
+
+            history_floor = _history_baseline_sqlite()
+            if tasks is not None and debt_rows is not None and not tasks and not debt_rows and history_floor:
+                return DoctorCheck(
+                    id="runtime.protocol_compliance",
+                    tier="runtime",
+                    status="healthy",
+                    severity="info",
+                    summary="No protocol drift after the last verified runtime repair",
+                    evidence=[
+                        "live protocol window: 7d",
+                        f"post-update repair baseline: {history_floor}",
+                        "no protocol tasks or open debt after repair baseline",
+                    ],
+                    category="operator_history",
+                )
 
             if tasks is not None and debt_rows is not None and (tasks or debt_rows):
                     closed_tasks = [row for row in tasks if row["status"] != "open"]
@@ -3122,6 +3210,7 @@ def check_protocol_compliance() -> DoctorCheck:
                         escalation_prompt=(
                             "Task discipline is drifting in live runtime data. NEXO is still skipping verification, change logging, or correction capture."
                         ) if status != "healthy" else "",
+                        category="operator_history",
                     )
     except Exception:
         pass
@@ -3140,6 +3229,7 @@ def check_protocol_compliance() -> DoctorCheck:
             escalation_prompt=(
                 "NEXO cannot verify heartbeat / guard_check / change_log compliance because the latest weekly Deep Sleep summary is missing."
             ),
+            category="operator_history",
         )
 
     protocol = summary.get("protocol_summary") or {}
@@ -3197,6 +3287,7 @@ def check_protocol_compliance() -> DoctorCheck:
         escalation_prompt=(
             "Heartbeat / guard_check / change_log discipline is drifting. NEXO is at risk of repeating known errors and hiding change history."
         ) if status != "healthy" else "",
+        category="operator_history",
     )
 
 
@@ -3979,9 +4070,15 @@ def check_memory_fabric_health(fix: bool = False) -> DoctorCheck:
         )
 
 
-def run_runtime_checks(fix: bool = False) -> list[DoctorCheck]:
+def _filter_runtime_checks_for_plane(checks: list[DoctorCheck], plane: str = "") -> list[DoctorCheck]:
+    if plane == "installation_live":
+        return [check for check in checks if check.category != "operator_history"]
+    return checks
+
+
+def run_runtime_checks(fix: bool = False, plane: str = "") -> list[DoctorCheck]:
     """Run all runtime-tier checks. Read-only by default."""
-    return [
+    checks = [
         safe_check(check_immune_status),
         safe_check(check_watchdog_status),
         safe_check(check_runner_health_status),
@@ -3992,7 +4089,7 @@ def run_runtime_checks(fix: bool = False) -> list[DoctorCheck]:
         safe_check(check_codex_session_parity),
         safe_check(check_bootstrap_reached_startup),
         safe_check(check_codex_conditioned_file_discipline),
-        safe_check(check_codex_protocol_compliance),
+        safe_check(check_codex_protocol_compliance, include_history=plane != "installation_live"),
         safe_check(check_claude_desktop_shared_brain),
         safe_check(check_transcript_source_parity),
         safe_check(check_client_assumption_regressions),
@@ -4009,3 +4106,4 @@ def run_runtime_checks(fix: bool = False) -> list[DoctorCheck]:
         safe_check(check_personal_script_registry, fix=fix),
         safe_check(check_skill_health, fix=fix),
     ]
+    return _filter_runtime_checks_for_plane(checks, plane=plane)

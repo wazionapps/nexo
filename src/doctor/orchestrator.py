@@ -46,7 +46,7 @@ def run_doctor(tier: str = "boot", fix: bool = False, plane: str = "") -> Doctor
         report.duration_ms = int((time.monotonic() - start) * 1000)
         return report
 
-    _, preflight = diagnostic_plane_preflight(plane)
+    normalized_plane, preflight = diagnostic_plane_preflight(plane)
     if preflight is not None:
         report.add(preflight)
         report.compute_status()
@@ -60,7 +60,7 @@ def run_doctor(tier: str = "boot", fix: bool = False, plane: str = "") -> Doctor
         if not runner:
             continue
         try:
-            checks = runner(fix=fix)
+            checks = runner(fix=fix, plane=normalized_plane)
             for check in checks:
                 report.add(check)
         except Exception as exc:

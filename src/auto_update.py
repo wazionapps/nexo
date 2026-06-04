@@ -70,6 +70,7 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 SRC_DIR = Path(__file__).resolve().parent
 NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(SRC_DIR)))
 REPO_DIR = SRC_DIR.parent
+REPAIR_BASELINE_FILE = "last-repair-baseline.json"
 
 
 def _resolve_repo_dir() -> Path:
@@ -89,6 +90,22 @@ def _resolve_repo_dir() -> Path:
 
 
 _RESOLVED_REPO_DIR = _resolve_repo_dir()
+
+
+def _stamp_runtime_repair_baseline(dest: Path) -> str:
+    operations_dir = dest / "operations"
+    operations_dir.mkdir(parents=True, exist_ok=True)
+    now = time.time()
+    payload = {
+        "last_repair_epoch": now,
+        "last_repair_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now)),
+        "source": "auto_update._run_runtime_post_sync",
+        "reason": "verified runtime repair baseline after update/post-sync",
+    }
+    (operations_dir / REPAIR_BASELINE_FILE).write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
+    )
+    return "runtime-repair-baseline"
 
 LAST_CHECK_FILE = DATA_DIR / "auto_update_last_check.json"
 MIGRATION_VERSION_FILE = DATA_DIR / "migration_version"
@@ -5210,6 +5227,10 @@ def _run_runtime_post_sync(dest: Path = NEXO_HOME, progress_fn=None) -> tuple[bo
     if verify.returncode != 0:
         return False, [verify.stderr.strip() or verify.stdout.strip() or "import verify failed"]
     actions.append("verify")
+    try:
+        actions.append(_stamp_runtime_repair_baseline(dest))
+    except Exception as exc:
+        actions.append(f"runtime-repair-baseline-warning:{exc.__class__.__name__}")
     return True, actions
 
 

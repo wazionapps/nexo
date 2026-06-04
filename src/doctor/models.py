@@ -17,6 +17,7 @@ class DoctorCheck:
     repair_plan: list[str] = field(default_factory=list)
     escalation_prompt: str = ""
     fixed: bool = False
+    category: str = "installed_product"  # installed_product, operator_history
 
 
 @dataclass

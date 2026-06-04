@@ -1,5 +1,14 @@
 # Changelog
 
+## [7.30.9] - 2026-06-04
+
+### Fixed - post-update repair baseline and release-safe doctor gates
+
+- **Post-update self-heal now stamps a verified repair baseline.** After a successful runtime post-sync and import verification, Brain writes `operations/last-repair-baseline.json` so historical session/task checks judge the repaired install from that point forward without rewriting old transcripts or protocol records.
+- **Doctor checks now distinguish installed-product failures from operator history.** Runtime checks carry a conservative category, and `installation_live` filters out historical Codex/session/process drift while preserving real installation blockers such as missing hooks, invalid config, release artifact drift, LaunchAgent issues, and crashes.
+- **Release closeout no longer fails on stale local history.** The final release gate still runs the runtime doctor, but it blocks only current installed-product criticals; pre-repair Codex/session drift remains visible in normal diagnostics without invalidating a healthy release.
+- **Regression coverage pins the boundary.** Tests cover installation-mode Codex enforcement, historical check filtering, post-update baseline behavior, runtime post-sync baseline writing, and the final closeout gate's installed-product blocker filter.
+
 ## [7.30.8] - 2026-06-04
 
 ### Fixed - Deep Sleep session counts and local context fact extraction
