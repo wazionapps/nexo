@@ -329,6 +329,20 @@
       "run_on_wake": true
     },
     {
+      "id": "memory-observation-watchdog",
+      "script": "scripts/nexo-memory-observation-watchdog.py",
+      "interval_seconds": 900,
+      "description": "Keep Memory Observations v2 queue convergent and repair stale/missed observation rows",
+      "core": true,
+      "optional": "automation",
+      "recovery_policy": "catchup",
+      "idempotent": true,
+      "max_catchup_age": 7200,
+      "stuck_after_seconds": 600,
+      "run_on_boot": true,
+      "run_on_wake": true
+    },
+    {
       "id": "email-monitor",
       "script": "scripts/nexo-email-monitor.py",
       "interval_seconds": 60,

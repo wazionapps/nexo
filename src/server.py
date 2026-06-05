@@ -120,7 +120,13 @@ from plugins.workflow import (
 )
 from plugin_loader import load_all_plugins, load_plugin, remove_plugin, list_plugins
 from tools_guardian import handle_guardian_rule_override
-from tools_api_call import handle_api_call, handle_create_app_token
+from tools_api_call import (
+    handle_api_call,
+    handle_create_app_token,
+    handle_support_ticket_create,
+    handle_support_ticket_list,
+    handle_support_ticket_read,
+)
 from runtime_versioning import (
     RestartRequiredMiddleware,
     build_mcp_status,
@@ -2771,6 +2777,28 @@ def nexo_api_call(
     Returns formatted text with HTTP status + parsed JSON body. Bearer is never echoed.
     """
     return handle_api_call(method, path, body_json, idempotency_key, headers_json, base_url)
+
+
+@mcp.tool
+def nexo_support_ticket_list(status: str = "", limit: int = 20) -> str:
+    """List real support tickets from the NEXO backend for the signed-in Desktop user.
+
+    Use this when the user asks about support tickets or bug reports. Do not
+    substitute a private followup for an actual product support ticket.
+    """
+    return handle_support_ticket_list(status, limit)
+
+
+@mcp.tool
+def nexo_support_ticket_read(ticket_id: str) -> str:
+    """Read one real support ticket from the NEXO backend by id."""
+    return handle_support_ticket_read(ticket_id)
+
+
+@mcp.tool
+def nexo_support_ticket_create(subject: str, message: str, priority: str = "normal") -> str:
+    """Create a real NEXO support ticket for a product bug/setup issue."""
+    return handle_support_ticket_create(subject, message, priority)
 
 
 @mcp.tool

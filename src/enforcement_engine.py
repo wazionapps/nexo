@@ -475,6 +475,7 @@ class HeadlessEnforcer:
         # per task cycle. Cleared on skill_match OR task_close.
         self._multi_step_event_fired: bool = False
         self._post_close_cooldown_until: float = 0.0
+        self._last_task_close_user_message_count: int = -1
         # A headless nexo_stop is terminal for the automation cycle. Once
         # seen, periodic/conditional reminders stay suppressed so cron
         # runners can reach TURN_END instead of reopening the task loop.
@@ -2287,6 +2288,7 @@ class HeadlessEnforcer:
         # v7.6 task_close observed → rearm conditional for the companion
         # open tool so the next task cycle re-opens the obligation.
         if name == "nexo_task_close":
+            self._last_task_close_user_message_count = int(self.user_message_count or 0)
             self.reset_task_cycle("nexo_task_open")
             self._start_post_close_cooldown()
             self._resolve_r17_commitments_from_task_close(tool_input)
@@ -2522,6 +2524,17 @@ class HeadlessEnforcer:
         the recent tool mix shows edit/execute/delegate signals (Edit,
         Write, Bash with mutation commands, Task dispatch).
         """
+        if getattr(self, "_session_stopped", False):
+            return
+        if self._post_close_cooldown_active():
+            return
+        # A closed task cycle must not re-open itself on idle/background
+        # ticks. Rearm only after a new visible user message advances the
+        # turn counter.
+        last_close_raw = getattr(self, "_last_task_close_user_message_count", -1)
+        last_close_count = int(last_close_raw) if last_close_raw is not None else -1
+        if last_close_count >= 0 and int(self.user_message_count or 0) <= last_close_count:
+            return
         for entry in self._conditional:
             tool = entry["tool"]
             rule = entry.get("rule", {})

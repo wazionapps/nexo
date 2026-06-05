@@ -341,6 +341,45 @@
       },
       "triggers_after": []
     },
+    "nexo_support_ticket_create": {
+      "description": "Create a real authenticated NEXO support ticket",
+      "category": "support",
+      "source": "server",
+      "requires": [],
+      "provides": ["support_ticket"],
+      "internal_calls": ["nexo_api_call"],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_support_ticket_list": {
+      "description": "List authenticated NEXO support tickets",
+      "category": "support",
+      "source": "server",
+      "requires": [],
+      "provides": ["support_ticket_list"],
+      "internal_calls": ["nexo_api_call"],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_support_ticket_read": {
+      "description": "Read one authenticated NEXO support ticket by ID",
+      "category": "support",
+      "source": "server",
+      "requires": [],
+      "provides": ["support_ticket"],
+      "internal_calls": ["nexo_api_call"],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
     "nexo_artifact_create": {
       "description": "Register artifact (service, dashboard, script)",
       "category": "artifact",

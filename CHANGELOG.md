@@ -1,5 +1,15 @@
 # Changelog
 
+## [7.30.14] - 2026-06-05
+
+### Fixed - support ticket and capability discoverability
+
+- **Agents now have explicit support-ticket tools.** Brain exposes list/read/create wrappers over the backend support ticket API so real customer incidents are opened as tickets instead of being hidden as internal followups.
+- **The product catalog now advertises managed capabilities.** System catalog discovery includes support tickets, provider proxy platforms/models, NEXO Credits Cloud/Edge, managed agent email, and protocol cards so agents can find the right backend surface before improvising.
+- **Task enforcement no longer reopens work immediately after close.** After `nexo_task_close`, conditional task-open reminders wait for a new visible user message before rearming, preventing background tool activity from creating duplicate task loops.
+- **Internal self-audit followups stay internal.** Daily audit and retroactive learning followups mark operational opportunities/retrospectives as agent-owned internal items, avoiding confusion with user-facing support tickets.
+- **Memory observation watchdog is scheduled.** A lightweight watchdog monitors memory-observation drift so missing observation capture is surfaced by the runtime instead of silently degrading.
+
 ## [7.30.13] - 2026-06-05
 
 ### Fixed - Email NEXO full-message handling

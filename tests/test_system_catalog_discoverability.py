@@ -65,6 +65,10 @@ def test_search_discovers_core_intents():
         ("nexo_startup", "nexo_startup"),
         ("nexo_checkpoint_save", "nexo_checkpoint_save"),
         ("nexo_status", "nexo_status"),
+        ("support tickets api", "nexo_support_tickets_api"),
+        ("provider proxy models video", "nexo_provider_models"),
+        ("nexo credits cloud projects", "nexo_credits_cloud"),
+        ("email nexo managed mailbox", "nexo_email_managed_agent_mailbox"),
     ]
     for query, wanted in probes:
         hits = search_system_catalog(query, limit=25)

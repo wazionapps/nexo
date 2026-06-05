@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEXO 7.30.14: support tickets and capability discovery</title>
+    <meta name="description" content="NEXO Brain 7.30.14 adds support-ticket tools, provider capability discovery, task-close rearm protection, and a memory-observation watchdog.">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-30-14/">
+</head>
+<body>
+    <main>
+        <p><a href="/blog/">Back to blog</a></p>
+        <h1>NEXO 7.30.14: support tickets and capability discovery</h1>
+        <p><strong>June 5, 2026.</strong> This patch tightens the agent-facing product contract used by Desktop-managed assistants.</p>
+        <h2>What changed</h2>
+        <ul>
+            <li>Agents now have explicit tools to list, read, and create real authenticated support tickets.</li>
+            <li>The system catalog advertises support tickets, provider proxy platforms/models, NEXO Credits Cloud/Edge, managed Email NEXO, and protocol cards.</li>
+            <li>After a task is closed, task-open reminders wait for a new visible user message instead of rearming from background activity.</li>
+            <li>Internal self-audit followups are marked as agent-owned internal items, and memory-observation drift is watched by a scheduled runtime job.</li>
+        </ul>
+        <h2>Why it matters</h2>
+        <p>Desktop agents need to route real customer incidents to support tickets, discover the backend capabilities they can use, and avoid reopening protocol loops after a task has already closed. 7.30.14 makes those behaviors explicit in Brain instead of relying on prompt memory.</p>
+        <p><a href="/changelog/#v73014">Read the full v7.30.14 changelog</a></p>
+    </main>
+</body>
+</html>

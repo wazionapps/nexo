@@ -336,12 +336,20 @@ def test_rail_10_conditional_rearm_is_behavioural_not_just_counter():
     # Simulate another 4 tool calls (matches the new threshold of 4).
     for _ in range(4):
         eng.on_tool_call("Edit")
-    # Re-evaluate conditional. The rule should surface because the
+    # No new visible user message yet: this must not re-open the task
+    # loop from idle/background activity alone.
+    eng.injection_queue.clear()
+    eng._post_close_cooldown_until = 0
+    eng._check_conditional()
+    assert eng.injection_queue == []
+
+    # Once a new user turn arrives, the rule can surface because the
     # previous task_open no longer counts as satisfying the next cycle.
+    eng.on_user_message("Nuevo trabajo de usuario.")
     eng.injection_queue.clear()
     eng._check_conditional()
     tags = [q.get("tag", "") for q in eng.injection_queue]
     assert any(t.startswith("conditional:nexo_task_open") for t in tags), (
         f"conditional rule must re-fire in the next task cycle after "
-        f"task_close; saw queue tags={tags}. Gap 7.1 regressed."
+        f"task_close and a new user message; saw queue tags={tags}. Gap 7.1 regressed."
     )

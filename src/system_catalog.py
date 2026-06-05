@@ -28,6 +28,7 @@ SECTION_ORDER = (
     "skills",
     "scripts",
     "crons",
+    "product_capabilities",
     "projects",
     "artifacts",
 )
@@ -85,6 +86,8 @@ def _tool_category(name: str) -> str:
         return "workflow"
     if name.startswith("nexo_learning"):
         return "learnings"
+    if name.startswith("nexo_support_ticket"):
+        return "support"
     if name.startswith("nexo_guard") or name.startswith("nexo_task") or name.startswith("nexo_cortex"):
         return "protocol"
     return "general"
@@ -610,6 +613,128 @@ def _artifact_entries() -> list[dict]:
     ]
 
 
+def _product_capability_entries() -> list[dict]:
+    """Static product contract map for agent self-discovery.
+
+    These entries are intentionally endpoint-level rather than marketing
+    copy. They let a fresh agent find the real backend surfaces before
+    guessing unsupported workflows.
+    """
+
+    return [
+        {
+            "kind": "product_capability",
+            "name": "nexo_support_tickets_api",
+            "display_name": "NEXO Support Tickets API",
+            "category": "support",
+            "description": "Create, list, read, reply, close and reopen real customer support tickets from Desktop/backend.",
+            "source": "nexo-desktop-web routes/web.php",
+            "endpoints": [
+                "GET /api/support/tickets",
+                "POST /api/support/tickets",
+                "GET /api/support/tickets/{supportTicket}",
+                "POST /api/support/tickets/{supportTicket}/messages",
+                "POST /api/support/tickets/{supportTicket}/close",
+                "POST /api/support/tickets/{supportTicket}/reopen",
+            ],
+            "notes": "Use this for product bug reports instead of creating private followups.",
+        },
+        {
+            "kind": "product_capability",
+            "name": "nexo_provider_proxy",
+            "display_name": "NEXO Credits Provider Proxy",
+            "category": "credits",
+            "description": "Billable proxy for provider calls. Platforms are discoverable; calls must pass credits, policy and app-token checks.",
+            "source": "nexo-desktop-web ProviderProxyController",
+            "endpoints": [
+                "GET /api/provider-proxy/platforms",
+                "GET /api/provider-proxy/models",
+                "POST /api/provider-proxy/estimate",
+                "POST /api/provider-proxy/call",
+                "GET /api/provider-proxy/requests/{providerRequest}",
+            ],
+            "notes": "Treat declared capabilities separately from invokable model support.",
+        },
+        {
+            "kind": "product_capability",
+            "name": "nexo_provider_models",
+            "display_name": "Provider Model Discovery",
+            "category": "credits",
+            "description": "Model/capability discovery endpoint for text, image, audio, vision and planned video support.",
+            "source": "nexo-desktop-web ProviderCatalogService",
+            "endpoints": [
+                "GET /api/provider-proxy/models?platform=openrouter",
+                "GET /api/provider-proxy/models?platform=openrouter&capability=video",
+            ],
+            "notes": "If a capability is not invokable, report it as planned/not_invokable instead of promising execution.",
+        },
+        {
+            "kind": "product_capability",
+            "name": "nexo_credits_cloud",
+            "display_name": "NEXO Credits Managed Cloud",
+            "category": "cloud",
+            "description": "Managed GCloud project provisioning/listing billed through NEXO Credits.",
+            "source": "nexo-desktop-web NexoCloudController",
+            "endpoints": [
+                "GET /api/nexo-cloud/projects",
+                "GET /api/nexo-cloud/sites",
+                "GET /api/nexo-cloud/deployments",
+                "GET /api/credits/cloud",
+                "GET /api/credits/projects",
+                "POST /api/nexo-cloud/provision",
+                "POST /api/nexo-cloud/token",
+                "POST /api/nexo-cloud/grants",
+            ],
+            "notes": "Read/list endpoints are safe discovery; provisioning remains a billable operation with spend limits.",
+        },
+        {
+            "kind": "product_capability",
+            "name": "nexo_edge_cloudflare",
+            "display_name": "NEXO Edge Cloudflare",
+            "category": "cloud",
+            "description": "Cloudflare zones, domains, DNS, redirects and jobs managed through NEXO Credits.",
+            "source": "nexo-desktop-web NexoEdgeController",
+            "endpoints": [
+                "GET /api/nexo-edge/assets",
+                "POST /api/nexo-edge/domains/check",
+                "POST /api/nexo-edge/domains/register",
+                "POST /api/nexo-edge/dns",
+                "POST /api/nexo-edge/redirects",
+                "GET /api/nexo-edge/jobs/{job}",
+            ],
+        },
+        {
+            "kind": "product_capability",
+            "name": "nexo_email_managed_agent_mailbox",
+            "display_name": "Email NEXO Managed Agent Mailbox",
+            "category": "email",
+            "description": "One managed IMAP/SMTP mailbox per NEXO license for the user's agent.",
+            "source": "nexo-desktop-web NexoEmailController + Desktop Email preferences",
+            "endpoints": [
+                "GET /api/nexo-email/account",
+                "POST /api/nexo-email/availability",
+                "POST /api/nexo-email/account/ensure",
+                "POST /api/nexo-email/account/connection",
+            ],
+            "notes": "If an account already exists, configure that mailbox; do not ask for a new address.",
+        },
+        {
+            "kind": "product_capability",
+            "name": "nexo_protocol_cards",
+            "display_name": "NEXO Protocol Cards",
+            "category": "workflow",
+            "description": "Official backend-served cards for product workflows and runtime contracts.",
+            "source": "nexo-desktop-web CardCatalogService",
+            "endpoints": [
+                "GET /api/cards/catalog",
+                "POST /api/cards/match",
+                "GET /api/cards/{slug}",
+                "POST /api/cards/{slug}/activate",
+            ],
+        },
+    ]
+
+
 def _locations() -> dict[str, str]:
     """Plan Consolidado 0.X.4 — canonical paths for runtime artefacts.
 
@@ -667,6 +792,7 @@ def build_system_catalog() -> dict:
         "skills": _skill_entries(),
         "scripts": _script_entries(),
         "crons": _cron_entries(),
+        "product_capabilities": _product_capability_entries(),
         "projects": _project_entries(),
         "artifacts": _artifact_entries(),
     }

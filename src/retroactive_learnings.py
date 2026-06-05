@@ -321,6 +321,10 @@ def apply_learning_retroactively(
     created = 0
     now_epoch = datetime.now().timestamp()
     summary_matches = []
+    try:
+        followup_columns = {row["name"] for row in conn.execute("PRAGMA table_info(followups)").fetchall()}
+    except Exception:
+        followup_columns = set()
     for m in capped:
         decision = m["decision"]
         followup_id = f"NF-RETRO-L{learning['id']}-D{decision['id']}"
@@ -334,18 +338,36 @@ def apply_learning_retroactively(
             f"SELECT id, domain, decision, based_on, status FROM decisions WHERE id = {int(decision['id'])}"
         )
         try:
+            insert_columns = [
+                "id",
+                "description",
+                "date",
+                "status",
+                "verification",
+                "created_at",
+                "updated_at",
+                "priority",
+            ]
+            values = [
+                followup_id,
+                description,
+                None,
+                "PENDING",
+                verification,
+                now_epoch,
+                now_epoch,
+                learning.get("priority") or "medium",
+            ]
+            if "internal" in followup_columns:
+                insert_columns.append("internal")
+                values.append(1)
+            if "owner" in followup_columns:
+                insert_columns.append("owner")
+                values.append("agent")
+            placeholders = ", ".join("?" for _ in insert_columns)
             conn.execute(
-                "INSERT OR REPLACE INTO followups (id, description, date, status, "
-                "verification, created_at, updated_at, priority) "
-                "VALUES (?, ?, NULL, 'PENDING', ?, ?, ?, ?)",
-                (
-                    followup_id,
-                    description,
-                    verification,
-                    now_epoch,
-                    now_epoch,
-                    learning.get("priority") or "medium",
-                ),
+                f"INSERT OR REPLACE INTO followups ({', '.join(insert_columns)}) VALUES ({placeholders})",
+                tuple(values),
             )
             created += 1
             summary_matches.append({

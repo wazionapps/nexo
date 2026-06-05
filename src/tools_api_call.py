@@ -3,6 +3,9 @@
 Exposes two MCP tools registered in server.py:
   - nexo_api_call(method, path, body_json, idempotency_key, headers_json, base_url)
   - nexo_create_app_token(name, abilities, allowed_platforms, expires_at)
+  - nexo_support_ticket_list(status, limit)
+  - nexo_support_ticket_read(ticket_id)
+  - nexo_support_ticket_create(subject, message, priority)
 
 The session bearer (Sanctum personal access token) is stored by NEXO Desktop in
 the OS keychain at:
@@ -24,6 +27,7 @@ from __future__ import annotations
 
 import json
 from typing import Any
+from urllib.parse import quote, urlencode
 
 import keyring
 import requests
@@ -194,3 +198,45 @@ def handle_create_app_token(
         path="/api/auth/app-tokens",
         body_json=json.dumps(payload),
     )
+
+
+def handle_support_ticket_list(status: str = "", limit: int = 20) -> str:
+    """List real NEXO support tickets for the signed-in Desktop user."""
+    query: dict[str, str] = {}
+    clean_status = (status or "").strip()
+    if clean_status:
+        query["status"] = clean_status
+    try:
+        parsed_limit = max(1, min(100, int(limit or 20)))
+    except Exception:
+        parsed_limit = 20
+    query["limit"] = str(parsed_limit)
+    suffix = "?" + urlencode(query) if query else ""
+    return handle_api_call("GET", f"/api/support/tickets{suffix}")
+
+
+def handle_support_ticket_read(ticket_id: str) -> str:
+    """Read one real NEXO support ticket by id for the signed-in Desktop user."""
+    clean = (ticket_id or "").strip()
+    if not clean:
+        return "ERROR: ticket_id is required."
+    return handle_api_call("GET", f"/api/support/tickets/{quote(clean, safe='')}")
+
+
+def handle_support_ticket_create(subject: str, message: str, priority: str = "normal") -> str:
+    """Create a real NEXO support ticket instead of a private/internal followup."""
+    clean_subject = (subject or "").strip()
+    clean_message = (message or "").strip()
+    clean_priority = (priority or "normal").strip().lower()
+    if not clean_subject:
+        return "ERROR: subject is required."
+    if not clean_message:
+        return "ERROR: message is required."
+    if clean_priority not in {"low", "normal", "high", "urgent"}:
+        clean_priority = "normal"
+    payload = {
+        "subject": clean_subject,
+        "message": clean_message,
+        "priority": clean_priority,
+    }
+    return handle_api_call("POST", "/api/support/tickets", body_json=json.dumps(payload, ensure_ascii=False))

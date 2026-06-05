@@ -271,7 +271,8 @@ def _ensure_protocol_debt(conn: sqlite3.Connection, *, debt_type: str, severity:
 
 
 def _ensure_followup(conn: sqlite3.Connection, *, prefix: str, description: str,
-                     verification: str, reasoning: str, priority: str = "high") -> str:
+                     verification: str, reasoning: str, priority: str = "high",
+                     internal: int = 1, owner: str = "agent") -> str:
     if not _table_exists(conn, "followups"):
         return ""
     # Content fingerprint, not security-sensitive.
@@ -300,6 +301,10 @@ def _ensure_followup(conn: sqlite3.Connection, *, prefix: str, description: str,
         }
         if "priority" in columns:
             update_fields["priority"] = priority
+        if "internal" in columns:
+            update_fields["internal"] = int(bool(internal))
+        if "owner" in columns:
+            update_fields["owner"] = owner
         closed_status = str(existing_id_row["status"] or "").upper()
         if closed_status.startswith("COMPLETED") or closed_status in {"DELETED", "ARCHIVED", "BLOCKED", "WAITING"}:
             update_fields["status"] = "PENDING"
@@ -324,6 +329,8 @@ def _ensure_followup(conn: sqlite3.Connection, *, prefix: str, description: str,
         reasoning=reasoning,
         recurrence=None,
         priority=priority,
+        internal=internal,
+        owner=owner,
     )
     if result.get("error"):
         return ""
@@ -1845,8 +1852,14 @@ def check_cognitive_health():
         if metrics["total_retrievals"] > 0:
             finding("INFO", "cognitive-metrics",
                     f"7d: {metrics['total_retrievals']} retrievals, relevance={metrics['retrieval_relevance_pct']}%")
-            if metrics["retrieval_relevance_pct"] < 50 and metrics["total_retrievals"] >= 5:
+            if metrics["retrieval_relevance_pct"] < 50 and metrics["total_retrievals"] >= 30:
                 finding("ERROR", "cognitive-metrics", f"Relevance critically low: {metrics['retrieval_relevance_pct']}%")
+            elif metrics["retrieval_relevance_pct"] < 50 and metrics["total_retrievals"] < 30:
+                finding(
+                    "INFO",
+                    "cognitive-metrics",
+                    f"Relevance below 50% but sample is low ({metrics['total_retrievals']} retrievals)",
+                )
 
         repeats = cog.check_repeat_errors()
         if repeats["new_count"] > 0 and repeats["repeat_rate_pct"] > 30:
