@@ -1,5 +1,15 @@
 # Changelog
 
+## [7.30.15] - 2026-06-05
+
+### Fixed - Email NEXO reply lifecycle closure
+
+- **Email replies can now force the correct lifecycle event at send time.** `nexo-send-reply.py --classify-as resolution` lets the monitor close substantive replies even when the body starts with a short affirmation such as "sí", "de acuerdo", or "perfecto".
+- **The email monitor no longer reopens already-closed reply work.** Stale `ack` / `commitment` debt is suppressed when a newer `resolution` or `action_done` exists, and `processed` rows with `action_done` are not reset to `pending`.
+- **Crash-after-send recovery now respects sent reply events.** If a worker dies after `nexo-send-reply.py` has recorded `replied` / `resolution` / `action_done`, the monitor reconciles the stale `processing` row to `processed` instead of requeueing it.
+- **The monitor prompt now tells agents when to use `--classify-as`.** Replies that actually close or answer actionable instructions are sent as `resolution`; pure acknowledgements and future commitments remain explicit.
+- **Regression coverage pins the failure mode.** Five new tests cover affirmative-instruction closure, action-done recovery, debt suppression, crash-after-send reconciliation, and the still-valid unreplied recovery path.
+
 ## [7.30.14] - 2026-06-05
 
 ### Fixed - support ticket and capability discoverability

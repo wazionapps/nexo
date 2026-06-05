@@ -19,6 +19,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import sqlite3
 import sys
 import time
 from pathlib import Path
@@ -28,6 +29,7 @@ import pytest
 
 
 SCRIPT = Path(__file__).resolve().parent.parent / "src" / "scripts" / "nexo-email-monitor.py"
+SEND_REPLY_SCRIPT = Path(__file__).resolve().parent.parent / "src" / "scripts" / "nexo-send-reply.py"
 
 
 @pytest.fixture
@@ -246,3 +248,176 @@ def test_read_returns_none_for_unknown(monitor_module):
 
 def test_read_returns_none_for_empty_message_id(monitor_module):
     assert monitor_module._email_checkpoint_read("") is None
+
+
+def _open_email_db(module):
+    conn = sqlite3.connect(str(module.EMAIL_DB_PATH))
+    conn.row_factory = sqlite3.Row
+    module._ensure_emails_table(conn)
+    module.ensure_email_events_table(conn)
+    conn.commit()
+    return conn
+
+
+def _seed_email_row(module, *, message_id, status="processed", started_at="", completed_at="", attempts=0):
+    conn = _open_email_db(module)
+    conn.execute(
+        """
+        INSERT OR REPLACE INTO emails (
+            message_id, from_addr, subject, received_at, status, started_at, completed_at, attempts
+        ) VALUES (?, ?, ?, datetime('now','localtime','-5 hours'), ?, ?, ?, ?)
+        """,
+        (message_id, "francisco@example.test", "Thread needing closure", status, started_at, completed_at, attempts),
+    )
+    conn.commit()
+    conn.close()
+
+
+def _email_status(module, message_id):
+    conn = _open_email_db(module)
+    row = conn.execute("SELECT status FROM emails WHERE message_id = ?", (message_id,)).fetchone()
+    conn.close()
+    return row["status"] if row else None
+
+
+def _event_count(module, message_id, event):
+    conn = _open_email_db(module)
+    count = conn.execute(
+        "SELECT COUNT(*) FROM email_events WHERE email_id = ? AND event = ?",
+        (message_id, event),
+    ).fetchone()[0]
+    conn.close()
+    return count
+
+
+def test_resolution_override_closes_affirmative_instruction_reply(monkeypatch, tmp_path):
+    nexo_home = tmp_path / "send-home"
+    base_dir = nexo_home / "nexo-email"
+    base_dir.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("NEXO_HOME", str(nexo_home))
+
+    fake_modules = {
+        "paths": MagicMock(nexo_email_dir=lambda: base_dir),
+        "runtime_home": MagicMock(export_resolved_nexo_home=lambda *a, **kw: nexo_home),
+        "email_sent_events": MagicMock(record_sent_email=MagicMock()),
+        "email_presentation": MagicMock(
+            build_email_presentation=MagicMock(),
+            signature_from_config=MagicMock(return_value=""),
+            text_to_html_fragment=MagicMock(return_value=""),
+        ),
+    }
+    for name, mock in fake_modules.items():
+        monkeypatch.setitem(sys.modules, name, mock)
+
+    spec = importlib.util.spec_from_file_location("send_reply_lifecycle_under_test", str(SEND_REPLY_SCRIPT))
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+
+    db_path = base_dir / "nexo-email.db"
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("CREATE TABLE emails (message_id TEXT PRIMARY KEY)")
+    module.ensure_email_events_table(conn)
+    conn.execute("INSERT INTO emails (message_id) VALUES ('<operator-reply@example.test>')")
+    conn.execute(
+        """
+        INSERT INTO email_events (email_id, event, timestamp, detail)
+        VALUES ('<operator-reply@example.test>', 'commitment', datetime('now','localtime','-4 hours'), 'old open debt')
+        """
+    )
+    conn.commit()
+    conn.close()
+
+    event = module.record_reply_lifecycle(
+        "<operator-reply@example.test>",
+        "",
+        "Sí, totalmente de acuerdo. Haz esto, cambia lo otro y ciérralo.",
+        db_path=db_path,
+        classify_override="resolution",
+    )
+
+    conn = sqlite3.connect(str(db_path))
+    events = [row[0] for row in conn.execute("SELECT event FROM email_events ORDER BY id").fetchall()]
+    conn.close()
+    assert event == "resolution"
+    assert events == ["commitment", "resolution", "action_done"]
+
+
+def test_recover_unreplied_processed_keeps_action_done_processed(monitor_module):
+    message_id = "<closed-processed@example.test>"
+    _seed_email_row(monitor_module, message_id=message_id, status="processed")
+    conn = _open_email_db(monitor_module)
+    conn.execute(
+        "INSERT INTO email_events (email_id, event, detail) VALUES (?, 'action_done', 'already closed')",
+        (message_id,),
+    )
+    conn.commit()
+    conn.close()
+
+    recovered = monitor_module._recover_unreplied_processed({}, hours=24)
+
+    assert recovered == 0
+    assert _email_status(monitor_module, message_id) == "processed"
+
+
+def test_scan_debt_suppresses_ack_when_action_done_is_newer(monitor_module):
+    message_id = "<ack-closed@example.test>"
+    _seed_email_row(monitor_module, message_id=message_id, status="processed")
+    conn = _open_email_db(monitor_module)
+    conn.execute(
+        """
+        INSERT INTO email_events (email_id, event, timestamp, detail)
+        VALUES (?, 'ack', datetime('now','localtime','-4 hours'), 'ack')
+        """,
+        (message_id,),
+    )
+    conn.execute(
+        """
+        INSERT INTO email_events (email_id, event, timestamp, detail)
+        VALUES (?, 'action_done', datetime('now','localtime','-1 hours'), 'closed')
+        """,
+        (message_id,),
+    )
+    conn.commit()
+    conn.close()
+
+    out = monitor_module.scan_debt(db_path=monitor_module.EMAIL_DB_PATH)
+
+    assert out == ""
+    assert _event_count(monitor_module, message_id, "debt_flagged") == 0
+
+
+def test_scan_debt_does_not_reopen_processing_email_after_sent_reply_event(monitor_module):
+    message_id = "<sent-before-crash@example.test>"
+    _seed_email_row(
+        monitor_module,
+        message_id=message_id,
+        status="processing",
+        started_at="2026-06-05 08:00:00",
+    )
+    conn = _open_email_db(monitor_module)
+    conn.execute(
+        """
+        INSERT INTO email_events (email_id, event, timestamp, detail)
+        VALUES (?, 'replied', datetime('now','localtime','-1 hours'), 'smtp sent before session died')
+        """,
+        (message_id,),
+    )
+    conn.commit()
+    conn.close()
+
+    out = monitor_module.scan_debt(db_path=monitor_module.EMAIL_DB_PATH)
+
+    assert out == ""
+    assert _email_status(monitor_module, message_id) == "processed"
+    assert _event_count(monitor_module, message_id, "debt_flagged") == 0
+
+
+def test_recover_unreplied_processed_still_reopens_when_no_reply_event_exists(monitor_module):
+    message_id = "<needs-recovery@example.test>"
+    _seed_email_row(monitor_module, message_id=message_id, status="processed")
+
+    recovered = monitor_module._recover_unreplied_processed({}, hours=24)
+
+    assert recovered == 1
+    assert _email_status(monitor_module, message_id) == "pending"
