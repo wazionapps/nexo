@@ -11,7 +11,8 @@ def _utcnow_naive() -> datetime:
     """
     return datetime.now(timezone.utc).replace(tzinfo=None)
 from cognitive._core import (
-    _get_db, embed, cosine_similarity, _blob_to_array, _array_to_blob,
+    _get_db, embed, cosine_similarity, _array_to_blob,
+    _active_embedding_context, _row_embedding_array,
     EMBEDDING_DIM, DISCRIMINATING_ENTITIES, redact_secrets,
 )
 from cognitive._ingest import _sanitize_memory_content
@@ -186,17 +187,26 @@ def check_repeat_errors() -> dict:
     Returns count of new learnings that are semantically duplicate (cosine > 0.8).
     """
     db = _get_db()
+    embedding_context = _active_embedding_context(db)
     cutoff_7d = (_utcnow_naive() - timedelta(days=7)).isoformat()
 
     # Recent learning STM entries
     new_learnings = db.execute(
-        "SELECT id, content, embedding FROM stm_memories WHERE source_type = 'learning' AND created_at >= ? AND promoted_to_ltm = 0",
+        """
+        SELECT id, content, embedding, embedding_v2, embedding_v2_model_marker
+        FROM stm_memories
+        WHERE source_type = 'learning' AND created_at >= ? AND promoted_to_ltm = 0
+        """,
         (cutoff_7d,)
     ).fetchall()
 
     # All LTM learnings
     ltm_learnings = db.execute(
-        "SELECT id, content, embedding FROM ltm_memories WHERE source_type = 'learning' AND is_dormant = 0"
+        """
+        SELECT id, content, embedding, embedding_v2, embedding_v2_model_marker
+        FROM ltm_memories
+        WHERE source_type = 'learning' AND is_dormant = 0
+        """
     ).fetchall()
 
     if not new_learnings or not ltm_learnings:
@@ -204,9 +214,13 @@ def check_repeat_errors() -> dict:
 
     duplicates = []
     for new in new_learnings:
-        new_vec = _blob_to_array(new["embedding"])
+        new_vec = _row_embedding_array(new, context=embedding_context)
+        if new_vec is None:
+            continue
         for ltm in ltm_learnings:
-            ltm_vec = _blob_to_array(ltm["embedding"])
+            ltm_vec = _row_embedding_array(ltm, context=embedding_context)
+            if ltm_vec is None:
+                continue
             score = cosine_similarity(new_vec, ltm_vec)
             if score > 0.8:
                 duplicates.append({
@@ -244,6 +258,7 @@ def rehearse_by_content(content_keywords: str, source_type: str = ""):
 
     try:
         db = _get_db()
+        embedding_context = _active_embedding_context(db)
         query_vec = embed(content_keywords[:500])  # cap to avoid slow embedding
         if np.linalg.norm(query_vec) == 0:
             return
@@ -258,9 +273,16 @@ def rehearse_by_content(content_keywords: str, source_type: str = ""):
             if table == "ltm_memories":
                 extra_where = " AND is_dormant = 0"
 
-            rows = db.execute(f"SELECT id, embedding FROM {table} WHERE 1=1{extra_where}").fetchall()
+            rows = db.execute(
+                f"""
+                SELECT id, embedding, embedding_v2, embedding_v2_model_marker
+                FROM {table} WHERE 1=1{extra_where}
+                """
+            ).fetchall()
             for row in rows:
-                vec = _blob_to_array(row["embedding"])
+                vec = _row_embedding_array(row, context=embedding_context)
+                if vec is None:
+                    continue
                 score = cosine_similarity(query_vec, vec)
                 if score >= 0.7:
                     db.execute(
@@ -320,8 +342,13 @@ def consolidate_semantic(threshold: float = 0.9, dry_run: bool = False) -> dict:
         Dict with 'merged' (list of merge actions) and 'siblings' (list of sibling links created)
     """
     db = _get_db()
+    embedding_context = _active_embedding_context(db)
     rows = db.execute(
-        "SELECT id, content, embedding, source_type, domain, access_count, strength FROM ltm_memories WHERE is_dormant = 0"
+        """
+        SELECT id, content, embedding, embedding_v2, embedding_v2_model_marker,
+               source_type, domain, access_count, strength
+        FROM ltm_memories WHERE is_dormant = 0
+        """
     ).fetchall()
 
     if len(rows) < 2:
@@ -329,15 +356,21 @@ def consolidate_semantic(threshold: float = 0.9, dry_run: bool = False) -> dict:
 
     memories = []
     for row in rows:
+        vec = _row_embedding_array(row, context=embedding_context)
+        if vec is None:
+            continue
         memories.append({
             "id": row["id"],
             "content": row["content"],
-            "vec": _blob_to_array(row["embedding"]),
+            "vec": vec,
             "source_type": row["source_type"],
             "domain": row["domain"],
             "access_count": row["access_count"],
             "strength": row["strength"],
         })
+
+    if len(memories) < 2:
+        return {"merged": [], "siblings": []}
 
     merged_ids = set()
     merge_actions = []
@@ -577,8 +610,10 @@ def auto_merge_duplicates(threshold: float = 0.92) -> dict:
         Dict with scanned, merged, kept counts and merge_log details.
     """
     db = _get_db()
+    embedding_context = _active_embedding_context(db)
     rows = db.execute(
-        "SELECT id, content, embedding, source_type, domain, access_count, strength, tags "
+        "SELECT id, content, embedding, embedding_v2, embedding_v2_model_marker, "
+        "source_type, domain, access_count, strength, tags "
         "FROM ltm_memories WHERE is_dormant = 0 AND "
         "(lifecycle_state IS NULL OR lifecycle_state = 'active')"
     ).fetchall()
@@ -589,16 +624,22 @@ def auto_merge_duplicates(threshold: float = 0.92) -> dict:
     # Build memory list with vectors (batch load like dream_cycle)
     memories = []
     for row in rows:
+        vec = _row_embedding_array(row, context=embedding_context)
+        if vec is None:
+            continue
         memories.append({
             "id": row["id"],
             "content": row["content"],
-            "vec": _blob_to_array(row["embedding"]),
+            "vec": vec,
             "source_type": row["source_type"],
             "domain": row["domain"] or "",
             "access_count": row["access_count"],
             "strength": row["strength"],
             "tags": row["tags"] or "",
         })
+
+    if len(memories) < 2:
+        return {"scanned": len(rows), "merged": 0, "kept": len(memories), "merge_log": []}
 
     n = len(memories)
 

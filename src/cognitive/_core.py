@@ -6,7 +6,6 @@ import math
 import hashlib
 import os
 import re
-import shutil
 import sqlite3
 import numpy as np
 from datetime import datetime, timedelta
@@ -38,6 +37,8 @@ LAMBDA_STM = 0.004126   # half-life = ln(2) / (7 * 24) ≈ 7 days
 LAMBDA_LTM = 0.000481  # half-life = ln(2) / (60 * 24) ≈ 60 days
 DEFAULT_MEMORY_STABILITY = 1.0
 DEFAULT_MEMORY_DIFFICULTY = 0.5
+EMBEDDING_MEMORY_TABLES = ("stm_memories", "ltm_memories", "quarantine")
+EMBEDDING_MIGRATION_BATCH_SIZE = int(os.environ.get("NEXO_EMBEDDING_MIGRATION_BATCH_SIZE", "128"))
 
 # Prediction Error Gate thresholds
 PE_GATE_REJECT = 0.85     # similarity > this → reject (not novel enough)
@@ -321,59 +322,602 @@ def _migrate_memory_personalization(conn: sqlite3.Connection):
                     raise
 
 
-def _auto_migrate_embeddings(conn: sqlite3.Connection):
-    """Re-embed when vector dimension or pinned embedding model changes."""
-    try:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS embedding_model_state (
-                key TEXT PRIMARY KEY,
-                value TEXT NOT NULL,
-                updated_at TEXT DEFAULT (datetime('now'))
-            )
-        """)
-        current_marker = _current_embedding_model_marker()
-        stored = conn.execute(
-            "SELECT value FROM embedding_model_state WHERE key = 'embedding_model_marker'"
-        ).fetchone()
-        stored_marker = stored["value"] if stored else ""
+def _ensure_embedding_model_state(conn: sqlite3.Connection) -> None:
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS embedding_model_state (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            updated_at TEXT DEFAULT (datetime('now'))
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS embedding_migration_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            old_marker TEXT DEFAULT '',
+            new_marker TEXT NOT NULL,
+            status TEXT NOT NULL,
+            total_rows INTEGER DEFAULT 0,
+            migrated_rows INTEGER DEFAULT 0,
+            error TEXT DEFAULT '',
+            backup_path TEXT DEFAULT '',
+            started_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now')),
+            finished_at TEXT
+        )
+    """)
 
-        row = None
-        for table in ("stm_memories", "ltm_memories", "quarantine"):
-            row = conn.execute(f"SELECT embedding FROM {table} LIMIT 1").fetchone()
-            if row:
-                break
-        if not row:
-            _write_embedding_model_marker(conn, current_marker)
-            return
 
-        vec = np.frombuffer(row["embedding"], dtype=np.float32)
-        dimension_matches = len(vec) == EMBEDDING_DIM
-        model_matches = stored_marker == current_marker
-        if dimension_matches and model_matches:
-            return
+def _ensure_embedding_shadow_columns(conn: sqlite3.Connection) -> None:
+    for table in EMBEDDING_MEMORY_TABLES:
+        for col, col_type in [
+            ("embedding_v2", "BLOB"),
+            ("embedding_v2_model_marker", "TEXT DEFAULT ''"),
+            ("embedding_v2_error", "TEXT DEFAULT ''"),
+        ]:
+            try:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}")
+            except sqlite3.OperationalError as e:
+                if "duplicate column" not in str(e).lower():
+                    raise
+    conn.commit()
 
-        _backup_cognitive_db_for_embedding_migration(stored_marker, current_marker)
-        model = _get_model()
 
-        for table in ("stm_memories", "ltm_memories", "quarantine"):
-            rows = conn.execute(f"SELECT id, content FROM {table}").fetchall()
-            if not rows:
-                continue
+def _embedding_state_value(conn: sqlite3.Connection, key: str, default: str = "") -> str:
+    _ensure_embedding_model_state(conn)
+    row = conn.execute("SELECT value FROM embedding_model_state WHERE key = ?", (key,)).fetchone()
+    return str(row["value"]) if row else default
 
-            contents = [r["content"] for r in rows]
-            ids = [r["id"] for r in rows]
 
-            embeddings = list(model.embed(contents))
-            for mem_id, emb in zip(ids, embeddings):
-                arr = np.array(emb, dtype=np.float32)
-                if len(arr) != EMBEDDING_DIM:
-                    raise ValueError(f"embedding dimension mismatch: {len(arr)} != {EMBEDDING_DIM}")
-                blob = arr.tobytes()
-                conn.execute(f"UPDATE {table} SET embedding = ? WHERE id = ?", (blob, mem_id))
-
-        _write_embedding_model_marker(conn, current_marker)
+def _write_embedding_state(conn: sqlite3.Connection, key: str, value: str, *, commit: bool = True) -> None:
+    _ensure_embedding_model_state(conn)
+    conn.execute(
+        """
+        INSERT INTO embedding_model_state (key, value, updated_at)
+        VALUES (?, ?, datetime('now'))
+        ON CONFLICT(key) DO UPDATE SET
+            value = excluded.value,
+            updated_at = excluded.updated_at
+        """,
+        (key, str(value or "")),
+    )
+    if commit:
         conn.commit()
+
+
+def _embedding_table_counts(conn: sqlite3.Connection, marker: str) -> dict:
+    total = 0
+    migrated = 0
+    errored = 0
+    by_table = {}
+    for table in EMBEDDING_MEMORY_TABLES:
+        table_total = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+        table_migrated = conn.execute(
+            f"""
+            SELECT COUNT(*) FROM {table}
+            WHERE embedding_v2 IS NOT NULL
+              AND embedding_v2_model_marker = ?
+            """,
+            (marker,),
+        ).fetchone()[0]
+        table_errored = conn.execute(
+            f"""
+            SELECT COUNT(*) FROM {table}
+            WHERE COALESCE(embedding_v2_error, '') != ''
+            """
+        ).fetchone()[0]
+        total += int(table_total or 0)
+        migrated += int(table_migrated or 0)
+        errored += int(table_errored or 0)
+        by_table[table] = {
+            "total": int(table_total or 0),
+            "migrated": int(table_migrated or 0),
+            "pending": max(0, int(table_total or 0) - int(table_migrated or 0)),
+            "errored": int(table_errored or 0),
+        }
+    return {
+        "total": total,
+        "migrated": migrated,
+        "pending": max(0, total - migrated),
+        "errored": errored,
+        "by_table": by_table,
+    }
+
+
+def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1",
+        (table,),
+    ).fetchone()
+    return bool(row)
+
+
+def _table_columns(conn: sqlite3.Connection, table: str) -> set[str]:
+    if not _table_exists(conn, table):
+        return set()
+    try:
+        return {str(row["name"] if isinstance(row, sqlite3.Row) else row[1]) for row in conn.execute(f"PRAGMA table_info({table})")}
     except Exception:
+        return set()
+
+
+def _read_embedding_state_snapshot(conn: sqlite3.Connection) -> dict[str, dict[str, str]]:
+    if not _table_exists(conn, "embedding_model_state"):
+        return {}
+    rows = conn.execute("SELECT key, value, updated_at FROM embedding_model_state").fetchall()
+    snapshot = {}
+    for row in rows:
+        key = str(row["key"])
+        snapshot[key] = {
+            "value": str(row["value"] or ""),
+            "updated_at": str(row["updated_at"] or ""),
+        }
+    return snapshot
+
+
+def _embedding_status_counts(conn: sqlite3.Connection, marker: str) -> dict:
+    total = 0
+    migrated = 0
+    errored = 0
+    by_table = {}
+    for table in EMBEDDING_MEMORY_TABLES:
+        if not _table_exists(conn, table):
+            by_table[table] = {"total": 0, "migrated": 0, "pending": 0, "errored": 0}
+            continue
+        table_total = int(conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] or 0)
+        columns = _table_columns(conn, table)
+        has_shadow = {"embedding_v2", "embedding_v2_model_marker", "embedding_v2_error"}.issubset(columns)
+        table_migrated = 0
+        table_errored = 0
+        if has_shadow:
+            table_migrated = int(conn.execute(
+                f"""
+                SELECT COUNT(*) FROM {table}
+                WHERE embedding_v2 IS NOT NULL
+                  AND embedding_v2_model_marker = ?
+                """,
+                (marker,),
+            ).fetchone()[0] or 0)
+            table_errored = int(conn.execute(
+                f"""
+                SELECT COUNT(*) FROM {table}
+                WHERE COALESCE(embedding_v2_error, '') != ''
+                """
+            ).fetchone()[0] or 0)
+        total += table_total
+        migrated += table_migrated
+        errored += table_errored
+        by_table[table] = {
+            "total": table_total,
+            "migrated": table_migrated,
+            "pending": max(0, table_total - table_migrated),
+            "errored": table_errored,
+        }
+    return {
+        "total": total,
+        "migrated": migrated,
+        "pending": max(0, total - migrated),
+        "errored": errored,
+        "by_table": by_table,
+    }
+
+
+def embedding_migration_status(conn: Optional[sqlite3.Connection] = None) -> dict:
+    """Return read-only status for the embedding migration.
+
+    This intentionally avoids _get_db() so health checks do not trigger model
+    warmup, re-embedding, or downloads. The migration itself still runs from
+    normal cognitive startup.
+    """
+    own_conn = conn is None
+    db_path = Path(COGNITIVE_DB)
+    if own_conn and not db_path.exists():
+        return {
+            "ok": True,
+            "healthy": True,
+            "status": "no_database",
+            "current_marker": _current_embedding_model_marker(),
+            "active_marker": "",
+            "storage": "",
+            "total_rows": 0,
+            "migrated_rows": 0,
+            "pending_rows": 0,
+            "errored_rows": 0,
+            "progress_percent": 100.0,
+            "needs_migration": False,
+            "uses_shadow": False,
+            "error": "",
+            "backup_path": "",
+            "schema": "nexo.embedding_migration_status.v1",
+        }
+    if own_conn:
+        conn = sqlite3.connect(str(db_path))
+        conn.row_factory = sqlite3.Row
+    try:
+        assert conn is not None
+        current_marker = _current_embedding_model_marker()
+        state = _read_embedding_state_snapshot(conn)
+        value = lambda key, default="": state.get(key, {}).get("value", default)
+        updated_at = lambda key: state.get(key, {}).get("updated_at", "")
+        active_marker = value("embedding_model_marker")
+        target_marker = value("embedding_migration_target_marker") or current_marker
+        storage = value("embedding_storage", "legacy")
+        status = value("embedding_migration_status")
+        counts = _embedding_status_counts(conn, current_marker)
+        total = int(counts["total"] or 0)
+        migrated = int(counts["migrated"] or 0)
+        pending = int(counts["pending"] or 0)
+        errored = int(counts["errored"] or 0)
+        uses_shadow = bool(storage == "shadow_v2" and active_marker == current_marker and pending == 0)
+        if total > 0 and not uses_shadow and status == "completed":
+            status = "pending"
+        elif not status:
+            if total == 0:
+                status = "empty"
+            elif uses_shadow:
+                status = "completed"
+            else:
+                status = "pending"
+        if uses_shadow and status not in {"failed", "partial"}:
+            status = "completed"
+        unhealthy = status in {"failed", "partial"} or errored > 0
+        progress = 100.0 if total <= 0 else round((migrated / total) * 100, 2)
+        return {
+            "ok": not unhealthy,
+            "healthy": not unhealthy,
+            "status": status,
+            "current_marker": current_marker,
+            "active_marker": active_marker,
+            "target_marker": target_marker,
+            "storage": storage,
+            "total_rows": total,
+            "migrated_rows": migrated,
+            "pending_rows": pending,
+            "errored_rows": errored,
+            "progress_percent": progress,
+            "needs_migration": bool(total > 0 and not uses_shadow),
+            "uses_shadow": uses_shadow,
+            "error": value("embedding_migration_error"),
+            "backup_path": value("embedding_migration_backup_path"),
+            "updated_at": updated_at("embedding_migration_status"),
+            "by_table": counts["by_table"],
+            "schema": "nexo.embedding_migration_status.v1",
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "healthy": False,
+            "status": "status_read_failed",
+            "error": str(exc),
+            "schema": "nexo.embedding_migration_status.v1",
+        }
+    finally:
+        if own_conn and conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+def _record_embedding_migration_run(
+    conn: sqlite3.Connection,
+    *,
+    old_marker: str,
+    new_marker: str,
+    status: str,
+    total_rows: int,
+    migrated_rows: int,
+    error: str = "",
+    backup_path: str = "",
+    commit: bool = True,
+) -> None:
+    _ensure_embedding_model_state(conn)
+    conn.execute(
+        """
+        INSERT INTO embedding_migration_runs (
+            old_marker, new_marker, status, total_rows, migrated_rows,
+            error, backup_path, updated_at, finished_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'),
+                CASE WHEN ? IN ('completed', 'failed') THEN datetime('now') ELSE NULL END)
+        """,
+        (
+            old_marker or "",
+            new_marker,
+            status,
+            int(total_rows or 0),
+            int(migrated_rows or 0),
+            str(error or "")[:2000],
+            str(backup_path or ""),
+            status,
+        ),
+    )
+    _write_embedding_state(conn, "embedding_migration_status", status, commit=False)
+    _write_embedding_state(conn, "embedding_migration_target_marker", new_marker, commit=False)
+    _write_embedding_state(conn, "embedding_migration_total_rows", str(int(total_rows or 0)), commit=False)
+    _write_embedding_state(conn, "embedding_migration_migrated_rows", str(int(migrated_rows or 0)), commit=False)
+    if error:
+        _write_embedding_state(conn, "embedding_migration_error", str(error)[:2000], commit=False)
+    if backup_path:
+        _write_embedding_state(conn, "embedding_migration_backup_path", backup_path, commit=False)
+    if commit:
+        conn.commit()
+
+
+def _first_embedding_row(conn: sqlite3.Connection):
+    for table in EMBEDDING_MEMORY_TABLES:
+        row = conn.execute(f"SELECT embedding FROM {table} LIMIT 1").fetchone()
+        if row:
+            return row
+    return None
+
+
+def _blob_matches_current_embedding_dim(blob) -> bool:
+    try:
+        return bool(blob) and len(blob) == EMBEDDING_DIM * 4
+    except Exception:
+        return False
+
+
+def _sqlite_row_value(row, key: str, default=None):
+    if row is None:
+        return default
+    if isinstance(row, dict):
+        return row.get(key, default)
+    try:
+        return row[key]
+    except (IndexError, KeyError, TypeError):
+        return default
+
+
+def _active_embedding_context(conn: sqlite3.Connection) -> dict:
+    try:
+        current_marker = _current_embedding_model_marker()
+        active_marker = _embedding_state_value(conn, "embedding_model_marker")
+        storage = _embedding_state_value(conn, "embedding_storage", "legacy")
+        migration_status = _embedding_state_value(conn, "embedding_migration_status")
+    except Exception:
+        current_marker = _current_embedding_model_marker()
+        active_marker = ""
+        storage = "legacy"
+        migration_status = ""
+    shadow_active = storage == "shadow_v2" and active_marker == current_marker
+    legacy_active = (
+        storage == "legacy"
+        and active_marker == current_marker
+        and migration_status not in {"pending", "running", "failed", "partial"}
+    )
+    return {
+        "current_marker": current_marker,
+        "active_marker": active_marker,
+        "storage": storage,
+        "migration_status": migration_status,
+        "shadow_active": shadow_active,
+        "legacy_active": legacy_active,
+    }
+
+
+def _row_embedding_blob(row, conn: Optional[sqlite3.Connection] = None, context: Optional[dict] = None):
+    if context is None and conn is not None:
+        context = _active_embedding_context(conn)
+    context = context or {}
+
+    if context.get("shadow_active"):
+        marker = _sqlite_row_value(row, "embedding_v2_model_marker", "")
+        blob = _sqlite_row_value(row, "embedding_v2")
+        if blob and marker == context.get("current_marker"):
+            return blob
+
+    if context.get("legacy_active"):
+        legacy_blob = _sqlite_row_value(row, "embedding")
+        if _blob_matches_current_embedding_dim(legacy_blob):
+            return legacy_blob
+    return None
+
+
+def _row_embedding_array(row, conn: Optional[sqlite3.Connection] = None, context: Optional[dict] = None) -> Optional[np.ndarray]:
+    blob = _row_embedding_blob(row, conn=conn, context=context)
+    if not blob:
+        return None
+    arr = _blob_to_array(blob)
+    if len(arr) != EMBEDDING_DIM:
+        return None
+    return arr
+
+
+def _embedding_migration_uses_shadow(conn: sqlite3.Connection) -> bool:
+    return bool(_active_embedding_context(conn).get("shadow_active"))
+
+
+def _embedding_migration_allows_hnsw(conn: sqlite3.Connection) -> bool:
+    context = _active_embedding_context(conn)
+    return bool(context.get("shadow_active") or context.get("legacy_active"))
+
+
+def _invalidate_embedding_indexes() -> None:
+    try:
+        import hnsw_index
+
+        hnsw_index.invalidate("both", remove_persisted=True)
+    except Exception:
+        pass
+
+
+def _ensure_embedding_indexes_invalidated(conn: sqlite3.Connection, marker: str, *, commit: bool = True) -> bool:
+    marker = str(marker or "")
+    if not marker:
+        return False
+    if _embedding_state_value(conn, "embedding_hnsw_invalidated_marker") == marker:
+        return False
+    _invalidate_embedding_indexes()
+    _write_embedding_state(conn, "embedding_hnsw_invalidated_marker", marker, commit=False)
+    if commit:
+        conn.commit()
+    return True
+
+
+def _auto_migrate_embeddings(conn: sqlite3.Connection):
+    """Re-embed safely when vector dimension or pinned embedding model changes.
+
+    The legacy ``embedding`` column remains untouched. New vectors are written to
+    shadow columns and become active only after every row has been migrated.
+    """
+    current_marker = ""
+    stored_marker = ""
+    try:
+        _ensure_embedding_model_state(conn)
+        _ensure_embedding_shadow_columns(conn)
+        current_marker = _current_embedding_model_marker()
+        stored_marker = _embedding_state_value(conn, "embedding_model_marker")
+
+        first_row = _first_embedding_row(conn)
+        if not first_row:
+            _write_embedding_state(conn, "embedding_storage", "shadow_v2", commit=False)
+            _write_embedding_state(conn, "embedding_migration_error", "", commit=False)
+            _record_embedding_migration_run(
+                conn,
+                old_marker=stored_marker,
+                new_marker=current_marker,
+                status="completed",
+                total_rows=0,
+                migrated_rows=0,
+            )
+            _write_embedding_model_marker(conn, current_marker)
+            _ensure_embedding_indexes_invalidated(conn, current_marker)
+            return
+
+        storage = _embedding_state_value(conn, "embedding_storage", "legacy")
+        counts = _embedding_table_counts(conn, current_marker)
+        if storage == "shadow_v2" and stored_marker == current_marker and counts["pending"] == 0:
+            _ensure_embedding_indexes_invalidated(conn, current_marker)
+            return
+
+        if counts["pending"] == 0:
+            _write_embedding_state(conn, "embedding_storage", "shadow_v2", commit=False)
+            _write_embedding_model_marker(conn, current_marker)
+            _record_embedding_migration_run(
+                conn,
+                old_marker=stored_marker,
+                new_marker=current_marker,
+                status="completed",
+                total_rows=counts["total"],
+                migrated_rows=counts["migrated"],
+                backup_path=_embedding_state_value(conn, "embedding_migration_backup_path"),
+            )
+            _ensure_embedding_indexes_invalidated(conn, current_marker)
+            return
+
+        backup_path = _embedding_state_value(conn, "embedding_migration_backup_path")
+        backup_marker = _embedding_state_value(conn, "embedding_migration_backup_marker")
+        if backup_marker != current_marker or not backup_path:
+            backup = _backup_cognitive_db_for_embedding_migration(stored_marker, current_marker, conn=conn)
+            if not backup:
+                raise RuntimeError("embedding migration backup failed")
+            backup_path = str(backup)
+            _write_embedding_state(conn, "embedding_migration_backup_marker", current_marker, commit=False)
+            _write_embedding_state(conn, "embedding_migration_backup_path", backup_path, commit=False)
+
+        _record_embedding_migration_run(
+            conn,
+            old_marker=stored_marker,
+            new_marker=current_marker,
+            status="running",
+            total_rows=counts["total"],
+            migrated_rows=counts["migrated"],
+            backup_path=backup_path,
+        )
+
+        model = _get_model()
+        batch_size = max(1, EMBEDDING_MIGRATION_BATCH_SIZE)
+        for table in EMBEDDING_MEMORY_TABLES:
+            while True:
+                rows = conn.execute(
+                    f"""
+                    SELECT id, content FROM {table}
+                    WHERE embedding_v2 IS NULL
+                       OR embedding_v2_model_marker != ?
+                    ORDER BY id
+                    LIMIT ?
+                    """,
+                    (current_marker, batch_size),
+                ).fetchall()
+                if not rows:
+                    break
+
+                contents = [r["content"] for r in rows]
+                embeddings = list(model.embed(contents))
+                if len(embeddings) != len(rows):
+                    raise RuntimeError(
+                        f"embedding batch length mismatch: {len(embeddings)} != {len(rows)}"
+                    )
+
+                for row, emb in zip(rows, embeddings):
+                    arr = np.array(emb, dtype=np.float32)
+                    if len(arr) != EMBEDDING_DIM:
+                        raise ValueError(f"embedding dimension mismatch: {len(arr)} != {EMBEDDING_DIM}")
+                    conn.execute(
+                        f"""
+                        UPDATE {table}
+                        SET embedding_v2 = ?,
+                            embedding_v2_model_marker = ?,
+                            embedding_v2_error = ''
+                        WHERE id = ?
+                        """,
+                        (arr.tobytes(), current_marker, row["id"]),
+                    )
+
+                counts = _embedding_table_counts(conn, current_marker)
+                _record_embedding_migration_run(
+                    conn,
+                    old_marker=stored_marker,
+                    new_marker=current_marker,
+                    status="running",
+                    total_rows=counts["total"],
+                    migrated_rows=counts["migrated"],
+                    backup_path=backup_path,
+                )
+
+        counts = _embedding_table_counts(conn, current_marker)
+        if counts["pending"] == 0 and counts["errored"] == 0:
+            _write_embedding_state(conn, "embedding_storage", "shadow_v2", commit=False)
+            _write_embedding_state(conn, "embedding_migration_error", "", commit=False)
+            _write_embedding_model_marker(conn, current_marker)
+            _record_embedding_migration_run(
+                conn,
+                old_marker=stored_marker,
+                new_marker=current_marker,
+                status="completed",
+                total_rows=counts["total"],
+                migrated_rows=counts["migrated"],
+                backup_path=backup_path,
+            )
+            _ensure_embedding_indexes_invalidated(conn, current_marker)
+        else:
+            _record_embedding_migration_run(
+                conn,
+                old_marker=stored_marker,
+                new_marker=current_marker,
+                status="partial",
+                total_rows=counts["total"],
+                migrated_rows=counts["migrated"],
+                error=json.dumps({"pending": counts["pending"], "errored": counts["errored"]}, sort_keys=True),
+                backup_path=backup_path,
+            )
+    except Exception as exc:
+        try:
+            _ensure_embedding_model_state(conn)
+            counts = _embedding_table_counts(conn, current_marker) if current_marker else {"total": 0, "migrated": 0}
+            _record_embedding_migration_run(
+                conn,
+                old_marker=stored_marker,
+                new_marker=current_marker or "unknown",
+                status="failed",
+                total_rows=counts.get("total", 0),
+                migrated_rows=counts.get("migrated", 0),
+                error=str(exc),
+                backup_path=_embedding_state_value(conn, "embedding_migration_backup_path"),
+            )
+        except Exception:
+            pass
         pass  # Don't break startup if migration fails
 
 
@@ -395,6 +939,7 @@ def _current_embedding_model_marker() -> str:
 
 
 def _write_embedding_model_marker(conn: sqlite3.Connection, marker: str) -> None:
+    _ensure_embedding_model_state(conn)
     conn.execute(
         """
         INSERT INTO embedding_model_state (key, value, updated_at)
@@ -408,15 +953,28 @@ def _write_embedding_model_marker(conn: sqlite3.Connection, marker: str) -> None
     conn.commit()
 
 
-def _backup_cognitive_db_for_embedding_migration(old_marker: str, new_marker: str) -> None:
+def _backup_cognitive_db_for_embedding_migration(
+    old_marker: str,
+    new_marker: str,
+    conn: Optional[sqlite3.Connection] = None,
+):
     db_path = Path(COGNITIVE_DB)
     if not db_path.exists():
-        return
+        return None
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     backup = db_path.with_name(f"{db_path.name}.bak-embedding-{stamp}")
     meta = backup.with_suffix(backup.suffix + ".json")
+    source_conn = None
+    dest_conn = None
     try:
-        shutil.copy2(db_path, backup)
+        dest_conn = sqlite3.connect(str(backup))
+        if conn is None:
+            source_conn = sqlite3.connect(str(db_path))
+            source_conn.backup(dest_conn)
+        else:
+            conn.backup(dest_conn)
+        dest_conn.close()
+        dest_conn = None
         meta.write_text(
             json.dumps(
                 {
@@ -430,8 +988,20 @@ def _backup_cognitive_db_for_embedding_migration(old_marker: str, new_marker: st
             ) + "\n",
             encoding="utf-8",
         )
+        return backup
     except Exception:
-        pass
+        return None
+    finally:
+        if dest_conn is not None:
+            try:
+                dest_conn.close()
+            except Exception:
+                pass
+        if source_conn is not None:
+            try:
+                source_conn.close()
+            except Exception:
+                pass
 
 
 def _init_tables(conn: sqlite3.Connection):

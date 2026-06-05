@@ -34,19 +34,23 @@ class WarmupTarget:
 
 
 def warmup_targets() -> list[WarmupTarget]:
-    from classifier_local import MODEL_ID, MODEL_REVISION
     from local_models import list_local_model_specs
 
-    targets = [
-        WarmupTarget(
-            name="local-zero-shot-classifier",
-            kind="transformers_sequence_classifier",
-            model_id=MODEL_ID,
-            revision=MODEL_REVISION,
-            source="src/classifier_local.py",
-            source_repo=MODEL_ID,
-        ),
-    ]
+    targets: list[WarmupTarget] = []
+    if str(os.environ.get("NEXO_LOCAL_CLASSIFIER", "")).strip().lower() in {"1", "true", "on", "auto"}:
+        from classifier_local import MODEL_ID, MODEL_REVISION
+
+        targets.append(
+            WarmupTarget(
+                name="local-zero-shot-classifier",
+                kind="transformers_sequence_classifier",
+                model_id=MODEL_ID,
+                revision=MODEL_REVISION,
+                source="src/classifier_local.py",
+                source_repo=MODEL_ID,
+                required=False,
+            )
+        )
     for spec in list_local_model_specs():
         targets.append(
             WarmupTarget(

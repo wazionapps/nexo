@@ -66,6 +66,15 @@ def _id_map_path(store: str) -> str:
     return os.path.join(_INDEX_DIR, f"{store}_ids.npy")
 
 
+def _persistent_index_paths(store: str) -> list[str]:
+    paths = [_index_path(store), _id_map_path(store)]
+    # Historical safety: np.save appends .npy when the caller passes a path
+    # without it. Keep the extra candidate so old stray maps are removed too.
+    if not paths[-1].endswith(".npy"):
+        paths.append(f"{paths[-1]}.npy")
+    return paths
+
+
 def should_activate(store: str = "both") -> bool:
     """Check if memory count exceeds threshold, making HNSW worthwhile."""
     if not HNSWLIB_AVAILABLE:
@@ -104,7 +113,7 @@ def build_index(store: str) -> dict:
     table = "stm_memories" if store == "stm" else "ltm_memories"
     where = "promoted_to_ltm = 0" if store == "stm" else "is_dormant = 0"
 
-    rows = db.execute(f"SELECT id, embedding FROM {table} WHERE {where}").fetchall()
+    rows = db.execute(f"SELECT * FROM {table} WHERE {where}").fetchall()
     if not rows:
         return {"count": 0, "store": store, "status": "empty"}
 
@@ -117,9 +126,10 @@ def build_index(store: str) -> dict:
     vectors = []
     internal_ids = []
 
+    embedding_context = cognitive._active_embedding_context(db)
     for i, row in enumerate(rows):
-        vec = np.frombuffer(row["embedding"], dtype=np.float32)
-        if len(vec) != EMBEDDING_DIM:
+        vec = cognitive._row_embedding_array(row, context=embedding_context)
+        if vec is None or len(vec) != EMBEDDING_DIM:
             continue
         vectors.append(vec)
         internal_ids.append(i)
@@ -234,15 +244,33 @@ def add_item(store: str, db_id: int, embedding: np.ndarray) -> bool:
         return False
 
 
-def invalidate(store: str = "both"):
-    """Remove indices from memory (forces rebuild on next use)."""
+def invalidate(store: str = "both", remove_persisted: bool = False):
+    """Remove indices from memory and optionally from disk.
+
+    Persistent index files must be removed whenever the active embedding
+    storage/model changes. Otherwise a later search can reload an index built
+    with obsolete vectors after the in-memory cache has been cleared.
+    """
+    stores = []
     with _index_lock:
         if store in ("both", "stm"):
             _indices.pop("stm", None)
             _id_maps.pop("stm", None)
+            stores.append("stm")
         if store in ("both", "ltm"):
             _indices.pop("ltm", None)
             _id_maps.pop("ltm", None)
+            stores.append("ltm")
+
+    if remove_persisted:
+        for target_store in stores:
+            for target in _persistent_index_paths(target_store):
+                try:
+                    os.remove(target)
+                except FileNotFoundError:
+                    pass
+                except Exception:
+                    pass
 
 
 def stats() -> dict:

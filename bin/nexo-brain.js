@@ -666,6 +666,11 @@ function shouldSkipModelWarmup() {
   return ["1", "true", "yes", "on"].includes(flag);
 }
 
+function shouldInstallLocalClassifierWarmupDeps() {
+  const flag = String(process.env.NEXO_LOCAL_CLASSIFIER || "").trim().toLowerCase();
+  return ["1", "true", "on", "auto"].includes(flag);
+}
+
 function resolveSystemPython() {
   return run("which python3") || run("which python") || "python3";
 }
@@ -705,13 +710,15 @@ function installWarmupPythonDependencies(pythonPath, { quiet = false, installRun
     }
   }
 
-  const classifierResult = spawnSync(
-    pythonPath,
-    [...pipCommon, ...WARMUP_PIP_PACKAGES],
-    { stdio, timeout: WARMUP_TIMEOUT_MS }
-  );
-  if (classifierResult.status !== 0) {
-    throw new Error("failed to install local classifier dependencies for model warmup");
+  if (shouldInstallLocalClassifierWarmupDeps()) {
+    const classifierResult = spawnSync(
+      pythonPath,
+      [...pipCommon, ...WARMUP_PIP_PACKAGES],
+      { stdio, timeout: WARMUP_TIMEOUT_MS }
+    );
+    if (classifierResult.status !== 0) {
+      throw new Error("failed to install local classifier dependencies for model warmup");
+    }
   }
 }
 
@@ -764,6 +771,157 @@ function runDesktopAwareModelWarmup(pythonPath, nexoHome = NEXO_HOME, options = 
     return;
   }
   runMandatoryModelWarmup(pythonPath, nexoHome, options);
+}
+
+function slugifyLocalModelName(value) {
+  return String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+function readManagedModelLock(dir) {
+  try {
+    const lockPath = path.join(dir, ".nexo-model-lock.json");
+    if (!fs.existsSync(lockPath)) return null;
+    const payload = JSON.parse(fs.readFileSync(lockPath, "utf8"));
+    return payload && typeof payload === "object" ? payload : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function isManagedModelRevisionDir(dir, { slug = "", revision = "" } = {}) {
+  const lock = readManagedModelLock(dir);
+  if (!lock) return false;
+  if (!lock.name || !lock.revision || (!lock.model_id && !lock.source_repo)) return false;
+  if (slug && slugifyLocalModelName(lock.name) !== slug) return false;
+  if (revision && String(lock.revision || "") !== String(revision || "")) return false;
+  return true;
+}
+
+function sha256File(filePath) {
+  return crypto.createHash("sha256").update(fs.readFileSync(filePath)).digest("hex");
+}
+
+function cleanupObsoleteRuntimeLlmModels(runtimeModelsDir, manifest, { reason = "install" } = {}) {
+  if (String(process.env.NEXO_KEEP_OBSOLETE_LLM_MODELS || "").trim() === "1") {
+    log(`  Keeping obsolete LLM models by NEXO_KEEP_OBSOLETE_LLM_MODELS=1 (${reason}).`);
+    return [];
+  }
+  if (!fs.existsSync(runtimeModelsDir)) return [];
+
+  const allowed = new Map();
+  for (const spec of manifest.models || []) {
+    const slug = slugifyLocalModelName(spec.name || "");
+    const revision = String(spec.revision || "").trim();
+    if (!slug || !revision) continue;
+    if (!allowed.has(slug)) allowed.set(slug, new Set());
+    allowed.get(slug).add(revision);
+  }
+
+  const removed = [];
+  for (const slugEntry of fs.readdirSync(runtimeModelsDir, { withFileTypes: true })) {
+    if (!slugEntry.isDirectory()) continue;
+    const slug = slugEntry.name;
+    if (slug.startsWith(".")) continue;
+    if (slug === "_hf-cache") continue;
+    const slugDir = path.join(runtimeModelsDir, slug);
+    const allowedRevisions = allowed.get(slug) || new Set();
+    for (const revisionEntry of fs.readdirSync(slugDir, { withFileTypes: true })) {
+      if (!revisionEntry.isDirectory()) continue;
+      const revision = revisionEntry.name;
+      const revisionDir = path.join(slugDir, revision);
+      if (allowedRevisions.has(revision)) continue;
+      if (!isManagedModelRevisionDir(revisionDir, { slug, revision })) continue;
+      fs.rmSync(revisionDir, { recursive: true, force: true });
+      removed.push(path.relative(runtimeModelsDir, revisionDir));
+    }
+    try {
+      if (fs.readdirSync(slugDir).length === 0) fs.rmdirSync(slugDir);
+    } catch (_) {}
+  }
+
+  if (removed.length > 0) {
+    log(`  Removed ${removed.length} obsolete managed LLM model revision(s) (${reason}).`);
+  }
+  return removed;
+}
+
+function copyBundledLlmModelsToRuntime(nexoHome = NEXO_HOME, {
+  reason = "install",
+  bundledModelsDir = path.join(__dirname, "..", "models"),
+  manifestPath = path.join(__dirname, "..", "src", "local_model_manifest.json"),
+} = {}) {
+  // OFFLINE-FIRST: copy bundled LLM models to runtime/models BEFORE warmup,
+  // so fastembed finds them locally and skips HuggingFace downloads.
+  // Bundle layout: resources/brain-bundle/models/<source-repo-name>/<all files>.
+  // Target layout: <NEXO_HOME>/runtime/models/<spec.name slugified>/<revision>/<files>.
+  // We map by source_repo basename to match local_model_manifest.json.
+  if (!fs.existsSync(bundledModelsDir)) return 0;
+  try {
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+    const runtimeModelsDir = path.join(nexoHome, "runtime", "models");
+    let modelsCopied = 0;
+    for (const spec of manifest.models || []) {
+      // Bundle layout supports either model_id basename (e.g.
+      // "bge-base-en-v1.5" from "BAAI/bge-base-en-v1.5") or source_repo
+      // basename (e.g. "bge-base-en-v1.5-onnx-q" from "qdrant/...").
+      const modelIdName = (spec.model_id || "").split("/").pop();
+      const sourceRepoName = (spec.source_repo || "").split("/").pop();
+      let sourceDir = path.join(bundledModelsDir, sourceRepoName);
+      if (!fs.existsSync(sourceDir)) {
+        sourceDir = path.join(bundledModelsDir, modelIdName);
+      }
+      if (!fs.existsSync(sourceDir)) continue;
+      const slug = slugifyLocalModelName(spec.name || "");
+      const targetDir = path.join(runtimeModelsDir, slug, spec.revision);
+      fs.mkdirSync(targetDir, { recursive: true });
+      const missingFiles = [];
+      for (const f of (spec.required_files || [])) {
+        const src = path.join(sourceDir, f.path);
+        const dst = path.join(targetDir, f.path);
+        if (!fs.existsSync(src)) {
+          missingFiles.push(f.path);
+          continue;
+        }
+        fs.mkdirSync(path.dirname(dst), { recursive: true });
+        let shouldCopy = !fs.existsSync(dst) || (f.size && fs.statSync(dst).size !== f.size);
+        if (!shouldCopy && f.sha256 && sha256File(dst) !== f.sha256) {
+          shouldCopy = true;
+        }
+        if (shouldCopy) {
+          fs.copyFileSync(src, dst);
+        }
+        if (f.size && fs.statSync(dst).size !== f.size) {
+          missingFiles.push(`${f.path}:size`);
+          continue;
+        }
+        if (f.sha256) {
+          const actual = sha256File(dst);
+          if (actual !== f.sha256) {
+            missingFiles.push(`${f.path}:sha256`);
+          }
+        }
+      }
+      if (missingFiles.length) {
+        log(`  WARN: bundled LLM model ${spec.name} incomplete (${missingFiles.join(", ")})`);
+        continue;
+      }
+      // Write the lock file to match revision (avoids re-download).
+      fs.writeFileSync(path.join(targetDir, ".nexo-model-lock.json"), JSON.stringify({
+        name: spec.name, kind: spec.kind, model_id: spec.model_id,
+        source_repo: spec.source_repo, revision: spec.revision, model_file: spec.model_file,
+        required_files: spec.required_files,
+      }, null, 2));
+      modelsCopied++;
+    }
+    if (modelsCopied > 0) log(`  Copied ${modelsCopied} pre-bundled LLM model(s) (offline, ${reason}).`);
+    if (modelsCopied > 0 && modelsCopied === (manifest.models || []).length) {
+      cleanupObsoleteRuntimeLlmModels(runtimeModelsDir, manifest, { reason });
+    }
+    return modelsCopied;
+  } catch (err) {
+    log(`  WARN: bundled models copy failed during ${reason}: ${err.message}`);
+    return 0;
+  }
 }
 
 async function runWarmupModelsCommand(args) {
@@ -3216,6 +3374,7 @@ async function runSetup() {
           log("  Python dependencies reconciled.");
         }
 
+        copyBundledLlmModelsToRuntime(NEXO_HOME, { reason: "update" });
         const migPythonForWarmup = findVenvPython(NEXO_HOME) || "python3";
         runDesktopAwareModelWarmup(migPythonForWarmup, NEXO_HOME, { reason: "update", installRuntimeDeps: false });
 
@@ -3492,6 +3651,7 @@ async function runSetup() {
         stampRuntimeRepairBaseline(NEXO_HOME, "bin.nexo-brain.same-version-repair")
       );
 
+      copyBundledLlmModelsToRuntime(NEXO_HOME, { reason: "repair" });
       runDesktopAwareModelWarmup(syncPython, NEXO_HOME, { reason: "repair" });
       logMacPermissionsNotice(NEXO_HOME, syncPython);
 
@@ -3935,71 +4095,7 @@ async function runSetup() {
   }
   log("Dependencies installed.");
 
-  // OFFLINE-FIRST: copy bundled LLM models to runtime/models BEFORE warmup,
-  // so fastembed finds them locally and skips the ~217MB HuggingFace download.
-  // Bundle layout: resources/brain-bundle/models/<source-repo-name>/<all files>.
-  // Target layout: <NEXO_HOME>/runtime/models/<spec.name slugified>/<revision>/<files>.
-  // We map by source_repo basename to match local_model_manifest.json.
-  const bundledModelsDir = path.join(__dirname, "..", "models");
-  if (fs.existsSync(bundledModelsDir)) {
-    try {
-      const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "src", "local_model_manifest.json"), "utf8"));
-      const runtimeModelsDir = path.join(NEXO_HOME, "runtime", "models");
-      let modelsCopied = 0;
-      for (const spec of manifest.models || []) {
-        // Bundle layout supports either model_id basename (e.g.
-        // "bge-base-en-v1.5" from "BAAI/bge-base-en-v1.5") or source_repo
-        // basename (e.g. "bge-base-en-v1.5-onnx-q" from "qdrant/...").
-        const modelIdName = (spec.model_id || "").split("/").pop();
-        const sourceRepoName = (spec.source_repo || "").split("/").pop();
-        let sourceDir = path.join(bundledModelsDir, modelIdName);
-        if (!fs.existsSync(sourceDir)) {
-          sourceDir = path.join(bundledModelsDir, sourceRepoName);
-        }
-        if (!fs.existsSync(sourceDir)) continue;
-        const slug = (spec.name || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-        const targetDir = path.join(runtimeModelsDir, slug, spec.revision);
-        fs.mkdirSync(targetDir, { recursive: true });
-        const missingFiles = [];
-        for (const f of (spec.required_files || [])) {
-          const src = path.join(sourceDir, f.path);
-          const dst = path.join(targetDir, f.path);
-          if (!fs.existsSync(src)) {
-            missingFiles.push(f.path);
-            continue;
-          }
-          fs.mkdirSync(path.dirname(dst), { recursive: true });
-          if (!fs.existsSync(dst) || (f.size && fs.statSync(dst).size !== f.size)) {
-            fs.copyFileSync(src, dst);
-          }
-          if (f.size && fs.statSync(dst).size !== f.size) {
-            missingFiles.push(`${f.path}:size`);
-            continue;
-          }
-          if (f.sha256) {
-            const actual = crypto.createHash("sha256").update(fs.readFileSync(dst)).digest("hex");
-            if (actual !== f.sha256) {
-              missingFiles.push(`${f.path}:sha256`);
-            }
-          }
-        }
-        if (missingFiles.length) {
-          log(`  WARN: bundled LLM model ${spec.name} incomplete (${missingFiles.join(", ")})`);
-          continue;
-        }
-        // Write the lock file to match revision (avoids re-download).
-        fs.writeFileSync(path.join(targetDir, ".nexo-model-lock.json"), JSON.stringify({
-          name: spec.name, kind: spec.kind, model_id: spec.model_id,
-          source_repo: spec.source_repo, revision: spec.revision, model_file: spec.model_file,
-          required_files: spec.required_files,
-        }, null, 2));
-        modelsCopied++;
-      }
-      if (modelsCopied > 0) log(`  Copied ${modelsCopied} pre-bundled LLM model(s) (offline).`);
-    } catch (err) {
-      log(`  WARN: bundled models copy failed: ${err.message}`);
-    }
-  }
+  copyBundledLlmModelsToRuntime(NEXO_HOME, { reason: "install" });
 
   runDesktopAwareModelWarmup(python, NEXO_HOME, { reason: "install", installRuntimeDeps: false });
 
@@ -5121,4 +5217,13 @@ if (isCliEntrypoint()) {
     console.error("Setup failed:", err.message);
     process.exit(1);
   });
+} else {
+  module.exports = {
+    cleanupObsoleteRuntimeLlmModels,
+    copyBundledLlmModelsToRuntime,
+    isManagedModelRevisionDir,
+    readManagedModelLock,
+    sha256File,
+    slugifyLocalModelName,
+  };
 }

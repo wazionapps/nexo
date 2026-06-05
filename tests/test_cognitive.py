@@ -412,7 +412,7 @@ def test_memory_personalization_changes_decay_rate():
     assert easier < harder
 
 
-def test_embedding_migration_reembeds_when_model_marker_changes(tmp_path, monkeypatch):
+def test_embedding_migration_uses_shadow_columns_when_model_marker_changes(tmp_path, monkeypatch):
     import importlib
     import sqlite3
 
@@ -446,14 +446,23 @@ def test_embedding_migration_reembeds_when_model_marker_changes(tmp_path, monkey
 
     _core._auto_migrate_embeddings(conn)
 
-    row = conn.execute("SELECT embedding FROM stm_memories LIMIT 1").fetchone()
-    migrated = np.frombuffer(row["embedding"], dtype=np.float32)
+    row = conn.execute(
+        "SELECT embedding, embedding_v2, embedding_v2_model_marker FROM stm_memories LIMIT 1"
+    ).fetchone()
+    legacy = np.frombuffer(row["embedding"], dtype=np.float32)
+    migrated = np.frombuffer(row["embedding_v2"], dtype=np.float32)
     marker = conn.execute(
         "SELECT value FROM embedding_model_state WHERE key = 'embedding_model_marker'"
     ).fetchone()["value"]
+    storage = conn.execute(
+        "SELECT value FROM embedding_model_state WHERE key = 'embedding_storage'"
+    ).fetchone()["value"]
 
+    assert legacy[0] == pytest.approx(1.0)
     assert migrated[0] == pytest.approx(0.25)
+    assert row["embedding_v2_model_marker"] == "new-multilingual-model"
     assert marker == "new-multilingual-model"
+    assert storage == "shadow_v2"
     assert list(tmp_path.glob("cognitive.db.bak-embedding-*"))
 
 

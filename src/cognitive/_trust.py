@@ -3,7 +3,10 @@ import os
 import re
 import numpy as np
 from datetime import datetime, timedelta, timezone
-from cognitive._core import _get_db, embed, cosine_similarity, _blob_to_array
+from cognitive._core import (
+    _get_db, embed, cosine_similarity,
+    _active_embedding_context, _row_embedding_array,
+)
 from cognitive._core import (
     POSITIVE_SIGNALS,
     NEGATIVE_SIGNALS,
@@ -127,17 +130,24 @@ def detect_dissonance(new_instruction: str, min_score: float = 0.65) -> list[dic
         List of conflicting memories with their strength and content
     """
     db = _get_db()
+    embedding_context = _active_embedding_context(db)
     query_vec = embed(new_instruction[:500])
     if np.linalg.norm(query_vec) == 0:
         return []
 
     rows = db.execute(
-        "SELECT id, content, embedding, source_type, domain, strength, access_count FROM ltm_memories WHERE is_dormant = 0 AND strength > 0.8"
+        """
+        SELECT id, content, embedding, embedding_v2, embedding_v2_model_marker,
+               source_type, domain, strength, access_count
+        FROM ltm_memories WHERE is_dormant = 0 AND strength > 0.8
+        """
     ).fetchall()
 
     conflicts = []
     for row in rows:
-        vec = _blob_to_array(row["embedding"])
+        vec = _row_embedding_array(row, context=embedding_context)
+        if vec is None:
+            continue
         score = cosine_similarity(query_vec, vec)
         if score >= min_score:
             conflicts.append({

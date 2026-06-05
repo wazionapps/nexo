@@ -48,6 +48,7 @@ def test_server_exposes_protocol_runtime_tools(isolated_db):
         "nexo_memory_search",
         "nexo_memory_answer",
         "nexo_memory_timeline",
+        "nexo_embedding_migration_status",
         "nexo_pre_answer_route",
         "nexo_evidence_search",
         "nexo_evidence_record",
@@ -77,6 +78,7 @@ def test_memory_tools_are_registered_with_fastmcp(isolated_db):
         "nexo_memory_search",
         "nexo_memory_answer",
         "nexo_memory_timeline",
+        "nexo_embedding_migration_status",
     ):
         assert name in names
 

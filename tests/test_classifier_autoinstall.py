@@ -16,6 +16,7 @@ def _reload_auto_update(monkeypatch, home: Path):
 
 
 def test_skip_when_already_installed(monkeypatch, tmp_path):
+    monkeypatch.setenv("NEXO_LOCAL_CLASSIFIER", "auto")
     au = _reload_auto_update(monkeypatch, tmp_path)
     monkeypatch.setattr(
         au,
@@ -37,7 +38,43 @@ def test_skip_when_already_installed(monkeypatch, tmp_path):
     assert payload["torch_version"] == "8.8.8"
 
 
-def test_install_runs_when_missing(monkeypatch, tmp_path):
+def test_default_defers_when_missing(monkeypatch, tmp_path):
+    au = _reload_auto_update(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        au.subprocess,
+        "run",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("pip should not run by default")),
+    )
+
+    au._CLASSIFIER_INSTALL_THREAD = None
+    au._maybe_install_local_classifier()
+
+    payload = json.loads((tmp_path / "runtime" / "operations" / "classifier-install-state.json").read_text())
+    assert payload["deferred"] is True
+    assert payload["reason"] == "not_bundled"
+    assert payload["deps_ok"] is False
+
+
+def test_install_alias_defers_like_default(monkeypatch, tmp_path):
+    monkeypatch.setenv("NEXO_LOCAL_CLASSIFIER", "install")
+    au = _reload_auto_update(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        au.subprocess,
+        "run",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("pip should not run for install alias")),
+    )
+
+    au._CLASSIFIER_INSTALL_THREAD = None
+    au._maybe_install_local_classifier()
+
+    payload = json.loads((tmp_path / "runtime" / "operations" / "classifier-install-state.json").read_text())
+    assert payload["deferred"] is True
+    assert payload["reason"] == "not_bundled"
+    assert payload["deps_ok"] is False
+
+
+def test_install_runs_when_missing_and_explicitly_enabled(monkeypatch, tmp_path):
+    monkeypatch.setenv("NEXO_LOCAL_CLASSIFIER", "auto")
     au = _reload_auto_update(monkeypatch, tmp_path)
     calls: list[list[str]] = []
     monkeypatch.setenv("VIRTUAL_ENV", "/tmp/nexo-venv")
@@ -94,6 +131,7 @@ def test_opt_out_via_env(monkeypatch, tmp_path):
 
 
 def test_pip_failure_no_crash(monkeypatch, tmp_path):
+    monkeypatch.setenv("NEXO_LOCAL_CLASSIFIER", "auto")
     au = _reload_auto_update(monkeypatch, tmp_path)
     probe_results = iter([
         (False, {}, ["transformers"]),

@@ -17,6 +17,8 @@ from cognitive._core import (
     _get_db, _init_tables, _migrate_lifecycle, _migrate_co_activation,
     _migrate_memory_personalization,
     _auto_migrate_embeddings,
+    embedding_migration_status,
+    _active_embedding_context, _row_embedding_array, _embedding_migration_uses_shadow,
     _get_model, _get_reranker, rerank_results,
     embed, cosine_similarity, _array_to_blob, _blob_to_array,
     extract_temporal_date, redact_secrets,

@@ -4,7 +4,8 @@ import numpy as np
 from datetime import datetime, timedelta
 from typing import Optional
 from cognitive._core import (
-    _get_db, embed, cosine_similarity, _blob_to_array, _array_to_blob,
+    _get_db, embed, cosine_similarity, _array_to_blob,
+    _active_embedding_context, _row_embedding_array, _row_embedding_blob,
     redact_secrets, extract_temporal_date, EMBEDDING_DIM,
     PE_GATE_REJECT, PE_GATE_REFINE, _gate_stats,
     initial_memory_profile, rehearsal_profile_update,
@@ -19,6 +20,13 @@ def _hnsw_notify_insert(store: str, db_id: int, vec: np.ndarray):
             hnsw_index.add_item(store, db_id, vec)
     except Exception:
         pass
+
+
+def _shadow_embedding_values(db, blob):
+    context = _active_embedding_context(db)
+    if context.get("shadow_active"):
+        return blob, context.get("current_marker", ""), ""
+    return None, "", ""
 
 def ingest(
     content: str,
@@ -76,6 +84,7 @@ def ingest(
     was_redacted = 1 if clean_content != content else 0
     vec = embed(clean_content)
     blob = _array_to_blob(vec)
+    shadow_blob, shadow_marker, shadow_error = _shadow_embedding_values(db, blob)
     temporal = extract_temporal_date(content)
     stability, difficulty = initial_memory_profile(source_type, store="stm")
 
@@ -89,16 +98,26 @@ def ingest(
     # user_direct = fast-track: quarantine then immediate promote
     if source == "user_direct" and not skip_quarantine:
         cur = db.execute(
-            """INSERT INTO quarantine (content, embedding, source, source_type, source_id, source_title, domain, confidence, status, promoted_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, 1.0, 'promoted', datetime('now'))""",
-            (clean_content, blob, source, source_type, source_id, source_title, domain)
+            """INSERT INTO quarantine (
+                   content, embedding, embedding_v2, embedding_v2_model_marker, embedding_v2_error,
+                   source, source_type, source_id, source_title, domain, confidence, status, promoted_at
+               )
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1.0, 'promoted', datetime('now'))""",
+            (clean_content, blob, shadow_blob, shadow_marker, shadow_error,
+             source, source_type, source_id, source_title, domain)
         )
         db.commit()
         # Now actually store in STM
         cur2 = db.execute(
-            """INSERT INTO stm_memories (content, embedding, source_type, source_id, source_title, domain, redaction_applied, temporal_date, lifecycle_state, stability, difficulty)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (clean_content, blob, source_type, source_id, source_title, domain, was_redacted, temporal, _pin_lifecycle, stability, difficulty)
+            """INSERT INTO stm_memories (
+                   content, embedding, embedding_v2, embedding_v2_model_marker, embedding_v2_error,
+                   source_type, source_id, source_title, domain, redaction_applied, temporal_date,
+                   lifecycle_state, stability, difficulty
+               )
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (clean_content, blob, shadow_blob, shadow_marker, shadow_error,
+             source_type, source_id, source_title, domain, was_redacted, temporal,
+             _pin_lifecycle, stability, difficulty)
         )
         db.commit()
         _hnsw_notify_insert("stm", cur2.lastrowid, vec)
@@ -107,9 +126,15 @@ def ingest(
     # skip_quarantine = direct STM (backward compatibility)
     if skip_quarantine:
         cur = db.execute(
-            """INSERT INTO stm_memories (content, embedding, source_type, source_id, source_title, domain, redaction_applied, temporal_date, lifecycle_state, stability, difficulty)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (clean_content, blob, source_type, source_id, source_title, domain, was_redacted, temporal, _pin_lifecycle, stability, difficulty)
+            """INSERT INTO stm_memories (
+                   content, embedding, embedding_v2, embedding_v2_model_marker, embedding_v2_error,
+                   source_type, source_id, source_title, domain, redaction_applied, temporal_date,
+                   lifecycle_state, stability, difficulty
+               )
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (clean_content, blob, shadow_blob, shadow_marker, shadow_error,
+             source_type, source_id, source_title, domain, was_redacted, temporal,
+             _pin_lifecycle, stability, difficulty)
         )
         db.commit()
         _hnsw_notify_insert("stm", cur.lastrowid, vec)
@@ -117,9 +142,13 @@ def ingest(
 
     # Route to quarantine
     cur = db.execute(
-        """INSERT INTO quarantine (content, embedding, source, source_type, source_id, source_title, domain)
-           VALUES (?, ?, ?, ?, ?, ?, ?)""",
-        (clean_content, blob, source, source_type, source_id, source_title, domain)
+        """INSERT INTO quarantine (
+               content, embedding, embedding_v2, embedding_v2_model_marker, embedding_v2_error,
+               source, source_type, source_id, source_title, domain
+           )
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (clean_content, blob, shadow_blob, shadow_marker, shadow_error,
+         source, source_type, source_id, source_title, domain)
     )
     db.commit()
     return -cur.lastrowid  # Negative = quarantined
@@ -248,11 +277,16 @@ def ingest_to_ltm(
     was_redacted = 1 if clean_content != content else 0
     vec = embed(clean_content)
     blob = _array_to_blob(vec)
+    shadow_blob, shadow_marker, shadow_error = _shadow_embedding_values(db, blob)
     stability, difficulty = initial_memory_profile(source_type, store="ltm")
     cur = db.execute(
-        """INSERT INTO ltm_memories (content, embedding, source_type, source_id, source_title, domain, tags, redaction_applied, stability, difficulty)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (clean_content, blob, source_type, source_id, source_title, domain, tags, was_redacted, stability, difficulty)
+        """INSERT INTO ltm_memories (
+               content, embedding, embedding_v2, embedding_v2_model_marker, embedding_v2_error,
+               source_type, source_id, source_title, domain, tags, redaction_applied, stability, difficulty
+           )
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (clean_content, blob, shadow_blob, shadow_marker, shadow_error,
+         source_type, source_id, source_title, domain, tags, was_redacted, stability, difficulty)
     )
     db.commit()
     return cur.lastrowid
@@ -269,12 +303,17 @@ def ingest_sensory(
     was_redacted = 1 if clean_content != content else 0
     vec = embed(clean_content)
     blob = _array_to_blob(vec)
+    shadow_blob, shadow_marker, shadow_error = _shadow_embedding_values(db, blob)
     ts = created_at or datetime.utcnow().isoformat()
     stability, difficulty = initial_memory_profile("sensory", store="stm")
     cur = db.execute(
-        """INSERT INTO stm_memories (content, embedding, source_type, source_id, domain, created_at, redaction_applied, stability, difficulty)
-           VALUES (?, ?, 'sensory', ?, ?, ?, ?, ?, ?)""",
-        (clean_content, blob, source_id, domain, ts, was_redacted, stability, difficulty)
+        """INSERT INTO stm_memories (
+               content, embedding, embedding_v2, embedding_v2_model_marker, embedding_v2_error,
+               source_type, source_id, domain, created_at, redaction_applied, stability, difficulty
+           )
+           VALUES (?, ?, ?, ?, ?, 'sensory', ?, ?, ?, ?, ?, ?)""",
+        (clean_content, blob, shadow_blob, shadow_marker, shadow_error,
+         source_id, domain, ts, was_redacted, stability, difficulty)
     )
     db.commit()
     return cur.lastrowid
@@ -320,6 +359,7 @@ def prediction_error_gate(
         return (False, 0.0, "rejected", None)
 
     db = _get_db()
+    embedding_context = _active_embedding_context(db)
     best_score = 0.0
     best_match = None
 
@@ -332,11 +372,16 @@ def prediction_error_gate(
             extra_where = " AND is_dormant = 0"
 
         rows = db.execute(
-            f"SELECT id, content, embedding, source_type, domain FROM {table} WHERE 1=1{extra_where}"
+            f"""
+            SELECT id, content, embedding, embedding_v2, embedding_v2_model_marker, source_type, domain
+            FROM {table} WHERE 1=1{extra_where}
+            """
         ).fetchall()
 
         for row in rows:
-            vec = _blob_to_array(row["embedding"])
+            vec = _row_embedding_array(row, context=embedding_context)
+            if vec is None:
+                continue
             score = cosine_similarity(content_vec, vec)
             if score > best_score:
                 best_score = score
@@ -425,6 +470,7 @@ def _refine_memory(match_info: dict, new_content: str) -> int:
     merged_content = match_info["content"] + "\n\n[REFINED]: " + new_content
     new_vec = embed(merged_content)
     new_blob = _array_to_blob(new_vec)
+    shadow_blob, shadow_marker, shadow_error = _shadow_embedding_values(db, new_blob)
     now = datetime.utcnow().isoformat()
     new_stability, new_difficulty = rehearsal_profile_update(
         current_stability,
@@ -434,9 +480,12 @@ def _refine_memory(match_info: dict, new_content: str) -> int:
     )
 
     db.execute(
-        f"UPDATE {table} SET content = ?, embedding = ?, strength = MIN(1.0, strength + 0.15), "
+        f"UPDATE {table} SET content = ?, embedding = ?, embedding_v2 = ?, "
+        f"embedding_v2_model_marker = ?, embedding_v2_error = ?, "
+        f"strength = MIN(1.0, strength + 0.15), "
         f"access_count = access_count + 1, last_accessed = ?, stability = ?, difficulty = ? WHERE id = ?",
-        (merged_content, new_blob, now, new_stability, new_difficulty, memory_id)
+        (merged_content, new_blob, shadow_blob, shadow_marker, shadow_error,
+         now, new_stability, new_difficulty, memory_id)
     )
     db.commit()
     return memory_id
@@ -457,10 +506,18 @@ def get_gate_stats() -> dict:
 def detect_patterns(content_vec: np.ndarray, threshold: float = 0.65) -> list[dict]:
     """Compare a vector against LTM to find matching patterns (potential repetitions)."""
     db = _get_db()
-    rows = db.execute("SELECT id, content, embedding, source_type, domain FROM ltm_memories WHERE is_dormant = 0").fetchall()
+    embedding_context = _active_embedding_context(db)
+    rows = db.execute(
+        """
+        SELECT id, content, embedding, embedding_v2, embedding_v2_model_marker, source_type, domain
+        FROM ltm_memories WHERE is_dormant = 0
+        """
+    ).fetchall()
     matches = []
     for row in rows:
-        vec = _blob_to_array(row["embedding"])
+        vec = _row_embedding_array(row, context=embedding_context)
+        if vec is None:
+            continue
         score = cosine_similarity(content_vec, vec)
         if score >= threshold:
             matches.append({
@@ -506,8 +563,12 @@ def _check_quarantine_contradiction(content_vec: np.ndarray, new_content: str = 
     checking for negation/opposition markers in the content.
     """
     db = _get_db()
+    embedding_context = _active_embedding_context(db)
     rows = db.execute(
-        "SELECT id, content, embedding, strength FROM ltm_memories WHERE is_dormant = 0 AND strength > 0.5"
+        """
+        SELECT id, content, embedding, embedding_v2, embedding_v2_model_marker, strength
+        FROM ltm_memories WHERE is_dormant = 0 AND strength > 0.5
+        """
     ).fetchall()
 
     # Opposition markers — if the new content negates what LTM says
@@ -519,7 +580,9 @@ def _check_quarantine_contradiction(content_vec: np.ndarray, new_content: str = 
     new_lower = new_content.lower() if new_content else ""
 
     for row in rows:
-        vec = _blob_to_array(row["embedding"])
+        vec = _row_embedding_array(row, context=embedding_context)
+        if vec is None:
+            continue
         score = cosine_similarity(content_vec, vec)
         if score >= 0.8:
             # High similarity — but is it confirmation or contradiction?
@@ -553,22 +616,33 @@ def _check_quarantine_contradiction(content_vec: np.ndarray, new_content: str = 
 def _check_quarantine_second_occurrence(content_vec: np.ndarray, exclude_id: int) -> bool:
     """Check if a similar memory already exists in quarantine (promoted or pending) — confirms the pattern."""
     db = _get_db()
+    embedding_context = _active_embedding_context(db)
     rows = db.execute(
-        "SELECT id, embedding FROM quarantine WHERE id != ? AND status IN ('pending', 'promoted')",
+        """
+        SELECT id, embedding, embedding_v2, embedding_v2_model_marker
+        FROM quarantine WHERE id != ? AND status IN ('pending', 'promoted')
+        """,
         (exclude_id,)
     ).fetchall()
     for row in rows:
-        vec = _blob_to_array(row["embedding"])
+        vec = _row_embedding_array(row, context=embedding_context)
+        if vec is None:
+            continue
         score = cosine_similarity(content_vec, vec)
         if score >= 0.75:
             return True
 
     # Also check STM for existing similar memories
     stm_rows = db.execute(
-        "SELECT embedding FROM stm_memories WHERE promoted_to_ltm = 0"
+        """
+        SELECT embedding, embedding_v2, embedding_v2_model_marker
+        FROM stm_memories WHERE promoted_to_ltm = 0
+        """
     ).fetchall()
     for row in stm_rows:
-        vec = _blob_to_array(row["embedding"])
+        vec = _row_embedding_array(row, context=embedding_context)
+        if vec is None:
+            continue
         score = cosine_similarity(content_vec, vec)
         if score >= 0.75:
             return True
@@ -590,6 +664,7 @@ def process_quarantine() -> dict:
         Dict with counts: promoted, rejected, expired, still_pending
     """
     db = _get_db()
+    embedding_context = _active_embedding_context(db)
     now = datetime.utcnow()
     expire_cutoff = (now - timedelta(days=7)).isoformat()
     age_24h = (now - timedelta(hours=24)).isoformat()
@@ -608,7 +683,14 @@ def process_quarantine() -> dict:
         content = row["content"]
         source = row["source"]
         created_at = row["created_at"]
-        content_vec = _blob_to_array(row["embedding"])
+        content_vec = _row_embedding_array(row, context=embedding_context)
+        if content_vec is None:
+            db.execute(
+                "UPDATE quarantine SET promotion_checks = promotion_checks + 1 WHERE id = ?",
+                (q_id,),
+            )
+            still_pending += 1
+            continue
 
         # Check expiration first
         if created_at < expire_cutoff:
@@ -637,10 +719,16 @@ def process_quarantine() -> dict:
 
         if should_promote:
             # Promote to STM
+            active_blob = _row_embedding_blob(row, context=embedding_context) or row["embedding"]
+            shadow_blob = active_blob if embedding_context.get("shadow_active") else None
+            shadow_marker = embedding_context.get("current_marker", "") if shadow_blob else ""
             cur = db.execute(
-                """INSERT INTO stm_memories (content, embedding, source_type, source_id, source_title, domain, redaction_applied, stability, difficulty)
-                   VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)""",
-                (content, row["embedding"], row["source_type"], row["source_id"],
+                """INSERT INTO stm_memories (
+                       content, embedding, embedding_v2, embedding_v2_model_marker, embedding_v2_error,
+                       source_type, source_id, source_title, domain, redaction_applied, stability, difficulty
+                   )
+                   VALUES (?, ?, ?, ?, '', ?, ?, ?, ?, 0, ?, ?)""",
+                (content, active_blob, shadow_blob, shadow_marker, row["source_type"], row["source_id"],
                  row["source_title"], row["domain"], *initial_memory_profile(row["source_type"], store="stm"))
             )
             db.execute(
@@ -712,10 +800,17 @@ def quarantine_promote(quarantine_id: int) -> str:
         return f"Quarantine item #{quarantine_id} is already promoted."
 
     # Insert into STM
+    embedding_context = _active_embedding_context(db)
+    active_blob = _row_embedding_blob(row, context=embedding_context) or row["embedding"]
+    shadow_blob = active_blob if embedding_context.get("shadow_active") else None
+    shadow_marker = embedding_context.get("current_marker", "") if shadow_blob else ""
     db.execute(
-        """INSERT INTO stm_memories (content, embedding, source_type, source_id, source_title, domain, redaction_applied, stability, difficulty)
-           VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)""",
-        (row["content"], row["embedding"], row["source_type"], row["source_id"],
+        """INSERT INTO stm_memories (
+               content, embedding, embedding_v2, embedding_v2_model_marker, embedding_v2_error,
+               source_type, source_id, source_title, domain, redaction_applied, stability, difficulty
+           )
+           VALUES (?, ?, ?, ?, '', ?, ?, ?, ?, 0, ?, ?)""",
+        (row["content"], active_blob, shadow_blob, shadow_marker, row["source_type"], row["source_id"],
          row["source_title"], row["domain"], *initial_memory_profile(row["source_type"], store="stm"))
     )
     db.execute(

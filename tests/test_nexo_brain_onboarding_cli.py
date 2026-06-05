@@ -96,7 +96,7 @@ def test_warmup_models_dry_run_lists_current_local_models_without_onboarding(tmp
     payload = json.loads(proc.stdout)
     targets = {target["name"]: target for target in payload["targets"]}
     model_ids = {target["model_id"] for target in targets.values()}
-    assert "MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7" in model_ids
+    assert "MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7" not in model_ids
     assert "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2" in model_ids
     assert "BAAI/bge-small-en-v1.5" in model_ids
     assert "Xenova/ms-marco-MiniLM-L-6-v2" in model_ids
@@ -139,6 +139,8 @@ def test_onboarding_source_uses_lazy_readline_and_atomic_final_calibration_write
     assert "function getReadline()" in text
     assert "const rl = readline.createInterface" not in text
     assert "function isOnboardingComplete(calibration)" in text
+    assert "function shouldInstallLocalClassifierWarmupDeps()" in text
+    assert "if (shouldInstallLocalClassifierWarmupDeps())" in text
     assert "migrated_from_legacy_calibration" in text
     assert 'writeJsonAtomic(path.join(runtimeBrainDir, "calibration.json"), calibration);' in text
     assert 'fs.writeFileSync(\n    path.join(runtimeBrainDir, "calibration.json")' not in text

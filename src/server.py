@@ -1223,6 +1223,14 @@ def nexo_local_index_models(action: str = "status", local_files_only: bool = Tru
 
 
 @mcp.tool
+def nexo_embedding_migration_status() -> str:
+    """Return read-only status for the cognitive embedding migration."""
+    from cognitive import embedding_migration_status
+
+    return json.dumps(embedding_migration_status(), ensure_ascii=False)
+
+
+@mcp.tool
 def nexo_continuity_snapshot_write(
     conversation_id: str,
     session_id: str = "",

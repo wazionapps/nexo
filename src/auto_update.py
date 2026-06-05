@@ -1211,6 +1211,15 @@ def _local_classifier_install_command() -> list[str]:
     return cmd
 
 
+def _local_classifier_auto_install_enabled() -> bool:
+    return str(os.environ.get("NEXO_LOCAL_CLASSIFIER", "")).strip().lower() in {
+        "1",
+        "true",
+        "on",
+        "auto",
+    }
+
+
 def _install_local_classifier_worker() -> None:
     from classifier_local import MODEL_REVISION
 
@@ -1309,6 +1318,18 @@ def _maybe_install_local_classifier() -> None:
             "model_revision": MODEL_REVISION,
             "deps_ok": False,
             "opt_out": True,
+        })
+        return
+    if not _local_classifier_auto_install_enabled():
+        from classifier_local import MODEL_REVISION
+
+        _write_classifier_install_log("[classifier-install] deferred: model is not bundled; set NEXO_LOCAL_CLASSIFIER=auto to install")
+        _write_classifier_install_state({
+            "installed_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "model_revision": MODEL_REVISION,
+            "deps_ok": False,
+            "deferred": True,
+            "reason": "not_bundled",
         })
         return
     try:

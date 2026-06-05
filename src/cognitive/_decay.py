@@ -3,7 +3,8 @@ import math
 import numpy as np
 from datetime import datetime, timedelta
 from cognitive._core import (
-    _get_db, embed, cosine_similarity, _blob_to_array, _array_to_blob,
+    _get_db, embed, cosine_similarity, _array_to_blob,
+    _active_embedding_context, _row_embedding_array, _row_embedding_blob,
     LAMBDA_STM, LAMBDA_LTM, EMBEDDING_DIM,
     initial_memory_profile, personalize_decay_rate,
 )
@@ -96,6 +97,7 @@ def promote_stm_to_ltm():
     3. source_type in ('learning', 'decision', 'feedback') (high-value by nature)
     """
     db = _get_db()
+    embedding_context = _active_embedding_context(db)
     now = datetime.utcnow()
     age_cutoff = (now - timedelta(days=5)).isoformat()
 
@@ -116,10 +118,17 @@ def promote_stm_to_ltm():
     promoted = 0
     for row in rows:
         redacted = row["redaction_applied"] if "redaction_applied" in row.keys() else 0
+        active_blob = _row_embedding_blob(row, context=embedding_context) or row["embedding"]
+        shadow_blob = active_blob if embedding_context.get("shadow_active") else None
+        shadow_marker = embedding_context.get("current_marker", "") if shadow_blob else ""
         db.execute(
-            """INSERT INTO ltm_memories (content, embedding, source_type, source_id, source_title, domain, original_stm_id, redaction_applied, stability, difficulty)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (row["content"], row["embedding"], row["source_type"], row["source_id"],
+            """INSERT INTO ltm_memories (
+                   content, embedding, embedding_v2, embedding_v2_model_marker, embedding_v2_error,
+                   source_type, source_id, source_title, domain, original_stm_id,
+                   redaction_applied, stability, difficulty
+               )
+               VALUES (?, ?, ?, ?, '', ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (row["content"], active_blob, shadow_blob, shadow_marker, row["source_type"], row["source_id"],
              row["source_title"], row["domain"], row["id"], redacted, row["stability"], row["difficulty"])
         )
         db.execute("UPDATE stm_memories SET promoted_to_ltm = 1 WHERE id = ?", (row["id"],))
@@ -239,30 +248,36 @@ def dream_cycle(max_insights: int = 50) -> dict:
         Dict with 'insights_created' count and 'insights' list of details.
     """
     db = _get_db()
+    embedding_context = _active_embedding_context(db)
     cutoff_24h = (datetime.utcnow() - timedelta(hours=24)).isoformat()
 
     # 1. Gather all memories accessed in the last 24 hours
     recent_memories = []
 
     stm_rows = db.execute(
-        """SELECT id, content, embedding, source_type, source_title, domain, 'stm' as store
+        """SELECT id, content, embedding, embedding_v2, embedding_v2_model_marker,
+                  source_type, source_title, domain, 'stm' as store
            FROM stm_memories
            WHERE last_accessed >= ? AND promoted_to_ltm = 0""",
         (cutoff_24h,)
     ).fetchall()
 
     ltm_rows = db.execute(
-        """SELECT id, content, embedding, source_type, source_title, domain, 'ltm' as store
+        """SELECT id, content, embedding, embedding_v2, embedding_v2_model_marker,
+                  source_type, source_title, domain, 'ltm' as store
            FROM ltm_memories
            WHERE last_accessed >= ? AND is_dormant = 0""",
         (cutoff_24h,)
     ).fetchall()
 
     for row in stm_rows + ltm_rows:
+        vec = _row_embedding_array(row, context=embedding_context)
+        if vec is None:
+            continue
         recent_memories.append({
             "id": row["id"],
             "content": row["content"],
-            "vec": _blob_to_array(row["embedding"]),
+            "vec": vec,
             "source_type": row["source_type"],
             "source_title": row["source_title"] or "",
             "domain": row["domain"] or "",
@@ -335,12 +350,17 @@ def dream_cycle(max_insights: int = 50) -> dict:
         insight_vec = (mem_a["vec"] + mem_b["vec"]) / 2.0
         insight_vec = insight_vec / (np.linalg.norm(insight_vec) or 1.0)  # re-normalize
         blob = _array_to_blob(insight_vec)
+        shadow_blob = blob if embedding_context.get("shadow_active") else None
+        shadow_marker = embedding_context.get("current_marker", "") if shadow_blob else ""
 
         # Store as LTM with dream_insight tag
         cur = db.execute(
-            """INSERT INTO ltm_memories (content, embedding, source_type, source_id, source_title, domain, tags, strength, stability, difficulty)
-               VALUES (?, ?, 'dream_insight', ?, ?, ?, 'dream_insight', 0.5, ?, ?)""",
-            (insight_content, blob,
+            """INSERT INTO ltm_memories (
+                   content, embedding, embedding_v2, embedding_v2_model_marker, embedding_v2_error,
+                   source_type, source_id, source_title, domain, tags, strength, stability, difficulty
+               )
+               VALUES (?, ?, ?, ?, '', 'dream_insight', ?, ?, ?, 'dream_insight', 0.5, ?, ?)""",
+            (insight_content, blob, shadow_blob, shadow_marker,
              f"{mem_a['store']}:{mem_a['id']},{mem_b['store']}:{mem_b['id']}",
              f"Dream: {title_a[:30]} <-> {title_b[:30]}",
              domain_str,

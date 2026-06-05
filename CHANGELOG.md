@@ -1,5 +1,14 @@
 # Changelog
 
+## [7.30.16] - 2026-06-05
+
+### Fixed - local LLM migration safety
+
+- **Embedding migration is resumable and preserves existing memory.** Cognitive memories keep their legacy vectors while new multilingual vectors are written to shadow columns; Brain activates the new vector store only after every row migrates successfully.
+- **Migration state is now machine-readable for Desktop diagnostics.** `nexo_embedding_migration_status` reports status, progress, errors and backup path without warming models or downloading files, so Desktop can detect failures safely.
+- **Packaged installs clean obsolete managed model revisions after the new bundle is complete.** `bin/nexo-brain.js` copies and verifies every model from `local_model_manifest.json` before removing old managed model revisions from `runtime/models`.
+- **Regression coverage pins migration, search and package-update behavior.** Tests cover resumable shadow embeddings, read-only status, bundled model verification and obsolete managed model cleanup.
+
 ## [7.30.14] - 2026-06-05
 
 ### Fixed - support ticket and capability discoverability

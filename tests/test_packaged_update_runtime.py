@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 from unittest import mock
@@ -12,6 +14,10 @@ REPO_SRC = REPO_ROOT / "src"
 
 if str(REPO_SRC) not in sys.path:
     sys.path.insert(0, str(REPO_SRC))
+
+
+def _node_available() -> bool:
+    return shutil.which("node") is not None
 
 
 @pytest.fixture(autouse=True)
@@ -721,13 +727,146 @@ def test_packaged_installer_verifies_bundled_local_models_before_locking():
     installer = REPO_ROOT / "bin" / "nexo-brain.js"
     text = installer.read_text(encoding="utf-8")
 
+    assert "function copyBundledLlmModelsToRuntime" in text
+    assert "function cleanupObsoleteRuntimeLlmModels" in text
     assert 'const missingFiles = [];' in text
     assert 'missingFiles.push(f.path);' in text
     assert 'missingFiles.push(`${f.path}:size`);' in text
-    assert 'crypto.createHash("sha256").update(fs.readFileSync(dst)).digest("hex")' in text
+    assert 'function sha256File(filePath)' in text
     assert 'bundled LLM model ${spec.name} incomplete' in text
     assert 'if (missingFiles.length)' in text
     assert 'fs.writeFileSync(path.join(targetDir, ".nexo-model-lock.json")' in text
+    assert 'modelsCopied === (manifest.models || []).length' in text
+    assert "cleanupObsoleteRuntimeLlmModels(runtimeModelsDir, manifest, { reason });" in text
+    assert 'function readManagedModelLock(dir)' in text
+    assert 'sha256File(dst) !== f.sha256' in text
+    assert 'fs.copyFileSync(src, dst);' in text
+    assert 'isManagedModelRevisionDir(revisionDir, { slug, revision })' in text
+    assert 'fs.rmSync(revisionDir, { recursive: true, force: true });' in text
+
+
+@pytest.mark.skipif(not _node_available(), reason="node not available")
+def test_packaged_installer_repairs_corrupt_same_size_bundled_model_and_cleans_obsolete(tmp_path):
+    bundle = tmp_path / "bundle-models" / "fake-source"
+    bundle.mkdir(parents=True)
+    good = b"GOOD"
+    (bundle / "model.bin").write_bytes(good)
+    manifest = tmp_path / "local_model_manifest.json"
+    manifest.write_text(
+        json.dumps({
+            "version": 1,
+            "models": [{
+                "name": "fake model",
+                "kind": "local_presence_llm",
+                "model_id": "org/fake-id",
+                "source_repo": "org/fake-source",
+                "revision": "rev1",
+                "model_file": "model.bin",
+                "required_files": [{
+                    "path": "model.bin",
+                    "size": len(good),
+                    "sha256": "278f14e96cc67489e5c0d6cebec8a2718fb158ec656fd41fed7ecd031cd472b2",
+                }],
+            }],
+        }),
+        encoding="utf-8",
+    )
+    home = tmp_path / "home"
+    target = home / "runtime" / "models" / "fake-model" / "rev1"
+    target.mkdir(parents=True)
+    (target / "model.bin").write_bytes(b"BADD")
+    obsolete = home / "runtime" / "models" / "fake-model" / "rev0"
+    obsolete.mkdir(parents=True)
+    (obsolete / ".nexo-model-lock.json").write_text(
+        json.dumps({"name": "fake model", "revision": "rev0", "model_id": "org/fake-id"}),
+        encoding="utf-8",
+    )
+    manual = home / "runtime" / "models" / "fake-model" / "manual"
+    manual.mkdir(parents=True)
+
+    runner = tmp_path / "run-copy-models.js"
+    runner.write_text("""
+const fs = require('node:fs');
+const installer = require(process.argv[2]);
+const count = installer.copyBundledLlmModelsToRuntime(process.argv[3], {
+  reason: 'test',
+  bundledModelsDir: process.argv[4],
+  manifestPath: process.argv[5],
+});
+const target = `${process.argv[3]}/runtime/models/fake-model/rev1/model.bin`;
+console.log(JSON.stringify({
+  count,
+  content: fs.readFileSync(target, 'utf8'),
+  lock: fs.existsSync(`${process.argv[3]}/runtime/models/fake-model/rev1/.nexo-model-lock.json`),
+  obsolete: fs.existsSync(`${process.argv[3]}/runtime/models/fake-model/rev0`),
+  manual: fs.existsSync(`${process.argv[3]}/runtime/models/fake-model/manual`),
+}));
+""", encoding="utf-8")
+    result = subprocess.run(
+        ["node", str(runner), str(REPO_ROOT / "bin" / "nexo-brain.js"), str(home), str(tmp_path / "bundle-models"), str(manifest)],
+        capture_output=True,
+        text=True,
+        timeout=20,
+        check=True,
+    )
+    payload = json.loads(result.stdout.strip().splitlines()[-1])
+
+    assert payload == {
+        "count": 1,
+        "content": "GOOD",
+        "lock": True,
+        "obsolete": False,
+        "manual": True,
+    }
+
+
+@pytest.mark.skipif(not _node_available(), reason="node not available")
+def test_packaged_installer_respects_keep_obsolete_models_env(tmp_path):
+    runtime_models = tmp_path / "runtime" / "models"
+    obsolete = runtime_models / "fake-model" / "rev0"
+    obsolete.mkdir(parents=True)
+    (obsolete / ".nexo-model-lock.json").write_text(
+        json.dumps({"name": "fake model", "revision": "rev0", "model_id": "org/fake-id"}),
+        encoding="utf-8",
+    )
+    manifest = {"models": [{"name": "fake model", "revision": "rev1"}]}
+    runner = tmp_path / "run-cleanup-models.js"
+    runner.write_text("""
+const fs = require('node:fs');
+const installer = require(process.argv[2]);
+process.env.NEXO_KEEP_OBSOLETE_LLM_MODELS = '1';
+const removed = installer.cleanupObsoleteRuntimeLlmModels(process.argv[3], JSON.parse(process.argv[4]), { reason: 'test' });
+console.log(JSON.stringify({ removed, exists: fs.existsSync(`${process.argv[3]}/fake-model/rev0`) }));
+""", encoding="utf-8")
+    result = subprocess.run(
+        ["node", str(runner), str(REPO_ROOT / "bin" / "nexo-brain.js"), str(runtime_models), json.dumps(manifest)],
+        capture_output=True,
+        text=True,
+        timeout=20,
+        check=True,
+    )
+    payload = json.loads(result.stdout.strip().splitlines()[-1])
+
+    assert payload == {"removed": [], "exists": True}
+
+
+def test_packaged_update_and_repair_adopt_bundled_local_models_before_warmup():
+    installer = REPO_ROOT / "bin" / "nexo-brain.js"
+    text = installer.read_text(encoding="utf-8")
+
+    update_copy = 'copyBundledLlmModelsToRuntime(NEXO_HOME, { reason: "update" });'
+    update_warmup = 'runDesktopAwareModelWarmup(migPythonForWarmup, NEXO_HOME, { reason: "update", installRuntimeDeps: false });'
+    repair_copy = 'copyBundledLlmModelsToRuntime(NEXO_HOME, { reason: "repair" });'
+    repair_warmup = 'runDesktopAwareModelWarmup(syncPython, NEXO_HOME, { reason: "repair" });'
+    install_copy = 'copyBundledLlmModelsToRuntime(NEXO_HOME, { reason: "install" });'
+    install_warmup = 'runDesktopAwareModelWarmup(python, NEXO_HOME, { reason: "install", installRuntimeDeps: false });'
+
+    for snippet in (update_copy, update_warmup, repair_copy, repair_warmup, install_copy, install_warmup):
+        assert snippet in text
+
+    assert text.index(update_copy) < text.index(update_warmup)
+    assert text.index(repair_copy) < text.index(repair_warmup)
+    assert text.index(install_copy) < text.index(install_warmup)
 
 
 def test_managed_runtime_wrapper_repairs_stale_core_current_before_exec():

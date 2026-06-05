@@ -15,9 +15,10 @@ def _utcnow_naive() -> datetime:
     """
     return datetime.now(timezone.utc).replace(tzinfo=None)
 from cognitive._core import (
-    _get_db, embed, cosine_similarity, _blob_to_array, _array_to_blob,
+    _get_db, embed, cosine_similarity, _blob_to_array,
     _get_model, _get_reranker, rerank_results, EMBEDDING_DIM,
     rehearsal_profile_update,
+    _active_embedding_context, _row_embedding_array, _embedding_migration_allows_hnsw,
 )
 
 _QUERY_INTENT_SCORE_THRESHOLD = 0.72
@@ -44,6 +45,21 @@ _QUERY_INTENT_CUES = {
     "temporal": ("when", "timeline", "date", "fecha", "cuando", "cuándo", "chronology"),
     "technical": ("::", "def ", "class ", "fn ", "function ", "api", "endpoint", "stack trace"),
 }
+
+
+def _search_row_embedding_array(row, context: dict | None = None):
+    vec = _row_embedding_array(row, context=context)
+    if vec is not None:
+        return vec
+    try:
+        raw = row["embedding"]
+    except (KeyError, IndexError, TypeError):
+        return None
+    if context is not None and not context.get("legacy_active") and not isinstance(raw, np.ndarray):
+        return None
+    if isinstance(raw, np.ndarray):
+        return _blob_to_array(raw)
+    return None
 
 
 def _query_intent_cache_key(query: str) -> str:
@@ -1116,23 +1132,25 @@ def search(
         query_vec = embed(query_text)
     if np.linalg.norm(query_vec) == 0:
         return []
+    embedding_context = _active_embedding_context(db)
 
     # Auto-restore snoozed memories whose snooze_until has passed
     _auto_restore_snoozed(db)
 
     # HNSW fast-path: use approximate nearest neighbors when available
     _hnsw_candidates = None
-    try:
-        import hnsw_index
-        if hnsw_index.is_available() and hnsw_index.should_activate(stores):
-            _hnsw_candidates = {}
-            for s in (["stm", "ltm"] if stores == "both" else [stores]):
-                hits = hnsw_index.search(query_vec, store=s, top_k=top_k * 4)
-                if hits:
-                    for db_id, score in hits:
-                        _hnsw_candidates[(s, db_id)] = score
-    except Exception:
-        _hnsw_candidates = None
+    if _embedding_migration_allows_hnsw(db):
+        try:
+            import hnsw_index
+            if hnsw_index.is_available() and hnsw_index.should_activate(stores):
+                _hnsw_candidates = {}
+                for s in (["stm", "ltm"] if stores == "both" else [stores]):
+                    hits = hnsw_index.search(query_vec, store=s, top_k=top_k * 4)
+                    if hits:
+                        for db_id, score in hits:
+                            _hnsw_candidates[(s, db_id)] = score
+        except Exception:
+            _hnsw_candidates = None
 
     results = []
     reactivated_ids = set()
@@ -1156,7 +1174,9 @@ def search(
             # HNSW fast-path: skip rows not in candidate set
             if _hnsw_candidates is not None and ("stm", row["id"]) not in _hnsw_candidates:
                 continue
-            vec = _blob_to_array(row["embedding"])
+            vec = _search_row_embedding_array(row, context=embedding_context)
+            if vec is None:
+                continue
             score = cosine_similarity(query_vec, vec)
             lifecycle = row["lifecycle_state"] or "active"
             if lifecycle == "pinned":
@@ -1199,7 +1219,9 @@ def search(
             # HNSW fast-path: skip rows not in candidate set
             if _hnsw_candidates is not None and ("ltm", row["id"]) not in _hnsw_candidates:
                 continue
-            vec = _blob_to_array(row["embedding"])
+            vec = _search_row_embedding_array(row, context=embedding_context)
+            if vec is None:
+                continue
             score = cosine_similarity(query_vec, vec)
             lifecycle = row["lifecycle_state"] or "active"
             if lifecycle == "pinned":
@@ -1235,7 +1257,9 @@ def search(
     if stores in ("both", "ltm") and not exclude_dormant:
         dormant_rows = db.execute("SELECT * FROM ltm_memories WHERE is_dormant = 1").fetchall()
         for row in dormant_rows:
-            vec = _blob_to_array(row["embedding"])
+            vec = _search_row_embedding_array(row, context=embedding_context)
+            if vec is None:
+                continue
             score = cosine_similarity(query_vec, vec)
             if score > 0.8:
                 # Reactivate
