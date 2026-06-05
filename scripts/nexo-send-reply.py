@@ -168,7 +168,7 @@ def save_to_sent(msg, config):
         with imaplib.IMAP4_SSL(config["imap_host"], config["imap_port"]) as imap:
             imap.login(config["email"], config["password"])
             imap.append(
-                "INBOX.Sent",
+                str(config.get("sent_folder") or "Sent").strip() or "Sent",
                 r"\Seen",
                 imaplib.Time2Internaldate(time.time()),
                 msg.as_bytes(),

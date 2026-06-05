@@ -303,6 +303,9 @@ def test_email_monitor_processing_prompt_is_catalog_backed_and_generic(tmp_path,
     assert "ALWAYS use the operator's preferred language: es." in prompt
     assert "Keep replies short and factual." in prompt
     assert "EMAILS ASSIGNED TO THIS SESSION" in prompt
+    assert "BODY.PEEK[]" in prompt
+    assert "FORBIDDEN to decide from the local DB header row alone" in prompt
+    assert "nexo_email_related" not in prompt
     assert "Francisco" not in prompt
     assert "franciscocp@gmail.com" not in prompt
 

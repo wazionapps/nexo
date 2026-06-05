@@ -60,13 +60,20 @@ This is CRITICAL — without the diary, the next NEXO session loses continuity.
 CONFIG: [[config_path]] (IMAP/SMTP, port, password)
 DATABASE: [[email_db_path]] (SQLite, `emails` table)
 
-1. Connect via IMAP. Detect ALL unread emails in INBOX.
-2. For EACH unread email, ALWAYS use `nexo_email_related(uid, folder='INBOX')`.
-   It is FORBIDDEN to decide using only `nexo_email_read(uid)` or `nexo_email_thread(uid)`.
-   `nexo_email_related` returns the full related context as complete threads
-   (Inbox + Sent), a MERGED TIMELINE in chronological order,
-   and an aggregated index of RELATED FILES with stored local paths.
-   If you only need the clean attachment list, use `nexo_email_attachments(uid, folder='INBOX')`.
+1. Connect via IMAP directly using CONFIG. Detect ALL unread emails in INBOX.
+2. For EACH assigned `message_id`, resolve the matching IMAP UID by fetching headers
+   from INBOX with `BODY.PEEK[HEADER]` and matching the `Message-ID` header exactly.
+   Then fetch the complete RFC822 message with `BODY.PEEK[]` (or equivalent full-message fetch)
+   and parse the body before making any decision.
+   It is FORBIDDEN to decide from the local DB header row alone. The DB row usually contains
+   `message_id`, sender and subject only; it is not the email body.
+   If the full body cannot be fetched or parsed into text, do NOT reply to the sender.
+   Mark the DB row as `error` or `needs_interactive`, add an `email_events` detail explaining
+   the fetch/parse failure, and escalate to the operator if the message cannot be safely handled.
+   If you need attachments, extract them from the fetched RFC822 MIME parts.
+2.5. To rebuild related thread context, use direct IMAP searches in INBOX and Sent based on
+     `Message-ID`, `In-Reply-To`, `References`, subject, and participants. Fetch the full RFC822
+     body for each related message you rely on. Do not use unavailable `nexo_email_*` helpers.
 3. Treat all related messages as ONE operational context.
    If email 1 says 'do X' and email 3 later says 'actually do not do it',
    the LATER instruction wins.
@@ -145,7 +152,7 @@ This guard call must happen before creating or editing the buffer files. Do not 
 When replying, the email MUST include the COMPLETE related history below,
 not just the immediate thread.
 Mandatory steps before sending:
-1. Reuse the MERGED TIMELINE from `nexo_email_related(uid)` as the source of truth.
+1. Reuse the MERGED TIMELINE you rebuilt by direct IMAP full-message fetches as the source of truth.
 2. Sort it chronologically (oldest first).
 3. Concatenate it into `/tmp/nexo-thread-UID.txt` with this format for each message:
    -- From: Name <email>

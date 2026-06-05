@@ -1172,7 +1172,7 @@ def count_stuck_emails():
 
 # === Email-loss prevention (2026-04-14): pre-register + orphan recovery ===
 # Problem: if headless NEXO dies before marking email in BD, IMAP may have it
-# marked SEEN (from nexo_email_read) but BD has no row. count_stuck_emails
+# marked SEEN (from an IMAP full-message read) but BD has no row. count_stuck_emails
 # cannot see it, and has_new_email returns 0. The email is lost.
 # Fix:
 #   1. Pre-register: INSERT status='pending' rows BEFORE launching NEXO, using

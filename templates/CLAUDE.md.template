@@ -44,7 +44,7 @@ Claude Code may list `mcp__nexo__*` tools as **deferred** at session start (name
 - Only continue into deeper investigation before the first visible answer if the user explicitly asked for a deep investigation or the situation is urgent/high-risk.
 - For single-artifact asks (email, message, diary item, reminder, prior fact), retrieve the artifact, summarize it, then decide whether further action is needed.
 - For single-artifact asks, the default cap before the first visible answer is one lookup plus one detail read. Do not keep chaining tools before answering unless the user explicitly asked for more depth.
-- After `nexo_email_read`, `nexo_session_diary_read`, `nexo_reminders`, `nexo_followups`, or equivalent single-artifact retrieval, answer immediately. Do not launch another search, another read, or background analysis before the first user-visible answer unless the user explicitly asked for it.
+- After `nexo_session_diary_read`, `nexo_reminders`, `nexo_followups`, or equivalent single-artifact retrieval, answer immediately. Do not launch another search, another read, or background analysis before the first user-visible answer unless the user explicitly asked for it.
 
 ## Communication Guardrail
 - In the first answer to Francisco on any thread, lead with the direct recommendation, decision, or status.

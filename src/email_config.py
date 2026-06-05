@@ -57,7 +57,7 @@ def _account_to_runtime_account(account: dict) -> dict:
         account.get("credential_key", ""),
     )
     metadata = account.get("metadata") if isinstance(account.get("metadata"), dict) else {}
-    sent_folder = str(metadata.get("sent_folder") or "").strip() or "INBOX.Sent"
+    sent_folder = str(metadata.get("sent_folder") or "").strip() or "Sent"
     return {
         "label": account.get("label", ""),
         "email": account.get("email", ""),

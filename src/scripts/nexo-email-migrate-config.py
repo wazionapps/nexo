@@ -106,7 +106,7 @@ def main(argv: list[str]) -> int:
         "claude_binary": legacy.get("claude_binary", ""),
         "working_dir": legacy.get("working_dir", str(Path.home())),
         "max_process_time": legacy.get("max_process_time"),
-        "sent_folder": legacy.get("sent_folder", "INBOX.Sent"),
+        "sent_folder": legacy.get("sent_folder", "Sent"),
         "operator_aliases": legacy_operator_aliases,
     }
 
@@ -140,7 +140,7 @@ def main(argv: list[str]) -> int:
             **metadata,
             **existing_metadata,
             "operator_aliases": merged_aliases,
-            "sent_folder": str(existing_metadata.get("sent_folder") or metadata.get("sent_folder") or "INBOX.Sent"),
+            "sent_folder": str(existing_metadata.get("sent_folder") or metadata.get("sent_folder") or "Sent"),
         }
         normalized_role = str(existing.get("role") or "both")
         account = add_email_account(

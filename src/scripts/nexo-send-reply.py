@@ -445,7 +445,7 @@ def save_to_sent(config, raw_message: bytes, folder: str = ""):
     imap_host = str((config or {}).get("imap_host") or "").strip()
     if not imap_host or not str((config or {}).get("password") or ""):
         return False
-    resolved_folder = str(folder or config.get("sent_folder") or "INBOX.Sent").strip() or "INBOX.Sent"
+    resolved_folder = str(folder or config.get("sent_folder") or "Sent").strip() or "Sent"
     client = imaplib.IMAP4_SSL(imap_host, int(config.get("imap_port") or 993))
     try:
         client.login(config["email"], config["password"])

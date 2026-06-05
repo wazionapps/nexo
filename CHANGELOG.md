@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.30.13] - 2026-06-05
+
+### Fixed - Email NEXO full-message handling
+
+- **Email monitor prompts now require a full IMAP message fetch before any decision.** Assigned mail rows are treated as metadata only; the agent must resolve the IMAP UID, fetch the complete RFC822 payload with `BODY.PEEK[]` or equivalent, and parse the body before replying, marking the task as needs-interactive/error if the body cannot be fetched.
+- **Managed Email NEXO sent-folder defaults now match MXroute.** Config loading, CLI setup, migration helpers, and reply saving now default to `Sent` instead of the non-existent `INBOX.Sent`.
+- **Regression coverage pins the Email NEXO body and sent-folder contract.** Tests now assert the monitor prompt forbids deciding from local header rows alone and that managed email helpers keep using the real `Sent` folder.
+
 ## [7.30.12] - 2026-06-04
 
 ### Fixed - Desktop-managed email credentials

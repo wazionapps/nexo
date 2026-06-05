@@ -69,7 +69,7 @@ def _sent_folder_from_account(account: dict | None) -> str:
     if isinstance(account, dict) and isinstance(account.get("metadata"), dict):
         metadata = account.get("metadata") or {}
     value = str(metadata.get("sent_folder") or "").strip()
-    return value or "INBOX.Sent"
+    return value or "Sent"
 
 
 def _store_credential(service: str, key: str, value: str) -> None:
@@ -139,7 +139,7 @@ def cmd_email_setup(args) -> int:
         "",
     )
     trusted = [d.strip() for d in trusted_raw.split(",") if d.strip()]
-    sent_folder = _prompt("IMAP sent folder", "INBOX.Sent").strip() or "INBOX.Sent"
+    sent_folder = _prompt("IMAP sent folder", "Sent").strip() or "Sent"
 
     role = _prompt(
         "Account role: inbox (read only) / outbox (send only) / both",
@@ -712,7 +712,7 @@ def register_email_parser(subparsers) -> None:
     s.add_argument("--operator", dest="operator", default="")
     s.add_argument("--trusted-domains", dest="trusted_domains", default="")
     s.add_argument("--sent-folder", dest="sent_folder", default=None,
-                   help="IMAP folder where sent copies should be appended (default: INBOX.Sent).")
+                   help="IMAP folder where sent copies should be appended (default: Sent).")
     s.add_argument("--role", dest="role", default="both", choices=["inbox", "outbox", "both"])
     read_group = s.add_mutually_exclusive_group()
     read_group.add_argument("--can-read", dest="can_read", action="store_true", default=None)
