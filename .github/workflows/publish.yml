@@ -24,6 +24,9 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
 
+      - name: Verify managed MCP locks are current
+        run: python3 scripts/verify_managed_mcp_lock.py
+
       - name: Run tests
         run: PYTHONPATH=src pytest tests/ -v
 
@@ -50,6 +53,9 @@ jobs:
 
       - name: Verify release readiness
         run: python3 scripts/verify_release_readiness.py --ci
+
+      - name: Verify managed MCP locks are current
+        run: python3 scripts/verify_managed_mcp_lock.py
 
       - name: Sync release artifacts
         run: python3 scripts/sync_release_artifacts.py --release-version "${GITHUB_REF_NAME#v}"
