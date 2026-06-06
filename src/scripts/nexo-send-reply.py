@@ -96,6 +96,22 @@ RESOLUTION_PATTERNS = (
 )
 
 _REPLY_EVENT_CONFIDENCE = float(os.environ.get("NEXO_REPLY_EVENT_CONFIDENCE", "0.72"))
+_GENERIC_AGENT_EMAIL_NAMES = {
+    "admin",
+    "agent",
+    "alerts",
+    "contact",
+    "hello",
+    "info",
+    "mail",
+    "nexo",
+    "nexoagent",
+    "no-reply",
+    "noreply",
+    "notifications",
+    "reply",
+    "support",
+}
 _REPLY_EVENT_LABELS = (
     ("The reply acknowledges receipt or says the work starts now", "ack"),
     ("The reply makes a future commitment or promises an update later", "commitment"),
@@ -134,21 +150,180 @@ def normalize_reply_text(text):
     return re.sub(r"\s+", " ", (text or "").strip()).strip()
 
 
-def _assistant_display_name(default: str = "Nova") -> str:
+def _clean_identity_value(value) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    return re.sub(r"\s+", " ", text)
+
+
+def _nested_identity_value(mapping: dict | None, *paths: tuple[str, ...]) -> str:
+    if not isinstance(mapping, dict):
+        return ""
+    for path in paths:
+        current = mapping
+        for key in path:
+            if not isinstance(current, dict):
+                current = None
+                break
+            current = current.get(key)
+        value = _clean_identity_value(current)
+        if value:
+            return value
+    return ""
+
+
+def _sender_email(config: dict | None) -> str:
+    if not isinstance(config, dict):
+        return ""
+    sender = _clean_identity_value(config.get("email"))
+    if sender:
+        return sender
+    agent_account = config.get("agent_account")
+    if isinstance(agent_account, dict):
+        return _clean_identity_value(agent_account.get("email"))
+    return ""
+
+
+def _metadata_identity_value(config: dict | None) -> str:
+    if not isinstance(config, dict):
+        return ""
+    sources = [config]
+    agent_account = config.get("agent_account")
+    if isinstance(agent_account, dict):
+        sources.append(agent_account)
+    for source in sources:
+        metadata = source.get("metadata")
+        value = _nested_identity_value(
+            metadata if isinstance(metadata, dict) else None,
+            ("assistant_name",),
+            ("agent_name",),
+            ("display_name",),
+            ("identity", "assistant_name"),
+            ("identity", "name"),
+        )
+        if value:
+            return value
+    return ""
+
+
+def _calibration_assistant_name() -> str:
+    try:
+        from calibration_runtime import load_runtime_calibration
+
+        payload = load_runtime_calibration()
+    except Exception:
+        payload = {}
+    return _nested_identity_value(
+        payload if isinstance(payload, dict) else None,
+        ("user", "assistant_name"),
+        ("assistant_name",),
+        ("identity", "assistant_name"),
+        ("identity", "name"),
+    )
+
+
+def _profile_assistant_name() -> str:
+    try:
+        from paths import brain_dir
+
+        profile_path = brain_dir() / "profile.json"
+        payload = json.loads(profile_path.read_text(encoding="utf-8")) if profile_path.is_file() else {}
+    except Exception:
+        payload = {}
+    return _nested_identity_value(
+        payload if isinstance(payload, dict) else None,
+        ("assistant_name",),
+        ("agent_name",),
+        ("identity", "assistant_name"),
+        ("identity", "name"),
+        ("profile", "assistant_name"),
+        ("profile", "identity", "assistant_name"),
+        ("profile", "identity", "name"),
+    )
+
+
+def _operator_profile_assistant_name(default: str) -> str:
     try:
         from automation_controls import get_operator_profile
 
         profile = get_operator_profile()
     except Exception:
         profile = {}
-    value = str((profile or {}).get("assistant_name") or "").strip()
-    return value or default
+    value = _clean_identity_value((profile or {}).get("assistant_name"))
+    return "" if value == default else value
+
+
+def _assistant_from_sender(config: dict | None) -> str:
+    sender = _sender_email(config)
+    if "@" not in sender:
+        return ""
+    local = sender.rsplit("@", 1)[0].strip().strip("<>")
+    local = local.split("+", 1)[0].strip()
+    if not local or local.lower() in _GENERIC_AGENT_EMAIL_NAMES:
+        return ""
+    words = [word for word in re.split(r"[^A-Za-z0-9]+", local) if word]
+    if not words:
+        return ""
+    candidate = " ".join(word[:1].upper() + word[1:] for word in words)
+    return _clean_identity_value(candidate)
+
+
+def _assistant_display_name(default: str = "Nova", config: dict | None = None) -> str:
+    candidates = [
+        os.environ.get("NEXO_ASSISTANT_NAME", ""),
+        _calibration_assistant_name(),
+        _profile_assistant_name(),
+        _metadata_identity_value(config),
+        _operator_profile_assistant_name(default),
+        _assistant_from_sender(config),
+    ]
+    for candidate in candidates:
+        value = _clean_identity_value(candidate)
+        if value:
+            return value
+    return default
 
 
 def _signature_label(config: dict) -> str:
-    assistant_name = _assistant_display_name()
-    sender = str((config or {}).get("email") or "").strip()
+    assistant_name = _assistant_display_name(config=config)
+    sender = _sender_email(config)
     return f"{assistant_name} — {sender}" if sender else assistant_name
+
+
+def _metadata_signature_value(config: dict | None) -> str:
+    if not isinstance(config, dict):
+        return ""
+    sources = [config]
+    agent_account = config.get("agent_account")
+    if isinstance(agent_account, dict):
+        sources.append(agent_account)
+    for source in sources:
+        metadata = source.get("metadata")
+        signature = _nested_identity_value(metadata if isinstance(metadata, dict) else None, ("signature",))
+        if signature:
+            return signature
+    return ""
+
+
+def _autogenerated_signature_owner(signature: str, sender: str) -> str:
+    signature = _clean_identity_value(signature)
+    sender = _clean_identity_value(sender)
+    if not signature or not sender:
+        return ""
+    pattern = rf"^(.+?)\s+(?:—|-)\s+{re.escape(sender)}$"
+    match = re.match(pattern, signature, flags=re.IGNORECASE)
+    return _clean_identity_value(match.group(1)) if match else ""
+
+
+def _presentation_signature(config: dict) -> str:
+    fallback = _signature_label(config)
+    metadata_signature = _metadata_signature_value(config)
+    owner = _autogenerated_signature_owner(metadata_signature, _sender_email(config))
+    assistant_name = _assistant_display_name(config=config)
+    if owner and assistant_name and owner.casefold() != assistant_name.casefold():
+        return fallback
+    return signature_from_config(config, fallback=fallback)
 
 
 def _message_id_domain(config: dict) -> str:
@@ -381,7 +556,7 @@ def build_html_quoted(quote_file, quote_from, quote_date):
 
 def send_email(config, to, cc, subject, body_text, body_html, in_reply_to, references, attachments=None):
     msg = MIMEMultipart("mixed")
-    msg["From"] = formataddr((_assistant_display_name(), config["email"]))
+    msg["From"] = formataddr((_assistant_display_name(config=config), config["email"]))
     msg["To"] = to
     if cc:
         msg["Cc"] = cc
@@ -510,7 +685,7 @@ def main(argv=None):
         subject=args.subject,
         body_text=body_text,
         body_html=html_fragment,
-        signature=signature_from_config(config, fallback=_signature_label(config)),
+        signature=_presentation_signature(config),
         include_signature=True,
     )
     body_text = presentation.body_text
