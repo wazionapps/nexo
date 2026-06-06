@@ -90,7 +90,8 @@ def test_toml_merge_preserves_user_owned_server_and_records_metadata(tmp_path):
     assert merged["nexo"]["managed_mcp"]["servers"]["nexo_chrome_control"]["owner"] == "nexo"
 
 
-def test_client_sync_writes_managed_defaults(tmp_path):
+def test_client_sync_writes_managed_defaults(tmp_path, monkeypatch):
+    monkeypatch.setenv("NEXO_MANAGED_MCP_PLATFORM", "darwin")
     runtime_root = Path(__file__).resolve().parents[1] / "src"
     config_path = tmp_path / "claude_desktop_config.json"
     server_config = {

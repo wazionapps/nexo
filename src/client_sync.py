@@ -849,11 +849,17 @@ def _managed_mcp_entries_for(client: str, server_config: dict) -> dict:
     runtime_root = str(env.get("NEXO_CODE") or "").strip()
     if not nexo_home:
         return {}
+    target_platform = str(
+        os.environ.get("NEXO_MANAGED_MCP_PLATFORM")
+        or env.get("NEXO_MANAGED_MCP_PLATFORM")
+        or ""
+    ).strip()
     try:
         return build_managed_server_entries(
             client=client,
             nexo_home=nexo_home,
             runtime_root=runtime_root or None,
+            platform=target_platform or None,
         )
     except Exception:
         return {}
