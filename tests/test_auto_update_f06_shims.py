@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import importlib
+import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -242,3 +244,71 @@ def test_maybe_migrate_f06_moves_runtime_state_and_operator_scratch_roots(monkey
     assert (home / "CLAUDE.md.generated").resolve() == (
         home / "personal" / "lib" / "generated" / "CLAUDE.md.generated"
     ).resolve()
+
+
+def test_maybe_migrate_f06_adds_personal_import_shim_for_core_helper(monkeypatch, tmp_path):
+    home = tmp_path
+    (home / ".structure-version").write_text("F0.6\n")
+    core_scripts = home / "core" / "scripts"
+    personal_scripts = home / "personal" / "scripts"
+    core_scripts.mkdir(parents=True)
+    personal_scripts.mkdir(parents=True)
+    (core_scripts / "nexo_personal_automation.py").write_text(
+        "__all__ = ['run_personal_automation_text']\n"
+        "def run_personal_automation_text(prompt):\n"
+        "    return 'core:' + prompt\n"
+    )
+    caller = personal_scripts / "ps-daily.py"
+    caller.write_text(
+        "from nexo_personal_automation import run_personal_automation_text\n"
+        "print(run_personal_automation_text('ok'))\n"
+    )
+    env = os.environ.copy()
+    env["NEXO_HOME"] = str(home)
+    env.pop("PYTHONPATH", None)
+
+    before = subprocess.run(
+        [sys.executable, str(caller)],
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=10,
+    )
+    assert before.returncode != 0
+    assert "nexo_personal_automation" in before.stderr
+
+    au = _reload_auto_update(monkeypatch, home)
+    au._maybe_migrate_to_f06_layout()
+
+    shim = personal_scripts / "nexo_personal_automation.py"
+    assert shim.exists()
+    if shim.is_symlink():
+        assert shim.resolve() == (core_scripts / "nexo_personal_automation.py").resolve()
+
+    after = subprocess.run(
+        [sys.executable, str(caller)],
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=10,
+    )
+    assert after.returncode == 0, after.stderr
+    assert after.stdout == "core:ok\n"
+
+
+def test_ensure_f06_personal_import_shim_preserves_distinct_personal_helper(monkeypatch, tmp_path):
+    home = tmp_path
+    core_scripts = home / "core" / "scripts"
+    personal_scripts = home / "personal" / "scripts"
+    core_scripts.mkdir(parents=True)
+    personal_scripts.mkdir(parents=True)
+    (core_scripts / "nexo_personal_automation.py").write_text("VALUE = 'core'\n")
+    personal_helper = personal_scripts / "nexo_personal_automation.py"
+    personal_helper.write_text("VALUE = 'personal-custom'\n")
+
+    au = _reload_auto_update(monkeypatch, home)
+    au._ensure_f06_personal_script_import_shims()
+
+    assert personal_helper.is_file()
+    assert not personal_helper.is_symlink()
+    assert personal_helper.read_text() == "VALUE = 'personal-custom'\n"

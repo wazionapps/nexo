@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.30.17] - 2026-06-06
+
+### Fixed - F0.6 personal script imports
+
+- **Personal scripts can import the promoted automation helper again.** F0.6 now creates an idempotent compatibility shim from `personal/scripts/nexo_personal_automation.py` to the core-managed helper in `core/scripts`, so existing scripts that use `from nexo_personal_automation import ...` keep working after the layout migration.
+- **The shim avoids a second source of truth.** The normal path is a relative symlink to the core helper, so script classification deduplicates it and does not show a duplicate personal script. Files that are distinct operator-owned helpers are preserved instead of overwritten.
+- **Regression coverage pins the failure mode.** Tests execute a personal script in a clean subprocess without `PYTHONPATH`, confirm the pre-shim import failure, then verify the repaired F0.6 path succeeds.
+
 ## [7.30.16] - 2026-06-05
 
 ### Fixed - local LLM migration safety
