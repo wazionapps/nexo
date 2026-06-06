@@ -1104,6 +1104,7 @@ def _backup_code_tree() -> tuple[str | None, str | None]:
         "cognitive",
         "dashboard",
         "local_context",
+        "product_knowledge",
         "rules",
         "crons",
         "scripts",

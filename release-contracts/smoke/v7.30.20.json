@@ -1,0 +1,127 @@
+{
+  "release_line": "v7.30",
+  "version": "7.30.20",
+  "generated_at": "2026-06-06T11:10:03.869840Z",
+  "ok": true,
+  "groups": [
+    {
+      "id": "product_knowledge_catalog",
+      "description": "Structured Product Knowledge catalog validates and feeds system catalog entries",
+      "command": [
+        "python3",
+        "scripts/verify_product_kb.py"
+      ],
+      "targets": [
+        "src/product_knowledge/catalog.json",
+        "scripts/verify_product_kb.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 0.03,
+      "stdout": "{\n  \"capability_count\": 9,\n  \"errors\": [],\n  \"ok\": true,\n  \"system_catalog_entry_count\": 14\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "product_knowledge_tests",
+      "description": "Product Knowledge search, answer, handlers, validation and legacy names are tested",
+      "command": [
+        "python3",
+        "-m",
+        "pytest",
+        "tests/test_product_knowledge.py",
+        "-q"
+      ],
+      "targets": [
+        "tests/test_product_knowledge.py",
+        "src/tools_product_knowledge.py",
+        "src/product_knowledge/catalog.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 7.38,
+      "stdout": ".....                                                                    [100%]Running teardown with pytest sessionfinish...\n\n5 passed in 1.72s\n",
+      "stderr": ""
+    },
+    {
+      "id": "packaged_runtime_package_copy_tests",
+      "description": "Packaged install/update paths copy and preserve runtime package directories including product_knowledge",
+      "command": [
+        "python3",
+        "-m",
+        "pytest",
+        "tests/test_startup_preflight.py::test_copy_runtime_from_source_includes_runtime_package_directories",
+        "tests/test_packaged_update_runtime.py::test_backup_code_tree_includes_skills_runtime_and_templates",
+        "tests/test_postinstall_invocation_contract.py",
+        "-q"
+      ],
+      "targets": [
+        "bin/nexo-brain.js",
+        "src/auto_update.py",
+        "src/plugins/update.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 3.78,
+      "stdout": "....                                                                     [100%]Running teardown with pytest sessionfinish...\n\n4 passed in 0.72s\n",
+      "stderr": ""
+    },
+    {
+      "id": "system_catalog_discoverability",
+      "description": "Core product capability names remain discoverable through nexo_system_catalog",
+      "command": [
+        "python3",
+        "-m",
+        "pytest",
+        "tests/test_system_catalog_discoverability.py::test_search_discovers_core_intents",
+        "-q"
+      ],
+      "targets": [
+        "src/system_catalog.py",
+        "tests/test_system_catalog_discoverability.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 3.28,
+      "stdout": ".                                                                        [100%]Running teardown with pytest sessionfinish...\n\n1 passed in 0.72s\n",
+      "stderr": ""
+    },
+    {
+      "id": "tool_map_sync",
+      "description": "Read-only product tools are represented in the tool enforcement map",
+      "command": [
+        "python3",
+        "scripts/verify_tool_map.py"
+      ],
+      "targets": [
+        "tool-enforcement-map.json",
+        "src/server.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 0.04,
+      "stdout": "  tool-enforcement-map.json is in sync with code (350 tools)\n",
+      "stderr": ""
+    },
+    {
+      "id": "release_surface_contract",
+      "description": "Release-facing public surfaces and integration artifacts are synchronized to v7.30.20",
+      "command": [
+        "python3",
+        "scripts/verify_release_readiness.py",
+        "--ci"
+      ],
+      "targets": [
+        "package.json",
+        "CHANGELOG.md",
+        "README.md",
+        "llms.txt",
+        ".well-known/llms.txt"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 45.42,
+      "stdout": "[sync-release-artifacts] OK\n........................................................................ [ 30%]\n........................................................................ [ 60%]\n........................................................................ [ 90%]\n.......................                                                  [100%]Running teardown with pytest sessionfinish...\n\n239 passed in 41.48s\n[client-parity] docs OK\n[client-parity] parity tests OK\n[release-readiness] changelog OK (7.30.20)\n[release-readiness] repo public surfaces OK (/Users/franciscoc/Documents/_PhpstormProjects/nexo)\n[release-readiness] duplicate artifact hygiene OK (/Users/franciscoc/Documents/_PhpstormProjects/nexo)\n[release-readiness] $ /opt/homebrew/opt/python@3.14/bin/python3.14 scripts/sync_release_artifacts.py --check\n[release-readiness] $ /opt/homebrew/opt/python@3.14/bin/python3.14 scripts/verify_client_parity.py\n[release-readiness] website skipped (missing /Users/franciscoc/Documents/_PhpstormProjects/nexo-gh-pages)\n[release-readiness] OK\n",
+      "stderr": ""
+    }
+  ]
+}

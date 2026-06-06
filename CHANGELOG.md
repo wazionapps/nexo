@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.30.20] - 2026-06-06
+
+### Fixed - packaged product knowledge runtime
+
+- **Packaged installs now copy the `product_knowledge` package into the installed runtime.** `bin/nexo-brain.js`, `auto_update.py`, and the packaged updater now treat `product_knowledge/` as a core runtime package, preventing `nexo update` from installing `tools_product_knowledge.py` without its importable package.
+- **Runtime layout migration and rollback preserve the package.** F0.6 shims, promotion, backups and restores now include `product_knowledge` alongside `local_context`, `doctor`, `db`, and `cognitive`.
+- **Regression coverage pins the update failure.** Startup/update/postinstall tests now assert that runtime package directories and installer package declarations include `product_knowledge`.
+
 ## [7.30.19] - 2026-06-06
 
 ### Added - product knowledge hub

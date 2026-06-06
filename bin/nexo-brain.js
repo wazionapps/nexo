@@ -1346,7 +1346,7 @@ function getCoreRuntimeFlatFiles(srcDir = path.join(__dirname, "..", "src")) {
 }
 
 function getCoreRuntimePackages() {
-  return ["db", "cognitive", "doctor", "local_context"];
+  return ["db", "cognitive", "doctor", "local_context", "product_knowledge"];
 }
 
 // Brain contracts — files the NEXO Brain publishes to consumers like

@@ -40,6 +40,7 @@ def test_backup_code_tree_includes_skills_runtime_and_templates(tmp_path, monkey
     (runtime_home / "templates").mkdir()
     (runtime_home / "bin").mkdir()
     (runtime_home / "local_context").mkdir()
+    (runtime_home / "product_knowledge").mkdir()
 
     (runtime_home / "skills" / "personal-skill" / "skill.json").write_text("{}\n")
     (runtime_home / "skills-core" / "core-skill" / "skill.json").write_text("{}\n")
@@ -47,6 +48,7 @@ def test_backup_code_tree_includes_skills_runtime_and_templates(tmp_path, monkey
     (runtime_home / "templates" / "skill-template.md").write_text("# template\n")
     (runtime_home / "bin" / "nexo").write_text("#!/bin/bash\n")
     (runtime_home / "local_context" / "__init__.py").write_text("# local context\n")
+    (runtime_home / "product_knowledge" / "__init__.py").write_text("# product knowledge\n")
 
     monkeypatch.setenv("NEXO_HOME", str(runtime_home))
 
@@ -83,6 +85,7 @@ def test_backup_code_tree_includes_skills_runtime_and_templates(tmp_path, monkey
     assert (backup_path / "templates" / "skill-template.md").is_file()
     assert (backup_path / "bin" / "nexo").is_file()
     assert (backup_path / "local_context" / "__init__.py").is_file()
+    assert (backup_path / "product_knowledge" / "__init__.py").is_file()
 
 
 def test_restore_code_tree_replaces_directory_symlink(tmp_path, monkeypatch):

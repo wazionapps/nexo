@@ -2753,6 +2753,7 @@ def _f06_legacy_shim_map() -> list[tuple[str, Path]]:
         ("hooks", core_root / "hooks"),
         ("rules", core_root / "rules"),
         ("local_context", core_root / "local_context"),
+        ("product_knowledge", core_root / "product_knowledge"),
         ("data", NEXO_HOME / "runtime" / "data"),
         ("logs", NEXO_HOME / "runtime" / "logs"),
         ("operations", NEXO_HOME / "runtime" / "operations"),
@@ -2822,6 +2823,7 @@ def _f06_live_legacy_paths() -> list[Path]:
             "hooks",
             "rules",
             "local_context",
+            "product_knowledge",
             "db",
             "dashboard",
             "skills-core",
@@ -2907,6 +2909,7 @@ def _promote_packaged_runtime_code_to_core() -> None:
         ("doctor", core_root / "doctor"),
         ("dashboard", core_root / "dashboard"),
         ("local_context", core_root / "local_context"),
+        ("product_knowledge", core_root / "product_knowledge"),
         ("skills-core", core_root / "skills"),
     ]
 
@@ -4740,6 +4743,7 @@ def _backup_runtime_tree(dest: Path = NEXO_HOME) -> str:
         "cognitive",
         "dashboard",
         "local_context",
+        "product_knowledge",
         "rules",
         "crons",
         "scripts",
@@ -4819,7 +4823,18 @@ def _restore_runtime_tree(backup_dir: str, dest: Path = NEXO_HOME) -> None:
 def _copy_runtime_from_source(src_dir: Path, repo_dir: Path, dest: Path = NEXO_HOME, progress_fn=None) -> dict:
     import shutil
 
-    packages = ["db", "cognitive", "doctor", "local_context", "dashboard", "rules", "crons", "hooks", "presets"]
+    packages = [
+        "db",
+        "cognitive",
+        "doctor",
+        "local_context",
+        "product_knowledge",
+        "dashboard",
+        "rules",
+        "crons",
+        "hooks",
+        "presets",
+    ]
     flat_files = _runtime_flat_files(src_dir)
     copied_packages = 0
     copied_files = 0

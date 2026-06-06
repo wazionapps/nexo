@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEXO 7.30.20: packaged product knowledge hotfix</title>
+    <meta name="description" content="NEXO Brain 7.30.20 fixes packaged installs so product knowledge tools import correctly after nexo update.">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-30-20/">
+</head>
+<body>
+    <main>
+        <p><a href="/blog/">Back to blog</a></p>
+        <h1>NEXO 7.30.20: packaged product knowledge hotfix</h1>
+        <p><strong>June 6, 2026.</strong> This patch fixes the packaged update path for the product knowledge hub introduced in v7.30.19.</p>
+        <h2>What changed</h2>
+        <ul>
+            <li>Packaged installs now copy <code>product_knowledge/</code> alongside core runtime packages such as <code>local_context/</code>, <code>doctor/</code>, <code>db/</code> and <code>cognitive/</code>.</li>
+            <li><code>nexo update</code> backup, promotion, shim and restore paths now preserve the product knowledge package.</li>
+            <li>Installer and update regression tests assert that runtime package directories include <code>product_knowledge</code>.</li>
+        </ul>
+        <h2>Why it matters</h2>
+        <p>v7.30.19 added the structured catalog and read-only product capability tools. v7.30.20 makes that contract installable from the npm package, so a real packaged runtime can import the new tools immediately after update.</p>
+        <p><a href="/changelog/#v73020">Read the full v7.30.20 changelog</a></p>
+    </main>
+</body>
+</html>

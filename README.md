@@ -18,9 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.30.19` is the current packaged-runtime line. Patch release over v7.30.18 - product capabilities now live in a structured, validated catalog with read-only discovery tools and preserved legacy system-catalog names.
+Version `7.30.20` is the current packaged-runtime line. Patch release over v7.30.19 - packaged installs now copy the `product_knowledge` package into the installed runtime so `nexo update` can import the new product knowledge tools.
 
-Previously in `7.30.17`: patch release over v7.30.16 - F0.6 repairs promoted helper imports for personal scripts by adding a core-backed compatibility shim without duplicating the script catalog.
+Previously in `7.30.19`: patch release over v7.30.18 - product capabilities now live in a structured, validated catalog with read-only discovery tools and preserved legacy system-catalog names.
 
 Previously in `7.30.16`: patch release over v7.30.14 - Desktop diagnostics can read embedding migration status without warming models, and the coordinated Desktop update path is covered for bundled model verification and obsolete managed model cleanup.
 

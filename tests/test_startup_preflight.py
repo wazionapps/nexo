@@ -295,7 +295,7 @@ def test_copy_runtime_from_source_creates_skill_scaffold_dirs(tmp_path, monkeypa
     assert (dest / "presets" / "guardian_default.json").is_file()
 
 
-def test_copy_runtime_from_source_includes_local_context_package(tmp_path, monkeypatch):
+def test_copy_runtime_from_source_includes_runtime_package_directories(tmp_path, monkeypatch):
     import auto_update
 
     src_dir = tmp_path / "src"
@@ -304,8 +304,11 @@ def test_copy_runtime_from_source_includes_local_context_package(tmp_path, monke
 
     (src_dir / "db").mkdir(parents=True)
     (src_dir / "local_context").mkdir(parents=True)
+    (src_dir / "product_knowledge").mkdir(parents=True)
     (src_dir / "local_context" / "__init__.py").write_text("from .api import status\n")
     (src_dir / "local_context" / "api.py").write_text("def status():\n    return {'ok': True}\n")
+    (src_dir / "product_knowledge" / "__init__.py").write_text("from .catalog import validate_catalog\n")
+    (src_dir / "product_knowledge" / "catalog.py").write_text("def validate_catalog():\n    return []\n")
     (repo_dir / "templates").mkdir(parents=True)
     (repo_dir / "package.json").write_text("{}\n")
 
@@ -316,6 +319,8 @@ def test_copy_runtime_from_source_includes_local_context_package(tmp_path, monke
     assert result["packages"] >= 2
     assert (dest / "local_context" / "__init__.py").is_file()
     assert (dest / "local_context" / "api.py").read_text() == "def status():\n    return {'ok': True}\n"
+    assert (dest / "product_knowledge" / "__init__.py").is_file()
+    assert (dest / "product_knowledge" / "catalog.py").read_text() == "def validate_catalog():\n    return []\n"
 
 
 def test_copy_runtime_from_source_replaces_f06_symlink_package_targets(tmp_path, monkeypatch):
