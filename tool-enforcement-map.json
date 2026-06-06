@@ -3005,6 +3005,21 @@
       },
       "triggers_after": []
     },
+    "nexo_embedding_migration_status": {
+      "description": "Report read-only cognitive embedding migration status for Desktop diagnostics",
+      "category": "memory",
+      "source": "server",
+      "requires": [],
+      "provides": [
+        "embedding_migration_status"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
     "nexo_memory_maintenance": {
       "description": "Run safe Memory Observations queue processing and optional backfill",
       "category": "memory",

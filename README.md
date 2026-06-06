@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.30.14` is the current packaged-runtime line. Patch release over v7.30.13 - support tickets, provider capability discovery, task-close rearming, internal audit followups, and the memory-observation watchdog are aligned for Desktop-managed agents.
+Version `7.30.16` is the current packaged-runtime line. Patch release over v7.30.14 - Desktop diagnostics can read embedding migration status without warming models, and the coordinated Desktop update path is covered for bundled model verification and obsolete managed model cleanup.
+
+Previously in `7.30.14`: patch release over v7.30.13 - support tickets, provider capability discovery, task-close rearming, internal audit followups, and the memory-observation watchdog are aligned for Desktop-managed agents.
 
 Previously in `7.30.13`: patch release over v7.30.12 - Email NEXO monitor prompts now require a full IMAP body fetch before replying, and managed email defaults use the MXroute `Sent` folder instead of `INBOX.Sent`.
 
