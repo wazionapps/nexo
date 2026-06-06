@@ -1,0 +1,108 @@
+{
+  "release_line": "v7.30",
+  "version": "7.30.21",
+  "generated_at": "2026-06-06T14:05:27.928225+00:00",
+  "ok": true,
+  "groups": [
+    {
+      "id": "managed_mcp_latest_lock",
+      "description": "Managed MCP provider locks are pinned to npm latest before release",
+      "command": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "scripts/verify_managed_mcp_lock.py"
+      ],
+      "targets": [
+        "scripts/verify_managed_mcp_lock.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 1.83,
+      "stdout": "[managed-mcp-lock] OK (5 npm providers pinned to latest)\n",
+      "stderr": ""
+    },
+    {
+      "id": "managed_mcp_reconcile_contract",
+      "description": "Managed MCP catalog, lock, runner metadata, and client merge ownership stay coherent",
+      "command": [
+        "env",
+        "NEXO_NO_MODEL_DOWNLOAD=1",
+        "NEXO_LOCAL_MODELS_NO_DOWNLOAD=1",
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_managed_mcp.py",
+        "tests/test_managed_mcp_release_gate.py"
+      ],
+      "targets": [
+        "tests/test_managed_mcp.py",
+        "tests/test_managed_mcp_release_gate.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 3.16,
+      "stdout": ".........                                                                [100%]Running teardown with pytest sessionfinish...\n\n9 passed in 0.93s\n",
+      "stderr": ""
+    },
+    {
+      "id": "closure_plane_contract",
+      "description": "Operational Closure Plane migration, backfill, evidence, and close behavior stay coherent",
+      "command": [
+        "env",
+        "NEXO_NO_MODEL_DOWNLOAD=1",
+        "NEXO_LOCAL_MODELS_NO_DOWNLOAD=1",
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_closure_plane.py",
+        "tests/test_migrations.py::test_init_db_creates_core_tables",
+        "tests/test_migrations.py::test_migrations_idempotent"
+      ],
+      "targets": [
+        "tests/test_closure_plane.py",
+        "tests/test_migrations.py::test_init_db_creates_core_tables",
+        "tests/test_migrations.py::test_migrations_idempotent"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 2.48,
+      "stdout": ".....                                                                    [100%]Running teardown with pytest sessionfinish...\n\n5 passed in 0.49s\n",
+      "stderr": ""
+    },
+    {
+      "id": "tool_map_contract",
+      "description": "Server tool map includes managed MCP and closure-plane tools",
+      "command": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "scripts/verify_tool_map.py"
+      ],
+      "targets": [
+        "scripts/verify_tool_map.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 0.03,
+      "stdout": "  tool-enforcement-map.json is in sync with code (356 tools)\n",
+      "stderr": ""
+    },
+    {
+      "id": "release_surface_contract",
+      "description": "Release-facing public surfaces are synchronized for v7.30.21",
+      "command": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "scripts/verify_release_readiness.py",
+        "--ci"
+      ],
+      "targets": [
+        "scripts/verify_release_readiness.py",
+        "--ci"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 37.92,
+      "stdout": "[sync-release-artifacts] OK\n........................................................................ [ 30%]\n........................................................................ [ 60%]\n........................................................................ [ 90%]\n.......................                                                  [100%]Running teardown with pytest sessionfinish...\n\n239 passed in 34.02s\n[client-parity] docs OK\n[client-parity] parity tests OK\n[release-readiness] changelog OK (7.30.21)\n[release-readiness] repo public surfaces OK (/Users/franciscoc/Documents/_PhpstormProjects/nexo)\n[release-readiness] duplicate artifact hygiene OK (/Users/franciscoc/Documents/_PhpstormProjects/nexo)\n[release-readiness] $ /opt/homebrew/opt/python@3.14/bin/python3.14 scripts/sync_release_artifacts.py --check\n[release-readiness] $ /opt/homebrew/opt/python@3.14/bin/python3.14 scripts/verify_client_parity.py\n[release-readiness] website skipped (missing /Users/franciscoc/Documents/_PhpstormProjects/nexo-gh-pages)\n[release-readiness] OK\n",
+      "stderr": ""
+    }
+  ]
+}

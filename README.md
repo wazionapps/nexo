@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.30.20` is the current packaged-runtime line. Patch release over v7.30.19 - packaged installs now copy the `product_knowledge` package into the installed runtime so `nexo update` can import the new product knowledge tools.
+Version `7.30.21` is the current packaged-runtime line. Patch release over v7.30.20 - Brain now ships managed default MCP catalog/lock reconciliation and the Operational Closure Plane, with Desktop v0.43.12 consuming the coordinated runtime contract.
+
+Previously in `7.30.20`: patch release over v7.30.19 - packaged installs now copy the `product_knowledge` package into the installed runtime so `nexo update` can import the new product knowledge tools.
 
 Previously in `7.30.19`: patch release over v7.30.18 - product capabilities now live in a structured, validated catalog with read-only discovery tools and preserved legacy system-catalog names.
 

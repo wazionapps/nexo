@@ -2775,6 +2775,98 @@ def _m77_morning_briefing_presentation(conn):
     )
 
 
+def _m78_operational_closure_plane(conn):
+    """Operational Closure Plane MVP: canonical read-only closure items."""
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS closure_items (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            summary TEXT NOT NULL DEFAULT '',
+            kind TEXT NOT NULL,
+            state TEXT NOT NULL DEFAULT 'open',
+            source_primary TEXT NOT NULL,
+            source_key TEXT NOT NULL,
+            dedupe_key TEXT NOT NULL,
+            impact_score REAL NOT NULL DEFAULT 0,
+            urgency_score REAL NOT NULL DEFAULT 0,
+            risk_score REAL NOT NULL DEFAULT 0,
+            confidence_score REAL NOT NULL DEFAULT 0,
+            priority_score REAL NOT NULL DEFAULT 0,
+            safety_class TEXT NOT NULL DEFAULT 'normal',
+            capability_required TEXT NOT NULL DEFAULT '',
+            capability_status TEXT NOT NULL DEFAULT 'unknown',
+            owner TEXT NOT NULL DEFAULT 'nero',
+            next_action TEXT NOT NULL DEFAULT '',
+            blocker_reason TEXT NOT NULL DEFAULT '',
+            evidence_required TEXT NOT NULL DEFAULT '',
+            evidence_observed TEXT NOT NULL DEFAULT '',
+            deadline_at TEXT NOT NULL DEFAULT '',
+            first_seen_at TEXT NOT NULL,
+            last_seen_at TEXT NOT NULL,
+            last_progress_at TEXT NOT NULL DEFAULT '',
+            closed_at TEXT NOT NULL DEFAULT '',
+            close_reason TEXT NOT NULL DEFAULT '',
+            source_payload_json TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(dedupe_key)
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS closure_item_sources (
+            id TEXT PRIMARY KEY,
+            closure_item_id TEXT NOT NULL,
+            source_type TEXT NOT NULL,
+            source_id TEXT NOT NULL,
+            source_status TEXT NOT NULL DEFAULT '',
+            source_payload_json TEXT NOT NULL DEFAULT '{}',
+            observed_at TEXT NOT NULL,
+            FOREIGN KEY(closure_item_id) REFERENCES closure_items(id) ON DELETE CASCADE,
+            UNIQUE(closure_item_id, source_type, source_id)
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS closure_item_events (
+            id TEXT PRIMARY KEY,
+            closure_item_id TEXT NOT NULL,
+            event_type TEXT NOT NULL,
+            from_state TEXT NOT NULL DEFAULT '',
+            to_state TEXT NOT NULL DEFAULT '',
+            note TEXT NOT NULL DEFAULT '',
+            evidence TEXT NOT NULL DEFAULT '',
+            actor TEXT NOT NULL DEFAULT 'nexo',
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY(closure_item_id) REFERENCES closure_items(id) ON DELETE CASCADE
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS closure_daily_snapshots (
+            snapshot_date TEXT PRIMARY KEY,
+            total_open INTEGER NOT NULL DEFAULT 0,
+            total_verified INTEGER NOT NULL DEFAULT 0,
+            total_waiting INTEGER NOT NULL DEFAULT 0,
+            total_closed INTEGER NOT NULL DEFAULT 0,
+            top_items_json TEXT NOT NULL DEFAULT '[]',
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """
+    )
+    _migrate_add_index(conn, "idx_closure_items_state_priority", "closure_items", "state, priority_score DESC, updated_at")
+    _migrate_add_index(conn, "idx_closure_items_source", "closure_items", "source_primary, source_key")
+    _migrate_add_index(conn, "idx_closure_items_kind", "closure_items", "kind, state")
+    _migrate_add_index(conn, "idx_closure_items_deadline", "closure_items", "deadline_at")
+    _migrate_add_index(conn, "idx_closure_sources_item", "closure_item_sources", "closure_item_id")
+    _migrate_add_index(conn, "idx_closure_sources_source", "closure_item_sources", "source_type, source_id")
+    _migrate_add_index(conn, "idx_closure_events_item", "closure_item_events", "closure_item_id, created_at")
+
+
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
     (2, "followups_reasoning", _m2_followups_reasoning),
@@ -2853,6 +2945,7 @@ MIGRATIONS = [
     (75, "failure_prevention_ledger", _m75_failure_prevention_ledger),
     (76, "semantic_layers", _m76_semantic_layers),
     (77, "morning_briefing_presentation", _m77_morning_briefing_presentation),
+    (78, "operational_closure_plane", _m78_operational_closure_plane),
 ]
 
 

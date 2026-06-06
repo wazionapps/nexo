@@ -1,0 +1,77 @@
+{
+  "schema": "nexo.managed_mcp.catalog.v1",
+  "catalog_version": "2026.06.06",
+  "defaults_profile": "normal_user",
+  "capabilities": [
+    {
+      "id": "chrome_control",
+      "display_name": "Chrome control",
+      "enabled_by_default": true,
+      "risk": "high",
+      "clients": ["claude_code", "claude_desktop", "codex"],
+      "providers": [
+        {
+          "id": "chrome-devtools-mcp",
+          "platforms": ["darwin", "win32"],
+          "source": {"type": "npm", "package": "chrome-devtools-mcp"},
+          "version_policy": "locked",
+          "transport": "stdio",
+          "preflight": {
+            "node": "^20.19.0 || ^22.12.0 || >=23",
+            "binaries": ["chrome"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "desktop_control",
+      "display_name": "Desktop control",
+      "enabled_by_default": true,
+      "risk": "high",
+      "clients": ["claude_code", "claude_desktop", "codex"],
+      "providers": [
+        {
+          "id": "mac-use-mcp",
+          "platforms": ["darwin"],
+          "source": {"type": "npm", "package": "mac-use-mcp"},
+          "version_policy": "locked",
+          "transport": "stdio",
+          "preflight": {
+            "os_permissions": ["accessibility", "screen_recording"]
+          }
+        },
+        {
+          "id": "native-devtools-mcp",
+          "platforms": ["win32"],
+          "source": {"type": "npm", "package": "native-devtools-mcp"},
+          "version_policy": "locked",
+          "transport": "stdio"
+        },
+        {
+          "id": "open-computer-use",
+          "platforms": ["win32"],
+          "source": {"type": "npm", "package": "open-computer-use"},
+          "version_policy": "locked",
+          "transport": "stdio",
+          "fallback": true
+        }
+      ]
+    },
+    {
+      "id": "power_control",
+      "display_name": "Power control",
+      "enabled_by_default": true,
+      "risk": "critical",
+      "clients": ["claude_code", "claude_desktop", "codex"],
+      "providers": [
+        {
+          "id": "desktop-commander",
+          "platforms": ["darwin", "win32"],
+          "source": {"type": "npm", "package": "@wonderwhy-er/desktop-commander"},
+          "version_policy": "locked",
+          "transport": "stdio"
+        }
+      ]
+    }
+  ]
+}

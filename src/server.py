@@ -6,6 +6,7 @@ import signal
 import sys
 import json
 import time
+from pathlib import Path
 
 from fastmcp import FastMCP
 from core_prompts import render_core_prompt
@@ -1007,6 +1008,75 @@ def nexo_mcp_write_queue_status(limit: int = 20) -> str:
     except Exception:
         clean_limit = 20
     return json.dumps(mcp_write_queue_status(limit=clean_limit), indent=2, ensure_ascii=False)
+
+
+@mcp.tool
+def nexo_managed_mcp_status(apply: bool = False) -> str:
+    """Read or apply the Brain-owned managed MCP catalog reconciliation plan."""
+    from managed_mcp import managed_mcp_status, reconcile_managed_mcp
+    import paths
+
+    runtime_root = Path(__file__).resolve().parent
+    if apply:
+        result = reconcile_managed_mcp(
+            nexo_home=paths.home(),
+            runtime_root=runtime_root,
+            apply=True,
+        )
+    else:
+        result = managed_mcp_status(
+            nexo_home=paths.home(),
+            runtime_root=runtime_root,
+        )
+    return json.dumps(result, indent=2, ensure_ascii=False)
+
+
+@mcp.tool
+def nexo_closure_status(refresh: bool = True, limit: int = 10) -> str:
+    """Read the Operational Closure Plane status and ranked closure queue."""
+    from closure_plane import handle_closure_status
+
+    try:
+        clean_limit = max(1, min(int(limit or 10), 100))
+    except Exception:
+        clean_limit = 10
+    return handle_closure_status(refresh=bool(refresh), limit=clean_limit)
+
+
+@mcp.tool
+def nexo_closure_next(limit: int = 10, include_waiting: bool = False, source: str = "", kind: str = "") -> str:
+    """Return the next ranked closure items without executing source actions."""
+    from closure_plane import handle_closure_next
+
+    try:
+        clean_limit = max(1, min(int(limit or 10), 100))
+    except Exception:
+        clean_limit = 10
+    return handle_closure_next(clean_limit, bool(include_waiting), source, kind)
+
+
+@mcp.tool
+def nexo_closure_item_get(item_id: str) -> str:
+    """Return one closure item with sources and events."""
+    from closure_plane import handle_closure_item_get
+
+    return handle_closure_item_get(item_id)
+
+
+@mcp.tool
+def nexo_closure_verify(item_id: str, evidence: str) -> str:
+    """Record verification evidence for a closure item."""
+    from closure_plane import handle_closure_verify
+
+    return handle_closure_verify(item_id, evidence)
+
+
+@mcp.tool
+def nexo_closure_close(item_id: str, reason: str = "completed") -> str:
+    """Close a verified closure item or reject/stale it explicitly."""
+    from closure_plane import handle_closure_close
+
+    return handle_closure_close(item_id, reason)
 
 
 @mcp.tool

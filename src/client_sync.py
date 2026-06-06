@@ -24,6 +24,13 @@ from bootstrap_docs import sync_client_bootstrap
 from runtime_home import resolve_nexo_home
 
 try:
+    from managed_mcp import build_managed_server_entries, merge_json_mcp_servers, merge_toml_mcp_servers
+except Exception:
+    build_managed_server_entries = None
+    merge_json_mcp_servers = None
+    merge_toml_mcp_servers = None
+
+try:
     from client_preferences import (
         BACKEND_NONE,
         INTERACTIVE_CLIENT_KEYS,
@@ -832,6 +839,26 @@ def build_server_config(
     return config
 
 
+def _managed_mcp_entries_for(client: str, server_config: dict) -> dict:
+    if str(os.environ.get("NEXO_MANAGED_MCP_DISABLE", "")).strip().lower() in {"1", "true", "yes", "on"}:
+        return {}
+    if not build_managed_server_entries:
+        return {}
+    env = server_config.get("env") if isinstance(server_config.get("env"), dict) else {}
+    nexo_home = str(env.get("NEXO_HOME") or "").strip()
+    runtime_root = str(env.get("NEXO_CODE") or "").strip()
+    if not nexo_home:
+        return {}
+    try:
+        return build_managed_server_entries(
+            client=client,
+            nexo_home=nexo_home,
+            runtime_root=runtime_root or None,
+        )
+    except Exception:
+        return {}
+
+
 def _claude_code_settings_path(home: Path | None = None) -> Path:
     base = home or _user_home()
     return base / ".claude" / "settings.json"
@@ -1001,6 +1028,11 @@ def _sync_codex_managed_config(
             "env": dict(server_config.get("env", {}) or {}),
         }
         codex_table["managed_server_command"] = server_config.get("command", "")
+        managed_entries = _managed_mcp_entries_for("codex", server_config)
+        if managed_entries and merge_toml_mcp_servers:
+            payload = merge_toml_mcp_servers(payload, managed_entries)
+            codex_table = payload.setdefault("nexo", {}).setdefault("codex", {})
+            codex_table["managed_default_mcp_count"] = len(managed_entries)
 
     # Ensure Codex headless crons (followup-runner, email-monitor, deep-sleep,
     # etc.) do not stall on approval prompts. Only set defaults when the user
@@ -1018,6 +1050,7 @@ def _sync_codex_managed_config(
         "hooks_enabled": True,
         "model": runtime_profile.get("model", ""),
         "reasoning_effort": runtime_profile.get("reasoning_effort", "") or "",
+        "managed_default_mcp_count": len(_managed_mcp_entries_for("codex", server_config)) if server_config else 0,
     }
 
 
@@ -1408,12 +1441,16 @@ def _sync_json_client(path: Path, server_config: dict, label: str, *, managed_me
             nexo_meta = {}
             payload["nexo"] = nexo_meta
         nexo_meta.update(managed_metadata)
+    managed_entries = _managed_mcp_entries_for(label, server_config)
+    if managed_entries and merge_json_mcp_servers:
+        payload = merge_json_mcp_servers(payload, managed_entries)
     _write_json_object(path, payload)
     return {
         "ok": True,
         "client": label,
         "action": action,
         "path": str(path),
+        "managed_default_mcp_count": len(managed_entries),
     }
 
 
@@ -1491,6 +1528,9 @@ def _sync_claude_code_settings(path: Path, server_config: dict) -> dict:
         runtime_root=runtime_root,
         nexo_home=nexo_home,
     )
+    managed_entries = _managed_mcp_entries_for("claude_code", server_config)
+    if managed_entries and merge_json_mcp_servers:
+        payload = merge_json_mcp_servers(payload, managed_entries)
     _ensure_headless_permissions(payload)
     _write_json_object(path, payload)
     return {
@@ -1499,6 +1539,7 @@ def _sync_claude_code_settings(path: Path, server_config: dict) -> dict:
         "action": action,
         "path": str(path),
         "managed_hook_count": managed_hook_count,
+        "managed_default_mcp_count": len(managed_entries),
     }
 
 

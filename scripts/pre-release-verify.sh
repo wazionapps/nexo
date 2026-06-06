@@ -31,10 +31,11 @@ scripts/pre-release-verify.sh — NEXO Brain release discipline wrapper.
 Checks (in order):
   1. privacy         — scripts/check_no_personal_data.sh
   2. tool-map        — scripts/verify_tool_map.py
-  3. release-ready   — scripts/verify_release_readiness.py --ci
-  4. workflows       — scripts/audit-release-workflows.py (NF-DS-E17D1B61)
-  5. pytest          — python3 -m pytest -q
-  6. release-target  — free tag + CHANGELOG entry + package.json version
+  3. managed-mcp-lock — scripts/verify_managed_mcp_lock.py
+  4. release-ready   — scripts/verify_release_readiness.py --ci
+  5. workflows       — scripts/audit-release-workflows.py (NF-DS-E17D1B61)
+  6. pytest          — python3 -m pytest -q
+  7. release-target  — free tag + CHANGELOG entry + package.json version
                        (only when --release vX.Y.Z is passed)
 
 Flags:
@@ -112,9 +113,10 @@ run_step() {
 
 run_step privacy        "privacy guard"      bash scripts/check_no_personal_data.sh
 run_step tool-map       "tool-map sync"      python3 scripts/verify_tool_map.py
+run_step managed-mcp-lock "managed MCP lock latest" python3 scripts/verify_managed_mcp_lock.py
 run_step release-ready  "release readiness"  python3 scripts/verify_release_readiness.py --ci
 run_step workflows      "release workflows"  python3 scripts/audit-release-workflows.py "$REPO_ROOT"
-run_step pytest         "pytest smoke"       python3 -m pytest -q
+run_step pytest         "pytest smoke"       env NEXO_NO_MODEL_DOWNLOAD=1 NEXO_LOCAL_MODELS_NO_DOWNLOAD=1 python3 -m pytest -q
 
 if [ -n "$RELEASE_TARGET" ]; then
     STEP=$((STEP+1))

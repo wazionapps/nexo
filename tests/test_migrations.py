@@ -39,6 +39,8 @@ def test_init_db_creates_core_tables():
         "failure_prevention_cases", "failure_source_events",
         "antibody_actions",
         "semantic_layers", "semantic_layer_source_refs",
+        "closure_items", "closure_item_sources", "closure_item_events",
+        "closure_daily_snapshots",
     }
     assert expected.issubset(tables), f"Missing tables: {expected - tables}"
 
@@ -48,7 +50,7 @@ def test_migrations_idempotent():
     db_mod.run_migrations()
     db_mod.run_migrations()
     version = db_mod.get_schema_version()
-    assert version >= 77
+    assert version >= 78
 
 
 def test_m76_semantic_layers_migration_is_idempotent_and_constrained():

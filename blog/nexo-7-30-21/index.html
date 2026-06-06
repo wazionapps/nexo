@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEXO 7.30.21: managed MCPs and closure plane</title>
+    <meta name="description" content="NEXO Brain 7.30.21 adds managed default MCP catalog/lock reconciliation and the Operational Closure Plane MVP.">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-30-21/">
+</head>
+<body>
+    <main>
+        <p><a href="/blog/">Back to blog</a></p>
+        <h1>NEXO 7.30.21: managed MCPs and closure plane</h1>
+        <p><strong>June 6, 2026.</strong> This patch coordinates Brain 7.30.21 with NEXO Desktop 0.43.12 and turns three implementation specs into release-gated product behavior.</p>
+        <h2>What changed</h2>
+        <ul>
+            <li>Brain now owns a managed default MCP catalog and exact lockfile for Chrome control, desktop control and power-control providers.</li>
+            <li>Release prep now verifies managed MCP provider locks against npm latest, including version, integrity, tarball and MCP binary selection.</li>
+            <li>The Operational Closure Plane adds canonical closure items, sources, events and verification tooling on top of protocol tasks, followups, outcomes, protocol debt and the MCP write queue.</li>
+            <li>NEXO Desktop 0.43.12 consumes the coordinated Brain contract and starts the Active Turn Input Router path with Claude stream-json support and Codex app-server fallback planning.</li>
+        </ul>
+        <h2>Why it matters</h2>
+        <p>NEXO can now keep its default MCP capabilities in sync through release automation instead of manual memory, while the closure plane gives open operational work a single ranked, evidence-backed place to converge.</p>
+        <p><a href="/changelog/#v73021">Read the full v7.30.21 changelog</a></p>
+    </main>
+</body>
+</html>

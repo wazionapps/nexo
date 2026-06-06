@@ -1,0 +1,124 @@
+{
+  "release_line": "v7.30",
+  "target_version": "7.30.21",
+  "scope_owner": "NEXO",
+  "distribution": {
+    "git_updates_on": "merge_to_main",
+    "packaged_release_on": "tag_publish"
+  },
+  "required_repo_files": [
+    "package.json",
+    "CHANGELOG.md",
+    "README.md",
+    "llms.txt",
+    ".well-known/llms.txt",
+    "index.html",
+    "blog/index.html",
+    "blog/nexo-7-30-21/index.html",
+    "changelog/index.html",
+    "sitemap.xml",
+    "release-contracts/v7.30.21.json",
+    "release-contracts/smoke/v7.30.21.json",
+    "scripts/pre-release-verify.sh",
+    "scripts/sync_release_artifacts.py",
+    "scripts/verify_release_readiness.py",
+    "scripts/verify_tool_map.py",
+    "scripts/verify_managed_mcp_lock.py",
+    "scripts/run_v7_30_21_smoke.py",
+    "tool-enforcement-map.json",
+    "src/client_sync.py",
+    "src/managed_mcp/catalog.json",
+    "src/managed_mcp/lock.json",
+    "src/managed_mcp/catalog.py",
+    "src/managed_mcp/client_config.py",
+    "src/managed_mcp/reconcile.py",
+    "bin/nexo-managed-mcp.js",
+    "src/closure_plane.py",
+    "src/db/_schema.py",
+    "src/server.py",
+    "tests/test_managed_mcp.py",
+    "tests/test_managed_mcp_release_gate.py",
+    "tests/test_closure_plane.py",
+    "tests/test_migrations.py",
+    ".claude-plugin/plugin.json",
+    "clawhub-skill/SKILL.md",
+    "openclaw-plugin/package.json",
+    "openclaw-plugin/package-lock.json",
+    "openclaw-plugin/src/mcp-bridge.ts"
+  ],
+  "required_website_files": [
+    "index.html",
+    "blog/index.html",
+    "blog/nexo-7-30-21/index.html",
+    "changelog/index.html",
+    "llms.txt",
+    ".well-known/llms.txt",
+    "sitemap.xml"
+  ],
+  "smoke": {
+    "required_groups": [
+      "managed_mcp_latest_lock",
+      "managed_mcp_reconcile_contract",
+      "closure_plane_contract",
+      "tool_map_contract",
+      "release_surface_contract"
+    ],
+    "max_age_hours": 72
+  },
+  "publication": {
+    "status": "ready",
+    "checklist_complete": true,
+    "blockers": []
+  },
+  "gates": [
+    {
+      "id": "managed_mcp_latest_lock",
+      "title": "Managed MCP provider locks are checked against npm latest before release",
+      "status": "complete",
+      "evidence_required": [
+        "scripts/verify_managed_mcp_lock.py compares src/managed_mcp/lock.json against npm latest version, integrity, tarball and binary metadata",
+        "scripts/pre-release-verify.sh runs the managed-mcp-lock step before release readiness and pytest",
+        "tests/test_managed_mcp_release_gate.py covers stale locks, update behavior and MCP binary selection"
+      ]
+    },
+    {
+      "id": "managed_mcp_reconcile_contract",
+      "title": "Managed default MCP catalog, lock, runner and client merge stay coherent",
+      "status": "complete",
+      "evidence_required": [
+        "src/managed_mcp/lock.json pins exact npm versions with integrity, tarball and bin values",
+        "client_sync.py writes NEXO-owned managed MCP entries without overwriting user-owned entries",
+        "bin/nexo-managed-mcp.js runs staged artifacts or exact locked npm packages instead of @latest"
+      ]
+    },
+    {
+      "id": "closure_plane_contract",
+      "title": "Operational Closure Plane MVP creates ranked, evidence-backed closure items",
+      "status": "complete",
+      "evidence_required": [
+        "Migration 78 creates closure_items, closure_item_sources, closure_item_events and closure_daily_snapshots",
+        "src/closure_plane.py backfills from protocol tasks, followups, protocol debt, outcomes and the MCP write queue",
+        "server.py exposes read/next/get/verify/close tools for closure items"
+      ]
+    },
+    {
+      "id": "tool_map_contract",
+      "title": "Public tool map includes all new server tools",
+      "status": "complete",
+      "evidence_required": [
+        "tool-enforcement-map.json includes nexo_managed_mcp_status and all five nexo_closure_* tools",
+        "scripts/verify_tool_map.py passes against server.py and plugin tools"
+      ]
+    },
+    {
+      "id": "release_surface_contract",
+      "title": "Public release surfaces and integration artifacts are aligned for v7.30.21",
+      "status": "complete",
+      "evidence_required": [
+        "README, llms, homepage, blog index, blog post, changelog page and sitemap reference v7.30.21",
+        "Claude plugin, ClawHub skill and OpenClaw package metadata reference 7.30.21",
+        "Release smoke and readiness checks validate the v7.30.21 contract before tag publish"
+      ]
+    }
+  ]
+}

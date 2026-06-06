@@ -1,5 +1,15 @@
 # Changelog
 
+## [7.30.21] - 2026-06-06
+
+### Added - managed MCPs and closure plane
+
+- **Brain now owns the default MCP capability catalog.** `src/managed_mcp/` ships the managed catalog/lock, client config merge helpers, reconcile state, and `nexo-managed-mcp` runner so Claude Code, Claude Desktop, and Codex receive the same Brain-owned default MCPs without overwriting user-owned entries.
+- **Client sync writes managed default MCPs alongside the main NEXO server.** `client_sync.py` now merges `nexo_chrome_control`, `nexo_desktop_control`, and `nexo_power_control` into JSON/TOML client configs with NEXO ownership metadata and exposes `nexo_managed_mcp_status` for read/apply reconciliation.
+- **Managed MCP provider locks are release-gated against npm latest.** `scripts/verify_managed_mcp_lock.py` validates exact provider version, integrity, tarball and MCP binary selection, and `scripts/pre-release-verify.sh` runs it before release so provider bumps are not a manual memory task.
+- **Operational Closure Plane MVP is live.** Migration 78 adds `closure_items`, sources, events, and daily snapshots; new tools `nexo_closure_status`, `nexo_closure_next`, `nexo_closure_item_get`, `nexo_closure_verify`, and `nexo_closure_close` surface read-only closure work from protocol tasks, followups, protocol debt, outcomes, and the MCP write queue.
+- **Regression coverage pins the release contract.** Tests cover catalog/lock validation, client merge ownership, reconcile state, closure migration/backfill/verify/close, and migration idempotence.
+
 ## [7.30.20] - 2026-06-06
 
 ### Fixed - packaged product knowledge runtime

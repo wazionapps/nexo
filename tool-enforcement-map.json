@@ -2864,6 +2864,96 @@
       },
       "triggers_after": []
     },
+    "nexo_managed_mcp_status": {
+      "description": "Read or apply the Brain-owned managed MCP catalog reconciliation plan",
+      "category": "system",
+      "source": "server",
+      "requires": [],
+      "provides": [
+        "managed_mcp_status"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_closure_status": {
+      "description": "Read Operational Closure Plane status and ranked closure queue",
+      "category": "closure",
+      "source": "server",
+      "requires": [],
+      "provides": [
+        "closure_status"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_closure_next": {
+      "description": "Return the next ranked closure items without executing source actions",
+      "category": "closure",
+      "source": "server",
+      "requires": [],
+      "provides": [
+        "closure_items"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_closure_item_get": {
+      "description": "Return one closure item with sources and events",
+      "category": "closure",
+      "source": "server",
+      "requires": [],
+      "provides": [
+        "closure_item"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_closure_verify": {
+      "description": "Record verification evidence for a closure item",
+      "category": "closure",
+      "source": "server",
+      "requires": [],
+      "provides": [
+        "closure_evidence"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_closure_close": {
+      "description": "Close a verified closure item or mark it rejected/stale explicitly",
+      "category": "closure",
+      "source": "server",
+      "requires": [],
+      "provides": [
+        "closure_close_result"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
     "nexo_media_memory_add": {
       "description": "Store non-text artifact metadata",
       "category": "media",
