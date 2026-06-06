@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEXO 7.30.19: product knowledge hub</title>
+    <meta name="description" content="NEXO Brain 7.30.19 adds a structured product knowledge hub and read-only product capability tools.">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-30-19/">
+</head>
+<body>
+    <main>
+        <p><a href="/blog/">Back to blog</a></p>
+        <h1>NEXO 7.30.19: product knowledge hub</h1>
+        <p><strong>June 6, 2026.</strong> This patch turns product capability knowledge into a structured, validated catalog that agents can query before answering what NEXO can do.</p>
+        <h2>What changed</h2>
+        <ul>
+            <li><code>src/product_knowledge/</code> now stores source-linked capabilities with safety, consent, retention, live-state and answer-guidance metadata.</li>
+            <li>Brain exposes read-only product tools for capability search, explanation, product answers, surface status and catalog validation.</li>
+            <li><code>nexo_system_catalog</code> still resolves legacy capability names such as <code>nexo_provider_models</code>, now backed by the structured catalog.</li>
+            <li>Release tests validate the catalog and tool map so product self-knowledge cannot drift silently.</li>
+        </ul>
+        <h2>Why it matters</h2>
+        <p>NEXO can now explain its product capabilities from a contract, not from stale prompt prose. Live facts such as credits balances, provider models, support tickets and cloud resources remain delegated to backend/runtime checks.</p>
+        <p><a href="/changelog/#v73019">Read the full v7.30.19 changelog</a></p>
+    </main>
+</body>
+</html>

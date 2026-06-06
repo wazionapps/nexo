@@ -614,12 +614,19 @@ def _artifact_entries() -> list[dict]:
 
 
 def _product_capability_entries() -> list[dict]:
-    """Static product contract map for agent self-discovery.
+    """Product contract map for agent self-discovery.
 
-    These entries are intentionally endpoint-level rather than marketing
-    copy. They let a fresh agent find the real backend surfaces before
-    guessing unsupported workflows.
+    The structured catalog is the primary source. The fallback below keeps
+    ``nexo_system_catalog`` alive if the product-knowledge package has a
+    syntax error during development.
     """
+
+    try:
+        from product_knowledge import catalog_entries_for_system_catalog
+
+        return catalog_entries_for_system_catalog()
+    except Exception:
+        pass
 
     return [
         {

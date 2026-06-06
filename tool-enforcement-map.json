@@ -693,6 +693,21 @@
       },
       "triggers_after": []
     },
+    "nexo_capability_explain": {
+      "description": "Explain one NEXO product capability with source and safety context",
+      "category": "product_knowledge",
+      "source": "server",
+      "requires": [],
+      "provides": [
+        "product_capability_explanation"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
     "nexo_change_commit": {
       "description": "Link change log entry to git commit",
       "category": "change_log",
@@ -3489,6 +3504,66 @@
       "source": "plugin:protocol",
       "requires": [],
       "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_product_answer": {
+      "description": "Answer a NEXO product question from the structured product catalog",
+      "category": "product_knowledge",
+      "source": "server",
+      "requires": [],
+      "provides": [
+        "product_answer"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_product_capabilities": {
+      "description": "Search the structured NEXO product capability catalog",
+      "category": "product_knowledge",
+      "source": "server",
+      "requires": [],
+      "provides": [
+        "product_capability_catalog"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_product_knowledge_validate": {
+      "description": "Validate the structured NEXO product knowledge catalog",
+      "category": "product_knowledge",
+      "source": "server",
+      "requires": [],
+      "provides": [
+        "product_knowledge_validation"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_product_surface_status": {
+      "description": "Show which NEXO product capabilities are exposed by a product surface",
+      "category": "product_knowledge",
+      "source": "server",
+      "requires": [],
+      "provides": [
+        "product_surface_status"
+      ],
       "internal_calls": [],
       "enforcement": {
         "level": "none",

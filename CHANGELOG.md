@@ -1,5 +1,14 @@
 # Changelog
 
+## [7.30.19] - 2026-06-06
+
+### Added - product knowledge hub
+
+- **Product capabilities now have a structured catalog.** Brain ships `src/product_knowledge/` with source-linked capabilities, safety metadata, live-state guidance, and validation so agents can answer product questions without relying on stale prompt text.
+- **New read-only product tools expose the catalog.** `nexo_product_capabilities`, `nexo_capability_explain`, `nexo_product_answer`, `nexo_product_surface_status`, and `nexo_product_knowledge_validate` let clients discover NEXO product surfaces while keeping credits, support, cloud and email state delegated to live backend/runtime checks.
+- **System catalog compatibility is preserved.** Legacy product capability names such as `nexo_provider_models`, `nexo_credits_cloud`, and `nexo_email_managed_agent_mailbox` still resolve through `nexo_system_catalog`, now backed by the structured catalog instead of a static inline list.
+- **Release gates pin the new contract.** `scripts/verify_product_kb.py`, `tests/test_product_knowledge.py`, and the tool-enforcement map keep product knowledge, MCP tools and discoverability aligned before release.
+
 ## [7.30.18] - 2026-06-06
 
 ### Fixed - managed email identity

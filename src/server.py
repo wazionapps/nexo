@@ -57,6 +57,13 @@ from tools_system_catalog import (
     handle_system_catalog,
     handle_tool_explain,
 )
+from tools_product_knowledge import (
+    handle_capability_explain,
+    handle_product_answer,
+    handle_product_capabilities,
+    handle_product_knowledge_validate,
+    handle_product_surface_status,
+)
 from tools_drive import (
     handle_drive_signals,
     handle_drive_reinforce,
@@ -1690,6 +1697,36 @@ def nexo_system_catalog(section: str = "", query: str = "", limit: int = 20) -> 
 def nexo_tool_explain(name: str) -> str:
     """Explain a live NEXO tool/capability from the generated system catalog."""
     return handle_tool_explain(name)
+
+
+@mcp.tool
+def nexo_product_capabilities(query: str = "", category: str = "", status: str = "", limit: int = 20) -> str:
+    """Search the structured NEXO product capability catalog."""
+    return handle_product_capabilities(query, category, status, limit)
+
+
+@mcp.tool
+def nexo_capability_explain(capability_id: str = "", query: str = "", locale: str = "es") -> str:
+    """Explain one NEXO product capability with source and safety context."""
+    return handle_capability_explain(capability_id, query, locale)
+
+
+@mcp.tool
+def nexo_product_answer(question: str, locale: str = "es", limit: int = 5) -> str:
+    """Answer a NEXO product question using the structured product catalog."""
+    return handle_product_answer(question, locale, limit)
+
+
+@mcp.tool
+def nexo_product_surface_status(surface: str = "", limit: int = 50) -> str:
+    """Show which NEXO product capabilities are exposed by a product surface."""
+    return handle_product_surface_status(surface, limit)
+
+
+@mcp.tool
+def nexo_product_knowledge_validate() -> str:
+    """Validate the structured NEXO product knowledge catalog."""
+    return handle_product_knowledge_validate()
 
 
 @mcp.tool

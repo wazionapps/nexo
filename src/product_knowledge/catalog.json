@@ -1,0 +1,358 @@
+{
+  "schema_version": 1,
+  "updated_at": "2026-06-06",
+  "source_policy": "Brain owns stable product semantics. Desktop manifests describe installed UI surfaces. Backend endpoints own live state, prices, balances, tickets and provisioning.",
+  "capabilities": [
+    {
+      "id": "nexo_product_self_knowledge",
+      "title": "Product Self-Knowledge",
+      "category": "product",
+      "layer": "brain",
+      "status": "live",
+      "summary": "NEXO can answer what its own runtime, tools, scripts, projects and supported workflows are by using structured local catalog sources.",
+      "aliases": ["system catalog", "tool explain", "self knowledge", "product map", "capabilities"],
+      "source_refs": [
+        "nexo/src/system_catalog.py",
+        "nexo/src/tools_system_catalog.py",
+        "nexo/src/server.py:nexo_system_catalog",
+        "nexo/src/server.py:nexo_tool_explain"
+      ],
+      "surfaces": ["Brain MCP tools", "Desktop conversation bootstrap"],
+      "live_state": {
+        "source": "local generated system catalog",
+        "max_age": "per tool call",
+        "fallback": "Answer only from this catalog and source_refs; do not guess unsupported capabilities."
+      },
+      "actions": {
+        "read": ["Search catalog sections", "Explain a tool or product capability"],
+        "write": []
+      },
+      "safety": {
+        "data_touched": ["tool descriptors", "local project atlas metadata", "script registry metadata"],
+        "data_origin": "local runtime metadata",
+        "consent_required": "no for read-only lookup",
+        "confirmation_required": "never for read-only lookup",
+        "credential_policy": "Do not expose credentials or secret values.",
+        "retention": "No new user data is stored by read-only lookup.",
+        "audit": "Tool calls are covered by the standard NEXO session/tool logs.",
+        "forbidden_actions": ["Invent unsupported product features", "Treat static docs as live backend state"]
+      },
+      "answer_guidance": {
+        "must_say": ["Use the live catalog first when available.", "Mark uncertain or missing capabilities as unknown."],
+        "must_not_say": ["Do not claim runtime parity that is not in the catalog."]
+      }
+    },
+    {
+      "id": "nexo_desktop_settings",
+      "title": "Desktop Preferences And Managed Settings",
+      "category": "desktop",
+      "layer": "desktop",
+      "status": "live",
+      "summary": "NEXO Desktop exposes non-technical settings through the Settings UI and a structured preference catalog.",
+      "aliases": ["preferences", "settings", "configuracion", "configuración", "settings catalog"],
+      "source_refs": [
+        "nexo-desktop/lib/settings-schema.js",
+        "nexo-desktop/lib/settings-preference-catalog.js",
+        "nexo-desktop/lib/app-settings-ipc.js",
+        "nexo-desktop/renderer/react/panels/Settings/SettingsShell.jsx"
+      ],
+      "surfaces": ["Desktop Settings", "settings-catalog IPC", "settings-preference-get IPC", "settings-preference-set IPC"],
+      "live_state": {
+        "source": "Desktop app settings + Brain calibration/profile files",
+        "max_age": "per IPC read",
+        "fallback": "Tell the user the setting exists only if present in the generated Desktop manifest."
+      },
+      "actions": {
+        "read": ["List preferences", "Read one preference"],
+        "write": ["Set one supported preference through settings-preference-set"]
+      },
+      "safety": {
+        "data_touched": ["Desktop settings", "Brain calibration", "Brain profile"],
+        "data_origin": "local user profile and Desktop app state",
+        "consent_required": "yes before changing preferences that affect behavior",
+        "confirmation_required": "yes for destructive, account, billing, permission or automation changes",
+        "credential_policy": "Never ask for passwords in chat; use Desktop connection flows or credential tools.",
+        "retention": "Settings persist in local app settings and Brain profile/calibration files.",
+        "audit": "Preference changes must pass through settings-save/settings-preference-set and standard logs.",
+        "forbidden_actions": ["Apply side effects from raw UI onChange", "Bypass Desktop Settings for normal users"]
+      },
+      "answer_guidance": {
+        "must_say": ["Guide non-technical users through Desktop Settings first."],
+        "must_not_say": ["Do not tell users to edit JSON files for normal preference changes."]
+      }
+    },
+    {
+      "id": "nexo_local_memory",
+      "title": "Local Memory And Local File Index",
+      "category": "memory",
+      "layer": "brain+desktop",
+      "status": "live",
+      "summary": "NEXO can index approved local folders for local retrieval while preserving exclusions, retention limits and diagnostics.",
+      "aliases": ["local memory", "index", "local index", "memoria local", "files"],
+      "source_refs": [
+        "nexo/src/server.py:nexo_local_index_status",
+        "nexo/src/server.py:nexo_local_index_roots",
+        "nexo/src/server.py:nexo_local_index_exclusions",
+        "nexo-desktop/renderer/react/panels/Settings/tabs/LocalMemoryTab.jsx"
+      ],
+      "surfaces": ["Desktop Local Memory settings", "Brain local index MCP tools"],
+      "live_state": {
+        "source": "local index service status and indexed roots",
+        "max_age": "per tool call",
+        "fallback": "If status is unavailable, describe only the configured design and ask to inspect diagnostics."
+      },
+      "actions": {
+        "read": ["Read index status", "List roots", "List exclusions"],
+        "write": ["Add/remove roots", "Add/remove exclusions", "Clear local index after confirmation"]
+      },
+      "safety": {
+        "data_touched": ["local file metadata", "text snippets from approved roots", "index diagnostics"],
+        "data_origin": "operator-approved local folders",
+        "consent_required": "yes before adding roots or clearing indexed data",
+        "confirmation_required": "yes for clear-index, purge, broad roots and sensitive folders",
+        "credential_policy": "Do not index credential files; keep secret patterns excluded.",
+        "retention": "Must follow local retention and disk growth limits.",
+        "audit": "Root/exclusion changes and purge operations must be logged.",
+        "forbidden_actions": ["Index home directory broadly without review", "Ignore exclusion rules", "Claim cloud upload for local-only index"]
+      },
+      "answer_guidance": {
+        "must_say": ["Local memory is local-first and controlled from Desktop settings."],
+        "must_not_say": ["Do not imply all user files are indexed by default."]
+      }
+    },
+    {
+      "id": "nexo_agent_email",
+      "title": "Managed Agent Email",
+      "category": "email",
+      "layer": "desktop+backend",
+      "status": "live",
+      "summary": "NEXO can use a managed IMAP/SMTP agent mailbox when the account exists, is configured and the user has enabled email automation.",
+      "aliases": ["email", "mailbox", "imap", "smtp", "agent mailbox", "managed mailbox"],
+      "source_refs": [
+        "nexo/src/system_catalog.py:nexo_email_managed_agent_mailbox",
+        "nexo-desktop/lib/email-automation-runtime.js",
+        "nexo-desktop/renderer/react/panels/Settings/tabs/EmailTab.jsx",
+        "nexo-desktop-web NexoEmailController"
+      ],
+      "surfaces": ["Desktop Email settings", "Backend NEXO Email API", "email-monitor automation"],
+      "live_state": {
+        "source": "Desktop settings + backend NEXO Email API + local automation supervisor",
+        "max_age": "per lookup",
+        "fallback": "If not configured, explain the setup route without inventing credentials."
+      },
+      "actions": {
+        "read": ["Check mailbox configuration", "Check automation readiness"],
+        "write": ["Configure managed mailbox", "Send email only with explicit authorization and account readiness"]
+      },
+      "safety": {
+        "data_touched": ["email addresses", "message metadata", "message bodies when processing email"],
+        "data_origin": "managed mailbox and local email monitor",
+        "consent_required": "yes before enabling monitoring or sending email",
+        "confirmation_required": "yes before sending external email or changing account settings",
+        "credential_policy": "Never request or reveal mailbox passwords in chat; use managed account connection flows.",
+        "retention": "Email processing follows local logs and mailbox retention; avoid storing full message bodies unnecessarily.",
+        "audit": "Sent email and monitor actions require verifiable logs.",
+        "forbidden_actions": ["Send email without current user authorization", "Use private followups as support tickets", "Expose SMTP/IMAP secrets"]
+      },
+      "answer_guidance": {
+        "must_say": ["Email works only when the mailbox is configured and enabled."],
+        "must_not_say": ["Do not promise sending if readiness was not checked."]
+      }
+    },
+    {
+      "id": "nexo_product_automations",
+      "title": "Product Automations",
+      "category": "automation",
+      "layer": "brain+desktop",
+      "status": "live",
+      "summary": "NEXO ships managed automations for email monitoring, followups and morning briefings; Desktop exposes safe controls for product automations.",
+      "aliases": ["automations", "email-monitor", "followup-runner", "morning-agent", "morning-digest"],
+      "source_refs": [
+        "nexo-desktop/renderer/react/panels/Settings/tabs/automationTabHelpers.js",
+        "nexo/src/server.py:nexo_automation_supervisor",
+        "nexo/src/server.py:nexo_automation_reconcile"
+      ],
+      "surfaces": ["Desktop Automations settings", "Brain automation supervisor"],
+      "live_state": {
+        "source": "automation supervisor + Desktop automation catalog",
+        "max_age": "per supervisor read",
+        "fallback": "Describe packaged automation categories, not individual running status."
+      },
+      "actions": {
+        "read": ["List automations", "Read schedule and health"],
+        "write": ["Enable/disable supported automations", "Change supported cadence or extra instructions"]
+      },
+      "safety": {
+        "data_touched": ["automation schedule", "automation logs", "email and followup metadata"],
+        "data_origin": "local automation runtime",
+        "consent_required": "yes before enabling/disabling or changing cadence",
+        "confirmation_required": "yes for changes that send email, notify users or alter recurring work",
+        "credential_policy": "Automations must use configured managed credentials; no secrets in chat.",
+        "retention": "Automation logs follow runtime log retention.",
+        "audit": "Automation changes and runs must be traceable.",
+        "forbidden_actions": ["Expose technical RSS/feed setup to normal users for Morning Digest", "Claim an automation is running without checking health"]
+      },
+      "answer_guidance": {
+        "must_say": ["Morning Digest is a managed briefing automation, not a raw feed configuration surface."],
+        "must_not_say": ["Do not say there are only three automations if the Desktop manifest reports four product automation identifiers."]
+      }
+    },
+    {
+      "id": "nexo_support_tickets_api",
+      "title": "Support Tickets",
+      "category": "support",
+      "layer": "desktop+backend",
+      "status": "live",
+      "summary": "Product bugs, setup failures and customer support reports belong in the backend support ticket system.",
+      "aliases": ["support", "tickets", "bug report", "soporte"],
+      "source_refs": [
+        "nexo/src/system_catalog.py:nexo_support_tickets_api",
+        "nexo/src/server.py:nexo_support_ticket_list",
+        "nexo/src/server.py:nexo_support_ticket_create",
+        "nexo-desktop/renderer/react/panels/Settings/tabs/SupportTab.jsx",
+        "nexo-desktop-web routes/web.php"
+      ],
+      "surfaces": ["Desktop Support settings", "Brain support-ticket tools", "Backend support API"],
+      "live_state": {
+        "source": "backend support API",
+        "max_age": "per API call",
+        "fallback": "Create a local draft only if backend is unavailable; do not treat reminders as real tickets."
+      },
+      "actions": {
+        "read": ["List/read tickets"],
+        "write": ["Create ticket", "Reply to ticket", "Close/reopen ticket"]
+      },
+      "safety": {
+        "data_touched": ["support subject", "support messages", "diagnostic attachments when user approves"],
+        "data_origin": "user report and Desktop diagnostics",
+        "consent_required": "yes before sending diagnostics or personal data to support",
+        "confirmation_required": "yes before creating external support tickets with attachments",
+        "credential_policy": "Use authenticated Desktop/backend session; do not ask for backend tokens in chat.",
+        "retention": "Backend support retention applies; diagnostic bundles must be minimized and redacted.",
+        "audit": "Ticket IDs and API results are the evidence of support actions.",
+        "forbidden_actions": ["Use private reminders/followups instead of support tickets", "Attach logs without permission"]
+      },
+      "answer_guidance": {
+        "must_say": ["Real product reports should be filed as support tickets."],
+        "must_not_say": ["Do not say a ticket was created without ticket ID evidence."]
+      }
+    },
+    {
+      "id": "nexo_credits_provider_proxy",
+      "title": "NEXO Credits Provider Proxy",
+      "category": "credits",
+      "layer": "backend+desktop",
+      "status": "live",
+      "summary": "NEXO Credits routes billable provider calls through backend policy, estimation, reservation and reconciliation.",
+      "aliases": ["credits", "provider proxy", "models", "openrouter", "heygen", "billing"],
+      "source_refs": [
+        "nexo/src/system_catalog.py:nexo_provider_proxy",
+        "nexo/src/system_catalog.py:nexo_provider_models",
+        "nexo-desktop/renderer/react/panels/Settings/tabs/SubscriptionsTab.jsx",
+        "nexo-desktop-web ProviderProxyController",
+        "nexo-desktop-web ProviderCatalogService"
+      ],
+      "surfaces": ["Desktop Subscriptions/Credits", "Backend provider-proxy API"],
+      "live_state": {
+        "source": "backend provider-proxy platforms/models/estimate endpoints",
+        "max_age": "per backend call",
+        "fallback": "Mark provider/model support as unknown or planned if not returned by backend."
+      },
+      "actions": {
+        "read": ["List platforms", "List models", "Estimate cost", "Read request status"],
+        "write": ["Reserve credits", "Execute provider call after explicit user intent"]
+      },
+      "safety": {
+        "data_touched": ["billing account", "credits balance", "provider request payload", "provider request result"],
+        "data_origin": "backend account and provider APIs",
+        "consent_required": "yes before spending credits or sending payloads to providers",
+        "confirmation_required": "yes before billable provider calls or top-ups",
+        "credential_policy": "Provider credentials live in backend credential storage; never reveal them.",
+        "retention": "Provider request records and ledger retention follow backend policy.",
+        "audit": "Credit reservation, ledger and provider request IDs are required evidence.",
+        "forbidden_actions": ["Hardcode prices or balances", "Promise video/model invocation unless backend marks it invokable", "Spend credits silently"]
+      },
+      "answer_guidance": {
+        "must_say": ["Balances, prices and invokable models are live backend facts."],
+        "must_not_say": ["Do not infer provider availability from marketing copy."]
+      }
+    },
+    {
+      "id": "nexo_managed_cloud_edge",
+      "title": "Managed Cloud And Edge",
+      "category": "cloud",
+      "layer": "backend+desktop",
+      "status": "planned_live",
+      "summary": "NEXO can list and provision managed cloud/edge resources through NEXO Credits when backend routes and spend controls are available.",
+      "aliases": ["nexo cloud", "nexo edge", "cloudflare", "gcloud", "managed infrastructure", "domains"],
+      "source_refs": [
+        "nexo/src/system_catalog.py:nexo_credits_cloud",
+        "nexo/src/system_catalog.py:nexo_edge_cloudflare",
+        "nexo-desktop-web NexoCloudController",
+        "nexo-desktop-web NexoEdgeController"
+      ],
+      "surfaces": ["Backend NEXO Cloud API", "Backend NEXO Edge API", "future Desktop managed infrastructure UI"],
+      "live_state": {
+        "source": "backend cloud/edge APIs",
+        "max_age": "per backend call",
+        "fallback": "Listing can be described as safe discovery; provisioning remains billable and must not be promised without route confirmation."
+      },
+      "actions": {
+        "read": ["List projects", "List sites", "List deployments", "List edge assets"],
+        "write": ["Provision project/site", "Register/check domain", "Create DNS/redirect/job after approval"]
+      },
+      "safety": {
+        "data_touched": ["cloud project metadata", "domain names", "DNS records", "deployment metadata", "billing/credits"],
+        "data_origin": "backend managed infrastructure and third-party cloud APIs",
+        "consent_required": "yes before provisioning or changing infrastructure",
+        "confirmation_required": "yes before billable, public or DNS-changing operations",
+        "credential_policy": "Cloud provider credentials are backend-managed; do not expose tokens.",
+        "retention": "Backend resource and job retention applies.",
+        "audit": "Provisioning/job IDs and credit ledger entries are required evidence.",
+        "forbidden_actions": ["Register domains without explicit approval", "Change DNS silently", "State a server/route/IP without verification"]
+      },
+      "answer_guidance": {
+        "must_say": ["Listing existing managed infrastructure is safe; creation is billable and approval-gated."],
+        "must_not_say": ["Do not claim a domain/server exists without live verification."]
+      }
+    },
+    {
+      "id": "nexo_protocol_cards",
+      "title": "Protocol Cards",
+      "category": "workflow",
+      "layer": "backend+brain+desktop",
+      "status": "live",
+      "summary": "Official workflow cards are served by backend and matched by Brain when available, so product procedures can evolve without hardcoded prompts.",
+      "aliases": ["cards", "protocol cards", "workflow cards", "procedures"],
+      "source_refs": [
+        "nexo/src/server.py:nexo_card_match",
+        "nexo-desktop-web CardCatalogService",
+        "nexo-desktop/prompts/system/conversation-bootstrap.md"
+      ],
+      "surfaces": ["Brain nexo_card_match", "Backend cards catalog", "Desktop bootstrap"],
+      "live_state": {
+        "source": "backend cards API",
+        "max_age": "per match request",
+        "fallback": "If unauthenticated/unavailable, continue with local product docs and say nothing about internal failure unless operationally relevant."
+      },
+      "actions": {
+        "read": ["Match cards", "Fetch catalog", "Fetch card"],
+        "write": ["Activate card when backend supports it and user context requires it"]
+      },
+      "safety": {
+        "data_touched": ["workflow metadata", "business type/category", "authenticated backend session"],
+        "data_origin": "backend card catalog",
+        "consent_required": "no for read-only matching",
+        "confirmation_required": "depends on actions inside the matched card",
+        "credential_policy": "Use existing authenticated Desktop/backend session; do not expose tokens.",
+        "retention": "Backend/API logging policy applies.",
+        "audit": "Card match/use is captured by runtime task evidence when relevant.",
+        "forbidden_actions": ["Invent official protocols", "Expose internal card fetch failures as user-facing noise"]
+      },
+      "answer_guidance": {
+        "must_say": ["Follow official cards silently when available."],
+        "must_not_say": ["Do not present backend-auth failures as product limitations."]
+      }
+    }
+  ]
+}
