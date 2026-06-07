@@ -1,7 +1,7 @@
 {
   "release_line": "v7.30",
   "version": "7.30.23",
-  "generated_at": "2026-06-07T14:34:48.692787+00:00",
+  "generated_at": "2026-06-07T15:04:33.111250+00:00",
   "ok": true,
   "groups": [
     {
@@ -26,8 +26,8 @@
       ],
       "returncode": 0,
       "ok": true,
-      "duration_seconds": 9.64,
-      "stdout": "...............................                                          [100%]Running teardown with pytest sessionfinish...\n\n31 passed in 3.23s\n",
+      "duration_seconds": 10.25,
+      "stdout": "...............................                                          [100%]Running teardown with pytest sessionfinish...\n\n31 passed in 3.45s\n",
       "stderr": ""
     },
     {
@@ -44,7 +44,7 @@
       ],
       "returncode": 0,
       "ok": true,
-      "duration_seconds": 0.03,
+      "duration_seconds": 0.04,
       "stdout": "{\n  \"backend_root\": \"/Users/franciscoc/Documents/_PhpstormProjects/nexo-desktop-web\",\n  \"errors\": [],\n  \"ok\": true,\n  \"schema_version\": 1,\n  \"surfaces_checked\": 6,\n  \"warnings\": []\n}\n",
       "stderr": ""
     },
@@ -84,8 +84,8 @@
       ],
       "returncode": 0,
       "ok": true,
-      "duration_seconds": 2.95,
-      "stdout": "........                                                                 [100%]Running teardown with pytest sessionfinish...\n\n8 passed in 0.85s\n",
+      "duration_seconds": 3.65,
+      "stdout": "........                                                                 [100%]Running teardown with pytest sessionfinish...\n\n8 passed in 0.95s\n",
       "stderr": ""
     },
     {
@@ -106,8 +106,8 @@
       ],
       "returncode": 0,
       "ok": true,
-      "duration_seconds": 2.46,
-      "stdout": ".                                                                        [100%]Running teardown with pytest sessionfinish...\n\n1 passed in 0.14s\n",
+      "duration_seconds": 2.5,
+      "stdout": ".                                                                        [100%]Running teardown with pytest sessionfinish...\n\n1 passed in 0.17s\n",
       "stderr": ""
     },
     {
@@ -122,7 +122,7 @@
       ],
       "returncode": 0,
       "ok": true,
-      "duration_seconds": 1.34,
+      "duration_seconds": 2.16,
       "stdout": "[managed-mcp-lock] OK (5 npm providers pinned to latest)\n",
       "stderr": ""
     },
@@ -138,7 +138,7 @@
       ],
       "returncode": 0,
       "ok": true,
-      "duration_seconds": 0.02,
+      "duration_seconds": 0.03,
       "stdout": "  tool-enforcement-map.json is in sync with code (364 tools)\n",
       "stderr": ""
     },
@@ -156,8 +156,8 @@
       ],
       "returncode": 0,
       "ok": true,
-      "duration_seconds": 34.59,
-      "stdout": "[sync-release-artifacts] OK\n........................................................................ [ 30%]\n........................................................................ [ 60%]\n........................................................................ [ 90%]\n.......................                                                  [100%]Running teardown with pytest sessionfinish...\n\n239 passed in 31.37s\n[client-parity] docs OK\n[client-parity] parity tests OK\n[release-readiness] changelog OK (7.30.23)\n[release-readiness] repo public surfaces OK (/Users/franciscoc/Documents/_PhpstormProjects/nexo)\n[release-readiness] duplicate artifact hygiene OK (/Users/franciscoc/Documents/_PhpstormProjects/nexo)\n[release-readiness] $ /opt/homebrew/opt/python@3.14/bin/python3.14 scripts/sync_release_artifacts.py --check\n[release-readiness] $ /opt/homebrew/opt/python@3.14/bin/python3.14 scripts/verify_client_parity.py\n[release-readiness] website skipped (missing /Users/franciscoc/Documents/_PhpstormProjects/nexo-gh-pages)\n[release-readiness] OK\n",
+      "duration_seconds": 35.01,
+      "stdout": "[sync-release-artifacts] OK\n........................................................................ [ 30%]\n........................................................................ [ 60%]\n........................................................................ [ 90%]\n.......................                                                  [100%]Running teardown with pytest sessionfinish...\n\n239 passed in 31.43s\n[client-parity] docs OK\n[client-parity] parity tests OK\n[release-readiness] changelog OK (7.30.23)\n[release-readiness] repo public surfaces OK (/Users/franciscoc/Documents/_PhpstormProjects/nexo)\n[release-readiness] duplicate artifact hygiene OK (/Users/franciscoc/Documents/_PhpstormProjects/nexo)\n[release-readiness] $ /opt/homebrew/opt/python@3.14/bin/python3.14 scripts/sync_release_artifacts.py --check\n[release-readiness] $ /opt/homebrew/opt/python@3.14/bin/python3.14 scripts/verify_client_parity.py\n[release-readiness] website skipped (missing /Users/franciscoc/Documents/_PhpstormProjects/nexo-gh-pages)\n[release-readiness] OK\n",
       "stderr": ""
     }
   ]
