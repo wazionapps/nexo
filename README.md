@@ -26,6 +26,8 @@ Previously in `7.30.19`: patch release over v7.30.18 - product capabilities now 
 
 Previously in `7.30.16`: patch release over v7.30.14 - Desktop diagnostics can read embedding migration status without warming models, and the coordinated Desktop update path is covered for bundled model verification and obsolete managed model cleanup.
 
+Previously in `7.30.15`: patch release over v7.30.14 - Email NEXO closes affirmative actionable replies correctly and avoids reopening processed threads after a sent reply is already recorded.
+
 Previously in `7.30.14`: patch release over v7.30.13 - support tickets, provider capability discovery, task-close rearming, internal audit followups, and the memory-observation watchdog are aligned for Desktop-managed agents.
 
 Previously in `7.30.13`: patch release over v7.30.12 - Email NEXO monitor prompts now require a full IMAP body fetch before replying, and managed email defaults use the MXroute `Sent` folder instead of `INBOX.Sent`.

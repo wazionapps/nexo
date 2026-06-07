@@ -74,6 +74,15 @@
 - **Packaged installs clean obsolete managed model revisions after the new bundle is complete.** `bin/nexo-brain.js` copies and verifies every model from `local_model_manifest.json` before removing old managed model revisions from `runtime/models`.
 - **Regression coverage pins migration, search and package-update behavior.** Tests cover resumable shadow embeddings, read-only status, bundled model verification and obsolete managed model cleanup.
 
+## [7.30.15] - 2026-06-05
+
+### Fixed - Email NEXO reply lifecycle closure
+
+- **Email replies can force the correct lifecycle event at send time.** `nexo-send-reply.py --classify-as resolution` lets the monitor close substantive replies even when the body starts with a short affirmation such as "si", "de acuerdo", or "perfecto".
+- **The email monitor no longer reopens already-closed reply work.** Stale `ack` / `commitment` debt is suppressed when a newer `resolution` or `action_done` exists, and `processed` rows with `action_done` are not reset to `pending`.
+- **Crash-after-send recovery now respects sent reply events.** If a worker dies after `nexo-send-reply.py` has recorded `replied` / `resolution` / `action_done`, the monitor reconciles the stale `processing` row to `processed` instead of requeueing it.
+- **Regression coverage pins the failure mode.** Tests cover affirmative-instruction closure, action-done recovery, debt suppression, crash-after-send reconciliation, and the still-valid unreplied recovery path.
+
 ## [7.30.14] - 2026-06-05
 
 ### Fixed - support ticket and capability discoverability

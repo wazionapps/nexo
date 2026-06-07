@@ -109,6 +109,8 @@ CREATE INDEX IF NOT EXISTS idx_ee_email ON email_events(email_id);
 CREATE INDEX IF NOT EXISTS idx_ee_event ON email_events(event);
 CREATE INDEX IF NOT EXISTS idx_ee_ts ON email_events(timestamp);
 """
+ACTION_CLOSURE_EVENTS = ("action_done", "resolution")
+SENT_REPLY_EVENTS = ("action_done", "resolution", "replied")
 EMAIL_LOOP_GUARD_SQL = """
 CREATE TABLE IF NOT EXISTS email_loop_guards (
     thread_key TEXT PRIMARY KEY,
@@ -902,18 +904,72 @@ def _has_active_processing_within(conn, email_id, *, hours=ZOMBIE_TIMEOUT_HOURS)
 
 
 def _has_action_done_after(conn, email_id, reference_ts):
+    return _has_email_event_after(conn, email_id, ACTION_CLOSURE_EVENTS, reference_ts)
+
+
+def _has_email_event_after(conn, email_id, events, reference_ts):
+    if not email_id or not reference_ts:
+        return False
+    event_list = tuple(events or ())
+    if not event_list:
+        return False
+    placeholders = ",".join("?" for _ in event_list)
     row = conn.execute(
-        """
+        f"""
         SELECT 1
         FROM email_events
         WHERE email_id = ?
-          AND event IN ('action_done', 'resolution')
-          AND timestamp > ?
+          AND event IN ({placeholders})
+          AND datetime(replace(timestamp, 'T', ' ')) > datetime(replace(?, 'T', ' '))
         LIMIT 1
         """,
-        (email_id, reference_ts),
+        (email_id, *event_list, reference_ts),
     ).fetchone()
     return bool(row)
+
+
+def _has_sent_reply_event(conn, email_id):
+    if not email_id:
+        return False
+    placeholders = ",".join("?" for _ in SENT_REPLY_EVENTS)
+    row = conn.execute(
+        f"""
+        SELECT 1
+        FROM email_events
+        WHERE email_id = ?
+          AND event IN ({placeholders})
+        LIMIT 1
+        """,
+        (email_id, *SENT_REPLY_EVENTS),
+    ).fetchone()
+    return bool(row)
+
+
+def _mark_processing_email_processed(conn, email_id, *, completed_at):
+    cols = _email_table_columns(conn)
+    updates = [
+        "status = 'processed'",
+        "started_at = NULL",
+    ]
+    params = []
+    if "completed_at" in cols:
+        updates.append(
+            "completed_at = CASE WHEN completed_at IS NULL OR trim(completed_at) = '' THEN ? ELSE completed_at END"
+        )
+        params.append(completed_at)
+    if "error" in cols:
+        updates.append("error = NULL")
+    params.append(email_id)
+    cur = conn.execute(
+        f"""
+        UPDATE emails
+        SET {', '.join(updates)}
+        WHERE message_id = ?
+          AND status = 'processing'
+        """,
+        tuple(params),
+    )
+    return cur.rowcount > 0
 
 
 def scan_debt(db_path=EMAIL_DB_PATH, *, max_items=5):
@@ -998,7 +1054,12 @@ def scan_debt(db_path=EMAIL_DB_PATH, *, max_items=5):
         """
     ).fetchall()
     recovered = []
+    sent_reconciled = []
     for row in stuck_rows:
+        if _has_sent_reply_event(conn, row["message_id"]):
+            if _mark_processing_email_processed(conn, row["message_id"], completed_at=now_label):
+                sent_reconciled.append(row)
+            continue
         conn.execute(
             """
             UPDATE emails
@@ -1053,6 +1114,11 @@ def scan_debt(db_path=EMAIL_DB_PATH, *, max_items=5):
     if recovered:
         lines.append("")
         lines.append(f"Auto-recovery applied: {len(recovered)} processing-stuck email(s) were reset to pending.")
+    if sent_reconciled:
+        lines.append("")
+        lines.append(
+            f"Reconciled {len(sent_reconciled)} processing email(s) with already-sent reply events; no re-open applied."
+        )
     total_reconciled = len(live_reconciled) + len(finished_reconciled)
     if total_reconciled:
         lines.append(f"Reconciled {total_reconciled} email(s) with inconsistent lifecycle state.")
@@ -1665,7 +1731,7 @@ def _recover_unreplied_processed(config, hours=24):
               AND NOT EXISTS (
                   SELECT 1 FROM email_events ev
                   WHERE ev.email_id = e.message_id
-                    AND ev.event IN ('replied', 'resolution')
+                    AND ev.event IN ('replied', 'resolution', 'action_done')
               )
             ORDER BY e.rowid DESC
             LIMIT 20

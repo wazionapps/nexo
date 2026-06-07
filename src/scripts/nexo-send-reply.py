@@ -445,7 +445,7 @@ def _has_open_action(conn, email_id):
     return not latest_done or latest_done < latest_open
 
 
-def record_reply_lifecycle(in_reply_to, references, body_text, *, subject="", to="", cc="", message_id="", db_path=EMAIL_DB_PATH):
+def record_reply_lifecycle(in_reply_to, references, body_text, *, subject="", to="", cc="", message_id="", db_path=EMAIL_DB_PATH, classify_override=""):
     try:
         conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
@@ -455,7 +455,7 @@ def record_reply_lifecycle(in_reply_to, references, body_text, *, subject="", to
             conn.close()
             return None
 
-        event = classify_reply_event(body_text)
+        event = (classify_override or "").strip() or classify_reply_event(body_text)
         detail = normalize_reply_text(body_text)[:200]
         meta = json.dumps(
             {
@@ -651,6 +651,18 @@ def build_parser():
     parser.add_argument("--quote-date", default="")
     parser.add_argument("--thread-file", default="", help="Full thread history file (all previous messages)")
     parser.add_argument("--attach", "--attachment", dest="attach", action="append", default=[], help="File to attach (can repeat)")
+    parser.add_argument(
+        "--classify-as",
+        dest="classify_as",
+        default="",
+        choices=["", "resolution", "ack", "commitment", "replied", "debt_flagged"],
+        help=(
+            "Force the reply lifecycle event instead of heuristic auto-classification. "
+            "Use when the reply is substantive but opens with a short affirmation that the "
+            "text heuristic would mis-read as 'ack' (escalation -> debt_flagged). "
+            "Empty (default) keeps automatic classification."
+        ),
+    )
     return parser
 
 
@@ -711,6 +723,7 @@ def main(argv=None):
             to=args.to,
             cc=args.cc,
             message_id=msg_id,
+            classify_override=(args.classify_as or "").strip(),
         )
         try:
             record_sent_email(

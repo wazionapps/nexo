@@ -16,6 +16,8 @@ v7.30.17: patch release. Repairs F0.6 personal-script bare imports to promoted c
 
 v7.30.16: patch release. Adds read-only embedding migration status for Desktop diagnostics, resumable shadow-embedding coverage, bundled model verification, and obsolete managed model cleanup for coordinated Desktop updates.
 
+v7.30.15: patch release. Email NEXO closes affirmative actionable replies correctly, suppresses stale reply debt, and recovers crash-after-send rows without reopening processed threads.
+
 v7.30.14: patch release. Adds support-ticket tools, provider capability discovery, post-close task rearm protection, internal audit followup marking, and the memory-observation watchdog for Desktop-managed agents.
 v7.30.13: patch release. Email NEXO monitor prompts now require a full IMAP body fetch before replying, and managed email defaults use the MXroute `Sent` folder instead of `INBOX.Sent`.
 v7.30.12: patch release. Desktop-managed email credentials now resolve through a shared keychain-first helper with legacy SQLite fallback for older configured accounts.

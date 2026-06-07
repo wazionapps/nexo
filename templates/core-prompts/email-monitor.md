@@ -40,6 +40,9 @@ You MUST register read-side lifecycle events, not send-side events:
 - When you open/analyze a new email seriously, add an `opened` event for that `message_id`.
 - When you change `emails.status` to `processing`, also add a `processing` event.
 - Do NOT register `ack` / `commitment` / `resolution` manually when replying: `nexo-send-reply.py` already does that.
+- When the reply closes or answers a real actionable instruction, pass `--classify-as resolution`.
+  This is mandatory when the body starts with a short affirmation (`sí`, `de acuerdo`, `perfecto`, etc.) but then contains substantive instructions or completed work.
+- Use `--classify-as ack` only for a pure receipt/started-working acknowledgement, and `--classify-as commitment` only for a real future commitment.
 - Use sqlite3 or local python3+sqlite3; tracking is best-effort, append-only, and never deletes historical entries.
 
 == WHEN THERE IS DEBT BUT NO UNREAD EMAIL ==
@@ -169,7 +172,9 @@ Mandatory steps before sending:
    The bottom of the email must preserve message -> reply -> message -> reply without dropping previous answers.
 
 == SEND VIA `nexo-send-reply.py` ==
-[[python_executable]] [[send_reply_script]] --to X --cc Y --subject 'Re: Z' --in-reply-to '<msgid>' --references '<refs>' --body-file /tmp/nexo-reply-UID.txt --quote-file /tmp/nexo-quote-UID.txt --quote-from 'Name <email>' --quote-date 'date' --thread-file /tmp/nexo-thread-UID.txt [--attach /path/to/file]
+[[python_executable]] [[send_reply_script]] --to X --cc Y --subject 'Re: Z' --in-reply-to '<msgid>' --references '<refs>' --body-file /tmp/nexo-reply-UID.txt --quote-file /tmp/nexo-quote-UID.txt --quote-from 'Name <email>' --quote-date 'date' --thread-file /tmp/nexo-thread-UID.txt --classify-as resolution [--attach /path/to/file]
+
+Use a different `--classify-as` value only when the lifecycle is truly different (`ack`, `commitment`, `replied`, `debt_flagged`).
 
 == ANTI-LOOP PROTECTION ==
 Do not reply to auto-replies, [[agent_email_label]] itself, `noreply@`,
