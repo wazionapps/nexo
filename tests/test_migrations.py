@@ -6,6 +6,7 @@ import pytest
 
 import db as db_mod
 from db._schema import (
+    MIGRATIONS,
     _m65_diary_quality,
     _m67_diary_quality_backfill_repair,
     _m68_memory_fabric_index,
@@ -51,6 +52,29 @@ def test_migrations_idempotent():
     db_mod.run_migrations()
     version = db_mod.get_schema_version()
     assert version >= 78
+
+
+def test_run_migrations_treats_text_versions_as_applied():
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute(
+        """
+        CREATE TABLE schema_migrations (
+            version TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            applied_at TEXT DEFAULT (datetime('now'))
+        )
+        """
+    )
+    for version, name, _fn in MIGRATIONS:
+        conn.execute(
+            "INSERT INTO schema_migrations (version, name) VALUES (?, ?)",
+            (str(version), name),
+        )
+    conn.commit()
+
+    assert run_migrations(conn) == 0
+    assert run_migrations(conn) == 0
 
 
 def test_m76_semantic_layers_migration_is_idempotent_and_constrained():

@@ -1346,7 +1346,7 @@ function getCoreRuntimeFlatFiles(srcDir = path.join(__dirname, "..", "src")) {
 }
 
 function getCoreRuntimePackages() {
-  return ["db", "cognitive", "doctor", "local_context", "product_knowledge"];
+  return ["db", "cognitive", "doctor", "local_context", "managed_mcp", "product_knowledge"];
 }
 
 // Brain contracts — files the NEXO Brain publishes to consumers like
@@ -4306,6 +4306,12 @@ async function runSetup() {
   const runtimeCliPath = path.join(NEXO_HOME, "bin", "nexo");
   fs.writeFileSync(runtimeCliPath, runtimeCli);
   fs.chmodSync(runtimeCliPath, 0o755);
+  const managedMcpSource = path.join(__dirname, "nexo-managed-mcp.js");
+  if (fs.existsSync(managedMcpSource)) {
+    const managedMcpTarget = path.join(NEXO_HOME, "bin", "nexo-managed-mcp");
+    fs.copyFileSync(managedMcpSource, managedMcpTarget);
+    fs.chmodSync(managedMcpTarget, 0o755);
+  }
 
   log("Copying core packages...");
   // Core packages (directories with __init__.py)

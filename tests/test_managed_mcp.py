@@ -1,4 +1,7 @@
 import json
+import os
+import subprocess
+from types import SimpleNamespace
 from pathlib import Path
 
 from client_sync import _sync_json_client
@@ -137,3 +140,104 @@ def test_reconcile_writes_state_only_when_applied(tmp_path):
     assert status_before["state_exists"] is False
     assert applied["applied"] is True
     assert Path(applied["state_path"]).is_file()
+
+
+def test_reconcile_apply_stages_providers_and_reports_health(tmp_path):
+    runtime_root = Path(__file__).resolve().parents[1] / "src"
+
+    def fake_npm_runner(stage_dir, package, version):
+        return SimpleNamespace(returncode=0, stdout=f"installed {package}@{version}", stderr="")
+
+    applied = reconcile_managed_mcp(
+        nexo_home=tmp_path,
+        runtime_root=runtime_root,
+        apply=True,
+        platform="darwin",
+        npm_runner=fake_npm_runner,
+    )
+    status = managed_mcp_status(
+        nexo_home=tmp_path,
+        runtime_root=runtime_root,
+        platform="darwin",
+    )
+
+    assert applied["applied"] is True
+    assert applied["providers"]
+    assert {provider["status"] for provider in applied["providers"].values()} == {"healthy"}
+    assert {provider["status"] for provider in status["providers"].values()} == {"healthy"}
+    for provider in applied["providers"].values():
+        assert Path(provider["staged_path"]).is_dir()
+        assert Path(provider["executable"]).is_file()
+
+
+def test_managed_mcp_runtime_copy_includes_package_and_runner():
+    root = Path(__file__).resolve().parents[1]
+    brain = (root / "bin" / "nexo-brain.js").read_text(encoding="utf-8")
+    auto_update = (root / "src" / "auto_update.py").read_text(encoding="utf-8")
+
+    assert '"managed_mcp"' in brain
+    assert '"managed_mcp"' in auto_update
+    assert "nexo-managed-mcp" in brain
+    assert "nexo-managed-mcp" in auto_update
+
+
+def test_managed_mcp_runner_respects_kill_switch(tmp_path):
+    state_dir = tmp_path / "runtime" / "managed-mcp"
+    state_dir.mkdir(parents=True)
+    (state_dir / "installed-state.json").write_text(json.dumps({
+        "desired": {
+            "claude_code": {
+                "nexo_chrome_control": {
+                    "nexo": {
+                        "capability_id": "chrome_control",
+                        "provider_id": "chrome-devtools-mcp",
+                        "provider_package": "chrome-devtools-mcp",
+                        "provider_version": "1.1.1",
+                        "provider_bin": "chrome-devtools-mcp",
+                    }
+                }
+            }
+        }
+    }))
+
+    result = subprocess.run(
+        ["node", str(Path(__file__).resolve().parents[1] / "bin" / "nexo-managed-mcp.js"), "run", "chrome_control"],
+        text=True,
+        capture_output=True,
+        env={**os.environ, "NEXO_HOME": str(tmp_path), "NEXO_MANAGED_MCP_DISABLE": "1"},
+        timeout=10,
+    )
+
+    assert result.returncode == 78
+    assert "disabled by policy" in result.stderr
+
+
+def test_managed_mcp_runner_fails_closed_when_provider_is_unstaged(tmp_path):
+    state_dir = tmp_path / "runtime" / "managed-mcp"
+    state_dir.mkdir(parents=True)
+    (state_dir / "installed-state.json").write_text(json.dumps({
+        "desired": {
+            "claude_code": {
+                "nexo_chrome_control": {
+                    "nexo": {
+                        "capability_id": "chrome_control",
+                        "provider_id": "chrome-devtools-mcp",
+                        "provider_package": "chrome-devtools-mcp",
+                        "provider_version": "1.1.1",
+                        "provider_bin": "chrome-devtools-mcp",
+                    }
+                }
+            }
+        }
+    }))
+
+    result = subprocess.run(
+        ["node", str(Path(__file__).resolve().parents[1] / "bin" / "nexo-managed-mcp.js"), "run", "chrome_control"],
+        text=True,
+        capture_output=True,
+        env={**os.environ, "NEXO_HOME": str(tmp_path), "NEXO_MANAGED_MCP_ALLOW_NPX_FALLBACK": ""},
+        timeout=10,
+    )
+
+    assert result.returncode == 69
+    assert "not staged" in result.stderr

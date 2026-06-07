@@ -189,6 +189,12 @@ def provider_for_capability(
 
 
 def _runner_path(nexo_home: Path, runtime_root: Path | None = None) -> Path:
+    runtime_bin = nexo_home / "bin" / "nexo-managed-mcp"
+    if runtime_bin.exists():
+        return runtime_bin
+    runtime_js = nexo_home / "bin" / "nexo-managed-mcp.js"
+    if runtime_js.exists():
+        return runtime_js
     runtime_bin = nexo_home / "runtime" / "bin" / "nexo-managed-mcp"
     if runtime_bin.exists():
         return runtime_bin

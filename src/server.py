@@ -1044,7 +1044,15 @@ def nexo_closure_status(refresh: bool = True, limit: int = 10) -> str:
 
 
 @mcp.tool
-def nexo_closure_next(limit: int = 10, include_waiting: bool = False, source: str = "", kind: str = "") -> str:
+def nexo_closure_next(
+    limit: int = 10,
+    include_waiting: bool = False,
+    source: str = "",
+    kind: str = "",
+    state: str = "",
+    max_risk: float = 0.0,
+    area: str = "",
+) -> str:
     """Return the next ranked closure items without executing source actions."""
     from closure_plane import handle_closure_next
 
@@ -1052,7 +1060,11 @@ def nexo_closure_next(limit: int = 10, include_waiting: bool = False, source: st
         clean_limit = max(1, min(int(limit or 10), 100))
     except Exception:
         clean_limit = 10
-    return handle_closure_next(clean_limit, bool(include_waiting), source, kind)
+    try:
+        clean_max_risk = float(max_risk or 0.0)
+    except Exception:
+        clean_max_risk = 0.0
+    return handle_closure_next(clean_limit, bool(include_waiting), source, kind, state, clean_max_risk, area)
 
 
 @mcp.tool
@@ -1061,6 +1073,56 @@ def nexo_closure_item_get(item_id: str) -> str:
     from closure_plane import handle_closure_item_get
 
     return handle_closure_item_get(item_id)
+
+
+@mcp.tool
+def nexo_closure_triage(
+    item_id: str,
+    state: str = "",
+    kind: str = "",
+    blocker_reason: str = "",
+    next_action: str = "",
+    evidence_required: str = "",
+    owner: str = "",
+    capability_required: str = "",
+    capability_status: str = "",
+    duplicate_of: str = "",
+) -> str:
+    """Triage a closure item without executing its source action."""
+    from closure_plane import handle_closure_triage
+
+    return handle_closure_triage(
+        item_id,
+        state,
+        kind,
+        blocker_reason,
+        next_action,
+        evidence_required,
+        owner,
+        capability_required,
+        capability_status,
+        duplicate_of,
+    )
+
+
+@mcp.tool
+def nexo_closure_link(item_id: str, link_type: str, link_id: str, relation: str = "related") -> str:
+    """Link a closure item to a task, workflow, followup, outcome, or learning."""
+    from closure_plane import handle_closure_link
+
+    return handle_closure_link(item_id, link_type, link_id, relation)
+
+
+@mcp.tool
+def nexo_closure_snapshot(refresh: bool = True, snapshot_date: str = "", limit: int = 10) -> str:
+    """Write and return an Operational Closure Plane daily snapshot."""
+    from closure_plane import handle_closure_snapshot
+
+    try:
+        clean_limit = max(1, min(int(limit or 10), 100))
+    except Exception:
+        clean_limit = 10
+    return handle_closure_snapshot(bool(refresh), snapshot_date, clean_limit)
 
 
 @mcp.tool

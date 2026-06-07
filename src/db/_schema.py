@@ -2867,6 +2867,42 @@ def _m78_operational_closure_plane(conn):
     _migrate_add_index(conn, "idx_closure_events_item", "closure_item_events", "closure_item_id, created_at")
 
 
+def _m79_operational_closure_links_readiness(conn):
+    """Upgrade Closure Plane with links and capability readiness tables."""
+    _m78_operational_closure_plane(conn)
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS closure_item_links (
+            id TEXT PRIMARY KEY,
+            closure_item_id TEXT NOT NULL,
+            link_type TEXT NOT NULL,
+            link_id TEXT NOT NULL,
+            relation TEXT NOT NULL DEFAULT 'related',
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY(closure_item_id) REFERENCES closure_items(id) ON DELETE CASCADE,
+            UNIQUE(closure_item_id, link_type, link_id, relation)
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS closure_capability_readiness (
+            id TEXT PRIMARY KEY,
+            capability TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'unknown',
+            reason TEXT NOT NULL DEFAULT '',
+            verified_at TEXT NOT NULL,
+            verification_evidence TEXT NOT NULL DEFAULT '',
+            expires_at TEXT NOT NULL DEFAULT '',
+            UNIQUE(capability)
+        )
+        """
+    )
+    _migrate_add_index(conn, "idx_closure_links_item", "closure_item_links", "closure_item_id")
+    _migrate_add_index(conn, "idx_closure_links_target", "closure_item_links", "link_type, link_id")
+    _migrate_add_index(conn, "idx_closure_readiness_capability", "closure_capability_readiness", "capability, status")
+
+
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
     (2, "followups_reasoning", _m2_followups_reasoning),
@@ -2946,6 +2982,7 @@ MIGRATIONS = [
     (76, "semantic_layers", _m76_semantic_layers),
     (77, "morning_briefing_presentation", _m77_morning_briefing_presentation),
     (78, "operational_closure_plane", _m78_operational_closure_plane),
+    (79, "operational_closure_links_readiness", _m79_operational_closure_links_readiness),
 ]
 
 
@@ -2967,7 +3004,11 @@ def run_migrations(conn=None):
     """)
     conn.commit()
 
-    applied = {r[0] for r in conn.execute("SELECT version FROM schema_migrations").fetchall()}
+    applied = {
+        int(r[0])
+        for r in conn.execute("SELECT version FROM schema_migrations").fetchall()
+        if str(r[0]).strip().isdigit()
+    }
 
     failed = []
     for version, name, fn in MIGRATIONS:
@@ -2975,9 +3016,10 @@ def run_migrations(conn=None):
             try:
                 fn(conn)
                 conn.execute(
-                    "INSERT INTO schema_migrations (version, name) VALUES (?, ?)",
+                    "INSERT OR IGNORE INTO schema_migrations (version, name) VALUES (?, ?)",
                     (version, name)
                 )
+                applied.add(version)
                 conn.commit()
             except Exception as e:
                 conn.rollback()

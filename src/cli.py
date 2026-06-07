@@ -170,6 +170,48 @@ def _mcp_status(args) -> int:
     )
 
 
+def _closure(args) -> int:
+    from closure_plane import closure_next, closure_snapshot, closure_status, refresh_closure_items
+    from db import get_db
+    from db._schema import run_migrations
+
+    conn = get_db()
+    run_migrations(conn)
+    command = str(getattr(args, "closure_command", "") or "status")
+    if command == "status":
+        payload = closure_status(
+            conn,
+            refresh=not bool(getattr(args, "no_refresh", False)),
+            limit=max(1, min(int(getattr(args, "limit", 10) or 10), 100)),
+        )
+    elif command == "next":
+        if bool(getattr(args, "refresh", False)):
+            refresh_closure_items(conn)
+        payload = {
+            "ok": True,
+            "items": closure_next(
+                conn,
+                limit=max(1, min(int(getattr(args, "limit", 10) or 10), 100)),
+                include_waiting=bool(getattr(args, "include_waiting", False)),
+                source=str(getattr(args, "source", "") or ""),
+                kind=str(getattr(args, "kind", "") or ""),
+                state=str(getattr(args, "state", "") or ""),
+                max_risk=getattr(args, "max_risk", 0.0),
+                area=str(getattr(args, "area", "") or ""),
+            ),
+        }
+    elif command == "snapshot":
+        payload = closure_snapshot(
+            conn,
+            refresh=not bool(getattr(args, "no_refresh", False)),
+            snapshot_date=str(getattr(args, "date", "") or ""),
+            limit=max(1, min(int(getattr(args, "limit", 10) or 10), 100)),
+        )
+    else:
+        payload = {"ok": False, "error": "unsupported closure command"}
+    return _print_json_or_text(payload, as_json=bool(getattr(args, "json", False)))
+
+
 def _mcp_write_message(stdin, payload: dict) -> None:
     raw = json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
     stdin.write(raw + b"\n")
@@ -4307,6 +4349,29 @@ def main():
         help="Install Codex automatically when the selected runtime needs it and it is missing.",
     )
 
+    # -- closure --
+    closure_parser = sub.add_parser("closure", help="Operational closure queue")
+    closure_sub = closure_parser.add_subparsers(dest="closure_command")
+    closure_status_p = closure_sub.add_parser("status", help="Show closure queue status")
+    closure_status_p.add_argument("--limit", type=int, default=10, help="Top items to include")
+    closure_status_p.add_argument("--no-refresh", action="store_true", help="Do not refresh adapters before reading")
+    closure_status_p.add_argument("--json", action="store_true", help="JSON output")
+    closure_next_p = closure_sub.add_parser("next", help="Show ranked closure items")
+    closure_next_p.add_argument("--limit", type=int, default=10, help="Maximum items")
+    closure_next_p.add_argument("--include-waiting", action="store_true", help="Include waiting_user/blocked items")
+    closure_next_p.add_argument("--refresh", action="store_true", help="Refresh adapters before reading")
+    closure_next_p.add_argument("--source", default="", help="Filter by source")
+    closure_next_p.add_argument("--kind", default="", help="Filter by kind")
+    closure_next_p.add_argument("--state", default="", help="Filter by state, e.g. ready or waiting_user")
+    closure_next_p.add_argument("--area", default="", help="Filter by owner/source/kind/payload area")
+    closure_next_p.add_argument("--max-risk", type=float, default=0.0, help="Filter by maximum risk_score")
+    closure_next_p.add_argument("--json", action="store_true", help="JSON output")
+    closure_snapshot_p = closure_sub.add_parser("snapshot", help="Write and show the daily closure snapshot")
+    closure_snapshot_p.add_argument("--date", default="", help="Snapshot date YYYY-MM-DD")
+    closure_snapshot_p.add_argument("--limit", type=int, default=10, help="Top items to include")
+    closure_snapshot_p.add_argument("--no-refresh", action="store_true", help="Do not refresh adapters before snapshot")
+    closure_snapshot_p.add_argument("--json", action="store_true", help="JSON output")
+
     # -- preferences --
     preferences_parser = sub.add_parser(
         "preferences",
@@ -4848,6 +4913,10 @@ def main():
             return _clients_sync(args)
         clients_parser.print_help()
         return 0
+    elif args.command == "closure":
+        if not args.closure_command:
+            args.closure_command = "status"
+        return _closure(args)
     elif args.command == "mcp":
         if args.mcp_command == "status":
             return _mcp_status(args)

@@ -2924,6 +2924,51 @@
       },
       "triggers_after": []
     },
+    "nexo_closure_triage": {
+      "description": "Triage a closure item without executing its source action",
+      "category": "closure",
+      "source": "server",
+      "requires": [],
+      "provides": [
+        "closure_triage_result"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_closure_link": {
+      "description": "Link a closure item to a task, workflow, followup, outcome, or learning",
+      "category": "closure",
+      "source": "server",
+      "requires": [],
+      "provides": [
+        "closure_item_link"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_closure_snapshot": {
+      "description": "Write and return an Operational Closure Plane daily snapshot",
+      "category": "closure",
+      "source": "server",
+      "requires": [],
+      "provides": [
+        "closure_snapshot"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
     "nexo_closure_verify": {
       "description": "Record verification evidence for a closure item",
       "category": "closure",

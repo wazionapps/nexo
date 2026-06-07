@@ -11,12 +11,34 @@ import datetime as _dt
 import hashlib
 import json
 import os
+import time as _time
 from pathlib import Path
 from typing import Any
 
 
 OPEN_STATES = {"open", "waiting", "verified"}
 FINAL_STATES = {"closed", "rejected", "stale"}
+STATE_ALIASES = {
+    "ready": "open",
+    "waiting_user": "waiting",
+    "blocked": "waiting",
+    "done": "closed",
+}
+READINESS_STATES = {
+    "available",
+    "missing_tool",
+    "missing_credential",
+    "needs_user_permission",
+    "unsafe",
+    "external_blocker",
+    "unknown",
+}
+TRIAGE_STATES = OPEN_STATES | FINAL_STATES
+
+
+def _canonical_state(value: Any) -> str:
+    clean = str(value or "").strip().lower()
+    return STATE_ALIASES.get(clean, clean)
 
 
 def _now_iso() -> str:
@@ -236,7 +258,7 @@ def _upsert_candidate(conn, item: dict[str, Any]) -> bool:
 
 
 def _record_event(conn, item_id: str, event_type: str, from_state: str, to_state: str, note: str, evidence: str = "") -> None:
-    event_id = _hash_id("CIE", f"{item_id}:{event_type}:{from_state}:{to_state}:{_now_iso()}:{note}", 24)
+    event_id = _hash_id("CIE", f"{item_id}:{event_type}:{from_state}:{to_state}:{_time.time_ns()}:{note}", 24)
     conn.execute(
         """
         INSERT INTO closure_item_events (
@@ -245,6 +267,17 @@ def _record_event(conn, item_id: str, event_type: str, from_state: str, to_state
         """,
         (event_id, item_id, event_type, from_state, to_state, note, evidence),
     )
+
+
+def _readiness_counts(conn) -> dict[str, int]:
+    if not _table_exists(conn, "closure_capability_readiness"):
+        return {}
+    return {
+        row["status"]: row["n"]
+        for row in conn.execute(
+            "SELECT status, COUNT(*) AS n FROM closure_capability_readiness GROUP BY status"
+        ).fetchall()
+    }
 
 
 def _protocol_task_candidates(conn, limit: int) -> list[dict[str, Any]]:
@@ -469,6 +502,7 @@ def refresh_closure_items(conn=None, *, limit_per_adapter: int = 250) -> dict[st
         run_migrations(conn)
     candidates: list[dict[str, Any]] = []
     adapter_counts: dict[str, int] = {}
+    adapter_errors: dict[str, str] = {}
     adapters = [
         ("protocol_tasks", lambda: _protocol_task_candidates(conn, limit_per_adapter)),
         ("followups", lambda: _followup_candidates(conn, limit_per_adapter)),
@@ -479,8 +513,9 @@ def refresh_closure_items(conn=None, *, limit_per_adapter: int = 250) -> dict[st
     for name, adapter in adapters:
         try:
             produced = adapter()
-        except Exception:
+        except Exception as exc:
             produced = []
+            adapter_errors[name] = f"{type(exc).__name__}: {exc}"
         adapter_counts[name] = len(produced)
         candidates.extend(produced)
 
@@ -493,17 +528,34 @@ def refresh_closure_items(conn=None, *, limit_per_adapter: int = 250) -> dict[st
     return {
         "ok": True,
         "adapters": adapter_counts,
+        "adapter_errors": adapter_errors,
         "observed": len(candidates),
         "created": created,
     }
 
 
-def closure_next(conn=None, *, limit: int = 10, include_waiting: bool = False, source: str = "", kind: str = "") -> list[dict[str, Any]]:
+def closure_next(
+    conn=None,
+    *,
+    limit: int = 10,
+    include_waiting: bool = False,
+    source: str = "",
+    kind: str = "",
+    state: str = "",
+    max_risk: float | None = None,
+    area: str = "",
+) -> list[dict[str, Any]]:
     if conn is None:
         from db import get_db
 
         conn = get_db()
-    states = ("open", "verified", "waiting") if include_waiting else ("open", "verified")
+    clean_state = _canonical_state(state)
+    if clean_state:
+        if clean_state not in OPEN_STATES | FINAL_STATES:
+            return []
+        states = (clean_state,)
+    else:
+        states = ("open", "verified", "waiting") if include_waiting else ("open", "verified")
     clauses = [f"state IN ({','.join('?' for _ in states)})"]
     params: list[Any] = list(states)
     if source:
@@ -512,6 +564,24 @@ def closure_next(conn=None, *, limit: int = 10, include_waiting: bool = False, s
     if kind:
         clauses.append("kind = ?")
         params.append(kind)
+    if max_risk is not None:
+        try:
+            risk_limit = float(max_risk)
+        except Exception:
+            risk_limit = 0.0
+        if risk_limit > 0:
+            clauses.append("risk_score <= ?")
+            params.append(max(0.0, min(risk_limit, 1.0)))
+    clean_area = str(area or "").strip()
+    if clean_area:
+        like_area = f"%{clean_area}%"
+        clauses.append(
+            "("
+            "source_primary = ? OR kind = ? OR owner = ? OR capability_required = ? "
+            "OR title LIKE ? OR summary LIKE ? OR source_payload_json LIKE ?"
+            ")"
+        )
+        params.extend([clean_area, clean_area, clean_area, clean_area, like_area, like_area, like_area])
     params.append(max(1, min(int(limit or 10), 100)))
     rows = conn.execute(
         f"""
@@ -547,6 +617,7 @@ def closure_status(conn=None, *, refresh: bool = True, limit: int = 10) -> dict[
         "schema": "nexo.closure.status.v1",
         "refreshed": refresh_result,
         "counts": counts,
+        "capability_readiness": _readiness_counts(conn),
         "open_total": sum(int(counts.get(state, 0)) for state in OPEN_STATES),
         "by_kind": by_kind,
         "next": closure_next(conn, limit=limit, include_waiting=True),
@@ -576,8 +647,13 @@ def closure_item_get(item_id: str, conn=None) -> dict[str, Any] | None:
         "SELECT * FROM closure_item_events WHERE closure_item_id = ? ORDER BY created_at DESC LIMIT 50",
         (payload["id"],),
     ).fetchall()
+    links = conn.execute(
+        "SELECT * FROM closure_item_links WHERE closure_item_id = ? ORDER BY created_at DESC, link_type, link_id",
+        (payload["id"],),
+    ).fetchall() if _table_exists(conn, "closure_item_links") else []
     payload["sources"] = [_as_dict(row) for row in sources]
     payload["events"] = [_as_dict(row) for row in events]
+    payload["links"] = [_as_dict(row) for row in links]
     return payload
 
 
@@ -641,12 +717,238 @@ def closure_close_item(item_id: str, *, reason: str = "completed", conn=None) ->
     return {"ok": True, "id": item["id"], "state": final_state}
 
 
-def _write_daily_snapshot(conn) -> None:
+def closure_link_item(
+    item_id: str,
+    *,
+    link_type: str,
+    link_id: str,
+    relation: str = "related",
+    conn=None,
+) -> dict[str, Any]:
+    if conn is None:
+        from db import get_db
+
+        conn = get_db()
+    item = closure_item_get(item_id, conn)
+    if not item:
+        return {"ok": False, "error": "closure item not found"}
+    clean_type = str(link_type or "").strip()
+    clean_id = str(link_id or "").strip()
+    clean_relation = str(relation or "related").strip() or "related"
+    if not clean_type or not clean_id:
+        return {"ok": False, "error": "link_type and link_id are required"}
+    now = _now_iso()
+    link_pk = _hash_id("CIL", f"{item['id']}:{clean_type}:{clean_id}:{clean_relation}", 24)
+    conn.execute(
+        """
+        INSERT INTO closure_item_links (
+            id, closure_item_id, link_type, link_id, relation, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(closure_item_id, link_type, link_id, relation) DO UPDATE SET
+            created_at = excluded.created_at
+        """,
+        (link_pk, item["id"], clean_type, clean_id, clean_relation, now),
+    )
+    _record_event(
+        conn,
+        item["id"],
+        "linked",
+        item["state"],
+        item["state"],
+        f"Linked {clean_type}:{clean_id} as {clean_relation}.",
+    )
+    conn.commit()
+    return {
+        "ok": True,
+        "id": link_pk,
+        "closure_item_id": item["id"],
+        "link_type": clean_type,
+        "link_id": clean_id,
+        "relation": clean_relation,
+    }
+
+
+def closure_set_capability_readiness(
+    capability: str,
+    *,
+    status: str = "unknown",
+    reason: str = "",
+    evidence: str = "",
+    expires_at: str = "",
+    conn=None,
+) -> dict[str, Any]:
+    if conn is None:
+        from db import get_db
+
+        conn = get_db()
+    clean_capability = str(capability or "").strip()
+    clean_status = str(status or "unknown").strip()
+    if not clean_capability:
+        return {"ok": False, "error": "capability is required"}
+    if clean_status not in READINESS_STATES:
+        return {"ok": False, "error": f"invalid readiness status: {clean_status}"}
+    now = _now_iso()
+    row_id = _hash_id("CCR", clean_capability, 20)
+    conn.execute(
+        """
+        INSERT INTO closure_capability_readiness (
+            id, capability, status, reason, verified_at, verification_evidence, expires_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(capability) DO UPDATE SET
+            status = excluded.status,
+            reason = excluded.reason,
+            verified_at = excluded.verified_at,
+            verification_evidence = excluded.verification_evidence,
+            expires_at = excluded.expires_at
+        """,
+        (row_id, clean_capability, clean_status, str(reason or ""), now, str(evidence or ""), str(expires_at or "")),
+    )
+    conn.commit()
+    return {"ok": True, "id": row_id, "capability": clean_capability, "status": clean_status}
+
+
+def closure_triage_item(
+    item_id: str,
+    *,
+    state: str = "",
+    kind: str = "",
+    blocker_reason: str = "",
+    next_action: str = "",
+    evidence_required: str = "",
+    owner: str = "",
+    capability_required: str = "",
+    capability_status: str = "",
+    duplicate_of: str = "",
+    conn=None,
+) -> dict[str, Any]:
+    if conn is None:
+        from db import get_db
+
+        conn = get_db()
+    item = closure_item_get(item_id, conn)
+    if not item:
+        return {"ok": False, "error": "closure item not found"}
+    updates: dict[str, Any] = {}
+    requested_state = str(state or "").strip()
+    clean_state = _canonical_state(requested_state)
+    if clean_state:
+        if clean_state not in TRIAGE_STATES:
+            return {"ok": False, "error": f"invalid state: {requested_state}"}
+        updates["state"] = clean_state
+    for column, value in (
+        ("kind", kind),
+        ("blocker_reason", blocker_reason),
+        ("next_action", next_action),
+        ("evidence_required", evidence_required),
+        ("owner", owner),
+        ("capability_required", capability_required),
+        ("capability_status", capability_status),
+    ):
+        clean_value = str(value or "").strip()
+        if clean_value:
+            updates[column] = clean_value
+    clean_duplicate = str(duplicate_of or "").strip()
+    if clean_duplicate:
+        target = closure_item_get(clean_duplicate, conn)
+        if not target:
+            return {"ok": False, "error": "duplicate target not found"}
+        closure_link_item(item["id"], link_type="closure_item", link_id=target["id"], relation="duplicate_of", conn=conn)
+        updates["state"] = "stale"
+        updates["close_reason"] = f"duplicate_of:{target['id']}"
+        updates["closed_at"] = _now_iso()
+    if not updates:
+        return {"ok": False, "error": "no triage changes supplied"}
+    now = _now_iso()
+    updates["updated_at"] = now
+    if set(updates) - {"updated_at"}:
+        updates["last_progress_at"] = now
+    assignments = ", ".join(f"{column} = ?" for column in updates)
+    params = list(updates.values()) + [item["id"]]
+    conn.execute(f"UPDATE closure_items SET {assignments} WHERE id = ?", params)
+    to_state = updates.get("state", item["state"])
+    _record_event(
+        conn,
+        item["id"],
+        "triaged",
+        item["state"],
+        to_state,
+        "Closure item triaged: " + ", ".join(sorted(column for column in updates if column != "updated_at")),
+    )
+    conn.commit()
+    result = {"ok": True, "id": item["id"], "state": to_state, "updated": sorted(updates)}
+    if requested_state and requested_state != clean_state:
+        result["requested_state"] = requested_state
+    return result
+
+
+def closure_snapshot(conn=None, *, refresh: bool = True, snapshot_date: str = "", limit: int = 10) -> dict[str, Any]:
+    if conn is None:
+        from db import get_db
+        from db._schema import run_migrations
+
+        conn = get_db()
+        run_migrations(conn)
+    if refresh:
+        refresh_closure_items(conn)
+    date_key = str(snapshot_date or _today()).strip()[:10]
+    if date_key != _today():
+        _write_daily_snapshot_for_date(conn, snapshot_date=date_key, limit=limit)
+    else:
+        _write_daily_snapshot(conn, limit=limit)
+    row = conn.execute(
+        "SELECT * FROM closure_daily_snapshots WHERE snapshot_date = ?",
+        (date_key,),
+    ).fetchone()
+    payload = _as_dict(row) if row else {}
+    if payload.get("top_items_json"):
+        try:
+            payload["top_items"] = json.loads(payload["top_items_json"])
+        except Exception:
+            payload["top_items"] = []
+    payload["capability_readiness"] = _readiness_counts(conn)
+    return {"ok": bool(payload), "snapshot": payload}
+
+
+def _write_daily_snapshot_for_date(conn, *, snapshot_date: str, limit: int = 10) -> None:
     counts = {
         row["state"]: row["n"]
         for row in conn.execute("SELECT state, COUNT(*) AS n FROM closure_items GROUP BY state").fetchall()
     }
-    top = closure_next(conn, limit=10, include_waiting=True)
+    top = closure_next(conn, limit=limit, include_waiting=True)
+    conn.execute(
+        """
+        INSERT OR REPLACE INTO closure_daily_snapshots (
+            snapshot_date, total_open, total_verified, total_waiting, total_closed,
+            top_items_json, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            snapshot_date,
+            int(counts.get("open", 0)),
+            int(counts.get("verified", 0)),
+            int(counts.get("waiting", 0)),
+            int(counts.get("closed", 0)),
+            _safe_json([
+                {
+                    "id": item.get("id"),
+                    "title": item.get("title"),
+                    "priority_score": item.get("priority_score"),
+                    "state": item.get("state"),
+                }
+                for item in top
+            ]),
+            _now_iso(),
+        ),
+    )
+    conn.commit()
+
+
+def _write_daily_snapshot(conn, *, limit: int = 10) -> None:
+    counts = {
+        row["state"]: row["n"]
+        for row in conn.execute("SELECT state, COUNT(*) AS n FROM closure_items GROUP BY state").fetchall()
+    }
+    top = closure_next(conn, limit=limit, include_waiting=True)
     conn.execute(
         """
         INSERT OR REPLACE INTO closure_daily_snapshots (
@@ -679,7 +981,15 @@ def handle_closure_status(refresh: bool = True, limit: int = 10) -> str:
     return json.dumps(closure_status(refresh=refresh, limit=limit), indent=2, ensure_ascii=False)
 
 
-def handle_closure_next(limit: int = 10, include_waiting: bool = False, source: str = "", kind: str = "") -> str:
+def handle_closure_next(
+    limit: int = 10,
+    include_waiting: bool = False,
+    source: str = "",
+    kind: str = "",
+    state: str = "",
+    max_risk: float | None = None,
+    area: str = "",
+) -> str:
     from db import get_db
     from db._schema import run_migrations
 
@@ -688,7 +998,16 @@ def handle_closure_next(limit: int = 10, include_waiting: bool = False, source: 
     refresh_closure_items(conn)
     return json.dumps({
         "ok": True,
-        "items": closure_next(conn, limit=limit, include_waiting=include_waiting, source=source, kind=kind),
+        "items": closure_next(
+            conn,
+            limit=limit,
+            include_waiting=include_waiting,
+            source=source,
+            kind=kind,
+            state=state,
+            max_risk=max_risk,
+            area=area,
+        ),
     }, indent=2, ensure_ascii=False)
 
 
@@ -700,6 +1019,68 @@ def handle_closure_item_get(item_id: str) -> str:
     run_migrations(conn)
     item = closure_item_get(item_id, conn)
     return json.dumps({"ok": bool(item), "item": item}, indent=2, ensure_ascii=False)
+
+
+def handle_closure_triage(
+    item_id: str,
+    state: str = "",
+    kind: str = "",
+    blocker_reason: str = "",
+    next_action: str = "",
+    evidence_required: str = "",
+    owner: str = "",
+    capability_required: str = "",
+    capability_status: str = "",
+    duplicate_of: str = "",
+) -> str:
+    from db import get_db
+    from db._schema import run_migrations
+
+    conn = get_db()
+    run_migrations(conn)
+    return json.dumps(
+        closure_triage_item(
+            item_id,
+            state=state,
+            kind=kind,
+            blocker_reason=blocker_reason,
+            next_action=next_action,
+            evidence_required=evidence_required,
+            owner=owner,
+            capability_required=capability_required,
+            capability_status=capability_status,
+            duplicate_of=duplicate_of,
+            conn=conn,
+        ),
+        indent=2,
+        ensure_ascii=False,
+    )
+
+
+def handle_closure_link(item_id: str, link_type: str, link_id: str, relation: str = "related") -> str:
+    from db import get_db
+    from db._schema import run_migrations
+
+    conn = get_db()
+    run_migrations(conn)
+    return json.dumps(
+        closure_link_item(item_id, link_type=link_type, link_id=link_id, relation=relation, conn=conn),
+        indent=2,
+        ensure_ascii=False,
+    )
+
+
+def handle_closure_snapshot(refresh: bool = True, snapshot_date: str = "", limit: int = 10) -> str:
+    from db import get_db
+    from db._schema import run_migrations
+
+    conn = get_db()
+    run_migrations(conn)
+    return json.dumps(
+        closure_snapshot(conn, refresh=refresh, snapshot_date=snapshot_date, limit=limit),
+        indent=2,
+        ensure_ascii=False,
+    )
 
 
 def handle_closure_verify(item_id: str, evidence: str) -> str:

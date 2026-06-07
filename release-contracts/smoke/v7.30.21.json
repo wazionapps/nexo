@@ -1,7 +1,7 @@
 {
   "release_line": "v7.30",
   "version": "7.30.21",
-  "generated_at": "2026-06-06T14:05:27.928225+00:00",
+  "generated_at": "2026-06-07T03:32:38.178207+00:00",
   "ok": true,
   "groups": [
     {
@@ -16,7 +16,7 @@
       ],
       "returncode": 0,
       "ok": true,
-      "duration_seconds": 1.83,
+      "duration_seconds": 1.89,
       "stdout": "[managed-mcp-lock] OK (5 npm providers pinned to latest)\n",
       "stderr": ""
     },
@@ -40,8 +40,8 @@
       ],
       "returncode": 0,
       "ok": true,
-      "duration_seconds": 3.16,
-      "stdout": ".........                                                                [100%]Running teardown with pytest sessionfinish...\n\n9 passed in 0.93s\n",
+      "duration_seconds": 4.95,
+      "stdout": ".........                                                                [100%]Running teardown with pytest sessionfinish...\n\n9 passed in 1.11s\n",
       "stderr": ""
     },
     {
@@ -66,8 +66,8 @@
       ],
       "returncode": 0,
       "ok": true,
-      "duration_seconds": 2.48,
-      "stdout": ".....                                                                    [100%]Running teardown with pytest sessionfinish...\n\n5 passed in 0.49s\n",
+      "duration_seconds": 9.17,
+      "stdout": ".....                                                                    [100%]Running teardown with pytest sessionfinish...\n\n5 passed in 1.16s\n",
       "stderr": ""
     },
     {
@@ -82,7 +82,7 @@
       ],
       "returncode": 0,
       "ok": true,
-      "duration_seconds": 0.03,
+      "duration_seconds": 0.04,
       "stdout": "  tool-enforcement-map.json is in sync with code (356 tools)\n",
       "stderr": ""
     },
@@ -100,8 +100,8 @@
       ],
       "returncode": 0,
       "ok": true,
-      "duration_seconds": 37.92,
-      "stdout": "[sync-release-artifacts] OK\n........................................................................ [ 30%]\n........................................................................ [ 60%]\n........................................................................ [ 90%]\n.......................                                                  [100%]Running teardown with pytest sessionfinish...\n\n239 passed in 34.02s\n[client-parity] docs OK\n[client-parity] parity tests OK\n[release-readiness] changelog OK (7.30.21)\n[release-readiness] repo public surfaces OK (/Users/franciscoc/Documents/_PhpstormProjects/nexo)\n[release-readiness] duplicate artifact hygiene OK (/Users/franciscoc/Documents/_PhpstormProjects/nexo)\n[release-readiness] $ /opt/homebrew/opt/python@3.14/bin/python3.14 scripts/sync_release_artifacts.py --check\n[release-readiness] $ /opt/homebrew/opt/python@3.14/bin/python3.14 scripts/verify_client_parity.py\n[release-readiness] website skipped (missing /Users/franciscoc/Documents/_PhpstormProjects/nexo-gh-pages)\n[release-readiness] OK\n",
+      "duration_seconds": 39.19,
+      "stdout": "[sync-release-artifacts] OK\n........................................................................ [ 30%]\n........................................................................ [ 60%]\n........................................................................ [ 90%]\n.......................                                                  [100%]Running teardown with pytest sessionfinish...\n\n239 passed in 35.75s\n[client-parity] docs OK\n[client-parity] parity tests OK\n[release-readiness] changelog OK (7.30.21)\n[release-readiness] repo public surfaces OK (/Users/franciscoc/Documents/_PhpstormProjects/nexo)\n[release-readiness] duplicate artifact hygiene OK (/Users/franciscoc/Documents/_PhpstormProjects/nexo)\n[release-readiness] $ /opt/homebrew/opt/python@3.14/bin/python3.14 scripts/sync_release_artifacts.py --check\n[release-readiness] $ /opt/homebrew/opt/python@3.14/bin/python3.14 scripts/verify_client_parity.py\n[release-readiness] website skipped (missing /Users/franciscoc/Documents/_PhpstormProjects/nexo-gh-pages)\n[release-readiness] OK\n",
       "stderr": ""
     }
   ]

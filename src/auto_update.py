@@ -4828,6 +4828,7 @@ def _copy_runtime_from_source(src_dir: Path, repo_dir: Path, dest: Path = NEXO_H
         "cognitive",
         "doctor",
         "local_context",
+        "managed_mcp",
         "product_knowledge",
         "dashboard",
         "rules",
@@ -4970,6 +4971,12 @@ def _copy_runtime_from_source(src_dir: Path, repo_dir: Path, dest: Path = NEXO_H
     wrapper = bin_dir / "nexo"
     wrapper.write_text(_runtime_cli_wrapper_text())
     wrapper.chmod(0o755)
+    managed_mcp_src = repo_dir / "bin" / "nexo-managed-mcp.js"
+    if managed_mcp_src.is_file():
+        managed_mcp_target = bin_dir / "nexo-managed-mcp"
+        _remove_runtime_copy_target(managed_mcp_target)
+        shutil.copy2(str(managed_mcp_src), str(managed_mcp_target))
+        managed_mcp_target.chmod(0o755)
 
     return {
         "packages": copied_packages,
