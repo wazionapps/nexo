@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.30.22] - 2026-06-07
+
+### Fixed - packaged managed runtime propagation
+
+- **Packaged installs now receive the managed MCP runtime package on a distinct Brain version.** v7.30.22 carries the managed MCP and closure-plane release payload under a new runtime version so existing Desktop installs already on v7.30.21 cannot skip the new `managed_mcp` package during update.
+- **Runtime verification catches missing managed MCP imports before Desktop publication.** Release evidence now treats `nexo_managed_mcp_status` importability as a blocker, preventing a same-version Desktop bundle from shipping package-level Brain changes that live installs would not pick up.
+- **Desktop v0.43.14 consumes this bumped Brain line.** The Desktop release bundle and changelog point at Brain 7.30.22 so the packaged update path has a clear version boundary.
+
 ## [7.30.21] - 2026-06-06
 
 ### Added - managed MCPs and closure plane
