@@ -1142,6 +1142,64 @@ def nexo_closure_close(item_id: str, reason: str = "completed") -> str:
 
 
 @mcp.tool
+def nexo_opportunity_refresh(
+    dry_run: bool = True,
+    sources: str = "",
+    limit_per_source: int = 250,
+    write_report: bool = False,
+) -> str:
+    """Generate Opportunity Orchestrator candidates from existing evidence."""
+    from opportunity_orchestrator import handle_opportunity_refresh
+
+    try:
+        clean_limit = max(1, min(int(limit_per_source or 250), 500))
+    except Exception:
+        clean_limit = 250
+    return handle_opportunity_refresh(bool(dry_run), sources, clean_limit, bool(write_report))
+
+
+@mcp.tool
+def nexo_opportunity_queue(
+    surface: str = "home",
+    limit: int = 3,
+    refresh: bool = False,
+    include_snoozed: bool = False,
+) -> str:
+    """Return at most three evidence-backed proposals for a user surface."""
+    from opportunity_orchestrator import handle_opportunity_queue
+
+    try:
+        clean_limit = max(0, min(int(limit or 3), 3))
+    except Exception:
+        clean_limit = 3
+    return handle_opportunity_queue(surface, clean_limit, bool(refresh), bool(include_snoozed))
+
+
+@mcp.tool
+def nexo_opportunity_get(opportunity_id: str, include_evidence: bool = True) -> str:
+    """Return one opportunity with evidence and read-only preparations."""
+    from opportunity_orchestrator import handle_opportunity_get
+
+    return handle_opportunity_get(opportunity_id, bool(include_evidence))
+
+
+@mcp.tool
+def nexo_opportunity_feedback(proposal_id: str, feedback: str, note: str = "", snooze_until: str = "") -> str:
+    """Record proposal feedback and apply suppression/snooze when requested."""
+    from opportunity_orchestrator import handle_opportunity_feedback
+
+    return handle_opportunity_feedback(proposal_id, feedback, note, snooze_until)
+
+
+@mcp.tool
+def nexo_opportunity_suppress(scope_type: str, scope_key: str, reason: str = "", expires_at: str = "") -> str:
+    """Suppress repeated opportunity suggestions by scope."""
+    from opportunity_orchestrator import handle_opportunity_suppress
+
+    return handle_opportunity_suppress(scope_type, scope_key, reason, expires_at)
+
+
+@mcp.tool
 def nexo_local_index_status() -> str:
     """Return local memory index status for Desktop settings and support diagnostics."""
     return json.dumps(local_context_api.status(), ensure_ascii=False)

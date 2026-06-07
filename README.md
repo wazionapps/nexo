@@ -18,7 +18,7 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.30.22` is the current packaged-runtime line. Patch release over v7.30.21 - Brain now ships managed default MCP catalog/lock reconciliation and the Operational Closure Plane, with Desktop v0.43.14 consuming the coordinated runtime contract.
+Version `7.30.23` is the current packaged-runtime line. Patch release over v7.30.22 - Brain now ships Opportunity Orchestrator Phase 1 for evidence-backed proactive preparation, read-only dry-run reports, bounded proposal queues, and feedback/suppression controls.
 
 Previously in `7.30.20`: patch release over v7.30.19 - packaged installs now copy the `product_knowledge` package into the installed runtime so `nexo update` can import the new product knowledge tools.
 

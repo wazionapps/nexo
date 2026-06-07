@@ -1,5 +1,14 @@
 # Changelog
 
+## [7.30.23] - 2026-06-07
+
+### Added - Opportunity Orchestrator Phase 1
+
+- **Brain now has a first proactive opportunity queue.** Migration 80 and `src/opportunity_orchestrator.py` add read-only opportunity discovery, evidence-backed preparations, proposal generation, feedback, snooze and suppression flows.
+- **The first surface is intentionally scarce and auditable.** `nexo_opportunity_refresh`, `nexo_opportunity_queue`, `nexo_opportunity_get`, `nexo_opportunity_feedback`, and `nexo_opportunity_suppress` expose the new queue with zero proposals treated as a valid result and normal queues capped at three.
+- **Privacy and authorization are pinned in tests.** The MVP blocks external action classes without explicit permission, redacts forbidden visible profiling labels, persists source evidence, and writes optional Markdown/JSON dry-run reports without sending messages or changing production.
+- **Release evidence now covers the anticipatory layer.** `tests/test_opportunity_orchestrator.py` validates migration, scoring, dedupe, max-three/zero-proposal behavior, feedback, suppression, server exports and anti-profiling output, while `scripts/run_v7_30_23_smoke.py` adds the feature to the release smoke matrix.
+
 ## [7.30.22] - 2026-06-07
 
 ### Added - product surface release gate

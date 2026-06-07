@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEXO 7.30.23: Opportunity Orchestrator Phase 1</title>
+    <meta name="description" content="NEXO Brain 7.30.23 adds Opportunity Orchestrator Phase 1: evidence-backed proactive preparation, bounded proposal queues, feedback and suppression.">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-30-23/">
+</head>
+<body>
+    <main>
+        <p><a href="/blog/">Back to blog</a></p>
+        <h1>NEXO 7.30.23: Opportunity Orchestrator Phase 1</h1>
+        <p><strong>June 7, 2026.</strong> This patch adds the first Brain-owned anticipatory layer: it looks at real operational signals, prepares safe context ahead of the user, and surfaces only scarce, evidence-backed proposals.</p>
+        <h2>What changed</h2>
+        <ul>
+            <li>Migration 80 adds durable signals, opportunities, evidence, preparations, proposals, proposal events, suppression rules and action authorizations.</li>
+            <li>The new orchestrator can refresh opportunities, queue at most three normal proposals, return evidence, accept feedback and suppress repeated noise.</li>
+            <li>Dry-run JSON and Markdown reports can be written without sending messages, touching production or executing external actions.</li>
+            <li>Release tests cover zero-proposal days, max-three output, evidence requirements, feedback/suppression, authorization boundaries and visible-output privacy guardrails.</li>
+        </ul>
+        <h2>Why it matters</h2>
+        <p>NEXO should get ahead of work without becoming noisy. This release gives Brain a small, auditable queue that can prepare context before the user asks while still treating no proposal as a healthy result when nothing has enough evidence.</p>
+        <p><a href="/changelog/#v73023">Read the full v7.30.23 changelog</a></p>
+    </main>
+</body>
+</html>

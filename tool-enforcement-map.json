@@ -2999,6 +2999,81 @@
       },
       "triggers_after": []
     },
+    "nexo_opportunity_refresh": {
+      "description": "Generate Opportunity Orchestrator candidates from existing evidence",
+      "category": "opportunity",
+      "source": "server",
+      "requires": [],
+      "provides": [
+        "opportunity_candidates"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_opportunity_queue": {
+      "description": "Return up to three evidence-backed Opportunity Orchestrator proposals",
+      "category": "opportunity",
+      "source": "server",
+      "requires": [],
+      "provides": [
+        "opportunity_proposals"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_opportunity_get": {
+      "description": "Return one opportunity with evidence and read-only preparations",
+      "category": "opportunity",
+      "source": "server",
+      "requires": [],
+      "provides": [
+        "opportunity"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_opportunity_feedback": {
+      "description": "Record proposal feedback and apply suppression when requested",
+      "category": "opportunity",
+      "source": "server",
+      "requires": [],
+      "provides": [
+        "opportunity_feedback"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "standard",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_opportunity_suppress": {
+      "description": "Suppress repeated Opportunity Orchestrator suggestions by scope",
+      "category": "opportunity",
+      "source": "server",
+      "requires": [],
+      "provides": [
+        "opportunity_suppression"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "standard",
+        "rules": []
+      },
+      "triggers_after": []
+    },
     "nexo_media_memory_add": {
       "description": "Store non-text artifact metadata",
       "category": "media",

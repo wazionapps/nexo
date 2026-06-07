@@ -2903,6 +2903,166 @@ def _m79_operational_closure_links_readiness(conn):
     _migrate_add_index(conn, "idx_closure_readiness_capability", "closure_capability_readiness", "capability, status")
 
 
+def _m80_opportunity_orchestrator(conn):
+    """Opportunity Orchestrator v1: sparse, evidence-backed proactive queue."""
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS nexo_signals (
+            id TEXT PRIMARY KEY,
+            source_type TEXT NOT NULL,
+            source_id TEXT NOT NULL DEFAULT '',
+            entity_ref TEXT NOT NULL DEFAULT '',
+            summary TEXT NOT NULL DEFAULT '',
+            signal_kind TEXT NOT NULL,
+            urgency REAL NOT NULL DEFAULT 0,
+            confidence REAL NOT NULL DEFAULT 0,
+            privacy_level TEXT NOT NULL DEFAULT 'normal',
+            source_hash TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            expires_at TEXT NOT NULL DEFAULT '',
+            UNIQUE(source_type, source_id, signal_kind)
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS nexo_opportunities (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            hypothesis TEXT NOT NULL DEFAULT '',
+            domain TEXT NOT NULL DEFAULT 'general',
+            opportunity_type TEXT NOT NULL,
+            dedupe_key TEXT NOT NULL,
+            impact REAL NOT NULL DEFAULT 0,
+            urgency REAL NOT NULL DEFAULT 0,
+            confidence REAL NOT NULL DEFAULT 0,
+            risk REAL NOT NULL DEFAULT 0,
+            effort REAL NOT NULL DEFAULT 0,
+            readiness REAL NOT NULL DEFAULT 0,
+            user_burden_reduction REAL NOT NULL DEFAULT 0,
+            interruption_cost REAL NOT NULL DEFAULT 0,
+            strategic_alignment REAL NOT NULL DEFAULT 0,
+            repetition_penalty REAL NOT NULL DEFAULT 0,
+            score REAL NOT NULL DEFAULT 0,
+            state TEXT NOT NULL DEFAULT 'candidate',
+            owner TEXT NOT NULL DEFAULT 'nero',
+            why_now TEXT NOT NULL DEFAULT '',
+            next_action TEXT NOT NULL DEFAULT '',
+            action_class TEXT NOT NULL DEFAULT 'read_only',
+            authorization_status TEXT NOT NULL DEFAULT 'not_required',
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+            expires_at TEXT NOT NULL DEFAULT '',
+            last_proposed_at TEXT NOT NULL DEFAULT '',
+            source_payload_json TEXT NOT NULL DEFAULT '{}',
+            UNIQUE(dedupe_key)
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS nexo_opportunity_evidence (
+            id TEXT PRIMARY KEY,
+            opportunity_id TEXT NOT NULL,
+            source_type TEXT NOT NULL,
+            source_id TEXT NOT NULL,
+            evidence_summary TEXT NOT NULL DEFAULT '',
+            confidence REAL NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY(opportunity_id) REFERENCES nexo_opportunities(id) ON DELETE CASCADE,
+            UNIQUE(opportunity_id, source_type, source_id)
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS nexo_preparations (
+            id TEXT PRIMARY KEY,
+            opportunity_id TEXT NOT NULL,
+            artifact_type TEXT NOT NULL,
+            artifact_ref TEXT NOT NULL DEFAULT '',
+            safe_mode INTEGER NOT NULL DEFAULT 1,
+            approval_required INTEGER NOT NULL DEFAULT 0,
+            status TEXT NOT NULL DEFAULT 'ready',
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            expires_at TEXT NOT NULL DEFAULT '',
+            FOREIGN KEY(opportunity_id) REFERENCES nexo_opportunities(id) ON DELETE CASCADE,
+            UNIQUE(opportunity_id, artifact_type, artifact_ref)
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS nexo_proposals (
+            id TEXT PRIMARY KEY,
+            opportunity_id TEXT NOT NULL,
+            surface TEXT NOT NULL DEFAULT 'home',
+            copy TEXT NOT NULL DEFAULT '',
+            cta_primary TEXT NOT NULL DEFAULT 'Inspect evidence',
+            cta_secondary TEXT NOT NULL DEFAULT 'Snooze',
+            shown_at TEXT NOT NULL DEFAULT '',
+            feedback TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY(opportunity_id) REFERENCES nexo_opportunities(id) ON DELETE CASCADE,
+            UNIQUE(opportunity_id, surface)
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS nexo_proposal_events (
+            id TEXT PRIMARY KEY,
+            proposal_id TEXT NOT NULL,
+            event_type TEXT NOT NULL,
+            feedback TEXT NOT NULL DEFAULT '',
+            note TEXT NOT NULL DEFAULT '',
+            metadata_json TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY(proposal_id) REFERENCES nexo_proposals(id) ON DELETE CASCADE
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS nexo_suppression_rules (
+            id TEXT PRIMARY KEY,
+            scope_type TEXT NOT NULL,
+            scope_key TEXT NOT NULL,
+            reason TEXT NOT NULL DEFAULT '',
+            expires_at TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(scope_type, scope_key, reason)
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS nexo_action_authorizations (
+            id TEXT PRIMARY KEY,
+            scope TEXT NOT NULL,
+            allowed_action_class TEXT NOT NULL,
+            max_cost REAL NOT NULL DEFAULT 0,
+            expires_at TEXT NOT NULL DEFAULT '',
+            granted_by TEXT NOT NULL DEFAULT '',
+            evidence_ref TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(scope, allowed_action_class, evidence_ref)
+        )
+        """
+    )
+    _migrate_add_index(conn, "idx_nexo_signals_source", "nexo_signals", "source_type, source_id")
+    _migrate_add_index(conn, "idx_nexo_signals_expires", "nexo_signals", "expires_at")
+    _migrate_add_index(conn, "idx_nexo_opportunities_state_score", "nexo_opportunities", "state, score DESC, updated_at")
+    _migrate_add_index(conn, "idx_nexo_opportunities_type", "nexo_opportunities", "opportunity_type, state")
+    _migrate_add_index(conn, "idx_nexo_opportunities_expires", "nexo_opportunities", "expires_at")
+    _migrate_add_index(conn, "idx_nexo_opportunity_evidence_item", "nexo_opportunity_evidence", "opportunity_id")
+    _migrate_add_index(conn, "idx_nexo_preparations_item", "nexo_preparations", "opportunity_id, status")
+    _migrate_add_index(conn, "idx_nexo_proposals_surface", "nexo_proposals", "surface, feedback")
+    _migrate_add_index(conn, "idx_nexo_proposal_events_proposal", "nexo_proposal_events", "proposal_id, created_at")
+    _migrate_add_index(conn, "idx_nexo_suppression_scope", "nexo_suppression_rules", "scope_type, scope_key")
+    _migrate_add_index(conn, "idx_nexo_authorizations_scope", "nexo_action_authorizations", "scope, allowed_action_class")
+
+
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
     (2, "followups_reasoning", _m2_followups_reasoning),
@@ -2983,6 +3143,7 @@ MIGRATIONS = [
     (77, "morning_briefing_presentation", _m77_morning_briefing_presentation),
     (78, "operational_closure_plane", _m78_operational_closure_plane),
     (79, "operational_closure_links_readiness", _m79_operational_closure_links_readiness),
+    (80, "opportunity_orchestrator", _m80_opportunity_orchestrator),
 ]
 
 
