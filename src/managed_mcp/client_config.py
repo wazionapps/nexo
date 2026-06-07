@@ -11,6 +11,47 @@ def _is_nexo_owned(entry: Any) -> bool:
     return isinstance(meta, dict) and meta.get("owner") == "nexo"
 
 
+def _managed_servers_metadata(container: dict[str, Any]) -> dict[str, Any]:
+    nexo_meta = container.get("nexo") if isinstance(container.get("nexo"), dict) else {}
+    managed = nexo_meta.get("managed_mcp") if isinstance(nexo_meta.get("managed_mcp"), dict) else {}
+    servers = managed.get("servers") if isinstance(managed.get("servers"), dict) else {}
+    return servers
+
+
+def _remove_nexo_owned_by_metadata(servers: dict[str, Any], managed_servers: dict[str, Any]) -> None:
+    for name, meta in list(managed_servers.items()):
+        if not (isinstance(meta, dict) and meta.get("owner") == "nexo"):
+            continue
+        current = servers.get(name)
+        if current is None or _is_nexo_owned(current) or name in servers:
+            servers.pop(name, None)
+        managed_servers.pop(name, None)
+
+
+def remove_json_nexo_managed_mcp_servers(payload: dict[str, Any]) -> dict[str, Any]:
+    result = deepcopy(payload) if isinstance(payload, dict) else {}
+    servers = result.get("mcpServers")
+    if not isinstance(servers, dict):
+        return result
+    managed_servers = _managed_servers_metadata(result)
+    for name, entry in list(servers.items()):
+        if _is_nexo_owned(entry):
+            servers.pop(name, None)
+            managed_servers.pop(name, None)
+    _remove_nexo_owned_by_metadata(servers, managed_servers)
+    return result
+
+
+def remove_toml_nexo_managed_mcp_servers(payload: dict[str, Any]) -> dict[str, Any]:
+    result = deepcopy(payload) if isinstance(payload, dict) else {}
+    servers = result.get("mcp_servers")
+    if not isinstance(servers, dict):
+        return result
+    managed_servers = _managed_servers_metadata(result)
+    _remove_nexo_owned_by_metadata(servers, managed_servers)
+    return result
+
+
 def merge_json_mcp_servers(payload: dict[str, Any], entries: dict[str, dict[str, Any]]) -> dict[str, Any]:
     result = deepcopy(payload) if isinstance(payload, dict) else {}
     servers = result.setdefault("mcpServers", {})

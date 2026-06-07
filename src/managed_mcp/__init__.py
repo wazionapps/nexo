@@ -11,7 +11,12 @@ from .catalog import (
     provider_for_capability,
     validate_catalog_lock,
 )
-from .client_config import merge_json_mcp_servers, merge_toml_mcp_servers
+from .client_config import (
+    merge_json_mcp_servers,
+    merge_toml_mcp_servers,
+    remove_json_nexo_managed_mcp_servers,
+    remove_toml_nexo_managed_mcp_servers,
+)
 from .reconcile import managed_mcp_status, reconcile_managed_mcp
 
 __all__ = [
@@ -26,6 +31,8 @@ __all__ = [
     "validate_catalog_lock",
     "merge_json_mcp_servers",
     "merge_toml_mcp_servers",
+    "remove_json_nexo_managed_mcp_servers",
+    "remove_toml_nexo_managed_mcp_servers",
     "managed_mcp_status",
     "reconcile_managed_mcp",
 ]

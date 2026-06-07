@@ -24,11 +24,21 @@ from bootstrap_docs import sync_client_bootstrap
 from runtime_home import resolve_nexo_home
 
 try:
-    from managed_mcp import build_managed_server_entries, merge_json_mcp_servers, merge_toml_mcp_servers
+    from managed_mcp import (
+        build_managed_server_entries,
+        merge_json_mcp_servers,
+        merge_toml_mcp_servers,
+        reconcile_managed_mcp,
+        remove_json_nexo_managed_mcp_servers,
+        remove_toml_nexo_managed_mcp_servers,
+    )
 except Exception:
     build_managed_server_entries = None
     merge_json_mcp_servers = None
     merge_toml_mcp_servers = None
+    reconcile_managed_mcp = None
+    remove_json_nexo_managed_mcp_servers = None
+    remove_toml_nexo_managed_mcp_servers = None
 
 try:
     from client_preferences import (
@@ -842,7 +852,7 @@ def build_server_config(
 def _managed_mcp_entries_for(client: str, server_config: dict) -> dict:
     if str(os.environ.get("NEXO_MANAGED_MCP_DISABLE", "")).strip().lower() in {"1", "true", "yes", "on"}:
         return {}
-    if not build_managed_server_entries:
+    if not build_managed_server_entries or not reconcile_managed_mcp:
         return {}
     env = server_config.get("env") if isinstance(server_config.get("env"), dict) else {}
     nexo_home = str(env.get("NEXO_HOME") or "").strip()
@@ -855,14 +865,49 @@ def _managed_mcp_entries_for(client: str, server_config: dict) -> dict:
         or ""
     ).strip()
     try:
-        return build_managed_server_entries(
+        plan = reconcile_managed_mcp(
+            nexo_home=nexo_home,
+            runtime_root=runtime_root or None,
+            clients=[client],
+            apply=True,
+            platform=target_platform or None,
+        )
+        providers = plan.get("providers") if isinstance(plan.get("providers"), dict) else {}
+        if not plan.get("ok") or not providers:
+            return {}
+        entries = build_managed_server_entries(
             client=client,
             nexo_home=nexo_home,
             runtime_root=runtime_root or None,
             platform=target_platform or None,
         )
+        required_providers = {
+            str((entry.get("nexo") or {}).get("provider_id") or "").strip()
+            for entry in entries.values()
+            if isinstance(entry, dict)
+        }
+        required_providers.discard("")
+        if not required_providers:
+            return {}
+        for provider_id in required_providers:
+            state = providers.get(provider_id) if isinstance(providers.get(provider_id), dict) else {}
+            if state.get("status") != "healthy":
+                return {}
+        return entries
     except Exception:
         return {}
+
+
+def _remove_unhealthy_json_managed_mcp(payload: dict) -> dict:
+    if not remove_json_nexo_managed_mcp_servers:
+        return payload
+    return remove_json_nexo_managed_mcp_servers(payload)
+
+
+def _remove_unhealthy_toml_managed_mcp(payload: dict) -> dict:
+    if not remove_toml_nexo_managed_mcp_servers:
+        return payload
+    return remove_toml_nexo_managed_mcp_servers(payload)
 
 
 def _claude_code_settings_path(home: Path | None = None) -> Path:
@@ -1039,6 +1084,10 @@ def _sync_codex_managed_config(
             payload = merge_toml_mcp_servers(payload, managed_entries)
             codex_table = payload.setdefault("nexo", {}).setdefault("codex", {})
             codex_table["managed_default_mcp_count"] = len(managed_entries)
+        else:
+            payload = _remove_unhealthy_toml_managed_mcp(payload)
+            codex_table = payload.setdefault("nexo", {}).setdefault("codex", {})
+            codex_table["managed_default_mcp_count"] = 0
 
     # Ensure Codex headless crons (followup-runner, email-monitor, deep-sleep,
     # etc.) do not stall on approval prompts. Only set defaults when the user
@@ -1056,7 +1105,7 @@ def _sync_codex_managed_config(
         "hooks_enabled": True,
         "model": runtime_profile.get("model", ""),
         "reasoning_effort": runtime_profile.get("reasoning_effort", "") or "",
-        "managed_default_mcp_count": len(_managed_mcp_entries_for("codex", server_config)) if server_config else 0,
+        "managed_default_mcp_count": len(managed_entries) if server_config else 0,
     }
 
 
@@ -1450,6 +1499,8 @@ def _sync_json_client(path: Path, server_config: dict, label: str, *, managed_me
     managed_entries = _managed_mcp_entries_for(label, server_config)
     if managed_entries and merge_json_mcp_servers:
         payload = merge_json_mcp_servers(payload, managed_entries)
+    else:
+        payload = _remove_unhealthy_json_managed_mcp(payload)
     _write_json_object(path, payload)
     return {
         "ok": True,
@@ -1537,6 +1588,8 @@ def _sync_claude_code_settings(path: Path, server_config: dict) -> dict:
     managed_entries = _managed_mcp_entries_for("claude_code", server_config)
     if managed_entries and merge_json_mcp_servers:
         payload = merge_json_mcp_servers(payload, managed_entries)
+    else:
+        payload = _remove_unhealthy_json_managed_mcp(payload)
     _ensure_headless_permissions(payload)
     _write_json_object(path, payload)
     return {

@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.30.24] - 2026-06-07
+
+### Fixed - managed MCP client sync release gate
+
+- **Client sync no longer publishes managed MCP entries before providers are staged and healthy.** `src/client_sync.py` now runs managed MCP reconciliation with `apply=True` before merging Brain-owned defaults, then requires every provider referenced by `nexo_chrome_control`, `nexo_desktop_control`, and `nexo_power_control` to report `healthy`.
+- **Failed staging removes stale Brain-owned entries instead of leaving broken client configs behind.** JSON and TOML client sync now strip NEXO-owned managed MCP servers when provider staging fails, while preserving user-owned servers even when they use the same names.
+- **The release gate pins the exact failure mode.** Tests cover no installed state/no healthy providers, successful reconcile apply, stale NEXO-owned cleanup, user-owned preservation, and the managed MCP release lock matrix without adding any automatic `npx` fallback.
+
 ## [7.30.23] - 2026-06-07
 
 ### Added - Opportunity Orchestrator Phase 1

@@ -81,6 +81,17 @@ def _make_runtime(root: Path, *, operator_name: str = "Atlas") -> Path:
     return runtime
 
 
+def _managed_mcp_healthy_plan(**_kwargs):
+    return {
+        "ok": True,
+        "providers": {
+            "chrome-devtools-mcp": {"status": "healthy"},
+            "desktop-commander": {"status": "healthy"},
+            "mac-use-mcp": {"status": "healthy"},
+        },
+    }
+
+
 def _normalize_home(path: Path, home: Path) -> str:
     try:
         return "~/" + path.resolve().relative_to(home.resolve()).as_posix()
@@ -432,6 +443,7 @@ def test_sync_codex_uses_codex_cli_when_available(tmp_path, monkeypatch):
     home = tmp_path / "home"
     captured = {}
 
+    monkeypatch.setattr(client_sync, "reconcile_managed_mcp", _managed_mcp_healthy_plan)
     monkeypatch.setattr(client_sync.shutil, "which", lambda name: "/tmp/fake-codex" if name == "codex" else None)
 
     def fake_run(cmd, **kwargs):
@@ -752,6 +764,7 @@ def test_sync_codex_defaults_operator_name_when_runtime_version_has_blank_value(
     home = tmp_path / "home"
     captured = {}
 
+    monkeypatch.setattr(client_sync, "reconcile_managed_mcp", _managed_mcp_healthy_plan)
     monkeypatch.setattr(client_sync.shutil, "which", lambda name: "/tmp/fake-codex" if name == "codex" else None)
 
     def fake_run(cmd, **kwargs):
@@ -780,6 +793,7 @@ def test_sync_codex_prefers_calibration_assistant_name_over_blank_version_value(
     home = tmp_path / "home"
     captured = {}
 
+    monkeypatch.setattr(client_sync, "reconcile_managed_mcp", _managed_mcp_healthy_plan)
     calibration_dir = runtime / "personal" / "brain"
     calibration_dir.mkdir(parents=True, exist_ok=True)
     (calibration_dir / "calibration.json").write_text(json.dumps({

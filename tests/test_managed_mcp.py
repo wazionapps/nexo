@@ -4,7 +4,7 @@ import subprocess
 from types import SimpleNamespace
 from pathlib import Path
 
-from client_sync import _sync_json_client
+from client_sync import _load_toml_object, _sync_codex_managed_config, _sync_json_client
 from managed_mcp import (
     build_managed_server_entries,
     load_catalog,
@@ -93,8 +93,64 @@ def test_toml_merge_preserves_user_owned_server_and_records_metadata(tmp_path):
     assert merged["nexo"]["managed_mcp"]["servers"]["nexo_chrome_control"]["owner"] == "nexo"
 
 
-def test_client_sync_writes_managed_defaults(tmp_path, monkeypatch):
+def _healthy_provider_plan():
+    return {
+        "ok": True,
+        "providers": {
+            "chrome-devtools-mcp": {"status": "healthy"},
+            "desktop-commander": {"status": "healthy"},
+            "mac-use-mcp": {"status": "healthy"},
+        },
+    }
+
+
+def _failed_provider_plan():
+    return {
+        "ok": True,
+        "providers": {
+            "chrome-devtools-mcp": {"status": "unstaged"},
+            "desktop-commander": {"status": "failed", "reason": "missing"},
+            "mac-use-mcp": {"status": "unstaged"},
+        },
+    }
+
+
+def test_client_sync_skips_managed_defaults_without_healthy_providers(tmp_path, monkeypatch):
     monkeypatch.setenv("NEXO_MANAGED_MCP_PLATFORM", "darwin")
+    import client_sync
+
+    monkeypatch.setattr(client_sync, "reconcile_managed_mcp", lambda **_: _failed_provider_plan())
+    runtime_root = Path(__file__).resolve().parents[1] / "src"
+    config_path = tmp_path / "claude_desktop_config.json"
+    server_config = {
+        "command": "/usr/bin/python3",
+        "args": [str(runtime_root / "server.py")],
+        "env": {
+            "NEXO_HOME": str(tmp_path),
+            "NEXO_CODE": str(runtime_root),
+        },
+    }
+
+    result = _sync_json_client(config_path, server_config, "claude_desktop")
+    payload = json.loads(config_path.read_text())
+
+    assert result["ok"] is True
+    assert result["managed_default_mcp_count"] == 0
+    assert "nexo" in payload["mcpServers"]
+    assert {"nexo_chrome_control", "nexo_desktop_control", "nexo_power_control"}.isdisjoint(payload["mcpServers"])
+
+
+def test_client_sync_writes_managed_defaults_after_reconcile_apply_ok(tmp_path, monkeypatch):
+    monkeypatch.setenv("NEXO_MANAGED_MCP_PLATFORM", "darwin")
+    import client_sync
+
+    calls = []
+
+    def fake_reconcile(**kwargs):
+        calls.append(kwargs)
+        return _healthy_provider_plan()
+
+    monkeypatch.setattr(client_sync, "reconcile_managed_mcp", fake_reconcile)
     runtime_root = Path(__file__).resolve().parents[1] / "src"
     config_path = tmp_path / "claude_desktop_config.json"
     server_config = {
@@ -111,8 +167,120 @@ def test_client_sync_writes_managed_defaults(tmp_path, monkeypatch):
 
     assert result["ok"] is True
     assert result["managed_default_mcp_count"] >= 3
+    assert calls and calls[0]["apply"] is True
+    assert calls[0]["clients"] == ["claude_desktop"]
     assert "nexo" in payload["mcpServers"]
     assert {"nexo_chrome_control", "nexo_desktop_control", "nexo_power_control"} <= set(payload["mcpServers"])
+
+
+def test_client_sync_removes_nexo_owned_stale_entries_when_staging_fails(tmp_path, monkeypatch):
+    monkeypatch.setenv("NEXO_MANAGED_MCP_PLATFORM", "darwin")
+    import client_sync
+
+    monkeypatch.setattr(client_sync, "reconcile_managed_mcp", lambda **_: _failed_provider_plan())
+    runtime_root = Path(__file__).resolve().parents[1] / "src"
+    config_path = tmp_path / "claude_desktop_config.json"
+    config_path.write_text(json.dumps({
+        "mcpServers": {
+            "nexo_chrome_control": {
+                "command": "/broken/nexo-managed-mcp.js",
+                "nexo": {"owner": "nexo"},
+            },
+            "custom_user_server": {"command": "/user/tool"},
+        },
+        "nexo": {
+            "managed_mcp": {
+                "servers": {
+                    "nexo_chrome_control": {"owner": "nexo"},
+                }
+            }
+        },
+    }))
+    server_config = {
+        "command": "/usr/bin/python3",
+        "args": [str(runtime_root / "server.py")],
+        "env": {
+            "NEXO_HOME": str(tmp_path),
+            "NEXO_CODE": str(runtime_root),
+        },
+    }
+
+    result = _sync_json_client(config_path, server_config, "claude_desktop")
+    payload = json.loads(config_path.read_text())
+
+    assert result["managed_default_mcp_count"] == 0
+    assert "nexo_chrome_control" not in payload["mcpServers"]
+    assert payload["mcpServers"]["custom_user_server"]["command"] == "/user/tool"
+    assert "nexo_chrome_control" not in payload["nexo"]["managed_mcp"]["servers"]
+
+
+def test_codex_sync_removes_nexo_owned_toml_entries_when_staging_fails(tmp_path, monkeypatch):
+    monkeypatch.setenv("NEXO_MANAGED_MCP_PLATFORM", "darwin")
+    import client_sync
+
+    monkeypatch.setattr(client_sync, "reconcile_managed_mcp", lambda **_: _failed_provider_plan())
+    runtime_root = Path(__file__).resolve().parents[1] / "src"
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        '[mcp_servers.nexo_chrome_control]\n'
+        'command = "/broken/nexo-managed-mcp.js"\n\n'
+        '[nexo.managed_mcp.servers.nexo_chrome_control]\n'
+        'owner = "nexo"\n',
+        encoding="utf-8",
+    )
+    server_config = {
+        "command": "/usr/bin/python3",
+        "args": [str(runtime_root / "server.py")],
+        "env": {
+            "NEXO_HOME": str(tmp_path),
+            "NEXO_CODE": str(runtime_root),
+        },
+    }
+
+    result = _sync_codex_managed_config(
+        config_path,
+        bootstrap_prompt="",
+        runtime_profile={"model": "gpt-5.5"},
+        server_config=server_config,
+    )
+    payload = _load_toml_object(config_path)
+
+    assert result["managed_default_mcp_count"] == 0
+    assert "nexo_chrome_control" not in payload["mcp_servers"]
+    assert "nexo_chrome_control" not in payload["nexo"]["managed_mcp"]["servers"]
+
+
+def test_codex_sync_preserves_user_owned_same_name_when_staging_fails(tmp_path, monkeypatch):
+    monkeypatch.setenv("NEXO_MANAGED_MCP_PLATFORM", "darwin")
+    import client_sync
+
+    monkeypatch.setattr(client_sync, "reconcile_managed_mcp", lambda **_: _failed_provider_plan())
+    runtime_root = Path(__file__).resolve().parents[1] / "src"
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        '[mcp_servers.nexo_power_control]\n'
+        'command = "/user/power-control"\n',
+        encoding="utf-8",
+    )
+    server_config = {
+        "command": "/usr/bin/python3",
+        "args": [str(runtime_root / "server.py")],
+        "env": {
+            "NEXO_HOME": str(tmp_path),
+            "NEXO_CODE": str(runtime_root),
+        },
+    }
+
+    result = _sync_codex_managed_config(
+        config_path,
+        bootstrap_prompt="",
+        runtime_profile={"model": "gpt-5.5"},
+        server_config=server_config,
+    )
+    payload = _load_toml_object(config_path)
+
+    assert result["managed_default_mcp_count"] == 0
+    assert payload["mcp_servers"]["nexo_power_control"]["command"] == "/user/power-control"
 
 
 def test_reconcile_writes_state_only_when_applied(tmp_path):
