@@ -1,0 +1,141 @@
+{
+  "release_line": "v7.30",
+  "target_version": "7.30.22",
+  "scope_owner": "NEXO",
+  "distribution": {
+    "git_updates_on": "merge_to_main",
+    "packaged_release_on": "tag_publish"
+  },
+  "required_repo_files": [
+    "package.json",
+    "CHANGELOG.md",
+    "README.md",
+    "llms.txt",
+    ".well-known/llms.txt",
+    "index.html",
+    "blog/index.html",
+    "blog/nexo-7-30-22/index.html",
+    "changelog/index.html",
+    "sitemap.xml",
+    "release-contracts/v7.30.22.json",
+    "release-contracts/smoke/v7.30.22.json",
+    "scripts/pre-release-verify.sh",
+    "scripts/sync_release_artifacts.py",
+    "scripts/verify_release_readiness.py",
+    "scripts/verify_tool_map.py",
+    "scripts/verify_managed_mcp_lock.py",
+    "scripts/verify_product_kb.py",
+    "scripts/verify_product_surface_alignment.py",
+    "scripts/run_v7_30_22_smoke.py",
+    "tool-enforcement-map.json",
+    "src/product_knowledge/catalog.json",
+    "src/product_knowledge/catalog.py",
+    "src/tools_product_knowledge.py",
+    "src/system_catalog.py",
+    "src/managed_mcp/catalog.json",
+    "src/managed_mcp/lock.json",
+    "src/managed_mcp/catalog.py",
+    "src/managed_mcp/client_config.py",
+    "src/managed_mcp/reconcile.py",
+    "bin/nexo-brain.js",
+    "bin/nexo-managed-mcp.js",
+    "src/auto_update.py",
+    "src/server.py",
+    "tests/test_product_knowledge.py",
+    "tests/test_product_surface_alignment.py",
+    "tests/test_managed_mcp.py",
+    "tests/test_managed_mcp_release_gate.py",
+    ".claude-plugin/plugin.json",
+    "clawhub-skill/SKILL.md",
+    "openclaw-plugin/package.json",
+    "openclaw-plugin/package-lock.json",
+    "openclaw-plugin/src/mcp-bridge.ts"
+  ],
+  "required_website_files": [
+    "index.html",
+    "blog/index.html",
+    "blog/nexo-7-30-22/index.html",
+    "changelog/index.html",
+    "llms.txt",
+    ".well-known/llms.txt",
+    "sitemap.xml"
+  ],
+  "smoke": {
+    "required_groups": [
+      "product_surface_alignment_contract",
+      "product_knowledge_catalog",
+      "product_knowledge_tests",
+      "managed_mcp_runtime_package_contract",
+      "managed_mcp_latest_lock",
+      "tool_map_contract",
+      "release_surface_contract"
+    ],
+    "max_age_hours": 72
+  },
+  "publication": {
+    "status": "ready",
+    "checklist_complete": true,
+    "blockers": []
+  },
+  "gates": [
+    {
+      "id": "product_surface_alignment_contract",
+      "title": "Product Knowledge fails release when managed backend surfaces drift",
+      "status": "complete",
+      "evidence_required": [
+        "scripts/verify_product_surface_alignment.py reconciles backend route families with catalog capabilities and source refs",
+        "scripts/pre-release-verify.sh runs product-surface before managed-mcp-lock, release readiness and pytest",
+        "tests/test_product_surface_alignment.py covers valid alignment, unmapped managed route prefixes and missing backend source refs"
+      ]
+    },
+    {
+      "id": "product_knowledge_catalog",
+      "title": "Structured Product Knowledge catalog includes managed communications and backend source refs",
+      "status": "complete",
+      "evidence_required": [
+        "src/product_knowledge/catalog.json includes managed communications providers and updated support/credits/cards backend source refs",
+        "scripts/verify_product_kb.py includes the product surface alignment result in its release-blocking validation",
+        "tests/test_product_knowledge.py keeps search, answers, handlers, validation and system catalog discoverability covered"
+      ]
+    },
+    {
+      "id": "managed_mcp_runtime_package_contract",
+      "title": "Packaged installs receive the managed MCP runtime package on the 7.30.22 version boundary",
+      "status": "complete",
+      "evidence_required": [
+        "bin/nexo-brain.js copies managed_mcp as a runtime package",
+        "src/auto_update.py preserves managed_mcp during packaged updates and copies the managed MCP runner",
+        "tests/test_managed_mcp.py::test_managed_mcp_runtime_copy_includes_package_and_runner pins the runtime package contract"
+      ]
+    },
+    {
+      "id": "managed_mcp_latest_lock",
+      "title": "Managed MCP provider locks are checked against npm latest before release",
+      "status": "complete",
+      "evidence_required": [
+        "scripts/verify_managed_mcp_lock.py compares src/managed_mcp/lock.json against npm latest version, integrity, tarball and binary metadata",
+        "scripts/pre-release-verify.sh still runs the managed-mcp-lock step before release readiness and pytest",
+        "tests/test_managed_mcp_release_gate.py covers stale locks, update behavior and MCP binary selection"
+      ]
+    },
+    {
+      "id": "tool_map_contract",
+      "title": "Public tool map includes managed MCP, closure-plane and product tools",
+      "status": "complete",
+      "evidence_required": [
+        "tool-enforcement-map.json includes the live server tools",
+        "scripts/verify_tool_map.py passes against server.py and plugin tools"
+      ]
+    },
+    {
+      "id": "release_surface_contract",
+      "title": "Public release surfaces and integration artifacts are aligned for v7.30.22",
+      "status": "complete",
+      "evidence_required": [
+        "README, llms, homepage, blog index, blog post, changelog page and sitemap reference v7.30.22",
+        "Claude plugin, ClawHub skill and OpenClaw package metadata reference 7.30.22",
+        "Release smoke and readiness checks validate the v7.30.22 contract before tag publish"
+      ]
+    }
+  ]
+}

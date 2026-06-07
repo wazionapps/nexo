@@ -31,11 +31,12 @@ scripts/pre-release-verify.sh — NEXO Brain release discipline wrapper.
 Checks (in order):
   1. privacy         — scripts/check_no_personal_data.sh
   2. tool-map        — scripts/verify_tool_map.py
-  3. managed-mcp-lock — scripts/verify_managed_mcp_lock.py
-  4. release-ready   — scripts/verify_release_readiness.py --ci
-  5. workflows       — scripts/audit-release-workflows.py (NF-DS-E17D1B61)
-  6. pytest          — python3 -m pytest -q
-  7. release-target  — free tag + CHANGELOG entry + package.json version
+  3. product-surface — scripts/verify_product_surface_alignment.py
+  4. managed-mcp-lock — scripts/verify_managed_mcp_lock.py
+  5. release-ready   — scripts/verify_release_readiness.py --ci
+  6. workflows       — scripts/audit-release-workflows.py (NF-DS-E17D1B61)
+  7. pytest          — python3 -m pytest -q
+  8. release-target  — free tag + CHANGELOG entry + package.json version
                        (only when --release vX.Y.Z is passed)
 
 Flags:
@@ -113,6 +114,7 @@ run_step() {
 
 run_step privacy        "privacy guard"      bash scripts/check_no_personal_data.sh
 run_step tool-map       "tool-map sync"      python3 scripts/verify_tool_map.py
+run_step product-surface "product surface alignment" python3 scripts/verify_product_surface_alignment.py
 run_step managed-mcp-lock "managed MCP lock latest" python3 scripts/verify_managed_mcp_lock.py
 run_step release-ready  "release readiness"  python3 scripts/verify_release_readiness.py --ci
 run_step workflows      "release workflows"  python3 scripts/audit-release-workflows.py "$REPO_ROOT"

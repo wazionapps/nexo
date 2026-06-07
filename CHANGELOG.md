@@ -2,6 +2,11 @@
 
 ## [7.30.22] - 2026-06-07
 
+### Added - product surface release gate
+
+- **Product Knowledge now fails release when managed backend surfaces drift.** `scripts/verify_product_surface_alignment.py` reconciles backend route families with catalog capabilities/source refs, `scripts/verify_product_kb.py` includes the same contract, and `scripts/pre-release-verify.sh` runs it before publication checks.
+- **Managed communications providers are now explicit product capabilities.** The catalog documents voice, SMS, WhatsApp, mass-email and voice-runtime backend surfaces with provider-agnostic credits guidance, so newly added managed routes are not invisible to agents.
+
 ### Fixed - packaged managed runtime propagation
 
 - **Packaged installs now receive the managed MCP runtime package on a distinct Brain version.** v7.30.22 carries the managed MCP and closure-plane release payload under a new runtime version so existing Desktop installs already on v7.30.21 cannot skip the new `managed_mcp` package during update.

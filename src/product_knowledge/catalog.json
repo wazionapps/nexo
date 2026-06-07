@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-06-06",
+  "updated_at": "2026-06-07",
   "source_policy": "Brain owns stable product semantics. Desktop manifests describe installed UI surfaces. Backend endpoints own live state, prices, balances, tickets and provisioning.",
   "capabilities": [
     {
@@ -210,6 +210,7 @@
         "nexo/src/server.py:nexo_support_ticket_list",
         "nexo/src/server.py:nexo_support_ticket_create",
         "nexo-desktop/renderer/react/panels/Settings/tabs/SupportTab.jsx",
+        "nexo-desktop-web SupportTicketController",
         "nexo-desktop-web routes/web.php"
       ],
       "surfaces": ["Desktop Support settings", "Brain support-ticket tools", "Backend support API"],
@@ -249,12 +250,19 @@
         "nexo/src/system_catalog.py:nexo_provider_proxy",
         "nexo/src/system_catalog.py:nexo_provider_models",
         "nexo-desktop/renderer/react/panels/Settings/tabs/SubscriptionsTab.jsx",
+        "nexo-desktop-web CreditsController",
+        "nexo-desktop-web NexoCreditsController",
         "nexo-desktop-web ProviderProxyController",
         "nexo-desktop-web ProviderCatalogService"
       ],
-      "surfaces": ["Desktop Subscriptions/Credits", "Backend provider-proxy API"],
+      "surfaces": [
+        "Desktop Subscriptions/Credits",
+        "Backend credits API",
+        "Backend provider-proxy API",
+        "Admin NEXO Credits credential/readiness panel"
+      ],
       "live_state": {
-        "source": "backend provider-proxy platforms/models/estimate endpoints",
+        "source": "backend credits and provider-proxy platforms/models/estimate endpoints",
         "max_age": "per backend call",
         "fallback": "Mark provider/model support as unknown or planned if not returned by backend."
       },
@@ -275,6 +283,47 @@
       "answer_guidance": {
         "must_say": ["Balances, prices and invokable models are live backend facts."],
         "must_not_say": ["Do not infer provider availability from marketing copy."]
+      }
+    },
+    {
+      "id": "nexo_managed_communications_providers",
+      "title": "Managed Communications Providers",
+      "category": "credits",
+      "layer": "backend+desktop",
+      "status": "live",
+      "summary": "NEXO can use managed voice, SMS, WhatsApp, mass-email and voice-runtime provider surfaces when backend readiness, credits and spend controls allow it.",
+      "aliases": ["managed voice", "managed sms", "managed whatsapp", "mass email", "email mass", "voice", "sms", "whatsapp", "provider communications"],
+      "source_refs": [
+        "nexo-desktop-web NexoVapiController",
+        "nexo-desktop-web NexoTwilioController",
+        "nexo-desktop-web NexoWazionWhatsappController",
+        "nexo-desktop-web NexoEmailMassController",
+        "nexo-desktop-web VoiceController",
+        "nexo-desktop-web ProviderCostResolverService"
+      ],
+      "surfaces": ["Backend managed communications APIs", "NEXO Credits managed provider flows", "Desktop provider request flows"],
+      "live_state": {
+        "source": "backend managed communications provider APIs + credits ledger",
+        "max_age": "per backend call",
+        "fallback": "Treat provider availability as unknown or not configured if backend route, readiness or cost checks are unavailable."
+      },
+      "actions": {
+        "read": ["List managed resources", "Estimate cost", "Read job or request status"],
+        "write": ["Provision phone/assistant/session/domain after approval", "Send message/email or start call after explicit authorization"]
+      },
+      "safety": {
+        "data_touched": ["phone numbers", "email recipients", "message bodies", "call metadata", "provider job payloads", "credits balance"],
+        "data_origin": "user-approved communication payloads and backend provider APIs",
+        "consent_required": "yes before sending communications, starting calls or provisioning managed provider resources",
+        "confirmation_required": "yes before billable provider operations or external communications",
+        "credential_policy": "Provider credentials live in backend credential storage; never reveal them.",
+        "retention": "Provider request records, suppression lists, message logs and ledger retention follow backend policy.",
+        "audit": "Provider job IDs, request IDs and ledger entries are required evidence.",
+        "forbidden_actions": ["Expose vendor/provider names as the product promise", "Start calls or send messages/emails without explicit authorization", "Bypass credit estimation or spend limits"]
+      },
+      "answer_guidance": {
+        "must_say": ["Describe user-facing outcomes, not vendor internals, unless the operator asks for implementation detail.", "Spend, readiness and job state are live backend facts."],
+        "must_not_say": ["Do not promise a call, SMS, WhatsApp message or email campaign without backend readiness and authorization evidence."]
       }
     },
     {
@@ -326,6 +375,7 @@
       "aliases": ["cards", "protocol cards", "workflow cards", "procedures"],
       "source_refs": [
         "nexo/src/server.py:nexo_card_match",
+        "nexo-desktop-web CardController",
         "nexo-desktop-web CardCatalogService",
         "nexo-desktop/prompts/system/conversation-bootstrap.md"
       ],

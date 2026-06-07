@@ -14,10 +14,13 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from product_knowledge import catalog_entries_for_system_catalog, list_capabilities, validate_catalog
+from verify_product_surface_alignment import validate_product_surface_alignment
 
 
 def main() -> int:
     errors = validate_catalog()
+    surface_alignment = validate_product_surface_alignment()
+    errors.extend(surface_alignment["errors"])
     capabilities = list_capabilities()
     entries = catalog_entries_for_system_catalog()
     ids = {capability["id"] for capability in capabilities}
@@ -38,6 +41,7 @@ def main() -> int:
         "ok": not errors,
         "capability_count": len(capabilities),
         "system_catalog_entry_count": len(entries),
+        "surface_alignment": surface_alignment,
         "errors": errors,
     }
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
