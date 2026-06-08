@@ -2593,6 +2593,7 @@ def _run_db_migrations() -> bool:
         applied = run_migrations(conn)
         if applied > 0:
             _log(f"Applied {applied} DB migration(s)")
+        _sync_core_rules_registry()
         # Plan Consolidado F1 — one-shot legacy email config migration.
         # After m46 adds the table, operators installed pre-v6.4.0 still
         # keep their data inside ~/.nexo/nexo-email/config.json. If the
@@ -2618,6 +2619,21 @@ def _run_db_migrations() -> bool:
     except Exception as e:
         _log(f"DB migration error: {e}")
         return False
+
+
+def _sync_core_rules_registry() -> None:
+    """Keep packaged product-core rules installed in the Brain DB."""
+    try:
+        from plugins.core_rules import _sync_rules_from_json
+        result = _sync_rules_from_json()
+        if result.get("status") == "applied":
+            _log(
+                "Core rules registry synced: "
+                f"v{result.get('version_from')} -> v{result.get('version_to')} "
+                f"({result.get('active_total')} active)"
+            )
+    except Exception as exc:
+        raise RuntimeError(f"core rules registry sync failed: {exc}") from exc
 
 
 def _maybe_migrate_legacy_email_config() -> None:

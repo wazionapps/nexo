@@ -288,7 +288,13 @@ def _m15_core_rules_tables(conn):
             type TEXT NOT NULL DEFAULT 'advisory',
             added_in TEXT DEFAULT '',
             removed_in TEXT DEFAULT NULL,
-            is_active INTEGER NOT NULL DEFAULT 1
+            is_active INTEGER NOT NULL DEFAULT 1,
+            source_artifact TEXT DEFAULT '',
+            source_anchor TEXT DEFAULT '',
+            content_hash TEXT DEFAULT '',
+            protected INTEGER NOT NULL DEFAULT 1,
+            severity TEXT DEFAULT 'critical',
+            replacement_rule_id TEXT DEFAULT NULL
         )
     """)
     conn.execute("""
@@ -3063,6 +3069,17 @@ def _m80_opportunity_orchestrator(conn):
     _migrate_add_index(conn, "idx_nexo_authorizations_scope", "nexo_action_authorizations", "scope, allowed_action_class")
 
 
+def _m81_core_rules_product_metadata(conn):
+    """Add product-core provenance and protection metadata to core_rules."""
+    _migrate_add_column(conn, "core_rules", "source_artifact", "TEXT DEFAULT ''")
+    _migrate_add_column(conn, "core_rules", "source_anchor", "TEXT DEFAULT ''")
+    _migrate_add_column(conn, "core_rules", "content_hash", "TEXT DEFAULT ''")
+    _migrate_add_column(conn, "core_rules", "protected", "INTEGER NOT NULL DEFAULT 1")
+    _migrate_add_column(conn, "core_rules", "severity", "TEXT DEFAULT 'critical'")
+    _migrate_add_column(conn, "core_rules", "replacement_rule_id", "TEXT DEFAULT NULL")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_core_rules_protected ON core_rules(protected, is_active)")
+
+
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
     (2, "followups_reasoning", _m2_followups_reasoning),
@@ -3144,6 +3161,7 @@ MIGRATIONS = [
     (78, "operational_closure_plane", _m78_operational_closure_plane),
     (79, "operational_closure_links_readiness", _m79_operational_closure_links_readiness),
     (80, "opportunity_orchestrator", _m80_opportunity_orchestrator),
+    (81, "core_rules_product_metadata", _m81_core_rules_product_metadata),
 ]
 
 

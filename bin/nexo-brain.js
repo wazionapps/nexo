@@ -3403,6 +3403,20 @@ async function runSetup() {
         if (fs.existsSync(rulesSrc)) {
           copyDirRec(rulesSrc, rulesDest);
           log("  Rules updated.");
+          const rulesSyncPython = findVenvPython(NEXO_HOME) || "python3";
+          const rulesSync = spawnSync(rulesSyncPython, [
+            "-c",
+            "import os,sys; sys.path.insert(0, os.environ['NEXO_CODE']); from plugins.core_rules import _sync_rules_from_json; print(_sync_rules_from_json().get('active_total', 0))"
+          ], {
+            cwd: srcDir,
+            env: { ...process.env, NEXO_HOME, NEXO_CODE: srcDir, PYTHONPATH: srcDir },
+            encoding: "utf8",
+            timeout: 30000,
+          });
+          if (rulesSync.status !== 0) {
+            throw new Error(`Core rules registry sync failed: ${rulesSync.stderr || rulesSync.stdout || "unknown error"}`);
+          }
+          log(`  Core rules registry synced (${String(rulesSync.stdout || "").trim() || "0"} active).`);
         }
 
         // Update crons (manifest.json + sync.py — needed by catchup & watchdog)
