@@ -43,6 +43,8 @@ DEFAULT_MAX_JOB_ATTEMPTS = int(os.environ.get("NEXO_LOCAL_INDEX_MAX_JOB_ATTEMPTS
 DEFAULT_SQLITE_BUSY_RETRY_ATTEMPTS = int(os.environ.get("NEXO_LOCAL_CONTEXT_BUSY_RETRY_ATTEMPTS", "5") or "5")
 DEFAULT_SQLITE_BUSY_RETRY_DELAY_SECONDS = float(os.environ.get("NEXO_LOCAL_CONTEXT_BUSY_RETRY_DELAY_SECONDS", "0.35") or "0.35")
 DEFAULT_HYGIENE_QUICK_SCAN_LIMIT = int(os.environ.get("NEXO_LOCAL_INDEX_HYGIENE_QUICK_SCAN_LIMIT", "5000") or "5000")
+LOCAL_CONTEXT_DEFAULT_MAX_DB_BYTES = 60 * 1024 ** 3
+LOCAL_CONTEXT_DEFAULT_MIN_FREE_BYTES = 5 * 1024 ** 3
 INITIAL_INDEX_COMPLETE_KEY = "initial_index_complete"
 INITIAL_INDEX_STARTED_AT_KEY = "initial_index_started_at"
 PERFORMANCE_PROFILE_KEY = "performance_profile"
@@ -1845,6 +1847,73 @@ def _is_paused_conn(conn) -> bool:
     return _get_state_conn(conn, "paused", "0") == "1"
 
 
+def _local_context_storage_bytes(db_path: Path | None = None) -> int:
+    db = Path(db_path or local_context_db_path())
+    total = 0
+    for candidate in (db, Path(str(db) + "-wal"), Path(str(db) + "-shm")):
+        try:
+            total += int(candidate.stat().st_size)
+        except OSError:
+            pass
+    return total
+
+
+def _local_context_disk_budget() -> dict:
+    db_path = Path(local_context_db_path())
+    max_bytes = paths.parse_size_bytes(
+        os.environ.get("NEXO_LOCAL_CONTEXT_MAX_DB_BYTES"),
+        default=LOCAL_CONTEXT_DEFAULT_MAX_DB_BYTES,
+    )
+    min_free_bytes = paths.parse_size_bytes(
+        os.environ.get("NEXO_LOCAL_CONTEXT_MIN_FREE_BYTES"),
+        default=LOCAL_CONTEXT_DEFAULT_MIN_FREE_BYTES,
+    )
+    db_bytes = _local_context_storage_bytes(db_path)
+    try:
+        probe = db_path.parent if db_path.parent.exists() else paths.memory_dir()
+        free_bytes = int(shutil.disk_usage(str(probe)).free)
+    except Exception:
+        free_bytes = None
+
+    reason = ""
+    if max_bytes > 0 and db_bytes > max_bytes:
+        reason = "local_context_db_too_large"
+    elif min_free_bytes > 0 and free_bytes is not None and free_bytes < min_free_bytes:
+        reason = "disk_free_below_floor"
+    return {
+        "ok": not reason,
+        "paused": bool(reason),
+        "reason": reason,
+        "db_path": str(db_path),
+        "db_bytes": db_bytes,
+        "max_bytes": max_bytes,
+        "free_bytes": free_bytes,
+        "min_free_bytes": min_free_bytes,
+    }
+
+
+def enforce_local_context_disk_budget() -> dict:
+    budget = _local_context_disk_budget()
+    if budget["ok"]:
+        return budget
+    try:
+        _set_state("paused", "1")
+        _set_state("pause_reason", str(budget["reason"]))
+        log_event(
+            "warn",
+            "index_paused_disk_budget",
+            "Local memory indexing paused to protect disk space",
+            reason=budget["reason"],
+            db_bytes=budget["db_bytes"],
+            max_bytes=budget["max_bytes"],
+            free_bytes=budget["free_bytes"],
+            min_free_bytes=budget["min_free_bytes"],
+        )
+    except Exception as exc:
+        budget["pause_error"] = type(exc).__name__
+    return budget
+
+
 def _allow_explicit_blocked_root(path: str) -> bool:
     # Test and controlled diagnostics may explicitly index a temporary fixture
     # root while production root discovery still skips temp/system trees.
@@ -3332,6 +3401,33 @@ def run_once(
     live_dir_limit: int | None = None,
     live_file_limit: int | None = None,
 ) -> dict:
+    disk_budget = enforce_local_context_disk_budget()
+    if disk_budget.get("paused"):
+        config = performance_config()
+        return {
+            "ok": True,
+            "paused": True,
+            "disk_budget": disk_budget,
+            "initial_scan": {
+                "complete": False,
+                "mode": "paused",
+                "pending_roots": 0,
+                "total_roots": 0,
+                "checkpoint_count": 0,
+            },
+            "initial_index_complete": False,
+            "live": {"ok": True, "paused": True, "assets": {}, "dirs": {}},
+            "scan": {"ok": True, "paused": True, "roots": 0, "seen": 0, "changed": 0, "errors": 0, "partial": False},
+            "jobs": {"ok": True, "paused": True, "processed": 0, "failed": 0},
+            "performance": {
+                "profile": config["profile"],
+                "scan_limit": 0,
+                "process_limit": 0,
+                "live_asset_limit": 0,
+                "live_dir_limit": 0,
+                "live_file_limit": 0,
+            },
+        }
     if _get_state("privacy_hygiene_v2", "0") != "1":
         local_index_privacy_hygiene(fix=True)
         _set_state("privacy_hygiene_v2", "1")
@@ -3832,6 +3928,21 @@ def _status_from_conn(conn, *, readonly: bool = False) -> dict:
     service["state"] = "paused" if paused else ("attention" if problem else ("idle" if active_jobs == 0 and initial_index_complete else "indexing"))
     performance = performance_config(conn=conn)
     problems = _problem_rows(conn)
+    disk_budget = _local_context_disk_budget()
+    if not disk_budget["ok"]:
+        problems.insert(0, {
+            "user_message": "Local memory indexing is paused to protect disk space",
+            "message_key": "local_context.disk_budget.paused",
+            "recommended_action": "Review local memory size and free disk space",
+            "recommended_action_key": "local_context.disk_budget.review",
+            "technical_detail": json_dumps(disk_budget),
+            "support_code": "LOCAL_CONTEXT_DISK_BUDGET",
+            "severity": "warning",
+            "retryable": True,
+            "path": disk_budget["db_path"],
+            "phase": "storage",
+            "created_at": now(),
+        })
     if problem:
         problems.insert(0, {
             "user_message": problem["user_message"],
@@ -3881,6 +3992,7 @@ def _status_from_conn(conn, *, readonly: bool = False) -> dict:
             "performance_profile": performance["profile"],
         },
         "performance": performance,
+        "disk_budget": disk_budget,
         "initial_scan": initial_scan,
         "initial_index_complete": bool(initial_index_complete),
         "volumes": volumes,

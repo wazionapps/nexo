@@ -1342,6 +1342,20 @@ def test_pause_stops_scan_until_resume(tmp_path):
     assert resumed["scan"]["seen"] == 1
 
 
+def test_run_once_pauses_when_local_context_db_exceeds_disk_budget(monkeypatch):
+    get_local_context_db()
+    monkeypatch.setenv("NEXO_LOCAL_CONTEXT_MAX_DB_BYTES", "1")
+    monkeypatch.setenv("NEXO_LOCAL_CONTEXT_MIN_FREE_BYTES", "0")
+
+    result = local_context.run_once(limit=20, process_limit=20)
+
+    assert result["paused"] is True
+    assert result["disk_budget"]["reason"] == "local_context_db_too_large"
+    status = local_context.status()
+    assert status["global"]["phase"] == "paused"
+    assert status["disk_budget"]["reason"] == "local_context_db_too_large"
+
+
 def test_performance_profile_is_persisted_and_reported():
     api.ensure_ready()
     default_status = local_context.status()

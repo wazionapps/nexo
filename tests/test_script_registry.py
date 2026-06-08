@@ -1,6 +1,7 @@
 """Tests for script_registry — metadata parsing, runtime detection, doctor validation."""
 import json
 import os
+import plistlib
 import stat
 import sys
 from pathlib import Path
@@ -238,6 +239,54 @@ class TestMetadataParsing:
         assert declared["valid"] is True
         assert declared["schedule_label"] == "09:00 weekday=1"
 
+    def test_schedule_metadata_supports_monthly_anchored_time(self, tmp_path):
+        script = tmp_path / "monthly-shopify.sh"
+        script.write_text(
+            "#!/bin/bash\n"
+            "# nexo: name=monthly-shopify\n"
+            "# nexo: runtime=shell\n"
+            "# nexo: cron_id=monthly-shopify\n"
+            "# nexo: schedule_freq=monthly\n"
+            "# nexo: schedule_at=04:00\n"
+            "# nexo: schedule_day=1\n"
+            "# nexo: schedule_required=true\n"
+            "echo ok\n"
+        )
+
+        meta = parse_inline_metadata(script)
+        declared = get_declared_schedule(meta, "monthly-shopify")
+        payload = json.loads(declared["schedule_value"])
+
+        assert declared["valid"] is True
+        assert declared["schedule_type"] == "calendar"
+        assert declared["schedule_freq"] == "monthly"
+        assert declared["schedule_label"] == "monthly day=1 04:00"
+        assert payload == {"at": "04:00", "day": 1, "freq": "monthly", "hour": 4, "minute": 0}
+
+    def test_schedule_metadata_supports_every_n_days_anchored_time(self, tmp_path):
+        script = tmp_path / "every-five-days.sh"
+        script.write_text(
+            "#!/bin/bash\n"
+            "# nexo: name=every-five-days\n"
+            "# nexo: runtime=shell\n"
+            "# nexo: cron_id=every-five-days\n"
+            "# nexo: schedule_freq=every_n_days\n"
+            "# nexo: schedule_at=04:30\n"
+            "# nexo: schedule_day=5\n"
+            "# nexo: schedule_required=true\n"
+            "echo ok\n"
+        )
+
+        meta = parse_inline_metadata(script)
+        declared = get_declared_schedule(meta, "every-five-days")
+        payload = json.loads(declared["schedule_value"])
+
+        assert declared["valid"] is True
+        assert declared["schedule"] == "04:30"
+        assert declared["schedule_label"] == "every 5d 04:30"
+        assert payload["freq"] == "every_n_days"
+        assert payload["every_days"] == 5
+
     def test_agent_metadata_keys_are_parsed(self, tmp_path):
         script = tmp_path / "agent.py"
         script.write_text(
@@ -392,6 +441,90 @@ class TestAgentRegistry:
 
         assert scheduled["ok"] is True
         assert "# nexo: future_agent_key=keep-me" in path.read_text()
+
+    def test_launchagent_uses_monthly_day_for_anchored_schedule(self, scripts_dir, monkeypatch):
+        from plugins import schedule as schedule_plugin
+
+        launch_agents = Path.home() / "Library" / "LaunchAgents"
+        launch_agents.mkdir(parents=True)
+        wrapper = scripts_dir / "nexo-cron-wrapper.sh"
+        wrapper.write_text("#!/bin/bash\n")
+        script = scripts_dir / "ps-monthly-shopify.sh"
+        script.write_text(
+            "#!/bin/bash\n"
+            "# nexo: name=monthly-shopify\n"
+            "# nexo: runtime=shell\n"
+            "# nexo: cron_id=monthly-shopify\n"
+            "# nexo: schedule_freq=monthly\n"
+            "# nexo: schedule_at=04:00\n"
+            "# nexo: schedule_day=1\n"
+            "# nexo: schedule_required=true\n"
+            "echo ok\n"
+        )
+        monkeypatch.setattr(schedule_plugin.subprocess, "run", lambda *args, **kwargs: SimpleNamespace(returncode=0))
+        declared = get_declared_schedule(parse_inline_metadata(script), "monthly-shopify")
+
+        result = schedule_plugin._add_launchagent(
+            "monthly-shopify",
+            str(script),
+            str(wrapper),
+            declared["schedule"],
+            0,
+            "Monthly Shopify",
+            "shell",
+            Path(os.environ["NEXO_HOME"]),
+            declared=declared,
+        )
+
+        plist_path = launch_agents / "com.nexo.monthly-shopify.plist"
+        with plist_path.open("rb") as fh:
+            plist = plistlib.load(fh)
+        assert "installed" in result
+        assert plist["StartCalendarInterval"] == {"Hour": 4, "Minute": 0, "Day": 1}
+        schedules = list_personal_script_schedules()
+        assert json.loads(schedules[0]["schedule_value"])["freq"] == "monthly"
+
+    def test_launchagent_uses_daily_calendar_and_gate_env_for_every_n_days(self, scripts_dir, monkeypatch):
+        from plugins import schedule as schedule_plugin
+
+        launch_agents = Path.home() / "Library" / "LaunchAgents"
+        launch_agents.mkdir(parents=True)
+        wrapper = scripts_dir / "nexo-cron-wrapper.sh"
+        wrapper.write_text("#!/bin/bash\n")
+        script = scripts_dir / "ps-every-five-days.sh"
+        script.write_text(
+            "#!/bin/bash\n"
+            "# nexo: name=every-five-days\n"
+            "# nexo: runtime=shell\n"
+            "# nexo: cron_id=every-five-days\n"
+            "# nexo: schedule_freq=every_n_days\n"
+            "# nexo: schedule_at=04:30\n"
+            "# nexo: schedule_day=5\n"
+            "# nexo: schedule_required=true\n"
+            "echo ok\n"
+        )
+        monkeypatch.setattr(schedule_plugin.subprocess, "run", lambda *args, **kwargs: SimpleNamespace(returncode=0))
+        declared = get_declared_schedule(parse_inline_metadata(script), "every-five-days")
+
+        schedule_plugin._add_launchagent(
+            "every-five-days",
+            str(script),
+            str(wrapper),
+            declared["schedule"],
+            0,
+            "Every five days",
+            "shell",
+            Path(os.environ["NEXO_HOME"]),
+            declared=declared,
+        )
+
+        plist_path = launch_agents / "com.nexo.every-five-days.plist"
+        with plist_path.open("rb") as fh:
+            plist = plistlib.load(fh)
+        env = plist["EnvironmentVariables"]
+        assert plist["StartCalendarInterval"] == {"Hour": 4, "Minute": 30}
+        assert env["NEXO_SCHEDULE_FREQ"] == "every_n_days"
+        assert env["NEXO_SCHEDULE_EVERY_DAYS"] == "5"
 
     def test_list_agents_handles_multi_calendar_schedule_records(self, scripts_dir):
         from script_registry import _agent_schedule_from_script

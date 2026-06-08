@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # nexo: name=prune-runtime-backups
-# nexo: description=Rotate technical rollback snapshots under runtime/backups by family. Never touches business (shopify-backups) or hourly_db (nexo-backup.sh) artifacts.
+# nexo: description=Rotate runtime/backups by class, including hourly DB dumps under a bounded restore policy.
 # nexo: category=maintenance
 # nexo: runtime=python
 # nexo: timeout=300
@@ -10,9 +10,9 @@
 prune_runtime_backups.py — NEXO backup retention by class.
 
 Separates *technical* rollback snapshots (throwaway, produced by the installer,
-updater and backfills) from *operational* snapshots (shopify-backups, hourly
-DB dumps, weekly archives) so the former can be rotated without risk to the
-latter.
+updater and backfills) from protected business/weekly restore points. Hourly
+DB dumps and local memory DB dumps are product-generated runtime artifacts and
+are rotated here with explicit minimum restore counts plus a global cap.
 
 Target: $NEXO_HOME/runtime/backups/ (default ~/.nexo/runtime/backups)
 
@@ -38,8 +38,8 @@ Class taxonomy (prefix-based) and retention policy:
 
   HOURLY_DB (sqlite dumps, managed by nexo-backup.sh):
     Prefix: nexo-YYYY-MM-DD-HHMM.db in runtime/backups/ root
-    These are already rotated by nexo-backup.sh (48h retention). We skip
-    them here to avoid double-rotation logic.
+    Retention: keep --hourly-keep newest unconditionally; older dumps are
+    pruned and may also be budget-pruned down to the same minimum.
 
   WEEKLY_DB (weekly/ directory):
     Already rotated by nexo-backup.sh (90d retention). Skip.
@@ -109,7 +109,7 @@ TECHNICAL_PREFIXES = (
 
 # Entries that must never be considered for pruning.
 PROTECTED_NAMES = {"shopify-backups", "weekly"}
-# Hourly DB dumps at the root of runtime/backups — managed by nexo-backup.sh.
+# Hourly DB dumps at the root of runtime/backups.
 HOURLY_DB_RE = re.compile(r"^nexo-\d{4}-\d{2}-\d{2}-\d{4}\.db$")
 LOCAL_CONTEXT_DB_RE = re.compile(r"^local-context-\d{4}-\d{2}-\d{2}-\d{4}(\d{2})?\.db$")
 TEMPORARY_RE = re.compile(r"(^|.*[.])tmp([.-].*)?$|.*\.tmp\..*|.*-journal$|.*\.db-(wal|shm)$")
@@ -328,7 +328,7 @@ def plan_prunes(
         else:
             to_keep.append(it)
 
-    for klass, keep_count in (("LOCAL_CONTEXT_DB", local_context_keep),):
+    for klass, keep_count in (("LOCAL_CONTEXT_DB", local_context_keep), ("HOURLY_DB", hourly_keep)):
         group = [it for it in items if it["class"] == klass]
         group.sort(key=lambda x: (x["ts"] or datetime.min.replace(tzinfo=timezone.utc)), reverse=True)
         for it in group[:max(0, keep_count)]:
@@ -346,11 +346,13 @@ def plan_prunes(
             for it in items:
                 by_budget_family.setdefault((it["class"], it["family"]), []).append(it)
             for (klass, _family), group in by_budget_family.items():
-                if klass not in {"TECHNICAL", "LOCAL_CONTEXT_DB", "TEMPORARY"}:
+                if klass not in {"TECHNICAL", "LOCAL_CONTEXT_DB", "HOURLY_DB", "TEMPORARY"}:
                     continue
                 min_keep = 0
                 if klass == "LOCAL_CONTEXT_DB":
                     min_keep = max(0, local_context_keep)
+                elif klass == "HOURLY_DB":
+                    min_keep = max(0, hourly_keep)
                 group.sort(key=lambda x: (x["ts"] or datetime.min.replace(tzinfo=timezone.utc)), reverse=True)
                 for it in group[:min_keep]:
                     protected_keep_ids.add(id(it))
@@ -359,7 +361,7 @@ def plan_prunes(
                 it for it in items
                 if id(it) not in delete_ids
                 and id(it) not in protected_keep_ids
-                and it["class"] in {"TECHNICAL", "LOCAL_CONTEXT_DB", "TEMPORARY"}
+                and it["class"] in {"TECHNICAL", "LOCAL_CONTEXT_DB", "HOURLY_DB", "TEMPORARY"}
             ]
             budget_candidates.sort(
                 key=lambda x: (
@@ -381,10 +383,10 @@ def plan_prunes(
     return to_delete, to_keep
 
 
-def restore_point_guard(items: list[dict], to_delete: list[dict]) -> tuple[bool, list[str], dict]:
+def restore_point_guard(items: list[dict], to_delete: list[dict], *, hourly_keep: int) -> tuple[bool, list[str], dict]:
     """Validate that apply mode never removes protected restore classes."""
     delete_ids = {id(item) for item in to_delete}
-    protected_classes = {"BUSINESS", "HOURLY_DB", "ROOT_DB", "UNKNOWN"}
+    protected_classes = {"BUSINESS", "ROOT_DB", "UNKNOWN"}
     protected_names = set(PROTECTED_NAMES)
     violations: list[str] = []
     for item in items:
@@ -393,10 +395,17 @@ def restore_point_guard(items: list[dict], to_delete: list[dict]) -> tuple[bool,
         if item["class"] in protected_classes or item["name"] in protected_names:
             violations.append(f"{item['name']} ({item['class']})")
     hourly_count = sum(1 for item in items if item["class"] == "HOURLY_DB")
+    hourly_delete_count = sum(1 for item in items if item["class"] == "HOURLY_DB" and id(item) in delete_ids)
+    hourly_after_prune = hourly_count - hourly_delete_count
+    hourly_floor = min(hourly_count, max(0, hourly_keep))
+    if hourly_after_prune < hourly_floor:
+        violations.append(f"hourly_db_floor ({hourly_after_prune} < {hourly_floor})")
     weekly_present = any(item["name"] == "weekly" for item in items)
     business_count = sum(1 for item in items if item["class"] == "BUSINESS")
     return not violations, violations, {
         "hourly_db_present": hourly_count,
+        "hourly_db_after_prune": hourly_after_prune,
+        "hourly_keep_floor": hourly_floor,
         "weekly_present": weekly_present,
         "business_protected": business_count,
         "protected_delete_violations": violations,
@@ -450,7 +459,11 @@ def run(args: argparse.Namespace) -> int:
                 delete_ids.add(id(item))
         to_keep = [item for item in items if id(item) not in delete_ids]
 
-    restore_guard_ok, restore_guard_violations, restore_guard = restore_point_guard(items, to_delete)
+    restore_guard_ok, restore_guard_violations, restore_guard = restore_point_guard(
+        items,
+        to_delete,
+        hourly_keep=max(0, args.hourly_keep),
+    )
 
     total_all = sum(i["size"] for i in items)
     total_del = sum(i["size"] for i in to_delete)
@@ -505,7 +518,7 @@ def run(args: argparse.Namespace) -> int:
         print(f"  total on disk:   {human_size(total_all)}  ({len(items)} entries)")
         print(f"    technical:     {len(tech_items)}")
         print(f"    business:      {len(biz_items)} (protected)")
-        print(f"    hourly_db:     {len(hourly_items)} (managed by nexo-backup.sh)")
+        print(f"    hourly_db:     {len(hourly_items)} (bounded; keep {args.hourly_keep})")
         print(f"    local_context: {len(local_context_items)}")
         print(f"    temporary:     {len(temporary_items)}")
         print(f"    root_db:       {len(root_db_items)} (never auto-pruned)")
@@ -578,7 +591,7 @@ def main() -> int:
     ap.add_argument("--window-days", type=int, default=90, help="month-spaced retention window (default: 90)")
     ap.add_argument("--only", help="restrict to one technical family (e.g. 'pre-backfill-owner')")
     ap.add_argument("--max-bytes", default=os.environ.get("NEXO_BACKUP_MAX_BYTES", str(DEFAULT_MAX_BYTES)), help="global product-generated backup hard cap, bytes or K/M/G/T (default: 50G)")
-    ap.add_argument("--delete-all-technical", action="store_true", help="emergency mode: delete all technical rollback snapshots; protected business/weekly/hourly DB backups remain untouched")
+    ap.add_argument("--delete-all-technical", action="store_true", help="emergency mode: delete all technical rollback snapshots; protected business/weekly backups remain untouched")
     ap.add_argument("--tmp-ttl-minutes", type=int, default=int(os.environ.get("NEXO_BACKUP_TMP_TTL_MINUTES", "30")), help="delete orphan temporary backup files older than this (default: 30)")
     ap.add_argument("--local-context-keep", type=int, default=int(os.environ.get("NEXO_LOCAL_CONTEXT_BACKUP_KEEP_LAST", "1")), help="local-context backup files to keep under the global cap (default: 1)")
     ap.add_argument("--hourly-keep", type=int, default=int(os.environ.get("NEXO_BACKUP_KEEP_LAST", "3")), help="hourly nexo DB backups to keep under the global cap (default: 3)")

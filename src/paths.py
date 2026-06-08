@@ -515,8 +515,8 @@ def aggressive_runtime_backup_prune(
 ) -> dict:
     """Escalate NEXO-owned backup pruning before any user-facing disk alert.
 
-    Escalation never targets protected business/hourly backup classes; the
-    pruner enforces that policy.
+    Escalation never targets protected business/weekly restore classes. Hourly
+    DB dumps are pruned only down to their configured restore floor.
     """
     root = Path(backups_root or backups_dir())
     floor = int(min_free_bytes if min_free_bytes is not None else backup_min_free_bytes())

@@ -232,3 +232,47 @@ def test_pruner_self_heals_local_context_artifacts_under_hard_cap(tmp_path):
     assert not old_local.exists()
     assert not orphan_tmp.exists()
     assert not orphan_wal.exists()
+
+
+def test_pruner_rotates_hourly_db_artifacts_under_hard_cap(tmp_path):
+    backup_base = tmp_path / "backups"
+    backup_base.mkdir()
+    script = Path(__file__).resolve().parent.parent / "src" / "scripts" / "prune_runtime_backups.py"
+
+    protected = backup_base / "shopify-backups"
+    protected.mkdir()
+    (protected / "keep.txt").write_text("business")
+    weekly = backup_base / "weekly"
+    weekly.mkdir()
+    (weekly / "weekly-2026-W23.db").write_bytes(b"w" * 1024)
+
+    for hour in range(24):
+        backup = backup_base / f"nexo-2026-06-07-{hour:02d}00.db"
+        backup.write_bytes(b"x" * 1024 * 1024)
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--root",
+            str(backup_base),
+            "--apply",
+            "--max-bytes",
+            "5M",
+            "--hourly-keep",
+            "3",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    assert result.returncode == 0
+    assert protected.is_dir()
+    assert weekly.is_dir()
+    remaining = sorted(path.name for path in backup_base.glob("nexo-*.db"))
+    assert remaining == [
+        "nexo-2026-06-07-2100.db",
+        "nexo-2026-06-07-2200.db",
+        "nexo-2026-06-07-2300.db",
+    ]

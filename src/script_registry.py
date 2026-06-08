@@ -83,6 +83,9 @@ METADATA_KEYS = {
     "category",
     "cron_id",
     "schedule",
+    "schedule_freq",
+    "schedule_at",
+    "schedule_day",
     "interval_seconds",
     "schedule_required",
     "recovery_policy",
@@ -125,6 +128,9 @@ METADATA_WRITE_ORDER = [
     "cron_id",
     "schedule_required",
     "schedule",
+    "schedule_freq",
+    "schedule_at",
+    "schedule_day",
     "interval_seconds",
     "recovery_policy",
     "run_on_boot",
@@ -160,6 +166,8 @@ _SCHEDULE_WEEKDAY_PREFIX_RE = re.compile(
     r"^weekday\s*=\s*(?P<weekday>\d)\s+(?P<hour>\d{1,2}):(?P<minute>\d{2})$",
     re.IGNORECASE,
 )
+_SCHEDULE_AT_RE = re.compile(r"^(?P<hour>\d{1,2}):(?P<minute>\d{2})$")
+SUPPORTED_ANCHORED_SCHEDULE_FREQS = {"daily", "weekly", "monthly", "every_n_days"}
 _LEGACY_CORE_SCRIPT_ALIASES = {
     "nexo-postcompact.sh": "post-compact.sh",
     "nexo-memory-precompact.sh": "pre-compact.sh",
@@ -415,6 +423,12 @@ def _normalize_metadata_value(key: str, value: str) -> str:
         return _normalize_runtime_metadata(value)
     if key == "schedule":
         return _normalize_schedule_metadata(value)
+    if key == "schedule_freq":
+        return str(value or "").strip().lower().replace("-", "_")
+    if key == "schedule_at":
+        return _normalize_schedule_at_metadata(value)
+    if key == "schedule_day":
+        return str(value or "").strip()
     return value
 
 
@@ -438,6 +452,35 @@ def _normalize_schedule_metadata(value: str) -> str:
         if 0 <= hour <= 23 and 0 <= minute <= 59 and 0 <= weekday <= 6:
             return f"{hour:02d}:{minute:02d}:{weekday}"
     return candidate
+
+
+def _normalize_schedule_at_metadata(value: str) -> str:
+    candidate = str(value or "").strip()
+    match = _SCHEDULE_AT_RE.match(candidate)
+    if not match:
+        return candidate
+    try:
+        hour = int(match.group("hour"))
+        minute = int(match.group("minute"))
+    except ValueError:
+        return candidate
+    if 0 <= hour <= 23 and 0 <= minute <= 59:
+        return f"{hour:02d}:{minute:02d}"
+    return candidate
+
+
+def _parse_schedule_at(value: str) -> tuple[int, int] | None:
+    match = _SCHEDULE_AT_RE.match(str(value or "").strip())
+    if not match:
+        return None
+    try:
+        hour = int(match.group("hour"))
+        minute = int(match.group("minute"))
+    except ValueError:
+        return None
+    if 0 <= hour <= 23 and 0 <= minute <= 59:
+        return hour, minute
+    return None
 
 
 def _detect_shebang(path: Path) -> str | None:
@@ -563,13 +606,17 @@ def get_declared_schedule(metadata: dict, default_name: str = "") -> dict:
     cron_id = explicit_cron_id or _safe_slug(default_name or explicit_name or "script")
     interval_raw = metadata.get("interval_seconds", "").strip()
     schedule_raw = metadata.get("schedule", "").strip()
+    schedule_freq_raw = metadata.get("schedule_freq", "").strip().lower().replace("-", "_")
+    schedule_at_raw = metadata.get("schedule_at", "").strip()
+    schedule_day_raw = metadata.get("schedule_day", "").strip()
+    anchored_raw_present = bool(schedule_freq_raw or schedule_at_raw or schedule_day_raw)
     schedule_required = _truthy(metadata.get("schedule_required"))
     recovery_policy_raw = metadata.get("recovery_policy", "").strip().lower()
     run_on_boot = _truthy(metadata.get("run_on_boot"))
     run_on_wake = _truthy(metadata.get("run_on_wake"))
     idempotent = _truthy(metadata.get("idempotent"))
     max_catchup_age_raw = metadata.get("max_catchup_age", "").strip()
-    required = schedule_required or bool(interval_raw or schedule_raw)
+    required = schedule_required or bool(interval_raw or schedule_raw or anchored_raw_present)
 
     if recovery_policy_raw and recovery_policy_raw not in SUPPORTED_RECOVERY_POLICIES:
         return {
@@ -638,11 +685,12 @@ def get_declared_schedule(metadata: dict, default_name: str = "") -> dict:
             return idempotent
         return policy in {"catchup", "run_once_on_wake", "restart", "restart_daemon"}
 
-    if interval_raw and schedule_raw:
+    configured_modes = sum(bool(value) for value in (interval_raw, schedule_raw, anchored_raw_present))
+    if configured_modes > 1:
         return {
             "required": required,
             "valid": False,
-            "error": "Both schedule and interval_seconds are set; choose one.",
+            "error": "Choose only one schedule mode: schedule, interval_seconds, or schedule_freq/schedule_at.",
             "cron_id": cron_id,
         }
 
@@ -677,6 +725,101 @@ def get_declared_schedule(metadata: dict, default_name: str = "") -> dict:
             "run_on_wake": _effective_run_on_wake(recovery_policy_raw or "run_once_on_wake"),
             "idempotent": _effective_idempotent(recovery_policy_raw or "run_once_on_wake"),
             "max_catchup_age": max_catchup_age or max(interval * 4, interval + 900),
+        }
+
+    if anchored_raw_present:
+        freq = schedule_freq_raw
+        if freq not in SUPPORTED_ANCHORED_SCHEDULE_FREQS:
+            return {
+                "required": required,
+                "valid": False,
+                "error": f"Invalid schedule_freq: {schedule_freq_raw or '(missing)'}",
+                "cron_id": cron_id,
+            }
+        parsed_at = _parse_schedule_at(schedule_at_raw)
+        if parsed_at is None:
+            return {
+                "required": required,
+                "valid": False,
+                "error": f"Invalid schedule_at: {schedule_at_raw or '(missing)'}",
+                "cron_id": cron_id,
+            }
+        hour, minute = parsed_at
+        day: int | None = None
+        if freq in {"weekly", "monthly", "every_n_days"}:
+            try:
+                day = int(schedule_day_raw)
+            except ValueError:
+                return {
+                    "required": required,
+                    "valid": False,
+                    "error": f"Invalid schedule_day: {schedule_day_raw or '(missing)'}",
+                    "cron_id": cron_id,
+                }
+        if freq == "weekly" and not (day is not None and 0 <= day <= 6):
+            return {
+                "required": required,
+                "valid": False,
+                "error": f"schedule_day for weekly schedules must be 0-6 (got {schedule_day_raw})",
+                "cron_id": cron_id,
+            }
+        if freq == "monthly" and not (day is not None and 1 <= day <= 28):
+            return {
+                "required": required,
+                "valid": False,
+                "error": f"schedule_day for monthly schedules must be 1-28 (got {schedule_day_raw})",
+                "cron_id": cron_id,
+            }
+        if freq == "every_n_days" and not (day is not None and 1 <= day <= 31):
+            return {
+                "required": required,
+                "valid": False,
+                "error": f"schedule_day for every_n_days schedules must be 1-31 (got {schedule_day_raw})",
+                "cron_id": cron_id,
+            }
+        at = f"{hour:02d}:{minute:02d}"
+        payload = {
+            "freq": freq,
+            "at": at,
+            "hour": hour,
+            "minute": minute,
+        }
+        if freq == "weekly":
+            payload["weekday"] = day
+            schedule = f"{at}:{day}"
+            label = f"weekly weekday={day} {at}"
+            max_age = 14 * 86400
+        elif freq == "monthly":
+            payload["day"] = day
+            schedule = at
+            label = f"monthly day={day} {at}"
+            max_age = 45 * 86400
+        elif freq == "every_n_days":
+            payload["every_days"] = day
+            schedule = at
+            label = f"every {day}d {at}"
+            max_age = max((day or 1) * 86400 + 48 * 3600, 72 * 3600)
+        else:
+            schedule = at
+            label = f"{at} daily"
+            max_age = 48 * 3600
+        return {
+            "required": required,
+            "valid": True,
+            "cron_id": cron_id,
+            "schedule_type": "calendar",
+            "schedule_value": json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False),
+            "schedule_label": label,
+            "schedule": schedule,
+            "schedule_freq": freq,
+            "schedule_at": at,
+            "schedule_day": day or 0,
+            "interval_seconds": 0,
+            "recovery_policy": recovery_policy_raw or "catchup",
+            "run_on_boot": _effective_run_on_boot(recovery_policy_raw or "catchup"),
+            "run_on_wake": _effective_run_on_wake(recovery_policy_raw or "catchup"),
+            "idempotent": _effective_idempotent(recovery_policy_raw or "catchup"),
+            "max_catchup_age": max_catchup_age or max_age,
         }
 
     if schedule_raw:
@@ -1122,6 +1265,9 @@ def _format_schedule_from_plist(plist_data: dict) -> tuple[str, str, str]:
         hour = cal.get("Hour")
         minute = cal.get("Minute")
         weekday = cal.get("Weekday")
+        day = cal.get("Day")
+        if day is not None and hour is not None and minute is not None:
+            return "calendar", json.dumps(cal, ensure_ascii=False), f"{hour:02d}:{minute:02d} day={day}"
         if weekday is not None and hour is not None and minute is not None:
             return "calendar", json.dumps(cal, ensure_ascii=False), f"{hour:02d}:{minute:02d} weekday={weekday}"
         if hour is not None and minute is not None:
@@ -1129,6 +1275,27 @@ def _format_schedule_from_plist(plist_data: dict) -> tuple[str, str, str]:
         return "calendar", json.dumps(cal, ensure_ascii=False), "calendar"
 
     return "manual", "", ""
+
+
+def _anchored_schedule_payload(schedule_value: str | dict | list | None) -> dict | None:
+    if isinstance(schedule_value, dict):
+        payload = schedule_value
+    elif isinstance(schedule_value, str) and schedule_value.lstrip().startswith("{"):
+        try:
+            payload = json.loads(schedule_value)
+        except Exception:
+            return None
+    else:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    freq = str(payload.get("freq") or "").strip()
+    if freq not in SUPPORTED_ANCHORED_SCHEDULE_FREQS:
+        return None
+    at = str(payload.get("at") or "").strip()
+    if _parse_schedule_at(at) is None:
+        return None
+    return payload
 
 
 def _calendar_payload_from_declared(schedule_value: str) -> dict | list | None:
@@ -1178,6 +1345,9 @@ def _compact_schedule_from_record(record: dict) -> str:
     if raw.lstrip().startswith("{") or raw.lstrip().startswith("["):
         with contextlib.suppress(Exception):
             payload = json.loads(raw)
+    anchored = _anchored_schedule_payload(payload)
+    if anchored:
+        return str(anchored.get("at") or "")
     if isinstance(payload, list):
         if len(payload) == 1 and isinstance(payload[0], dict):
             payload = payload[0]
@@ -1243,10 +1413,25 @@ def _inferred_schedule_metadata_lines(path: Path, metadata: dict, record: dict) 
         lines.append(f"{prefix} nexo: interval_seconds={interval}")
         lines.append(f"{prefix} nexo: recovery_policy=run_once_on_wake")
     elif schedule_type == "calendar":
-        compact_schedule = _compact_schedule_from_record(record)
-        if not compact_schedule:
-            return None
-        lines.append(f"{prefix} nexo: schedule={compact_schedule}")
+        anchored = _anchored_schedule_payload(record.get("schedule_value"))
+        if anchored:
+            freq = str(anchored.get("freq") or "")
+            at = str(anchored.get("at") or "")
+            if freq == "weekly":
+                day = anchored.get("weekday")
+            elif freq == "every_n_days":
+                day = anchored.get("every_days")
+            else:
+                day = anchored.get("day")
+            lines.append(f"{prefix} nexo: schedule_freq={freq}")
+            lines.append(f"{prefix} nexo: schedule_at={at}")
+            if freq in {"weekly", "monthly", "every_n_days"}:
+                lines.append(f"{prefix} nexo: schedule_day={day}")
+        else:
+            compact_schedule = _compact_schedule_from_record(record)
+            if not compact_schedule:
+                return None
+            lines.append(f"{prefix} nexo: schedule={compact_schedule}")
         lines.append(f"{prefix} nexo: recovery_policy=catchup")
     elif schedule_type == "keep_alive":
         lines.append(f"{prefix} nexo: recovery_policy=restart_daemon")
@@ -1336,6 +1521,18 @@ def _is_agent_archived(metadata: dict | None) -> bool:
 
 
 def _format_agent_calendar_value(raw: str) -> tuple[str, str]:
+    payload = _anchored_schedule_payload(raw)
+    if payload:
+        at = str(payload.get("at") or "")
+        freq = str(payload.get("freq") or "")
+        if freq == "weekly":
+            return at, f"weekly weekday={int(payload.get('weekday'))} {at}"
+        if freq == "monthly":
+            return at, f"monthly day={int(payload.get('day'))} {at}"
+        if freq == "every_n_days":
+            return at, f"every {int(payload.get('every_days'))}d {at}"
+        return at, f"{at} daily"
+
     compact = _compact_schedule_from_record({
         "schedule_type": "calendar",
         "schedule_value": raw,
@@ -1357,6 +1554,30 @@ def _format_agent_calendar_value(raw: str) -> tuple[str, str]:
     return compact, f"{hour:02d}:{minute:02d} daily"
 
 
+def _agent_anchored_schedule_fields(schedule_value: str | dict | list | None) -> dict:
+    payload = _anchored_schedule_payload(schedule_value)
+    if not payload:
+        return {
+            "schedule_freq": "",
+            "schedule_at": "",
+            "schedule_day": 0,
+        }
+    freq = str(payload.get("freq") or "")
+    if freq == "weekly":
+        day = int(payload.get("weekday"))
+    elif freq == "monthly":
+        day = int(payload.get("day"))
+    elif freq == "every_n_days":
+        day = int(payload.get("every_days"))
+    else:
+        day = 0
+    return {
+        "schedule_freq": freq,
+        "schedule_at": str(payload.get("at") or ""),
+        "schedule_day": day,
+    }
+
+
 def _agent_schedule_from_script(script: dict) -> dict:
     schedules = script.get("schedules") if isinstance(script.get("schedules"), list) else []
     if schedules:
@@ -1372,6 +1593,7 @@ def _agent_schedule_from_script(script: dict) -> dict:
         elif schedule_type == "calendar":
             daily_at, formatted = _format_agent_calendar_value(schedule_value)
             label = formatted or label
+        anchored_fields = _agent_anchored_schedule_fields(schedule_value)
         return {
             "schedule_type": schedule_type,
             "schedule_value": schedule_value,
@@ -1379,6 +1601,7 @@ def _agent_schedule_from_script(script: dict) -> dict:
             "effective_schedule_label": label,
             "interval_seconds": interval_seconds,
             "daily_at": daily_at,
+            **anchored_fields,
             "cron_id": str(schedule.get("cron_id") or ""),
             "schedule_source": "runtime",
             "schedules": schedules,
@@ -1394,6 +1617,9 @@ def _agent_schedule_from_script(script: dict) -> dict:
             "effective_schedule_label": str(declared.get("schedule_label") or ""),
             "interval_seconds": int(declared.get("interval_seconds", 0) or 0),
             "daily_at": str(declared.get("schedule") or ""),
+            "schedule_freq": str(declared.get("schedule_freq") or ""),
+            "schedule_at": str(declared.get("schedule_at") or ""),
+            "schedule_day": int(declared.get("schedule_day", 0) or 0),
             "cron_id": str(declared.get("cron_id") or ""),
             "schedule_source": "metadata",
             "schedules": [],
@@ -1406,6 +1632,9 @@ def _agent_schedule_from_script(script: dict) -> dict:
         "effective_schedule_label": "",
         "interval_seconds": 0,
         "daily_at": "",
+        "schedule_freq": "",
+        "schedule_at": "",
+        "schedule_day": 0,
         "cron_id": str(metadata.get("cron_id") or script.get("name") or ""),
         "schedule_source": "",
         "schedules": [],
@@ -1579,6 +1808,9 @@ def set_agent_schedule(
     *,
     interval_seconds: int | None = None,
     daily_at: str | None = None,
+    schedule_freq: str | None = None,
+    schedule_at: str | None = None,
+    schedule_day: int | str | None = None,
     clear: bool = False,
 ) -> dict:
     status = get_agent_status(name_or_path)
@@ -1592,7 +1824,18 @@ def set_agent_schedule(
     if runtime == "unknown":
         runtime = "shell" if path.suffix.lower() == ".sh" else "python"
 
-    remove = {"schedule", "interval_seconds", "recovery_policy", "run_on_boot", "run_on_wake", "idempotent", "max_catchup_age"}
+    remove = {
+        "schedule",
+        "schedule_freq",
+        "schedule_at",
+        "schedule_day",
+        "interval_seconds",
+        "recovery_policy",
+        "run_on_boot",
+        "run_on_wake",
+        "idempotent",
+        "max_catchup_age",
+    }
     updates = {
         "agent": "true",
         "name": metadata.get("name") or agent.get("name") or _logical_personal_script_name(path.stem),
@@ -1615,6 +1858,11 @@ def set_agent_schedule(
             "agent": refreshed.get("agent") if refreshed.get("ok") else agent,
         }
 
+    anchored_requested = bool(schedule_freq or schedule_at or schedule_day is not None)
+    mode_count = sum(bool(value) for value in (interval_seconds is not None, bool(daily_at), anchored_requested))
+    if mode_count > 1:
+        return {"ok": False, "error": "Choose interval_seconds, daily_at, or schedule_freq/schedule_at."}
+
     if interval_seconds is not None:
         try:
             interval = int(interval_seconds)
@@ -1627,6 +1875,17 @@ def set_agent_schedule(
             "interval_seconds": str(interval),
             "recovery_policy": "run_once_on_wake",
         })
+    elif anchored_requested:
+        freq = str(schedule_freq or "").strip().lower().replace("-", "_")
+        at = _normalize_schedule_at_metadata(str(schedule_at or "").strip())
+        updates.update({
+            "schedule_required": "true",
+            "schedule_freq": freq,
+            "schedule_at": at,
+            "recovery_policy": "catchup",
+        })
+        if schedule_day is not None:
+            updates["schedule_day"] = str(schedule_day)
     elif daily_at:
         schedule_value = _normalize_schedule_metadata(str(daily_at).strip())
         updates.update({
@@ -1635,7 +1894,7 @@ def set_agent_schedule(
             "recovery_policy": "catchup",
         })
     else:
-        return {"ok": False, "error": "Choose interval_seconds, daily_at, or clear=true"}
+        return {"ok": False, "error": "Choose interval_seconds, daily_at, schedule_freq/schedule_at, or clear=true"}
 
     candidate_metadata = dict(metadata)
     for key in remove:
@@ -1660,6 +1919,7 @@ def set_agent_schedule(
         "ok": not ensure_error,
         "name": agent["name"],
         "cron_id": cron_id,
+        "declared_schedule": declared,
         "error": ensure_error,
         "removed": removed,
         "ensure_schedules": ensured,
@@ -1860,6 +2120,15 @@ def _discover_personal_schedule_records() -> list[dict]:
             continue
 
         schedule_type, schedule_value, schedule_label = _format_schedule_from_plist(plist_data)
+        managed_marker = env.get(PERSONAL_SCHEDULE_MANAGED_ENV) == "1"
+        if managed_marker and exists and script_path is not None:
+            with contextlib.suppress(Exception):
+                meta = parse_inline_metadata(script_path)
+                declared = get_declared_schedule(meta, meta.get("name", script_path.stem))
+                if declared.get("valid") and declared.get("cron_id") == cron_id:
+                    schedule_type = str(declared.get("schedule_type") or schedule_type)
+                    schedule_value = str(declared.get("schedule_value") or schedule_value)
+                    schedule_label = str(declared.get("schedule_label") or schedule_label)
         results.append({
             "cron_id": cron_id,
             "script_path": str(script_path) if script_path else "",
@@ -1871,7 +2140,7 @@ def _discover_personal_schedule_records() -> list[dict]:
             "plist_path": str(plist_path),
             "enabled": True,
             "description": "",
-            "managed_marker": env.get(PERSONAL_SCHEDULE_MANAGED_ENV) == "1",
+            "managed_marker": managed_marker,
             "script_exists": exists,
             "script_within_scripts_dir": in_scripts_dir,
         })

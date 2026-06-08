@@ -1,5 +1,14 @@
 # Changelog
 
+## [7.30.29] - 2026-06-08
+
+### Fixed - runtime disk guard
+
+- **Hourly `nexo.db` backups are now bounded by the central retention cap.** The pruner rotates old `nexo-YYYY-MM-DD-HHMM.db` files while preserving the configured recent restore floor, so hard caps can actually free disk space.
+- **The hourly backup wrapper now passes its keep policy to the pruner.** `NEXO_BACKUP_KEEP_LAST` and `NEXO_LOCAL_CONTEXT_BACKUP_KEEP_LAST` are enforced by the shared cleanup path instead of relying on a separate age-only fallback.
+- **Local memory now pauses before it fills the disk.** `run_once()` stops indexing when `local-context.db` exceeds `NEXO_LOCAL_CONTEXT_MAX_DB_BYTES` or free disk drops below `NEXO_LOCAL_CONTEXT_MIN_FREE_BYTES`, and status reports the measured budget reason.
+- **Regression coverage pins the María disk incident class.** Tests reproduce 24 hourly DB dumps under a tight cap and prove the pruner keeps only the restore floor while protecting weekly/business backups.
+
 ## [7.30.28] - 2026-06-08
 
 ### Fixed - first-hop F0.6 repair from old hook lists

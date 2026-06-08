@@ -384,7 +384,71 @@ def _runtime_command(script_type: str) -> str:
     return "python3"
 
 
-def _register_schedule_metadata(cron_id, script_path, schedule, interval_seconds, description, script_type, label="", plist_path="", keep_alive: bool = False):
+def _declared_schedule_payload(declared: dict | None) -> dict:
+    declared = declared or {}
+    raw = str(declared.get("schedule_value") or "").strip()
+    if not raw.startswith("{"):
+        return {}
+    try:
+        payload = json.loads(raw)
+    except Exception:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _calendar_from_schedule(schedule: str, declared: dict | None = None) -> dict:
+    payload = _declared_schedule_payload(declared)
+    if payload:
+        freq = str(payload.get("freq") or "")
+        cal = {"Hour": int(payload.get("hour")), "Minute": int(payload.get("minute"))}
+        if freq == "weekly":
+            cal["Weekday"] = int(payload.get("weekday"))
+        elif freq == "monthly":
+            cal["Day"] = int(payload.get("day"))
+        return cal
+
+    parts = str(schedule or "").split(":")
+    cal = {"Hour": int(parts[0]), "Minute": int(parts[1])}
+    if len(parts) > 2:
+        cal["Weekday"] = int(parts[2])
+    return cal
+
+
+def _systemd_calendar_from_schedule(schedule: str, declared: dict | None = None) -> str:
+    payload = _declared_schedule_payload(declared)
+    if payload:
+        freq = str(payload.get("freq") or "")
+        hour = int(payload.get("hour"))
+        minute = int(payload.get("minute"))
+        if freq == "weekly":
+            days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+            return f"OnCalendar={days[int(payload.get('weekday'))]} *-*-* {hour:02d}:{minute:02d}:00"
+        if freq == "monthly":
+            return f"OnCalendar=*-*-{int(payload.get('day')):02d} {hour:02d}:{minute:02d}:00"
+        return f"OnCalendar=*-*-* {hour:02d}:{minute:02d}:00"
+
+    parts = str(schedule or "").split(":")
+    hour, minute = int(parts[0]), int(parts[1])
+    if len(parts) > 2:
+        days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+        return f"OnCalendar={days[int(parts[2])]} *-*-* {hour:02d}:{minute:02d}:00"
+    return f"OnCalendar=*-*-* {hour:02d}:{minute:02d}:00"
+
+
+def _schedule_gate_env(declared: dict | None = None) -> dict:
+    payload = _declared_schedule_payload(declared)
+    if not payload:
+        return {}
+    env = {
+        "NEXO_SCHEDULE_FREQ": str(payload.get("freq") or ""),
+        "NEXO_SCHEDULE_AT": str(payload.get("at") or ""),
+    }
+    if payload.get("freq") == "every_n_days":
+        env["NEXO_SCHEDULE_EVERY_DAYS"] = str(int(payload.get("every_days") or 0))
+    return {key: value for key, value in env.items() if value}
+
+
+def _register_schedule_metadata(cron_id, script_path, schedule, interval_seconds, description, script_type, label="", plist_path="", keep_alive: bool = False, declared: dict | None = None):
     init_db()
     script_meta = parse_inline_metadata(Path(script_path))
     runtime = classify_runtime(Path(script_path), script_meta)
@@ -398,7 +462,12 @@ def _register_schedule_metadata(cron_id, script_path, schedule, interval_seconds
         source="filesystem",
         has_inline_metadata=bool(script_meta),
     )
-    if keep_alive:
+    declared = declared or {}
+    if declared.get("valid") and declared.get("schedule_type"):
+        schedule_type = str(declared.get("schedule_type") or "")
+        schedule_value = str(declared.get("schedule_value") or "")
+        schedule_label = str(declared.get("schedule_label") or "")
+    elif keep_alive:
         schedule_type = "keep_alive"
         schedule_value = "true"
         schedule_label = "keep alive"
@@ -452,6 +521,7 @@ def _add_launchagent(cron_id, script_path, wrapper_path, schedule, interval_seco
             "PATH": resolve_launchagent_path(),
             PERSONAL_SCHEDULE_MANAGED_ENV: "1",
             "NEXO_PERSONAL_CRON_ID": cron_id,
+            **_schedule_gate_env(declared),
         },
     }
 
@@ -460,11 +530,7 @@ def _add_launchagent(cron_id, script_path, wrapper_path, schedule, interval_seco
     elif interval_seconds:
         plist["StartInterval"] = interval_seconds
     elif schedule:
-        parts = schedule.split(":")
-        cal = {"Hour": int(parts[0]), "Minute": int(parts[1])}
-        if len(parts) > 2:
-            cal["Weekday"] = int(parts[2])
-        plist["StartCalendarInterval"] = cal
+        plist["StartCalendarInterval"] = _calendar_from_schedule(schedule, declared)
 
     declared = declared or {}
     if declared.get("run_on_boot") or (keep_alive and "run_on_boot" not in declared):
@@ -485,6 +551,7 @@ def _add_launchagent(cron_id, script_path, wrapper_path, schedule, interval_seco
         label=label,
         plist_path=str(plist_path),
         keep_alive=keep_alive,
+        declared=declared,
     )
 
     if keep_alive:
@@ -517,6 +584,8 @@ Environment=HOME={Path.home()}
 Environment={PERSONAL_SCHEDULE_MANAGED_ENV}=1
 Environment=NEXO_PERSONAL_CRON_ID={cron_id}
 """
+    for key, value in _schedule_gate_env(declared).items():
+        service_content += f"Environment={key}={value}\n"
     service_path = unit_dir / f"nexo-{cron_id}.service"
     service_path.write_text(service_content)
 
@@ -535,10 +604,10 @@ Environment=NEXO_HOME={nexo_home}
 Environment=HOME={Path.home()}
 Environment={PERSONAL_SCHEDULE_MANAGED_ENV}=1
 Environment=NEXO_PERSONAL_CRON_ID={cron_id}
-
-[Install]
-WantedBy=default.target
 """
+        for key, value in _schedule_gate_env(declared).items():
+            service_content += f"Environment={key}={value}\n"
+        service_content += "\n[Install]\nWantedBy=default.target\n"
         service_path = unit_dir / f"nexo-{cron_id}.service"
         service_path.write_text(service_content)
 
@@ -555,6 +624,7 @@ WantedBy=default.target
             label=f"nexo-{cron_id}",
             plist_path="",
             keep_alive=True,
+            declared=declared,
         )
 
         return f"Cron '{cron_id}' installed as KeepAlive systemd service and enabled. Service: {service_path}"
@@ -565,14 +635,7 @@ WantedBy=default.target
         if declared.get("run_on_boot") or not declared.get("required"):
             timer_spec += "\nOnBootSec=60s"
     elif schedule:
-        parts = schedule.split(":")
-        hour, minute = int(parts[0]), int(parts[1])
-        if len(parts) > 2:
-            days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-            day = days[int(parts[2])]
-            timer_spec = f"OnCalendar={day} *-*-* {hour:02d}:{minute:02d}:00"
-        else:
-            timer_spec = f"OnCalendar=*-*-* {hour:02d}:{minute:02d}:00"
+        timer_spec = _systemd_calendar_from_schedule(schedule, declared)
     else:
         return "ERROR: no schedule or interval"
 
@@ -602,6 +665,7 @@ WantedBy=timers.target
         label=f"nexo-{cron_id}",
         plist_path="",
         keep_alive=False,
+        declared=declared,
     )
 
     return f"Cron '{cron_id}' installed as systemd timer and enabled. Service: {service_path}, Timer: {timer_path}"

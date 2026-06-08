@@ -59,7 +59,12 @@ cleanup_backups() {
         PRUNER="$(dirname "$0")/prune_runtime_backups.py"
     fi
     if [ -f "$PRUNER" ]; then
-        python3 "$PRUNER" --root "$BACKUP_DIR" --apply --max-bytes "$BACKUP_MAX_BYTES" >/dev/null 2>&1 || true
+        python3 "$PRUNER" \
+            --root "$BACKUP_DIR" \
+            --apply \
+            --max-bytes "$BACKUP_MAX_BYTES" \
+            --hourly-keep "$KEEP_LAST" \
+            --local-context-keep "$LOCAL_CONTEXT_KEEP_LAST" >/dev/null 2>&1 || true
     fi
 
     python3 - "$BACKUP_DIR" "$RETENTION_HOURS" "$KEEP_LAST" "$FAMILY_KEEP_LAST" "$LOCAL_CONTEXT_RETENTION_HOURS" "$LOCAL_CONTEXT_KEEP_LAST" <<'PY'

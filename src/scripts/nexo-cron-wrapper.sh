@@ -331,6 +331,73 @@ if [ "$DISABLED_GATE_OUTPUT" = "disabled" ]; then
     exit 0
 fi
 
+if [ "${NEXO_SCHEDULE_FREQ:-}" = "every_n_days" ] && [ -n "${NEXO_SCHEDULE_EVERY_DAYS:-}" ]; then
+    EVERY_N_DAYS_GATE_OUTPUT=$(python3 - "$DB" "$CRON_ID" "$NEXO_SCHEDULE_EVERY_DAYS" <<'PYGATE' 2>/dev/null || true
+from __future__ import annotations
+from datetime import datetime, timezone
+import sqlite3
+import sys
+
+db_path, cron_id, every_days_raw = sys.argv[1:]
+try:
+    every_days = int(every_days_raw)
+except ValueError:
+    sys.exit(0)
+if every_days <= 1:
+    sys.exit(0)
+try:
+    row = None
+    conn = sqlite3.connect(db_path)
+    row = conn.execute(
+        """
+        SELECT started_at
+          FROM cron_runs
+         WHERE cron_id = ?
+           AND ended_at IS NOT NULL
+           AND exit_code = 0
+           AND COALESCE(summary, '') NOT LIKE '[schedule-gate]%'
+           AND COALESCE(summary, '') NOT LIKE '[disabled]%'
+         ORDER BY started_at DESC, id DESC
+         LIMIT 1
+        """,
+        (cron_id,),
+    ).fetchone()
+except Exception:
+    sys.exit(0)
+finally:
+    try:
+        conn.close()
+    except Exception:
+        pass
+if row is None or not row[0]:
+    sys.exit(0)
+raw = str(row[0])
+try:
+    last = datetime.strptime(raw[:19], "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+except ValueError:
+    try:
+        last = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        sys.exit(0)
+    if last.tzinfo is None:
+        last = last.replace(tzinfo=timezone.utc)
+elapsed = (datetime.now(timezone.utc) - last.astimezone(timezone.utc)).total_seconds()
+if elapsed < every_days * 86400:
+    remaining_hours = max(1, int(((every_days * 86400) - elapsed + 3599) // 3600))
+    print(f"skip\tlast={raw}\tremaining_hours={remaining_hours}")
+PYGATE
+)
+    if [ -n "$EVERY_N_DAYS_GATE_OUTPUT" ]; then
+        EXIT_CODE=0
+        SIGNAL_NAME=""
+        : > "$OUTPUT_FILE"
+        echo "[schedule-gate] $CRON_ID skipped - every ${NEXO_SCHEDULE_EVERY_DAYS} days (${EVERY_N_DAYS_GATE_OUTPUT})" > "$OUTPUT_FILE"
+        finalize_row
+        cleanup
+        exit 0
+    fi
+fi
+
 "$@" > "$OUTPUT_FILE" 2>&1 &
 CHILD_PID=$!
 

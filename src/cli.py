@@ -1287,17 +1287,27 @@ def _agents_set_schedule(args):
 
     interval_seconds = None
     daily_at = None
+    schedule_freq = None
+    schedule_at = None
+    schedule_day = None
     if getattr(args, "every_minutes", None) is not None:
         interval_seconds = int(args.every_minutes) * 60
     elif getattr(args, "every_seconds", None) is not None:
         interval_seconds = int(args.every_seconds)
     elif getattr(args, "daily_at", None):
         daily_at = str(args.daily_at).strip()
+    elif getattr(args, "schedule_freq", None):
+        schedule_freq = str(args.schedule_freq).strip()
+        schedule_at = str(getattr(args, "schedule_at", "") or "").strip()
+        schedule_day = getattr(args, "schedule_day", None)
 
     result = set_agent_schedule(
         args.name,
         interval_seconds=interval_seconds,
         daily_at=daily_at,
+        schedule_freq=schedule_freq,
+        schedule_at=schedule_at,
+        schedule_day=schedule_day,
         clear=bool(getattr(args, "reset", False)),
     )
     if args.json:
@@ -4160,7 +4170,10 @@ def main():
     agents_schedule_group.add_argument("--every-minutes", type=int, help="Run the agent every N minutes")
     agents_schedule_group.add_argument("--every-seconds", type=int, help="Run the agent every N seconds")
     agents_schedule_group.add_argument("--daily-at", type=str, help="Run the agent every day at HH:MM or HH:MM:weekday")
+    agents_schedule_group.add_argument("--schedule-freq", choices=["daily", "weekly", "monthly", "every_n_days"], help="Run the agent on an anchored cadence")
     agents_schedule_group.add_argument("--reset", action="store_true", help="Clear the agent schedule")
+    agents_schedule_p.add_argument("--schedule-at", type=str, help="Anchored schedule time HH:MM")
+    agents_schedule_p.add_argument("--schedule-day", type=int, help="Weekday 0-6, month day 1-28, or every N days")
     agents_schedule_p.add_argument("--json", action="store_true", help="JSON output")
 
     agents_run_p = agents_sub.add_parser("run", help="Run an agent now")
