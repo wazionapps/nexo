@@ -1,0 +1,186 @@
+{
+  "release_line": "v7.30",
+  "target_version": "7.30.28",
+  "scope_owner": "NEXO",
+  "distribution": {
+    "git_updates_on": "merge_to_main",
+    "packaged_release_on": "tag_publish"
+  },
+  "required_repo_files": [
+    "package.json",
+    "CHANGELOG.md",
+    "README.md",
+    "llms.txt",
+    ".well-known/llms.txt",
+    "index.html",
+    "blog/index.html",
+    "blog/nexo-7-30-28/index.html",
+    "changelog/index.html",
+    "sitemap.xml",
+    "release-contracts/v7.30.28.json",
+    "release-contracts/smoke/v7.30.28.json",
+    "scripts/pre-release-verify.sh",
+    "scripts/sync_release_artifacts.py",
+    "scripts/verify_release_readiness.py",
+    "scripts/verify_tool_map.py",
+    "scripts/verify_managed_mcp_lock.py",
+    "scripts/verify_product_kb.py",
+    "scripts/verify_product_surface_alignment.py",
+    "scripts/run_v7_30_28_smoke.py",
+    "tool-enforcement-map.json",
+    "src/doctor/providers/runtime.py",
+    "src/scripts/nexo-watchdog.sh",
+    "src/auto_update.py",
+    "tests/test_doctor.py",
+    "tests/test_startup_preflight.py",
+    "tests/test_auto_update_f06_shims.py",
+    "tests/test_shell_runtime_path_contract.py",
+    "tests/test_watchdog_in_flight.py",
+    "src/managed_mcp/catalog.json",
+    "src/managed_mcp/lock.json",
+    "src/managed_mcp/catalog.py",
+    "src/managed_mcp/__init__.py",
+    "src/managed_mcp/client_config.py",
+    "src/managed_mcp/reconcile.py",
+    "src/client_sync.py",
+    "tests/test_client_sync.py",
+    "tests/test_managed_mcp.py",
+    "tests/test_managed_mcp_release_gate.py",
+    "bin/nexo-brain.js",
+    "bin/nexo-managed-mcp.js",
+    "src/auto_update.py",
+    ".claude-plugin/plugin.json",
+    "clawhub-skill/SKILL.md",
+    "openclaw-plugin/package.json",
+    "openclaw-plugin/package-lock.json",
+    "openclaw-plugin/src/mcp-bridge.ts"
+  ],
+  "required_website_files": [
+    "index.html",
+    "blog/index.html",
+    "blog/nexo-7-30-28/index.html",
+    "changelog/index.html",
+    "llms.txt",
+    ".well-known/llms.txt",
+    "sitemap.xml"
+  ],
+  "smoke": {
+    "required_groups": [
+      "maintenance_diagnostics_self_heal",
+      "f06_core_script_update_propagation",
+      "managed_mcp_client_sync_release_gate",
+      "managed_mcp_runtime_package_contract",
+      "managed_mcp_latest_lock",
+      "product_surface_alignment_contract",
+      "product_knowledge_catalog",
+      "product_knowledge_tests",
+      "tool_map_contract",
+      "release_surface_contract"
+    ],
+    "max_age_hours": 72
+  },
+  "publication": {
+    "status": "ready",
+    "checklist_complete": true,
+    "blockers": []
+  },
+  "gates": [
+    {
+      "id": "f06_core_script_update_propagation",
+      "title": "Runtime update propagates packaged core scripts through F0.6 shims",
+      "status": "complete",
+      "evidence_required": [
+        "src/auto_update.py preserves the F0.6 scripts -> core/scripts symlink and copies packaged scripts to the resolved core directory",
+        "Post-install hooks from the freshly copied tree promote core script updates archived by older F0.6 shim reconciliation",
+        "The existing guardian-hard post-install hook also runs F0.6 runtime repairs so old hook lists execute the fix on the first upgrade",
+        "The fresh hook runner prefers the freshly copied hook list when available so future hook additions are not skipped by the old parent process",
+        "core/current is refreshed from core after update so same-version runtime snapshots cannot keep stale scripts",
+        "Core scripts are overwritten from packaged source even when an old registry scan classified the existing file as non-script",
+        "Personal script collisions remain preserved",
+        "tests/test_startup_preflight.py::test_copy_runtime_from_source_updates_core_script_through_f06_shim pins the active watchdog LaunchAgent path",
+        "tests/test_auto_update_f06_shims.py pins legacy conflict recovery, old-hook compatibility and same-version core/current refresh"
+      ]
+    },
+    {
+      "id": "maintenance_diagnostics_self_heal",
+      "title": "Runtime maintenance diagnostics stay quiet when the installation is healthy",
+      "status": "complete",
+      "evidence_required": [
+        "src/doctor/providers/runtime.py compares LaunchAgent weekday/weekdays schedules with the same declared schedule shape used by cron sync",
+        "Release audit traces are scoped as operator_history so installation_live health is not degraded by old release artifacts",
+        "Automation telemetry tolerates sparse high-coverage usage gaps and still degrades on material missing usage coverage",
+        "Local-index hygiene retries transient SQLite locks and treats truncated quick scans as clean when no residue remains",
+        "src/scripts/nexo-watchdog.sh reads runtime/cognitive/cognitive.db with legacy fallback and observes alive long-running cron workers without warning"
+      ]
+    },
+    {
+      "id": "managed_mcp_client_sync_release_gate",
+      "title": "Client sync only writes managed MCP defaults after provider staging is healthy",
+      "status": "complete",
+      "evidence_required": [
+        "src/client_sync.py calls reconcile_managed_mcp(apply=True) before merging managed MCP entries into JSON or TOML client configs",
+        "_managed_mcp_entries_for(...) returns no entries unless every provider required by the generated server entries reports status=healthy",
+        "JSON and TOML sync remove stale NEXO-owned managed MCP entries when staging fails while preserving user-owned entries",
+        "tests/test_managed_mcp.py and tests/test_managed_mcp_release_gate.py keep the no-npx-fallback release blocker covered"
+      ]
+    },
+    {
+      "id": "managed_mcp_runtime_package_contract",
+      "title": "Packaged installs keep receiving the managed MCP runtime package",
+      "status": "complete",
+      "evidence_required": [
+        "bin/nexo-brain.js copies managed_mcp as a runtime package",
+        "src/auto_update.py preserves managed_mcp during packaged updates and copies the managed MCP runner",
+        "tests/test_managed_mcp.py::test_managed_mcp_runtime_copy_includes_package_and_runner pins the runtime package contract"
+      ]
+    },
+    {
+      "id": "managed_mcp_latest_lock",
+      "title": "Managed MCP provider locks are checked against npm latest before release",
+      "status": "complete",
+      "evidence_required": [
+        "scripts/verify_managed_mcp_lock.py compares src/managed_mcp/lock.json against npm latest version, integrity, tarball and binary metadata",
+        "scripts/pre-release-verify.sh still runs the managed-mcp-lock step before release readiness and pytest",
+        "tests/test_managed_mcp_release_gate.py covers stale locks, update behavior and MCP binary selection"
+      ]
+    },
+    {
+      "id": "product_surface_alignment_contract",
+      "title": "Product Knowledge remains aligned with managed backend surfaces",
+      "status": "complete",
+      "evidence_required": [
+        "scripts/verify_product_surface_alignment.py reconciles backend route families with catalog capabilities and source refs",
+        "scripts/pre-release-verify.sh runs product-surface before managed-mcp-lock, release readiness and pytest",
+        "tests/test_product_surface_alignment.py covers valid alignment, unmapped managed route prefixes and missing backend source refs"
+      ]
+    },
+    {
+      "id": "product_knowledge_catalog",
+      "title": "Structured Product Knowledge catalog remains valid",
+      "status": "complete",
+      "evidence_required": [
+        "scripts/verify_product_kb.py validates the structured catalog",
+        "tests/test_product_knowledge.py keeps search, answers, handlers, validation and system catalog discoverability covered"
+      ]
+    },
+    {
+      "id": "tool_map_contract",
+      "title": "Public tool map remains synchronized with server exports",
+      "status": "complete",
+      "evidence_required": [
+        "tool-enforcement-map.json includes the live NEXO server tools",
+        "scripts/verify_tool_map.py passes against server.py and plugin tools"
+      ]
+    },
+    {
+      "id": "release_surface_contract",
+      "title": "Public release surfaces and integration artifacts are aligned for v7.30.28",
+      "status": "complete",
+      "evidence_required": [
+        "README, llms, homepage, blog index, blog post, changelog page and sitemap reference v7.30.28",
+        "Claude plugin, ClawHub skill and OpenClaw package metadata reference 7.30.28",
+        "Release smoke and readiness checks validate the v7.30.28 contract before tag publish"
+      ]
+    }
+  ]
+}

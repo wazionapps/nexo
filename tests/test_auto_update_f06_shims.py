@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import json
 import os
 import subprocess
 import sys
@@ -87,6 +88,41 @@ def test_post_install_hook_refreshes_core_current_snapshot_even_same_version(mon
     assert changed is True
     assert message == "runtime-snapshot-refreshed:7.30.27"
     assert (core / "current").is_symlink()
+    assert (core / "current" / "scripts" / "nexo-watchdog.sh").read_text() == "#!/bin/bash\necho new\n"
+
+
+def test_existing_guardian_hook_runs_f06_runtime_repairs_for_old_hook_lists(monkeypatch, tmp_path):
+    home = tmp_path
+    (home / ".structure-version").write_text("F0.6\n")
+    core = home / "core"
+    core_scripts = core / "scripts"
+    current_target = core / "versions" / "7.30.28"
+    current_scripts = current_target / "scripts"
+    core_scripts.mkdir(parents=True)
+    current_scripts.mkdir(parents=True)
+    (core / "cli.py").write_text("print('cli')\n")
+    (core / "package.json").write_text('{"version":"7.30.28"}\n')
+    (core_scripts / "nexo-watchdog.sh").write_text("#!/bin/bash\necho new\n")
+    (current_target / "cli.py").write_text("print('cli')\n")
+    (current_target / "package.json").write_text('{"version":"7.30.28"}\n')
+    (current_scripts / "nexo-watchdog.sh").write_text("#!/bin/bash\necho old\n")
+    (core / "current").symlink_to(Path("versions") / "7.30.28")
+    guardian_config = home / "personal" / "config" / "guardian-runtime-overrides.json"
+    guardian_config.parent.mkdir(parents=True)
+    guardian_config.write_text(
+        json.dumps({
+            "G1_ENFORCER_ACTIVE": "hard",
+            "G3_ENFORCE_DESTRUCTIVE": "hard",
+            "G3_SSH_ENFORCE_REMOTE_WRITE": "hard",
+            "G4_ENFORCE_GUARD_CHECK": "hard",
+        }) + "\n"
+    )
+
+    au = _reload_auto_update(monkeypatch, home)
+    changed, message = au._persist_guardian_hard_defaults(home)
+
+    assert changed is False
+    assert "runtime-snapshot-refreshed:7.30.28" in str(message)
     assert (core / "current" / "scripts" / "nexo-watchdog.sh").read_text() == "#!/bin/bash\necho new\n"
 
 

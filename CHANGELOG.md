@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.30.28] - 2026-06-08
+
+### Fixed - first-hop F0.6 repair from old hook lists
+
+- **F0.6 runtime repairs now execute even when the old updater only knows the older post-install hook list.** The existing `guardian-hard-persisted` hook now also runs the F0.6 script-conflict recovery and `core/current` snapshot refresh, so upgrades from older installed versions do not need a second `nexo update`.
+- **Fresh hook execution now prefers the freshly copied hook list.** Future post-install hooks defined by a new release are discovered from the new runtime tree instead of being limited to the parent updater's stale hook list.
+- **Regression coverage pins the old-hook path.** Tests prove the legacy guardian hook can refresh a same-version `core/current` snapshot even when Guardian defaults were already present.
+
 ## [7.30.27] - 2026-06-08
 
 ### Fixed - F0.6 snapshot repair after legacy script conflicts

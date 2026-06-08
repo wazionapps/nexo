@@ -5444,10 +5444,20 @@ def _persist_guardian_hard_defaults(dest: Path) -> tuple[bool, str | None]:
           non-default value (``shadow`` / ``off`` / anything else). Only
           fills missing keys or upgrades explicit defaults.
     """
+    def _join_messages(*messages: str | None) -> str | None:
+        parts = [str(message) for message in messages if str(message or "").strip()]
+        return ";".join(parts) if parts else None
+
+    repair_message = None
+    try:
+        _repair_changed, repair_message = _run_f06_post_update_repairs(dest)
+    except Exception as exc:
+        repair_message = f"f06-post-update-repair-warning:{exc.__class__.__name__}"
+
     if _is_ephemeral_runtime_install(dest):
-        return False, "guardian-hard-persist-skipped:ephemeral"
+        return False, _join_messages("guardian-hard-persist-skipped:ephemeral", repair_message)
     if os.environ.get("NEXO_GUARDIAN_PERSIST_HARD", "").strip().lower() == "off":
-        return False, "guardian-hard-persist-skipped:operator-opt-out"
+        return False, _join_messages("guardian-hard-persist-skipped:operator-opt-out", repair_message)
 
     config_path = dest / "personal" / "config" / "guardian-runtime-overrides.json"
     config_path.parent.mkdir(parents=True, exist_ok=True)
@@ -5477,16 +5487,16 @@ def _persist_guardian_hard_defaults(dest: Path) -> tuple[bool, str | None]:
             current[key] = default
 
     if current == original and config_path.is_file():
-        return False, None
+        return False, repair_message
 
     try:
         tmp_path = config_path.with_suffix(config_path.suffix + ".tmp")
         tmp_path.write_text(json.dumps(current, indent=2, ensure_ascii=False) + "\n")
         tmp_path.replace(config_path)
     except Exception as exc:  # pragma: no cover - filesystem failures
-        return False, f"guardian-hard-persist-error:{exc.__class__.__name__}"
+        return False, _join_messages(f"guardian-hard-persist-error:{exc.__class__.__name__}", repair_message)
 
-    return True, None
+    return True, repair_message
 
 
 from datetime import datetime as _adaptive_datetime  # isolated alias; other modules use ``time.time()``
@@ -5702,12 +5712,27 @@ def _refresh_active_versioned_runtime_snapshot(dest: Path) -> tuple[bool, str | 
     return True, f"runtime-snapshot-refreshed:{version}"
 
 
+def _run_f06_post_update_repairs(dest: Path) -> tuple[bool, str | None]:
+    changed = False
+    messages: list[str] = []
+    for repair in (
+        _promote_f06_core_scripts_from_latest_legacy_conflict,
+        _refresh_active_versioned_runtime_snapshot,
+    ):
+        repair_changed, repair_message = repair(dest)
+        changed = changed or repair_changed
+        if repair_message:
+            messages.append(repair_message)
+    return changed, ";".join(messages) if messages else None
+
+
 # Whitelist of post-install hooks to invoke from the fresh tree. Each entry
 # is the function name inside ``auto_update.py`` of the freshly-copied
 # code. The subprocess resolves them on the NEW module and calls
 # ``fn(dest)`` returning ``(bool, str | None)``. New hooks added in
 # future releases only need an entry here — no extra wiring.
 _POST_INSTALL_FRESH_HOOKS = (
+    ("f06-post-update-repairs", "_run_f06_post_update_repairs"),
     ("f06-core-scripts-promoted", "_promote_f06_core_scripts_from_latest_legacy_conflict"),
     ("runtime-snapshot-refreshed", "_refresh_active_versioned_runtime_snapshot"),
     ("guardian-hard-persisted", "_persist_guardian_hard_defaults"),
@@ -5745,7 +5770,7 @@ def _run_post_install_hooks_fresh(dest: Path, *, env: dict | None = None) -> lis
         "import json, sys\n"
         "from pathlib import Path\n"
         f"sys.path.insert(0, {repr(str(code_root))})\n"
-        "hooks = json.loads(" + repr(hook_specs_json) + ")\n"
+        "fallback_hooks = json.loads(" + repr(hook_specs_json) + ")\n"
         f"dest = Path({repr(dest_str)})\n"
         "results = []\n"
         "try:\n"
@@ -5753,6 +5778,11 @@ def _run_post_install_hooks_fresh(dest: Path, *, env: dict | None = None) -> lis
         "except Exception as exc:\n"
         "    print(json.dumps({'error': 'import_auto_update_failed', 'detail': repr(exc)}))\n"
         "    sys.exit(0)\n"
+        "fresh_hooks = getattr(fresh, '_POST_INSTALL_FRESH_HOOKS', None)\n"
+        "if isinstance(fresh_hooks, (list, tuple)) and fresh_hooks:\n"
+        "    hooks = [(str(tag), str(fn)) for tag, fn in fresh_hooks]\n"
+        "else:\n"
+        "    hooks = fallback_hooks\n"
         "for tag, fn_name in hooks:\n"
         "    fn = getattr(fresh, fn_name, None)\n"
         "    if fn is None:\n"

@@ -1,0 +1,248 @@
+{
+  "release_line": "v7.30",
+  "version": "7.30.28",
+  "generated_at": "2026-06-08T04:17:35.182196+00:00",
+  "ok": true,
+  "groups": [
+    {
+      "id": "f06_core_script_update_propagation",
+      "description": "Runtime update copies packaged core scripts through the F0.6 scripts shim and refreshes active version snapshots",
+      "command": [
+        "env",
+        "NEXO_NO_MODEL_DOWNLOAD=1",
+        "NEXO_LOCAL_MODELS_NO_DOWNLOAD=1",
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_startup_preflight.py::test_copy_runtime_from_source_updates_core_script_through_f06_shim",
+        "tests/test_startup_preflight.py::test_copy_runtime_from_source_preserves_personal_script_collision",
+        "tests/test_auto_update_f06_shims.py::test_post_install_hook_promotes_f06_core_scripts_from_legacy_conflict",
+        "tests/test_auto_update_f06_shims.py::test_post_install_hook_refreshes_core_current_snapshot_even_same_version",
+        "tests/test_auto_update_f06_shims.py::test_existing_guardian_hook_runs_f06_runtime_repairs_for_old_hook_lists",
+        "tests/test_cli_scripts.py::TestRuntimeUpdate::test_update_uses_recorded_source_repo",
+        "tests/test_cli_scripts.py::TestRuntimeUpdate::test_update_reports_personal_schedule_self_heal"
+      ],
+      "targets": [
+        "tests/test_startup_preflight.py::test_copy_runtime_from_source_updates_core_script_through_f06_shim",
+        "tests/test_startup_preflight.py::test_copy_runtime_from_source_preserves_personal_script_collision",
+        "tests/test_auto_update_f06_shims.py::test_post_install_hook_promotes_f06_core_scripts_from_legacy_conflict",
+        "tests/test_auto_update_f06_shims.py::test_post_install_hook_refreshes_core_current_snapshot_even_same_version",
+        "tests/test_auto_update_f06_shims.py::test_existing_guardian_hook_runs_f06_runtime_repairs_for_old_hook_lists",
+        "tests/test_cli_scripts.py::TestRuntimeUpdate::test_update_uses_recorded_source_repo",
+        "tests/test_cli_scripts.py::TestRuntimeUpdate::test_update_reports_personal_schedule_self_heal"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 41.08,
+      "stdout": ".......                                                                  [100%]Running teardown with pytest sessionfinish...\n\n7 passed in 13.87s\n",
+      "stderr": ""
+    },
+    {
+      "id": "maintenance_diagnostics_self_heal",
+      "description": "Runtime maintenance diagnostics stay quiet when the installation is healthy and watchdog observes live work without warning",
+      "command": [
+        "env",
+        "NEXO_NO_MODEL_DOWNLOAD=1",
+        "NEXO_LOCAL_MODELS_NO_DOWNLOAD=1",
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_doctor.py::TestRuntimeChecks::test_launchagent_expectations_preserve_declared_weekly_schedule",
+        "tests/test_doctor.py::TestRuntimeChecks::test_launchagent_expectations_support_multiple_weekdays",
+        "tests/test_doctor.py::TestRuntimeChecks::test_release_trace_hygiene_flags_stale_audit_artifacts",
+        "tests/test_doctor.py::TestRuntimeChecks::test_release_trace_hygiene_is_filtered_from_installation_live",
+        "tests/test_doctor.py::TestRuntimeChecks::test_automation_telemetry_tolerates_high_coverage_sparse_usage_gaps",
+        "tests/test_doctor.py::TestRuntimeChecks::test_automation_telemetry_still_warns_on_material_usage_gaps",
+        "tests/test_doctor.py::TestRuntimeChecks::test_local_index_hygiene_retries_transient_db_lock",
+        "tests/test_doctor.py::TestRuntimeChecks::test_local_index_hygiene_quick_truncation_without_residue_is_info",
+        "tests/test_shell_runtime_path_contract.py::test_watchdog_uses_runtime_paths_and_personal_config",
+        "tests/test_shell_runtime_path_contract.py::test_watchdog_keeps_alive_in_flight_work_observational",
+        "tests/test_watchdog_in_flight.py::test_watchdog_treats_fresh_in_flight_row_as_healthy",
+        "tests/test_watchdog_in_flight.py::test_watchdog_observes_long_in_flight_with_alive_process"
+      ],
+      "targets": [
+        "tests/test_doctor.py::TestRuntimeChecks::test_launchagent_expectations_preserve_declared_weekly_schedule",
+        "tests/test_doctor.py::TestRuntimeChecks::test_launchagent_expectations_support_multiple_weekdays",
+        "tests/test_doctor.py::TestRuntimeChecks::test_release_trace_hygiene_flags_stale_audit_artifacts",
+        "tests/test_doctor.py::TestRuntimeChecks::test_release_trace_hygiene_is_filtered_from_installation_live",
+        "tests/test_doctor.py::TestRuntimeChecks::test_automation_telemetry_tolerates_high_coverage_sparse_usage_gaps",
+        "tests/test_doctor.py::TestRuntimeChecks::test_automation_telemetry_still_warns_on_material_usage_gaps",
+        "tests/test_doctor.py::TestRuntimeChecks::test_local_index_hygiene_retries_transient_db_lock",
+        "tests/test_doctor.py::TestRuntimeChecks::test_local_index_hygiene_quick_truncation_without_residue_is_info",
+        "tests/test_shell_runtime_path_contract.py::test_watchdog_uses_runtime_paths_and_personal_config",
+        "tests/test_shell_runtime_path_contract.py::test_watchdog_keeps_alive_in_flight_work_observational",
+        "tests/test_watchdog_in_flight.py::test_watchdog_treats_fresh_in_flight_row_as_healthy",
+        "tests/test_watchdog_in_flight.py::test_watchdog_observes_long_in_flight_with_alive_process"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 3.81,
+      "stdout": "............                                                             [100%]Running teardown with pytest sessionfinish...\n\n12 passed in 1.28s\n",
+      "stderr": ""
+    },
+    {
+      "id": "product_surface_alignment_contract",
+      "description": "Product Knowledge catalog is aligned with managed backend route families",
+      "command": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "scripts/verify_product_surface_alignment.py",
+        "--require-backend"
+      ],
+      "targets": [
+        "scripts/verify_product_surface_alignment.py",
+        "--require-backend"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 0.04,
+      "stdout": "{\n  \"backend_root\": \"/Users/franciscoc/Documents/_PhpstormProjects/nexo-desktop-web\",\n  \"errors\": [],\n  \"ok\": true,\n  \"schema_version\": 1,\n  \"surfaces_checked\": 6,\n  \"warnings\": []\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "product_knowledge_catalog",
+      "description": "Structured Product Knowledge validates catalog, system entries, and surface alignment",
+      "command": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "scripts/verify_product_kb.py"
+      ],
+      "targets": [
+        "scripts/verify_product_kb.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 0.02,
+      "stdout": "{\n  \"capability_count\": 10,\n  \"errors\": [],\n  \"ok\": true,\n  \"surface_alignment\": {\n    \"backend_root\": \"/Users/franciscoc/Documents/_PhpstormProjects/nexo-desktop-web\",\n    \"errors\": [],\n    \"ok\": true,\n    \"schema_version\": 1,\n    \"surfaces_checked\": 6,\n    \"warnings\": []\n  },\n  \"system_catalog_entry_count\": 15\n}\n",
+      "stderr": ""
+    },
+    {
+      "id": "product_knowledge_tests",
+      "description": "Product Knowledge search, answers, handlers, and surface drift tests stay coherent",
+      "command": [
+        "env",
+        "NEXO_NO_MODEL_DOWNLOAD=1",
+        "NEXO_LOCAL_MODELS_NO_DOWNLOAD=1",
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_product_knowledge.py",
+        "tests/test_product_surface_alignment.py"
+      ],
+      "targets": [
+        "tests/test_product_knowledge.py",
+        "tests/test_product_surface_alignment.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 2.92,
+      "stdout": "........                                                                 [100%]Running teardown with pytest sessionfinish...\n\n8 passed in 0.99s\n",
+      "stderr": ""
+    },
+    {
+      "id": "managed_mcp_client_sync_release_gate",
+      "description": "Client sync writes managed MCP defaults only after reconcile apply reports required providers healthy",
+      "command": [
+        "env",
+        "NEXO_NO_MODEL_DOWNLOAD=1",
+        "NEXO_LOCAL_MODELS_NO_DOWNLOAD=1",
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_managed_mcp.py::test_client_sync_skips_managed_defaults_without_healthy_providers",
+        "tests/test_managed_mcp.py::test_client_sync_writes_managed_defaults_after_reconcile_apply_ok",
+        "tests/test_managed_mcp.py::test_client_sync_removes_nexo_owned_stale_entries_when_staging_fails",
+        "tests/test_managed_mcp.py::test_codex_sync_removes_nexo_owned_toml_entries_when_staging_fails",
+        "tests/test_managed_mcp.py::test_codex_sync_preserves_user_owned_same_name_when_staging_fails",
+        "tests/test_managed_mcp_release_gate.py"
+      ],
+      "targets": [
+        "tests/test_managed_mcp.py::test_client_sync_skips_managed_defaults_without_healthy_providers",
+        "tests/test_managed_mcp.py::test_client_sync_writes_managed_defaults_after_reconcile_apply_ok",
+        "tests/test_managed_mcp.py::test_client_sync_removes_nexo_owned_stale_entries_when_staging_fails",
+        "tests/test_managed_mcp.py::test_codex_sync_removes_nexo_owned_toml_entries_when_staging_fails",
+        "tests/test_managed_mcp.py::test_codex_sync_preserves_user_owned_same_name_when_staging_fails",
+        "tests/test_managed_mcp_release_gate.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 3.11,
+      "stdout": "........                                                                 [100%]Running teardown with pytest sessionfinish...\n\n8 passed in 0.70s\n",
+      "stderr": ""
+    },
+    {
+      "id": "managed_mcp_runtime_package_contract",
+      "description": "Packaged runtime copies managed_mcp package and managed MCP runner",
+      "command": [
+        "env",
+        "NEXO_NO_MODEL_DOWNLOAD=1",
+        "NEXO_LOCAL_MODELS_NO_DOWNLOAD=1",
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_managed_mcp.py::test_managed_mcp_runtime_copy_includes_package_and_runner"
+      ],
+      "targets": [
+        "tests/test_managed_mcp.py::test_managed_mcp_runtime_copy_includes_package_and_runner"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 2.48,
+      "stdout": ".                                                                        [100%]Running teardown with pytest sessionfinish...\n\n1 passed in 0.14s\n",
+      "stderr": ""
+    },
+    {
+      "id": "managed_mcp_latest_lock",
+      "description": "Managed MCP provider locks are pinned to npm latest before release",
+      "command": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "scripts/verify_managed_mcp_lock.py"
+      ],
+      "targets": [
+        "scripts/verify_managed_mcp_lock.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 2.16,
+      "stdout": "[managed-mcp-lock] OK (5 npm providers pinned to latest)\n",
+      "stderr": ""
+    },
+    {
+      "id": "tool_map_contract",
+      "description": "Server tool map includes managed MCP, closure-plane, product and opportunity tools",
+      "command": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "scripts/verify_tool_map.py"
+      ],
+      "targets": [
+        "scripts/verify_tool_map.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 0.03,
+      "stdout": "  tool-enforcement-map.json is in sync with code (364 tools)\n",
+      "stderr": ""
+    },
+    {
+      "id": "release_surface_contract",
+      "description": "Release-facing public surfaces are synchronized for v7.30.28",
+      "command": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "scripts/verify_release_readiness.py",
+        "--ci"
+      ],
+      "targets": [
+        "scripts/verify_release_readiness.py",
+        "--ci"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 111.48,
+      "stdout": "[sync-release-artifacts] OK\n........................................................................ [ 29%]\n........................................................................ [ 58%]\n........................................................................ [ 87%]\n..............................                                           [100%]Running teardown with pytest sessionfinish...\n\n246 passed in 108.35s (0:01:48)\n[client-parity] docs OK\n[client-parity] parity tests OK\n[release-readiness] changelog OK (7.30.28)\n[release-readiness] repo public surfaces OK (/Users/franciscoc/Documents/_PhpstormProjects/nexo)\n[release-readiness] duplicate artifact hygiene OK (/Users/franciscoc/Documents/_PhpstormProjects/nexo)\n[release-readiness] $ /opt/homebrew/opt/python@3.14/bin/python3.14 scripts/sync_release_artifacts.py --check\n[release-readiness] $ /opt/homebrew/opt/python@3.14/bin/python3.14 scripts/verify_client_parity.py\n[release-readiness] website skipped (missing /Users/franciscoc/Documents/_PhpstormProjects/nexo-gh-pages)\n[release-readiness] OK\n",
+      "stderr": ""
+    }
+  ]
+}
