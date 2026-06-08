@@ -23,6 +23,30 @@ def _now_text() -> str:
     return datetime.datetime.now().isoformat(timespec="seconds")
 
 
+def _run_timestamp_sort_key(value: str | None) -> tuple[int, str]:
+    text = str(value or "").strip()
+    if not text:
+        return (0, "")
+    normalized = text.replace("Z", "+00:00")
+    try:
+        parsed = datetime.datetime.fromisoformat(normalized)
+    except ValueError:
+        return (1, text)
+    if parsed.tzinfo is not None:
+        parsed = parsed.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+    return (2, parsed.isoformat(timespec="seconds"))
+
+
+def _newer_run(candidate: dict | None, current: dict | None) -> dict | None:
+    if not candidate or not candidate.get("started_at"):
+        return current
+    if not current or not current.get("started_at"):
+        return candidate
+    if _run_timestamp_sort_key(candidate.get("started_at")) > _run_timestamp_sort_key(current.get("started_at")):
+        return candidate
+    return current
+
+
 def _get_db():
     """Resolve db._core lazily so reload-heavy tests use the live connection module."""
     return importlib.import_module("db._core").get_db()
@@ -406,11 +430,16 @@ def list_personal_scripts(include_disabled: bool = True, *, include_core: bool =
                 schedule["last_exit_code"] = latest["exit_code"]
         script["schedules"] = script_schedules
         script["has_schedule"] = bool(script_schedules)
-        latest = None
+        latest = _newer_run(
+            {"started_at": script.get("last_run_at"), "exit_code": script.get("last_exit_code")},
+            None,
+        )
         for schedule in script_schedules:
             started_at = schedule.get("last_run_at")
-            if started_at and (latest is None or started_at > latest.get("started_at", "")):
-                latest = {"started_at": started_at, "exit_code": schedule.get("last_exit_code")}
+            latest = _newer_run(
+                {"started_at": started_at, "exit_code": schedule.get("last_exit_code")},
+                latest,
+            )
         if latest:
             script["last_run_at"] = latest["started_at"]
             script["last_exit_code"] = latest["exit_code"]

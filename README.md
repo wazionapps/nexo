@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.30.32` is the current packaged-runtime line. Patch release over v7.30.31 - packaged update/doctor now repair npm/npx wrapper drift, archive stale personal script backups, validate observable automation health contracts, and block legacy Claude/Codex project memory writes.
+Version `7.30.33` is the current packaged-runtime line. Patch release over v7.30.32 - personal agent/script status now keeps the newest real run between manual executions and cron history, so a successful manual agent run cannot be hidden behind an older scheduled failure.
+
+Previously in `7.30.32`: patch release over v7.30.31 - packaged update/doctor now repair npm/npx wrapper drift, archive stale personal script backups, validate observable automation health contracts, and block legacy Claude/Codex project memory writes.
 
 Previously in `7.30.31`: patch release over v7.30.30 - Core Rules now reach agents both through a compact managed bootstrap summary and task-specific `cortex/task_open` injection from the protected `core_rules` registry.
 

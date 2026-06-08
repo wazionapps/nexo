@@ -6,11 +6,13 @@
     "chrome-devtools-mcp": {
       "source_type": "npm",
       "package": "chrome-devtools-mcp",
-      "version": "1.1.1",
-      "integrity": "sha512-Fs/ASXAkQqvYCbJjHIx/pnShjyIoZoPxdg4J3wjaA9FLkRb2ngGnisu2AGcBIXdw5qrPkOuV/cOlGOonpsE1qw==",
-      "tarball": "https://registry.npmjs.org/chrome-devtools-mcp/-/chrome-devtools-mcp-1.1.1.tgz",
+      "version": "1.2.0",
+      "integrity": "sha512-xHd8hoLZQArDsYhu8OUHvKBIiihx1Co9DgAPHWaM4kzRf41TpZ0IuxKioIWTEGzFKpRqQzIxpFqydY4AKqP5sQ==",
+      "tarball": "https://registry.npmjs.org/chrome-devtools-mcp/-/chrome-devtools-mcp-1.2.0.tgz",
       "bin": "chrome-devtools-mcp",
-      "engines": {"node": "^20.19.0 || ^22.12.0 || >=23"}
+      "engines": {
+        "node": "^20.19.0 || ^22.12.0 || >=23"
+      }
     },
     "mac-use-mcp": {
       "source_type": "npm",
@@ -19,7 +21,9 @@
       "integrity": "sha512-UcVkzvHuw+f21nEZwb3MwdqWGxLK/nYlhN55SRD6FZ2yn2t3ji0zKLD2XvQLp0ugeYyS92TqVgnw6E4P5VB+bg==",
       "tarball": "https://registry.npmjs.org/mac-use-mcp/-/mac-use-mcp-1.1.1.tgz",
       "bin": "mac-use-mcp",
-      "engines": {"node": ">=22"}
+      "engines": {
+        "node": ">=22"
+      }
     },
     "native-devtools-mcp": {
       "source_type": "npm",
@@ -28,7 +32,9 @@
       "integrity": "sha512-TIR8QCKzYCaHY+N1IWB7OM6pZH49HJxRj1dZjT4RNkviA1QpgINm8H95ohMCbf4ZC5jdFssMlb9KmWNZnCeCSw==",
       "tarball": "https://registry.npmjs.org/native-devtools-mcp/-/native-devtools-mcp-0.10.1.tgz",
       "bin": "native-devtools-mcp",
-      "engines": {"node": ">=18"}
+      "engines": {
+        "node": ">=18"
+      }
     },
     "open-computer-use": {
       "source_type": "npm",
@@ -37,7 +43,7 @@
       "integrity": "sha512-KlOHmFvXHe2IEMGE/O+zMN5ASo+FQ42copj4j1xEOnyeLq4oxUxhtHqEdPUACCUcMZaHzKXfZboL1dk5a2GjLA==",
       "tarball": "https://registry.npmjs.org/open-computer-use/-/open-computer-use-0.1.52.tgz",
       "bin": "open-computer-use-mcp",
-      "engines": {"node": "^20.19.0 || ^22.12.0 || >=23"}
+      "engines": {}
     },
     "desktop-commander": {
       "source_type": "npm",
@@ -46,7 +52,9 @@
       "integrity": "sha512-ZgdBDihpaLfrzQQQGQCPmElYMx91oUXeVEWbxbygeUfq2aOZvHrcVMeuTGy9oMDp9vxjq6d/+ZGE0mQLJnAWkw==",
       "tarball": "https://registry.npmjs.org/@wonderwhy-er/desktop-commander/-/desktop-commander-0.2.42.tgz",
       "bin": "desktop-commander",
-      "engines": {"node": ">=18.0.0"}
+      "engines": {
+        "node": ">=18.0.0"
+      }
     }
   }
 }

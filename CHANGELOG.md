@@ -1,5 +1,12 @@
 # Changelog
 
+## [7.30.33] - 2026-06-08
+
+### Fixed - personal agent run state
+
+- **Personal script status now respects newer manual agent runs.** `list_personal_scripts()` compares the stored manual run timestamp against scheduled cron history and keeps the newest real execution, so `nexo agents status` no longer reports an agent as failing after a successful manual run.
+- **Nora-style agent registration is now covered by regression evidence.** A focused test reproduces a newer manual success plus older cron failure and proves the agent stays healthy without duplicating scripts or creating parallel orchestration.
+
 ## [7.30.32] - 2026-06-08
 
 ### Fixed - packaged update and automation health
