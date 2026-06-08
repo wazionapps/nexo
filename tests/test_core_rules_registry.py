@@ -75,3 +75,13 @@ def test_core_rules_sync_updates_non_empty_old_registry(isolated_db):
     row = conn.execute("SELECT rule, content_hash FROM core_rules WHERE id = 'I1'").fetchone()
     assert row["rule"] != "old text"
     assert row["content_hash"]
+
+
+def test_managed_bootstrap_templates_include_compact_core_rules_summary():
+    root = Path(__file__).resolve().parents[1]
+    for relative in ("templates/CLAUDE.md.template", "templates/CODEX.AGENTS.md.template"):
+        text = (root / relative).read_text()
+        assert "## Core Rules Summary" in text
+        assert "Check existing context, memory, tickets, files, credentials, and prior work before asking the user." in text
+        assert "Do not invent or deny NEXO capabilities without checking the live product/source of truth first." in text
+        assert "Close work only with evidence" in text

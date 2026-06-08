@@ -1,5 +1,21 @@
 # Changelog
 
+## [7.30.31] - 2026-06-08
+
+### Fixed - Core Rules prompt injection
+
+- **Cortex/task_open now inject product Core Rules instead of only legacy categories.** Task-specific decisions now pull relevant `product_core` and `bootstrap_contract` rules from the protected registry, including context-before-asking, real capability checks, continuity, evidence, and architecture-review rules.
+- **Managed Claude/Codex bootstraps now carry a compact Core Rules summary from the first turn.** The full registry remains in `core_rules`, while the startup prompt keeps the critical behavior visible before any contextual tool call runs.
+- **Regression coverage pins the injection path.** Tests prove `answer` and `edit` tasks receive product/bootstrap rules and that managed bootstrap templates include the compact rules summary.
+
+## [7.30.30] - 2026-06-08
+
+### Added - protected product Core Rules registry
+
+- **Brain now syncs product-managed Core Rules into the runtime DB on install and update.** `src/rules/core-rules.json` is the source of truth, while `core_rules` stores protected, versioned rows with provenance, content hashes, severity, and replacement metadata.
+- **The registry now includes bootstrap and product behavior rules.** New `bootstrap_contract` and `product_core` categories cover CORE/USER separation, memory authority, identity continuity, safe autonomy, capability verification, tenant boundaries, ticket reality checks, and reuse of prior work.
+- **Install/update paths now fail closed if Core Rules sync breaks.** DB migrations and package install/update flows keep the registry populated for fresh installs and existing runtimes.
+
 ## [7.30.29] - 2026-06-08
 
 ### Fixed - runtime disk guard

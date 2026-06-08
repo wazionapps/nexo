@@ -31,25 +31,159 @@ def _get_db():
     return get_db()
 
 
+_CLASSIC_RULE_CATEGORIES_BY_TASK = {
+    "edit": ["integrity", "execution"],
+    "execute": ["integrity", "execution", "delegation"],
+    "delegate": ["delegation"],
+    "analyze": ["execution", "memory"],
+    "answer": ["communication"],
+}
+
+_PRODUCT_RULE_IDS_BY_TASK = {
+    "answer": [
+        "PC1",   # Context before asking
+        "PC2",   # Capability before delegating work to the user
+        "PC4",   # Evidence before closure claims
+        "PC8",   # Do not invent product capabilities
+        "PC16",  # Continuity of identity and sessions
+        "PC19",  # Product language, not internal jargon
+        "PC24",  # Read what NEXO already wrote before acting
+        "PC25",  # External state claims require live evidence
+        "PC28",  # Check real capability before denying
+        "PC29",  # Operational explanation stays simple
+        "PC32",  # Reuse prior work before researching from zero
+        "MEMORY_AUTHORITY",
+        "IDENTITY_CONTINUITY",
+        "SAFE_AUTONOMY_FIRST",
+        "DEFERRED_TOOL_DISCOVERY",
+    ],
+    "analyze": [
+        "PC1",
+        "PC2",
+        "PC5",
+        "PC16",
+        "PC24",
+        "PC25",
+        "PC28",
+        "PC31",
+        "PC32",
+        "MEMORY_AUTHORITY",
+        "CORE_SYSTEM_AWARENESS",
+        "SAFE_AUTONOMY_FIRST",
+    ],
+    "edit": [
+        "PC3",
+        "PC4",
+        "PC5",
+        "PC18",
+        "PC24",
+        "PC25",
+        "PC30",
+        "PC31",
+        "PC32",
+        "RUNTIME_CORE_PROTECTED",
+        "MEMORY_AUTHORITY",
+        "SAFE_AUTONOMY_FIRST",
+    ],
+    "execute": [
+        "PC2",
+        "PC3",
+        "PC4",
+        "PC10",
+        "PC11",
+        "PC12",
+        "PC13",
+        "PC14",
+        "PC15",
+        "PC17",
+        "PC25",
+        "PC26",
+        "PC27",
+        "RUNTIME_CORE_PROTECTED",
+        "SAFE_AUTONOMY_FIRST",
+    ],
+    "delegate": [
+        "PC1",
+        "PC2",
+        "PC10",
+        "PC11",
+        "PC12",
+        "PC16",
+        "PC24",
+        "PC31",
+        "PC32",
+        "MEMORY_AUTHORITY",
+        "IDENTITY_CONTINUITY",
+    ],
+}
+
+_DEFAULT_PRODUCT_RULE_IDS = [
+    "PC1",
+    "PC2",
+    "PC4",
+    "PC24",
+    "PC25",
+    "PC28",
+    "PC32",
+    "MEMORY_AUTHORITY",
+    "SAFE_AUTONOMY_FIRST",
+]
+
+
+def _sync_core_rules_if_available() -> None:
+    try:
+        from plugins.core_rules import _sync_if_needed
+        _sync_if_needed()
+    except Exception:
+        pass
+
+
+def _rule_rows_for_ids(conn, ids: list[str]) -> list:
+    unique_ids = list(dict.fromkeys(ids))
+    if not unique_ids:
+        return []
+    placeholders = ",".join("?" * len(unique_ids))
+    rows = conn.execute(
+        f"""SELECT id, rule
+            FROM core_rules
+            WHERE id IN ({placeholders}) AND is_active = 1 AND type = 'blocking'""",
+        unique_ids,
+    ).fetchall()
+    by_id = {row["id"]: row for row in rows}
+    return [by_id[rule_id] for rule_id in unique_ids if rule_id in by_id]
+
+
+def _classic_rule_rows_for_task(conn, task_type: str, excluded_ids: set[str], limit: int = 5) -> list:
+    categories = _CLASSIC_RULE_CATEGORIES_BY_TASK.get(task_type, ["integrity", "execution"])
+    placeholders = ",".join("?" * len(categories))
+    rows = conn.execute(
+        f"""SELECT id, rule
+            FROM core_rules
+            WHERE category IN ({placeholders})
+              AND is_active = 1
+              AND type = 'blocking'
+            ORDER BY importance DESC, category, id
+            LIMIT ?""",
+        [*categories, limit + len(excluded_ids)],
+    ).fetchall()
+    filtered = [row for row in rows if row["id"] not in excluded_ids]
+    return filtered[:limit]
+
+
 def _get_core_rules_for_task(task_type: str) -> list[str]:
     """Get relevant Core Rules for the given task type."""
-    conn = _get_db()
     try:
-        # Map task type to rule categories
-        category_map = {
-            "edit": ["integrity", "execution"],
-            "execute": ["integrity", "execution", "delegation"],
-            "delegate": ["delegation"],
-            "analyze": ["execution", "memory"],
-            "answer": ["communication"],
-        }
-        categories = category_map.get(task_type, ["integrity", "execution"])
-        placeholders = ",".join("?" * len(categories))
-
-        rows = conn.execute(
-            f"SELECT id, rule FROM core_rules WHERE category IN ({placeholders}) AND is_active = 1 AND type = 'blocking' ORDER BY importance DESC LIMIT 5",
-            categories
-        ).fetchall()
+        _sync_core_rules_if_available()
+        conn = _get_db()
+        clean_type = str(task_type or "").strip().lower()
+        product_ids = _PRODUCT_RULE_IDS_BY_TASK.get(clean_type, _DEFAULT_PRODUCT_RULE_IDS)
+        product_rows = _rule_rows_for_ids(conn, product_ids)
+        classic_rows = _classic_rule_rows_for_task(
+            conn,
+            clean_type,
+            {row["id"] for row in product_rows},
+        )
+        rows = classic_rows + product_rows
         return [f"{r['id']}: {r['rule']}" for r in rows]
     except Exception:
         return []

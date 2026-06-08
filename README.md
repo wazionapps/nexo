@@ -18,7 +18,11 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.30.28` is the current packaged-runtime line. Patch release over v7.30.27 - F0.6 runtime repairs now run through an existing post-install hook, so older updaters execute script-conflict recovery and `core/current` refresh on the first upgrade.
+Version `7.30.31` is the current packaged-runtime line. Patch release over v7.30.30 - Core Rules now reach agents both through a compact managed bootstrap summary and task-specific `cortex/task_open` injection from the protected `core_rules` registry.
+
+Previously in `7.30.30`: product-managed Core Rules now sync from `src/rules/core-rules.json` into protected DB rows for bootstrap and product behavior, with provenance, hashes, severity, and install/update synchronization.
+
+Previously in `7.30.29`: runtime disk guards now bound hourly database backups and pause Local Memory indexing before disk pressure becomes unsafe.
 
 Previously in `7.30.27`: patch release over v7.30.26 - post-update repair now recovers core scripts archived by older F0.6 shim reconciliation and refreshes `core/current` from `core`, so same-version snapshots cannot keep stale watchdog code.
 

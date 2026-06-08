@@ -3071,6 +3071,7 @@ def _m80_opportunity_orchestrator(conn):
 
 def _m81_core_rules_product_metadata(conn):
     """Add product-core provenance and protection metadata to core_rules."""
+    _m15_core_rules_tables(conn)
     _migrate_add_column(conn, "core_rules", "source_artifact", "TEXT DEFAULT ''")
     _migrate_add_column(conn, "core_rules", "source_anchor", "TEXT DEFAULT ''")
     _migrate_add_column(conn, "core_rules", "content_hash", "TEXT DEFAULT ''")
