@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.30.26] - 2026-06-08
+
+### Fixed - F0.6 core script update propagation
+
+- **`nexo update` now updates active core scripts through the F0.6 compatibility shim.** When `~/.nexo/scripts` is the expected symlink to `core/scripts`, runtime sync copies packaged scripts to the resolved core directory instead of replacing the symlink with a legacy directory.
+- **Core scripts are no longer frozen by non-script classification drift.** Personal script collisions are still preserved, but a shipped script such as `nexo-watchdog.sh` is overwritten from the packaged source even if an old registry scan classified the existing file as `non-script`.
+- **Release evidence now verifies the actual installed script path.** Tests pin the `~/.nexo/scripts -> core/scripts` update path so watchdog fixes in v7.30.25 reach the LaunchAgent-executed file after `nexo update`.
+
 ## [7.30.25] - 2026-06-08
 
 ### Fixed - Desktop maintenance self-heal diagnostics

@@ -4843,6 +4843,14 @@ def _copy_runtime_from_source(src_dir: Path, repo_dir: Path, dest: Path = NEXO_H
     script_conflicts: list[dict[str, str]] = []
     installed_script_classes = _installed_scripts_classification(dest)
 
+    def _preserve_f06_legacy_shims() -> bool:
+        if dest != NEXO_HOME:
+            return False
+        try:
+            return (dest / ".structure-version").read_text(encoding="utf-8").strip() == "F0.6"
+        except Exception:
+            return False
+
     for dirname in ("bin", "skills", "skills-core", "skills-runtime", "templates"):
         (dest / dirname).mkdir(parents=True, exist_ok=True)
 
@@ -4886,7 +4894,10 @@ def _copy_runtime_from_source(src_dir: Path, repo_dir: Path, dest: Path = NEXO_H
     scripts_dest = dest / "scripts"
     if scripts_src.is_dir():
         if scripts_dest.is_symlink():
-            _remove_runtime_copy_target(scripts_dest)
+            if _preserve_f06_legacy_shims():
+                scripts_dest = scripts_dest.resolve(strict=False)
+            else:
+                _remove_runtime_copy_target(scripts_dest)
         scripts_dest.mkdir(parents=True, exist_ok=True)
         for item in scripts_src.iterdir():
             if item.name == "__pycache__" or item.name.startswith(".") or is_duplicate_artifact_name(item):
@@ -4897,7 +4908,7 @@ def _copy_runtime_from_source(src_dir: Path, repo_dir: Path, dest: Path = NEXO_H
                 shutil.copytree(str(item), str(dst), ignore=_runtime_copy_ignore())
             elif item.is_file():
                 existing_class = installed_script_classes.get(item.name, "")
-                if dst.exists() and existing_class in {"personal", "non-script"}:
+                if dst.exists() and existing_class == "personal":
                     script_conflicts.append(
                         {
                             "name": item.name,

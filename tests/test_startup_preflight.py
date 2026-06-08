@@ -731,6 +731,35 @@ def test_copy_runtime_from_source_preserves_personal_script_collision(tmp_path, 
     assert stats["script_conflicts"][0]["name"] == "email-triage-agent.py"
 
 
+def test_copy_runtime_from_source_updates_core_script_through_f06_shim(tmp_path, monkeypatch):
+    import auto_update
+
+    runtime_home = tmp_path / "runtime"
+    src_dir = tmp_path / "repo" / "src"
+    repo_dir = tmp_path / "repo"
+    core_scripts = runtime_home / "core" / "scripts"
+    core_scripts.mkdir(parents=True)
+    (src_dir / "scripts").mkdir(parents=True)
+    (src_dir / "hooks").mkdir(parents=True)
+    (src_dir / "plugins").mkdir(parents=True)
+    (repo_dir / "templates").mkdir(parents=True)
+    (runtime_home / ".structure-version").write_text("F0.6\n")
+    (runtime_home / "scripts").symlink_to("core/scripts", target_is_directory=True)
+    (core_scripts / "nexo-watchdog.sh").write_text("#!/bin/bash\necho old\n")
+    (src_dir / "scripts" / "nexo-watchdog.sh").write_text("#!/bin/bash\necho new\n")
+
+    monkeypatch.setenv("NEXO_HOME", str(runtime_home))
+    monkeypatch.setattr(auto_update, "NEXO_HOME", runtime_home)
+    monkeypatch.setattr(auto_update, "_installed_scripts_classification", lambda dest: {"nexo-watchdog.sh": "non-script"})
+
+    stats = auto_update._copy_runtime_from_source(src_dir, repo_dir, runtime_home)
+
+    assert (runtime_home / "scripts").is_symlink()
+    assert (core_scripts / "nexo-watchdog.sh").read_text() == "#!/bin/bash\necho new\n"
+    assert stats["scripts"] == 1
+    assert stats["script_conflicts"] == []
+
+
 def test_restore_runtime_tree_replaces_symlink_targets(tmp_path):
     import auto_update
 
