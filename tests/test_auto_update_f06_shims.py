@@ -40,6 +40,56 @@ def test_ensure_f06_legacy_shims_moves_config_and_links(monkeypatch, tmp_path):
     assert (home / "brain").resolve() == canonical_brain.resolve()
 
 
+def test_post_install_hook_promotes_f06_core_scripts_from_legacy_conflict(monkeypatch, tmp_path):
+    home = tmp_path
+    (home / ".structure-version").write_text("F0.6\n")
+    core_scripts = home / "core" / "scripts"
+    conflict_scripts = home / "runtime" / "backups" / "legacy-shim-conflicts-2026-06-08-030808" / "scripts"
+    core_scripts.mkdir(parents=True)
+    conflict_scripts.mkdir(parents=True)
+
+    old_script = core_scripts / "nexo-watchdog.sh"
+    new_script = conflict_scripts / "nexo-watchdog.sh"
+    old_script.write_text("#!/bin/bash\necho old\n")
+    new_script.write_text("#!/bin/bash\necho new\n")
+    os.utime(old_script, (100, 100))
+    os.utime(new_script, (200, 200))
+
+    au = _reload_auto_update(monkeypatch, home)
+    changed, message = au._promote_f06_core_scripts_from_latest_legacy_conflict(home)
+
+    assert changed is True
+    assert message == "f06-core-scripts-promoted:1"
+    assert old_script.read_text() == "#!/bin/bash\necho new\n"
+    assert old_script.stat().st_mode & 0o111
+
+
+def test_post_install_hook_refreshes_core_current_snapshot_even_same_version(monkeypatch, tmp_path):
+    home = tmp_path
+    (home / ".structure-version").write_text("F0.6\n")
+    core = home / "core"
+    core_scripts = core / "scripts"
+    current_target = core / "versions" / "7.30.27"
+    current_scripts = current_target / "scripts"
+    core_scripts.mkdir(parents=True)
+    current_scripts.mkdir(parents=True)
+    (core / "cli.py").write_text("print('cli')\n")
+    (core / "package.json").write_text('{"version":"7.30.27"}\n')
+    (core_scripts / "nexo-watchdog.sh").write_text("#!/bin/bash\necho new\n")
+    (current_target / "cli.py").write_text("print('cli')\n")
+    (current_target / "package.json").write_text('{"version":"7.30.27"}\n')
+    (current_scripts / "nexo-watchdog.sh").write_text("#!/bin/bash\necho old\n")
+    (core / "current").symlink_to(Path("versions") / "7.30.27")
+
+    au = _reload_auto_update(monkeypatch, home)
+    changed, message = au._refresh_active_versioned_runtime_snapshot(home)
+
+    assert changed is True
+    assert message == "runtime-snapshot-refreshed:7.30.27"
+    assert (core / "current").is_symlink()
+    assert (core / "current" / "scripts" / "nexo-watchdog.sh").read_text() == "#!/bin/bash\necho new\n"
+
+
 def test_maybe_migrate_f06_promotes_packaged_code_into_core(monkeypatch, tmp_path):
     home = tmp_path
     (home / ".structure-version").write_text("F0.6\n")

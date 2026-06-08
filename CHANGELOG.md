@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.30.27] - 2026-06-08
+
+### Fixed - F0.6 snapshot repair after legacy script conflicts
+
+- **First-hop upgrades from older updaters now recover core script fixes archived by the F0.6 shim.** Fresh post-install hooks promote scripts from the latest `legacy-shim-conflicts-*` backup when an old updater copied packaged scripts into a temporary legacy `scripts/` directory and the shim archived them instead of replacing `core/scripts`.
+- **`core/current` is refreshed even when the version number is already current.** Runtime sync now rebuilds the active version snapshot from `core/` so Desktop and CLI paths that resolve through `core/current` cannot keep stale script bytes after a same-version repair.
+- **Regression coverage pins the real upgrade failure.** Tests cover legacy conflict recovery, same-version `core/current` refresh, the F0.6 `scripts -> core/scripts` path, personal script preservation, and runtime update self-heal behavior.
+
 ## [7.30.26] - 2026-06-08
 
 ### Fixed - F0.6 core script update propagation

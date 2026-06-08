@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-<meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.30.26 propagates core script fixes through F0.6 installs.">
+<meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.30.27 repairs F0.6 script conflicts and stale same-version snapshots.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.30.26 propagates core script fixes through F0.6 installs.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.30.27 repairs F0.6 script conflicts and stale same-version snapshots.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.30.26 propagates core script fixes through F0.6 installs.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.30.27 repairs F0.6 script conflicts and stale same-version snapshots.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.30.26 propagates core script fixes through F0.6 installs.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.30.27 repairs F0.6 script conflicts and stale same-version snapshots.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -87,13 +87,13 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v7.30.26 live</span>
+                    <span class="page-chip">v7.30.27 live</span>
                     <span class="page-chip">F0.6</span>
                     <span class="page-chip">Core script propagation</span>
                     <span class="page-chip">Patch release</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v73026" class="btn btn-primary">Start with v7.30.26</a>
+                    <a href="#v73027" class="btn btn-primary">Start with v7.30.27</a>
                     <a href="#v7122" class="btn btn-secondary">See v7.12.2</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -101,8 +101,8 @@
             <div class="page-visual">
                 <div class="page-stack">
                     <div class="page-stack-card">
-                        <strong>v7.30.26</strong>
-                        <span>Patch - runtime update now copies packaged core scripts through the F0.6 shim so watchdog fixes reach the active LaunchAgent path.</span>
+                        <strong>v7.30.27</strong>
+                        <span>Patch - post-update repair recovers scripts archived by older F0.6 shim reconciliation and refreshes core/current from core.</span>
                     </div>
                     <div class="page-stack-card">
                         <strong>v7.17.8</strong>
@@ -344,6 +344,14 @@
 <section class="section-compact" style="background:rgba(124,58,237,0.08);">
     <div class="container desktop-disclaimer" style="max-width:860px;font-size:13px;line-height:1.55;">
         <p><strong>About NEXO Desktop.</strong> NEXO Desktop is a separate closed-source companion client distributed at <a href="https://nexo-desktop.com/">nexo-desktop.com</a>. When a changelog entry mentions NEXO Desktop it refers to a coordinated client release that consumes the Brain CLI/MCP contract. Desktop source does not live in this repo; the Brain (AGPL-3.0) remains fully usable on its own from terminal, provider CLIs, or any MCP client.</p>
+    </div>
+</section>
+
+<section id="v73027" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.30.27 <span style="opacity:.5;font-weight:400;">&mdash; June 8, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">F0.6 snapshot repair</h2>
+        <p class="section-subtitle">Post-update repair now promotes core scripts archived by older F0.6 shim reconciliation and rebuilds <code>core/current</code> from <code>core</code>, so same-version runtime snapshots cannot keep stale watchdog code.</p>
     </div>
 </section>
 

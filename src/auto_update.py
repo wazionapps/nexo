@@ -5590,12 +5590,126 @@ def _maybe_promote_adaptive_weights_empirically(dest: Path) -> tuple[bool, str |
     return True, None
 
 
+def _promote_f06_core_scripts_from_latest_legacy_conflict(dest: Path) -> tuple[bool, str | None]:
+    """Recover core script updates archived by the pre-fix F0.6 shim path.
+
+    Older updaters copied packaged scripts into ``NEXO_HOME/scripts`` after
+    breaking the F0.6 compatibility symlink. The subsequent shim reconciliation
+    saw those fresh scripts as legacy conflicts and archived them under
+    ``runtime/backups/legacy-shim-conflicts-*`` instead of replacing
+    ``core/scripts``. This hook runs from the freshly-copied release tree, so it
+    can repair the first upgrade that introduces the updater fix.
+    """
+    try:
+        marker = (dest / ".structure-version").read_text(encoding="utf-8").strip()
+    except Exception:
+        marker = ""
+    if marker != "F0.6":
+        return False, None
+
+    core_scripts = dest / "core" / "scripts"
+    backups_dir = dest / "runtime" / "backups"
+    if not core_scripts.is_dir() or not backups_dir.is_dir():
+        return False, None
+
+    try:
+        candidates = sorted(
+            [p for p in backups_dir.glob("legacy-shim-conflicts-*") if (p / "scripts").is_dir()],
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+    except Exception:
+        return False, "f06-core-scripts-promote-warning:scan"
+
+    if not candidates:
+        return False, None
+
+    def _should_skip(path: Path) -> bool:
+        return (
+            path.name == "__pycache__"
+            or path.name.startswith(".")
+            or is_duplicate_artifact_name(path)
+        )
+
+    def _source_is_not_older(src: Path, dst: Path) -> bool:
+        if not dst.exists() and not dst.is_symlink():
+            return True
+        try:
+            return src.stat().st_mtime >= dst.stat().st_mtime
+        except Exception:
+            return False
+
+    copied = 0
+
+    def _copy_entry(src: Path, dst: Path) -> None:
+        nonlocal copied
+        if _should_skip(src):
+            return
+        if src.is_dir():
+            dst.mkdir(parents=True, exist_ok=True)
+            for child in src.iterdir():
+                _copy_entry(child, dst / child.name)
+            return
+        if not src.is_file() or not _source_is_not_older(src, dst):
+            return
+        try:
+            if dst.exists() and dst.is_file() and src.read_bytes() == dst.read_bytes():
+                return
+        except Exception:
+            pass
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(str(src), str(dst))
+        if src.suffix == ".sh":
+            dst.chmod(0o755)
+        copied += 1
+
+    for backup_root in candidates[:3]:
+        scripts_backup = backup_root / "scripts"
+        try:
+            for item in scripts_backup.iterdir():
+                _copy_entry(item, core_scripts / item.name)
+        except Exception as exc:
+            return False, f"f06-core-scripts-promote-warning:{exc.__class__.__name__}"
+        if copied:
+            return True, f"f06-core-scripts-promoted:{copied}"
+
+    return False, None
+
+
+def _refresh_active_versioned_runtime_snapshot(dest: Path) -> tuple[bool, str | None]:
+    """Rebuild ``core/current`` from ``core`` after an update.
+
+    Version equality is not enough evidence that the active snapshot contains
+    the same bytes as ``core``: a same-version repair can update ``core/scripts``
+    after ``core/current`` was already activated. Refreshing the snapshot keeps
+    Desktop/CLI clients that resolve through ``core/current`` on the repaired
+    runtime tree.
+    """
+    core_root = dest / "core"
+    if not core_root.is_dir() or not (core_root / "cli.py").is_file():
+        return False, None
+    try:
+        from runtime_versioning import activate_versioned_runtime_snapshot, read_version_for_path
+
+        version = str(read_version_for_path(core_root) or "").strip()
+        if not version:
+            return False, "runtime-snapshot-refresh-skipped:missing-version"
+        result = activate_versioned_runtime_snapshot(source_root=core_root, version=version)
+    except Exception as exc:
+        return False, f"runtime-snapshot-refresh-warning:{exc.__class__.__name__}"
+    if not result.get("ok"):
+        return False, f"runtime-snapshot-refresh-warning:{result.get('error', 'unknown')}"
+    return True, f"runtime-snapshot-refreshed:{version}"
+
+
 # Whitelist of post-install hooks to invoke from the fresh tree. Each entry
 # is the function name inside ``auto_update.py`` of the freshly-copied
 # code. The subprocess resolves them on the NEW module and calls
 # ``fn(dest)`` returning ``(bool, str | None)``. New hooks added in
 # future releases only need an entry here — no extra wiring.
 _POST_INSTALL_FRESH_HOOKS = (
+    ("f06-core-scripts-promoted", "_promote_f06_core_scripts_from_latest_legacy_conflict"),
+    ("runtime-snapshot-refreshed", "_refresh_active_versioned_runtime_snapshot"),
     ("guardian-hard-persisted", "_persist_guardian_hard_defaults"),
     ("adaptive-weights-promoted", "_maybe_promote_adaptive_weights_empirically"),
 )
