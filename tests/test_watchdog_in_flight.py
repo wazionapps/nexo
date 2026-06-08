@@ -112,9 +112,9 @@ def test_watchdog_treats_fresh_in_flight_row_as_healthy(tmp_path):
 
 
 @pytest.mark.skipif(sys.platform != "darwin", reason="macOS only")
-def test_watchdog_warns_on_long_in_flight_with_alive_process(tmp_path):
+def test_watchdog_observes_long_in_flight_with_alive_process(tmp_path):
     """An in-flight row older than 3× max_stale but whose worker process is
-    alive must WARN, not FAIL — long-running legitimate work."""
+    alive must stay observational, not FAIL — long-running legitimate work."""
     home = _bootstrap_home(tmp_path)
     db = home / "runtime" / "data" / "nexo.db"
     conn = sqlite3.connect(db)

@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.30.24` is the current packaged-runtime line. Patch release over v7.30.23 - client sync now stages and verifies managed MCP providers before writing Brain-owned default MCP entries into Claude, Codex, or Desktop configs.
+Version `7.30.25` is the current packaged-runtime line. Patch release over v7.30.24 - Desktop-facing maintenance diagnostics now self-heal or stay informational when the runtime is healthy, and watchdog uses the canonical cognitive DB layout.
+
+Previously in `7.30.24`: patch release over v7.30.23 - client sync now stages and verifies managed MCP providers before writing Brain-owned default MCP entries into Claude, Codex, or Desktop configs.
 
 Previously in `7.30.23`: patch release over v7.30.22 - Brain ships Opportunity Orchestrator Phase 1 for evidence-backed proactive preparation, read-only dry-run reports, bounded proposal queues, and feedback/suppression controls.
 

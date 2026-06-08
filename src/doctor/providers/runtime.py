@@ -50,6 +50,7 @@ WATCHDOG_FRESHNESS = 3600  # 1 hour (runs every 30 min)
 RUNNER_HEALTH_FRESHNESS = 43200  # 12 hours (runner-health-check runs every 6h)
 DEFAULT_CRON_THRESHOLD = 7200  # Fallback when manifest data is unavailable
 LIVE_PROTOCOL_SESSION_FRESHNESS = 1800  # 30 minutes
+AUTOMATION_TELEMETRY_USAGE_WARN_COVERAGE = 99.0
 SPECIAL_ENV_NORMALIZE_IDS = {"prevent-sleep", "tcc-approve"}
 OPTIONALS_FILE = paths.config_dir() / "optionals.json"
 SCHEDULE_FILE = paths.config_dir() / "schedule.json"
@@ -1071,6 +1072,43 @@ def _run_at_load_cron_ids() -> set[str]:
     return ids
 
 
+def _launchd_calendar_weekdays(schedule: dict) -> list[int]:
+    raw = schedule.get("weekdays") or schedule.get("Weekdays")
+    if raw is None and "weekday" in schedule:
+        raw = [schedule.get("weekday")]
+    if raw is None and "Weekday" in schedule:
+        raw = [schedule.get("Weekday")]
+    if isinstance(raw, str):
+        parts = [part.strip() for part in raw.replace("+", ",").split(",")]
+    elif isinstance(raw, (list, tuple, set)):
+        parts = list(raw)
+    else:
+        return []
+    selected: set[int] = set()
+    for part in parts:
+        try:
+            selected.add(int(part) % 7)
+        except Exception:
+            continue
+    if len(selected) >= 7:
+        return []
+    return [day for day in (1, 2, 3, 4, 5, 6, 0) if day in selected]
+
+
+def _launchd_calendar_interval(schedule: dict) -> dict | list[dict]:
+    base = {}
+    if "hour" in schedule:
+        base["Hour"] = schedule["hour"]
+    if "minute" in schedule:
+        base["Minute"] = schedule["minute"]
+    weekdays = _launchd_calendar_weekdays(schedule)
+    if weekdays:
+        if len(weekdays) == 1:
+            return {**base, "Weekday": weekdays[0]}
+        return [{**base, "Weekday": day} for day in weekdays]
+    return base
+
+
 def _launchagent_schedule_expectations() -> dict[str, dict]:
     expectations = {}
     for cron in _enabled_manifest_crons():
@@ -1096,14 +1134,7 @@ def _launchagent_schedule_expectations() -> dict[str, dict]:
             expected["schedule_configured"] = True
         elif "schedule" in cron:
             schedule = resolve_declared_schedule(cron)
-            cal = {}
-            if "hour" in schedule:
-                cal["Hour"] = schedule["hour"]
-            if "minute" in schedule:
-                cal["Minute"] = schedule["minute"]
-            if "weekday" in schedule:
-                cal["Weekday"] = schedule["weekday"]
-            expected["StartCalendarInterval"] = cal
+            expected["StartCalendarInterval"] = _launchd_calendar_interval(schedule)
             expected["RunAtLoad"] = True if should_run_at_load(cron) else None
             expected["schedule_configured"] = True
         elif should_run_at_load(cron):
@@ -3380,6 +3411,7 @@ def check_release_trace_hygiene() -> DoctorCheck:
             evidence=[],
             repair_plan=[],
             escalation_prompt="",
+            category="operator_history",
         )
 
     try:
@@ -3402,6 +3434,7 @@ def check_release_trace_hygiene() -> DoctorCheck:
                     evidence=[],
                     repair_plan=[],
                     escalation_prompt="",
+                    category="operator_history",
                 )
 
             stale_run_samples: list[str] = []
@@ -3465,6 +3498,7 @@ def check_release_trace_hygiene() -> DoctorCheck:
             evidence=[str(exc)],
             repair_plan=["Inspect workflow_goals/workflow_runs state manually"],
             escalation_prompt="Release traces could not be audited, so stale audit artifacts may be hiding in the runtime.",
+            category="operator_history",
         )
 
     evidence = [
@@ -3486,6 +3520,7 @@ def check_release_trace_hygiene() -> DoctorCheck:
                 "Keep workflow/goal state aligned with the real shipped state after releases",
             ],
             escalation_prompt="Audit/release traces drifted away from reality, which makes shipping state look ambiguous.",
+            category="operator_history",
         )
     return DoctorCheck(
         id="runtime.release_trace_hygiene",
@@ -3496,6 +3531,7 @@ def check_release_trace_hygiene() -> DoctorCheck:
         evidence=evidence,
         repair_plan=[],
         escalation_prompt="",
+        category="operator_history",
     )
 
 
@@ -3754,7 +3790,7 @@ def check_automation_telemetry(days: int = 7) -> DoctorCheck:
     status = "healthy"
     severity = "info"
     repair_plan: list[str] = []
-    if usage_coverage < 100.0 and missing_usage_runs > 1:
+    if usage_coverage < AUTOMATION_TELEMETRY_USAGE_WARN_COVERAGE and missing_usage_runs > 1:
         status = "degraded"
         severity = "warn"
         repair_plan.append("Restore backend usage parsing so automation runs always emit token telemetry")
@@ -3933,10 +3969,21 @@ def check_local_index_hygiene(fix: bool = False) -> DoctorCheck:
     try:
         from local_context import api as local_context_api
 
-        try:
-            result = local_context_api.local_index_hygiene(fix=fix, quick=not fix)
-        except TypeError:
-            result = local_context_api.local_index_hygiene(fix=fix)
+        result = None
+        for attempt in range(3):
+            try:
+                try:
+                    result = local_context_api.local_index_hygiene(fix=fix, quick=not fix)
+                except TypeError:
+                    result = local_context_api.local_index_hygiene(fix=fix)
+                break
+            except sqlite3.OperationalError as exc:
+                if "locked" not in str(exc).lower() or attempt >= 2:
+                    raise
+                time.sleep(0.2 * (attempt + 1))
+        if result is None:
+            raise RuntimeError("local_index_hygiene returned no result")
+
         residue = result.get("residue") or {}
         cleanup = result.get("cleanup") or {}
         privacy = result.get("privacy") or {}
@@ -3958,13 +4005,18 @@ def check_local_index_hygiene(fix: bool = False) -> DoctorCheck:
             "privacy_truncated=" + str(privacy_truncated),
         ]
         evidence.extend(f"root={path}" for path in suspect_roots[:5])
-        if residue_total == 0 and privacy_residue_total == 0 and not suspect_roots and not privacy_truncated:
+        if residue_total == 0 and privacy_residue_total == 0 and not suspect_roots:
+            summary = (
+                "Local memory index quick scan found no residue"
+                if privacy_truncated
+                else "Local memory index hygiene is clean"
+            )
             return DoctorCheck(
                 id="runtime.local_index_hygiene",
                 tier="runtime",
                 status="healthy",
                 severity="info",
-                summary="Local memory index hygiene is clean",
+                summary=summary,
                 evidence=evidence,
                 repair_plan=[],
             )

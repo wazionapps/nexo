@@ -23,6 +23,8 @@ LOG_DIR="$NEXO_HOME/runtime/logs"
 [ ! -d "$LOG_DIR" ] && [ -d "$NEXO_HOME/logs" ] && LOG_DIR="$NEXO_HOME/logs"
 DATA_DIR="$NEXO_HOME/runtime/data"
 [ ! -d "$DATA_DIR" ] && [ -d "$NEXO_HOME/data" ] && DATA_DIR="$NEXO_HOME/data"
+COGNITIVE_DIR="$NEXO_HOME/runtime/cognitive"
+[ ! -d "$COGNITIVE_DIR" ] && COGNITIVE_DIR="$DATA_DIR"
 BACKUP_DIR="$NEXO_HOME/runtime/backups"
 [ ! -d "$BACKUP_DIR" ] && [ -d "$NEXO_HOME/backups" ] && BACKUP_DIR="$NEXO_HOME/backups"
 DB_PATH="$DATA_DIR/nexo.db"
@@ -841,8 +843,7 @@ for monitor in "${MONITORS[@]}"; do
             fi
           fi
         elif [ "$age" -gt $(( max_stale * 3 )) ]; then
-          [ "$status" = "PASS" ] && status="WARN"
-          details="${details}In-flight for ${stale_age} (long-running, process alive). "
+          details="${details}In-flight for ${stale_age} (long-running, process alive; observing). "
         else
           details="${details}In-flight (started ${stale_age}). "
         fi
@@ -1206,7 +1207,10 @@ fi
 # --- Cognitive DB check ---
 COG_STATUS="PASS"
 COG_DETAIL=""
-COG_DB="$DATA_DIR/cognitive.db"
+COG_DB="$COGNITIVE_DIR/cognitive.db"
+if [ ! -f "$COG_DB" ] && [ -f "$DATA_DIR/cognitive.db" ]; then
+  COG_DB="$DATA_DIR/cognitive.db"
+fi
 if [ -f "$COG_DB" ]; then
   COG_INT=$(sqlite3 "$COG_DB" "PRAGMA integrity_check;" 2>/dev/null || echo "CORRUPT")
   if [ "$COG_INT" != "ok" ]; then

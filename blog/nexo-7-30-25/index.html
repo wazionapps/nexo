@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEXO 7.30.25: maintenance self-heal diagnostics</title>
+    <meta name="description" content="NEXO Brain 7.30.25 keeps healthy maintenance diagnostics quiet for Desktop users, aligns LaunchAgent schedules, and updates watchdog runtime paths.">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-30-25/">
+</head>
+<body>
+    <main>
+        <p><a href="/blog/">Back to blog</a></p>
+        <h1>NEXO 7.30.25: maintenance self-heal diagnostics</h1>
+        <p><strong>June 8, 2026.</strong> This patch reduces false maintenance warnings for Desktop-facing installs. When maintenance is healthy, self-healing or informational state now stays out of the user's way instead of asking a non-technical user to interpret internal repair details.</p>
+        <h2>What changed</h2>
+        <ul>
+            <li>LaunchAgent calendar checks now compare manifest <code>weekday</code>/<code>weekdays</code> schedules the same way cron sync declares them.</li>
+            <li>Release audit traces are classified as operator history instead of current installation health.</li>
+            <li>Sparse, high-coverage telemetry gaps remain informational instead of producing noisy maintenance warnings.</li>
+            <li>Local-index hygiene retries transient SQLite locks and treats truncated quick scans as clean when no residue is found.</li>
+            <li>Watchdog reads the canonical <code>runtime/cognitive/cognitive.db</code> path with legacy fallback and observes live long-running workers without warning.</li>
+        </ul>
+        <h2>Why it matters</h2>
+        <p>Desktop users should not need to understand LaunchAgents, SQLite locks, telemetry coverage, or watchdog internals. This release keeps those maintenance details inside Brain unless a real user-actionable problem remains.</p>
+        <p><a href="/changelog/#v73025">Read the full v7.30.25 changelog</a></p>
+    </main>
+</body>
+</html>

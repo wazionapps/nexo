@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.30.25] - 2026-06-08
+
+### Fixed - Desktop maintenance self-heal diagnostics
+
+- **Runtime doctor no longer turns healthy maintenance state into user-facing warnings.** LaunchAgent calendar expectations now match manifest `weekday`/`weekdays`, release audit traces are scoped as operator history, sparse high-coverage telemetry gaps stay informational, and local-index hygiene retries transient locks while treating quick-scan truncation without residue as clean.
+- **Watchdog now follows the current runtime layout and does not warn on live long-running work.** The cognitive DB check reads the canonical `runtime/cognitive/cognitive.db` path with legacy fallback, and in-flight cron rows with an alive worker remain observational while dead workers still fail and self-heal.
+- **Release evidence pins the maintenance contract.** Tests cover weekly/multi-day LaunchAgent schedules, installation-live filtering, telemetry thresholds, local-index retry/truncation, watchdog runtime paths, and live verification reached `21 healthy, 0 degraded, 0 critical`.
+
 ## [7.30.24] - 2026-06-07
 
 ### Fixed - managed MCP client sync release gate

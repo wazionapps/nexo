@@ -73,11 +73,18 @@ def test_watchdog_uses_runtime_paths_and_personal_config() -> None:
     assert 'CONFIG_DIR="$NEXO_HOME/personal/config"' in text
     assert 'LOG_DIR="$NEXO_HOME/runtime/logs"' in text
     assert 'DATA_DIR="$NEXO_HOME/runtime/data"' in text
+    assert 'COGNITIVE_DIR="$NEXO_HOME/runtime/cognitive"' in text
     assert 'BACKUP_DIR="$NEXO_HOME/runtime/backups"' in text
     assert "optionals_file = '$CONFIG_DIR/optionals.json'" in text
     assert "schedule_file = '$CONFIG_DIR/schedule.json'" in text
     assert "stdout_log = logs_dir + '/' + cid + '-stdout.log'" in text
-    assert 'COG_DB="$DATA_DIR/cognitive.db"' in text
+    assert 'COG_DB="$COGNITIVE_DIR/cognitive.db"' in text
+
+
+def test_watchdog_keeps_alive_in_flight_work_observational() -> None:
+    text = _read("src/scripts/nexo-watchdog.sh")
+    assert "long-running, process alive; observing" in text
+    assert 'status="WARN"\n          details="${details}In-flight for ${stale_age} (long-running' not in text
 
 
 def test_compaction_and_tool_log_hooks_use_runtime_layout() -> None:

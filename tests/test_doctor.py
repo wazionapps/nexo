@@ -857,6 +857,61 @@ class TestRuntimeChecks:
             "Weekday": 3,
         }
 
+    def test_launchagent_expectations_preserve_declared_weekly_schedule(self, nexo_home, monkeypatch):
+        from doctor.providers import runtime
+
+        (nexo_home / "config").mkdir(parents=True, exist_ok=True)
+        (nexo_home / "config" / "optionals.json").write_text("{}")
+        (nexo_home / "crons").mkdir(parents=True, exist_ok=True)
+        (nexo_home / "crons" / "manifest.json").write_text(json.dumps({
+            "crons": [
+                {
+                    "id": "followup-hygiene",
+                    "core": True,
+                    "schedule": {"hour": 5, "minute": 0, "weekday": 0},
+                }
+            ]
+        }))
+
+        monkeypatch.setenv("NEXO_HOME", str(nexo_home))
+        monkeypatch.setattr(runtime, "NEXO_HOME", nexo_home)
+        monkeypatch.setattr(runtime, "OPTIONALS_FILE", nexo_home / "config" / "optionals.json")
+        monkeypatch.setattr(runtime, "SCHEDULE_FILE", nexo_home / "config" / "schedule.json")
+
+        expectations = runtime._launchagent_schedule_expectations()
+        assert expectations["followup-hygiene"]["StartCalendarInterval"] == {
+            "Hour": 5,
+            "Minute": 0,
+            "Weekday": 0,
+        }
+
+    def test_launchagent_expectations_support_multiple_weekdays(self, nexo_home, monkeypatch):
+        from doctor.providers import runtime
+
+        (nexo_home / "config").mkdir(parents=True, exist_ok=True)
+        (nexo_home / "config" / "optionals.json").write_text("{}")
+        (nexo_home / "crons").mkdir(parents=True, exist_ok=True)
+        (nexo_home / "crons" / "manifest.json").write_text(json.dumps({
+            "crons": [
+                {
+                    "id": "morning-agent",
+                    "core": True,
+                    "schedule": {"hour": 7, "minute": 0, "weekdays": [2, 6]},
+                }
+            ]
+        }))
+
+        monkeypatch.setenv("NEXO_HOME", str(nexo_home))
+        monkeypatch.setattr(runtime, "NEXO_HOME", nexo_home)
+        monkeypatch.setattr(runtime, "OPTIONALS_FILE", nexo_home / "config" / "optionals.json")
+        monkeypatch.setattr(runtime, "SCHEDULE_FILE", nexo_home / "config" / "schedule.json")
+
+        expectations = runtime._launchagent_schedule_expectations()
+        assert expectations["morning-agent"]["StartCalendarInterval"] == [
+            {"Hour": 7, "Minute": 0, "Weekday": 2},
+            {"Hour": 7, "Minute": 0, "Weekday": 6},
+        ]
+
     def test_launchagent_expectations_include_watch_paths(self, nexo_home, monkeypatch):
         from doctor.providers import runtime
 
@@ -1541,8 +1596,33 @@ class TestRuntimeChecks:
         check = runtime.check_release_trace_hygiene()
 
         assert check.status == "degraded"
+        assert check.category == "operator_history"
         assert any("WF-STALE-1" in item for item in check.evidence)
         assert any("WG-AUDIT-12345678" in item for item in check.evidence)
+
+    def test_release_trace_hygiene_is_filtered_from_installation_live(self, nexo_home, monkeypatch):
+        from doctor.models import DoctorCheck
+        from doctor.providers import runtime
+
+        checks = runtime._filter_runtime_checks_for_plane([
+            DoctorCheck(
+                id="runtime.release_trace_hygiene",
+                tier="runtime",
+                status="degraded",
+                severity="warn",
+                summary="Release trace hygiene needs cleanup",
+                category="operator_history",
+            ),
+            DoctorCheck(
+                id="runtime.launchagents",
+                tier="runtime",
+                status="healthy",
+                severity="info",
+                summary="LaunchAgents aligned",
+            ),
+        ], plane="installation_live")
+
+        assert [check.id for check in checks] == ["runtime.launchagents"]
 
     def test_transcript_source_parity_warns_when_codex_selected_without_sessions(self, nexo_home, monkeypatch):
         from doctor.providers import runtime
@@ -3091,6 +3171,75 @@ class TestRuntimeChecks:
         assert check.status == "healthy"
         assert any("missing_usage_runs=1" in item for item in check.evidence)
 
+    def test_automation_telemetry_tolerates_high_coverage_sparse_usage_gaps(self, nexo_home):
+        db_path = nexo_home / "data" / "nexo.db"
+        conn = sqlite3.connect(str(db_path))
+        conn.execute(
+            """CREATE TABLE automation_runs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                backend TEXT DEFAULT '',
+                model TEXT DEFAULT '',
+                reasoning_effort TEXT DEFAULT '',
+                input_tokens INTEGER DEFAULT 0,
+                cached_input_tokens INTEGER DEFAULT 0,
+                output_tokens INTEGER DEFAULT 0,
+                total_cost_usd REAL,
+                telemetry_source TEXT DEFAULT '',
+                cost_source TEXT DEFAULT '',
+                status TEXT DEFAULT 'ok',
+                metadata TEXT DEFAULT '{}',
+                created_at TEXT DEFAULT (datetime('now'))
+            )"""
+        )
+        conn.executemany(
+            """INSERT INTO automation_runs (
+                backend, input_tokens, output_tokens, total_cost_usd, cost_source, status, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))""",
+            [("codex", 120, 20, 0.12, "pricing_snapshot", "ok") for _ in range(497)]
+            + [("codex", 0, 0, 0.0, "pricing_snapshot", "ok") for _ in range(3)],
+        )
+        conn.commit()
+        conn.close()
+
+        from doctor.providers.runtime import check_automation_telemetry
+
+        check = check_automation_telemetry()
+        assert check.status == "healthy"
+        assert any("usage_coverage=99.4%" in item for item in check.evidence)
+        assert any("missing_usage_runs=3" in item for item in check.evidence)
+
+    def test_automation_telemetry_still_warns_on_material_usage_gaps(self, nexo_home):
+        db_path = nexo_home / "data" / "nexo.db"
+        conn = sqlite3.connect(str(db_path))
+        conn.execute(
+            """CREATE TABLE automation_runs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                backend TEXT DEFAULT '',
+                input_tokens INTEGER DEFAULT 0,
+                cached_input_tokens INTEGER DEFAULT 0,
+                output_tokens INTEGER DEFAULT 0,
+                total_cost_usd REAL,
+                cost_source TEXT DEFAULT '',
+                status TEXT DEFAULT 'ok',
+                created_at TEXT DEFAULT (datetime('now'))
+            )"""
+        )
+        conn.executemany(
+            """INSERT INTO automation_runs (
+                backend, input_tokens, output_tokens, total_cost_usd, cost_source, status, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))""",
+            [("codex", 120, 20, 0.12, "pricing_snapshot", "ok") for _ in range(7)]
+            + [("codex", 0, 0, 0.0, "pricing_snapshot", "ok") for _ in range(3)],
+        )
+        conn.commit()
+        conn.close()
+
+        from doctor.providers.runtime import check_automation_telemetry
+
+        check = check_automation_telemetry()
+        assert check.status == "degraded"
+        assert any("usage_coverage=70.0%" in item for item in check.evidence)
+
     def test_automation_telemetry_excludes_interactive_desktop_sessions_from_scored_coverage(self, nexo_home):
         db_path = nexo_home / "data" / "nexo.db"
         conn = sqlite3.connect(str(db_path))
@@ -3169,6 +3318,64 @@ class TestRuntimeChecks:
         assert check.status == "healthy"
         assert any("scored_successful_runs=1" in item for item in check.evidence)
         assert any("headless_unmetered_runs_excluded=2" in item for item in check.evidence)
+
+    def test_local_index_hygiene_retries_transient_db_lock(self, nexo_home, monkeypatch):
+        from doctor.providers import runtime
+
+        calls = {"count": 0, "sleep": 0}
+
+        def fake_hygiene(*, fix=False, quick=True):
+            calls["count"] += 1
+            if calls["count"] == 1:
+                raise sqlite3.OperationalError("database is locked")
+            return {
+                "residue": {},
+                "cleanup": {},
+                "privacy": {"residue": {}, "cleanup": {}, "truncated": False, "quick": quick},
+                "removed_roots": [],
+                "quick": quick,
+            }
+
+        monkeypatch.setitem(
+            sys.modules,
+            "local_context",
+            SimpleNamespace(api=SimpleNamespace(local_index_hygiene=fake_hygiene)),
+        )
+        monkeypatch.setattr(runtime.time, "sleep", lambda _seconds: calls.__setitem__("sleep", calls["sleep"] + 1))
+
+        check = runtime.check_local_index_hygiene(fix=False)
+
+        assert check.status == "healthy"
+        assert calls == {"count": 2, "sleep": 1}
+
+    def test_local_index_hygiene_quick_truncation_without_residue_is_info(self, nexo_home, monkeypatch):
+        from doctor.providers import runtime
+
+        def fake_hygiene(*, fix=False, quick=True):
+            return {
+                "residue": {},
+                "cleanup": {},
+                "privacy": {
+                    "residue": {"assets": 0, "dirs": 0, "content_secret_assets": 0, "truncated": True},
+                    "cleanup": {},
+                    "truncated": True,
+                    "quick": quick,
+                },
+                "removed_roots": [],
+                "quick": quick,
+            }
+
+        monkeypatch.setitem(
+            sys.modules,
+            "local_context",
+            SimpleNamespace(api=SimpleNamespace(local_index_hygiene=fake_hygiene)),
+        )
+
+        check = runtime.check_local_index_hygiene(fix=False)
+
+        assert check.status == "healthy"
+        assert "quick scan" in check.summary
+        assert any("privacy_truncated=True" in item for item in check.evidence)
 
     def test_automation_caller_coverage_warns_on_core_cron_without_matching_caller(self, nexo_home):
         db_path = nexo_home / "data" / "nexo.db"

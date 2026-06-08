@@ -18,6 +18,7 @@ CLI_PY = os.path.join(os.path.dirname(__file__), "..", "src", "cli.py")
 def _subprocess_env():
     env = dict(os.environ)
     env.pop("PYTEST_CURRENT_TEST", None)
+    env.setdefault("NEXO_MANAGED_MCP_DISABLE", "1")
     return env
 
 
