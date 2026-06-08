@@ -1273,6 +1273,44 @@ class TestRuntimeChecks:
         assert any("desktop-managed Claude runtime missing or drifted" in item for item in check.evidence)
         assert any("npm-global" in item for item in check.repair_plan)
 
+    def test_packaged_update_npm_toolchain_reports_repaired_wrappers(self, nexo_home, monkeypatch):
+        from doctor.providers import runtime
+        from plugins import update
+
+        monkeypatch.setattr(update, "packaged_npm_toolchain_status", lambda repair=False: {
+            "ok": True,
+            "cmd": ["npm"],
+            "env": {},
+            "attempts": [{"cmd": ["npm"], "ok": True}],
+            "repaired": ["npm", "npx"] if repair else [],
+        })
+
+        check = runtime.check_packaged_update_npm_toolchain(fix=True)
+
+        assert check.status == "healthy"
+        assert check.fixed is True
+        assert "repaired wrappers: npm, npx" in check.summary
+
+    def test_personal_automation_health_warns_without_observable_contract(self, nexo_home):
+        from doctor.providers import runtime
+
+        scripts_dir = nexo_home / "personal" / "scripts"
+        scripts_dir.mkdir(parents=True, exist_ok=True)
+        (scripts_dir / "ps-weekly-shopify-health.sh").write_text(
+            "#!/bin/sh\n"
+            "# nexo: name=weekly-shopify-health\n"
+            "# nexo: runtime=shell\n"
+            "# nexo: schedule_required=true\n"
+            "# nexo: interval_seconds=3600\n"
+            "exit 0\n",
+            encoding="utf-8",
+        )
+
+        check = runtime.check_personal_automation_health_contracts()
+
+        assert check.status == "degraded"
+        assert any("no health_file contract" in item for item in check.evidence)
+
     def test_client_bootstrap_parity_warns_when_codex_bootstrap_missing(self, nexo_home, monkeypatch):
         from doctor.providers import runtime
 

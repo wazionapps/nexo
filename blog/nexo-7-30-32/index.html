@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEXO 7.30.32: packaged update and automation health</title>
+    <meta name="description" content="NEXO Brain 7.30.32 repairs packaged update npm wrapper recovery, scheduled automation health checks, stale script backup cleanup, and legacy memory write guards.">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-30-32/">
+</head>
+<body>
+    <main>
+        <p><a href="/blog/">Back to blog</a></p>
+        <h1>NEXO 7.30.32: packaged update and automation health</h1>
+        <p><strong>June 8, 2026.</strong> This patch closes update and observability gaps found in live runtime maintenance: broken packaged npm wrappers, stale personal script backup artifacts, scheduled automations without a health signal, and managed agents writing durable notes into legacy client memory files.</p>
+        <h2>What changed</h2>
+        <ul>
+            <li>Packaged update and doctor share the same npm toolchain probe and can repair broken NEXO-owned <code>npm</code>/<code>npx</code> wrappers before using npm.</li>
+            <li>Doctor can archive stale NEXO-owned personal script backup artifacts such as <code>.bak.*</code> files instead of reporting false duplicate-script warnings.</li>
+            <li>Scheduled personal automations can declare <code>health_file</code>, <code>health_max_age_seconds</code>, <code>health_nonempty</code>, and <code>health_must_contain</code> contracts so silent failures become visible.</li>
+            <li>Managed agent memory writes to legacy Claude/Codex project <code>MEMORY.md</code> paths are blocked; durable memory must go through NEXO Brain.</li>
+        </ul>
+        <h2>Why it matters</h2>
+        <p>NEXO should repair update prerequisites before asking the user, detect broken scheduled work before the operator notices manually, and keep memory authority inside the shared Brain instead of legacy client files.</p>
+        <p><a href="/changelog/#v73032">Read the full v7.30.32 changelog</a></p>
+    </main>
+</body>
+</html>

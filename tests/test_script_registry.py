@@ -639,6 +639,34 @@ class TestCoreFiltering:
         assert "my-tool" in names
         assert "email-monitor" not in names
 
+    def test_dot_bak_timestamp_artifacts_are_ignored_and_archived(self, scripts_dir):
+        from script_registry import archive_ignored_personal_script_artifacts
+
+        backup = scripts_dir / "ps-calendar-reservas-sync.py.bak.20260531-pre-fix-estados"
+        backup.write_text(
+            "#!/usr/bin/env python3\n"
+            "# nexo: name=calendar-reservas-sync\n"
+            "# nexo: runtime=python\n"
+            "# nexo: schedule_required=true\n"
+            "print('backup')\n"
+        )
+        (scripts_dir / "ps-calendar-reservas-sync.py").write_text(
+            "#!/usr/bin/env python3\n"
+            "# nexo: name=calendar-reservas-sync\n"
+            "# nexo: runtime=python\n"
+            "print('active')\n"
+        )
+
+        report = classify_scripts_dir()
+        classes = {entry["path"].split("/")[-1]: entry["classification"] for entry in report["entries"]}
+        assert classes[backup.name] == "ignored"
+
+        cleanup = archive_ignored_personal_script_artifacts(dry_run=False)
+        assert cleanup["ok"] is True
+        assert len(cleanup["archived"]) == 1
+        assert not backup.exists()
+        assert Path(cleanup["archived"][0]["backup_path"]).is_file()
+
     def test_classify_scripts_dir(self, scripts_dir):
         (scripts_dir / "nexo-immune.py").write_text("# core script\n")
         (scripts_dir / "my-tool.py").write_text("# nexo: name=my-tool\nprint('hi')\n")

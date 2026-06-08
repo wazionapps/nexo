@@ -575,6 +575,14 @@ def _is_legacy_client_memory_path(path_value: str) -> bool:
         return True
     if len(parts) >= 2 and parts[0] in {".claude", ".codex"} and parts[1] == "memories":
         return True
+    if (
+        len(parts) >= 5
+        and parts[0] in {".claude", ".codex"}
+        and parts[1] == "projects"
+        and parts[-2] == "memory"
+        and parts[-1] == "MEMORY.md"
+    ):
+        return True
     return False
 
 

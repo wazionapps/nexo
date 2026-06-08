@@ -652,6 +652,35 @@ def test_process_pre_tool_event_blocks_legacy_client_memory_write(guardrail_env,
     assert "legacy Claude/Codex MEMORY files are read-only" in message
 
 
+def test_process_pre_tool_event_blocks_project_legacy_memory_write(guardrail_env, monkeypatch, tmp_path):
+    legacy_home = tmp_path / "home"
+    target = legacy_home / ".claude" / "projects" / "-Users-franciscoc" / "memory" / "MEMORY.md"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("old", encoding="utf-8")
+
+    monkeypatch.setenv("HOME", str(legacy_home))
+    db, hook_guardrails = _reload_guardrail_stack()
+    db.init_db()
+    monkeypatch.setattr(hook_guardrails, "get_protocol_strictness", lambda: "strict")
+    db.register_session(
+        "nexo-2010-3013",
+        "project legacy memory write",
+        external_session_id="claude-memory-project-1",
+        session_client="claude_code",
+    )
+
+    result = hook_guardrails.process_pre_tool_event(
+        {
+            "session_id": "claude-memory-project-1",
+            "tool_name": "Write",
+            "tool_input": {"file_path": str(target)},
+        }
+    )
+
+    assert result["status"] == "blocked"
+    assert result["blocks"][0]["debt_type"] == "legacy_client_memory_write_blocked"
+
+
 def test_process_pre_tool_event_allows_legacy_memory_write_with_explicit_override(guardrail_env, monkeypatch, tmp_path):
     legacy_home = tmp_path / "home"
     target = legacy_home / ".codex" / "memories" / "legacy.md"

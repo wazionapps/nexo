@@ -102,6 +102,10 @@ METADATA_KEYS = {
     "agent_archived",
     "agent_enabled_before_archive",
     "agent_icon",
+    "health_file",
+    "health_max_age_seconds",
+    "health_nonempty",
+    "health_must_contain",
 }
 AGENT_METADATA_KEYS = {
     "agent",
@@ -125,6 +129,10 @@ METADATA_WRITE_ORDER = [
     "agent_archived",
     "agent_enabled_before_archive",
     "agent_icon",
+    "health_file",
+    "health_max_age_seconds",
+    "health_nonempty",
+    "health_must_contain",
     "cron_id",
     "schedule_required",
     "schedule",
@@ -178,6 +186,10 @@ PRODUCT_AUTOMATION_NAMES = (
     "email-monitor",
     "followup-runner",
     "morning-agent",
+)
+_BACKUP_ARTIFACT_RE = re.compile(
+    r"(?:\.bak(?:[-.][\w.-]+)?|\.backup(?:[-.][\w.-]+)?|\.old(?:[-.][\w.-]+)?)$",
+    re.IGNORECASE,
 )
 
 
@@ -531,7 +543,7 @@ def _is_ignored(path: Path) -> bool:
     """Check if file should be ignored entirely."""
     if path.name in _IGNORED_FILES:
         return True
-    if re.search(r"\.bak(?:-[\w.-]+)?$", path.name, re.IGNORECASE):
+    if _BACKUP_ARTIFACT_RE.search(path.name):
         return True
     if path.name.endswith("~"):
         return True
@@ -545,6 +557,38 @@ def _is_ignored(path: Path) -> bool:
         if parent.name in _IGNORED_DIRS:
             return True
     return False
+
+
+def archive_ignored_personal_script_artifacts(*, dry_run: bool = True) -> dict:
+    """Move ignored backup artifacts with NEXO metadata out of personal/scripts."""
+    scripts_dir = get_scripts_dir()
+    result = {"ok": True, "candidates": [], "archived": [], "errors": []}
+    if not scripts_dir.is_dir():
+        return result
+    backup_root = paths.backups_dir() / "personal-script-backups"
+    for path in sorted(scripts_dir.iterdir()):
+        if not path.is_file() or not _BACKUP_ARTIFACT_RE.search(path.name):
+            continue
+        meta = parse_inline_metadata(path)
+        if not meta:
+            continue
+        item = {"path": str(path), "name": str(meta.get("name") or path.name)}
+        result["candidates"].append(item)
+        if dry_run:
+            continue
+        try:
+            backup_root.mkdir(parents=True, exist_ok=True)
+            target = backup_root / f"{int(time.time())}-{path.name}"
+            counter = 1
+            while target.exists():
+                target = backup_root / f"{int(time.time())}-{counter}-{path.name}"
+                counter += 1
+            shutil.move(str(path), str(target))
+            result["archived"].append({**item, "backup_path": str(target)})
+        except Exception as exc:
+            result["ok"] = False
+            result["errors"].append({"path": str(path), "error": str(exc)})
+    return result
 
 
 def _is_script_candidate(path: Path, metadata: dict | None = None) -> bool:

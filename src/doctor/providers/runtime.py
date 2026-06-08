@@ -2016,9 +2016,14 @@ def check_personal_script_registry(fix: bool = False) -> DoctorCheck:
     """Check the DB-backed personal script registry against filesystem/plists."""
     try:
         from db import init_db, get_personal_script_health_report
-        from script_registry import repair_orphan_personal_schedule_metadata, sync_personal_scripts
+        from script_registry import (
+            archive_ignored_personal_script_artifacts,
+            repair_orphan_personal_schedule_metadata,
+            sync_personal_scripts,
+        )
 
         init_db()
+        backup_cleanup = archive_ignored_personal_script_artifacts(dry_run=not fix)
         if fix:
             repair_orphan_personal_schedule_metadata(dry_run=False)
         sync_personal_scripts(prune_missing=True)
@@ -2032,7 +2037,17 @@ def check_personal_script_registry(fix: bool = False) -> DoctorCheck:
             summary=f"Personal scripts registry check failed: {e}",
         )
 
-    issues = report.get("issues", [])
+    issues = list(report.get("issues", []))
+    backup_candidates = backup_cleanup.get("candidates", []) if isinstance(backup_cleanup, dict) else []
+    backup_archived = backup_cleanup.get("archived", []) if isinstance(backup_cleanup, dict) else []
+    if backup_candidates and not fix:
+        issues.append({
+            "severity": "warn",
+            "message": (
+                f"{len(backup_candidates)} ignored personal script backup artifact(s) still carry NEXO metadata; "
+                "doctor --fix will archive them outside personal/scripts"
+            ),
+        })
     if not issues:
         audit = report.get("schedule_audit", {}).get("summary", {})
         summary = (
@@ -2047,6 +2062,8 @@ def check_personal_script_registry(fix: bool = False) -> DoctorCheck:
             )
         if fix:
             summary += " (fixed)"
+        if backup_archived:
+            summary += f", archived {len(backup_archived)} stale backup artifact(s)"
         return DoctorCheck(
             id="runtime.personal_scripts",
             tier="runtime",
@@ -2075,6 +2092,103 @@ def check_personal_script_registry(fix: bool = False) -> DoctorCheck:
         escalation_prompt=(
             "Personal script metadata, files, and personal cron schedules are out of sync. "
             "Reconcile NEXO_HOME/personal/scripts with personal LaunchAgents without treating them as core crons."
+        ),
+    )
+
+
+def _truthy_metadata(value) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _metadata_int(value, fallback: int = 0) -> int:
+    try:
+        return int(str(value or "").strip())
+    except Exception:
+        return fallback
+
+
+def _resolve_personal_health_path(raw: str) -> Path:
+    path = Path(str(raw or "").strip()).expanduser()
+    if path.is_absolute():
+        return path
+    return NEXO_HOME / path
+
+
+def check_personal_automation_health_contracts() -> DoctorCheck:
+    """Check observable success contracts for scheduled personal automations."""
+    try:
+        from script_registry import list_scripts
+        scripts = list_scripts(include_core=False)
+    except Exception as exc:
+        return DoctorCheck(
+            id="runtime.personal_automation_health",
+            tier="runtime",
+            status="degraded",
+            severity="warn",
+            summary=f"Personal automation health check failed: {exc}",
+        )
+
+    issues: list[str] = []
+    checked = 0
+    scheduled = 0
+    now = time.time()
+    for script in scripts:
+        metadata = script.get("metadata") if isinstance(script.get("metadata"), dict) else {}
+        declared = script.get("declared_schedule") if isinstance(script.get("declared_schedule"), dict) else {}
+        if not declared.get("required"):
+            continue
+        scheduled += 1
+        name = str(script.get("name") or metadata.get("name") or Path(str(script.get("path") or "")).name)
+        health_file_raw = str(metadata.get("health_file") or "").strip()
+        if not health_file_raw:
+            issues.append(f"{name}: scheduled automation has no health_file contract")
+            continue
+        checked += 1
+        health_file = _resolve_personal_health_path(health_file_raw)
+        if not health_file.is_file():
+            issues.append(f"{name}: health_file missing ({health_file})")
+            continue
+        try:
+            stat = health_file.stat()
+            content = health_file.read_text(errors="ignore")
+        except Exception as exc:
+            issues.append(f"{name}: health_file unreadable ({exc})")
+            continue
+        max_age = _metadata_int(metadata.get("health_max_age_seconds"), 0)
+        if max_age > 0 and now - stat.st_mtime > max_age:
+            issues.append(f"{name}: health_file stale ({int(now - stat.st_mtime)}s > {max_age}s)")
+        if _truthy_metadata(metadata.get("health_nonempty")) and not content.strip():
+            issues.append(f"{name}: health_file is empty")
+        must_contain = str(metadata.get("health_must_contain") or "").strip()
+        if must_contain and must_contain not in content:
+            issues.append(f"{name}: health_file does not contain required marker `{must_contain}`")
+
+    if not issues:
+        return DoctorCheck(
+            id="runtime.personal_automation_health",
+            tier="runtime",
+            status="healthy",
+            severity="info",
+            summary=f"Scheduled personal automation health contracts OK ({checked}/{scheduled} checked)",
+        )
+
+    return DoctorCheck(
+        id="runtime.personal_automation_health",
+        tier="runtime",
+        status="degraded",
+        severity="warn",
+        summary=f"Personal automation health contract issues detected in {len(issues)} item(s)",
+        evidence=issues[:12],
+        repair_plan=[
+            "Add `# nexo: health_file=...` to scheduled personal automations that must prove useful output",
+            "Use `health_max_age_seconds`, `health_nonempty=true`, or `health_must_contain=...` for semantic success checks",
+            "Run `nexo doctor --tier runtime` after updates to catch stale or missing automation outputs",
+        ],
+        escalation_prompt=(
+            "Scheduled personal automations need observable success contracts; a cron exit code alone is not enough "
+            "to know that useful work happened."
         ),
     )
 
@@ -2209,6 +2323,60 @@ def check_client_backend_preferences(fix: bool = False) -> DoctorCheck:
             "The configured interactive client or automation backend is missing. "
             "Align installed clients with schedule.json so `nexo chat` and background automation use the intended tools."
         ) if status != "healthy" else "",
+    )
+
+
+def check_packaged_update_npm_toolchain(fix: bool = False) -> DoctorCheck:
+    """Verify the npm runtime used by packaged Brain updates can actually run."""
+    try:
+        from plugins.update import packaged_npm_toolchain_status
+        status = packaged_npm_toolchain_status(repair=fix)
+    except Exception as exc:
+        return DoctorCheck(
+            id="runtime.packaged_update_npm",
+            tier="runtime",
+            status="degraded",
+            severity="warn",
+            summary=f"Packaged update npm check failed: {exc}",
+        )
+
+    attempts = status.get("attempts") if isinstance(status, dict) else []
+    evidence: list[str] = []
+    for item in (attempts[:6] if isinstance(attempts, list) else []):
+        cmd = " ".join(str(part) for part in (item.get("cmd") or []))
+        if item.get("ok"):
+            evidence.append(f"ok: {cmd}")
+        else:
+            evidence.append(f"failed: {cmd}: {item.get('error') or 'unknown error'}")
+
+    repaired = status.get("repaired") if isinstance(status, dict) else []
+    if status.get("ok"):
+        summary = "Packaged update npm runtime is healthy"
+        if repaired:
+            summary += f" (repaired wrappers: {', '.join(str(item) for item in repaired)})"
+        return DoctorCheck(
+            id="runtime.packaged_update_npm",
+            tier="runtime",
+            status="healthy",
+            severity="info",
+            summary=summary,
+            evidence=evidence,
+            fixed=bool(fix and repaired),
+        )
+
+    return DoctorCheck(
+        id="runtime.packaged_update_npm",
+        tier="runtime",
+        status="critical",
+        severity="error",
+        summary="Packaged update cannot find a healthy npm runtime",
+        evidence=evidence,
+        repair_plan=[
+            "Run `nexo doctor --tier runtime --fix` to repair NEXO npm/npx wrappers when a healthy Node/npm exists",
+            "Install Node.js or restore an nvm Node version if no healthy npm candidate exists",
+            "Retry `nexo update` after the npm runtime check is healthy",
+        ],
+        escalation_prompt="Packaged Brain update cannot run npm safely; repair the local Node/npm runtime before updating.",
     )
 
 
@@ -4137,6 +4305,7 @@ def run_runtime_checks(fix: bool = False, plane: str = "") -> list[DoctorCheck]:
         safe_check(check_stale_sessions),
         safe_check(check_cron_freshness),
         safe_check(check_client_backend_preferences, fix=fix),
+        safe_check(check_packaged_update_npm_toolchain, fix=fix),
         safe_check(check_client_bootstrap_parity, fix=fix),
         safe_check(check_codex_session_parity),
         safe_check(check_bootstrap_reached_startup),
@@ -4156,6 +4325,7 @@ def run_runtime_checks(fix: bool = False, plane: str = "") -> list[DoctorCheck]:
         safe_check(check_launchagent_inventory),
         safe_check(check_launchagent_integrity, fix=fix),
         safe_check(check_personal_script_registry, fix=fix),
+        safe_check(check_personal_automation_health_contracts),
         safe_check(check_skill_health, fix=fix),
     ]
     return _filter_runtime_checks_for_plane(checks, plane=plane)

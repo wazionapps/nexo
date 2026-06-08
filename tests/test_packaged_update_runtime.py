@@ -312,6 +312,13 @@ def test_handle_packaged_update_reloads_launchagents_after_successful_bump(monke
     from plugins import update
 
     versions = iter(["5.3.6", "5.3.7"])
+    monkeypatch.setattr(update, "packaged_npm_toolchain_status", lambda repair=False: {
+        "ok": True,
+        "cmd": ["npm"],
+        "env": {},
+        "attempts": [],
+        "repaired": [],
+    })
 
     monkeypatch.setattr(update, "_read_version", lambda: next(versions))
     monkeypatch.setattr(update, "_backup_databases", lambda: ("backup-dir", None))
@@ -377,6 +384,17 @@ def test_handle_packaged_update_uses_desktop_managed_npm_runtime(monkeypatch):
     monkeypatch.setenv("NEXO_DESKTOP_NODE", desktop_node)
     monkeypatch.setenv("NEXO_DESKTOP_NPM_CLI", bundled_npm_cli)
     monkeypatch.setenv("NEXO_DESKTOP_NPM_PREFIX", managed_prefix)
+    monkeypatch.setattr(update, "packaged_npm_toolchain_status", lambda repair=False: {
+        "ok": True,
+        "cmd": [desktop_node, bundled_npm_cli],
+        "env": {
+            "ELECTRON_RUN_AS_NODE": "1",
+            "NPM_CONFIG_PREFIX": managed_prefix,
+            "PATH": f"{managed_prefix}/bin:/usr/bin",
+        },
+        "attempts": [],
+        "repaired": [],
+    })
     monkeypatch.setattr(update, "_read_version", lambda: next(versions))
     monkeypatch.setattr(update, "_backup_databases", lambda: ("backup-dir", None))
     monkeypatch.setattr(update, "_backup_code_tree", lambda: ("code-backup", None))
@@ -425,11 +443,60 @@ def test_handle_packaged_update_uses_desktop_managed_npm_runtime(monkeypatch):
     assert captured["env"]["PATH"].split(":")[0] == f"{managed_prefix}/bin"
 
 
+def test_packaged_npm_toolchain_repairs_broken_nexo_wrappers(monkeypatch, tmp_path):
+    from plugins import update
+
+    home = tmp_path / "home"
+    runtime_home = home / ".nexo"
+    nexo_bin = runtime_home / "bin"
+    nvm_bin = home / ".nvm" / "versions" / "node" / "v22.16.0" / "bin"
+    nexo_bin.mkdir(parents=True)
+    nvm_bin.mkdir(parents=True)
+    broken_npm = nexo_bin / "npm"
+    broken_npx = nexo_bin / "npx"
+    healthy_npm = nvm_bin / "npm"
+    healthy_npx = nvm_bin / "npx"
+    broken_npm.write_text("#!/bin/sh\nexit 127\n", encoding="utf-8")
+    broken_npx.write_text("#!/bin/sh\nexit 127\n", encoding="utf-8")
+    healthy_npm.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    healthy_npx.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+
+    monkeypatch.setattr(update, "NEXO_HOME", runtime_home)
+    monkeypatch.setattr(update.Path, "home", lambda: home)
+    monkeypatch.setattr(update.shutil, "which", lambda name: str(broken_npm) if name == "npm" else None)
+
+    def fake_run(args, **_kwargs):
+        if args[0] in {"npm", str(broken_npm)}:
+            return mock.Mock(returncode=127, stdout="", stderr="broken npm")
+        if args[0] == str(healthy_npm):
+            if args[1:] == ["--version"]:
+                return mock.Mock(returncode=0, stdout="10.9.0\n", stderr="")
+            if args[1:] == ["root", "-g"]:
+                return mock.Mock(returncode=0, stdout=str(nvm_bin.parent / "lib" / "node_modules") + "\n", stderr="")
+        raise AssertionError(f"unexpected npm probe: {args}")
+
+    monkeypatch.setattr(update.subprocess, "run", fake_run)
+
+    status = update.packaged_npm_toolchain_status(repair=True)
+
+    assert status["ok"] is True
+    assert sorted(status["repaired"]) == ["npm", "npx"]
+    assert str(healthy_npm) in broken_npm.read_text(encoding="utf-8")
+    assert str(healthy_npx) in broken_npx.read_text(encoding="utf-8")
+
+
 def test_handle_packaged_update_finalizes_layout_before_import_verification(monkeypatch):
     from plugins import update
 
     versions = iter(["7.1.2", "7.1.3"])
     call_order = []
+    monkeypatch.setattr(update, "packaged_npm_toolchain_status", lambda repair=False: {
+        "ok": True,
+        "cmd": ["npm"],
+        "env": {},
+        "attempts": [],
+        "repaired": [],
+    })
 
     monkeypatch.setattr(update, "_read_version", lambda: next(versions))
     monkeypatch.setattr(update, "_backup_databases", lambda: ("backup-dir", None))
@@ -494,6 +561,13 @@ def test_handle_packaged_update_runs_maintenance_when_version_unchanged(monkeypa
     runtime_home.mkdir()
 
     monkeypatch.setattr(update, "NEXO_HOME", runtime_home)
+    monkeypatch.setattr(update, "packaged_npm_toolchain_status", lambda repair=False: {
+        "ok": True,
+        "cmd": ["npm"],
+        "env": {},
+        "attempts": [],
+        "repaired": [],
+    })
     monkeypatch.setattr(update, "_read_version", lambda: next(versions))
     monkeypatch.setattr(update, "_backup_databases", lambda: ("backup-dir", None))
     monkeypatch.setattr(update, "_backup_code_tree", lambda: ("code-backup", None))
@@ -533,6 +607,13 @@ def test_handle_packaged_update_runs_maintenance_when_version_unchanged(monkeypa
 
 
 def _common_packaged_update_stubs(monkeypatch, update, versions):
+    monkeypatch.setattr(update, "packaged_npm_toolchain_status", lambda repair=False: {
+        "ok": True,
+        "cmd": ["npm"],
+        "env": {},
+        "attempts": [],
+        "repaired": [],
+    })
     monkeypatch.setattr(update, "_read_version", lambda: next(versions))
     monkeypatch.setattr(update, "_backup_databases", lambda: ("backup-dir", None))
     monkeypatch.setattr(update, "_backup_code_tree", lambda: ("code-backup", None))

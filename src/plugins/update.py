@@ -410,6 +410,142 @@ def _apply_desktop_npm_prefix(env: dict[str, str]) -> None:
     env["PATH"] = os.pathsep.join([prefix_bin, *[entry for entry in entries if entry != prefix_bin]])
 
 
+def _prepend_path(env: dict[str, str], directory: Path | str) -> None:
+    directory = Path(directory)
+    if not str(directory):
+        return
+    current_path = str(env.get("PATH", ""))
+    entries = [entry for entry in current_path.split(os.pathsep) if entry]
+    directory_text = str(directory)
+    env["PATH"] = os.pathsep.join([directory_text, *[entry for entry in entries if entry != directory_text]])
+
+
+def _candidate_npm_paths() -> list[Path]:
+    candidates: list[Path] = []
+    seen: set[str] = set()
+
+    def add(candidate: str | Path | None) -> None:
+        if not candidate:
+            return
+        path = Path(str(candidate)).expanduser()
+        key = str(path)
+        if key in seen:
+            return
+        seen.add(key)
+        candidates.append(path)
+
+    add(shutil.which("npm"))
+    for base in (
+        Path("/opt/homebrew/bin/npm"),
+        Path("/usr/local/bin/npm"),
+        Path.home() / ".nexo" / "bin" / "npm",
+    ):
+        add(base)
+    nvm_root = Path.home() / ".nvm" / "versions" / "node"
+    if nvm_root.is_dir():
+        for npm_path in sorted(nvm_root.glob("*/bin/npm"), reverse=True):
+            add(npm_path)
+    return candidates
+
+
+def _npm_probe(cmd: list[str], env: dict[str, str]) -> dict:
+    evidence: list[str] = []
+    try:
+        version = subprocess.run([*cmd, "--version"], env=env, capture_output=True, text=True, timeout=10)
+    except FileNotFoundError as exc:
+        return {"ok": False, "error": f"not found: {exc}", "evidence": evidence}
+    except Exception as exc:
+        return {"ok": False, "error": str(exc), "evidence": evidence}
+    evidence.append(f"npm --version rc={version.returncode} out={str(version.stdout or version.stderr).strip()[:160]}")
+    if version.returncode != 0:
+        return {"ok": False, "error": str(version.stderr or version.stdout).strip()[:300], "evidence": evidence}
+    try:
+        root = subprocess.run([*cmd, "root", "-g"], env=env, capture_output=True, text=True, timeout=10)
+    except Exception as exc:
+        return {"ok": False, "error": f"npm root -g failed: {exc}", "evidence": evidence}
+    evidence.append(f"npm root -g rc={root.returncode} out={str(root.stdout or root.stderr).strip()[:160]}")
+    if root.returncode != 0:
+        return {"ok": False, "error": str(root.stderr or root.stdout).strip()[:300], "evidence": evidence}
+    return {"ok": True, "error": "", "evidence": evidence}
+
+
+def _write_nexo_bin_wrapper(wrapper: Path, target: Path) -> bool:
+    if not target.exists():
+        return False
+    content = f'#!/bin/sh\nexec "{target}" "$@"\n'
+    try:
+        if wrapper.exists() and wrapper.read_text(errors="ignore") == content:
+            return False
+    except Exception:
+        pass
+    wrapper.parent.mkdir(parents=True, exist_ok=True)
+    if wrapper.exists():
+        backup_dir = NEXO_HOME / "runtime" / "backups" / "npm-shim-repair"
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(wrapper, backup_dir / f"{int(time.time())}-{wrapper.name}")
+    wrapper.write_text(content)
+    wrapper.chmod(0o755)
+    return True
+
+
+def _repair_nexo_npm_wrappers(selected_npm: Path | None) -> list[str]:
+    if not selected_npm:
+        return []
+    selected_bin = selected_npm.parent
+    repaired: list[str] = []
+    wrapper_dir = NEXO_HOME / "bin"
+    for name in ("npm", "npx"):
+        target = selected_bin / name
+        if _write_nexo_bin_wrapper(wrapper_dir / name, target):
+            repaired.append(name)
+    return repaired
+
+
+def packaged_npm_toolchain_status(*, repair: bool = False) -> dict:
+    """Resolve a healthy npm invocation for packaged update/doctor paths."""
+    default_cmd, default_env = _npm_command_parts()
+    attempts: list[dict] = []
+    default_probe = _npm_probe(default_cmd, default_env)
+    attempts.append({"cmd": default_cmd, **default_probe})
+    if default_probe.get("ok"):
+        return {"ok": True, "cmd": default_cmd, "env": default_env, "attempts": attempts, "repaired": []}
+
+    for npm_path in _candidate_npm_paths():
+        if not npm_path.exists():
+            continue
+        env = dict(os.environ)
+        _prepend_path(env, npm_path.parent)
+        probe = _npm_probe([str(npm_path)], env)
+        attempts.append({"cmd": [str(npm_path)], **probe})
+        if not probe.get("ok"):
+            continue
+        repaired = _repair_nexo_npm_wrappers(npm_path) if repair else []
+        if repaired:
+            # Re-probe through the normal path after repair so updates use the
+            # same command a fresh shell will resolve.
+            refreshed_cmd, refreshed_env = _npm_command_parts()
+            refreshed_probe = _npm_probe(refreshed_cmd, refreshed_env)
+            attempts.append({"cmd": refreshed_cmd, **refreshed_probe, "after_repair": True})
+            if refreshed_probe.get("ok"):
+                return {
+                    "ok": True,
+                    "cmd": refreshed_cmd,
+                    "env": refreshed_env,
+                    "attempts": attempts,
+                    "repaired": repaired,
+                }
+        return {"ok": True, "cmd": [str(npm_path)], "env": env, "attempts": attempts, "repaired": repaired}
+
+    return {
+        "ok": False,
+        "cmd": default_cmd,
+        "env": default_env,
+        "attempts": attempts,
+        "repaired": [],
+        "error": "No healthy npm runtime found.",
+    }
+
+
 def _run_npm(args: list[str], **kwargs):
     cmd, env = _npm_command_parts()
     extra_env = kwargs.pop("env", None)
@@ -1377,6 +1513,18 @@ def _handle_packaged_update(progress_fn=None, *, include_clis: bool = True) -> s
     if wipe_err:
         return f"ABORTED (wipe guard): {wipe_err}"
 
+    _emit_progress(progress_fn, "Checking npm runtime for packaged update...")
+    npm_status = packaged_npm_toolchain_status(repair=True)
+    if not npm_status.get("ok"):
+        attempts = "; ".join(
+            f"{' '.join(item.get('cmd') or [])}: {item.get('error') or 'failed'}"
+            for item in npm_status.get("attempts", [])[:6]
+            if isinstance(item, dict)
+        )
+        return f"ABORTED: npm runtime unavailable. {attempts or npm_status.get('error') or 'No npm candidate worked.'}"
+    npm_cmd = list(npm_status.get("cmd") or ["npm"])
+    npm_env = dict(npm_status.get("env") or os.environ)
+
     # 1. Backup databases BEFORE any changes
     _emit_progress(progress_fn, "Backing up runtime databases...")
     backup_dir, backup_err = _backup_databases()
@@ -1395,10 +1543,11 @@ def _handle_packaged_update(progress_fn=None, *, include_clis: bool = True) -> s
     # 3. Run npm update (postinstall.js will migrate NEXO_HOME in-place)
     try:
         _emit_progress(progress_fn, "Downloading and applying the latest npm package...")
-        result = _run_npm(
-            ["install", "-g", "nexo-brain@latest"],
+        install_env = {**npm_env, "NEXO_HOME": str(NEXO_HOME)}
+        result = subprocess.run(
+            [*npm_cmd, "install", "-g", "nexo-brain@latest"],
             capture_output=True, text=True, timeout=120,
-            env={**os.environ, "NEXO_HOME": str(NEXO_HOME)},
+            env=install_env,
         )
         if result.returncode != 0:
             # npm failed (including postinstall failures) — full rollback

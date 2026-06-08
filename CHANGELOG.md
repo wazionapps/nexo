@@ -1,5 +1,14 @@
 # Changelog
 
+## [7.30.32] - 2026-06-08
+
+### Fixed - packaged update and automation health
+
+- **Packaged updates now repair broken npm/npx wrappers before using npm.** The updater and doctor share the same npm toolchain resolver, can recover `~/.nexo/bin/npm` and `npx` from a healthy Node/npm runtime, and fail with candidate evidence instead of a generic missing-npm abort.
+- **Personal script backups with NEXO metadata no longer pollute the registry.** `.bak.*`, `.backup.*`, and `.old.*` artifacts are ignored consistently, and `doctor --fix` archives stale metadata-bearing backups outside `personal/scripts`.
+- **Scheduled personal automations now require observable success contracts.** Doctor warns when scheduled personal scripts lack `health_file` metadata, and validates declared health files for freshness, non-empty output, or required markers when configured.
+- **Legacy Claude/Codex project memory writes are blocked.** The existing legacy-memory guard now covers `~/.claude/projects/.../memory/MEMORY.md` and equivalent Codex project paths, keeping durable memory in NEXO Brain.
+
 ## [7.30.31] - 2026-06-08
 
 ### Fixed - Core Rules prompt injection
