@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-<meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.31.0 makes Fable 5 the default Claude Code model.">
+<meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.31.1 adds a provider circuit breaker so automations pause and queue instead of failing.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -87,14 +87,14 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v7.31.0 live</span>
-                    <span class="page-chip">Models</span>
-                    <span class="page-chip">Claude</span>
-                    <span class="page-chip">Defaults</span>
-                    <span class="page-chip">Minor release</span>
+                    <span class="page-chip">v7.31.1 live</span>
+                    <span class="page-chip">Reliability</span>
+                    <span class="page-chip">Automations</span>
+                    <span class="page-chip">Providers</span>
+                    <span class="page-chip">Patch release</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v7310" class="btn btn-primary">Start with v7.31.0</a>
+                    <a href="#v7311" class="btn btn-primary">Start with v7.31.1</a>
                     <a href="#v7122" class="btn btn-secondary">See v7.12.2</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -102,8 +102,8 @@
             <div class="page-visual">
                 <div class="page-stack">
                     <div class="page-stack-card">
-                        <strong>v7.31.0</strong>
-                        <span>Minor - the recommended Claude Code model moves from Opus 4.8 to Fable 5 with max reasoning, with auto-migration for installs riding NEXO defaults.</span>
+                        <strong>v7.31.1</strong>
+                        <span>Patch - automations pause and queue when the selected engine is unavailable (credits, rate limits, expired auth) and resume automatically, with one operator notice in their language.</span>
                     </div>
                     <div class="page-stack-card">
                         <strong>v7.17.8</strong>
@@ -345,6 +345,14 @@
 <section class="section-compact" style="background:rgba(124,58,237,0.08);">
     <div class="container desktop-disclaimer" style="max-width:860px;font-size:13px;line-height:1.55;">
         <p><strong>About NEXO Desktop.</strong> NEXO Desktop is a separate closed-source companion client distributed at <a href="https://nexo-desktop.com/">nexo-desktop.com</a>. When a changelog entry mentions NEXO Desktop it refers to a coordinated client release that consumes the Brain CLI/MCP contract. Desktop source does not live in this repo; the Brain (AGPL-3.0) remains fully usable on its own from terminal, provider CLIs, or any MCP client.</p>
+    </div>
+</section>
+
+<section id="v7311" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.31.1 <span style="opacity:.5;font-weight:400;">&mdash; June 10, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">Provider circuit breaker and reliability hardening</h2>
+        <p class="section-subtitle">Headless automations (email monitor, deep sleep, evolution, follow-ups) pause and queue when the selected engine is unavailable &mdash; credits exhausted, rate limited or auth expired &mdash; and resume automatically when it is back, with a single operator notice in their configured language signed by their agent. The protocol nudge gains threshold, cooldown and headless awareness in shadow mode, and the client config push stops writing an invalid <code>mcp__*</code> permission rule to Claude Code settings (repairing installs that already had it).</p>
     </div>
 </section>
 

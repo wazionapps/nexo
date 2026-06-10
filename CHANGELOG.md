@@ -1,5 +1,20 @@
 # Changelog
 
+## [7.31.1] - 2026-06-10
+
+### Added - provider circuit breaker (Phase 1 reliability)
+
+- **Headless automations pause and queue when the selected engine is unavailable.** New `provider_circuit_breaker` gates `agent_runner.run_automation_prompt` (the single launch path for email-monitor, deep-sleep, evolution, catch-up, followups…): credit exhaustion, rate limits and expired auth open the breaker on first sight, generic failures after 3 consecutive. Open state fails fast with a queue-me signal instead of launching doomed sessions; one half-open probe per retry window; success closes. The operator gets ONE notice per opening — in their configured language, signed by their agent — instead of a per-item escalation storm.
+- **The email monitor returns the attempt when the breaker vetoes a launch** (provider downtime is not the email's fault) and its Spanish escalation branch is now actually in Spanish (it contained the English copy verbatim; the test asserting the bug is fixed too).
+
+### Added - protocol nudge shaping (shadow)
+
+- **The "non-trivial work without nexo_task_open" warning gains threshold, cooldown and headless awareness — in SHADOW mode by default.** Visible behaviour is unchanged; decisions are logged to `runtime/logs/protocol-nudge-shadow.ndjson` to calibrate the threshold with real data before activation (`NEXO_PROTOCOL_NUDGE_MODE=active`). Headless runners stay covered by HeadlessEnforcer. Session-close learning-aggregation telemetry lands in the real close flow (`handle_stop`), not `stop.py`.
+
+### Fixed - valid client config push
+
+- **`client_sync` stops pushing the invalid `"mcp__*"` allow rule to Claude Code settings** (it triggered a Settings Warning on every launch) and now REMOVES it from contaminated installs while preserving user rules; NEXO-managed servers are listed explicitly. Codex `config.toml` is write-if-changed so identical rewrites stop churning trust prompts.
+
 ## [7.31.0] - 2026-06-10
 
 ### Changed - default Claude model: Fable 5

@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEXO 7.31.1: provider circuit breaker and reliability hardening</title>
+    <meta name="description" content="NEXO Brain 7.31.1 pauses and queues headless automations when the selected engine is unavailable (credits, rate limits, expired auth), notifies the operator once in their language, ships protocol nudge shaping in shadow mode, and stops pushing an invalid Claude Code permission rule.">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-31-1/">
+</head>
+<body>
+    <main>
+        <p><a href="/blog/">Back to blog</a></p>
+        <h1>NEXO 7.31.1: provider circuit breaker and reliability hardening</h1>
+        <p><strong>June 10, 2026.</strong> This patch release is the Brain half of the Phase&nbsp;1 reliability program: automations stop losing work when the engine behind them is temporarily unavailable.</p>
+        <h2>What changed</h2>
+        <ul>
+            <li><strong>Provider circuit breaker.</strong> When Claude or Codex is unavailable &mdash; credits exhausted, rate limited, auth expired &mdash; headless automations (email monitor, deep sleep, evolution, follow-ups&hellip;) no longer launch sessions that die mid-flight and burn their retries. Work pauses and queues, one probe per retry window re-tests, and everything resumes automatically when the engine is back.</li>
+            <li><strong>One notice, in your language, signed by your agent.</strong> Instead of a per-item escalation storm (previously in English regardless of configuration), the operator gets a single message when automations pause and another when they resume.</li>
+            <li><strong>Protocol nudge shaping (shadow).</strong> The "non-trivial work without an open task" reminder gains a streak threshold, a cooldown and headless awareness &mdash; running in shadow/log-only mode to calibrate with real data before activation.</li>
+            <li><strong>Valid client config push.</strong> The sync no longer writes an invalid <code>mcp__*</code> permission rule to Claude Code settings (the cause of a Settings Warning on every launch) and repairs installs that already had it; Codex config writes are now change-only, avoiding repeated trust prompts.</li>
+        </ul>
+        <h2>Why it matters</h2>
+        <p>An agent platform is only as reliable as its behaviour when things go wrong. With 7.31.1 a missing credit top-up degrades to a quiet pause-and-resume instead of lost work and inbox noise &mdash; and the operator hears about it exactly once, from their agent, in their language.</p>
+        <p><a href="/changelog/#v7311">Read the full v7.31.1 changelog</a></p>
+    </main>
+</body>
+</html>
