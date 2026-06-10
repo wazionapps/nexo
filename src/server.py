@@ -3093,4 +3093,14 @@ if __name__ == "__main__":
                     "mode": "runtime-service",
                 }
             )
+            # Phase 2.1/2.2 — retire this resident gracefully if the on-disk
+            # runtime is updated under it AND no clients remain connected.
+            # The current-generation resident never self-terminates: a warm
+            # Brain is what keeps conversation starts fast.
+            from runtime_service import start_resident_obsolescence_watch
+
+            start_resident_obsolescence_watch(
+                port=port,
+                on_exit=lambda: (close_local_context_db(), close_db()),
+            )
         mcp.run(**run_kwargs)

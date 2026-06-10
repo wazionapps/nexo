@@ -34,6 +34,16 @@ STATE_FILE = "runtime-service.json"
 LOCK_FILE = "runtime-service.lock"
 LOG_FILE = "runtime-service.log"
 
+# Phase 2.1/2.2 — state isolation per runtime generation. Two different Brain
+# installs (e.g. the managed ~/.nexo/core runtime and an npm-global one)
+# used to share ONE state file: each side saw a "stale_runtime" resident and
+# KILLED the other's in an endless ping-pong (1,314 resident restarts logged
+# on the operator machine; every restart forced the next conversation to pay
+# a 10-48s cold Brain boot and expired client sessions). With the state file
+# keyed by runtime generation, a runtime can only ever see — and manage —
+# its OWN resident. Foreign residents become invisible instead of killable.
+
+
 
 def env_flag(name: str, *, default: bool = False) -> bool:
     value = os.environ.get(name)
@@ -55,10 +65,27 @@ def service_url(host: str | None = None, port: int | None = None, path: str | No
     return f"http://{host or service_host()}:{int(port or service_port())}{path or service_path()}"
 
 
-def service_state_path() -> Path:
+def _generation_state_token(generation: str) -> str:
+    """Stable filesystem-safe token for a runtime generation."""
+    text = str(generation or "unknown").strip() or "unknown"
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
+
+
+def _current_generation_token() -> str:
+    return _generation_state_token(current_runtime_identity().get("runtime_generation", "unknown"))
+
+
+def _legacy_service_state_path() -> Path:
     root = paths.runtime_state_dir()
     root.mkdir(parents=True, exist_ok=True)
     return root / STATE_FILE
+
+
+def service_state_path() -> Path:
+    root = paths.runtime_state_dir()
+    root.mkdir(parents=True, exist_ok=True)
+    token = _current_generation_token()
+    return root / f"runtime-service-{token}.json"
 
 
 def service_log_path() -> Path:
@@ -70,7 +97,8 @@ def service_log_path() -> Path:
 def service_lock_path() -> Path:
     root = paths.runtime_state_dir()
     root.mkdir(parents=True, exist_ok=True)
-    return root / LOCK_FILE
+    token = _current_generation_token()
+    return root / f"runtime-service-{token}.lock"
 
 
 @contextmanager
@@ -128,10 +156,22 @@ def service_start_lock(*, timeout: float = 10.0):
 def read_service_state() -> dict[str, Any]:
     try:
         path = service_state_path()
-        if not path.is_file():
-            return {}
-        data = json.loads(path.read_text(encoding="utf-8"))
-        return data if isinstance(data, dict) else {}
+        if path.is_file():
+            data = json.loads(path.read_text(encoding="utf-8"))
+            return data if isinstance(data, dict) else {}
+        # Phase 2.1 — one-time soft migration: adopt a pre-generation legacy
+        # state file ONLY if it belongs to this same runtime. A foreign
+        # install's legacy state stays invisible (never "stale to kill").
+        legacy = _legacy_service_state_path()
+        if legacy.is_file():
+            data = json.loads(legacy.read_text(encoding="utf-8"))
+            if isinstance(data, dict) and state_matches_current_runtime(data):
+                try:
+                    legacy.replace(path)
+                except Exception:
+                    pass
+                return data
+        return {}
     except Exception:
         return {}
 
@@ -443,6 +483,107 @@ def runtime_service_status() -> dict[str, Any]:
         "log_path": str(service_log_path()),
         "server_path": str(current_server_path()),
     }
+
+
+# Phase 2.1/2.2 — resident obsolescence watch.
+#
+# With per-generation state files, residents no longer kill each other; the
+# missing piece is cleanup: after a runtime update, the OLD resident must
+# eventually exit, while the CURRENT one must stay warm forever (a hot Brain
+# is what turns 10-48s conversation starts into fast ones). Rules:
+#   - a resident whose on-disk runtime generation still matches its own NEVER
+#     self-terminates, idle or not;
+#   - an OBSOLETE resident (disk generation changed under it) exits cleanly
+#     once it has had no established client connections for two consecutive
+#     checks (anti-flap), removing its state file on the way out;
+#   - if connections cannot be counted (no lsof/netstat), it stays alive —
+#     fail-safe towards living.
+
+OBSOLESCENCE_CHECK_SECONDS = 300
+
+
+def _count_established_connections(port: int) -> int | None:
+    """Best-effort count of ESTABLISHED TCP connections to ``port``.
+
+    Returns None when it cannot tell (missing tooling) so callers can fail
+    safe. Uses lsof on POSIX and netstat on Windows; both ship with the OS.
+    """
+    try:
+        if os.name == "nt":
+            out = subprocess.run(
+                ["netstat", "-ano", "-p", "tcp"],
+                capture_output=True, text=True, timeout=10,
+            ).stdout
+            needle = f":{port} "
+            return sum(
+                1 for line in out.splitlines()
+                if "ESTABLISHED" in line and needle in line.split("ESTABLISHED")[0]
+            )
+        out = subprocess.run(
+            ["lsof", "-nP", f"-iTCP:{port}", "-sTCP:ESTABLISHED"],
+            capture_output=True, text=True, timeout=10,
+        ).stdout
+        rows = [line for line in out.splitlines() if "ESTABLISHED" in line]
+        # lsof lists both directions of loopback pairs; the resident's own
+        # accept side is one row per client connection.
+        return len(rows)
+    except Exception:
+        return None
+
+
+def _resident_is_obsolete(boot_generation: str) -> bool:
+    try:
+        from runtime_versioning import compute_mcp_runtime_fingerprint, read_version_for_path, runtime_generation
+
+        root = current_server_path().parent
+        version = read_version_for_path(root) or read_version_for_path(root.parent)
+        fingerprint = compute_mcp_runtime_fingerprint(root, use_cache=False)
+        current = runtime_generation(version, fingerprint, str(root))
+        return bool(boot_generation) and bool(current) and current != boot_generation
+    except Exception:
+        return False  # cannot tell -> assume still current (fail-safe)
+
+
+def start_resident_obsolescence_watch(*, port: int, on_exit=None) -> None:
+    """Spawn the daemon thread that retires obsolete residents gracefully."""
+    import threading
+
+    boot_generation = str(current_runtime_identity().get("runtime_generation") or "")
+
+    def _watch() -> None:
+        strikes = 0
+        while True:
+            time.sleep(OBSOLESCENCE_CHECK_SECONDS)
+            try:
+                if not _resident_is_obsolete(boot_generation):
+                    strikes = 0
+                    continue
+                connections = _count_established_connections(port)
+                if connections is None or connections > 0:
+                    strikes = 0
+                    continue
+                strikes += 1
+                if strikes < 2:
+                    continue
+                print(
+                    f"[runtime-service] obsolete resident (gen {boot_generation[:24]}…) idle for two checks — exiting cleanly",
+                    file=sys.stderr,
+                )
+                try:
+                    service_state_path().unlink(missing_ok=True)
+                except Exception:
+                    pass
+                if callable(on_exit):
+                    try:
+                        on_exit()
+                    except Exception:
+                        pass
+                os._exit(0)
+            except Exception:
+                strikes = 0  # the watch must never kill a healthy resident
+
+    thread = threading.Thread(target=_watch, name="resident-obsolescence-watch", daemon=True)
+    thread.start()
 
 
 def run_mcp_proxy_adapter(*, name: str, instructions: str, run_kwargs: dict[str, Any]) -> None:

@@ -36,9 +36,17 @@ _data_dir = os.path.dirname(DB_PATH)
 os.makedirs(_data_dir, exist_ok=True)
 
 # TTLs in seconds (match session-coord.sh behavior)
-SESSION_STALE_SECONDS = 900    # 15 min (documented TTL)
+SESSION_STALE_SECONDS = 900    # 15 min (documented TTL) — visibility horizon only
 MESSAGE_TTL_SECONDS = 3600     # 1 hour
 QUESTION_TTL_SECONDS = 600     # 10 min
+
+# Phase 2.1 — purge horizon, deliberately FAR above the visibility TTL.
+# SESSION_STALE_SECONDS only governs what counts as "active" in listings;
+# physically DELETING rows at 15 min destroyed the continuity of any session
+# that spent >15 min in code tools without touching a nexo_* tool (incident
+# 10-jun: two working sessions lost mid-task, orphaning their open protocol
+# tasks). Rows now survive 24h so revival/heartbeat can find them.
+SESSION_PURGE_SECONDS = 24 * 3600
 
 # Single shared connection per process with write serialization.
 # SQLite allows only one writer at a time. Using a shared connection with

@@ -2,7 +2,7 @@ from __future__ import annotations
 """NEXO DB — Sessions module."""
 import time, secrets, string, sqlite3
 from datetime import datetime
-from db._core import get_db, _gen_id, now_epoch, local_time_str, SESSION_STALE_SECONDS, MESSAGE_TTL_SECONDS, QUESTION_TTL_SECONDS
+from db._core import get_db, _gen_id, now_epoch, local_time_str, SESSION_STALE_SECONDS, SESSION_PURGE_SECONDS, MESSAGE_TTL_SECONDS, QUESTION_TTL_SECONDS
 
 # ── Session operations ──────────────────────────────────────────────
 
@@ -166,9 +166,17 @@ def get_active_sessions() -> list[dict]:
 
 
 def clean_stale_sessions() -> int:
-    """Remove stale sessions. Returns count removed."""
+    """Purge sessions older than the PURGE horizon. Returns count removed.
+
+    Phase 2.1 — this used to delete at SESSION_STALE_SECONDS (15 min), which
+    destroyed any session that worked quietly in code tools for a while: the
+    next session/cron to start would erase it, its next nexo_track failed
+    with "Session not found" and its open protocol tasks were orphaned.
+    Deletion now happens at SESSION_PURGE_SECONDS (24h); the 15-min TTL keeps
+    governing VISIBILITY (get_active_sessions/search_sessions) unchanged.
+    """
     conn = get_db()
-    cutoff = now_epoch() - SESSION_STALE_SECONDS
+    cutoff = now_epoch() - SESSION_PURGE_SECONDS
     stale = conn.execute(
         "SELECT sid FROM sessions WHERE last_update_epoch <= ?", (cutoff,)
     ).fetchall()
@@ -309,13 +317,42 @@ def search_sessions(keyword: str) -> list[dict]:
 
 # ── File tracking ───────────────────────────────────────────────────
 
-def track_files(sid: str, paths: list[str]) -> dict:
-    """Track files for a session. Returns conflicts if any."""
+def revive_session(sid: str, task_hint: str = "(revived session)") -> bool:
+    """Phase 2.1 — re-create a session row for a valid SID that vanished.
+
+    A session can disappear legitimately (purge horizon, manual cleanup,
+    DB swap) while its client keeps working with the same SID. The durable
+    identity is the SID, not the row: revive it instead of erroring, so the
+    "Session not found. Register first." class of breakage cannot occur.
+    Returns True when a row was actually (re)created.
+    """
+    sid = _validate_sid(sid)
     conn = get_db()
     now = now_epoch()
+    cursor = conn.execute(
+        "INSERT OR IGNORE INTO sessions (sid, task, started_epoch, last_update_epoch, local_time) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (sid, task_hint, now, now, local_time_str()),
+    )
+    conn.commit()
+    return cursor.rowcount > 0
+
+
+def track_files(sid: str, paths: list[str]) -> dict:
+    """Track files for a session. Returns conflicts if any.
+
+    Phase 2.1 — a valid SID whose row vanished is REVIVED instead of being
+    told "Session not found. Register first." (the heartbeat already revived
+    missing sessions; this layer was internally inconsistent). The result
+    carries ``revived: True`` so callers can log the recovery.
+    """
+    sid = _validate_sid(sid)
+    conn = get_db()
+    now = now_epoch()
+    revived = False
     session = conn.execute("SELECT sid FROM sessions WHERE sid = ?", (sid,)).fetchone()
     if not session:
-            return {"error": f"Session {sid} not found. Register first."}
+        revived = revive_session(sid, task_hint="(revived by nexo_track)")
 
     for path in paths:
         conn.execute(
@@ -324,7 +361,10 @@ def track_files(sid: str, paths: list[str]) -> dict:
         )
     conn.commit()
     conflicts = _check_conflicts(conn, sid)
-    return {"tracked": paths, "conflicts": conflicts}
+    result = {"tracked": paths, "conflicts": conflicts}
+    if revived:
+        result["revived"] = True
+    return result
 
 
 def untrack_files(sid: str, paths: list[str] | None = None):
