@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-<meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.30.33 fixes personal agent status after manual runs.">
+<meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.31.0 makes Fable 5 the default Claude Code model.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.30.33 fixes personal agent status after manual runs.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.31.0 makes Fable 5 the default Claude Code model.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.30.33 fixes personal agent status after manual runs.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.31.0 makes Fable 5 the default Claude Code model.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.30.33 fixes personal agent status after manual runs.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.31.0 makes Fable 5 the default Claude Code model.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -87,14 +87,14 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v7.30.33 live</span>
-                    <span class="page-chip">Agents</span>
-                    <span class="page-chip">Scripts</span>
-                    <span class="page-chip">State</span>
-                    <span class="page-chip">Patch release</span>
+                    <span class="page-chip">v7.31.0 live</span>
+                    <span class="page-chip">Models</span>
+                    <span class="page-chip">Claude</span>
+                    <span class="page-chip">Defaults</span>
+                    <span class="page-chip">Minor release</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v73033" class="btn btn-primary">Start with v7.30.33</a>
+                    <a href="#v7310" class="btn btn-primary">Start with v7.31.0</a>
                     <a href="#v7122" class="btn btn-secondary">See v7.12.2</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -102,8 +102,8 @@
             <div class="page-visual">
                 <div class="page-stack">
                     <div class="page-stack-card">
-                        <strong>v7.30.33</strong>
-                        <span>Patch - personal agent status keeps the newest real run across manual executions and cron history.</span>
+                        <strong>v7.31.0</strong>
+                        <span>Minor - the recommended Claude Code model moves from Opus 4.8 to Fable 5 with max reasoning, with auto-migration for installs riding NEXO defaults.</span>
                     </div>
                     <div class="page-stack-card">
                         <strong>v7.17.8</strong>
@@ -345,6 +345,14 @@
 <section class="section-compact" style="background:rgba(124,58,237,0.08);">
     <div class="container desktop-disclaimer" style="max-width:860px;font-size:13px;line-height:1.55;">
         <p><strong>About NEXO Desktop.</strong> NEXO Desktop is a separate closed-source companion client distributed at <a href="https://nexo-desktop.com/">nexo-desktop.com</a>. When a changelog entry mentions NEXO Desktop it refers to a coordinated client release that consumes the Brain CLI/MCP contract. Desktop source does not live in this repo; the Brain (AGPL-3.0) remains fully usable on its own from terminal, provider CLIs, or any MCP client.</p>
+    </div>
+</section>
+
+<section id="v7310" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.31.0 <span style="opacity:.5;font-weight:400;">&mdash; June 10, 2026 &mdash; <strong>MINOR</strong></span></div>
+        <h2 class="section-title">Default Claude model: Fable 5</h2>
+        <p class="section-subtitle">The recommended Claude Code model moves from Opus 4.8 to Fable 5 with max reasoning (<code>claude-fable-5</code>). All four main resonance tiers resolve Claude Code to Fable 5, the <code>muy_bajo</code> tier keeps Haiku for cheap internal classifiers, and Codex stays on GPT-5.5. Installs riding NEXO defaults auto-migrate on update while customized models are respected, and learning housekeeping no longer aborts when the embedding backend is missing.</p>
     </div>
 </section>
 

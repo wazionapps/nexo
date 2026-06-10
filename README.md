@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.30.33` is the current packaged-runtime line. Patch release over v7.30.32 - personal agent/script status now keeps the newest real run between manual executions and cron history, so a successful manual agent run cannot be hidden behind an older scheduled failure.
+Version `7.31.0` is the current packaged-runtime line. Minor release over v7.30.33 - the recommended Claude Code model moves from Opus 4.8 to Fable 5 with max reasoning (`claude-fable-5`) across all four main resonance tiers (the `muy_bajo` tier keeps Haiku for cheap internal classifiers and Codex stays on GPT-5.5), existing installs riding NEXO defaults auto-migrate on update while customized models are respected, and learning housekeeping no longer aborts when the embedding backend is missing.
+
+Previously in `7.30.33`: patch release over v7.30.32 - personal agent/script status now keeps the newest real run between manual executions and cron history, so a successful manual agent run cannot be hidden behind an older scheduled failure.
 
 Previously in `7.30.32`: patch release over v7.30.31 - packaged update/doctor now repair npm/npx wrapper drift, archive stale personal script backups, validate observable automation health contracts, and block legacy Claude/Codex project memory writes.
 
