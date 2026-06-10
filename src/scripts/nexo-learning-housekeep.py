@@ -158,10 +158,21 @@ def detect_duplicates(conn):
     if len(learnings) < 2:
         return []
 
-    model = build_fastembed_embedding("bge-base-embeddings")
-    texts = [f"{l['title']}: {l['content'][:300]}" for l in learnings]
-    embeddings = list(model.embed(texts))
-    embeddings = np.array(embeddings)
+    # build_fastembed_embedding() lazily imports fastembed inside its body, so a
+    # missing backend raises ModuleNotFoundError HERE, not at the import guard
+    # above (which only resolves the helper symbol). Without this guard the whole
+    # housekeeping run crashes with exit 1 whenever there are >=2 learnings to
+    # compare and fastembed is absent. Degrade exactly like the "not available"
+    # branch instead of aborting decay/prioritization/archival.
+    try:
+        model = build_fastembed_embedding("bge-base-embeddings")
+        texts = [f"{l['title']}: {l['content'][:300]}" for l in learnings]
+        embeddings = list(model.embed(texts))
+        embeddings = np.array(embeddings)
+    except Exception as exc:
+        print(f"[{ts}] Dedup skipped: embedding backend unavailable "
+              f"({type(exc).__name__}: {exc})")
+        return []
 
     # Normalize
     norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
