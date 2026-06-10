@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Blog — NEXO Brain</title>
-<meta name="description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.31.1 provider circuit breaker release.">
+<meta name="description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.31.2 session continuity release.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/blog/">
 
@@ -134,7 +134,7 @@
                     <span class="page-chip">Shared brain product notes</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="/blog/nexo-7-31-1/" class="btn btn-primary">Read latest release</a>
+                    <a href="/blog/nexo-7-31-2/" class="btn btn-primary">Read latest release</a>
                     <a href="/changelog/" class="btn btn-secondary">Latest release notes</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -143,26 +143,26 @@
             <div class="blog-featured-card">
                 <div class="section-label">Latest release</div>
                 <div class="blog-featured-meta">
-                    <span class="compare-chip">June 10, 2026</span>
-                    <span class="compare-chip">Reliability</span>
-                    <span class="compare-chip">Automations</span>
-                    <span class="compare-chip">Providers</span>
+                    <span class="compare-chip">June 11, 2026</span>
+                    <span class="compare-chip">Continuity</span>
+                    <span class="compare-chip">Sessions</span>
+                    <span class="compare-chip">Runtime</span>
                     <span class="compare-chip">Patch</span>
                 </div>
-                <h2>NEXO 7.31.1: provider circuit breaker and reliability hardening</h2>
-                <p>Patch release over v7.31.0. Headless automations pause and queue when the selected engine is unavailable (credits, rate limits, expired auth) and resume on their own; the operator gets one notice in their language signed by their agent; protocol nudge shaping ships in shadow mode; and the client config push stops writing an invalid Claude Code permission rule.</p>
+                <h2>NEXO 7.31.2: session continuity and resident stability</h2>
+                <p>Patch release over v7.31.1. The session ID becomes a durable identity (sessions survive quiet work periods; physical cleanup at 24h), runtime residents are isolated per generation so two installs can never kill each other, and obsolete residents retire themselves once their clients disconnect.</p>
                 <div class="hero-actions" style="justify-content:flex-start;margin-bottom:18px;">
-                    <a href="/blog/nexo-7-31-1/" class="btn btn-primary">Open article</a>
-                    <a href="/changelog/#v7311" class="btn btn-secondary">Open changelog</a>
+                    <a href="/blog/nexo-7-31-2/" class="btn btn-primary">Open article</a>
+                    <a href="/changelog/#v7312" class="btn btn-secondary">Open changelog</a>
                 </div>
                 <div class="blog-mini-stack">
                     <div class="blog-mini-card">
                         <strong>Companion view</strong>
-                        <span><a href="/changelog/#v7311">See the full v7.31.1 changelog</a></span>
+                        <span><a href="/changelog/#v7312">See the full v7.31.2 changelog</a></span>
                     </div>
                     <div class="blog-mini-card">
                         <strong>Previous release</strong>
-                        <span><a href="/blog/nexo-7-31-0/">NEXO 7.31.0: default Claude model Fable 5</a>.</span>
+                        <span><a href="/blog/nexo-7-31-1/">NEXO 7.31.1: provider circuit breaker and reliability hardening</a>.</span>
                     </div>
                 </div>
             </div>

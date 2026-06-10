@@ -1,6 +1,15 @@
 # Changelog
 
-## [7.31.1] - 2026-06-10
+## [7.31.2] - 2026-06-11
+
+### Fixed - session continuity (Phase 2 reliability)
+
+- **Sessions survive quiet work periods.** Session rows were physically deleted after 15 quiet minutes (SESSION_STALE_SECONDS) by whichever session or cron started next, so any client that spent >15 minutes in code tools lost its SID mid-task ("Session not found. Register first.") and orphaned its open protocol tasks — while the heartbeat path already revived missing sessions (the layer was internally inconsistent). Now `nexo_track` revives valid SIDs (flagging `revived: true`), physical purge happens at 24h (`SESSION_PURGE_SECONDS`), and the 15-minute TTL keeps governing *visibility only* (active listings unchanged). The SID is the durable identity, not the row.
+
+### Fixed - runtime resident stability (Phase 2 reliability)
+
+- **Brain residents from different installs can no longer kill each other.** Two installs sharing one machine (e.g. the managed runtime and an npm-global one) shared a single runtime-service state file: each side saw a "stale" resident and killed the other's in an endless ping-pong — 1,314 resident restarts logged on one machine, every restart forcing the next conversation to pay a 10-48s cold-Brain boot and expiring client sessions. State and lock files are now keyed by runtime *generation* (with soft migration of a matching legacy state): a runtime can only see and manage its own resident.
+- **Obsolete residents retire themselves gracefully.** After a runtime update, the old-generation resident exits cleanly once no clients remain connected (two consecutive checks, lsof/netstat with fail-safe towards living). The current-generation resident never self-terminates: a warm Brain is what keeps conversation starts fast.
 
 ### Added - provider circuit breaker (Phase 1 reliability)
 

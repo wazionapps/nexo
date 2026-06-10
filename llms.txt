@@ -1,9 +1,14 @@
 # NEXO Brain
 
-> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v7.31.1). NEXO Desktop is a separate closed-source companion app distributed at nexo-desktop.com; its source does not ship in this repo. Mentions of "NEXO Desktop" in changelog entries describe coordinated client releases that consume the Brain CLI / MCP contract. For the commercial Desktop product, contact info@wazion.com.
+> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v7.31.2). NEXO Desktop is a separate closed-source companion app distributed at nexo-desktop.com; its source does not ship in this repo. Mentions of "NEXO Desktop" in changelog entries describe coordinated client releases that consume the Brain CLI / MCP contract. For the commercial Desktop product, contact info@wazion.com.
 
 NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. It adds a local shared brain across supported clients, configurable terminal and automation backends, recovery-aware background jobs, startup preflight, runtime self-healing, smarter retrieval defaults, long-horizon overnight analysis, and 150+ MCP tools.
 
+v7.31.2: patch release. The session ID becomes a durable identity: tools revive a valid SID whose
+row vanished, physical session cleanup moves from 15 minutes to 24 hours (visibility TTL unchanged),
+runtime-service state is keyed per runtime generation so two installs can never kill each other's
+resident, and obsolete residents retire themselves once clients disconnect while the current one
+stays warm for fast conversation starts.
 v7.31.1: patch release. Headless automations pause and queue when the selected engine is unavailable (credits exhausted, rate limited, expired auth) via a shared provider circuit breaker on the single launch path, resuming automatically with ONE operator notice in their configured language signed by their agent. Protocol nudge shaping (threshold, cooldown, headless awareness) ships in shadow mode, and client config push stops writing an invalid mcp__* permission rule to Claude Code settings (repairing contaminated installs).
 v7.31.0: minor release. The recommended Claude Code model moves from Opus 4.8 to Fable 5 with max reasoning (`claude-fable-5`). All four main resonance tiers resolve Claude Code to Fable 5, the `muy_bajo` tier keeps Haiku for cheap internal classifiers, and Codex stays on GPT-5.5. Existing installs riding NEXO defaults auto-migrate on update (mirroring the 4.6→4.7→4.8 migrations) while customized models are respected, and learning housekeeping no longer aborts when the embedding backend is missing.
 v7.30.33: patch release. Personal agent/script status now compares manual runs with scheduled cron history and keeps the newest real execution, preventing successful manual agent runs from being hidden behind older scheduled failures.
