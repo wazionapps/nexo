@@ -1973,13 +1973,47 @@ def _toolbox_summary(conn) -> str:
     return ""
 
 
+def _log_session_learning_aggregation_shadow(sid: str, *, blocked: bool, pending_count: int) -> None:
+    """Phase 1.5 (shadow) — session-level learning aggregation telemetry.
+
+    The per-line gate above only sees corrections its detector flagged in the
+    moment. The real close flow (here — NOT stop.py, which fires after every
+    response with a 10s timeout) is where a session-WIDE aggregation belongs.
+    Shadow first: record close-time compliance metrics to
+    runtime/logs/learning-aggregation-shadow.ndjson so the active phase
+    (full buffer analysis) can be sized with real data before it gates
+    anything. Never raises, never blocks.
+    """
+    try:
+        import json as _json
+        import os as _os
+        import time as _time
+        from pathlib import Path as _Path
+
+        base = _Path(_os.environ.get("NEXO_HOME") or (_Path.home() / ".nexo"))
+        path = base / "runtime" / "logs" / "learning-aggregation-shadow.ndjson"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(_json.dumps({
+                "ts": _time.time(),
+                "sid": sid,
+                "close_blocked_by_pending_correction": blocked,
+                "pending_corrections_at_close": pending_count,
+            }, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+
 def handle_stop(sid: str) -> str:
     """Cleanly close a session, removing it from active sessions immediately."""
+    pending_count = 0
     try:
         from db import list_session_correction_requirements
 
         pending = list_session_correction_requirements(session_id=sid, status="open", limit=3)
+        pending_count = len(pending or [])
         if pending:
+            _log_session_learning_aggregation_shadow(sid, blocked=True, pending_count=pending_count)
             return (
                 "ERROR: session has user correction(s) without durable learning_add. "
                 "Call nexo_learning_add for the correction before nexo_stop. "
@@ -1987,6 +2021,7 @@ def handle_stop(sid: str) -> str:
             )
     except Exception:
         pass
+    _log_session_learning_aggregation_shadow(sid, blocked=False, pending_count=pending_count)
     _stop_keepalive(sid)
     complete_session(sid)
     return f"Session {sid} closed."

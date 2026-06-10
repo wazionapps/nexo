@@ -42,6 +42,22 @@ PROTOCOL_SKIP_TOOLS = {
     "nexo_rules_check",
 }
 ACTION_TASK_TYPES = {"edit", "execute", "delegate"}
+
+# Phase 1.5 (SPEC-FIABILIDAD-FASES-2026-06) — protocol nudge shaping.
+# The "Non-trivial work without nexo_task_open" warning fired on EVERY
+# non-trivial tool call from tool #1 (no threshold, no rate limit, no
+# session-type awareness) — measurable as noise that gets ignored. Shaping:
+#   - threshold: only nudge after N consecutive non-trivial tools w/o task
+#   - cooldown: once nudged, stay quiet for a window
+#   - headless: runner sessions are covered by HeadlessEnforcer already
+#     (enforcement_engine.py, threshold 4/2 + cooldown) — skip the nudge
+# Mode is SHADOW by default: visible behaviour is UNCHANGED; decisions are
+# logged to runtime/logs/protocol-nudge-shadow.ndjson so the threshold can
+# be calibrated with real data before flipping NEXO_PROTOCOL_NUDGE_MODE to
+# "active". ("off" disables shaping bookkeeping entirely.)
+PROTOCOL_NUDGE_MODE = str(os.environ.get("NEXO_PROTOCOL_NUDGE_MODE", "shadow")).strip().lower()
+PROTOCOL_NUDGE_THRESHOLD = max(1, int(os.environ.get("NEXO_PROTOCOL_NUDGE_THRESHOLD", "6") or 6))
+PROTOCOL_NUDGE_COOLDOWN_S = max(0, int(os.environ.get("NEXO_PROTOCOL_NUDGE_COOLDOWN_S", "300") or 300))
 NEXO_CODE_ROOT = Path(os.environ.get("NEXO_CODE", str(Path(__file__).resolve().parent))).expanduser().resolve()
 LIVE_REPO_ROOT = NEXO_CODE_ROOT.parent if NEXO_CODE_ROOT.name == "src" else NEXO_CODE_ROOT
 PUBLIC_REPO_DIRS = {
@@ -1198,6 +1214,110 @@ def _append_protocol_warning(warnings: list[dict], message: str) -> None:
     warnings.append({"message": clean})
 
 
+def _protocol_nudge_state_path() -> Path:
+    base = Path(os.environ.get("NEXO_HOME") or (Path.home() / ".nexo"))
+    return base / "runtime" / "data" / "protocol-nudge-state.json"
+
+
+def _protocol_nudge_shadow_log_path() -> Path:
+    base = Path(os.environ.get("NEXO_HOME") or (Path.home() / ".nexo"))
+    return base / "runtime" / "logs" / "protocol-nudge-shadow.ndjson"
+
+
+def _shape_protocol_nudge(sid: str) -> dict:
+    """Phase 1.5 — decide whether the no-task nudge SHOULD fire under shaping.
+
+    Pure bookkeeping + decision; never raises (a broken state file must not
+    break the hook). Returns {would_emit, reason, streak}.
+    """
+    import json as _json
+    import time as _time
+
+    headless = (
+        str(os.environ.get("NEXO_AUTOMATION", "")).strip() == "1"
+        or str(os.environ.get("NEXO_HEADLESS", "")).strip() == "1"
+    )
+    if headless:
+        return {"would_emit": False, "reason": "headless-covered-by-enforcer", "streak": 0}
+
+    state_path = _protocol_nudge_state_path()
+    state: dict = {}
+    try:
+        state = _json.loads(state_path.read_text(encoding="utf-8"))
+        if not isinstance(state, dict):
+            state = {}
+    except Exception:
+        state = {}
+
+    now = _time.time()
+    # Drop stale sessions (>48h) so the file cannot grow without bound.
+    state = {
+        key: value for key, value in state.items()
+        if isinstance(value, dict) and (now - float(value.get("updated_at") or 0)) < 48 * 3600
+    }
+    entry = state.get(sid) or {}
+    streak = int(entry.get("streak") or 0) + 1
+    last_nudge_at = float(entry.get("last_nudge_at") or 0)
+    entry.update({"streak": streak, "updated_at": now})
+
+    if streak < PROTOCOL_NUDGE_THRESHOLD:
+        decision = {"would_emit": False, "reason": "under-threshold", "streak": streak}
+    elif last_nudge_at and (now - last_nudge_at) < PROTOCOL_NUDGE_COOLDOWN_S:
+        decision = {"would_emit": False, "reason": "cooldown", "streak": streak}
+    else:
+        entry["last_nudge_at"] = now
+        decision = {"would_emit": True, "reason": "threshold-reached", "streak": streak}
+
+    state[sid] = entry
+    try:
+        state_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = state_path.with_suffix(".json.tmp")
+        tmp.write_text(_json.dumps(state, ensure_ascii=False) + "\n", encoding="utf-8")
+        os.replace(tmp, state_path)
+    except Exception:
+        pass
+    return decision
+
+
+def _reset_protocol_nudge_streak(sid: str) -> None:
+    """A session with an open task is compliant — its streak restarts."""
+    import json as _json
+
+    if PROTOCOL_NUDGE_MODE == "off" or not sid:
+        return
+    state_path = _protocol_nudge_state_path()
+    try:
+        state = _json.loads(state_path.read_text(encoding="utf-8"))
+        if not isinstance(state, dict) or sid not in state:
+            return
+        state[sid]["streak"] = 0
+        tmp = state_path.with_suffix(".json.tmp")
+        tmp.write_text(_json.dumps(state, ensure_ascii=False) + "\n", encoding="utf-8")
+        os.replace(tmp, state_path)
+    except Exception:
+        pass
+
+
+def _log_protocol_nudge_shadow(sid: str, decision: dict, emitted_today: bool) -> None:
+    import json as _json
+    import time as _time
+
+    try:
+        path = _protocol_nudge_shadow_log_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(_json.dumps({
+                "ts": _time.time(),
+                "sid": sid,
+                "mode": PROTOCOL_NUDGE_MODE,
+                "threshold": PROTOCOL_NUDGE_THRESHOLD,
+                "decision": decision,
+                "legacy_warning_emitted": emitted_today,
+            }, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+
 def _collect_protocol_warnings(conn, *, sid: str, tool_name: str) -> list[dict]:
     short_name = _short_tool_name(tool_name)
     if short_name in PROTOCOL_SKIP_TOOLS or short_name not in NON_TRIVIAL_PROTOCOL_TOOLS:
@@ -1214,6 +1334,17 @@ def _collect_protocol_warnings(conn, *, sid: str, tool_name: str) -> list[dict]:
     task = _find_any_open_task(conn, sid)
     has_guard = _session_has_guard_check(conn, sid)
     if not task:
+        # Phase 1.5 — shaping decision. In SHADOW mode (default) the visible
+        # behaviour below is untouched and the decision is only logged so the
+        # threshold can be calibrated; in ACTIVE mode the shaping governs
+        # (headless skip, streak threshold, cooldown); "off" disables both.
+        nudge = None
+        if PROTOCOL_NUDGE_MODE in {"shadow", "active"}:
+            nudge = _shape_protocol_nudge(sid)
+        if PROTOCOL_NUDGE_MODE == "active" and nudge and not nudge["would_emit"]:
+            _log_protocol_nudge_shadow(sid, nudge, emitted_today=False)
+            return warnings
+
         guard_note = (
             render_core_prompt("hook-protocol-warning-task-open-guard-note")
             if short_name in {"Read", "Bash", "Grep", "Glob"} and not has_guard
@@ -1230,7 +1361,11 @@ def _collect_protocol_warnings(conn, *, sid: str, tool_name: str) -> list[dict]:
             warnings,
             render_core_prompt("hook-protocol-warning-heartbeat-close-evidence"),
         )
+        if PROTOCOL_NUDGE_MODE == "shadow" and nudge is not None:
+            _log_protocol_nudge_shadow(sid, nudge, emitted_today=True)
         return warnings
+
+    _reset_protocol_nudge_streak(sid)
 
     task_id = str(task.get("task_id") or "").strip()
     if str(task.get("task_type") or "").strip() in ACTION_TASK_TYPES and not (task.get("opened_with_guard") or has_guard):
