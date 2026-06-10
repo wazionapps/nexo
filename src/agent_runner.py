@@ -1205,6 +1205,14 @@ def run_automation_prompt(
             f"{selected_backend} automation backend selected but launcher is not installed; fallback blocked."
         )
 
+    # Fase 1.6 — provider circuit breaker. "Installed" is not "available":
+    # with credits exhausted / rate limited / auth expired, every headless
+    # cron used to launch a session that died mid-flight, burned its retry
+    # budget and escalated to the operator per-item. The breaker fails fast
+    # with a queue-me signal instead; one probe per retry window re-tests.
+    from provider_circuit_breaker import raise_if_unavailable
+    raise_if_unavailable(selected_backend)
+
     # Resonance map decides (model, effort) for every call. ``caller`` is
     # MANDATORY — every script that invokes the automation backend must be
     # registered in src/resonance_map.py so its reasoning budget is a
@@ -1414,6 +1422,7 @@ def run_automation_prompt(
         stderr = result.stderr or ""
         if not recorded:
             stderr = _append_stderr(stderr, record_error)
+        _record_provider_breaker_outcome(selected_backend, result.returncode, final_stdout, stderr)
         return subprocess.CompletedProcess(
             cmd,
             result.returncode,
@@ -1490,6 +1499,7 @@ def run_automation_prompt(
             stderr = result.stderr or ""
             if not recorded:
                 stderr = _append_stderr(stderr, record_error)
+            _record_provider_breaker_outcome(selected_backend, result.returncode, final_stdout, stderr)
             return subprocess.CompletedProcess(
                 cmd,
                 result.returncode,
@@ -1498,6 +1508,22 @@ def run_automation_prompt(
             )
 
     raise AutomationBackendUnavailableError(f"Unsupported automation backend: {selected_backend}")
+
+
+def _record_provider_breaker_outcome(backend: str, returncode: int | None, stdout: str, stderr: str) -> None:
+    """Fase 1.6 — feed the circuit breaker after every headless session.
+
+    Success closes the breaker; classified failures (credits/rate-limit/auth)
+    open it immediately so the NEXT cron fails fast and queues instead of
+    launching another doomed session. Best-effort: breaker bookkeeping must
+    never mask the session result.
+    """
+    try:
+        from provider_circuit_breaker import classify_session_failure, record_session_outcome
+        reason = classify_session_failure(returncode, stdout or "", stderr or "")
+        record_session_outcome(backend, ok=(reason is None), reason=reason)
+    except Exception:
+        pass
 
 
 def probe_automation_backend(

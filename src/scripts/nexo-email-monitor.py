@@ -57,6 +57,7 @@ if str(NEXO_CODE) not in sys.path:
     sys.path.insert(0, str(NEXO_CODE))
 
 from agent_runner import AutomationBackendUnavailableError, run_automation_prompt
+from provider_circuit_breaker import ProviderTemporarilyUnavailableError
 from client_preferences import (
     resolve_automation_backend,
 )
@@ -1997,19 +1998,24 @@ def _localized_operator_escalation_email(
     exhausted_count: int,
     details: str,
 ) -> tuple[str, str]:
+    # Phase 1.6 — subjects are signed by the AGENT (assistant_name, dynamic
+    # per install), not by the product: the operator talks to their agent.
     if _uses_spanish(operator_language):
-        subject = f"[NEXO] Emails requiring manual attention ({exhausted_count})"
+        # Phase 1.6 — this branch used to contain the ENGLISH text copied
+        # verbatim (operator-reported 10-jun: escalation mails arrived in
+        # English with language=es configured). Real Spanish now.
+        subject = f"[{assistant_name}] Emails que necesitan tu atención ({exhausted_count})"
         body = (
-            f"Hello {operator_name},\n\n"
-            f"The following emails have already been attempted {MAX_EMAIL_ATTEMPTS} times "
-            f"without succeeding (the session dies before completion):\n\n{details}\n\n"
-            "I marked them as `needs_interactive`. "
-            f"Open {assistant_name} Desktop and ask about the affected email so it can be resolved manually.\n\n"
+            f"Hola {operator_name},\n\n"
+            f"Los siguientes emails ya se han intentado {MAX_EMAIL_ATTEMPTS} veces "
+            f"sin conseguirlo (la sesión muere antes de terminar):\n\n{details}\n\n"
+            "Los he marcado como `needs_interactive`. "
+            f"Abre {assistant_name} Desktop y pregunta por el email afectado para resolverlo manualmente.\n\n"
             f"— {assistant_name}"
         )
         return subject, body
 
-    subject = f"[NEXO] Emails requiring manual attention ({exhausted_count})"
+    subject = f"[{assistant_name}] Emails requiring manual attention ({exhausted_count})"
     body = (
         f"Hello {operator_name},\n\n"
         f"The following emails have already been attempted {MAX_EMAIL_ATTEMPTS} times "
@@ -2354,6 +2360,17 @@ def launch_nexo(config, debt_block="", target_emails=None):
             _email_checkpoint_delete(mid)
         return True
 
+    except ProviderTemporarilyUnavailableError as e:
+        # Fase 1.6 — the engine is alive but unusable (credits/rate/auth).
+        # This attempt must NOT count against the email (the provider being
+        # down is not this email's fault), no scary per-item escalation:
+        # give the attempt back, notify the operator ONCE per opening (in
+        # their language) and let the breaker's probe window decide when to
+        # resume. The work stays queued exactly where it was.
+        log.warning(f"Provider circuit breaker open ({e.backend}: {e.reason}) — queueing work, attempt returned")
+        _decrement_attempts(target_message_ids)
+        _notify_provider_breaker_open_once(e)
+        return False
     except AutomationBackendUnavailableError as e:
         log.error(f"Automation backend unavailable: {e}")
         _persist_failure_checkpoints(error_msg=f"AutomationBackendUnavailable: {e}", last_text="")
@@ -2405,6 +2422,94 @@ def _increment_attempts(email_ids):
         conn.close()
     except Exception as e:
         log.warning(f"Failed to increment attempts: {e}")
+
+
+def _decrement_attempts(email_ids):
+    """Fase 1.6 — give an attempt back when the launch was vetoed by the
+    provider circuit breaker: the provider being down is not the email's
+    fault and must not push it towards needs_interactive."""
+    if not email_ids:
+        return
+    try:
+        conn = sqlite3.connect(str(EMAIL_DB_PATH))
+        for mid in email_ids:
+            conn.execute(
+                "UPDATE emails SET attempts = MAX(COALESCE(attempts, 1) - 1, 0) WHERE message_id = ?",
+                (mid,),
+            )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        log.warning(f"Failed to decrement attempts: {e}")
+
+
+def _notify_provider_breaker_open_once(error):
+    """Fase 1.6 — ONE operator notice per breaker opening, in their language.
+
+    Replaces the per-item English escalation storm the operator reported
+    (10-jun): with credits exhausted, every queued email generated its own
+    'needs manual attention' mail. Now: a single message explaining the pause
+    and that work is queued and resumes automatically.
+    """
+    try:
+        from provider_circuit_breaker import should_notify_operator
+        if not should_notify_operator(error.backend):
+            return
+        operator_name, assistant_name, operator_language = _get_operator_info()
+        config = load_config()
+        operator_email = config.get("operator_email", "")
+        if not operator_email:
+            log.warning("Breaker open but no operator_email configured — skipping notice")
+            return
+        retry_hint = ""
+        if error.retry_after_ts:
+            retry_hint = datetime.fromtimestamp(error.retry_after_ts).strftime("%H:%M")
+        reason_es = {
+            "credits": "créditos agotados",
+            "rate_limit": "límite de uso alcanzado",
+            "auth": "sesión caducada (hay que volver a conectar)",
+        }.get(error.reason, error.reason)
+        reason_en = {
+            "credits": "credits exhausted",
+            "rate_limit": "rate limit reached",
+            "auth": "session expired (needs re-login)",
+        }.get(error.reason, error.reason)
+        if _uses_spanish(operator_language):
+            subject = f"[{assistant_name}] Motor {error.backend} en pausa ({reason_es})"
+            body = (
+                f"Hola {operator_name},\n\n"
+                f"He pausado las automatizaciones que usan {error.backend} porque está no disponible: {reason_es}.\n\n"
+                "El trabajo pendiente queda EN COLA (no se pierde nada) y se reanudará solo en cuanto el motor vuelva"
+                + (f" (próxima comprobación ~{retry_hint})" if retry_hint else "")
+                + ".\n\nNo recibirás un aviso por cada tarea: solo este, y otro cuando se reanude.\n\n"
+                f"— {assistant_name}"
+            )
+        else:
+            subject = f"[{assistant_name}] Engine {error.backend} paused ({reason_en})"
+            body = (
+                f"Hello {operator_name},\n\n"
+                f"I paused the automations that use {error.backend} because it is unavailable: {reason_en}.\n\n"
+                "Pending work stays QUEUED (nothing is lost) and resumes automatically once the engine is back"
+                + (f" (next probe ~{retry_hint})" if retry_hint else "")
+                + ".\n\nYou will not get one notice per task — just this one, and another when work resumes.\n\n"
+                f"— {assistant_name}"
+            )
+        body_file = BASE_DIR / ".breaker-notice-body.txt"
+        body_file.write_text(body, encoding="utf-8")
+        send_script = get_send_reply_script_path(local_script_dir=_script_dir)
+        subprocess.run(
+            [
+                sys.executable, str(send_script),
+                "--to", f"{operator_name} <{operator_email}>",
+                "--subject", subject,
+                "--body-file", str(body_file),
+            ],
+            timeout=30,
+            capture_output=True,
+        )
+        log.info(f"Breaker-open notice sent to operator ({error.backend}: {error.reason})")
+    except Exception as e:
+        log.warning(f"Failed to send breaker-open notice: {e}")
 
 
 def _mark_needs_interactive(email_ids):

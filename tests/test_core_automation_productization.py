@@ -431,10 +431,14 @@ def test_email_monitor_localizes_operator_escalation_email_for_spanish(tmp_path,
         details="  - Subject: Report domain: canarirural.com | From: reports@example.com",
     )
 
-    assert subject == "[NEXO] Emails requiring manual attention (1)"
-    assert body.startswith("Hello Francisco,")
-    assert "I marked them as `needs_interactive`." in body
-    assert "Open Nero Desktop" in body
+    # Phase 1.6 — this test used to assert the ENGLISH copy for language=es,
+    # consecrating the very bug the operator reported (10-jun: escalation
+    # mails arrived in English with Spanish configured). Real Spanish now,
+    # and subjects are signed by the agent (assistant_name), not the product.
+    assert subject == "[Nero] Emails que necesitan tu atención (1)"
+    assert body.startswith("Hola Francisco,")
+    assert "Los he marcado como `needs_interactive`." in body
+    assert "Abre Nero Desktop" in body
 
 
 def test_followup_runner_detects_dynamic_operator_name(tmp_path, monkeypatch):
