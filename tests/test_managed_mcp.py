@@ -44,7 +44,7 @@ def test_builds_default_managed_entries_for_each_client(tmp_path):
     assert entries["nexo_chrome_control"]["args"] == ["run", "chrome_control"]
     assert entries["nexo_chrome_control"]["nexo"]["owner"] == "nexo"
     assert entries["nexo_chrome_control"]["nexo"]["provider_package"] == "chrome-devtools-mcp"
-    assert entries["nexo_chrome_control"]["nexo"]["provider_version"] == "1.1.1"
+    assert entries["nexo_chrome_control"]["nexo"]["provider_version"] == "1.2.0"
     assert entries["nexo_chrome_control"]["nexo"]["provider_bin"] == "chrome-devtools-mcp"
     assert entries["nexo_chrome_control"]["env"]["NEXO_CODE"] == str(runtime_root)
     assert entries["nexo_chrome_control"]["command"].endswith("bin/nexo-managed-mcp.js")

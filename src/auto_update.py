@@ -2058,7 +2058,7 @@ def _refresh_resonance_tiers_model_defaults(dest: Path = NEXO_HOME) -> list[str]
         dest / "personal" / "brain" / "resonance_tiers.json",
         dest / "brain" / "resonance_tiers.json",
     ]
-    old_prefixes = ("claude-opus-4-6", "claude-opus-4-7")
+    old_prefixes = ("claude-opus-4-6", "claude-opus-4-7", "claude-opus-4-8")
 
     for target_path in target_paths:
         try:
@@ -2089,7 +2089,7 @@ def _refresh_resonance_tiers_model_defaults(dest: Path = NEXO_HOME) -> list[str]
             model = str(claude.get("model") or "").strip()
             tier_changed = False
             if model and model.startswith(old_prefixes):
-                claude["model"] = str(source_claude.get("model") or "claude-opus-4-8")
+                claude["model"] = str(source_claude.get("model") or "claude-fable-5")
                 tier_changed = True
             if tier_changed and not str(claude.get("effort") or "").strip() and source_claude.get("effort"):
                 claude["effort"] = str(source_claude.get("effort"))

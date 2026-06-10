@@ -1,5 +1,18 @@
 # Changelog
 
+## [7.31.0] - 2026-06-10
+
+### Changed - default Claude model: Fable 5
+
+- **Claude Code default model is now `claude-fable-5` (Fable 5 with max reasoning).** `model_defaults.json` bumps `recommendation_version` to 4 and records `claude-opus-4-8` in `previous_defaults`, so users riding NEXO defaults get the upgrade while customized models stay untouched.
+- **All four main resonance tiers (maximo/alto/medio/bajo) now resolve Claude Code to `claude-fable-5`.** The `muy_bajo` tier keeps Haiku for cheap internal classifiers, and every Codex slot stays on `gpt-5.5` — this change does not touch OpenAI routing.
+- **Existing installs auto-migrate on update.** `heal_runtime_profiles` and the resonance contract refresh now treat `claude-opus-4-8` as a legacy default prefix, mirroring the 4.6→4.7→4.8 migrations, and `client_sync` propagates the new model to `~/.claude/settings.json`.
+- **Hardcoded fallbacks aligned.** The corrupt-JSON fallbacks in `model_defaults.py`, `bin/nexo-brain.js`, and `client_sync.py` now agree on `claude-fable-5` (two of them still pointed at Opus 4.7).
+
+### Fixed - learning housekeeping resilience
+
+- **Learning dedup no longer aborts housekeeping when the embedding backend is missing.** `nexo-learning-housekeep.py` degrades to skipping dedup (matching the "not available" branch) instead of crashing the whole decay/prioritization/archival run with exit 1.
+
 ## [7.30.33] - 2026-06-08
 
 ### Fixed - personal agent run state
