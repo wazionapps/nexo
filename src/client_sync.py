@@ -1012,7 +1012,16 @@ def _load_toml_object(path: Path) -> dict:
 def _write_toml_object(path: Path, payload: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     lines = _emit_toml_table(payload)
-    path.write_text("\n".join(lines).rstrip() + "\n")
+    content = "\n".join(lines).rstrip() + "\n"
+    # v7.31.x (Fase 1) — write-if-changed: rewriting an identical config.toml
+    # on every Desktop update churns mtime/content signatures and can
+    # re-trigger Codex's hook/trust confirmation prompt for the operator.
+    try:
+        if path.is_file() and path.read_text() == content:
+            return
+    except Exception:
+        pass  # unreadable existing file -> fall through to a clean write
+    path.write_text(content)
 
 
 def _sync_codex_managed_config(
@@ -1527,6 +1536,12 @@ def _claude_desktop_managed_metadata(server_config: dict, *, operator_name: str)
 # (followup-runner, email-monitor, deep-sleep, etc.) to work without
 # interactive approval prompts. Without this, Claude Code headless invocations
 # stall waiting for MCP tool approvals.
+#
+# v7.31.x (Fase 1) — "mcp__*" is NOT a valid Claude Code allow rule (allow
+# patterns must name a literal mcp__<server>__ scope; only deny/ask accept
+# bare wildcards). Claude Code skips it and shows a Settings Warning on every
+# launch. List the NEXO-managed servers explicitly instead; user-added
+# servers belong to the user's own config, not to this template.
 _NEXO_HEADLESS_ALLOWLIST = (
     "Bash",
     "Read",
@@ -1539,6 +1554,16 @@ _NEXO_HEADLESS_ALLOWLIST = (
     "NotebookEdit",
     "WebSearch",
     "WebFetch",
+    "mcp__nexo__*",
+    "mcp__nexo_chrome_control__*",
+    "mcp__nexo_desktop_control__*",
+    "mcp__nexo_power_control__*",
+)
+
+# Entries previously pushed by this template that Claude Code rejects as
+# invalid. The sync REMOVES them so already-contaminated installs stop
+# showing the launch warning. Safe: Claude Code was skipping them anyway.
+_NEXO_INVALID_ALLOWLIST_ENTRIES = (
     "mcp__*",
 )
 
@@ -1557,6 +1582,12 @@ def _ensure_headless_permissions(payload: dict) -> None:
     if not isinstance(allow_list, list):
         allow_list = []
         permissions["allow"] = allow_list
+
+    # v7.31.x (Fase 1) — migrate away invalid entries this template used to
+    # push (Claude Code skips them and warns on every launch).
+    for invalid in _NEXO_INVALID_ALLOWLIST_ENTRIES:
+        while invalid in allow_list:
+            allow_list.remove(invalid)
 
     existing = {str(item) for item in allow_list if isinstance(item, str)}
     for entry in _NEXO_HEADLESS_ALLOWLIST:

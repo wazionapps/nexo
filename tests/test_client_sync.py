@@ -1241,3 +1241,44 @@ def test_bootstrap_docs_resolve_templates_for_versioned_runtime_uses_nexo_home_t
     resolved = bootstrap_docs._resolve_templates_dir(module_file)
 
     assert resolved == runtime_root / "templates"
+
+
+def test_sync_claude_code_replaces_invalid_mcp_wildcard_allow_rule(tmp_path):
+    # Fase 1 (incidente 10-jun): la plantilla headless empujaba "mcp__*", que
+    # Claude Code rechaza como regla allow inválida y avisa en cada arranque.
+    # El sync debe (a) no volver a añadirla, (b) RETIRARLA de instalaciones
+    # contaminadas, (c) preservar las reglas propias del usuario, y (d) dejar
+    # las reglas válidas por servidor gestionado.
+    import client_sync
+
+    runtime = _make_runtime(tmp_path)
+    home = tmp_path / "home"
+    settings_path = home / ".claude" / "settings.json"
+    settings_path.parent.mkdir(parents=True)
+    settings_path.write_text(json.dumps({
+        "permissions": {
+            "allow": ["Bash", "mcp__*", "mcp__github__*"],
+            "deny": [],
+            "ask": [],
+            "defaultMode": "dontAsk",
+        },
+    }))
+
+    result = client_sync.sync_claude_code(
+        nexo_home=runtime,
+        runtime_root=runtime,
+        operator_name="Atlas",
+        user_home=home,
+    )
+
+    assert result["ok"] is True
+    payload = json.loads(settings_path.read_text())
+    allow = payload["permissions"]["allow"]
+    assert "mcp__*" not in allow
+    assert "mcp__github__*" in allow
+    assert "mcp__nexo__*" in allow
+    assert "mcp__nexo_chrome_control__*" in allow
+    assert "mcp__nexo_desktop_control__*" in allow
+    assert "mcp__nexo_power_control__*" in allow
+    assert "Bash" in allow
+    assert allow.count("Bash") == 1
