@@ -52,7 +52,10 @@ def test_service_state_roundtrip_is_under_runtime_state(monkeypatch, tmp_path):
     runtime_service.write_service_state({"pid": 123, "port": 17872, "url": "http://127.0.0.1:17872/mcp"})
     path = runtime_service.service_state_path()
 
-    assert path == tmp_path / "runtime" / "state" / "runtime-service.json"
+    # Phase 2.1 — the state file is keyed by runtime GENERATION so two
+    # different installs can never see (and kill) each other's resident.
+    token = runtime_service._current_generation_token()
+    assert path == tmp_path / "runtime" / "state" / f"runtime-service-{token}.json"
     data = json.loads(path.read_text(encoding="utf-8"))
     assert data["pid"] == 123
     assert data["port"] == 17872
@@ -70,7 +73,8 @@ def test_service_start_lock_is_under_runtime_state(monkeypatch, tmp_path):
 
     with runtime_service.service_start_lock(timeout=1):
         path = runtime_service.service_lock_path()
-        assert path == tmp_path / "runtime" / "state" / "runtime-service.lock"
+        token = runtime_service._current_generation_token()
+        assert path == tmp_path / "runtime" / "state" / f"runtime-service-{token}.lock"
         assert path.exists()
 
 
