@@ -112,19 +112,9 @@ def test_adaptive_mode_and_reflection_follow_personal_and_runtime_paths(tmp_path
     assert reflection.REFLECTION_LOG_PATH == str(nexo_home / "runtime" / "coordination" / "reflection-log.json")
 
 
-def test_heartbeat_enforcement_state_file_follows_runtime_operations(tmp_path, monkeypatch):
-    nexo_home = tmp_path / "nexo-home"
-    monkeypatch.setenv("NEXO_HOME", str(nexo_home))
-
-    import importlib.util
-
-    heartbeat_path = SRC / "hooks" / "heartbeat-enforcement.py"
-    spec = importlib.util.spec_from_file_location("heartbeat_enforcement_test", heartbeat_path)
-    module = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
-    spec.loader.exec_module(module)
-
-    assert module.STATE_FILE == nexo_home / "runtime" / "operations" / ".heartbeat-state.json"
+# Phase 2.3 — test_heartbeat_enforcement_state_file_follows_runtime_operations
+# removed with the dead hook trio (operator decision 11-jun); the shell-path
+# contract test now pins the ABSENCE of those files instead.
 
 
 def test_server_backup_dir_follows_runtime_backups(tmp_path, monkeypatch):

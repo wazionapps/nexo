@@ -83,7 +83,7 @@ except Exception:
 
     def resolve_client_runtime_profile(client: str, preferences: dict | None = None) -> dict:
         defaults = {
-            "claude_code": {"model": "claude-fable-5", "reasoning_effort": "max"},
+            "claude_code": {"model": "claude-opus-4-8", "reasoning_effort": "max"},
             "codex": {"model": "gpt-5.5", "reasoning_effort": "xhigh"},
         }
         return dict(defaults.get(client, {}))

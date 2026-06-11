@@ -34,7 +34,7 @@ def test_tier_medio_resolves_to_claude_code_high_effort():
         "personal/test", "claude_code", explicit_tier="medio"
     )
     assert effort == "high"
-    assert model == "claude-fable-5"
+    assert model == "claude-opus-4-8"
 
 
 def test_reasoning_effort_explicit_overrides_resolver():

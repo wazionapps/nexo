@@ -18,9 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.31.2` is the current packaged-runtime line. Patch release over v7.31.1 - the session ID becomes a durable identity (sessions survive quiet work periods; physical cleanup at 24h), runtime residents are isolated per generation so two installs can never kill each other's resident, and obsolete residents retire themselves once clients disconnect.
+Version `7.31.3` is the current packaged-runtime line. Patch release over v7.31.2 - the recommended Claude Code model returns to Opus 4.8 with max reasoning (installs riding NEXO defaults migrate back automatically; customized models untouched), and the dead heartbeat-enforcement hook trio is removed from the source tree.
 
-Previously in `7.31.1`: patch release over v7.31.0 - headless automations pause and queue when the selected engine is unavailable (credits, rate limits, expired auth) and resume automatically with one operator notice in their language; protocol nudge shaping ships in shadow mode; and the client config push stops writing an invalid `mcp__*` permission rule to Claude Code settings.
+Previously in `7.31.2`: patch release over v7.31.1 - the session ID becomes a durable identity (sessions survive quiet work periods; physical cleanup at 24h), runtime residents are isolated per generation so two installs can never kill each other's resident, and obsolete residents retire themselves once clients disconnect.
 
 Previously in `7.30.33`: patch release over v7.30.32 - personal agent/script status now keeps the newest real run between manual executions and cron history, so a successful manual agent run cannot be hidden behind an older scheduled failure.
 

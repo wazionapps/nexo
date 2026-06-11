@@ -178,7 +178,7 @@ def test_build_interactive_client_command_preserves_claude_flags(tmp_path, monke
     assert cmd == [
         "/tmp/fake-claude",
         "--model",
-        "claude-fable-5",
+        "claude-opus-4-8",
         "--effort",
         "max",
         "--dangerously-skip-permissions",
@@ -642,7 +642,7 @@ def test_run_automation_prompt_ignores_legacy_task_profile_routing_overrides(mon
     assert result.stdout == "FAST OK"
     assert captured["cmd"][0] == "/tmp/fake-claude"
     assert "--model" in captured["cmd"]
-    assert captured["cmd"][captured["cmd"].index("--model") + 1] == "claude-fable-5"
+    assert captured["cmd"][captured["cmd"].index("--model") + 1] == "claude-opus-4-8"
     assert captured["cmd"][captured["cmd"].index("--effort") + 1] == "max"
 
 

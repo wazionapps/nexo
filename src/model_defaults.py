@@ -20,7 +20,7 @@ from typing import Any
 _FALLBACK: dict[str, Any] = {
     "schema_version": 1,
     "claude_code": {
-        "model": "claude-fable-5",
+        "model": "claude-opus-4-8",
         "reasoning_effort": "max",
         "display_name": "Fable 5 with max reasoning",
         "recommendation_version": 4,
@@ -99,7 +99,7 @@ def looks_like_claude_model(model: str) -> bool:
     return str(model or "").strip().lower().startswith(_CLAUDE_MODEL_PREFIXES)
 
 
-_CLAUDE_DEFAULT_PREFIXES = ("claude-opus-4-6", "claude-opus-4-7", "claude-opus-4-8")
+_CLAUDE_DEFAULT_PREFIXES = ("claude-opus-4-6", "claude-opus-4-7", "claude-opus-4-8", "claude-fable-5")
 
 
 def heal_runtime_profiles(profiles: dict) -> tuple[dict, list[str]]:

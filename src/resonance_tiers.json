@@ -1,19 +1,19 @@
 {
   "tiers": {
     "maximo": {
-      "claude_code": { "model": "claude-fable-5", "effort": "max" },
+      "claude_code": { "model": "claude-opus-4-8", "effort": "max" },
       "codex":       { "model": "gpt-5.5",             "effort": "xhigh" }
     },
     "alto": {
-      "claude_code": { "model": "claude-fable-5", "effort": "xhigh" },
+      "claude_code": { "model": "claude-opus-4-8", "effort": "xhigh" },
       "codex":       { "model": "gpt-5.5",             "effort": "high" }
     },
     "medio": {
-      "claude_code": { "model": "claude-fable-5", "effort": "high" },
+      "claude_code": { "model": "claude-opus-4-8", "effort": "high" },
       "codex":       { "model": "gpt-5.5",             "effort": "medium" }
     },
     "bajo": {
-      "claude_code": { "model": "claude-fable-5", "effort": "medium" },
+      "claude_code": { "model": "claude-opus-4-8", "effort": "medium" },
       "codex":       { "model": "gpt-5.5",             "effort": "low" }
     },
     "muy_bajo": {

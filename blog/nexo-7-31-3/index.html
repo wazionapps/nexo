@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEXO 7.31.3: default Claude model back to Opus 4.8</title>
+    <meta name="description" content="NEXO Brain 7.31.3 returns the recommended Claude Code model to Opus 4.8 with max reasoning (auto-migrating installs riding NEXO defaults) and removes the dead heartbeat-enforcement hook trio from the source tree.">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-31-3/">
+</head>
+<body>
+    <main>
+        <p><a href="/blog/">Back to blog</a></p>
+        <h1>NEXO 7.31.3: default Claude model back to Opus 4.8</h1>
+        <p><strong>June 11, 2026.</strong> A small operator-driven patch: the recommended Claude Code model returns to Opus 4.8, and a trio of dead hooks leaves the tree for good.</p>
+        <h2>What changed</h2>
+        <ul>
+            <li><strong>Default Claude Code model: Opus 4.8 with max reasoning.</strong> This reverts the brief 7.31.0 move to Fable 5. Installs riding NEXO defaults migrate back automatically (recommendation version 5, with Fable 5 recorded as a previous default); deliberately customized models stay untouched, as always. The four main resonance tiers resolve Claude Code to Opus 4.8 again, the cheap classifier tier keeps Haiku, and Codex routing is untouched.</li>
+            <li><strong>Dead heartbeat-enforcement hooks removed.</strong> The trio was never wired into client settings and its output was discarded; update cleanups already retired it from installs, and the protocol nudge shaping introduced in 7.31.1 covers the need. A contract test now pins their absence.</li>
+        </ul>
+        <h2>Why it matters</h2>
+        <p>Model defaults follow the operator's judgement, and the migration machinery makes those changes safe in both directions: riders of the recommended default move automatically, custom choices are never touched, and dead code stays dead.</p>
+        <p><a href="/changelog/#v7313">Read the full v7.31.3 changelog</a></p>
+    </main>
+</body>
+</html>

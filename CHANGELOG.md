@@ -1,6 +1,14 @@
 # Changelog
 
-## [7.31.2] - 2026-06-11
+## [7.31.3] - 2026-06-11
+
+### Changed - default Claude model back to Opus 4.8
+
+- **The recommended Claude Code model returns to `claude-opus-4-8` with max reasoning** (operator decision, reverting the brief 7.31.0 move to Fable 5). `model_defaults.json` bumps `recommendation_version` to 5 and records `claude-fable-5` in `previous_defaults`, so installs riding NEXO defaults migrate back automatically while customized models stay untouched. The four main resonance tiers resolve Claude Code to Opus 4.8 again; `muy_bajo` keeps Haiku and Codex stays on GPT-5.5. Corrupt-JSON fallbacks realigned in `model_defaults.py`, `bin/nexo-brain.js` and `client_sync.py`.
+
+### Removed - dead heartbeat-enforcement hook trio
+
+- **`heartbeat-enforcement.py`, `heartbeat-user-msg.sh` and `heartbeat-posttool.sh` are removed from the source tree** (operator decision). They were dead weight: the shell launchers were never registered in client settings, their stdout was discarded by post_tool_use, the update cleanup lists already retire them from installs, and the Phase 1.5 protocol nudge shaping covers the need. The shell-path contract test now pins their ABSENCE so they cannot quietly return.
 
 ### Fixed - session continuity (Phase 2 reliability)
 

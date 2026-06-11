@@ -21,7 +21,7 @@ def test_normalize_client_preferences_preserves_old_defaults(tmp_path):
     assert prefs["provider_runtime"]["providers"]["anthropic"]["client"] == "claude_code"
     assert prefs["provider_runtime"]["providers"]["openai"]["client"] == "codex"
     assert prefs["provider_runtime"]["fallback_policy"]["automation"] == "fail_closed"
-    assert prefs["client_runtime_profiles"]["claude_code"]["model"] == "claude-fable-5"
+    assert prefs["client_runtime_profiles"]["claude_code"]["model"] == "claude-opus-4-8"
     assert prefs["client_runtime_profiles"]["codex"]["model"] == "gpt-5.5"
     assert prefs["client_runtime_profiles"]["codex"]["reasoning_effort"] == "xhigh"
     assert prefs["automation_task_profiles"]["fast"]["backend"] == ""
@@ -281,7 +281,7 @@ def test_client_runtime_profiles_normalize_and_default():
         }
     )
 
-    assert prefs["client_runtime_profiles"]["claude_code"]["model"] == "claude-fable-5"
+    assert prefs["client_runtime_profiles"]["claude_code"]["model"] == "claude-opus-4-8"
     assert prefs["client_runtime_profiles"]["codex"]["model"] == "gpt-5.5"
     assert prefs["client_runtime_profiles"]["codex"]["reasoning_effort"] == "high"
 

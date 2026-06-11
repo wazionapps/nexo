@@ -846,7 +846,7 @@ class TestChatCommand:
         # to effort=xhigh for claude_code. The previous "max" value came from
         # reading client_runtime_profiles directly; that path is only the
         # fallback now.
-        assert payload["argv"][:5] == ["--model", "claude-fable-5", "--effort", "xhigh", "--dangerously-skip-permissions"]
+        assert payload["argv"][:5] == ["--model", "claude-opus-4-8", "--effort", "xhigh", "--dangerously-skip-permissions"]
         assert "nexo_startup" in payload["argv"][-1]
         assert "nexo_heartbeat" in payload["argv"][-1]
         assert payload["cwd"] == str(workspace.resolve())

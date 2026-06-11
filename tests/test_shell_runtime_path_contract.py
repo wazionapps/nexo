@@ -120,10 +120,17 @@ def test_auxiliary_hooks_use_runtime_or_core_locations_first() -> None:
     assert 'DATA_DIR="$NEXO_HOME/runtime/data"' in inbox
     assert 'DB="$DATA_DIR/nexo.db"' in inbox
 
-    heartbeat_user = _read("src/hooks/heartbeat-user-msg.sh")
-    assert 'elif [ -f "$NEXO_HOME/core/hooks/heartbeat-enforcement.py" ]; then' in heartbeat_user
-    assert 'HELPER="$NEXO_HOME/core/hooks/heartbeat-enforcement.py"' in heartbeat_user
-
-    heartbeat_posttool = _read("src/hooks/heartbeat-posttool.sh")
-    assert 'elif [ -f "$NEXO_HOME/core/hooks/heartbeat-enforcement.py" ]; then' in heartbeat_posttool
-    assert 'HELPER="$NEXO_HOME/core/hooks/heartbeat-enforcement.py"' in heartbeat_posttool
+    # Phase 2.3 (operator decision 11-jun) — the dead heartbeat-enforcement
+    # trio was removed from src/hooks: its .sh launchers were never
+    # registered in client settings, post_tool_use discarded their stdout,
+    # and the update cleanup lists already retire them from installs.
+    # The contract now pins their ABSENCE so they cannot quietly return.
+    import os
+    for retired in (
+        "src/hooks/heartbeat-enforcement.py",
+        "src/hooks/heartbeat-user-msg.sh",
+        "src/hooks/heartbeat-posttool.sh",
+    ):
+        assert not os.path.exists(os.path.join(REPO_ROOT, retired)), (
+            f"{retired} was retired (Phase 2.3) and must not reappear"
+        )
