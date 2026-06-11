@@ -1981,18 +1981,17 @@ Only include grounded opportunities. Avoid generic motivational/business filler.
 
 Label:
 
-- ES: `Bloqueos`
-- EN: `Blockers`
+- ES: `Bloqueos y riesgos`
+- EN: `Blockers and risks`
 
 Description:
 
-- ES: `Muestra lo que impide avanzar y quien o que tiene que desbloquearlo.`
-- EN: `Shows what prevents progress and who or what must unblock it.`
+- ES: `Señala bloqueos, riesgos o asuntos que pueden frenarte si no los atiendes.`
+- EN: `Flags blockers, risks, or issues that can slow you down if ignored.`
 
 Fields:
 
-- enabled: checkbox, default true
-- max_items: number, default 5
+- blockers: boolean, default true
 
 Prompt intent:
 
