@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-<meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.31.3 returns the default Claude Code model to Opus 4.8.">
+<meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.31.4 makes memory recall honour absolute time ranges.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -94,7 +94,7 @@
                     <span class="page-chip">Patch release</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v7313" class="btn btn-primary">Start with v7.31.3</a>
+                    <a href="#v7314" class="btn btn-primary">Start with v7.31.4</a>
                     <a href="#v7122" class="btn btn-secondary">See v7.12.2</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -102,8 +102,8 @@
             <div class="page-visual">
                 <div class="page-stack">
                     <div class="page-stack-card">
-                        <strong>v7.31.3</strong>
-                        <span>Patch - the recommended Claude Code model returns to Opus 4.8 with automatic migration for installs riding defaults, and the dead heartbeat-enforcement hooks leave the tree.</span>
+                        <strong>v7.31.4</strong>
+                        <span>Patch - memory recall honours absolute time ranges (ISO dates, ranges, epochs) enforced in SQL, so old windows actually surface.</span>
                     </div>
                     <div class="page-stack-card">
                         <strong>v7.17.8</strong>
@@ -345,6 +345,14 @@
 <section class="section-compact" style="background:rgba(124,58,237,0.08);">
     <div class="container desktop-disclaimer" style="max-width:860px;font-size:13px;line-height:1.55;">
         <p><strong>About NEXO Desktop.</strong> NEXO Desktop is a separate closed-source companion client distributed at <a href="https://nexo-desktop.com/">nexo-desktop.com</a>. When a changelog entry mentions NEXO Desktop it refers to a coordinated client release that consumes the Brain CLI/MCP contract. Desktop source does not live in this repo; the Brain (AGPL-3.0) remains fully usable on its own from terminal, provider CLIs, or any MCP client.</p>
+    </div>
+</section>
+
+<section id="v7314" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.31.4 <span style="opacity:.5;font-weight:400;">&mdash; June 11, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">Memory recall honours absolute time ranges</h2>
+        <p class="section-subtitle">time_range only understood relative values; absolute dates, ranges and epochs silently disabled the filter and recall returned the most recent events instead of the requested window. The parser now accepts all those forms and the window is enforced in SQL itself, so old windows surface past the recency-truncated candidate set.</p>
     </div>
 </section>
 

@@ -750,12 +750,23 @@ def list_memory_events(
     session_id: str = "",
     project_key: str = "",
     limit: int = 20,
+    start_ts: float | None = None,
+    end_ts: float | None = None,
 ) -> list[dict]:
     conn = _core().get_db()
     if not _table_exists(conn, "memory_events"):
         return []
     clauses = ["1=1"]
     params: list[Any] = []
+    # time_range push-down (ff78ff94): bounds must constrain the SQL fetch
+    # itself — Python-side filtering after a recency-truncated fetch made old
+    # windows return nothing.
+    if start_ts is not None:
+        clauses.append("created_at >= ?")
+        params.append(float(start_ts))
+    if end_ts is not None:
+        clauses.append("created_at < ?")
+        params.append(float(end_ts))
     if event_type.strip():
         clauses.append("event_type = ?")
         params.append(event_type.strip().lower())
@@ -798,12 +809,20 @@ def list_memory_observations(
     project_key: str = "",
     status: str = "",
     limit: int = 20,
+    start_ts: float | None = None,
+    end_ts: float | None = None,
 ) -> list[dict]:
     conn = _core().get_db()
     if not _table_exists(conn, "memory_observations"):
         return []
     clauses = ["1=1"]
     params: list[Any] = []
+    if start_ts is not None:
+        clauses.append("created_at >= ?")
+        params.append(float(start_ts))
+    if end_ts is not None:
+        clauses.append("created_at < ?")
+        params.append(float(end_ts))
     if observation_type.strip():
         clauses.append("observation_type = ?")
         params.append(observation_type.strip().lower())
@@ -845,6 +864,8 @@ def search_memory_observations_fts(
     *,
     project_key: str = "",
     limit: int = 20,
+    start_ts: float | None = None,
+    end_ts: float | None = None,
 ) -> list[dict]:
     conn = _core().get_db()
     if not _table_exists(conn, "memory_observations_fts"):
@@ -859,6 +880,12 @@ def search_memory_observations_fts(
          WHERE memory_observations_fts MATCH ?
     """
     params: list[Any] = [fts]
+    if start_ts is not None:
+        sql += " AND o.created_at >= ?"
+        params.append(float(start_ts))
+    if end_ts is not None:
+        sql += " AND o.created_at < ?"
+        params.append(float(end_ts))
     if project_key.strip():
         sql += " AND o.project_key = ?"
         params.append(project_key.strip())

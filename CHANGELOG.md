@@ -1,5 +1,11 @@
 # Changelog
 
+## [7.31.4] - 2026-06-11
+
+### Fixed - memory recall honours absolute time ranges
+
+- **Asking the Brain about a specific past day actually returns that day.** `time_range` only understood relative values (`today`, `ayer`, `last N days`); any absolute value — an ISO date, a `start..end` range, a datetime or epoch seconds — silently disabled the filter and the recall tools returned the most recent events instead (operator repro: asking for June 4th returned yesterday's activity). The parser now supports all those forms, and the window is enforced in SQL itself: the fetch helpers accept `start_ts`/`end_ts` bounds, so old windows surface even past the recency-truncated candidate set (the second chained bug).
+
 ## [7.31.3] - 2026-06-11
 
 ### Changed - default Claude model back to Opus 4.8

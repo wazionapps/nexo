@@ -82,6 +82,40 @@ def _parse_time_range(value: str = "") -> tuple[float | None, float | None, str]
         unit = match.group(2)
         delta = timedelta(hours=amount) if unit.startswith("h") else timedelta(days=amount)
         return (now - delta).timestamp(), now.timestamp(), clean
+
+    # Operator bug (session ff78ff94, 11-jun): absolute values silently fell
+    # through to (None, None, "") which DISABLED the filter — asking for a
+    # specific past day returned the most recent events instead. Support ISO
+    # dates, ISO ranges (date end is inclusive: bound = next midnight), ISO
+    # datetimes, and epoch seconds / epoch ranges.
+    def _point(text, *, end_of_day=False):
+        text = text.strip()
+        if re.fullmatch(r"\d{9,}(\.\d+)?", text):
+            return float(text), False
+        try:
+            if re.fullmatch(r"\d{4}-\d{2}-\d{2}", text):
+                day = datetime.fromisoformat(text)
+                if end_of_day:
+                    return (day + timedelta(days=1)).timestamp(), True
+                return day.timestamp(), True
+            return datetime.fromisoformat(text).timestamp(), False
+        except ValueError:
+            return None, False
+
+    if ".." in clean:
+        left, _, right = clean.partition("..")
+        start_ts, _ = _point(left)
+        end_ts, _ = _point(right, end_of_day=True)
+        if start_ts is not None and end_ts is not None and end_ts > start_ts:
+            return start_ts, end_ts, f"range:{clean}"
+        return None, None, ""
+
+    point_ts, is_date = _point(clean)
+    if point_ts is not None:
+        if is_date:
+            return point_ts, point_ts + 86400, f"day:{clean}"
+        # Single datetime/epoch: a one-hour window centred forward.
+        return point_ts, point_ts + 3600, f"at:{clean}"
     return None, None, ""
 
 
@@ -177,6 +211,8 @@ def memory_search(
         clean_query,
         project_key="",
         limit=max_items * 3,
+        start_ts=start,
+        end_ts=end,
     ):
         uid = item.get("observation_uid") or f"id:{item.get('id')}"
         observations_by_uid[uid] = item
@@ -184,6 +220,8 @@ def memory_search(
         query=clean_query,
         project_key="",
         limit=max_items * 3,
+        start_ts=start,
+        end_ts=end,
     ):
         uid = item.get("observation_uid") or f"id:{item.get('id')}"
         observations_by_uid.setdefault(uid, item)
@@ -192,6 +230,8 @@ def memory_search(
         query=clean_query,
         project_key="",
         limit=max_items * 3,
+        start_ts=start,
+        end_ts=end,
     )
 
     candidates = [
