@@ -1,5 +1,11 @@
 # Changelog
 
+## [7.31.5] - 2026-06-11
+
+### Added - breaker resume notice
+
+- **The pause email's promise is now kept.** When automations pause because the selected engine is unavailable, the single operator notice says "you will get another notice when work resumes" — that resume notice now exists. When a notified pause recovers, the email monitor sends exactly one "engine resumed, the queue is processing" email (Spanish/English per the operator's language, signed by their agent), gated by `should_notify_operator_resumed` so it can never repeat. Caught reviewing the breaker's first real production firing, which otherwise worked exactly as designed.
+
 ## [7.31.4] - 2026-06-11
 
 ### Fixed - memory recall honours absolute time ranges

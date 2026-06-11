@@ -18,9 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.31.4` is the current packaged-runtime line. Patch release over v7.31.3 - memory recall honours absolute time ranges (ISO dates, start..end ranges, datetimes, epochs) and enforces the window in SQL, so asking about a specific past day returns that day.
+Version `7.31.5` is the current packaged-runtime line. Patch release over v7.31.4 - the breaker resume notice exists: when a notified engine pause recovers, the operator gets exactly one resume email in their language, signed by their agent.
 
-Previously in `7.31.3`: patch release over v7.31.2 - the recommended Claude Code model returns to Opus 4.8 with max reasoning (installs riding NEXO defaults migrate back automatically; customized models untouched), and the dead heartbeat-enforcement hook trio is removed from the source tree.
+Previously in `7.31.4`: patch release over v7.31.3 - memory recall honours absolute time ranges (ISO dates, start..end ranges, datetimes, epochs) and enforces the window in SQL, so asking about a specific past day returns that day.
 
 Previously in `7.30.33`: patch release over v7.30.32 - personal agent/script status now keeps the newest real run between manual executions and cron history, so a successful manual agent run cannot be hidden behind an older scheduled failure.
 
