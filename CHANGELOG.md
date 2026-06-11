@@ -1,5 +1,11 @@
 # Changelog
 
+## [7.31.6] - 2026-06-11
+
+### Fixed - Desktop UI language for headless notices
+
+- **Headless/email-monitor notifications now respect the Desktop UI language for non-LLM templates.** Static emails for `needs_interactive`, provider breaker pause, and provider breaker resume now choose explicit ES/EN templates from Desktop `app.ui_language` first, then fall back to profile/calibration language, and finally English. The templates use the configured user and assistant names, so product releases are generic across users, agents, and installs.
+
 ## [7.31.5] - 2026-06-11
 
 ### Added - breaker resume notice

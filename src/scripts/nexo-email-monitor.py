@@ -90,12 +90,83 @@ CONCURRENT_THRESHOLD_MINUTES = 15
 MAX_CONCURRENT_SESSIONS = 2
 MAX_EMAIL_ATTEMPTS = 3
 DEFAULT_OPERATOR_LANGUAGE = "en"
+SUPPORTED_NOTIFICATION_LANGUAGES = {"en", "es"}
 EMPTY_INBOX_BACKOFF_STEPS = (
     (12, 60 * 60),
     (6, 30 * 60),
     (3, 15 * 60),
 )
 DEFAULT_ASSISTANT_NAME = "Nova"
+HEADLESS_NOTIFICATION_TEMPLATES = {
+    "email_needs_interactive": {
+        "es": {
+            "subject": "[{assistant_name}] Emails que necesitan tu atención ({count})",
+            "body": (
+                "Hola {user_name},\n\n"
+                "Los siguientes emails ya se han intentado {max_attempts} veces sin poder completarse:\n\n"
+                "{details}\n\n"
+                "Los he marcado como `needs_interactive`.\n"
+                "Abre {assistant_name} Desktop y pregunta por el email afectado para resolverlo manualmente.\n\n"
+                "— {assistant_name}"
+            ),
+        },
+        "en": {
+            "subject": "[{assistant_name}] Emails requiring your attention ({count})",
+            "body": (
+                "Hello {user_name},\n\n"
+                "The following emails have already been attempted {max_attempts} times without completing:\n\n"
+                "{details}\n\n"
+                "I marked them as `needs_interactive`.\n"
+                "Open {assistant_name} Desktop and ask about the affected email so it can be resolved manually.\n\n"
+                "— {assistant_name}"
+            ),
+        },
+    },
+    "provider_breaker_open": {
+        "es": {
+            "subject": "[{assistant_name}] Motor {backend} en pausa ({reason})",
+            "body": (
+                "Hola {user_name},\n\n"
+                "He pausado las automatizaciones que usan {backend} porque no está disponible: {reason}.\n\n"
+                "El trabajo pendiente queda EN COLA; no se pierde nada.\n"
+                "Se reanudará automáticamente cuando el motor vuelva a estar disponible{retry_hint}.\n\n"
+                "No recibirás un aviso por cada tarea: solo este aviso y otro cuando el trabajo se reanude.\n\n"
+                "— {assistant_name}"
+            ),
+        },
+        "en": {
+            "subject": "[{assistant_name}] Engine {backend} paused ({reason})",
+            "body": (
+                "Hello {user_name},\n\n"
+                "I paused the automations that use {backend} because it is unavailable: {reason}.\n\n"
+                "Pending work stays QUEUED; nothing is lost.\n"
+                "It will resume automatically when the engine becomes available again{retry_hint}.\n\n"
+                "You will not get one notice per task: only this notice and another one when work resumes.\n\n"
+                "— {assistant_name}"
+            ),
+        },
+    },
+    "provider_breaker_resumed": {
+        "es": {
+            "subject": "[{assistant_name}] Motor {backend} reanudado",
+            "body": (
+                "Hola {user_name},\n\n"
+                "El motor {backend} vuelve a estar disponible y he reanudado las automatizaciones.\n\n"
+                "La cola pendiente se está procesando ya, en orden. No tienes que hacer nada.\n\n"
+                "— {assistant_name}"
+            ),
+        },
+        "en": {
+            "subject": "[{assistant_name}] Engine {backend} resumed",
+            "body": (
+                "Hello {user_name},\n\n"
+                "The {backend} engine is available again and I have resumed the automations.\n\n"
+                "The pending queue is being processed now, in order. Nothing is needed from you.\n\n"
+                "— {assistant_name}"
+            ),
+        },
+    },
+}
 EVENT_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS email_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1990,6 +2061,104 @@ def _uses_spanish(language: str) -> bool:
     return normalized == "es" or normalized.startswith("es-")
 
 
+def _normalize_notification_language(value: str | None = "") -> str:
+    normalized = str(value or "").strip().lower().replace("_", "-")
+    if normalized == "es" or normalized.startswith("es-"):
+        return "es"
+    if normalized == "en" or normalized.startswith("en-"):
+        return "en"
+    return ""
+
+
+def _desktop_settings_candidates() -> list[Path]:
+    home = Path.home()
+    candidates: list[Path] = []
+    explicit_settings = os.environ.get("NEXO_DESKTOP_SETTINGS", "").strip()
+    if explicit_settings:
+        candidates.append(Path(explicit_settings))
+    explicit_user_data = os.environ.get("NEXO_DESKTOP_USER_DATA", "").strip()
+    if explicit_user_data:
+        candidates.append(Path(explicit_user_data) / "app-settings.json")
+    candidates.extend([
+        home / "Library" / "Application Support" / "nexo-desktop-mvp" / "app-settings.json",
+        home / "Library" / "Application Support" / "NEXO Desktop" / "app-settings.json",
+        home / "Library" / "Application Support" / "nexo-desktop" / "app-settings.json",
+    ])
+    return candidates
+
+
+def _read_json_file(path: Path) -> dict:
+    try:
+        if path.is_file():
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(payload, dict):
+                return payload
+    except Exception:
+        return {}
+    return {}
+
+
+def get_desktop_ui_language(settings_payload: dict | None = None) -> str:
+    """Return the Desktop UI language for deterministic non-LLM notices."""
+    payloads: list[dict] = []
+    if isinstance(settings_payload, dict):
+        payloads.append(settings_payload)
+    else:
+        payloads.extend(_read_json_file(candidate) for candidate in _desktop_settings_candidates())
+
+    for payload in payloads:
+        app = payload.get("app") if isinstance(payload.get("app"), dict) else {}
+        for candidate in (app.get("ui_language"), payload.get("ui_language")):
+            lang = _normalize_notification_language(str(candidate or ""))
+            if lang:
+                return lang
+    return ""
+
+
+def resolve_notification_language(
+    operator_language: str | None = "",
+    *,
+    settings_payload: dict | None = None,
+) -> str:
+    """Resolve static notification language: Desktop UI first, profile fallback, EN final."""
+    return (
+        get_desktop_ui_language(settings_payload=settings_payload)
+        or _normalize_notification_language(operator_language)
+        or DEFAULT_OPERATOR_LANGUAGE
+    )
+
+
+def render_headless_notification_template(
+    template_id: str,
+    lang: str,
+    variables: dict,
+) -> tuple[str, str]:
+    normalized = _normalize_notification_language(lang) or DEFAULT_OPERATOR_LANGUAGE
+    template_group = HEADLESS_NOTIFICATION_TEMPLATES.get(template_id)
+    if not template_group:
+        raise KeyError(f"unknown headless notification template: {template_id}")
+    template = template_group.get(normalized) or template_group[DEFAULT_OPERATOR_LANGUAGE]
+    values = {key: "" if value is None else value for key, value in dict(variables or {}).items()}
+    return template["subject"].format(**values), template["body"].format(**values)
+
+
+def _provider_reason(reason: str, lang: str) -> str:
+    normalized = _normalize_notification_language(lang) or DEFAULT_OPERATOR_LANGUAGE
+    reasons = {
+        "es": {
+            "credits": "créditos agotados",
+            "rate_limit": "límite de uso alcanzado",
+            "auth": "sesión caducada (hay que volver a conectar)",
+        },
+        "en": {
+            "credits": "credits exhausted",
+            "rate_limit": "rate limit reached",
+            "auth": "session expired (needs re-login)",
+        },
+    }
+    return reasons.get(normalized, reasons["en"]).get(reason, reason)
+
+
 def _localized_operator_escalation_email(
     *,
     operator_name: str,
@@ -1998,33 +2167,18 @@ def _localized_operator_escalation_email(
     exhausted_count: int,
     details: str,
 ) -> tuple[str, str]:
-    # Phase 1.6 — subjects are signed by the AGENT (assistant_name, dynamic
-    # per install), not by the product: the operator talks to their agent.
-    if _uses_spanish(operator_language):
-        # Phase 1.6 — this branch used to contain the ENGLISH text copied
-        # verbatim (operator-reported 10-jun: escalation mails arrived in
-        # English with language=es configured). Real Spanish now.
-        subject = f"[{assistant_name}] Emails que necesitan tu atención ({exhausted_count})"
-        body = (
-            f"Hola {operator_name},\n\n"
-            f"Los siguientes emails ya se han intentado {MAX_EMAIL_ATTEMPTS} veces "
-            f"sin conseguirlo (la sesión muere antes de terminar):\n\n{details}\n\n"
-            "Los he marcado como `needs_interactive`. "
-            f"Abre {assistant_name} Desktop y pregunta por el email afectado para resolverlo manualmente.\n\n"
-            f"— {assistant_name}"
-        )
-        return subject, body
-
-    subject = f"[{assistant_name}] Emails requiring manual attention ({exhausted_count})"
-    body = (
-        f"Hello {operator_name},\n\n"
-        f"The following emails have already been attempted {MAX_EMAIL_ATTEMPTS} times "
-        f"without succeeding (the session dies before completion):\n\n{details}\n\n"
-        f"I marked them as `needs_interactive`. "
-        f"Open {assistant_name} Desktop and ask about the affected email so it can be resolved manually.\n\n"
-        f"— {assistant_name}"
+    lang = resolve_notification_language(operator_language)
+    return render_headless_notification_template(
+        "email_needs_interactive",
+        lang,
+        {
+            "assistant_name": assistant_name,
+            "user_name": operator_name,
+            "count": exhausted_count,
+            "max_attempts": MAX_EMAIL_ATTEMPTS,
+            "details": details,
+        },
     )
-    return subject, body
 
 
 def _operator_aliases(config) -> list[str]:
@@ -2455,22 +2609,15 @@ def _notify_provider_breaker_resumed_once():
             operator_email = config.get("operator_email", "") if config else ""
             if not operator_email:
                 return
-            if _uses_spanish(operator_language):
-                subject = f"[{assistant_name}] Motor {backend} reanudado"
-                body = (
-                    f"Hola {operator_name},\n\n"
-                    f"El motor {backend} vuelve a estar disponible y he reanudado las automatizaciones.\n\n"
-                    "La cola pendiente se está procesando ya, en orden. No tienes que hacer nada.\n\n"
-                    f"— {assistant_name}"
-                )
-            else:
-                subject = f"[{assistant_name}] Engine {backend} resumed"
-                body = (
-                    f"Hello {operator_name},\n\n"
-                    f"The {backend} engine is available again and I have resumed the automations.\n\n"
-                    "The pending queue is being processed now, in order. Nothing is needed from you.\n\n"
-                    f"— {assistant_name}"
-                )
+            subject, body = render_headless_notification_template(
+                "provider_breaker_resumed",
+                resolve_notification_language(operator_language),
+                {
+                    "assistant_name": assistant_name,
+                    "user_name": operator_name,
+                    "backend": backend,
+                },
+            )
             body_file = BASE_DIR / ".breaker-resume-body.txt"
             body_file.write_text(body, encoding="utf-8")
             send_script = get_send_reply_script_path(local_script_dir=_script_dir)
@@ -2510,36 +2657,21 @@ def _notify_provider_breaker_open_once(error):
         retry_hint = ""
         if error.retry_after_ts:
             retry_hint = datetime.fromtimestamp(error.retry_after_ts).strftime("%H:%M")
-        reason_es = {
-            "credits": "créditos agotados",
-            "rate_limit": "límite de uso alcanzado",
-            "auth": "sesión caducada (hay que volver a conectar)",
-        }.get(error.reason, error.reason)
-        reason_en = {
-            "credits": "credits exhausted",
-            "rate_limit": "rate limit reached",
-            "auth": "session expired (needs re-login)",
-        }.get(error.reason, error.reason)
-        if _uses_spanish(operator_language):
-            subject = f"[{assistant_name}] Motor {error.backend} en pausa ({reason_es})"
-            body = (
-                f"Hola {operator_name},\n\n"
-                f"He pausado las automatizaciones que usan {error.backend} porque está no disponible: {reason_es}.\n\n"
-                "El trabajo pendiente queda EN COLA (no se pierde nada) y se reanudará solo en cuanto el motor vuelva"
-                + (f" (próxima comprobación ~{retry_hint})" if retry_hint else "")
-                + ".\n\nNo recibirás un aviso por cada tarea: solo este, y otro cuando se reanude.\n\n"
-                f"— {assistant_name}"
-            )
-        else:
-            subject = f"[{assistant_name}] Engine {error.backend} paused ({reason_en})"
-            body = (
-                f"Hello {operator_name},\n\n"
-                f"I paused the automations that use {error.backend} because it is unavailable: {reason_en}.\n\n"
-                "Pending work stays QUEUED (nothing is lost) and resumes automatically once the engine is back"
-                + (f" (next probe ~{retry_hint})" if retry_hint else "")
-                + ".\n\nYou will not get one notice per task — just this one, and another when work resumes.\n\n"
-                f"— {assistant_name}"
-            )
+        lang = resolve_notification_language(operator_language)
+        retry_label = ""
+        if retry_hint:
+            retry_label = f" (próxima comprobación ~{retry_hint})" if lang == "es" else f" (next probe ~{retry_hint})"
+        subject, body = render_headless_notification_template(
+            "provider_breaker_open",
+            lang,
+            {
+                "assistant_name": assistant_name,
+                "user_name": operator_name,
+                "backend": error.backend,
+                "reason": _provider_reason(error.reason, lang),
+                "retry_hint": retry_label,
+            },
+        )
         body_file = BASE_DIR / ".breaker-notice-body.txt"
         body_file.write_text(body, encoding="utf-8")
         send_script = get_send_reply_script_path(local_script_dir=_script_dir)

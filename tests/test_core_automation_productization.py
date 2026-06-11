@@ -417,6 +417,7 @@ def test_email_monitor_complexity_tier_escalates_complex_or_retry_emails(tmp_pat
 def test_email_monitor_localizes_operator_escalation_email_for_spanish(tmp_path, monkeypatch):
     home = tmp_path / "nexo-home"
     (home / "nexo-email").mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
     monkeypatch.setenv("NEXO_HOME", str(home))
     helper = types.ModuleType("nexo_helper")
     helper.call_tool_text = lambda *args, **kwargs: ""
@@ -439,6 +440,139 @@ def test_email_monitor_localizes_operator_escalation_email_for_spanish(tmp_path,
     assert body.startswith("Hola Francisco,")
     assert "Los he marcado como `needs_interactive`." in body
     assert "Abre Nero Desktop" in body
+
+
+def test_email_monitor_notification_language_prefers_desktop_ui_language(tmp_path, monkeypatch):
+    home = tmp_path / "nexo-home"
+    settings = tmp_path / "desktop-user-data" / "app-settings.json"
+    settings.parent.mkdir(parents=True)
+    settings.write_text(json.dumps({"app": {"ui_language": "es-ES"}}), encoding="utf-8")
+    (home / "nexo-email").mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("NEXO_HOME", str(home))
+    monkeypatch.setenv("NEXO_DESKTOP_SETTINGS", str(settings))
+    helper = types.ModuleType("nexo_helper")
+    helper.call_tool_text = lambda *args, **kwargs: ""
+    monkeypatch.setitem(sys.modules, "nexo_helper", helper)
+    module = _load_script_module("nexo_email_monitor_ui_language_test", "nexo-email-monitor.py")
+
+    assert module.get_desktop_ui_language() == "es"
+    assert module.resolve_notification_language("en") == "es"
+
+
+def test_headless_notification_templates_are_spanish_for_spanish_ui(tmp_path, monkeypatch):
+    home = tmp_path / "nexo-home"
+    (home / "nexo-email").mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("NEXO_HOME", str(home))
+    helper = types.ModuleType("nexo_helper")
+    helper.call_tool_text = lambda *args, **kwargs: ""
+    monkeypatch.setitem(sys.modules, "nexo_helper", helper)
+    module = _load_script_module("nexo_email_monitor_spanish_templates_test", "nexo-email-monitor.py")
+
+    lang = module.resolve_notification_language("en", settings_payload={"app": {"ui_language": "es"}})
+    subject, body = module.render_headless_notification_template(
+        "email_needs_interactive",
+        lang,
+        {
+            "assistant_name": "Nero",
+            "user_name": "Francisco",
+            "count": 1,
+            "max_attempts": 3,
+            "details": "- Subject: Prueba | From: cliente@example.test",
+        },
+    )
+    breaker_subject, breaker_body = module.render_headless_notification_template(
+        "provider_breaker_open",
+        lang,
+        {
+            "assistant_name": "Nero",
+            "user_name": "Francisco",
+            "backend": "codex",
+            "reason": module._provider_reason("credits", lang),
+            "retry_hint": " (próxima comprobación ~18:00)",
+        },
+    )
+
+    assert subject == "[Nero] Emails que necesitan tu atención (1)"
+    assert body.startswith("Hola Francisco,")
+    assert "Los he marcado como `needs_interactive`." in body
+    assert "Hello" not in body
+    assert "I marked" not in body
+    assert "Engine paused" not in breaker_subject
+    assert "Pending work stays" not in breaker_body
+    assert breaker_subject == "[Nero] Motor codex en pausa (créditos agotados)"
+    assert "El trabajo pendiente queda EN COLA" in breaker_body
+
+
+def test_headless_notification_templates_are_english_for_english_ui(tmp_path, monkeypatch):
+    home = tmp_path / "nexo-home"
+    (home / "nexo-email").mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("NEXO_HOME", str(home))
+    helper = types.ModuleType("nexo_helper")
+    helper.call_tool_text = lambda *args, **kwargs: ""
+    monkeypatch.setitem(sys.modules, "nexo_helper", helper)
+    module = _load_script_module("nexo_email_monitor_english_templates_test", "nexo-email-monitor.py")
+
+    lang = module.resolve_notification_language("es", settings_payload={"app": {"ui_language": "en-US"}})
+    subject, body = module.render_headless_notification_template(
+        "email_needs_interactive",
+        lang,
+        {
+            "assistant_name": "Ada",
+            "user_name": "Alice",
+            "count": 2,
+            "max_attempts": 3,
+            "details": "- Subject: Test | From: client@example.test",
+        },
+    )
+
+    assert subject == "[Ada] Emails requiring your attention (2)"
+    assert body.startswith("Hello Alice,")
+    assert "I marked them as `needs_interactive`." in body
+    assert body.endswith("— Ada")
+    assert "— Nero" not in body
+
+
+def test_headless_notification_language_falls_back_to_profile_then_en(tmp_path, monkeypatch):
+    home = tmp_path / "nexo-home"
+    (home / "nexo-email").mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("NEXO_HOME", str(home))
+    helper = types.ModuleType("nexo_helper")
+    helper.call_tool_text = lambda *args, **kwargs: ""
+    monkeypatch.setitem(sys.modules, "nexo_helper", helper)
+    module = _load_script_module("nexo_email_monitor_language_fallback_test", "nexo-email-monitor.py")
+
+    assert module.resolve_notification_language("es-MX", settings_payload={}) == "es"
+    assert module.resolve_notification_language("", settings_payload={}) == "en"
+
+
+def test_provider_breaker_resume_uses_generic_configured_agent(tmp_path, monkeypatch):
+    home = tmp_path / "nexo-home"
+    (home / "nexo-email").mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("NEXO_HOME", str(home))
+    helper = types.ModuleType("nexo_helper")
+    helper.call_tool_text = lambda *args, **kwargs: ""
+    monkeypatch.setitem(sys.modules, "nexo_helper", helper)
+    module = _load_script_module("nexo_email_monitor_resume_template_test", "nexo-email-monitor.py")
+
+    subject, body = module.render_headless_notification_template(
+        "provider_breaker_resumed",
+        "en",
+        {
+            "assistant_name": "Ada",
+            "user_name": "Alice",
+            "backend": "claude_code",
+        },
+    )
+
+    assert subject == "[Ada] Engine claude_code resumed"
+    assert body.startswith("Hello Alice,")
+    assert body.endswith("— Ada")
+    assert "Nero" not in body
 
 
 def test_followup_runner_detects_dynamic_operator_name(tmp_path, monkeypatch):
