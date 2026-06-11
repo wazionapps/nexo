@@ -51,7 +51,8 @@ DEFAULT_RETRY_AFTER_S = {
 _FAILURE_PATTERNS = (
     ("credits", re.compile(
         r"credit balance is too low|insufficient[_ ]quota|exceeded your current quota"
-        r"|billing hard limit|out of credits|usage limit reached|plan limits",
+        r"|billing hard limit|out of credits|usage limit reached|hit your usage limit"
+        r"|purchase more credits|plan limits",
         re.I)),
     ("rate_limit", re.compile(
         r"rate[_ -]?limit|too many requests|\b429\b|overloaded[_ ]error|\b529\b"

@@ -107,3 +107,17 @@ def test_breaker_fails_open_on_corrupt_state(tmp_path):
     path.write_text("{corrupted json", encoding="utf-8")
     ok, _ = check_provider_available("claude_code")
     assert ok is True, "a broken state file must never block automations"
+
+
+def test_classify_real_codex_usage_limit_message():
+    # Phase 3 — REAL fixture recorded from codex 0.139.0 on 11-jun (the CLI
+    # actually ran out of credits mid-recording): the wording is "You've hit
+    # your usage limit ... purchase more credits", which the original
+    # pattern ("usage limit reached") missed, classifying it as generic.
+    from provider_circuit_breaker import classify_session_failure
+
+    real_message = (
+        "You've hit your usage limit. Visit https://chatgpt.com/codex/settings/usage "
+        "to purchase more credits or try again at 9:30 AM."
+    )
+    assert classify_session_failure(1, "", real_message) == "credits"
