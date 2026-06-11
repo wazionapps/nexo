@@ -39,9 +39,9 @@
     "open-computer-use": {
       "source_type": "npm",
       "package": "open-computer-use",
-      "version": "0.1.52",
-      "integrity": "sha512-KlOHmFvXHe2IEMGE/O+zMN5ASo+FQ42copj4j1xEOnyeLq4oxUxhtHqEdPUACCUcMZaHzKXfZboL1dk5a2GjLA==",
-      "tarball": "https://registry.npmjs.org/open-computer-use/-/open-computer-use-0.1.52.tgz",
+      "version": "0.1.53",
+      "integrity": "sha512-5qwCPl7Gm4Wk2i/wFkq2dVLN2SzNRQSJTd95zXdGF+u5ZsUXkFx1IFVdNbYelWOpc4fgy8Z8/gYrbacj/2chig==",
+      "tarball": "https://registry.npmjs.org/open-computer-use/-/open-computer-use-0.1.53.tgz",
       "bin": "open-computer-use-mcp",
       "engines": {}
     },
