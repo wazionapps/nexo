@@ -2443,6 +2443,52 @@ def _decrement_attempts(email_ids):
         log.warning(f"Failed to decrement attempts: {e}")
 
 
+def _notify_provider_breaker_resumed_once():
+    """Send the resume notice the pause email promises — once per recovery."""
+    try:
+        from provider_circuit_breaker import should_notify_operator_resumed
+        for backend in ("claude_code", "codex"):
+            if not should_notify_operator_resumed(backend):
+                continue
+            operator_name, assistant_name, operator_language = _get_operator_info()
+            config = load_config()
+            operator_email = config.get("operator_email", "") if config else ""
+            if not operator_email:
+                return
+            if _uses_spanish(operator_language):
+                subject = f"[{assistant_name}] Motor {backend} reanudado"
+                body = (
+                    f"Hola {operator_name},\n\n"
+                    f"El motor {backend} vuelve a estar disponible y he reanudado las automatizaciones.\n\n"
+                    "La cola pendiente se está procesando ya, en orden. No tienes que hacer nada.\n\n"
+                    f"— {assistant_name}"
+                )
+            else:
+                subject = f"[{assistant_name}] Engine {backend} resumed"
+                body = (
+                    f"Hello {operator_name},\n\n"
+                    f"The {backend} engine is available again and I have resumed the automations.\n\n"
+                    "The pending queue is being processed now, in order. Nothing is needed from you.\n\n"
+                    f"— {assistant_name}"
+                )
+            body_file = BASE_DIR / ".breaker-resume-body.txt"
+            body_file.write_text(body, encoding="utf-8")
+            send_script = get_send_reply_script_path(local_script_dir=_script_dir)
+            subprocess.run(
+                [
+                    sys.executable, str(send_script),
+                    "--to", f"{operator_name} <{operator_email}>",
+                    "--subject", subject,
+                    "--body-file", str(body_file),
+                ],
+                timeout=30,
+                capture_output=True,
+            )
+            log.info(f"Breaker resume notice sent for {backend}")
+    except Exception as e:
+        log.warning(f"Breaker resume notice failed: {e}")
+
+
 def _notify_provider_breaker_open_once(error):
     """Fase 1.6 — ONE operator notice per breaker opening, in their language.
 
@@ -2675,6 +2721,7 @@ def main():
         backoff_state = load_empty_inbox_backoff_state()
         debt_block = scan_debt()
 
+        _notify_provider_breaker_resumed_once()
         reconcile_orphaned_seen(config, hours=24)
         reconcile_terminal_unseen(config, hours=48)
         # Recovery window widened from 24h to 7 days (168h): a single email can

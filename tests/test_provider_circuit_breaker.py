@@ -121,3 +121,23 @@ def test_classify_real_codex_usage_limit_message():
         "to purchase more credits or try again at 9:30 AM."
     )
     assert classify_session_failure(1, "", real_message) == "credits"
+
+
+def test_resume_notice_fires_exactly_once_after_notified_opening():
+    # The pause email promises "another notice when work resumes" — pin it.
+    from provider_circuit_breaker import (
+        record_session_outcome,
+        should_notify_operator,
+        should_notify_operator_resumed,
+    )
+
+    # Opening WITH operator notice -> resume notice armed on close.
+    record_session_outcome("claude_code", ok=False, reason="auth")
+    assert should_notify_operator("claude_code") is True
+    record_session_outcome("claude_code", ok=True)
+    assert should_notify_operator_resumed("claude_code") is True
+    assert should_notify_operator_resumed("claude_code") is False, "exactly once"
+
+    # Close without a notified opening -> NO resume notice.
+    record_session_outcome("codex", ok=True)
+    assert should_notify_operator_resumed("codex") is False

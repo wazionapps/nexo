@@ -190,6 +190,9 @@ def record_session_outcome(
             "consecutive_failures": 0,
             "closed_at": _now(),
             "recovered_from": entry.get("reason") if was_open else None,
+            # The pause email promises "another notice when work resumes":
+            # arm that notice only when the OPENING was actually notified.
+            "resume_notice_pending": bool(was_open and entry.get("operator_notified_at")),
         }
         _save_state(state)
         return state[backend]
@@ -211,6 +214,21 @@ def record_session_outcome(
             entry["operator_notified_at"] = None
     _save_state(state)
     return entry
+
+
+def should_notify_operator_resumed(backend: str) -> bool:
+    """True exactly once after a notified opening closes (engine resumed).
+
+    The pause notice tells the operator "you will get another notice when
+    work resumes" — this is that notice's gate. Clears the flag on read.
+    """
+    state = _load_state()
+    entry = _entry(state, backend)
+    if entry.get("state") == "closed" and entry.get("resume_notice_pending"):
+        entry["resume_notice_pending"] = False
+        _save_state(state)
+        return True
+    return False
 
 
 def should_notify_operator(backend: str) -> bool:
