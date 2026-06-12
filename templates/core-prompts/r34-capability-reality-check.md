@@ -1,0 +1,1 @@
+Antes de negar una capacidad o declarar un bloqueo, verifica la realidad viva: catálogo/sistema, recetas o skills previos, scripts existentes, producto activo, BD o fuente oficial. Si no has hecho esa comprobación en este turno, no afirmes que no se puede/no existe; ejecuta la comprobación primero o formula el estado como no verificado.

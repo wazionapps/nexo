@@ -350,12 +350,7 @@ _CAPABILITY_REALITY_TOOLS = {
     "Bash",
 }
 
-_CAPABILITY_REALITY_PROMPT = (
-    "Antes de negar una capacidad o declarar un bloqueo, verifica la realidad viva: "
-    "catálogo/sistema, recetas o skills previos, scripts existentes, producto activo, BD o fuente oficial. "
-    "Si no has hecho esa comprobación en este turno, no afirmes que no se puede/no existe; ejecuta la comprobación primero "
-    "o formula el estado como no verificado."
-)
+_CAPABILITY_REALITY_PROMPT = render_core_prompt("r34-capability-reality-check")
 
 
 def _redact_for_log(text: str, max_len: int = 200) -> str:

@@ -71,6 +71,7 @@ def test_prompt_catalog_dir_exists_and_contains_automation_prompts():
     assert (core_prompts.PROMPTS_DIR / "r14-correction-learning-question.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "r15-project-context-injection.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "r-catalog.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "r34-capability-reality-check.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "r34-identity-coherence-probe.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "r34-identity-coherence-question.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "r16-declared-done-injection.md").is_file()
@@ -330,6 +331,7 @@ def test_render_core_prompt_supports_enforcer_and_startup_templates():
     r23m = core_prompts.render_core_prompt("r23m-message-duplicate-injection", thread="patricia@example.com", similarity="97", age_sec="42")
     r24 = core_prompts.render_core_prompt("r24-stale-memory-injection", threshold_days="7")
     r25 = core_prompts.render_core_prompt("r25-read-only-host-injection", host="maria", matched="rm")
+    r34_capability = core_prompts.render_core_prompt("r34-capability-reality-check")
     startup = core_prompts.render_core_prompt("interactive-startup")
     codex_contract = core_prompts.render_core_prompt("codex-protocol-contract")
     server_instructions = core_prompts.render_core_prompt("server-mcp-instructions", assistant_name="Nero")
@@ -404,6 +406,7 @@ def test_render_core_prompt_supports_enforcer_and_startup_templates():
     assert "97% identical" in r23m
     assert "older than 7 days" in r24
     assert "access_mode=read_only" in r25
+    assert "verifica la realidad viva" in r34_capability
     assert "run nexo_startup and nexo_heartbeat" in startup
     assert "NEXO PROTOCOL (MANDATORY)" in codex_contract
     assert "conditioned learnings or blocking guard rules" in codex_contract
