@@ -1,10 +1,86 @@
 # NEXO Brain
 
-> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v7.26.0). NEXO Desktop is a separate closed-source companion app distributed at nexo-desktop.com; its source does not ship in this repo. Mentions of "NEXO Desktop" in changelog entries describe coordinated client releases that consume the Brain CLI / MCP contract. For the commercial Desktop product, contact info@wazion.com.
+> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v7.31.6). NEXO Desktop is a separate closed-source companion app distributed at nexo-desktop.com; its source does not ship in this repo. Mentions of "NEXO Desktop" in changelog entries describe coordinated client releases that consume the Brain CLI / MCP contract. For the commercial Desktop product, contact info@wazion.com.
 
 NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. It adds a local shared brain across supported clients, configurable terminal and automation backends, recovery-aware background jobs, startup preflight, runtime self-healing, smarter retrieval defaults, long-horizon overnight analysis, and 150+ MCP tools.
 
-v7.26.0: minor release. Provider runtime parity lets Desktop-managed Brain select Anthropic Claude or OpenAI Codex, records provider/client metadata on sessions, automations and crons, and provisions Codex from bundled managed runtime artifacts with fail-closed fallback policy.
+v7.31.6: patch release. Headless/email-monitor notifications now respect the Desktop UI language for
+static needs_interactive, provider breaker pause, and provider breaker resume templates before falling
+back to profile/calibration language and English.
+v7.31.5: patch release. The breaker resume notice exists: when a notified engine pause recovers, the
+operator gets exactly one "engine resumed, queue processing" email in their language, signed by
+their agent, gated so it can never repeat.
+v7.31.4: patch release. Memory recall honours absolute time ranges: ISO dates, start..end ranges,
+datetimes and epoch seconds all parse (they used to silently disable the filter), and the window is
+enforced in SQL so old windows surface past the recency-truncated fetch.
+v7.31.3: patch release. The recommended Claude Code model returns to claude-opus-4-8 with max
+reasoning (recommendation version 5; installs riding NEXO defaults migrate back automatically,
+customized models untouched), and the dead heartbeat-enforcement hook trio is removed from the
+source tree with a contract test pinning its absence.
+v7.31.2: patch release. The session ID becomes a durable identity: tools revive a valid SID whose
+row vanished, physical session cleanup moves from 15 minutes to 24 hours (visibility TTL unchanged),
+runtime-service state is keyed per runtime generation so two installs can never kill each other's
+resident, and obsolete residents retire themselves once clients disconnect while the current one
+stays warm for fast conversation starts.
+v7.31.1: patch release. Headless automations pause and queue when the selected engine is unavailable (credits exhausted, rate limited, expired auth) via a shared provider circuit breaker on the single launch path, resuming automatically with ONE operator notice in their configured language signed by their agent. Protocol nudge shaping (threshold, cooldown, headless awareness) ships in shadow mode, and client config push stops writing an invalid mcp__* permission rule to Claude Code settings (repairing contaminated installs).
+v7.31.0: minor release. The recommended Claude Code model moves from Opus 4.8 to Fable 5 with max reasoning (`claude-fable-5`). All four main resonance tiers resolve Claude Code to Fable 5, the `muy_bajo` tier keeps Haiku for cheap internal classifiers, and Codex stays on GPT-5.5. Existing installs riding NEXO defaults auto-migrate on update (mirroring the 4.6→4.7→4.8 migrations) while customized models are respected, and learning housekeeping no longer aborts when the embedding backend is missing.
+v7.30.33: patch release. Personal agent/script status now compares manual runs with scheduled cron history and keeps the newest real execution, preventing successful manual agent runs from being hidden behind older scheduled failures.
+v7.30.32: patch release. Packaged update and doctor now repair broken NEXO `npm`/`npx` wrappers before using npm, archive stale NEXO-owned personal script backups, check scheduled automation health contracts, and block managed agents from writing durable memories into legacy Claude/Codex project `MEMORY.md` files.
+
+v7.30.31: patch release. Core Rules now reach agents through both a compact managed bootstrap summary and task-specific `cortex/task_open` injection from the protected `core_rules` registry.
+
+v7.30.30: patch release. Product-managed Core Rules now sync from `src/rules/core-rules.json` into protected DB rows for bootstrap and product behavior, with provenance, hashes, severity, and install/update synchronization.
+
+v7.30.29: patch release. Runtime disk guards now bound hourly database backups and pause Local Memory indexing before disk pressure becomes unsafe.
+
+v7.30.28: patch release. F0.6 runtime repairs now run through an existing post-install hook, so older updaters execute script-conflict recovery and `core/current` refresh on the first upgrade.
+
+v7.30.27: patch release. Post-update repair now recovers core scripts archived by older F0.6 shim reconciliation and refreshes `core/current` from `core`, so same-version snapshots cannot keep stale watchdog code.
+
+v7.30.26: patch release. `nexo update` now copies packaged core scripts through the F0.6 `scripts -> core/scripts` shim, so watchdog fixes reach the active LaunchAgent path.
+
+v7.30.25: patch release. Desktop-facing maintenance diagnostics now self-heal or stay informational when the runtime is healthy, and watchdog uses the canonical cognitive DB layout while observing live long-running work.
+
+v7.30.24: patch release. Client sync now stages and verifies managed MCP providers before writing Brain-owned default MCP entries, cleans stale NEXO-owned entries on staging failure, and preserves user-owned servers.
+
+v7.30.23: patch release. Adds Opportunity Orchestrator Phase 1 for evidence-backed proactive preparation, read-only dry-run reports, bounded proposal queues, feedback/suppression controls, and privacy-tested visible output.
+
+v7.30.20: patch release. Packaged installs now copy the `product_knowledge` package into the installed runtime so product knowledge tools import correctly after `nexo update`.
+
+v7.30.19: patch release. Product capabilities now live in a structured, validated catalog with read-only discovery tools and preserved legacy system-catalog names.
+
+v7.30.18: patch release. Managed email replies now resolve the active assistant identity per account and replace stale generated signatures without touching custom signatures.
+
+v7.30.17: patch release. Repairs F0.6 personal-script bare imports to promoted core helpers by creating a core-backed compatibility shim that keeps the script catalog deduplicated.
+
+v7.30.16: patch release. Adds read-only embedding migration status for Desktop diagnostics, resumable shadow-embedding coverage, bundled model verification, and obsolete managed model cleanup for coordinated Desktop updates.
+
+v7.30.15: patch release. Email NEXO closes affirmative actionable replies correctly, suppresses stale reply debt, and recovers crash-after-send rows without reopening processed threads.
+
+v7.30.14: patch release. Adds support-ticket tools, provider capability discovery, post-close task rearm protection, internal audit followup marking, and the memory-observation watchdog for Desktop-managed agents.
+v7.30.13: patch release. Email NEXO monitor prompts now require a full IMAP body fetch before replying, and managed email defaults use the MXroute `Sent` folder instead of `INBOX.Sent`.
+v7.30.12: patch release. Desktop-managed email credentials now resolve through a shared keychain-first helper with legacy SQLite fallback for older configured accounts.
+v7.30.11: patch release. Installer and npm postinstall now stamp the verified repair baseline too, covering the first update from older packaged runtimes without a manual second run.
+v7.30.10: patch release. Packaged `nexo update` now stamps the verified repair baseline after import verification, including same-version idempotent maintenance.
+v7.30.9: patch release. Post-update self-heal stamps a verified repair baseline, and doctor release gates distinguish current installation failures from historical operator/session drift.
+v7.30.8: patch release. Deep Sleep folds parallel Codex sub-agents into their parent work thread, and Local Context stops the entity_facts cartesian blow-up that created runaway sidecar databases.
+v7.30.7: patch release. Deep Sleep retention is republished with complete smoke/release-contract evidence so final closeout validates npm, GitHub, runtime update, and doctor checks end-to-end.
+v7.30.6: patch release. Deep Sleep now rotates operational artifacts and logs automatically, keeping the newest DB backups and analyzed contexts while preserving unfinished runs for retry/debugging.
+v7.30.5: patch release. Morning briefing is now Morning preparation, with automatic relevance, changes since yesterday, next actions, relevant public context, and chat-addressable preferences for non-technical users.
+v7.30.4: patch release. Local runtime update post-sync now gives bounded Memory Fabric repair enough time to finish instead of rolling back after the old 60-second limit, and headless automations treat nexo_stop as terminal so followup/deep-sleep runners do not reopen no-op protocol loops.
+v7.30.3: patch release. Release closeout now protects freshly written runtime backup snapshots from technical pruning and validates protocol evidence against the canonical `runtime/data/nexo.db` layout.
+v7.30.2: patch release. Deep Sleep now fails closed on partial nightly runs, carries complete learning context into synthesis, writes an explicit agent start packet, and creates governed followups with verification, priority, owner, and date fields.
+v7.30.1: patch release. Morning briefings now behave more like a start-of-day assistant, treat news/weather as verified optional sources, and keep user type inference inside NEXO instead of asking the user to choose a role manually.
+v7.30.0: minor release. Morning briefing preferences now support weather/news, selectable weekdays, safer SMTP certificates, Opus 4.8 defaults, and an agent-facing preference catalog so NEXO can explain or change supported settings by chat.
+v7.29.0: minor release. Morning briefing now has structured content preferences, Desktop-facing briefing presentation state, sanitized email presentation output, and per-account email signature support.
+v7.28.0: minor release. Cognitive memory architecture now links action authorship, reasons, operational state, entity profiles, failure prevention, semantic layers, and release-gated runtime memory benchmarks, with explicit update and fresh-install gates.
+v7.27.6: patch release. Operational memory continuity now persists detected promises as commitments, routes `qué prometí?` / pending / why-touched questions through evidence-backed memory, fails memory health when observation queues breach SLA, and audits Local Context usage from real pre-answer telemetry.
+v7.27.5: patch release. Desktop onboarding asks for the user's name directly in Spanish with `¿Cómo te llamas?`, matching Desktop fallback copy.
+v7.27.3: patch release. OpenAI raw calls and Codex-managed bootstrap no longer send system-role messages, preventing `role 'system' is not supported on this model` while preserving Anthropic/OpenAI provider parity.
+v7.27.2: patch release. Legacy Codex preferences now migrate to OpenAI correctly, and the F0.6 config-folder transition keeps reading existing config/schedule.json before it is moved.
+v7.27.1: patch release. Lifecycle stop calls skip external provider session UUIDs safely, and provider runtime selection keeps chat plus automation aligned to the same Anthropic/OpenAI account.
+v7.27.0: minor release. Codex-side defaults move to verified `gpt-5.5` resonance tiers, managed config healing follows that model family, and Local Memory file-type actions tolerate transient SQLite locks.
+v7.26.0: minor release. Provider runtime parity lets Desktop-managed Brain select Anthropic or OpenAI, records provider/client metadata on sessions, automations and crons, and provisions the OpenAI runtime from bundled managed artifacts with fail-closed fallback policy.
 v7.25.6: patch release. Existing Local Memory sidecar databases repair legacy root/exclusion columns before source-dependent indexes are created, and core background crons prefer the NEXO-managed Python runtime.
 v7.25.5: patch release. Explicit user-included Local Memory roots can override default system/noisy-tree skips, Brain LocalIndex operator messages stay English, and Desktop-managed installs keep the Core-pinned Python 3.12 runtime contract.
 v7.25.4: patch release. Local Memory starts from safe user-content and email roots instead of whole-disk roots, adds configurable file-type include/exclude rules, and cleans legacy whole-disk index state with backup or archive-rebuild safety.

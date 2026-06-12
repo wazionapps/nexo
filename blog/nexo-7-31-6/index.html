@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEXO 7.31.6: Desktop UI language for headless notices</title>
+    <meta name="description" content="NEXO Brain 7.31.6 makes static headless/email-monitor notices follow the Desktop UI language before falling back to profile, calibration, and English.">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-31-6/">
+</head>
+<body>
+    <main>
+        <p><a href="/blog/">Back to blog</a></p>
+        <h1>NEXO 7.31.6: Desktop UI language for headless notices</h1>
+        <p><strong>June 11, 2026.</strong> A small patch for language consistency across Desktop-driven automation.</p>
+        <h2>What changed</h2>
+        <ul>
+            <li><strong>Headless/email-monitor notifications now respect the Desktop UI language.</strong> Static emails for <code>needs_interactive</code>, provider breaker pause, and provider breaker resume choose explicit ES/EN templates from Desktop <code>app.ui_language</code> first, then fall back to profile/calibration language and English.</li>
+            <li><strong>Templates stay product-generic.</strong> They use the configured user and assistant names, so releases do not bake in one operator or one agent identity.</li>
+        </ul>
+        <p><a href="/changelog/#v7316">Read the full v7.31.6 changelog</a></p>
+    </main>
+</body>
+</html>

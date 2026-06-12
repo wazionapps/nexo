@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.26.0 adds provider runtime parity for Anthropic Claude and OpenAI Codex.">
+<meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.31.6 aligns static headless notification language with the Desktop UI.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.26.0 adds provider runtime parity for Anthropic Claude and OpenAI Codex.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.31.0 makes Fable 5 the default Claude Code model.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.26.0 adds provider runtime parity for Anthropic Claude and OpenAI Codex.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.31.0 makes Fable 5 the default Claude Code model.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.26.0 adds provider runtime parity for Anthropic Claude and OpenAI Codex.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.31.0 makes Fable 5 the default Claude Code model.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -87,13 +87,14 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v7.26.0 live</span>
-                    <span class="page-chip">Provider runtime</span>
-                    <span class="page-chip">Claude + Codex</span>
-                    <span class="page-chip">Minor release</span>
+                    <span class="page-chip">v7.31.3 live</span>
+                    <span class="page-chip">Models</span>
+                    <span class="page-chip">Claude</span>
+                    <span class="page-chip">Cleanup</span>
+                    <span class="page-chip">Patch release</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v7260" class="btn btn-primary">Start with v7.26.0</a>
+                    <a href="#v7316" class="btn btn-primary">Start with v7.31.6</a>
                     <a href="#v7122" class="btn btn-secondary">See v7.12.2</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -101,8 +102,8 @@
             <div class="page-visual">
                 <div class="page-stack">
                     <div class="page-stack-card">
-                        <strong>v7.26.0</strong>
-                        <span>Minor - provider runtime parity lets Desktop-managed Brain choose Anthropic Claude or OpenAI Codex and preserves provider metadata across sessions, automations, and crons.</span>
+                        <strong>v7.31.6</strong>
+                        <span>Patch - static headless/email-monitor notices now follow the Desktop UI language before profile/calibration fallback.</span>
                     </div>
                     <div class="page-stack-card">
                         <strong>v7.17.8</strong>
@@ -343,15 +344,367 @@
 
 <section class="section-compact" style="background:rgba(124,58,237,0.08);">
     <div class="container desktop-disclaimer" style="max-width:860px;font-size:13px;line-height:1.55;">
-        <p><strong>About NEXO Desktop.</strong> NEXO Desktop is a separate closed-source companion client distributed at <a href="https://nexo-desktop.com/">nexo-desktop.com</a>. When a changelog entry mentions NEXO Desktop it refers to a coordinated client release that consumes the Brain CLI/MCP contract. Desktop source does not live in this repo; the Brain (AGPL-3.0) remains fully usable on its own from terminal, Codex, Claude Code, or any MCP client.</p>
+        <p><strong>About NEXO Desktop.</strong> NEXO Desktop is a separate closed-source companion client distributed at <a href="https://nexo-desktop.com/">nexo-desktop.com</a>. When a changelog entry mentions NEXO Desktop it refers to a coordinated client release that consumes the Brain CLI/MCP contract. Desktop source does not live in this repo; the Brain (AGPL-3.0) remains fully usable on its own from terminal, provider CLIs, or any MCP client.</p>
+    </div>
+</section>
+
+<section id="v7316" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.31.6 <span style="opacity:.5;font-weight:400;">&mdash; June 11, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">Desktop UI language for headless notices</h2>
+        <p class="section-subtitle">Static emails for needs_interactive, provider breaker pause, and provider breaker resume now choose explicit ES/EN templates from Desktop app.ui_language first, then fall back to profile/calibration language and English. The templates use the configured user and assistant names, so product releases stay generic across users, agents, and installs.</p>
+    </div>
+</section>
+
+<section id="v7315" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.31.5 <span style="opacity:.5;font-weight:400;">&mdash; June 11, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">The breaker resume notice</h2>
+        <p class="section-subtitle">The pause notice promises "another notice when work resumes" &mdash; 7.31.5 keeps that promise: exactly one "engine resumed, queue processing" email per recovery, in the operator&#39;s language, signed by their agent, gated so it can never repeat.</p>
+    </div>
+</section>
+
+<section id="v7314" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.31.4 <span style="opacity:.5;font-weight:400;">&mdash; June 11, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">Memory recall honours absolute time ranges</h2>
+        <p class="section-subtitle">time_range only understood relative values; absolute dates, ranges and epochs silently disabled the filter and recall returned the most recent events instead of the requested window. The parser now accepts all those forms and the window is enforced in SQL itself, so old windows surface past the recency-truncated candidate set.</p>
+    </div>
+</section>
+
+<section id="v7313" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.31.3 <span style="opacity:.5;font-weight:400;">&mdash; June 11, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">Default Claude model back to Opus 4.8</h2>
+        <p class="section-subtitle">The recommended Claude Code model returns to <code>claude-opus-4-8</code> with max reasoning (operator decision, reverting the brief 7.31.0 move to Fable 5). Recommendation version 5 records Fable 5 as a previous default so installs riding NEXO defaults migrate back automatically while customized models stay untouched. The dead heartbeat-enforcement hook trio is removed from the source tree with a contract test pinning its absence.</p>
+    </div>
+</section>
+
+<section id="v7312" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.31.2 <span style="opacity:.5;font-weight:400;">&mdash; June 11, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">Session continuity and resident stability</h2>
+        <p class="section-subtitle">The session ID becomes a durable identity: tools revive a valid SID whose row vanished, physical cleanup moves from 15 minutes to 24 hours, and the short TTL keeps governing visibility only. Runtime-service state files are keyed by runtime generation so two Brain installs can never kill each other's resident (1,314 ping-pong restarts measured on one machine, each forcing a 10-48s cold conversation start), and obsolete residents retire themselves once their clients disconnect while the current one stays warm.</p>
+    </div>
+</section>
+
+<section id="v7311" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.31.1 <span style="opacity:.5;font-weight:400;">&mdash; June 10, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">Provider circuit breaker and reliability hardening</h2>
+        <p class="section-subtitle">Headless automations (email monitor, deep sleep, evolution, follow-ups) pause and queue when the selected engine is unavailable &mdash; credits exhausted, rate limited or auth expired &mdash; and resume automatically when it is back, with a single operator notice in their configured language signed by their agent. The protocol nudge gains threshold, cooldown and headless awareness in shadow mode, and the client config push stops writing an invalid <code>mcp__*</code> permission rule to Claude Code settings (repairing installs that already had it).</p>
+    </div>
+</section>
+
+<section id="v7310" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.31.0 <span style="opacity:.5;font-weight:400;">&mdash; June 10, 2026 &mdash; <strong>MINOR</strong></span></div>
+        <h2 class="section-title">Default Claude model: Fable 5</h2>
+        <p class="section-subtitle">The recommended Claude Code model moves from Opus 4.8 to Fable 5 with max reasoning (<code>claude-fable-5</code>). All four main resonance tiers resolve Claude Code to Fable 5, the <code>muy_bajo</code> tier keeps Haiku for cheap internal classifiers, and Codex stays on GPT-5.5. Installs riding NEXO defaults auto-migrate on update while customized models are respected, and learning housekeeping no longer aborts when the embedding backend is missing.</p>
+    </div>
+</section>
+
+<section id="v73033" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.30.33 <span style="opacity:.5;font-weight:400;">&mdash; June 8, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">Personal agent run state</h2>
+        <p class="section-subtitle">Personal script status now compares manual runs with scheduled cron history and keeps the newest real execution, so a successful manual agent run cannot be hidden behind an older scheduled failure.</p>
+    </div>
+</section>
+
+<section id="v73032" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.30.32 <span style="opacity:.5;font-weight:400;">&mdash; June 8, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">Packaged update and automation health</h2>
+        <p class="section-subtitle">Packaged update and doctor now repair broken NEXO <code>npm</code>/<code>npx</code> wrappers before relying on npm, archive stale NEXO-owned personal script backups, check declared scheduled automation health files, and block managed agents from writing durable memories into legacy Claude/Codex project <code>MEMORY.md</code> files.</p>
+    </div>
+</section>
+
+<section id="v73031" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.30.31 <span style="opacity:.5;font-weight:400;">&mdash; June 8, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">Core Rules injection</h2>
+        <p class="section-subtitle">Product Core Rules now reach agents from the first turn through a compact managed bootstrap summary and through task-specific <code>cortex/task_open</code> injection from the protected <code>core_rules</code> registry.</p>
+    </div>
+</section>
+
+<section id="v73028" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.30.28 <span style="opacity:.5;font-weight:400;">&mdash; June 8, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">First-hop F0.6 repair</h2>
+        <p class="section-subtitle">F0.6 runtime repairs now run through an existing post-install hook, so older updaters execute script-conflict recovery and <code>core/current</code> refresh on the first upgrade.</p>
+    </div>
+</section>
+
+<section id="v73027" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.30.27 <span style="opacity:.5;font-weight:400;">&mdash; June 8, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">F0.6 snapshot repair</h2>
+        <p class="section-subtitle">Post-update repair now promotes core scripts archived by older F0.6 shim reconciliation and rebuilds <code>core/current</code> from <code>core</code>, so same-version runtime snapshots cannot keep stale watchdog code.</p>
+    </div>
+</section>
+
+<section id="v73026" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.30.26 <span style="opacity:.5;font-weight:400;">&mdash; June 8, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">F0.6 core script propagation</h2>
+        <p class="section-subtitle"><code>nexo update</code> now copies packaged scripts through the F0.6 <code>scripts -&gt; core/scripts</code> shim, so active LaunchAgent scripts receive shipped fixes without preserving stale non-script classifications.</p>
+    </div>
+</section>
+
+<section id="v73025" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.30.25 <span style="opacity:.5;font-weight:400;">&mdash; June 8, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">Maintenance self-heal diagnostics</h2>
+        <p class="section-subtitle">Desktop-facing maintenance diagnostics now self-heal or stay informational when the runtime is healthy, while LaunchAgent schedule checks, telemetry coverage, local-index hygiene and watchdog runtime paths match live behavior.</p>
+    </div>
+</section>
+
+<section id="v73024" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.30.24 <span style="opacity:.5;font-weight:400;">&mdash; June 7, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">Managed MCP client sync release gate</h2>
+        <p class="section-subtitle">Client sync now stages and verifies managed MCP providers before writing Brain-owned defaults, removes stale NEXO-owned entries when staging fails, and preserves user-owned servers.</p>
+    </div>
+</section>
+
+<section id="v73023" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.30.23 <span style="opacity:.5;font-weight:400;">&mdash; June 7, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">Opportunity Orchestrator Phase 1</h2>
+        <p class="section-subtitle">Brain now turns existing operational signals into a scarce proactive queue with evidence-backed preparations, zero-proposal handling, max-three normal proposals, feedback and suppression controls.</p>
+    </div>
+</section>
+
+<section id="v73022" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.30.22 <span style="opacity:.5;font-weight:400;">&mdash; June 7, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">Packaged managed runtime propagation</h2>
+        <p class="section-subtitle">Packaged installs receive the managed MCP runtime package under a distinct Brain version, and Desktop v0.43.14 consumes Brain v7.30.22 so existing users cannot skip the managed_mcp package.</p>
+    </div>
+</section>
+
+<section id="v73021" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.30.21 <span style="opacity:.5;font-weight:400;">&mdash; June 6, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">Managed MCPs and closure plane</h2>
+        <p class="section-subtitle">Brain now ships managed default MCP catalog/lock reconciliation, release-gates provider locks against npm latest, and exposes the Operational Closure Plane MVP for ranked, evidence-backed closure work.</p>
+    </div>
+</section>
+
+<section id="v73020" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.30.20 <span style="opacity:.5;font-weight:400;">&mdash; June 6, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">Packaged product knowledge hotfix</h2>
+        <p class="section-subtitle">Packaged installs now copy <code>product_knowledge</code> into the installed runtime, and update backups, shims and installer tests preserve the package across <code>nexo update</code>.</p>
+    </div>
+</section>
+
+<section id="v73019" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.30.19 <span style="opacity:.5;font-weight:400;">&mdash; June 6, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">Product knowledge hub</h2>
+        <p class="section-subtitle">Product capabilities now live in a structured, validated catalog with read-only discovery tools, live-state guidance, safety metadata, and preserved legacy system-catalog names.</p>
+    </div>
+</section>
+
+<section id="v73018" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.30.18 <span style="opacity:.5;font-weight:400;">&mdash; June 6, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">Managed email identity</h2>
+        <p class="section-subtitle">Managed email replies now resolve the active assistant identity per account, replace stale generated signatures like <code>Nero — torrente@nexoagentmail.com</code>, and preserve custom signatures.</p>
+    </div>
+</section>
+
+<section id="v73017" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.30.17 <span style="opacity:.5;font-weight:400;">&mdash; June 6, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">F0.6 personal script import shim</h2>
+        <p class="section-subtitle">Personal scripts that import the promoted <code>nexo_personal_automation</code> helper now resolve it through a core-backed compatibility shim, preserving distinct operator files and avoiding duplicate script-catalog entries.</p>
+    </div>
+</section>
+
+<section id="v73016" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.30.16 <span style="opacity:.5;font-weight:400;">&mdash; June 5, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">Embedding migration diagnostics</h2>
+        <p class="section-subtitle">Desktop can now read embedding migration status, progress, errors and backup path without warming models or downloading files, while release coverage pins resumable shadow embeddings, bundled model verification and obsolete managed model cleanup.</p>
+    </div>
+</section>
+
+<section id="v73015" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.30.15 <span style="opacity:.5;font-weight:400;">&mdash; June 5, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">Email NEXO lifecycle closure</h2>
+        <p class="section-subtitle">Email NEXO now closes affirmative actionable replies correctly, suppresses stale reply debt, and recovers crash-after-send rows without reopening already processed threads.</p>
+    </div>
+</section>
+
+<section id="v73014" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.30.14 <span style="opacity:.5;font-weight:400;">&mdash; June 5, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">Support tickets and capability discovery</h2>
+        <p class="section-subtitle">Agents now have real support-ticket tools, product capability discovery for provider models and managed services, safer task-close rearming, internal audit followup marking, and a scheduled memory-observation watchdog.</p>
+    </div>
+</section>
+
+<section id="v73012" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.30.12 <span style="opacity:.5;font-weight:400;">&mdash; June 4, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">Desktop-managed email credentials</h2>
+        <p class="section-subtitle">Email account reads, config loading, and migration now share one keychain-first credential helper with legacy SQLite fallback, so Desktop-managed Email NEXO setup can keep passwords behind the credential service boundary.</p>
+    </div>
+</section>
+
+<section id="v73011" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.30.11 <span style="opacity:.5;font-weight:400;">&mdash; June 4, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">Installer repair baseline</h2>
+        <p class="section-subtitle">The installer and npm postinstall now stamp the verified repair baseline after successful migration, same-version repair, fresh install finalization, or same-version reinstall, so first updates from older packaged runtimes do not need a manual second pass.</p>
+    </div>
+</section>
+
+<section id="v73010" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.30.10 <span style="opacity:.5;font-weight:400;">&mdash; June 4, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">Packaged update repair baseline</h2>
+        <p class="section-subtitle">npm-installed runtimes now stamp the verified repair baseline after successful import verification, including same-version idempotent maintenance, so old and new users get the self-heal contract through normal update.</p>
+    </div>
+</section>
+
+<section id="v7309" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.30.9 <span style="opacity:.5;font-weight:400;">&mdash; June 4, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">Release-safe self-heal</h2>
+        <p class="section-subtitle">Post-update repair now writes a verified baseline, runtime doctor checks distinguish installed-product failures from operator history, and release closeout blocks only real installation failures instead of old Codex/session drift.</p>
+    </div>
+</section>
+
+<section id="v7308" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.30.8 <span style="opacity:.5;font-weight:400;">&mdash; June 4, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">Deep Sleep and Local Context stability</h2>
+        <p class="section-subtitle">Deep Sleep now counts spawned Codex sub-agents under their parent work thread, and Local Context only writes entity_facts for entities mentioned in the same chunk with hard per-asset and value-length ceilings.</p>
+    </div>
+</section>
+
+<section id="v7307" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.30.7 <span style="opacity:.5;font-weight:400;">&mdash; June 4, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">Deep Sleep retention closeout</h2>
+        <p class="section-subtitle">The Deep Sleep retention patch is republished with the required smoke artifact and release contract so final closeout validates npm, GitHub, runtime update, doctor, and protocol evidence end-to-end.</p>
+    </div>
+</section>
+
+<section id="v7306" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.30.6 <span style="opacity:.5;font-weight:400;">&mdash; June 4, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">Deep Sleep retention and log rotation</h2>
+        <p class="section-subtitle">Deep Sleep now keeps the newest DB backups and analyzed context dumps, preserves unfinished runs for retry/debugging, and rotates oversized sleep logs automatically during update, nightly runs, and daily housekeeping.</p>
+    </div>
+</section>
+
+<section id="v7305" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.30.5 <span style="opacity:.5;font-weight:400;">&mdash; June 3, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">Morning preparation</h2>
+        <p class="section-subtitle">The daily morning automation now behaves like a start-of-day preparation assistant: it ranks what changed, what matters, blockers, next actions, and relevant public context from profile and preferences instead of asking the user to configure technical sources.</p>
+    </div>
+</section>
+
+<section id="v7304" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.30.4 <span style="opacity:.5;font-weight:400;">&mdash; June 3, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">Local update completion and runner closeout</h2>
+        <p class="section-subtitle">Runtime update post-sync now gives bounded Memory Fabric repair enough time to finish, and headless automations treat <code>nexo_stop</code> as terminal so followup/deep-sleep runners do not reopen no-op loops.</p>
+    </div>
+</section>
+
+<section id="v7303" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.30.3 <span style="opacity:.5;font-weight:400;">&mdash; June 3, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">Release closeout backup protection</h2>
+        <p class="section-subtitle">Release closeout now protects the freshly written runtime backup from technical pruning before validation and checks protocol evidence against the canonical <code>runtime/data/nexo.db</code> path.</p>
+    </div>
+</section>
+
+<section id="v7302" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.30.2 <span style="opacity:.5;font-weight:400;">&mdash; June 3, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">Deep Sleep release-grade overnight loop</h2>
+        <p class="section-subtitle">Deep Sleep now fails closed on partial nightly runs, carries complete learning context into synthesis, writes an explicit agent start packet, and creates governed followups with verification, priority, owner, and date fields.</p>
+    </div>
+</section>
+
+<section id="v7301" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.30.1 <span style="opacity:.5;font-weight:400;">&mdash; June 3, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">Morning briefing clarity</h2>
+        <p class="section-subtitle">Brain now frames the morning briefing as a start-of-day assistant, filters and ranks what matters, treats news/weather as verified optional sources, and infers the useful user angle from profile and activity instead of asking for a manual user-type choice.</p>
+    </div>
+</section>
+
+<section id="v7300" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.30.0 <span style="opacity:.5;font-weight:400;">&mdash; June 3, 2026 &mdash; <strong>MINOR</strong></span></div>
+        <h2 class="section-title">Agent-facing preferences</h2>
+        <p class="section-subtitle">Brain now exposes a preference catalog for chat, moves Claude Code defaults to Opus 4.8, supports selected weekdays for product automations, adds weather/news context to morning briefings, and fixes SMTP certificate handling for daily email delivery.</p>
+    </div>
+</section>
+
+<section id="v7290" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.29.0 <span style="opacity:.5;font-weight:400;">&mdash; June 3, 2026 &mdash; <strong>MINOR</strong></span></div>
+        <h2 class="section-title">Morning briefing preferences</h2>
+        <p class="section-subtitle">Brain now stores structured morning briefing content preferences, saves the latest sent briefing for Desktop Home and overlay views, sanitizes email presentation output, and appends per-account signatures safely.</p>
+    </div>
+</section>
+
+<section id="v7280" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.28.0 <span style="opacity:.5;font-weight:400;">&mdash; June 2, 2026 &mdash; <strong>MINOR</strong></span></div>
+        <h2 class="section-title">Cognitive memory architecture</h2>
+        <p class="section-subtitle">Brain now connects action authorship, reasons, operational state, runtime budgets, entity live profiles, failure prevention, semantic layers, and memory benchmarks so future answers can explain what happened, why it happened, and what should be reused. Release readiness also requires both fresh-install and update evidence before tagging.</p>
+    </div>
+</section>
+
+<section id="v7276" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.27.6 <span style="opacity:.5;font-weight:400;">&mdash; June 1, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">Operational memory continuity</h2>
+        <p class="section-subtitle">Detected promises now persist as commitments, pre-answer routing consults evidence-backed memory for promises, pending work and why-touched questions, memory health reports old observation queues, and Local Context audits use real before-answer telemetry.</p>
+    </div>
+</section>
+
+<section id="v7273" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.27.3 <span style="opacity:.5;font-weight:400;">&mdash; May 25, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">OpenAI system-role compatibility</h2>
+        <p class="section-subtitle">OpenAI raw calls now fold runtime instructions into the user payload, Codex-managed bootstrap no longer writes legacy <code>initial_messages</code>, and doctor flags stale Codex configs before they can trigger account-model failures.</p>
+    </div>
+</section>
+
+<section id="v7272" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.27.2 <span style="opacity:.5;font-weight:400;">&mdash; May 25, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">Legacy OpenAI provider migration</h2>
+        <p class="section-subtitle">Older Codex preferences now migrate to OpenAI correctly, and the F0.6 config-folder transition keeps reading existing schedule settings before moving them.</p>
+    </div>
+</section>
+
+<section id="v7270" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.27.0 <span style="opacity:.5;font-weight:400;">&mdash; May 25, 2026 &mdash; <strong>MINOR</strong></span></div>
+        <h2 class="section-title">Anthropic/OpenAI account parity</h2>
+        <p class="section-subtitle">Desktop-managed Brain now keeps Anthropic/OpenAI account selection consistent across session metadata, automation/crons, managed install recovery, model defaults, and provider runtime sync.</p>
     </div>
 </section>
 
 <section id="v7260" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
     <div class="container">
         <div class="section-label">New in v7.26.0 <span style="opacity:.5;font-weight:400;">&mdash; May 25, 2026 &mdash; <strong>MINOR</strong></span></div>
-        <h2 class="section-title">Provider runtime parity for Claude and Codex</h2>
-        <p class="section-subtitle">Desktop-managed Brain can now choose Anthropic Claude or OpenAI Codex as the runtime account surface, keep provider/client/session metadata synchronized, and provision Codex from bundled managed artifacts with fail-closed fallback behavior.</p>
+        <h2 class="section-title">Provider runtime parity</h2>
+        <p class="section-subtitle">Desktop-managed Brain can choose Anthropic or OpenAI as the runtime account surface, keep provider/client/session metadata synchronized, and provision OpenAI from bundled managed artifacts with fail-closed fallback behavior.</p>
     </div>
 </section>
 
@@ -2117,7 +2470,7 @@
                 </div>
                 <div class="cognitive-card">
                     <h3>Codex no longer inherits Claude models</h3>
-                    <p>The historical <code>DEFAULT_CODEX_MODEL = DEFAULT_CLAUDE_CODE_MODEL</code> alias is gone. Codex default is <code>gpt-5.4</code> / <code>xhigh</code>. Client sync refuses to write Claude-family models into <code>~/.codex/config.toml</code>, and existing bad writes are healed on the next <code>nexo update</code>.</p>
+                    <p>The historical <code>DEFAULT_CODEX_MODEL = DEFAULT_CLAUDE_CODE_MODEL</code> alias is gone. Codex default is <code>gpt-5.5</code> / <code>xhigh</code>. Client sync refuses to write Claude-family models into <code>~/.codex/config.toml</code>, and existing bad writes are healed on the next <code>nexo update</code>.</p>
                 </div>
                 <div class="cognitive-card">
                     <h3>Headless crons no longer zombie</h3>

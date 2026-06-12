@@ -18,7 +18,115 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.20.24` is the current packaged-runtime line. Patch release over v7.20.23 — Local Memory performance profile writes now tolerate active indexing, retry transient SQLite busy states, and shorten indexer write locks between processed files.
+Version `7.31.6` is the current packaged-runtime line. Patch release over v7.31.5 - headless/email-monitor notifications now respect the Desktop UI language for static ES/EN templates before falling back to profile/calibration language and English.
+
+Previously in `7.31.5`: patch release over v7.31.4 - the breaker resume notice exists: when a notified engine pause recovers, the operator gets exactly one resume email in their language, signed by their agent.
+
+Previously in `7.31.4`: patch release over v7.31.3 - memory recall honours absolute time ranges (ISO dates, start..end ranges, datetimes, epochs) and enforces the window in SQL, so asking about a specific past day returns that day.
+
+Previously in `7.30.33`: patch release over v7.30.32 - personal agent/script status now keeps the newest real run between manual executions and cron history, so a successful manual agent run cannot be hidden behind an older scheduled failure.
+
+Previously in `7.30.32`: patch release over v7.30.31 - packaged update/doctor now repair npm/npx wrapper drift, archive stale personal script backups, validate observable automation health contracts, and block legacy Claude/Codex project memory writes.
+
+Previously in `7.30.31`: patch release over v7.30.30 - Core Rules now reach agents both through a compact managed bootstrap summary and task-specific `cortex/task_open` injection from the protected `core_rules` registry.
+
+Previously in `7.30.30`: product-managed Core Rules now sync from `src/rules/core-rules.json` into protected DB rows for bootstrap and product behavior, with provenance, hashes, severity, and install/update synchronization.
+
+Previously in `7.30.29`: runtime disk guards now bound hourly database backups and pause Local Memory indexing before disk pressure becomes unsafe.
+
+Previously in `7.30.27`: patch release over v7.30.26 - post-update repair now recovers core scripts archived by older F0.6 shim reconciliation and refreshes `core/current` from `core`, so same-version snapshots cannot keep stale watchdog code.
+
+Previously in `7.30.26`: patch release over v7.30.25 - `nexo update` now copies packaged core scripts through the F0.6 `scripts -> core/scripts` shim, so watchdog fixes reach the active LaunchAgent path.
+
+Previously in `7.30.25`: patch release over v7.30.24 - Desktop-facing maintenance diagnostics now self-heal or stay informational when the runtime is healthy, and watchdog uses the canonical cognitive DB layout.
+
+Previously in `7.30.24`: patch release over v7.30.23 - client sync now stages and verifies managed MCP providers before writing Brain-owned default MCP entries into Claude, Codex, or Desktop configs.
+
+Previously in `7.30.23`: patch release over v7.30.22 - Brain ships Opportunity Orchestrator Phase 1 for evidence-backed proactive preparation, read-only dry-run reports, bounded proposal queues, and feedback/suppression controls.
+
+Previously in `7.30.20`: patch release over v7.30.19 - packaged installs now copy the `product_knowledge` package into the installed runtime so `nexo update` can import the new product knowledge tools.
+
+Previously in `7.30.19`: patch release over v7.30.18 - product capabilities now live in a structured, validated catalog with read-only discovery tools and preserved legacy system-catalog names.
+
+Previously in `7.30.16`: patch release over v7.30.14 - Desktop diagnostics can read embedding migration status without warming models, and the coordinated Desktop update path is covered for bundled model verification and obsolete managed model cleanup.
+
+Previously in `7.30.15`: patch release over v7.30.14 - Email NEXO closes affirmative actionable replies correctly and avoids reopening processed threads after a sent reply is already recorded.
+
+Previously in `7.30.14`: patch release over v7.30.13 - support tickets, provider capability discovery, task-close rearming, internal audit followups, and the memory-observation watchdog are aligned for Desktop-managed agents.
+
+Previously in `7.30.13`: patch release over v7.30.12 - Email NEXO monitor prompts now require a full IMAP body fetch before replying, and managed email defaults use the MXroute `Sent` folder instead of `INBOX.Sent`.
+
+Previously in `7.30.12`: patch release over v7.30.11 - Desktop-managed email credentials now resolve through the shared credential helper, so Email NEXO migrations and CLI reads use keychain-backed markers before legacy SQLite fallback.
+
+Previously in `7.30.11`: patch release over v7.30.10 - the installer and npm postinstall path now stamp the verified repair baseline too, so the first update from older packaged installs is covered without a manual second run.
+
+Previously in `7.30.10`: patch release over v7.30.9 - packaged `nexo update` now stamps the verified repair baseline after import verification, including same-version maintenance runs.
+
+Previously in `7.30.9`: patch release over v7.30.8 - post-update self-heal now stamps a verified repair baseline, and doctor release gates distinguish current installation failures from historical operator/session drift.
+
+Previously in `7.30.8`: patch release over v7.30.7 - Deep Sleep now folds parallel Codex sub-agents into their parent thread and Local Context stops the `entity_facts` cartesian blow-up that created runaway sidecar databases.
+
+Previously in `7.30.7`: patch release over v7.30.6 - the Deep Sleep retention update is republished with the required release smoke contract so final closeout, npm, GitHub, and runtime verification stay aligned.
+
+Previously in `7.30.6`: patch release over v7.30.5 - Deep Sleep now rotates its operational artifacts and logs automatically, keeping historical installs bounded without touching local-context memory.
+
+Previously in `7.30.4`: patch release over v7.30.3 - local runtime update post-sync now gives bounded Memory Fabric repair enough time to finish, and headless automations now treat `nexo_stop` as a terminal close so followup/deep-sleep runners do not reopen no-op protocol loops.
+
+Previously in `7.30.3`: patch release over v7.30.2 - release closeout now protects the freshly written runtime backup from technical pruning and validates protocol evidence against the canonical `runtime/data/nexo.db` layout.
+
+Previously in `7.30.2`: patch release over v7.30.1 - Deep Sleep now fails closed on partial nightly runs, carries complete learning context into synthesis, writes an explicit agent start packet, and creates governed followups with verification, priority, owner, and date fields.
+
+Previously in `7.30.1`: patch release over v7.30.0 - morning briefings now behave more like a start-of-day assistant, explain news/weather as verified optional sources, and keep user type inference inside NEXO instead of asking the user to choose a role manually.
+
+Previously in `7.30.0`: minor release over v7.29.0 - morning briefing preferences now support weather/news, selectable weekdays, safer SMTP certificates, Opus 4.8 defaults, and an agent-facing preference catalog so NEXO can explain or change supported settings by chat.
+
+Previously in `7.29.0`: minor release over v7.28.0 - the morning briefing now has structured content preferences, Desktop-facing briefing presentation state, and per-account email signature support.
+
+Previously in `7.28.0`: minor release over v7.27.6 - the Brain memory architecture now links action authorship, reasons, operational state, entity profiles, failure prevention, semantic layers, and release-gated runtime memory benchmarks.
+
+Previously in `7.27.6`: patch release over v7.27.5 - operational memory continuity now persists promises as commitments, routes pre-answer questions through evidence-backed memory, and exposes observation-queue convergence in health checks.
+
+Previously in `7.27.5`: patch release over v7.27.4 - Desktop onboarding asks for the user's name directly in Spanish with `¿Cómo te llamas?`, matching Desktop fallback copy.
+
+Previously in `7.27.1`: patch release over v7.27.0 - lifecycle stop calls skip external provider session UUIDs safely, and provider runtime selection keeps chat plus automation aligned to the same Anthropic/OpenAI account.
+
+Previously in `7.27.0`: minor release over v7.26.0 - Codex-side defaults move to verified `gpt-5.5` resonance tiers, managed config healing follows that model family, and Local Memory file-type actions tolerate transient SQLite locks.
+
+Previously in `7.26.0`: minor release over v7.25.6 - provider runtime parity lets Desktop-managed Brain choose Anthropic or OpenAI, keep provider metadata on sessions/automation/crons, and provision the managed OpenAI runtime from bundled Desktop resources.
+
+Previously in `7.25.6`: patch release over v7.25.5 - existing Local Memory sidecar databases repair legacy root/exclusion columns before source-dependent indexes are created, and core background crons prefer the NEXO-managed Python runtime.
+
+Previously in `7.25.4`: patch release over v7.25.3 - Local Memory starts from safe user-content and email roots, adds configurable included/excluded file types, and cleans legacy whole-disk index state with backup or archive-rebuild safety.
+
+Previously in `7.25.3`: patch release over v7.25.2 - Desktop-managed Brain installs require the same Python ABI as the bundled wheels and repair incompatible managed virtual environments before reuse.
+
+Previously in `7.25.0`: minor release over v7.24.0 - Memory Fabric links transcript lookup, historical backup diary recovery, unified search and knowledge graph evidence so memories are not available only inside expiring snapshots.
+
+Previously in `7.24.0`: minor release over v7.23.13 - Home Agents, cognitive quality controls, English operational copy, and non-blocking task-open context are integrated into main.
+
+Previously in `7.23.13`: patch over v7.23.12 - release guardrails now audit publish workflows for masked failures and add minimal-delta coverage for punctual UI edits.
+
+Previously in `7.23.12`: patch over v7.23.11 - protected database recovery now repairs degraded Brain tables from backup without rolling back newer rows.
+
+Previously in `7.23.11`: patch over v7.23.10 - older installed runtimes can update safely even when `cognitive_paths.py` has not been synced yet.
+
+Previously in `7.23.6`: patch over v7.23.5 - `nexo update` clears safe legacy `cognitive.db` shadows and keeps superseded archives under runtime backup retention.
+
+Previously in `7.23.3`: patch over v7.23.2 - Followup runner skips DONE terminal statuses so already-finished followups do not re-enter executable batches.
+
+Previously in `7.23.2`: patch over v7.23.1 - Desktop-facing version checks refresh stale latest-version cache entries so a just-published Brain update can still appear inside NEXO Desktop.
+
+Previously in `7.23.1`: express patch over v7.23.0 - headless automations no longer hang on silent Claude children, synthetic followup prompts no longer trigger session-end loops, and runtime backups self-prune under a hard cap before creating new large artifacts.
+
+Previously in `7.23.0`: minor release over v7.22.0 - pre-answer routing now consults continuity evidence before visible replies, Memory Observations queue processing converges through a bounded processor, and audits expose saved-but-not-used stores, automation drift, MCP live/catalog gaps, artifact location and transcript coverage.
+
+Previously in `7.22.0`: minor release over v7.21.0 - heartbeat stays fast in Desktop-managed sessions, MCP writes can be accepted through a durable file-backed queue before SQLite commit, Brain exposes compliance state for Desktop gates, and Local Context adds Entity Dossier for open-domain local evidence aggregation.
+
+Previously in `7.21.0`: minor release over v7.20.25 - MCP now starts through a thin compatibility adapter backed by one resident local Runtime Service, reducing duplicate Brain processes and SQLite contention across Claude Code, Codex, Claude Desktop, and NEXO Desktop.
+
+Previously in `7.20.25`: patch release over v7.20.24 — Local Context now uses the pinned local BGE embedding model when available, automatically refreshes old hash embeddings, prioritizes known documents before lower-value files, and treats the Desktop-owned Qwen local-presence model as optional in standalone Brain installs.
+
+Previously in `7.20.24`: patch release over v7.20.23 — Local Memory performance profile writes now tolerate active indexing, retry transient SQLite busy states, and shorten indexer write locks between processed files.
 
 Previously in `7.20.23`: patch release over v7.20.22 — Local Memory status reads the real split sidecar database read-only, reports retryable keyed failures without false zeroes, and keeps Desktop Spanish/English copy localized.
 
@@ -182,24 +290,24 @@ Previously in `7.4.1`: patch release correcting the over-promise in v7.4.0's rel
 
 Previously in `7.2.0`: minor release consolidating three parallel workstreams into a single Guardian-active-by-default train. Block K roadmap closure (G1 enforcer active, G3 SSH remote-write detector, `src/guardian_runtime_config.py` resolver, `_persist_guardian_hard_defaults` during `nexo update`). F0.6 hardening wave (`nexo rollback f06` CLI, `src/scripts/prune_runtime_backups.py` promoted to core, `docs/f06-layout-contract.md`, three new doctor boot-tier checks, `scripts/nexo-migrate-nora.sh` + `scripts/f0-safe-apply-remote.sh` idempotent migration). Adaptive weights flipped from "14-day calendar wait" to "14 days OR (≥200 samples AND ≥2 days)" with auto-promotion during `nexo update`. Small-fixes batch: R34 `bool("unknown")==True` fix, `classify_scripts_dir` dedup, B10 module-level path constants lazy-evaluated, schedule override audit log, `scripts/pre-release-verify.sh` + `docs/release-discipline.md`, pre-commit hook that blocks commits when `tool-enforcement-map.json` drifts from `src/plugins/`.
 
-Previously in `7.1.10`: follow-up over v7.1.8 that shipped two rescue batches of WIP stashed aside during the v7.1.8 release window. First rescue: `src/autonomy_mandate.py` expanded the mandate-detection vocabulary (hazlo todo / no pares / estás al mando / te dejo al mando / sigue sin parar / haz el plan completo), added three honest flags on `MandateState` (`execute_until_blocker`, `suppress_mid_task_menus`, `revalidate_after_compaction`) with session filtering, wired post/pre-compact hooks that read those flags, surfaced them through protocol/workflow handlers and session payload, and introduced the new `src/checkpoint_policy.py` module with tests. Second rescue: `scripts/verify_release_readiness.py` gained a smoke-artifact contract pass that validates `release-contracts/smoke/v<version>.json` before any tag push, the release-final audit skill references the new contract, `src/hook_guardrails.py` + `src/hooks/post_tool_use.py` refine the post-tool protocol reminder path with a new contract test, and a couple of core prompts (task-close evidence, r14 correction learning) got wording polish.
+Previously in `7.1.10`: follow-up over v7.1.8 that shipped two rescue batches of WIP stashed aside during the v7.1.8 release window. First rescue: `src/autonomy_mandate.py` expanded the Spanish-language mandate-detection phrase set (do everything / do not stop / you are in charge / I leave you in charge / keep going / do the full plan), added three honest flags on `MandateState` (`execute_until_blocker`, `suppress_mid_task_menus`, `revalidate_after_compaction`) with session filtering, wired post/pre-compact hooks that read those flags, surfaced them through protocol/workflow handlers and session payload, and introduced the new `src/checkpoint_policy.py` module with tests. Second rescue: `scripts/verify_release_readiness.py` gained a smoke-artifact contract pass that validates `release-contracts/smoke/v<version>.json` before any tag push, the release-final audit skill references the new contract, `src/hook_guardrails.py` + `src/hooks/post_tool_use.py` refine the post-tool protocol reminder path with a new contract test, and a couple of core prompts (task-close evidence, r14 correction learning) got wording polish.
 
 Previously in `7.1.8`: batch release over v7.1.7 consolidating the Block K Guardian/Enforcer roadmap (auto-drain of stale `protocol_debt` rows, destructive-command pre-tool gate, `guard_check`-required gate, inline guard ack on `nexo_task_open`, Guardian Health in the morning briefing) with Block D hardcode cleanup (classifier-backed `backfill_task_owner`, migration v50 supersedes the duplicate NEXO-product learning pair, new semantic-hardcodes audit) and Block E product guards (LaunchAgent plist protection, agent-name fallbacks no longer leak the product identity, `francisco_emails` removed from the email-config dict export, `runner-health-check.py` + `nexo_personal_automation.py` promoted from personal to core).
 
-Previously in `7.0.1`: hotfix over v7.0.0 (db._core.DB_PATH was only caller still hardcoded to legacy ~/.nexo/data/nexo.db; every shared-DB command silently returned empty results post-migration). Previously in `7.0.0`: **BREAKING — Plan Consolidado fase F0.6**: physical separation of the runtime tree into `~/.nexo/{core,personal,runtime}/`. The flat layout (`~/.nexo/scripts/`, `brain/`, `data/`, `operations/`, ...) is gone. Operators on v6.x are auto-migrated on first `nexo update`; fresh installs land directly in the new tree. New `paths.py` helpers are transition-aware.
+Previously in `7.0.1`: hotfix over v7.0.0 (db._core.DB_PATH was only caller still hardcoded to legacy ~/.nexo/data/nexo.db; every shared-DB command silently returned empty results post-migration). Previously in `7.0.0`: **BREAKING — Consolidated Plan Phase F0.6**: physical separation of the runtime tree into `~/.nexo/{core,personal,runtime}/`. The flat layout (`~/.nexo/scripts/`, `brain/`, `data/`, `operations/`, ...) is gone. Operators on v6.x are auto-migrated on first `nexo update`; fresh installs land directly in the new tree. New `paths.py` helpers are transition-aware.
 
-Previously in `6.5.0`: Plan Consolidado fase F0.2: operators can now `nexo scripts enable|disable|status <name>` any personal automation. The cron wrapper honours the flag at every tick (`exit 0` with `summary='[disabled]'` while the LaunchAgent stays loaded). The companion NEXO Desktop client (a closed-source product, distributed separately) wires the same toggle into its Automatizaciones panel. See [CHANGELOG](CHANGELOG.md) for the full diff.
+Previously in `6.5.0`: Consolidated Plan Phase F0.2: operators can now `nexo scripts enable|disable|status <name>` any personal automation. The cron wrapper honours the flag at every tick (`exit 0` with `summary='[disabled]'` while the LaunchAgent stays loaded). The companion NEXO Desktop client (a closed-source product, distributed separately) wires the same toggle into its Automations panel. See [CHANGELOG](CHANGELOG.md) for the full diff.
 
 > **About NEXO Desktop.** NEXO Desktop is a separate closed-source companion app distributed at [nexo-desktop.com](https://nexo-desktop.com/) — its source does not live in this repo. When release notes mention Desktop they describe a coordinated client release that consumes the Brain's CLI / MCP contract; the Brain itself is fully usable on its own (terminal, Codex, Claude Code, or any MCP client). If you want the product edition rather than the open-source Brain alone, contact `info@wazion.com` and ask about NEXO Desktop.
 
 
-Previously in `6.4.0`: Plan Consolidado fase F1 — multi-tenant email accounts (`email_accounts` table, `nexo email setup` interactive wizard, `nexo email add --password-stdin --json` for machine consumers, idempotent migrator from legacy `~/.nexo/nexo-email/config.json`). On post-F0.6 installs that legacy-looking path is only a compatibility alias/shim into `~/.nexo/runtime/nexo-email/config.json`; it should never be treated as a second source of truth.
+Previously in `6.4.0`: Consolidated Plan Phase F1 — multi-tenant email accounts (`email_accounts` table, `nexo email setup` interactive wizard, `nexo email add --password-stdin --json` for machine consumers, idempotent migrator from legacy `~/.nexo/nexo-email/config.json`). On post-F0.6 installs that legacy-looking path is only a compatibility alias/shim into `~/.nexo/runtime/nexo-email/config.json`; it should never be treated as a second source of truth.
 
 Previously in `6.3.1`: privacy hotfix over v6.3.0. The nightly auditor caught that `src/presets/entities_universal.json` in v6.3.0 shipped operator-specific `vhost_mapping` entries (private IPs, hostnames, tenant names). v6.3.1 pulls those out into `src/presets/entities_local.sample.json` (template) + `.gitignore`'d `~/.nexo/brain/presets/entities_local.json` (operator copy), and the installer drops the sample at `nexo init`. No behaviour change on the Guardian side.
 
-Previously in `6.3.0` — Plan Consolidado wave 2, coordinated with NEXO Desktop v0.18.0. Closes the remaining Guardian roadmap items that do not require an invasive structure migration: extended `cognitive_sentiment` shape (is_correction/valence/intent), extended `entities` schema, 21 labelled rule fixtures with R13 spike gates, Fase F telemetry loops + Deep Sleep phase, pinned local zero-shot classifier skeleton (mDeBERTa), hook respects `NEXO_MIGRATING=1`, `origin` column on `personal_scripts`, and the T4 LLM gate wrapping R15/R23e/R23f/R23h (byte-parity Py ↔ JS). Two pre-release auditors flagged a CRITICAL in the first JS wire (method-name + async mismatch) and a HIGH (classifier bool conflated "no" with "unparseable"); both corrected with regression tests before merge.
+Previously in `6.3.0` — Consolidated Plan wave 2, coordinated with NEXO Desktop v0.18.0. Closes the remaining Guardian roadmap items that do not require an invasive structure migration: extended `cognitive_sentiment` shape (is_correction/valence/intent), extended `entities` schema, 21 labelled rule fixtures with R13 spike gates, Phase F telemetry loops + Deep Sleep phase, pinned local zero-shot classifier skeleton (mDeBERTa), hook respects `NEXO_MIGRATING=1`, `origin` column on `personal_scripts`, and the T4 LLM gate wrapping R15/R23e/R23f/R23h (byte-parity Py ↔ JS). Two pre-release auditors flagged a CRITICAL in the first JS wire (method-name + async mismatch) and a HIGH (classifier bool conflated "no" with "unparseable"); both corrected with regression tests before merge.
 
-Previously in `6.1.1`: small fix to `nexo --help` so the `Latest: vX` line reliably appears when NEXO Desktop invokes the CLI via subprocess — unblocks the Desktop Brain auto-update banner that previously couldn't parse the version delta. No behaviour change for interactive terminal users; the 6-hour registry cache still rate-limits network calls. Bundles all v6.1.0 Protocol Enforcer Fase 2 + multi-claude-sid hotfix content.
+Previously in `6.1.1`: small fix to `nexo --help` so the `Latest: vX` line reliably appears when NEXO Desktop invokes the CLI via subprocess — unblocks the Desktop Brain auto-update banner that previously couldn't parse the version delta. No behaviour change for interactive terminal users; the 6-hour registry cache still rate-limits network calls. Bundles all v6.1.0 Protocol Enforcer Phase 2 + multi-claude-sid hotfix content.
 
 Previously in `6.0.2`: adds the reserved caller prefix `personal/*` so scripts living in `~/.nexo/scripts/` can invoke the automation backend with their own caller id without editing `src/resonance_map.py`. New kwarg `tier` (`"maximo"` / `"alto"` / `"medio"` / `"bajo"`) on `run_automation_prompt`, `run_automation_interactive`, `nexo_helper.run_automation_text`, `nexo_helper.run_automation_json`, and `nexo-agent-run.py --tier`. Precedence for `personal/*` callers: explicit `tier=` → explicit `reasoning_effort=` → `calibration.preferences.default_resonance` → `DEFAULT_RESONANCE` (`alto`). Registered callers keep their behaviour unchanged. New guide: [`docs/personal-scripts-guide.md`](docs/personal-scripts-guide.md).
 
@@ -213,11 +321,11 @@ Previously in `5.10.1`: silent, one-shot migration that recovers legacy `reasoni
 
 Previously in `5.10.0`: fixes the deep-sleep extract bloat that made Session 1 take ~57 minutes on some installs (new `bare_mode` on `run_automation_prompt` wires `claude --bare` for JSON-only extractor callers — ~4.3× faster per child, sourced from `ANTHROPIC_API_KEY` env or `~/.claude/anthropic-api-key.txt`). `caller=` is now **mandatory** on `run_automation_prompt` — no silent fallback; every automation subprocess traces back to a registered caller with a deliberate tier. Five personal scripts (`personal/email-monitor`, `personal/github-monitor`, `personal/post-x`, `personal/followup-runner`, `personal/orchestrator-v2`) joined the resonance map with tiers picked per caller based on what each one does. gbp/* marketing posts bumped from `medio` to `alto` (public-facing copy, quality first over speed). 65 legacy protocol debts bulk-resolved as part of the audit — the patterns that generated them are structurally closed by mandatory `caller=` + unified session log + bare_mode.
 
-Previously in `5.9.1`: adds `default_resonance` to `brain/calibration.json` via the Desktop-facing schema (`nexo schema --json`), so NEXO Desktop's Preferences dialog renders a select with `Máximo` / `Alto (recomendado)` / `Medio` / `Bajo` automatically — no Desktop release needed. `resolve_tier_for_caller` reads calibration first and falls back to the legacy `schedule.json` location. `nexo preferences --resonance` writes both. The UI control only affects interactive sessions (`nexo chat`, Desktop new conversation, interactive `nexo update`); crons and background processes stay pinned per caller in `resonance_map.py`.
+Previously in `5.9.1`: adds `default_resonance` to `brain/calibration.json` via the Desktop-facing schema (`nexo schema --json`), so NEXO Desktop's Preferences dialog renders a localized resonance selector automatically — no Desktop release needed. `resolve_tier_for_caller` reads calibration first and falls back to the legacy `schedule.json` location. `nexo preferences --resonance` writes both. The UI control only affects interactive sessions (`nexo chat`, Desktop new conversation, interactive `nexo update`); crons and background processes stay pinned per caller in `resonance_map.py`.
 
 Previously in `5.9.0`: every Claude/Codex invocation now flows through a central **resonance map** and a **unified session log**. Four tiers (`MAXIMO` / `ALTO` / `MEDIO` / `BAJO`) each resolve to a concrete `(model, reasoning_effort)` pair per backend. User-facing callers (`nexo chat`, Desktop new conversation, interactive `nexo update`) honour the user's `default_resonance` preference; system-owned callers (deep-sleep, evolution, catchup, GBP posts, …) run at a fixed tier chosen per caller in `src/resonance_map.py` — the user's preference never downgrades a cron we decided needs `MAXIMO`. Unknown callers raise `UnregisteredCallerError`. Migration #41 adds `caller`, `session_type`, `started_at`, `ended_at`, `pid`, `resonance_tier` to `automation_runs`; interactive sessions record a row at spawn (with `ended_at=NULL`) and update it on close, so the Brain now has a single source of truth for every Claude/Codex call regardless of origin. New `nexo preferences --resonance` CLI. New MCP tools `nexo_session_log_create` / `nexo_session_log_close` let NEXO Desktop (which spawns `claude` directly from its TypeScript process) feed the same log.
 
-Previously in `5.8.2`: the Brain core no longer auto-classifies `followups` and `reminders` on behalf of agents. v5.8.0's `classify_task()` heuristic (NEXO-specific ID prefixes `NF-PROTOCOL-*` / `NF-DS-*` / `NF-AUDIT-*`, Spanish user-verbs `debes` / `revisar` / `firmar`, agent keywords `monitor` / `auditoría diaria` / `checkpoint`) was fine for NEXO's own DB but bled convention into every third-party agent plugged into the shared Brain. The core now persists `internal=0` and `owner=NULL` when the caller omits them, and clients that want automatic classification (NEXO Desktop does, via its `_legacyClassifyOwner` helpers) compute it themselves and pass the result. Migration #40 keeps the columns + indexes; rows already backfilled by v5.8.0 keep their values. `normalise_owner` still explicitly rejects the string `"nexo"` so legacy hardcoding cannot sneak back in.
+Previously in `5.8.2`: the Brain core no longer auto-classifies `followups` and `reminders` on behalf of agents. v5.8.0's `classify_task()` heuristic (NEXO-specific ID prefixes `NF-PROTOCOL-*` / `NF-DS-*` / `NF-AUDIT-*`, Spanish user-verb patterns, and agent keywords such as monitor or daily audit) was fine for NEXO's own DB but bled convention into every third-party agent plugged into the shared Brain. The core now persists `internal=0` and `owner=NULL` when the caller omits them, and clients that want automatic classification (NEXO Desktop does, via its `_legacyClassifyOwner` helpers) compute it themselves and pass the result. Migration #40 keeps the columns + indexes; rows already backfilled by v5.8.0 keep their values. `normalise_owner` still explicitly rejects the string `"nexo"` so legacy hardcoding cannot sneak back in.
 
 Previously in `5.8.1`: closes a self-reinforcing `launchctl kickstart -k` loop in the watchdog that wedged deep-sleep Phase 2 between 2026-04-14 and 2026-04-17. The cron wrapper now INSERTs an in-flight row (`ended_at=NULL`) at start and traps SIGTERM/INT/HUP to close it with `exit_code=143` instead of vanishing from `cron_runs`. The watchdog interprets in-flight rows as "currently running" and only re-executes after verifying the worker process is dead. `extract.py` classifies CLI failures into transient (`overloaded_error`, rate-limit, timeout, signal — retried next run) and deterministic (skipped after `MAX_POISON_ATTEMPTS`), and passes a slim shared-context (200 head lines + metadata) instead of the full 400+ KB dump. A new `auto_update._heal_deep_sleep_runtime()` repairs existing installs silently on the next `nexo update`: poisoned checkpoints, stale locks, dangling `cron_runs` rows, and bloated `.watchdog-fails` counters.
 
@@ -316,8 +424,8 @@ Version `5.2.1` fixes the Deep Sleep datetime regression and closes the decision
 
 Version `5.2.0` closes two focused gaps in the Cortex layer that were left open by the v5.1 audit — the high-stakes response-contract detector was English-only, and the `nexo-cortex-cycle` cron was writing a quality snapshot that no reader ever consumed:
 
-- `HIGH_STAKES_KEYWORDS_ES` adds ~45 Spanish keywords to the high-stakes detector with accented and unaccented variants, so a goal written in Spanish (`migrar la base de datos de producción`) trips the same gate as its English twin.
-- `NEGATION_PATTERNS` suppresses false positives when the user explicitly disclaims touching the sensitive area (`sin afectar producción`, `no tocar prod`, `without touching production`, `don't modify`). The raw keyword being present is no longer enough to flag the task.
+- `HIGH_STAKES_KEYWORDS_ES` adds ~45 Spanish-language keywords to the high-stakes detector with accented and unaccented variants, so a goal written in Spanish trips the same gate as its English twin.
+- `NEGATION_PATTERNS` suppresses false positives when the user explicitly disclaims touching the sensitive area, including both Spanish and English boundary statements. The raw keyword being present is no longer enough to flag the task.
 - `evaluate_response_confidence` accepts two new optional kwargs, `pre_action_context_hits` (+up to 10) and `area_has_atlas_entry` (+5), so the score can finally reward tasks that loaded real context instead of only punishing unprepared ones. Both signals are capped and cannot override a real risk penalty.
 - A monotonic numeric safeguard layers on top of the boolean decision tree: `answer` downgrades to `verify` when `final_score < 50`, and `verify` downgrades to `defer` when `high_stakes` and `final_score < 30`. The safeguard can only make response discipline stricter, never looser.
 - `handle_cortex_quality` in `src/plugins/cortex.py` now reads `$NEXO_HOME/operations/cortex-quality-latest.json` when the requested window (7 or 1 days) is fresh (<6h 30m) and the schema matches — silent fallback to the live SQL computation on any failure. The handler's JSON response now includes `"source": "cache" | "live"` for observability.
@@ -373,7 +481,7 @@ Version `5.0.0` closes the loop between memory, decisions, outcomes, and reusabl
 |------------|-------------|-------|----------------|
 | Shared brain / MCP runtime | Yes | Yes | Yes |
 | Managed bootstrap document | `~/.claude/CLAUDE.md` | `~/.codex/AGENTS.md` | Not applicable |
-| Global startup bootstrap sync | Native via hooks + bootstrap | Managed via bootstrap + Codex config `initial_messages` + `mcp_servers.nexo` | Managed MCP-only shared-brain metadata |
+| Global startup bootstrap sync | Native via hooks + bootstrap | Managed via bootstrap + Codex config `mcp_servers.nexo` | Managed MCP-only shared-brain metadata |
 | `nexo chat` terminal client | Yes | Yes | No |
 | Background automation backend | Recommended | Supported | No |
 | Raw transcript source for Deep Sleep | Yes | Yes | No |
