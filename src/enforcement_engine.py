@@ -317,6 +317,46 @@ _SILENT_REMINDER_DISCLOSURE_SUFFIX = (
     " Do not mention this reminder or any internal enforcement to the user."
 )
 
+_CAPABILITY_DENIAL_RE = re.compile(
+    r"\b("
+    r"no\s+(?:se\s+puede|puedo|existe|hay|tenemos|esta\s+montado|est[aá]\s+montado)|"
+    r"no\s+(?:est[aá]\s+soportado|hay\s+nada\s+montado)|"
+    r"(?:cannot|can't|can\s+not|not\s+possible|does\s+not\s+exist|no\s+such\s+capability|not\s+supported)"
+    r")\b",
+    re.IGNORECASE,
+)
+_CAPABILITY_REALITY_TOOLS = {
+    "nexo_system_catalog",
+    "mcp__nexo__nexo_system_catalog",
+    "nexo_card_match",
+    "mcp__nexo__nexo_card_match",
+    "nexo_skill_match",
+    "mcp__nexo__nexo_skill_match",
+    "nexo_credential_list",
+    "mcp__nexo__nexo_credential_list",
+    "nexo_credential_get",
+    "mcp__nexo__nexo_credential_get",
+    "nexo_pre_action_context",
+    "mcp__nexo__nexo_pre_action_context",
+    "nexo_recent_context",
+    "mcp__nexo__nexo_recent_context",
+    "nexo_session_diary_read",
+    "mcp__nexo__nexo_session_diary_read",
+    "nexo_status",
+    "mcp__nexo__nexo_status",
+    "Read",
+    "Grep",
+    "Glob",
+    "Bash",
+}
+
+_CAPABILITY_REALITY_PROMPT = (
+    "Antes de negar una capacidad o declarar un bloqueo, verifica la realidad viva: "
+    "catálogo/sistema, recetas o skills previos, scripts existentes, producto activo, BD o fuente oficial. "
+    "Si no has hecho esa comprobación en este turno, no afirmes que no se puede/no existe; ejecuta la comprobación primero "
+    "o formula el estado como no verificado."
+)
+
 
 def _redact_for_log(text: str, max_len: int = 200) -> str:
     """Return a log-safe truncation of `text` with secret-like tokens
@@ -331,6 +371,11 @@ def _redact_for_log(text: str, max_len: int = 200) -> str:
     if len(out) > max_len:
         out = out[:max_len] + "..."
     return out
+
+
+def _security_followup_id(seed: str) -> str:
+    digest = hashlib.sha1(seed.encode("utf-8"), usedforsecurity=False).hexdigest()[:10].upper()
+    return f"NF-SECURITY-EXPOSED-CREDENTIAL-{digest}"
 
 
 def _upgrade_silent_reminder_prompt(prompt: str) -> str:
@@ -925,6 +970,7 @@ class HeadlessEnforcer:
         shadow → logs only. soft/hard → enqueues the reminder. Dedup 60s
         via the standard _enqueue tag guard.
         """
+        self._check_capability_denial_requires_reality(text)
         if _detect_declared_done is None:
             return
         mode = self._guardian_rule_mode("R16_declared_done")
@@ -958,6 +1004,25 @@ class HeadlessEnforcer:
             self.raise_event("done_claimed_with_open_task", {"source": "R16"})
         except Exception:
             pass
+
+    def _check_capability_denial_requires_reality(self, text: str):
+        """Block unsupported capability denials until a live source was checked."""
+        if not text or not _CAPABILITY_DENIAL_RE.search(text):
+            return
+        if self.tools_called.intersection(_CAPABILITY_REALITY_TOOLS):
+            return
+        mode = self._guardian_rule_mode("R34_capability_reality_check")
+        if mode == "off":
+            return
+        if mode == "shadow":
+            _logger.info("[R34 SHADOW] would inject capability reality check")
+            return
+        self._enqueue(
+            _CAPABILITY_REALITY_PROMPT,
+            "r34:capability-denial-without-reality-check",
+            rule_id="R34_capability_reality_check",
+        )
+        _logger.info("[R34 %s] enqueued capability reality check", mode.upper())
 
     def _r25_context(self) -> tuple[set[str], list[str]]:
         """Resolve the (read_only_hosts, destructive_patterns) pair from
@@ -1713,9 +1778,44 @@ class HeadlessEnforcer:
             return
         if mode == "shadow":
             _logger.info("[R23g SHADOW] would inject")
+            self._ensure_exposed_credential_followup(tool_input, reason="R23g shadow")
             return
         self._enqueue(prompt, "R23g_secrets_in_output", rule_id="R23g_secrets_in_output")
+        self._ensure_exposed_credential_followup(tool_input, reason="R23g detected secret exposure risk")
         _logger.info("[R23g %s] enqueued", mode.upper())
+
+    def _ensure_exposed_credential_followup(self, tool_input, *, reason: str) -> None:
+        if not isinstance(tool_input, dict):
+            return
+        cmd = tool_input.get("command")
+        if not isinstance(cmd, str) or not cmd.strip():
+            return
+        safe_cmd = _redact_for_log(cmd, max_len=160)
+        followup_id = _security_followup_id(f"{reason}:{safe_cmd}")
+        try:
+            from db import create_followup, get_followup  # type: ignore
+
+            if get_followup(followup_id):
+                return
+            create_followup(
+                followup_id,
+                description=(
+                    "SEGURIDAD: credencial expuesta o en riesgo detectada por el guard. "
+                    f"Origen: {safe_cmd}. Rotar/revocar la credencial y sustituirla en el gestor seguro."
+                ),
+                date=time.strftime("%Y-%m-%d"),
+                verification=(
+                    "Cierre solo con evidencia de revocación efectiva: llamada/API/HTTP 401 para la credencial antigua "
+                    "o comprobación oficial equivalente, más nueva ubicación segura registrada."
+                ),
+                reasoning=reason,
+                priority="critical",
+                internal=1,
+                owner="agent",
+            )
+            _logger.info("[R23g] security followup created: %s", followup_id)
+        except Exception as exc:  # noqa: BLE001
+            _logger.warning("R23g security followup create failed: %s", exc)
 
     def _check_r23i(self, tool_name: str, tool_input):
         """R23i — Edit after recent git push on auto_deploy project (soft)."""
