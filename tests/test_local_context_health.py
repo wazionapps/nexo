@@ -29,7 +29,8 @@ def test_sidecar_index_snapshot_reads_readonly_without_recording_usage():
 
     assert result["ok"] is True
     assert result["indexed"]["files_found"] >= 1
-    assert result["sidecar_query_counter"]["note"] == "legacy_counter_not_real_usage"
+    assert result["sidecar_query_counter"]["note"] == "usage_store_query_events"
+    assert result["sidecar_query_counter"]["legacy_note"] == "legacy_counter_not_real_usage"
     assert after_queries == before_queries
 
 

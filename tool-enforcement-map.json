@@ -2244,7 +2244,7 @@
       "triggers_after": []
     },
     "nexo_guardian_rule_override": {
-      "description": "Temporarily override a Guardian rule's mode (off/shadow/soft/hard) with TTL (1h/24h/session). Core rules (R13/R14/R16/R25/R30) cannot be set to off. Writes to ~/.nexo/config/guardian-runtime-overrides.json.",
+      "description": "Temporarily override a Guardian rule's mode (off/shadow/soft/hard) with TTL (1h/24h/session). Core rules (R13/R14/R16/R25/R30/R34/R37) cannot be set to off. Writes to ~/.nexo/config/guardian-runtime-overrides.json.",
       "category": "guardian",
       "source": "server",
       "requires": [],
@@ -5192,7 +5192,9 @@
       "R14_correction_learning",
       "R16_declared_done",
       "R25_nora_maria_read_only",
-      "R30_pre_done_evidence_system_prompt"
+      "R30_pre_done_evidence_system_prompt",
+      "R34_identity_coherence",
+      "R37_pre_answer_evidence_gate"
     ],
     "core_rules_disallow_off": true,
     "server_side_rules_schema": {

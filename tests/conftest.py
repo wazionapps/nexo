@@ -27,6 +27,11 @@ REPO_PREFIXES = (
     "script_registry",
     "state_watchers_runtime",
 )
+DB_IMPORT_CLIENT_MODULES = (
+    "tools_reminders_crud",
+    "tools_learnings",
+    "plugins.episodic_memory",
+)
 
 # Some test modules import cognitive/db packages during collection, before
 # autouse fixtures can redirect paths. Keep those imports away from the live
@@ -102,6 +107,10 @@ def isolated_db(tmp_path, monkeypatch):
 
     import db as db_package
     importlib.reload(db_package)
+    for module_name in DB_IMPORT_CLIENT_MODULES:
+        module = sys.modules.get(module_name)
+        if module is not None:
+            importlib.reload(module)
     import db._core as db_core
     import cognitive._core as cog_core
     try:

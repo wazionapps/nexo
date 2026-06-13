@@ -18,7 +18,7 @@ def test_core_rules_catalog_metadata_matches_active_rules():
     ]
     blocking = [rule for rule in rules if rule["type"] == "blocking"]
 
-    assert data["_meta"]["version"] == "1.1.0"
+    assert data["_meta"]["version"] == "1.2.0"
     assert data["_meta"]["total_rules"] == len(rules)
     assert data["_meta"]["blocking"] == len(blocking)
     assert {rule["id"] for rule in rules} >= {
@@ -29,6 +29,7 @@ def test_core_rules_catalog_metadata_matches_active_rules():
         "PC20",
         "PC28",
         "PC32",
+        "PC33",
     }
 
 
@@ -37,7 +38,7 @@ def test_core_rules_sync_installs_product_core_rows_with_hashes(isolated_db):
     from plugins.core_rules import handle_rules_list
 
     rendered = handle_rules_list(limit=1)
-    assert "CORE RULES v1.1.0" in rendered
+    assert "CORE RULES v1.2.0" in rendered
 
     conn = db.get_db()
     total = conn.execute("SELECT COUNT(*) FROM core_rules WHERE is_active = 1").fetchone()[0]
@@ -45,7 +46,7 @@ def test_core_rules_sync_installs_product_core_rows_with_hashes(isolated_db):
     pc1 = conn.execute("SELECT * FROM core_rules WHERE id = 'PC1'").fetchone()
     bootstrap = conn.execute("SELECT * FROM core_rules WHERE id = 'CORE_USER_SEPARATION'").fetchone()
 
-    assert version == "1.1.0"
+    assert version == "1.2.0"
     assert total == _catalog()["_meta"]["total_rules"]
     assert pc1["category"] == "product_core"
     assert pc1["protected"] == 1
@@ -83,5 +84,6 @@ def test_managed_bootstrap_templates_include_compact_core_rules_summary():
         text = (root / relative).read_text()
         assert "## Core Rules Summary" in text
         assert "Check existing context, memory, tickets, files, credentials, and prior work before asking the user." in text
+        assert "Before answering about releases, commits, branches, tags" in text
         assert "Do not invent or deny NEXO capabilities without checking the live product/source of truth first." in text
         assert "Close work only with evidence" in text

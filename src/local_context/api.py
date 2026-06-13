@@ -6,7 +6,6 @@ import re
 import shutil
 import sqlite3
 import stat
-import hashlib
 import subprocess
 import sys
 import time
@@ -16,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 import paths
-from . import embeddings
+from . import embeddings, usage_events
 from .db import LOCAL_CONTEXT_TABLES, close_local_context_db, connect_local_context_db_readonly, ensure_local_context_db, get_local_context_db, local_context_db_path
 from .extractors import canonical_entity_key, chunk_text, contains_secret, entities, entity_mentions, extract_text, normalize_entity_alias, summarize
 from .logging import log_event, tail
@@ -4663,7 +4662,7 @@ def context_query(
     include_relations: bool = True,
     snippet_chars: int = 1200,
     readonly: bool = True,
-    record_query: bool = False,
+    record_query: bool = True,
 ) -> dict:
     conn = _read_conn() if readonly else _conn()
     close_conn = bool(readonly)
@@ -4680,7 +4679,7 @@ def context_query(
             include_entities=include_entities,
             include_relations=include_relations,
             snippet_chars=snippet_chars,
-            record_query=bool(record_query and not readonly),
+            record_query=bool(record_query),
         )
     finally:
         if close_conn:
@@ -4791,21 +4790,27 @@ def _context_query_conn(
     if assets:
         summary = f"Found {len(assets)} local asset(s) related to '{clean_query}'."
     if record_query:
-        conn.execute(
-            """
-            INSERT INTO local_context_queries(query_hash, intent, result_count, confidence, warnings_json, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (
-                hashlib.sha256(clean_query.encode("utf-8", errors="ignore")).hexdigest(),
-                intent,
-                len(assets),
-                0.75 if evidence_refs else 0.0,
-                json_dumps(warnings),
-                now(),
-            ),
+        recorded = usage_events.record_usage_event(
+            query=clean_query,
+            client="nexo",
+            tool="nexo_local_context",
+            source="local_context_query",
+            route_stage="context_query",
+            intent=intent,
+            result_count=len(assets),
+            should_inject=bool(evidence_refs),
+            evidence_refs_count=len(evidence_refs),
+            used_before_response=False,
+            metadata={
+                "legacy_table": "local_context_queries",
+                "mode": normalized_mode,
+                "warnings_count": len(warnings),
+            },
         )
-        conn.commit()
+        if not recorded.get("ok"):
+            warnings.append(
+                f"Local-context usage telemetry not recorded: {recorded.get('error') or 'unknown_error'}"
+            )
     payload = {
         "ok": True,
         "query": clean_query,

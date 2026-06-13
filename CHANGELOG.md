@@ -1,5 +1,17 @@
 # Changelog
 
+## [7.31.7] - 2026-06-13
+
+### Added - pre-answer evidence gate
+
+- **Stateful answers now require evidence before wording.** Questions about releases, commits, branches, tags, tickets, servers, ports, DNS, deployments, sent messages, uploads, installs, or verified/closed status route through the new `live_state_claim` pre-answer path. Brain consults continuity/evidence sources first and, if nothing verifies the state, injects a verification-gap reminder so the agent says "not verified yet" instead of guessing from memory.
+- **R34 and R37 are core/hard defaults.** Identity coherence is now hard/core, and the new pre-answer evidence gate is hard/core in Guardian defaults, the core prompt, the protected core-rule registry, and Desktop bootstrap preload guidance.
+
+### Fixed - closeout and runtime evidence discipline
+
+- **Release/task closeout is harder to fake accidentally.** Stop hooks and task-close gates now catch future commitments without followups, total-closure language while work remains open, pending release/smoke/tag language at close, irreversible publication claims without specific approval evidence, and live-state fixes without live-surface verification.
+- **Local Context and MCP write evidence are more traceable.** Local Context queries now record real usage telemetry without writing to the read-only sidecar path, the health snapshot reports the usage store counter, and the MCP write queue can persist followups, change logs, and learnings through the same queued write lane.
+
 ## [7.31.6] - 2026-06-11
 
 ### Fixed - Desktop UI language for headless notices

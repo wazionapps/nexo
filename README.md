@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.31.6` is the current packaged-runtime line. Patch release over v7.31.5 - headless/email-monitor notifications now respect the Desktop UI language for static ES/EN templates before falling back to profile/calibration language and English.
+Version `7.31.7` is the current packaged-runtime line. Patch release over v7.31.6 - stateful answers now require evidence before claiming release, commit, branch, server, ticket, deployment, sent/uploaded, installed, verified, or closed status. Guardian defaults promote identity coherence to hard/core and add a hard/core pre-answer evidence gate, while closeout and Local Context telemetry now leave stronger proof trails.
+
+Previously in `7.31.6`: patch release over v7.31.5 - headless/email-monitor notifications now respect the Desktop UI language for static ES/EN templates before falling back to profile/calibration language and English.
 
 Previously in `7.31.5`: patch release over v7.31.4 - the breaker resume notice exists: when a notified engine pause recovers, the operator gets exactly one resume email in their language, signed by their agent.
 

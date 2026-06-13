@@ -79,6 +79,27 @@ def test_budget_policy_deep_prior_work_allows_indexed_transcripts():
     assert policy.max_source_timeout_ms == 1200
 
 
+def test_budget_policy_deep_live_state_claim_discloses_gap_without_evidence():
+    from pre_answer_runtime import run_pre_answer_route, select_budget_policy
+    from pre_answer_router import plan_sources
+
+    policy = select_budget_policy(query="esta publicada la release?", intent="live_state_claim", area="desktop")
+    adapters = {step.name: (lambda request, name=step.name: {"source": name}) for step in plan_sources("live_state_claim").all_steps()}
+
+    result = run_pre_answer_route(
+        {"query": "esta publicada la release?", "intent": "live_state_claim", "source": "test"},
+        source_adapters=adapters,
+    )
+
+    assert policy.budget_tier == "deep"
+    assert "evidence_ledger" in policy.allowed_sources
+    assert "transcripts" in policy.allowed_sources
+    assert result["should_inject"] is True
+    assert result["decision_signal"] == "defer"
+    assert result["must_disclose_gap"] is True
+    assert "PRE-ANSWER VERIFICATION GAP" in result["rendered"]
+
+
 def test_budget_policy_critical_requires_guard_atlas_release():
     from pre_answer_runtime import select_budget_policy
 
@@ -195,7 +216,7 @@ def test_budget_policy_source_names_are_canonical():
 
     adapters = set(default_source_adapters())
     assert CANONICAL_ROUTER_SOURCES <= adapters
-    for intent in ("general", "file_location", "schedule_commitment", "prior_work", "runtime_diagnosis"):
+    for intent in ("general", "file_location", "schedule_commitment", "prior_work", "live_state_claim", "runtime_diagnosis"):
         policy = select_budget_policy(query=intent, intent=intent, area="brain")
         names = set(policy.allowed_sources) | set(policy.required_sources)
         assert names <= CANONICAL_ROUTER_SOURCES

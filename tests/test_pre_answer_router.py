@@ -43,6 +43,9 @@ def test_pre_answer_router_intent_matrix_multilingual(fake_pre_answer_semantic_r
         ("recuerdas la decision sobre local context?", "memory_question"),
         ("did you do that in another terminal?", "identity_authorship"),
         ("recuérdame mañana revisar el deadline", "schedule_commitment"),
+        ("esta publicada la release 7.31.7?", "live_state_claim"),
+        ("que commit subiste en desktop?", "live_state_claim"),
+        ("ese ticket esta cerrado?", "live_state_claim"),
         ("qué prometí hacer?", "schedule_commitment"),
         ("qué queda pendiente?", "schedule_commitment"),
         ("por qué toqué src/pre_answer_router.py", "prior_work"),
@@ -76,6 +79,14 @@ def test_pre_answer_router_intent_matrix_multilingual(fake_pre_answer_semantic_r
     schedule_plan = router.plan_sources("schedule_commitment")
     assert schedule_plan.primary[0].name == "semantic_layers"
     assert schedule_plan.primary[1].name == "commitments"
+    live_state_plan = router.plan_sources("live_state_claim")
+    assert [step.name for step in live_state_plan.primary][:4] == [
+        "semantic_layers",
+        "recent_context",
+        "evidence_ledger",
+        "change_log",
+    ]
+    assert live_state_plan.fallback[-1].name == "local_context"
 
 
 def test_pre_answer_router_deadline_skips_slow_local_context():
@@ -208,6 +219,71 @@ def test_pre_answer_router_prior_work_uses_operational_stores_before_transcript(
     assert calls.index("transcripts") > calls.index("diary")
     assert result.should_inject is True
     assert result.evidence_refs == ["transcript:1"]
+
+
+def test_live_state_claim_discloses_verification_gap_without_evidence(fake_pre_answer_semantic_router):
+    import pre_answer_router as router
+
+    fake_pre_answer_semantic_router.labels_by_text = {
+        "esta publicada la release 7.31.7?": "live_state_claim",
+    }
+
+    def empty_source(name):
+        return lambda request: router.SourceResult(source=name)
+
+    adapters = {
+        step.name: empty_source(step.name)
+        for step in router.plan_sources("live_state_claim").all_steps()
+    }
+
+    result = router.route_pre_answer(
+        "esta publicada la release 7.31.7?",
+        budget_ms=2000,
+        source_adapters=adapters,
+    )
+
+    assert result.intent == "live_state_claim"
+    assert result.should_inject is True
+    assert result.decision_signal == "defer"
+    assert result.must_disclose_gap is True
+    assert "PRE-ANSWER VERIFICATION GAP" in result.rendered
+    assert "Do not affirm, deny" in result.rendered
+
+
+def test_live_state_claim_uses_evidence_without_gap(fake_pre_answer_semantic_router):
+    import pre_answer_router as router
+
+    fake_pre_answer_semantic_router.labels_by_text = {
+        "que commit subiste en desktop?": "live_state_claim",
+    }
+
+    def empty_source(name):
+        return lambda request: router.SourceResult(source=name)
+
+    adapters = {
+        step.name: empty_source(step.name)
+        for step in router.plan_sources("live_state_claim").all_steps()
+    }
+    adapters["evidence_ledger"] = lambda request: router.SourceResult(
+        source="evidence_ledger",
+        rendered="Commit c208699 verified on origin/main.",
+        evidence_refs=["git:c208699"],
+        result_count=1,
+    )
+
+    result = router.route_pre_answer(
+        "que commit subiste en desktop?",
+        budget_ms=2000,
+        source_adapters=adapters,
+    )
+
+    assert result.intent == "live_state_claim"
+    assert result.should_inject is True
+    assert result.decision_signal == ""
+    assert result.must_disclose_gap is False
+    assert result.evidence_refs == ["git:c208699"]
+    assert "PRE-ANSWER CONTEXT" in result.rendered
+    assert "PRE-ANSWER VERIFICATION GAP" not in result.rendered
 
 
 def test_prior_work_uses_causal_graph_without_new_intent_detector(fake_pre_answer_semantic_router):

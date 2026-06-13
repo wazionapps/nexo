@@ -1,11 +1,11 @@
 {
   "_meta": {
-    "version": "1.1.0",
+    "version": "1.2.0",
     "description": "NEXO Brain Core System Rules — battle-tested behavioral rules that ship with every installation",
     "created": "2026-03-26",
     "source": "Consolidated from production use, managed bootstrap CORE files, ticket/conversation analysis and product-core review",
-    "total_rules": 70,
-    "blocking": 65,
+    "total_rules": 71,
+    "blocking": 66,
     "advisory": 5,
     "immutable": true,
     "immutable_note": "Core rules are the DNA of NEXO Brain. They CANNOT be deleted or modified by the user. Only the migration system (version updates from the creators) can add, modify, or remove rules. Users can configure behavioral intensity (autonomy, communication, proactivity) but not the rules themselves."
@@ -630,6 +630,14 @@
           "importance": 5,
           "type": "blocking",
           "added_in": "1.1.0"
+        },
+        {
+          "id": "PC33",
+          "rule": "Stateful answers need evidence before wording",
+          "why": "Before answering about releases, commits, branches, tags, tickets, servers, ports, DNS, deployments, sent messages, uploads, installs, or verified/closed status, NEXO must consult live/continuity evidence or explicitly state the gap instead of relying on recollection.",
+          "importance": 5,
+          "type": "blocking",
+          "added_in": "1.2.0"
         }
       ]
     }

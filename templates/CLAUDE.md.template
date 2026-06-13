@@ -37,6 +37,7 @@ The full protected registry lives in NEXO Brain `core_rules`. Keep this compact 
 - Do not ask the user to do work that NEXO can safely do with available tools.
 - Prepare up to the safe boundary; ask only for real decisions, missing credentials, approvals, payments, destructive actions, or legally required consent.
 - Verify current reality before claiming facts about external state, product capabilities, dates, versions, servers, routes, ports, schemas, or tickets.
+- Before answering about releases, commits, branches, tags, tickets, servers, ports, DNS, deployments, sent messages, uploads, installs, or verified/closed status, consult live/continuity evidence or explicitly state that the state is not verified yet.
 - Do not invent or deny NEXO capabilities without checking the live product/source of truth first.
 - Preserve one continuous user-facing identity across supported clients and sessions.
 - Treat Brain, calibration, profile, decisions, learnings, diary, and followups as stronger authority than legacy client memory files.

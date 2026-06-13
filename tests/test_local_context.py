@@ -7,7 +7,7 @@ from pathlib import Path
 import local_context
 from db import get_db
 from db._schema import get_schema_version
-from local_context import api
+from local_context import api, usage_events
 from local_context.db import (
     MAIN_CLEANUP_STATE_KEY,
     MIGRATION_STATE_KEY,
@@ -214,6 +214,7 @@ def test_local_memory_read_paths_use_readonly_sidecar_without_prepare_or_audit_w
     local_context.run_once(limit=20, process_limit=20)
     conn = get_local_context_db()
     before_queries = conn.execute("SELECT COUNT(*) AS total FROM local_context_queries").fetchone()["total"]
+    before_usage = usage_events.summarize_query_events(window_seconds=0)["total"]
 
     def fail_if_write_prepare_runs():
         raise AssertionError("read-only local memory path must not prepare or migrate the database")
@@ -226,6 +227,7 @@ def test_local_memory_read_paths_use_readonly_sidecar_without_prepare_or_audit_w
     asset = local_context.get_asset(context["assets"][0]["asset_id"])
     neighbors = local_context.get_neighbors(context["assets"][0]["asset_id"])
     after_queries = conn.execute("SELECT COUNT(*) AS total FROM local_context_queries").fetchone()["total"]
+    after_usage = usage_events.summarize_query_events(window_seconds=0)["total"]
 
     assert context["ok"] is True
     assert context["evidence_refs"]
@@ -234,6 +236,23 @@ def test_local_memory_read_paths_use_readonly_sidecar_without_prepare_or_audit_w
     assert asset["ok"] is True
     assert neighbors["ok"] is True
     assert after_queries == before_queries
+    assert after_usage == before_usage + 1
+
+
+def test_context_query_no_record_skips_usage_store(tmp_path):
+    root = tmp_path / "docs"
+    root.mkdir()
+    (root / "sidecar-memory.txt").write_text("Memoria local sin registro sensible.", encoding="utf-8")
+
+    local_context.add_root(str(root))
+    local_context.run_once(limit=20, process_limit=20)
+    before_usage = usage_events.summarize_query_events(window_seconds=0)["total"]
+
+    context = local_context.context_query("registro sensible", limit=5, record_query=False)
+    after_usage = usage_events.summarize_query_events(window_seconds=0)["total"]
+
+    assert context["ok"] is True
+    assert after_usage == before_usage
 
 
 def test_context_query_uses_entity_match_when_chunk_text_does_not_repeat_entity(tmp_path):

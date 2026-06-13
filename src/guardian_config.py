@@ -2,7 +2,7 @@
 
 Fase 2 spec items 0.5 + 0.19. Provides the canonical loader for the
 Guardian configuration and the validator that enforces the core-rule
-invariant: R13, R14, R16, R25, R30 can only be shadow / soft / hard.
+invariant: R13, R14, R16, R25, R30, R34, R37 can only be shadow / soft / hard.
 A mode of 'off' is rejected with a clear error so the operator cannot
 accidentally disable a rule that Fase 2 declared non-negotiable.
 
@@ -43,6 +43,8 @@ CORE_RULES: frozenset[str] = frozenset({
     "R16_declared_done",
     "R25_nora_maria_read_only",
     "R30_pre_done_evidence_system_prompt",
+    "R34_identity_coherence",
+    "R37_pre_answer_evidence_gate",
 })
 
 VALID_MODES: frozenset[str] = frozenset({"off", "shadow", "soft", "hard"})

@@ -1,9 +1,13 @@
 # NEXO Brain
 
-> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v7.31.6). NEXO Desktop is a separate closed-source companion app distributed at nexo-desktop.com; its source does not ship in this repo. Mentions of "NEXO Desktop" in changelog entries describe coordinated client releases that consume the Brain CLI / MCP contract. For the commercial Desktop product, contact info@wazion.com.
+> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v7.31.7). NEXO Desktop is a separate closed-source companion app distributed at nexo-desktop.com; its source does not ship in this repo. Mentions of "NEXO Desktop" in changelog entries describe coordinated client releases that consume the Brain CLI / MCP contract. For the commercial Desktop product, contact info@wazion.com.
 
 NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. It adds a local shared brain across supported clients, configurable terminal and automation backends, recovery-aware background jobs, startup preflight, runtime self-healing, smarter retrieval defaults, long-horizon overnight analysis, and 150+ MCP tools.
 
+v7.31.7: patch release. Stateful answers now require evidence before claiming release, commit,
+branch, server, ticket, deployment, sent/uploaded, installed, verified, or closed status. The
+pre-answer router adds a live_state_claim path with a verification-gap reminder, Guardian defaults
+make identity coherence hard/core, and closeout/local-context telemetry leave stronger proof trails.
 v7.31.6: patch release. Headless/email-monitor notifications now respect the Desktop UI language for
 static needs_interactive, provider breaker pause, and provider breaker resume templates before falling
 back to profile/calibration language and English.

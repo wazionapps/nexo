@@ -31,11 +31,13 @@ PRE_ANSWER_INTENTS: tuple[str, ...] = (
     "memory_question",
     "identity_authorship",
     "schedule_commitment",
+    "live_state_claim",
     "runtime_diagnosis",
     "general",
 )
 
 INJECTING_INTENTS = set(PRE_ANSWER_INTENTS) - {"general"}
+EVIDENCE_REQUIRED_INTENTS = {"live_state_claim"}
 
 DEFAULT_BUDGET_MS = 2500
 DEFAULT_TOKEN_BUDGET = 2500
@@ -344,6 +346,53 @@ _FEATURE_LEXICON: dict[str, tuple[str, ...]] = {
         "instalacion",
         "catalogo",
     ),
+    "live_state": (
+        "release",
+        "published",
+        "publish",
+        "deployed",
+        "deploy",
+        "uploaded",
+        "sent",
+        "closed",
+        "merged",
+        "commit",
+        "branch",
+        "tag",
+        "version",
+        "server",
+        "port",
+        "dns",
+        "domain",
+        "ticket",
+        "issue",
+        "pr",
+        "pull",
+        "status",
+        "running",
+        "installed",
+        "verified",
+        "publicado",
+        "publicada",
+        "publicar",
+        "desplegado",
+        "desplegada",
+        "subido",
+        "subida",
+        "enviado",
+        "enviada",
+        "cerrado",
+        "cerrada",
+        "mergeado",
+        "rama",
+        "servidor",
+        "puerto",
+        "dominio",
+        "estado",
+        "corriendo",
+        "instalado",
+        "verificado",
+    ),
 }
 
 _INTENT_FEATURE_WEIGHTS: dict[str, dict[str, float]] = {
@@ -353,6 +402,7 @@ _INTENT_FEATURE_WEIGHTS: dict[str, dict[str, float]] = {
     "memory_question": {"memory": 1.40, "past_work": 0.20, "identity": 0.15},
     "identity_authorship": {"identity": 1.20, "past_work": 0.65},
     "schedule_commitment": {"schedule": 1.55, "past_work": 0.10, "memory": 0.20},
+    "live_state_claim": {"live_state": 1.45, "past_work": 0.45, "runtime": 0.25, "identity": 0.15},
     "runtime_diagnosis": {"runtime": 1.55, "location": 0.15},
 }
 
@@ -592,6 +642,25 @@ _SOURCE_PLANS: dict[str, SourcePlan] = {
             SourceStep("transcripts", phase="fallback", timeout_ms=650),
         ),
     ),
+    "live_state_claim": SourcePlan(
+        intent="live_state_claim",
+        primary=(
+            SourceStep("semantic_layers", timeout_ms=120, max_chars=900),
+            SourceStep("recent_context", timeout_ms=240),
+            SourceStep("evidence_ledger", timeout_ms=260),
+            SourceStep("change_log", timeout_ms=300),
+            SourceStep("protocol_tasks", timeout_ms=240),
+            SourceStep("workflows", timeout_ms=260),
+            SourceStep("project_atlas", timeout_ms=160),
+            SourceStep("system_catalog", timeout_ms=420),
+            SourceStep("diary", timeout_ms=280),
+        ),
+        fallback=(
+            SourceStep("transcripts", phase="fallback", timeout_ms=700),
+            SourceStep("memory", phase="fallback", timeout_ms=500),
+            SourceStep("local_context", phase="fallback", timeout_ms=900, max_chars=900),
+        ),
+    ),
     "runtime_diagnosis": SourcePlan(
         intent="runtime_diagnosis",
         primary=(
@@ -737,6 +806,7 @@ def _classify_intent_semantic(text: str) -> IntentClassification | None:
             "memory_question means asking remembered facts, decisions, or context. "
             "identity_authorship means who did something, which session/client acted, or Nero authorship. "
             "schedule_commitment means promises, pending commitments, reminders, deadlines, or future follow-up. "
+            "live_state_claim means current or past external state that needs evidence: releases, commits, branches, tags, tickets, servers, ports, DNS, deployments, sent messages, uploads, installs, or verified/closed status. "
             "runtime_diagnosis means diagnosing NEXO/Brain/Desktop/runtime/tools. "
             "general means no pre-answer continuity evidence is needed."
         ),
@@ -1012,6 +1082,7 @@ def route_pre_answer(
     missing_required = sorted(required_sources - consulted_or_evident)
     missing_required_count = len(set(missing_required) | set(required_source_timeouts))
     optional_sources_skipped_count = sum(1 for source in sources if source.skipped and source.source not in required_sources)
+    has_any_evidence = any(source.has_evidence for source in sources)
     rendered = render_route(
         query=query,
         classification=classification,
@@ -1023,12 +1094,21 @@ def route_pre_answer(
         rendered = _clip(rendered, max_rendered_chars)
     elif budget_policy and max_rendered_chars == 0:
         rendered = ""
-    should_inject = classification.intent in INJECTING_INTENTS and any(source.has_evidence for source in sources)
-    if not rendered:
-        should_inject = False
     aborted_reason = "required_source_timeout" if required_source_timeouts else _route_aborted_reason(sources, budget)
     must_disclose_gap = bool((budget_policy or {}).get("must_disclose_gap") or missing_required_count)
     decision_signal = "defer" if missing_required_count and (budget_policy or {}).get("fallback_policy") == "mandatory_fail_closed" else ""
+    if classification.intent in EVIDENCE_REQUIRED_INTENTS and (not has_any_evidence or missing_required_count):
+        gap = render_evidence_gap(
+            query=query,
+            classification=classification,
+            sources=sources,
+            missing_required_count=missing_required_count,
+            required_source_timeouts=required_source_timeouts,
+        )
+        rendered = f"{rendered}\n\n{gap}" if rendered else gap
+        must_disclose_gap = True
+        decision_signal = "defer"
+    should_inject = classification.intent in INJECTING_INTENTS and bool(rendered)
     telemetry = _build_route_event(
         query=query,
         route_intent=classification.intent,
@@ -1098,6 +1178,35 @@ def render_route(
         lines.append(f"[{source.source}]")
         lines.append(_clip(snippet, source_result_char_budget(token_budget)))
     return _clip("\n".join(lines), max(400, int(token_budget or DEFAULT_TOKEN_BUDGET) * 4))
+
+
+def render_evidence_gap(
+    *,
+    query: str,
+    classification: IntentClassification,
+    sources: Iterable[SourceResult],
+    missing_required_count: int = 0,
+    required_source_timeouts: Iterable[str] = (),
+) -> str:
+    checked = [source.source for source in sources if not source.skipped]
+    skipped = [source.source for source in sources if source.skipped]
+    timeout_names = list(dict.fromkeys(required_source_timeouts))
+    lines = [
+        "PRE-ANSWER VERIFICATION GAP",
+        f"Intent: {classification.intent} ({classification.confidence:.2f})",
+        "The user is asking about state that requires evidence before any claim.",
+        "Do not affirm, deny, or present a release/server/ticket/commit/action status as fact from recollection.",
+        "If no stronger source is available in this turn, answer that the state is not verified yet and continue checking.",
+    ]
+    if checked:
+        lines.append(f"Sources checked without enough evidence: {', '.join(dict.fromkeys(checked))}.")
+    if skipped:
+        lines.append(f"Sources skipped or unavailable: {', '.join(dict.fromkeys(skipped))}.")
+    if missing_required_count:
+        lines.append(f"Missing required source count: {missing_required_count}.")
+    if timeout_names:
+        lines.append(f"Required source timeouts: {', '.join(timeout_names)}.")
+    return _clip("\n".join(lines), 1800)
 
 
 def default_source_adapters() -> dict[str, SourceAdapter]:
@@ -2165,6 +2274,7 @@ def _matching_lines(lines: Iterable[str], query: str, *, limit: int = 6) -> list
 
 
 __all__ = [
+    "EVIDENCE_REQUIRED_INTENTS",
     "INJECTING_INTENTS",
     "PRE_ANSWER_INTENTS",
     "IntentClassification",
@@ -2177,6 +2287,7 @@ __all__ = [
     "default_source_adapters",
     "plan_sources",
     "redact_secrets",
+    "render_evidence_gap",
     "render_route",
     "route_pre_answer",
     "shutdown_executor",

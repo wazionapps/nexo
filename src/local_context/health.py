@@ -7,7 +7,7 @@ import time
 from typing import Any, Callable
 
 from .db import connect_local_context_db_readonly, local_context_db_path
-from .usage_events import DEFAULT_USAGE_WINDOW_SECONDS, summarize_usage, usage_snapshot
+from .usage_events import DEFAULT_USAGE_WINDOW_SECONDS, summarize_query_events, summarize_usage, usage_snapshot
 
 DEFAULT_HEALTH_DEADLINE_MS = 500
 DEFAULT_DB_TIMEOUT_MS = 120
@@ -106,6 +106,7 @@ def _read_sidecar_snapshot(*, db_timeout_ms: int) -> dict[str, Any]:
         latest_query = 0.0
         if query_total:
             latest_query = float(_scalar(conn, "SELECT MAX(created_at) FROM local_context_queries") or 0.0)
+        usage_query_counter = summarize_query_events()
 
         jobs_pending = jobs_running = jobs_failed = jobs_done = 0
         if _table_exists(conn, "local_index_jobs"):
@@ -144,9 +145,13 @@ def _read_sidecar_snapshot(*, db_timeout_ms: int) -> dict[str, Any]:
                 "phase": phase,
             },
             "sidecar_query_counter": {
-                "total": query_total,
-                "latest_at": latest_query,
-                "note": "legacy_counter_not_real_usage",
+                "total": int(usage_query_counter.get("total") or 0) if usage_query_counter.get("ok") else 0,
+                "latest_at": float(usage_query_counter.get("latest_at") or 0.0) if usage_query_counter.get("ok") else 0.0,
+                "store_path": usage_query_counter.get("store_path") or "",
+                "note": "usage_store_query_events",
+                "legacy_total": query_total,
+                "legacy_latest_at": latest_query,
+                "legacy_note": "legacy_counter_not_real_usage",
             },
         }
     finally:

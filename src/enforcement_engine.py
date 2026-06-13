@@ -253,9 +253,19 @@ try:
 except ImportError:  # pragma: no cover
     _r23j_should = None  # type: ignore
 
+try:
+    from scripts.jargon_first_response import scan_text as _scan_jargon, user_requested_detail as _jargon_user_requested_detail
+except ImportError:  # pragma: no cover
+    _scan_jargon = None  # type: ignore
+    _jargon_user_requested_detail = None  # type: ignore
+
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 MAP_FILENAME = "tool-enforcement-map.json"
 LOG_DIR = paths.logs_dir()
+
+_JARGON_PROMPT = render_core_prompt("r26-jargon-rewrite")
+_EXECUTE_BEFORE_ASK_PROMPT = render_core_prompt("r35-execute-before-ask")
+_PRODUCTION_CHANGE_LOG_PROMPT = render_core_prompt("r36-production-change-log-required")
 
 _logger = logging.getLogger("nexo.enforcer")
 if not _logger.handlers:
@@ -456,6 +466,7 @@ class HeadlessEnforcer:
         # R25 — last user message is inspected for an explicit permit token
         # ("force OK", "si borra", etc). Populated by on_user_message.
         self._r25_last_user_text = ""
+        self._first_assistant_text_checked_for_jargon = False
         # R17 promise-debt state. Opened on a detected promise, counts
         # down on each tool call.
         self._r17_window_remaining = 0
@@ -473,6 +484,8 @@ class HeadlessEnforcer:
         # it as a bool avoids carrying stale push context across
         # unrelated tool chains.
         self._r23i_recent_push = False
+        self._production_mutation_tool_instance: int | None = None
+        self._production_mutation_evidence: str = ""
         # R23m — circular buffer of outbound-message sends with
         # {thread, body, ts}. Capped at 16 entries.
         self._r23m_recent_messages: list[dict] = []
@@ -717,6 +730,7 @@ class HeadlessEnforcer:
         # R15/R25 context MUST be updated regardless of R14 module availability
         # (critical fix: R14 import failure was silently killing R15/R25 too).
         self._r25_last_user_text = text or ""
+        self._first_assistant_text_checked_for_jargon = False
         try:
             self.on_user_message_r15(text or "")
         except Exception as _r15_exc:  # noqa: BLE001
@@ -965,6 +979,10 @@ class HeadlessEnforcer:
         shadow → logs only. soft/hard → enqueues the reminder. Dedup 60s
         via the standard _enqueue tag guard.
         """
+        if not self._first_assistant_text_checked_for_jargon:
+            self._first_assistant_text_checked_for_jargon = True
+            self._check_jargon_text(text, tag="r26:first-response-jargon")
+        self._check_execute_before_ask(text)
         self._check_capability_denial_requires_reality(text)
         if _detect_declared_done is None:
             return
@@ -1208,6 +1226,130 @@ class HeadlessEnforcer:
             )
         except Exception as exc:  # noqa: BLE001
             _logger.debug("R17 commitment resolution skipped: %s", exc)
+
+    def _check_jargon_text(self, text: str, *, tag: str) -> None:
+        if _scan_jargon is None:
+            return
+        clean = (text or "").strip()
+        if not clean:
+            return
+        if _jargon_user_requested_detail is not None and _jargon_user_requested_detail(self._r25_last_user_text or ""):
+            return
+        try:
+            matches = _scan_jargon(clean)
+        except Exception as exc:  # noqa: BLE001
+            _logger.warning("jargon scan failed (%s); staying silent", exc)
+            return
+        if not matches:
+            return
+        mode = self._guardian_rule_mode("R26_jargon_filter")
+        if mode == "off":
+            return
+        if mode == "shadow":
+            _logger.info("[R26 SHADOW] would inject jargon rewrite: %s", [m.get("token") for m in matches[:5]])
+            return
+        self._enqueue(_JARGON_PROMPT, tag, rule_id="R26_jargon_filter")
+
+    def _check_execute_before_ask(self, text: str) -> None:
+        user = (self._r25_last_user_text or "").lower()
+        reply = (text or "").lower()
+        if not user or not reply:
+            return
+        imperative = re.search(r"\b(hazlo|mira|reactiva|ejecuta|arregla|corrige|aplica|dale|haz|revisa|comprueba)\b", user)
+        asking = (
+            "?" in reply
+            or "tengo dos decisiones" in reply
+            or "elige" in reply
+            or "quieres que" in reply
+            or "confirmas" in reply
+            or "necesito que decidas" in reply
+        )
+        hard_boundary = re.search(
+            r"\b(credencial|contraseñ|password|pago|payment|destructiv|irreversible|borrar|delete|revocar|rotar|publicar|publish|dns|legal)\b",
+            user + "\n" + reply,
+        )
+        if not imperative or not asking or hard_boundary:
+            return
+        mode = self._guardian_rule_mode("R35_execute_before_ask")
+        if mode == "off":
+            return
+        if mode == "shadow":
+            _logger.info("[R35 SHADOW] would inject execute-before-ask")
+            return
+        self._enqueue(_EXECUTE_BEFORE_ASK_PROMPT, "r35:execute-before-ask", rule_id="R35_execute_before_ask")
+
+    def _production_mutation_summary(self, tool_name: str, tool_input) -> str:
+        if tool_name not in {"Bash", "mcp__nexo__Bash"} or not isinstance(tool_input, dict):
+            return ""
+        cmd = str(tool_input.get("command") or "")
+        if not cmd:
+            return ""
+        patterns = (
+            r"\bgit\s+push\b(?!.*--dry-run)(?=.*\b(?:main|master|release|stable)\b)",
+            r"\b(?:rsync|scp)\b(?!.*--dry-run).+\s+\S+:\S+",
+            r"\b(?:rsync|scp)\b(?!.*--dry-run).+\s+\S+:(?:/[^ \n\r;]*)(?:public_html|httpdocs|www|webroot)\b",
+            r"\bssh\b[^'\"]*['\"][^'\"]*(?:sed\s+-i|tee\s+|>\s*\S|>>\s*\S|rm\s+-|mv\s+|cp\s+)[^'\"]*['\"]",
+            r"\bssh\b[^'\"]*['\"][^'\"]*(?:sed\s+-i|tee\s+|>\s*\S|>>\s*\S|rm\s+-|mv\s+|cp\s+)[^'\"]*(?:public_html|httpdocs|/var/www|/opt/)[^'\"]*['\"]",
+            r"\bnpm\s+publish\b",
+            r"\bupload-release\.sh\b",
+            r"\bgcloud\s+builds\s+(?:submit|triggers\s+run)\b",
+            r"\bgcloud\s+run\s+(?:deploy|services\s+update|jobs\s+deploy|jobs\s+update)\b",
+            r"\bgcloud\s+dns\s+record-sets\s+transaction\s+execute\b",
+            r"\b(?:whmapi1|uapi|cpapi2)\b",
+            r"\b(?:cloudflare|cfcli)\b.*\b(?:dns|record)\b.*\b(?:create|delete|update|patch|put|post)\b",
+            r"\bcurl\b(?=.*api\.cloudflare\.com/client/v4/zones/.*/dns_records)(?=.*(?:-X|--request)\s*(?:POST|PUT|PATCH|DELETE)\b)",
+        )
+        for pattern in patterns:
+            if re.search(pattern, cmd, re.IGNORECASE | re.DOTALL):
+                return cmd[:300]
+        return ""
+
+    def _task_close_has_change_trace(self, tool_input) -> bool:
+        payload = tool_input if isinstance(tool_input, dict) else {}
+        fields = (
+            "files_changed",
+            "change_summary",
+            "change_why",
+            "change_verify",
+            "evidence_refs",
+            "evidence",
+            "verification",
+        )
+        joined = "\n".join(str(payload.get(field) or "") for field in fields).lower()
+        if "change_log:" in joined or "nexo_change_log" in joined:
+            return True
+        return bool(str(payload.get("files_changed") or "").strip() and str(payload.get("change_summary") or "").strip())
+
+    def _check_production_change_log_close(self, tool_name: str, tool_input) -> None:
+        if tool_name in {"nexo_change_log", "mcp__nexo__nexo_change_log"}:
+            self._production_mutation_tool_instance = None
+            self._production_mutation_evidence = ""
+            return
+        summary = self._production_mutation_summary(tool_name, tool_input)
+        if summary:
+            self._production_mutation_tool_instance = self._tool_instance_counter
+            self._production_mutation_evidence = summary
+            return
+        if tool_name not in {"nexo_task_close", "mcp__nexo__nexo_task_close"}:
+            return
+        if self._production_mutation_tool_instance is None:
+            return
+        if self._task_close_has_change_trace(tool_input):
+            self._production_mutation_tool_instance = None
+            self._production_mutation_evidence = ""
+            return
+        mode = self._guardian_rule_mode("R36_production_change_log")
+        if mode == "off":
+            return
+        if mode == "shadow":
+            _logger.info("[R36 SHADOW] would inject production change_log requirement")
+            return
+        self.injection_queue.append({
+            "prompt": _PRODUCTION_CHANGE_LOG_PROMPT,
+            "tag": "r36:production-change-log",
+            "rule_id": "R36_production_change_log",
+        })
+        _logger.info("[R36 %s] enqueued production change_log requirement", mode.upper())
 
     def _advance_r17_window(self, tool_name: str):
         if not self._r17_promise_seen_for_turn:
@@ -2380,12 +2522,22 @@ class HeadlessEnforcer:
             else:
                 self._conditional_counters[tool] = self._conditional_counters.get(tool, 0) + 1
 
+        if name != "nexo_task_close":
+            self._check_production_change_log_close(name, tool_input)
+
         # v7.6 task_close observed → rearm conditional for the companion
         # open tool so the next task cycle re-opens the obligation.
         if name == "nexo_task_close":
+            if isinstance(tool_input, dict):
+                close_text = "\n".join(
+                    str(tool_input.get(field) or "")
+                    for field in ("summary", "result", "evidence", "verification", "outcome_notes", "change_summary")
+                )
+                self._check_jargon_text(close_text, tag="r26:task-close-jargon")
             self._last_task_close_user_message_count = int(self.user_message_count or 0)
             self.reset_task_cycle("nexo_task_open")
             self._start_post_close_cooldown()
+            self._check_production_change_log_close(name, tool_input)
             self._resolve_r17_commitments_from_task_close(tool_input)
 
         if name == "nexo_stop":

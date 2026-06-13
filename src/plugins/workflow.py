@@ -8,6 +8,7 @@ from db import (
     create_workflow_goal,
     create_workflow_run,
     get_db,
+    get_followups,
     get_workflow_goal,
     get_protocol_task,
     get_workflow_run,
@@ -19,6 +20,22 @@ from db import (
     update_workflow_goal,
 )
 from protocol_settings import get_protocol_strictness
+
+
+TOTAL_CLOSURE_MARKERS = (
+    "sin deuda",
+    "no queda deuda",
+    "deuda cero",
+    "todo cerrado",
+    "goal cumplido",
+    "objetivo cumplido",
+    "no queda nada pendiente",
+    "all done",
+    "no open debt",
+)
+PENDING_RELEASE_MARKERS = ("smoke pendiente", "tags pendientes", "merge pendiente", "stable pendiente", "pending smoke", "pending tags", "pending merge")
+IRREVERSIBLE_MARKERS = ("publish stable", "publicar stable", "promocionar stable", "broadcast", "enviar a clientes", "force-push", "revocar", "cobrar")
+SPECIFIC_APPROVAL_MARKERS = ("aprobacion explicita", "aprobación explícita", "ok especifico", "ok específico", "autorizacion especifica", "autorización específica", "specific ok", "explicit approval")
 
 
 def _session_has_open_task(session_id: str) -> bool:
@@ -69,6 +86,26 @@ def _parse_json_object(value: str) -> dict | None:
     except json.JSONDecodeError:
         return None
     return parsed if isinstance(parsed, dict) else None
+
+
+def _goal_close_text(*parts: object) -> str:
+    return "\n".join(str(part or "") for part in parts if str(part or "").strip()).lower()
+
+
+def _active_followup_snapshot(limit: int = 5) -> list[dict]:
+    try:
+        followups = get_followups("active")
+    except Exception:
+        return []
+    return [
+        {
+            "id": item.get("id", ""),
+            "status": item.get("status", ""),
+            "date": item.get("date", ""),
+            "description": str(item.get("description", ""))[:180],
+        }
+        for item in followups[: max(1, limit)]
+    ]
 
 
 def _checkpoint_active_files(*payloads: dict | None) -> list[str]:
@@ -277,6 +314,68 @@ def handle_goal_update(
     clean_goal_id = (goal_id or "").strip()
     if not clean_goal_id:
         return json.dumps({"ok": False, "error": "goal_id is required"}, ensure_ascii=False, indent=2)
+    requested_status = (status or "").strip().lower()
+    existing_goal = get_workflow_goal(clean_goal_id)
+    if not existing_goal:
+        return json.dumps({"ok": False, "error": f"Unknown goal_id: {clean_goal_id}"}, ensure_ascii=False, indent=2)
+    close_text = _goal_close_text(
+        existing_goal.get("title", ""),
+        existing_goal.get("objective", ""),
+        title,
+        objective,
+        next_action,
+        success_signal,
+        blocker_reason,
+        shared_state,
+    )
+    if requested_status == "completed":
+        if int(existing_goal.get("open_run_count") or 0) > 0:
+            return json.dumps(
+                {
+                    "ok": False,
+                    "error": "Cannot mark goal completed while linked workflow runs are still open.",
+                    "blocked_by": "goal_open_runs_gate",
+                    "goal_id": clean_goal_id,
+                    "open_run_count": int(existing_goal.get("open_run_count") or 0),
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        active_followups = _active_followup_snapshot()
+        if any(marker in close_text for marker in TOTAL_CLOSURE_MARKERS) and active_followups:
+            return json.dumps(
+                {
+                    "ok": False,
+                    "error": "Cannot mark goal completed as total/no-debt while followups are still open.",
+                    "blocked_by": "goal_total_closure_open_followups_gate",
+                    "goal_id": clean_goal_id,
+                    "open_followups": active_followups,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        if any(marker in close_text for marker in PENDING_RELEASE_MARKERS):
+            return json.dumps(
+                {
+                    "ok": False,
+                    "error": "Cannot mark goal completed while smoke/tags/merge/stable work is described as pending.",
+                    "blocked_by": "goal_pending_release_gate",
+                    "goal_id": clean_goal_id,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        if any(marker in close_text for marker in IRREVERSIBLE_MARKERS) and not any(marker in close_text for marker in SPECIFIC_APPROVAL_MARKERS):
+            return json.dumps(
+                {
+                    "ok": False,
+                    "error": "Cannot mark irreversible publish/broadcast/payment goal completed without a specific approval tied to evidence.",
+                    "blocked_by": "goal_irreversible_specific_ok_gate",
+                    "goal_id": clean_goal_id,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
     try:
         goal = update_workflow_goal(
             clean_goal_id,
@@ -292,8 +391,6 @@ def handle_goal_update(
         )
     except ValueError as exc:
         return json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False, indent=2)
-    if not goal:
-        return json.dumps({"ok": False, "error": f"Unknown goal_id: {clean_goal_id}"}, ensure_ascii=False, indent=2)
 
     return json.dumps(
         {

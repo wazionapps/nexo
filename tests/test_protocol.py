@@ -699,6 +699,77 @@ def test_task_close_rejects_done_without_evidence_and_keeps_task_open():
     assert row["closed_at"] is None
 
 
+def test_task_close_blocks_total_closure_claim_when_followups_are_open():
+    from db import create_followup, get_db
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    sid = _register_session("nexo-1003-2003-total")
+    create_followup(
+        "NF-OPEN-TOTAL-CLOSE",
+        "Smoke publico pendiente antes de promocionar stable",
+        date="2026-06-12",
+        status="PENDING",
+    )
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Close release cleanup",
+            task_type="execute",
+            area="release",
+            plan='["verify", "close"]',
+            verification_step="verify open followups",
+        )
+    )
+
+    closed = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="done",
+            evidence="pytest passed and no queda nada pendiente; sin deuda.",
+        )
+    )
+
+    assert closed["ok"] is False
+    assert closed["blocked_by"] == "total_closure_open_work_gate"
+    assert closed["debt_type"] == "total_closure_with_open_work"
+    assert closed["open_followups"][0]["id"] == "NF-OPEN-TOTAL-CLOSE"
+    row = get_db().execute(
+        "SELECT status FROM protocol_tasks WHERE task_id = ?",
+        (opened["task_id"],),
+    ).fetchone()
+    assert row["status"] == "open"
+
+
+def test_task_close_blocks_irreversible_publish_without_specific_post_evidence_ok():
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    sid = _register_session("nexo-1003-2003-stable")
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Publish stable Desktop release",
+            task_type="execute",
+            area="release",
+            plan='["verify evidence", "publish stable"]',
+            verification_step="verify public stable manifests",
+        )
+    )
+
+    closed = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="done",
+            evidence="Smoke local passed; publish stable executed after a generic prior OK.",
+        )
+    )
+
+    assert closed["ok"] is False
+    assert closed["blocked_by"] == "irreversible_specific_ok_gate"
+    assert closed["debt_type"] == "irreversible_action_missing_specific_ok"
+
+
 def test_task_close_reject_done_without_evidence_dedupes_protocol_debt():
     from db import get_db
     from plugins.protocol import handle_task_open, handle_task_close
@@ -1599,3 +1670,83 @@ def test_build_area_context_accepts_personal_scripts_underscore_alias():
 
     assert result["has_context"] is True
     assert result["atlas_entry"]["project_key"] == "personal-scripts"
+
+
+def test_task_close_blocks_state_bug_without_live_surface_evidence():
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    sid = _register_session("nexo-1607-2607")
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Resolver bug de estado del backend",
+            task_type="execute",
+            area="nexo-product",
+            verification_step="Verificar contra producción viva",
+        )
+    )
+
+    closed = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="done",
+            evidence="Test de fixture verde con 3 casos y revisión local del repo.",
+        )
+    )
+
+    assert closed["ok"] is False
+    assert closed["blocked_by"] == "live_surface_verification"
+
+
+def test_task_close_accepts_state_bug_with_live_surface_evidence():
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    sid = _register_session("nexo-1634-2634")
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Resolver bug de estado del backend",
+            task_type="execute",
+            area="nexo-product",
+            verification_step="Verificar contra producción viva",
+        )
+    )
+
+    closed = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="done",
+            evidence="Logs vivos black-box.ndjson revisados: no aparece impossible_state_recovered tras reproducir el flujo.",
+        )
+    )
+
+    assert closed["ok"] is True
+
+
+def test_task_close_blocks_production_deploy_without_changed_files():
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    sid = _register_session("nexo-1660-2660")
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Desplegar fix a producción",
+            task_type="execute",
+            area="nexo-release",
+        )
+    )
+
+    closed = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="done",
+            evidence="git push origin main terminó correctamente y producción responde HTTP 200.",
+            change_summary="Despliegue de fix a producción",
+        )
+    )
+
+    assert closed["ok"] is False
+    assert closed["blocked_by"] == "g1_change_log"

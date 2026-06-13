@@ -9,7 +9,8 @@ Token list (case-insensitive substring match), taken verbatim from the
 followup spec:
 
     Learning #, protocol debt, cortex eval, runtime-core, guard_check,
-    heartbeat, pre-emptive guard, enforcer, task_open, task_close, NF-
+    heartbeat, pre-emptive guard, enforcer, task_open, task_close, NF-,
+    Subscription inactive, WSL, scorer, match, cortex
 
 Use as:
 
@@ -53,6 +54,11 @@ PROHIBITED_TOKENS: Sequence[str] = (
     "task_close",
     "heartbeat",
     "NF-",
+    "Subscription inactive",
+    "WSL",
+    "scorer",
+    "match",
+    "cortex",
 )
 
 # Heuristic signals from the *user* message that mean "operator asked for
@@ -103,15 +109,13 @@ def scan_text(text: str, *, tokens: Iterable[str] = PROHIBITED_TOKENS) -> List[d
     target = _first_visible_paragraph(text)
     if not target:
         return []
-    lowered = target.lower()
     found: List[dict] = []
     for token in tokens:
-        needle = token.lower()
-        start = 0
-        while True:
-            idx = lowered.find(needle, start)
-            if idx < 0:
-                break
+        pattern = re.escape(token)
+        if token.isalpha() and len(token) <= 6:
+            pattern = rf"\b{pattern}\b"
+        for match in re.finditer(pattern, target, re.IGNORECASE):
+            idx = match.start()
             snippet_start = max(0, idx - 25)
             snippet_end = min(len(target), idx + len(token) + 25)
             found.append({
@@ -119,7 +123,6 @@ def scan_text(text: str, *, tokens: Iterable[str] = PROHIBITED_TOKENS) -> List[d
                 "index": idx,
                 "snippet": target[snippet_start:snippet_end].replace("\n", " "),
             })
-            start = idx + max(1, len(needle))
     found.sort(key=lambda row: row["index"])
     return found
 

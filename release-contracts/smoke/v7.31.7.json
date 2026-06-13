@@ -1,0 +1,121 @@
+{
+  "release_line": "v7.31",
+  "version": "7.31.7",
+  "generated_at": "2026-06-13T09:06:10Z",
+  "ok": true,
+  "groups": [
+    {
+      "id": "brain_evidence_gate_tests",
+      "description": "Pre-answer evidence gate, runtime budget, Guardian defaults, core rules and prompt text",
+      "command": [
+        "env",
+        "PYTHONPATH=src",
+        "python3",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_pre_answer_router.py",
+        "tests/test_runtime_budget_policy.py",
+        "tests/test_guardian_config.py",
+        "tests/test_core_rules_registry.py",
+        "tests/test_system_prompt_rule_texts.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 5.25,
+      "stdout": "44 passed in 5.25s",
+      "stderr": ""
+    },
+    {
+      "id": "brain_wip_targeted_tests",
+      "description": "Closeout, enforcement, Local Context, MCP write queue, protocol/workflow and runtime package WIP validation",
+      "command": [
+        "env",
+        "PYTHONPATH=src",
+        "python3",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_deep_sleep_collect.py",
+        "tests/test_enforcement_engine_guardrails.py",
+        "tests/test_evidence_ledger.py",
+        "tests/test_jargon_first_response.py",
+        "tests/test_local_context.py",
+        "tests/test_local_context_health.py",
+        "tests/test_mcp_write_queue.py",
+        "tests/test_post_tool_use_protocol_reminder.py",
+        "tests/test_protocol.py",
+        "tests/test_workflow.py",
+        "tests/test_startup_preflight.py",
+        "tests/test_runtime_package_autoscan.py",
+        "tests/test_stop_hook_closeout.py",
+        "tests/test_pre_answer_router.py",
+        "tests/test_runtime_budget_policy.py",
+        "tests/test_guardian_config.py",
+        "tests/test_core_rules_registry.py",
+        "tests/test_system_prompt_rule_texts.py",
+        "tests/test_cortex.py",
+        "tests/test_r34_identity_coherence.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 43.63,
+      "stdout": "313 passed, 2 xpassed in 43.63s",
+      "stderr": ""
+    },
+    {
+      "id": "client_parity",
+      "description": "Managed bootstrap and client parity after prompt/bootstrap changes",
+      "command": [
+        "python3",
+        "scripts/verify_client_parity.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 103.27,
+      "stdout": "250 passed in 103.27s; [client-parity] docs OK; [client-parity] parity tests OK",
+      "stderr": ""
+    },
+    {
+      "id": "desktop_pre_answer_tests",
+      "description": "Desktop pre-answer client, bootstrap preload and send-message contract",
+      "command": [
+        "node",
+        "--test",
+        "tests/pre-answer-router-client.test.js",
+        "tests/conversation-bootstrap.test.js",
+        "tests/pre-answer-send-message-contract.test.js"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 0.08,
+      "stdout": "23 passed",
+      "stderr": ""
+    },
+    {
+      "id": "desktop_wip_targeted_tests",
+      "description": "Desktop Codex image/app-server, React runtime, release contracts and renderer common validation",
+      "command": [
+        "node",
+        "--test",
+        "tests/codex-app-server-client.test.js",
+        "tests/enforcer-silent-overlap.test.js",
+        "tests/lifecycle-metadata-sync-contract.test.js",
+        "tests/product-release-contracts.test.js",
+        "tests/provider-runtime-ui-contract.test.js",
+        "tests/react-chat-contract.test.js",
+        "tests/react-settings-contract.test.js",
+        "tests/release-script-hardening.test.js",
+        "tests/renderer-common.test.js",
+        "tests/pre-answer-router-client.test.js",
+        "tests/conversation-bootstrap.test.js",
+        "tests/pre-answer-send-message-contract.test.js"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 1.92,
+      "stdout": "243 passed",
+      "stderr": ""
+    }
+  ]
+}

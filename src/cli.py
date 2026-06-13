@@ -2045,6 +2045,7 @@ def _local_context_query(args) -> int:
             max_chars=int(getattr(args, "max_chars", 20000) or 0),
             include_entities=bool(getattr(args, "include_entities", False)),
             include_relations=bool(getattr(args, "include_relations", False)),
+            record_query=not bool(getattr(args, "no_record", False)),
         ),
         args,
     )
@@ -4094,6 +4095,7 @@ def main():
     local_context_query_p.add_argument("--include-entities", action="store_true", help="Include matched entities in the JSON payload.")
     local_context_query_p.add_argument("--include-relations", action="store_true", help="Include graph relations in the JSON payload.")
     local_context_query_p.add_argument("--no-evidence-required", action="store_true", help="Allow empty evidence results")
+    local_context_query_p.add_argument("--no-record", action="store_true", help="Do not write query telemetry to local-context-usage.db")
     local_context_query_p.add_argument("--json", action="store_true", help="JSON output")
 
     local_context_diagnostics_p = local_context_sub.add_parser("diagnostics", help="Tail local memory diagnostic events")

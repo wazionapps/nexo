@@ -1,0 +1,132 @@
+{
+  "release_line": "v7.31",
+  "target_version": "7.31.7",
+  "scope_owner": "NEXO",
+  "distribution": {
+    "git_updates_on": "merge_to_main",
+    "packaged_release_on": "tag_publish"
+  },
+  "required_repo_files": [
+    "package.json",
+    "CHANGELOG.md",
+    "README.md",
+    "llms.txt",
+    ".well-known/llms.txt",
+    "index.html",
+    "blog/index.html",
+    "blog/nexo-7-31-7/index.html",
+    "changelog/index.html",
+    "sitemap.xml",
+    "release-contracts/v7.31.7.json",
+    "release-contracts/smoke/v7.31.7.json",
+    "src/pre_answer_router.py",
+    "src/pre_answer_runtime.py",
+    "src/guardian_config.py",
+    "src/presets/guardian_default.json",
+    "src/rules/core-rules.json",
+    "templates/CLAUDE.md.template",
+    "templates/CODEX.AGENTS.md.template",
+    "templates/core-prompts/server-mcp-instructions.md",
+    "tool-enforcement-map.json",
+    "src/hooks/stop.py",
+    "src/hooks/post_tool_use.py",
+    "src/enforcement_engine.py",
+    "src/plugins/protocol.py",
+    "src/plugins/workflow.py",
+    "src/mcp_write_queue.py",
+    "src/local_context/api.py",
+    "src/local_context/health.py",
+    "src/local_context/usage_events.py",
+    "scripts/check_runtime_packages.py",
+    "tests/test_pre_answer_router.py",
+    "tests/test_runtime_budget_policy.py",
+    "tests/test_guardian_config.py",
+    "tests/test_core_rules_registry.py",
+    "tests/test_system_prompt_rule_texts.py",
+    "tests/test_stop_hook_closeout.py",
+    "tests/test_runtime_package_autoscan.py",
+    ".claude-plugin/plugin.json",
+    "clawhub-skill/SKILL.md",
+    "openclaw-plugin/package.json",
+    "openclaw-plugin/package-lock.json",
+    "openclaw-plugin/src/mcp-bridge.ts"
+  ],
+  "required_website_files": [
+    "index.html",
+    "blog/index.html",
+    "blog/nexo-7-31-7/index.html",
+    "changelog/index.html",
+    "llms.txt",
+    ".well-known/llms.txt",
+    "sitemap.xml"
+  ],
+  "smoke": {
+    "required_groups": [
+      "brain_evidence_gate_tests",
+      "brain_wip_targeted_tests",
+      "client_parity",
+      "desktop_pre_answer_tests",
+      "desktop_wip_targeted_tests"
+    ],
+    "max_age_hours": 72
+  },
+  "publication": {
+    "status": "ready",
+    "checklist_complete": true,
+    "blockers": []
+  },
+  "gates": [
+    {
+      "id": "brain_evidence_gate",
+      "title": "Brain requires evidence before stateful answers",
+      "status": "complete",
+      "evidence_required": [
+        "src/pre_answer_router.py adds live_state_claim with evidence-required gap injection",
+        "src/pre_answer_runtime.py routes live_state_claim to deep budget",
+        "src/guardian_config.py and src/presets/guardian_default.json make R34/R37 hard core rules",
+        "tests/test_pre_answer_router.py and tests/test_runtime_budget_policy.py cover evidence and gap paths"
+      ]
+    },
+    {
+      "id": "desktop_bootstrap_pre_answer",
+      "title": "Desktop preloads continuity tools and preserves verification gaps",
+      "status": "complete",
+      "evidence_required": [
+        "prompts/system/conversation-bootstrap.md preloads pre-answer and continuity tools",
+        "lib/pre-answer-router-client.js detects live_state_claim and keeps defer/gap metadata",
+        "tests/pre-answer-router-client.test.js and tests/conversation-bootstrap.test.js cover detection, preload, and generic gap injection"
+      ]
+    },
+    {
+      "id": "closeout_release_discipline",
+      "title": "Task closeout and release discipline gates are stricter",
+      "status": "complete",
+      "evidence_required": [
+        "src/hooks/stop.py blocks future commitments or partial closes without followups",
+        "src/plugins/protocol.py blocks total/no-debt language with open work, pending release gates, irreversible actions without specific approval, and live-state fixes without live verification",
+        "src/enforcement_engine.py and src/hooks/post_tool_use.py enforce clearer first responses and production change logging",
+        "tests/test_stop_hook_closeout.py, tests/test_protocol.py, tests/test_post_tool_use_protocol_reminder.py, and tests/test_enforcement_engine_guardrails.py pass"
+      ]
+    },
+    {
+      "id": "local_context_usage_trace",
+      "title": "Local Context query use is recorded in the real usage store",
+      "status": "complete",
+      "evidence_required": [
+        "src/local_context/api.py records query usage through local_context.usage_events without mutating the read-only sidecar",
+        "src/local_context/health.py reports the usage-store query counter with legacy counter evidence",
+        "tests/test_local_context.py and tests/test_local_context_health.py pass"
+      ]
+    },
+    {
+      "id": "release_surface_contract",
+      "title": "Public release surfaces and integration artifacts are aligned for v7.31.7",
+      "status": "complete",
+      "evidence_required": [
+        "README, llms, homepage, blog index, blog post, changelog page and sitemap reference v7.31.7",
+        "Claude plugin, ClawHub skill and OpenClaw package metadata reference 7.31.7",
+        "release-contracts/smoke/v7.31.7.json records the focused Brain/Desktop validation commands"
+      ]
+    }
+  ]
+}

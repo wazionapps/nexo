@@ -42,5 +42,20 @@ jobs:
         # script exits 1 on any FAIL finding, gating the PR/push to main.
         run: python3 scripts/audit-release-workflows.py "$GITHUB_WORKSPACE"
 
+      - name: Verify flattened runtime ships every Python package
+        # NF-DS-5761D141: adding a top-level src/ package must not silently
+        # disappear from the flattened runtime copied by auto_update.
+        run: |
+          runtime_tmp="$(mktemp -d)"
+          NEXO_RUNTIME_TMP="$runtime_tmp" PYTHONPATH=src python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          import auto_update
+
+          auto_update._copy_runtime_from_source(Path("src"), Path("."), Path(os.environ["NEXO_RUNTIME_TMP"]))
+          PY
+          python3 scripts/check_runtime_packages.py --src src --runtime "$runtime_tmp"
+
       - name: Pin benchmark + contract structure tests
         run: PYTHONPATH=src pytest tests/test_release_readiness_baseline.py -v

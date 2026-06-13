@@ -1,0 +1,1 @@
+Reescribe antes de responder: la primera respuesta o el resumen de cierre usa terminos internos sin traducir. Empieza por la conclusion en lenguaje normal y, si necesitas mencionar un termino tecnico, explicalo en la misma frase.

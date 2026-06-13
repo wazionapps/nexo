@@ -892,6 +892,37 @@ def _collect_local_context(conn: sqlite3.Connection, limit: int, allowed: set[st
                 privacy_level="metadata",
             )
         )
+    try:
+        from local_context import usage_events
+
+        for row in usage_events.list_recent_query_events(limit=limit):
+            intent = str(row.get("intent") or "answer")
+            intent_label = intent.replace("_", " ").replace("-", " ")
+            entries.append(
+                _entry(
+                    evidence_id=f"local_context_usage:{row.get('event_id')}",
+                    source_type="local_context",
+                    source_id=str(row.get("event_id") or ""),
+                    created_at=row.get("created_at"),
+                    client=row.get("client"),
+                    object_type="local_context_query",
+                    object_ref=row.get("query_hash"),
+                    action=intent,
+                    summary=(
+                        f"local-context query intent={intent_label} "
+                        f"result_count={row.get('result_count') or 0}"
+                    ),
+                    refs=[],
+                    confidence=0.75 if int(row.get("evidence_refs_count") or 0) > 0 else 0.0,
+                    privacy_level="metadata",
+                    metadata={
+                        "store": "local-context-usage.db",
+                        "route_stage": row.get("route_stage") or "",
+                    },
+                )
+            )
+    except Exception:
+        pass
     return entries
 
 

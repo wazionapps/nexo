@@ -325,6 +325,19 @@ def collect_learnings() -> list[dict]:
     return safe_query(NEXO_DB, "SELECT * FROM learnings ORDER BY updated_at DESC LIMIT 200")
 
 
+def collect_all_active_learnings(db_path: Path | str = NEXO_DB) -> list[dict]:
+    """Full active learning list for Deep Sleep file-backed analysis."""
+    status_filter = ""
+    if "status" in _table_columns(Path(db_path), "learnings"):
+        status_filter = "WHERE COALESCE(status, 'active') NOT IN ('superseded', 'deleted', 'archived')"
+    return safe_query(
+        Path(db_path),
+        "SELECT * FROM learnings "
+        f"{status_filter} "
+        "ORDER BY COALESCE(updated_at, created_at) DESC, id DESC"
+    )
+
+
 def collect_diaries(target_date: str) -> list[dict]:
     """Today's session diaries."""
     # Diaries store created_at as unix timestamp or ISO string -- handle both
@@ -959,6 +972,9 @@ def main():
     learnings = collect_learnings()
     print(f"  Learnings: {len(learnings)}")
 
+    all_active_learnings = collect_all_active_learnings()
+    print(f"  Active learnings dump: {len(all_active_learnings)}")
+
     diaries = collect_diaries(target_date)
     print(f"  Diaries today: {len(diaries)}")
 
@@ -997,6 +1013,12 @@ def main():
     ]
     shared_parts.append(format_section("ACTIVE FOLLOWUPS", followups))
     shared_parts.append(format_section("LEARNINGS (recent 200)", learnings))
+    shared_parts.append(
+        "\n## FULL ACTIVE LEARNINGS DUMP\n"
+        f"- File: learnings-dump.json\n"
+        f"- Count: {len(all_active_learnings)}\n"
+        "- Use this file for complete learning coverage; do not call nexo_learning_list from inside Deep Sleep analysis.\n"
+    )
     shared_parts.append(format_section("SESSION DIARIES TODAY", diaries))
     shared_parts.append(format_section("TRUST SCORE HISTORY (7d)", trust_history))
     shared_parts.append(format_section("DISCOVERED NON-CORE CONTENT", extras))
@@ -1011,6 +1033,22 @@ def main():
     long_horizon_file = date_dir / "long-horizon-context.json"
     long_horizon_file.write_text(json.dumps(long_horizon, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"  Long horizon JSON: {long_horizon_file.name}")
+
+    learnings_dump_file = date_dir / "learnings-dump.json"
+    learnings_dump_file.write_text(
+        json.dumps(
+            {
+                "generated_at": datetime.now().isoformat(),
+                "source_db": str(NEXO_DB),
+                "active_learning_count": len(all_active_learnings),
+                "learnings": all_active_learnings,
+            },
+            indent=2,
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    print(f"  Full learnings JSON: {learnings_dump_file.name} ({len(all_active_learnings)} active)")
 
     # Individual session files
     session_files_written = []
@@ -1091,11 +1129,13 @@ def main():
         "total_tool_uses": sum(s["tool_use_count"] for s in sessions),
         "followups_active": len(followups),
         "learnings_count": len(learnings),
+        "active_learnings_count": len(all_active_learnings),
         "diaries_today": len(diaries),
         "error_log_files": len(error_logs),
         "date_dir": str(date_dir),
         "shared_context_file": str(shared_file),
         "long_horizon_file": str(long_horizon_file),
+        "learnings_dump_file": str(learnings_dump_file),
         "context_file": str(legacy_file),
         "total_size_bytes": total_size,
     }

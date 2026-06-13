@@ -255,6 +255,9 @@ def _base_tier_for(
     if intent == "file_location":
         reasons.append("simple_file_location")
         return "quick", reasons
+    if intent == "live_state_claim":
+        reasons.append("live_state_claim_deep")
+        return "deep", reasons
     if intent in {"runtime_diagnosis"}:
         reasons.append("runtime_diagnosis_deep")
         return "deep", reasons

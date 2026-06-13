@@ -678,6 +678,66 @@ def summarize_usage(
     }
 
 
+def summarize_query_events(
+    *,
+    window_seconds: int = DEFAULT_USAGE_WINDOW_SECONDS,
+    db_path: str | os.PathLike[str] | None = None,
+    now_ts: float | None = None,
+) -> dict[str, Any]:
+    path = Path(db_path).expanduser() if db_path else usage_db_path()
+    window = max(0, int(window_seconds))
+    current = float(now_ts if now_ts is not None else _now())
+    since = 0.0 if window == 0 else current - window
+    if not path.exists():
+        return {
+            "ok": True,
+            "store_path": str(path),
+            "window_seconds": window,
+            "since": since,
+            "total": 0,
+            "latest_at": 0.0,
+            "by_intent": {},
+        }
+    try:
+        conn = _connect_usage_db(create=False, db_path=path)
+    except sqlite3.OperationalError as exc:
+        return {"ok": False, "error": "usage_store_busy", "detail": str(exc), "store_path": str(path)}
+    except sqlite3.DatabaseError as exc:
+        return {"ok": False, "error": "usage_store_unreadable", "detail": str(exc), "store_path": str(path)}
+    try:
+        totals = conn.execute(
+            f"""
+            SELECT COUNT(*) AS total, MAX(created_at) AS latest_at
+            FROM {USAGE_TABLE}
+            WHERE created_at >= ?
+              AND (source = 'local_context_query' OR route_stage = 'context_query')
+            """,
+            (since,),
+        ).fetchone()
+        intent_rows = conn.execute(
+            f"""
+            SELECT intent, COUNT(*) AS total
+            FROM {USAGE_TABLE}
+            WHERE created_at >= ?
+              AND (source = 'local_context_query' OR route_stage = 'context_query')
+            GROUP BY intent
+            ORDER BY total DESC, intent ASC
+            """,
+            (since,),
+        ).fetchall()
+    finally:
+        conn.close()
+    return {
+        "ok": True,
+        "store_path": str(path),
+        "window_seconds": window,
+        "since": since,
+        "total": int(totals["total"] or 0),
+        "latest_at": float(totals["latest_at"] or 0.0),
+        "by_intent": {str(row["intent"]): int(row["total"] or 0) for row in intent_rows},
+    }
+
+
 def usage_snapshot(
     *,
     indexed_files: int | None = None,
@@ -727,6 +787,31 @@ def list_recent_events(
             f"""
             SELECT *
             FROM {USAGE_TABLE}
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (max(1, min(int(limit or 50), 500)),),
+        ).fetchall()
+    finally:
+        conn.close()
+    return [dict(row) for row in rows]
+
+
+def list_recent_query_events(
+    *,
+    limit: int = 50,
+    db_path: str | os.PathLike[str] | None = None,
+) -> list[dict[str, Any]]:
+    path = Path(db_path).expanduser() if db_path else usage_db_path()
+    if not path.exists():
+        return []
+    conn = _connect_usage_db(create=False, db_path=path)
+    try:
+        rows = conn.execute(
+            f"""
+            SELECT *
+            FROM {USAGE_TABLE}
+            WHERE source = 'local_context_query' OR route_stage = 'context_query'
             ORDER BY created_at DESC
             LIMIT ?
             """,

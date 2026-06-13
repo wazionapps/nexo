@@ -619,6 +619,103 @@ def _is_release_task(*, goal: str, area: str = "", project_hint: str = "", verif
     return any(token in combined_context for token in _RELEASE_CONTEXT_HINTS)
 
 
+def _requires_live_surface_verification(task: dict, outcome: str) -> bool:
+    if outcome != "done":
+        return False
+    clean_type = str(task.get("task_type") or "").strip()
+    if clean_type not in {"edit", "execute"}:
+        return False
+    combined = " ".join(
+        str(task.get(field) or "")
+        for field in ("goal", "area", "project_hint", "context_hint", "verification_step")
+    ).lower()
+    if not combined:
+        return False
+    subject_hit = re.search(
+        r"\b(bug|estado|state|storefront|backend|front[- ]?end|datos|data|bd|database|producci[oó]n|production|live)\b",
+        combined,
+    )
+    behavior_hit = re.search(
+        r"\b(arregl|fix|resolver|resuelto|declara|afirm|verificar|validar|confirmar|close|cerrar)\b",
+        combined,
+    )
+    return bool(subject_hit and behavior_hit)
+
+
+def _has_live_surface_verification(evidence: str) -> bool:
+    text = (evidence or "").lower()
+    if not text:
+        return False
+    live_markers = (
+        "black-box.ndjson",
+        "impossible_state_recovered",
+        "playwright",
+        "browser",
+        "navegador",
+        "screenshot",
+        "captura",
+        "tema publicado",
+        "published theme",
+        "theme_id",
+        "cloud sql",
+        "production db",
+        "bd producción",
+        "bd de producción",
+        "mysql -h",
+        "psql ",
+        "gcloud logs",
+        "live logs",
+        "logs vivos",
+        "http 200",
+        "curl ",
+        "url pública",
+        "public url",
+    )
+    if any(marker in text for marker in live_markers):
+        return True
+    return bool(re.search(r"\b(producci[oó]n|production|live)\b.*\b(logs?|bd|db|browser|navegador|playwright|url|http|tema)\b", text))
+
+
+def _requires_production_change_log(
+    task: dict,
+    outcome: str,
+    evidence: str,
+    change_summary: str,
+    triggered_by: str,
+) -> bool:
+    if outcome not in {"done", "partial", "failed"}:
+        return False
+    clean_type = str(task.get("task_type") or "").strip()
+    if clean_type not in {"edit", "execute"}:
+        return False
+    task_context = " ".join(
+        str(part or "")
+        for part in (
+            task.get("goal"),
+            task.get("area"),
+            task.get("project_hint"),
+            task.get("context_hint"),
+            task.get("verification_step"),
+        )
+    ).lower()
+    action_context = " ".join(
+        str(part or "")
+        for part in (
+            evidence,
+            change_summary,
+            triggered_by,
+        )
+    ).lower()
+    combined = f"{task_context}\n{action_context}"
+    return bool(
+        re.search(
+            r"\b(git push|rsync|scp|ssh|npm publish|upload-release\.sh|gcloud builds)\b",
+            combined,
+        )
+        or re.search(r"\b(deploy|desplieg|publish|publicaci[oó]n)\b", action_context)
+    )
+
+
 def evaluate_response_confidence(
     *,
     goal: str,
@@ -1135,6 +1232,51 @@ def _record_debt(session_id: str, task_id: str, debt_type: str, *, severity: str
     _append_debt_ref(debts, debt, debt_type=debt_type, severity=severity)
 
 
+TOTAL_CLOSURE_RE = re.compile(
+    r"\b("
+    r"sin\s+deuda|no\s+queda\s+deuda|deuda\s+cero|todo\s+cerrado|"
+    r"goal\s+cumplido|objetivo\s+cumplido|completamente\s+cerrad[oa]|"
+    r"no\s+queda\s+nada\s+pendiente|all\s+set|all\s+done|no\s+open\s+debt"
+    r")\b",
+    re.IGNORECASE,
+)
+PENDING_RELEASE_GATE_RE = re.compile(
+    r"\b(smoke|tag|tags|merge|release|stable|broadcast|publicaci[oó]n)\b.{0,80}\b(pendiente|pending|falta|sin\s+verificar|sin\s+evidencia)\b",
+    re.IGNORECASE | re.DOTALL,
+)
+IRREVERSIBLE_ACTION_RE = re.compile(
+    r"\b(publish\s+stable|publicar\s+stable|promocionar\s+stable|broadcast|enviar\s+a\s+clientes|cobrar|payment|force-push|revocar)\b",
+    re.IGNORECASE,
+)
+SPECIFIC_OK_AFTER_EVIDENCE_RE = re.compile(
+    r"\b(aprobaci[oó]n\s+expl[ií]cita|ok\s+espec[ií]fico|autorizaci[oó]n\s+espec[ií]fica|specific\s+ok|explicit\s+approval)\b"
+    r".{0,120}\b(evidencia|evidence|smoke|verificad[oa]|verified)\b",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def _active_followup_snapshot(limit: int = 5) -> list[dict]:
+    try:
+        followups = get_followups("active")
+    except Exception:
+        return []
+    snapshot: list[dict] = []
+    for item in followups[: max(1, limit)]:
+        snapshot.append(
+            {
+                "id": item.get("id", ""),
+                "status": item.get("status", ""),
+                "date": item.get("date", ""),
+                "description": str(item.get("description", ""))[:180],
+            }
+        )
+    return snapshot
+
+
+def _closure_claim_text(*parts: object) -> str:
+    return "\n".join(str(part or "") for part in parts if str(part or "").strip())
+
+
 def handle_confidence_check(
     goal: str,
     task_type: str = "answer",
@@ -1600,6 +1742,93 @@ def handle_task_close(
         task_type=task.get("task_type", ""),
         high_stakes=bool(task.get("response_high_stakes")),
     )
+    closure_text = _closure_claim_text(
+        task.get("goal", ""),
+        task.get("context_hint", ""),
+        clean_evidence,
+        clean_change_summary,
+        clean_change_verify,
+        outcome_notes,
+        result,
+        summary,
+        verification,
+    )
+
+    if clean_outcome == "done":
+        open_task_debts = list_protocol_debts(status="open", task_id=task_id, limit=5)
+        active_followups = _active_followup_snapshot()
+        if TOTAL_CLOSURE_RE.search(closure_text) and (active_followups or open_task_debts):
+            debt = _ensure_open_debt(
+                task["session_id"],
+                task_id,
+                "total_closure_with_open_work",
+                severity="error",
+                evidence=(
+                    "Task close used total-closure language while open work still exists. "
+                    f"open_followups={len(active_followups)} open_task_debts={len(open_task_debts)} "
+                    f"claim={closure_text[:240]!r}"
+                ),
+                debts=debts_created,
+            )
+            return json.dumps(
+                {
+                    "ok": False,
+                    "error": "Cannot close as total/no-debt while followups or task debt are still open.",
+                    "hint": "Say what was executed in this task and distinguish remaining open followups/debt, then retry.",
+                    "task_id": task_id,
+                    "blocked_by": "total_closure_open_work_gate",
+                    "debt_id": debt.get("id"),
+                    "debt_type": "total_closure_with_open_work",
+                    "open_followups": active_followups,
+                    "open_task_debts": open_task_debts,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        if PENDING_RELEASE_GATE_RE.search(closure_text):
+            debt = _ensure_open_debt(
+                task["session_id"],
+                task_id,
+                "release_gate_pending_at_close",
+                severity="error",
+                evidence=f"Task close attempted done while smoke/tags/merge/release pending language was present: {closure_text[:240]!r}",
+                debts=debts_created,
+            )
+            return json.dumps(
+                {
+                    "ok": False,
+                    "error": "Cannot close as done while release/smoke/tag/merge work is described as pending.",
+                    "hint": "Close as partial or provide evidence that the named pending gate is now verified.",
+                    "task_id": task_id,
+                    "blocked_by": "release_gate_pending_at_close",
+                    "debt_id": debt.get("id"),
+                    "debt_type": "release_gate_pending_at_close",
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        if IRREVERSIBLE_ACTION_RE.search(closure_text) and not SPECIFIC_OK_AFTER_EVIDENCE_RE.search(closure_text):
+            debt = _ensure_open_debt(
+                task["session_id"],
+                task_id,
+                "irreversible_action_missing_specific_ok",
+                severity="error",
+                evidence=f"Irreversible action close lacks specific post-evidence approval language: {closure_text[:240]!r}",
+                debts=debts_created,
+            )
+            return json.dumps(
+                {
+                    "ok": False,
+                    "error": "Cannot close irreversible publish/broadcast/payment action without a specific approval after evidence.",
+                    "hint": "Record the explicit approval tied to the verified evidence, not a prior generic OK.",
+                    "task_id": task_id,
+                    "blocked_by": "irreversible_specific_ok_gate",
+                    "debt_id": debt.get("id"),
+                    "debt_type": "irreversible_action_missing_specific_ok",
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
 
     if (task.get("task_type") or "").strip() == "analyze" and clean_outcome == "done":
         artifact_paths = _existing_analyze_artifact_paths(all_evidence_refs)
@@ -1640,6 +1869,41 @@ def handle_task_close(
                 ensure_ascii=False,
                 indent=2,
             )
+
+    live_surface_required = _requires_live_surface_verification(task, clean_outcome)
+    live_surface_evidence = "\n".join(
+        part
+        for part in (clean_evidence, clean_change_verify, outcome_notes, verification, summary, result)
+        if part
+    )
+    if live_surface_required and not _has_live_surface_verification(live_surface_evidence):
+        debt = _ensure_open_debt(
+            task["session_id"],
+            task_id,
+            "live_surface_verification_missing",
+            severity="error",
+            evidence=(
+                "Task closed as done for state/storefront/backend/data behavior without live-surface evidence. "
+                f"Goal: {task.get('goal','')}. Evidence provided: {live_surface_evidence[:240]!r}"
+            ),
+            debts=debts_created,
+        )
+        return json.dumps(
+            {
+                "ok": False,
+                "error": "Cannot close task as 'done' without live production verification evidence.",
+                "hint": (
+                    "Add evidence from the real surface: live logs such as black-box.ndjson/impossible_state_recovered, "
+                    "published storefront/browser or Playwright evidence, or production database evidence."
+                ),
+                "task_id": task_id,
+                "blocked_by": "live_surface_verification",
+                "debt_id": debt.get("id"),
+                "debt_type": "live_surface_verification_missing",
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
 
     pending_corrections = list_session_correction_requirements(
         session_id=task["session_id"],
@@ -1809,7 +2073,14 @@ def handle_task_close(
                 debts=debts_created,
             )
 
-    if task.get("must_change_log") and clean_outcome in {"done", "partial", "failed"}:
+    production_change_log_required = _requires_production_change_log(
+        task,
+        clean_outcome,
+        clean_evidence,
+        clean_change_summary,
+        triggered_by,
+    )
+    if (task.get("must_change_log") or production_change_log_required) and clean_outcome in {"done", "partial", "failed"}:
         if effective_files:
             change = log_change(
                 task["session_id"],

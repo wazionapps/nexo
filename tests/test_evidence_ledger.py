@@ -3,6 +3,7 @@ import sqlite3
 
 import db
 import evidence_ledger
+from local_context import usage_events
 
 
 def _debug_candidate_task_sources():
@@ -209,6 +210,26 @@ def test_search_evidence_unifies_existing_operational_sources():
     file_results = evidence_ledger.search_evidence(file_path="src/evidence_ledger.py", include_transcripts=False)
     assert any(item.source_type == "change_log" for item in file_results)
     assert any(item.source_type == "task" for item in file_results)
+
+
+def test_search_evidence_reads_local_context_usage_store_without_legacy_counter():
+    usage_events.record_usage_event(
+        query="evidence ledger usage store",
+        source="local_context_query",
+        route_stage="context_query",
+        intent="evidence_ledger_usage_store",
+        result_count=2,
+        evidence_refs_count=2,
+    )
+
+    results = evidence_ledger.search_evidence("usage store", include_transcripts=False, limit=20)
+
+    assert any(
+        item.source_type == "local_context"
+        and item.metadata.get("store") == "local-context-usage.db"
+        and item.action == "evidence_ledger_usage_store"
+        for item in results
+    )
 
 
 def test_search_evidence_uses_core_db_when_package_alias_is_stale(monkeypatch):

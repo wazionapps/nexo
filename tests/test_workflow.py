@@ -412,3 +412,28 @@ def test_goal_stack_tracks_blocked_and_hides_abandoned_by_default():
     assert abandoned["status"] == "abandoned"
     assert all(item["goal_id"] != goal["goal_id"] for item in default_list["goals"])
     assert any(item["goal_id"] == goal["goal_id"] and item["status"] == "abandoned" for item in include_closed["goals"])
+
+
+def test_goal_update_blocks_total_closure_when_followups_are_open():
+    import db
+    from plugins.workflow import handle_goal_open, handle_goal_update
+
+    sid = _register_session("nexo-1108-2208")
+    db.create_followup(
+        "NF-GOAL-OPEN-DEBT",
+        "Tags pendientes de la release",
+        date="2026-06-12",
+        status="PENDING",
+    )
+    goal = json.loads(handle_goal_open(sid=sid, title="Release train"))
+    closed = json.loads(
+        handle_goal_update(
+            goal_id=goal["goal_id"],
+            status="completed",
+            success_signal="Objetivo cumplido, sin deuda.",
+        )
+    )
+
+    assert closed["ok"] is False
+    assert closed["blocked_by"] == "goal_total_closure_open_followups_gate"
+    assert closed["open_followups"][0]["id"] == "NF-GOAL-OPEN-DEBT"

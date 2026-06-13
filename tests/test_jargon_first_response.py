@@ -37,6 +37,11 @@ def test_detects_each_prohibited_token():
         "task_close": "cerré con task_close evidence",
         "heartbeat": "tras el heartbeat de las 22:00",
         "NF-": "el followup NF-ABC1234 sigue abierto",
+        "Subscription inactive": "Subscription inactive aparece en la primera respuesta.",
+        "WSL": "WSL no está instalado.",
+        "scorer": "el scorer lo marcó como warn.",
+        "match": "el match semántico falló.",
+        "cortex": "cortex devolvió warn.",
     }
     for token, text in samples.items():
         matches = scan_text(text)
@@ -57,8 +62,19 @@ def test_token_list_matches_followup_spec():
         "task_close",
         "heartbeat",
         "NF-",
+        "Subscription inactive",
+        "WSL",
+        "scorer",
+        "match",
+        "cortex",
     }
     assert set(PROHIBITED_TOKENS) == expected
+
+
+def test_short_jargon_tokens_use_word_boundaries():
+    assert scan_text("El matching interno queda fuera del primer párrafo útil.") == []
+    matches = scan_text("El match interno no debe salir sin explicación.")
+    assert any(m["token"] == "match" for m in matches)
 
 
 def test_case_insensitive():

@@ -1,0 +1,1 @@
+Has ejecutado una mutacion de produccion. Antes de cerrar la tarea, registra el cambio con `nexo_change_log(...)` o cierra con `nexo_task_close(...)` incluyendo archivos/artefacto, motivo, riesgo y verificacion real.

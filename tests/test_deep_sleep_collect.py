@@ -229,6 +229,36 @@ def test_project_priority_signals_handles_optional_schema_columns(monkeypatch, t
     assert signals[0]["project"] == "wazion"
 
 
+def test_collect_all_active_learnings_returns_full_dump(monkeypatch, tmp_path):
+    collect = _load_collect_module(monkeypatch, tmp_path)
+    nexo_home = Path(os.environ["NEXO_HOME"])
+    data_dir = nexo_home / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    db_path = data_dir / "nexo.db"
+
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        "CREATE TABLE learnings (id INTEGER, category TEXT, title TEXT, content TEXT, status TEXT, created_at TEXT, updated_at TEXT)"
+    )
+    for idx in range(250):
+        conn.execute(
+            "INSERT INTO learnings VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (idx, "ops", f"Learning {idx}", "content", "active", "2026-04-01T08:00:00", f"2026-04-02T08:{idx % 60:02d}:00"),
+        )
+    conn.execute(
+        "INSERT INTO learnings VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (999, "ops", "Old superseded", "content", "superseded", "2026-04-01T08:00:00", "2026-04-02T08:00:00"),
+    )
+    conn.commit()
+    conn.close()
+
+    rows = collect.collect_all_active_learnings(db_path)
+
+    assert len(rows) == 250
+    assert all(row["status"] == "active" for row in rows)
+    assert {row["id"] for row in rows} == set(range(250))
+
+
 def _make_session(
     session_file: str,
     *,

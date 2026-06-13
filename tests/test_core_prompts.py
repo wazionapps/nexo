@@ -332,6 +332,9 @@ def test_render_core_prompt_supports_enforcer_and_startup_templates():
     r24 = core_prompts.render_core_prompt("r24-stale-memory-injection", threshold_days="7")
     r25 = core_prompts.render_core_prompt("r25-read-only-host-injection", host="maria", matched="rm")
     r34_capability = core_prompts.render_core_prompt("r34-capability-reality-check")
+    r26_jargon = core_prompts.render_core_prompt("r26-jargon-rewrite")
+    r35_execute = core_prompts.render_core_prompt("r35-execute-before-ask")
+    r36_change_log = core_prompts.render_core_prompt("r36-production-change-log-required")
     startup = core_prompts.render_core_prompt("interactive-startup")
     codex_contract = core_prompts.render_core_prompt("codex-protocol-contract")
     server_instructions = core_prompts.render_core_prompt("server-mcp-instructions", assistant_name="Nero")
@@ -407,6 +410,9 @@ def test_render_core_prompt_supports_enforcer_and_startup_templates():
     assert "older than 7 days" in r24
     assert "access_mode=read_only" in r25
     assert "verifica la realidad viva" in r34_capability
+    assert "Reescribe antes de responder" in r26_jargon
+    assert "Ejecuta el siguiente paso seguro" in r35_execute
+    assert "nexo_change_log" in r36_change_log
     assert "run nexo_startup and nexo_heartbeat" in startup
     assert "NEXO PROTOCOL (MANDATORY)" in codex_contract
     assert "conditioned learnings or blocking guard rules" in codex_contract

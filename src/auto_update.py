@@ -4727,6 +4727,54 @@ def _runtime_flat_files(base_dir: Path) -> list[str]:
     return ordered
 
 
+_RUNTIME_RESOURCE_DIRS = {"crons", "hooks", "managed_mcp", "presets"}
+_RUNTIME_PACKAGE_IGNORE_DIRS = {
+    "__pycache__",
+    "bin",
+    "node_modules",
+    "scripts",
+    "skills",
+    "skills-core",
+    "skills-runtime",
+    "templates",
+    "test",
+    "tests",
+    "vendor",
+}
+
+
+def _pyproject_top_level_packages(repo_dir: Path, src_dir: Path) -> set[str]:
+    pyproject = repo_dir / "pyproject.toml"
+    if not pyproject.is_file():
+        return set()
+    try:
+        text = pyproject.read_text(encoding="utf-8", errors="ignore")
+    except Exception:
+        return set()
+    packages: set[str] = set()
+    for match in re.finditer(r'["\']([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)*)["\']', text):
+        top = match.group(1).split(".", 1)[0]
+        if top in _RUNTIME_PACKAGE_IGNORE_DIRS:
+            continue
+        if (src_dir / top).is_dir():
+            packages.add(top)
+    return packages
+
+
+def _runtime_package_dirs(src_dir: Path, repo_dir: Path | None = None) -> list[str]:
+    packages: set[str] = set()
+    if src_dir.is_dir():
+        for child in sorted(src_dir.iterdir(), key=lambda path: path.name):
+            if not child.is_dir() or child.name.startswith(".") or child.name in _RUNTIME_PACKAGE_IGNORE_DIRS:
+                continue
+            if (child / "__init__.py").is_file():
+                packages.add(child.name)
+        if repo_dir is not None:
+            packages.update(_pyproject_top_level_packages(repo_dir, src_dir))
+    packages.update(dirname for dirname in _RUNTIME_RESOURCE_DIRS if (src_dir / dirname).is_dir())
+    return sorted(packages)
+
+
 def _installed_scripts_classification(dest: Path) -> dict[str, str]:
     scripts_dest = dest / "scripts"
     if dest != NEXO_HOME or not scripts_dest.is_dir():
@@ -4753,17 +4801,9 @@ def _backup_runtime_tree(dest: Path = NEXO_HOME) -> str:
     backup_dir = paths.create_backup_dir("runtime-tree")
 
     code_dirs = [
-        "hooks",
+        *_runtime_package_dirs(dest),
         "plugins",
-        "db",
-        "cognitive",
-        "dashboard",
-        "local_context",
-        "product_knowledge",
-        "rules",
-        "crons",
         "scripts",
-        "doctor",
         "skills",
         "skills-core",
         "skills-runtime",
@@ -4839,19 +4879,7 @@ def _restore_runtime_tree(backup_dir: str, dest: Path = NEXO_HOME) -> None:
 def _copy_runtime_from_source(src_dir: Path, repo_dir: Path, dest: Path = NEXO_HOME, progress_fn=None) -> dict:
     import shutil
 
-    packages = [
-        "db",
-        "cognitive",
-        "doctor",
-        "local_context",
-        "managed_mcp",
-        "product_knowledge",
-        "dashboard",
-        "rules",
-        "crons",
-        "hooks",
-        "presets",
-    ]
+    packages = _runtime_package_dirs(src_dir, repo_dir)
     flat_files = _runtime_flat_files(src_dir)
     copied_packages = 0
     copied_files = 0

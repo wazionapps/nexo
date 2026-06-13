@@ -1,0 +1,1 @@
+La ultima orden del operador fue imperativa y la accion parece reversible. Ejecuta el siguiente paso seguro con las herramientas disponibles y deja alternativas o dudas no bloqueantes para el final. Pregunta solo si falta una credencial, hay pago, accion destructiva o ambiguedad real.

@@ -1,8 +1,41 @@
 # NEXO Brain
 
-> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v7.30.28). NEXO Desktop is a separate closed-source companion app distributed at nexo-desktop.com; its source does not ship in this repo. Mentions of "NEXO Desktop" in changelog entries describe coordinated client releases that consume the Brain CLI / MCP contract. For the commercial Desktop product, contact info@wazion.com.
+> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v7.31.7). NEXO Desktop is a separate closed-source companion app distributed at nexo-desktop.com; its source does not ship in this repo. Mentions of "NEXO Desktop" in changelog entries describe coordinated client releases that consume the Brain CLI / MCP contract. For the commercial Desktop product, contact info@wazion.com.
 
 NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. It adds a local shared brain across supported clients, configurable terminal and automation backends, recovery-aware background jobs, startup preflight, runtime self-healing, smarter retrieval defaults, long-horizon overnight analysis, and 150+ MCP tools.
+
+v7.31.7: patch release. Stateful answers now require evidence before claiming release, commit,
+branch, server, ticket, deployment, sent/uploaded, installed, verified, or closed status. The
+pre-answer router adds a live_state_claim path with a verification-gap reminder, Guardian defaults
+make identity coherence hard/core, and closeout/local-context telemetry leave stronger proof trails.
+v7.31.6: patch release. Headless/email-monitor notifications now respect the Desktop UI language for
+static needs_interactive, provider breaker pause, and provider breaker resume templates before falling
+back to profile/calibration language and English.
+v7.31.5: patch release. The breaker resume notice exists: when a notified engine pause recovers, the
+operator gets exactly one "engine resumed, queue processing" email in their language, signed by
+their agent, gated so it can never repeat.
+v7.31.4: patch release. Memory recall honours absolute time ranges: ISO dates, start..end ranges,
+datetimes and epoch seconds all parse (they used to silently disable the filter), and the window is
+enforced in SQL so old windows surface past the recency-truncated fetch.
+v7.31.3: patch release. The recommended Claude Code model returns to claude-opus-4-8 with max
+reasoning (recommendation version 5; installs riding NEXO defaults migrate back automatically,
+customized models untouched), and the dead heartbeat-enforcement hook trio is removed from the
+source tree with a contract test pinning its absence.
+v7.31.2: patch release. The session ID becomes a durable identity: tools revive a valid SID whose
+row vanished, physical session cleanup moves from 15 minutes to 24 hours (visibility TTL unchanged),
+runtime-service state is keyed per runtime generation so two installs can never kill each other's
+resident, and obsolete residents retire themselves once clients disconnect while the current one
+stays warm for fast conversation starts.
+v7.31.1: patch release. Headless automations pause and queue when the selected engine is unavailable (credits exhausted, rate limited, expired auth) via a shared provider circuit breaker on the single launch path, resuming automatically with ONE operator notice in their configured language signed by their agent. Protocol nudge shaping (threshold, cooldown, headless awareness) ships in shadow mode, and client config push stops writing an invalid mcp__* permission rule to Claude Code settings (repairing contaminated installs).
+v7.31.0: minor release. The recommended Claude Code model moves from Opus 4.8 to Fable 5 with max reasoning (`claude-fable-5`). All four main resonance tiers resolve Claude Code to Fable 5, the `muy_bajo` tier keeps Haiku for cheap internal classifiers, and Codex stays on GPT-5.5. Existing installs riding NEXO defaults auto-migrate on update (mirroring the 4.6→4.7→4.8 migrations) while customized models are respected, and learning housekeeping no longer aborts when the embedding backend is missing.
+v7.30.33: patch release. Personal agent/script status now compares manual runs with scheduled cron history and keeps the newest real execution, preventing successful manual agent runs from being hidden behind older scheduled failures.
+v7.30.32: patch release. Packaged update and doctor now repair broken NEXO `npm`/`npx` wrappers before using npm, archive stale NEXO-owned personal script backups, check scheduled automation health contracts, and block managed agents from writing durable memories into legacy Claude/Codex project `MEMORY.md` files.
+
+v7.30.31: patch release. Core Rules now reach agents through both a compact managed bootstrap summary and task-specific `cortex/task_open` injection from the protected `core_rules` registry.
+
+v7.30.30: patch release. Product-managed Core Rules now sync from `src/rules/core-rules.json` into protected DB rows for bootstrap and product behavior, with provenance, hashes, severity, and install/update synchronization.
+
+v7.30.29: patch release. Runtime disk guards now bound hourly database backups and pause Local Memory indexing before disk pressure becomes unsafe.
 
 v7.30.28: patch release. F0.6 runtime repairs now run through an existing post-install hook, so older updaters execute script-conflict recovery and `core/current` refresh on the first upgrade.
 

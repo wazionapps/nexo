@@ -253,6 +253,27 @@ def _apply_write(record: dict[str, Any]) -> None:
 
         capture_context_event(**payload)
         return
+    if kind == "followup_create":
+        from tools_reminders_crud import handle_followup_create
+
+        result = handle_followup_create(**payload)
+        if str(result).startswith("ERROR:"):
+            raise ValueError(result)
+        return
+    if kind == "change_log":
+        from plugins.episodic_memory import handle_change_log
+
+        result = handle_change_log(**payload)
+        if str(result).startswith("ERROR:"):
+            raise ValueError(result)
+        return
+    if kind == "learning_add":
+        from tools_learnings import handle_learning_add
+
+        result = handle_learning_add(**payload)
+        if str(result).startswith("ERROR:"):
+            raise ValueError(result)
+        return
     raise ValueError(f"unsupported write kind: {kind}")
 
 
@@ -351,4 +372,3 @@ def _worker_loop() -> None:
             drain_write_queue(limit=50)
         except Exception:
             pass
-

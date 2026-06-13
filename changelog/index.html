@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-<meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.31.6 aligns static headless notification language with the Desktop UI.">
+<meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.31.7 adds a pre-answer evidence gate for stateful status claims.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -87,14 +87,14 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v7.31.3 live</span>
-                    <span class="page-chip">Models</span>
-                    <span class="page-chip">Claude</span>
-                    <span class="page-chip">Cleanup</span>
+                    <span class="page-chip">v7.31.7 live</span>
+                    <span class="page-chip">Evidence</span>
+                    <span class="page-chip">Guardian</span>
+                    <span class="page-chip">Closeout</span>
                     <span class="page-chip">Patch release</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v7316" class="btn btn-primary">Start with v7.31.6</a>
+                    <a href="#v7317" class="btn btn-primary">Start with v7.31.7</a>
                     <a href="#v7122" class="btn btn-secondary">See v7.12.2</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -102,8 +102,8 @@
             <div class="page-visual">
                 <div class="page-stack">
                     <div class="page-stack-card">
-                        <strong>v7.31.6</strong>
-                        <span>Patch - static headless/email-monitor notices now follow the Desktop UI language before profile/calibration fallback.</span>
+                        <strong>v7.31.7</strong>
+                        <span>Patch - stateful answers now require evidence before release, commit, branch, server, ticket, deployment, sent/uploaded, installed, verified, or closed-status claims.</span>
                     </div>
                     <div class="page-stack-card">
                         <strong>v7.17.8</strong>
@@ -345,6 +345,15 @@
 <section class="section-compact" style="background:rgba(124,58,237,0.08);">
     <div class="container desktop-disclaimer" style="max-width:860px;font-size:13px;line-height:1.55;">
         <p><strong>About NEXO Desktop.</strong> NEXO Desktop is a separate closed-source companion client distributed at <a href="https://nexo-desktop.com/">nexo-desktop.com</a>. When a changelog entry mentions NEXO Desktop it refers to a coordinated client release that consumes the Brain CLI/MCP contract. Desktop source does not live in this repo; the Brain (AGPL-3.0) remains fully usable on its own from terminal, provider CLIs, or any MCP client.</p>
+    </div>
+</section>
+
+<section id="v7317" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.31.7 <span style="opacity:.5;font-weight:400;">&mdash; June 13, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">Pre-answer evidence before state claims</h2>
+        <p class="section-subtitle">Questions about releases, commits, branches, tags, tickets, servers, ports, DNS, deployments, sent messages, uploads, installs, or verified/closed status now route through a live-state pre-answer path. If Brain cannot find evidence in continuity or live sources, it injects a verification-gap reminder so the agent says the state is not verified yet instead of guessing from memory.</p>
+        <p class="section-subtitle">Guardian defaults make identity coherence hard/core and add the hard/core R37 evidence gate. Closeout paths are stricter too: future commitments need followups, release/smoke/tag work cannot close as done while still pending, irreversible publication claims need specific approval evidence, and Local Context query telemetry moves to the real usage store.</p>
     </div>
 </section>
 

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>NEXO Brain — Libre Shared Brain for Provider Accounts and MCP Agents</title>
-    <meta name="description" content="Libre/open-source cognitive runtime with a shared brain for Anthropic, OpenAI, Desktop, terminal, and other MCP clients. Version 7.31.6 aligns headless notification language with the Desktop UI.">
+    <meta name="description" content="Libre/open-source cognitive runtime with a shared brain for Anthropic, OpenAI, Desktop, terminal, and other MCP clients. Version 7.31.7 adds a pre-answer evidence gate for stateful claims.">
     <meta name="keywords" content="AI memory, cognitive architecture, MCP, Claude Code, Codex, Claude Desktop, agent memory, vector search, AI agents, shared brain, open source">
     <meta name="author" content="WAzion">
     <meta name="robots" content="index, follow">
@@ -14,7 +14,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com">
     <meta property="og:title" content="NEXO Brain — Libre Shared Brain for Provider Accounts and MCP Agents">
-    <meta property="og:description" content="Libre/open-source cognitive runtime with a shared brain across Anthropic, OpenAI, Desktop, terminal, and other MCP clients. Version 7.31.6 aligns headless notification language with the Desktop UI.">
+    <meta property="og:description" content="Libre/open-source cognitive runtime with a shared brain across Anthropic, OpenAI, Desktop, terminal, and other MCP clients. Version 7.31.7 adds a pre-answer evidence gate for stateful claims.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-home.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -22,7 +22,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="NEXO Brain — Libre Shared Brain for Provider Accounts and MCP Agents">
-    <meta name="twitter:description" content="Libre/open-source cognitive runtime with a shared brain across Anthropic, OpenAI, Desktop, terminal, and other MCP clients. Version 7.31.6 aligns headless notification language with the Desktop UI.">
+    <meta name="twitter:description" content="Libre/open-source cognitive runtime with a shared brain across Anthropic, OpenAI, Desktop, terminal, and other MCP clients. Version 7.31.7 adds a pre-answer evidence gate for stateful claims.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-home.png">
 
     <!-- Google Analytics (GA4) -->
@@ -46,12 +46,12 @@
         "@context": "https://schema.org",
         "@type": "SoftwareApplication",
         "name": "NEXO Brain",
-        "description": "Libre/open-source local cognitive runtime with a shared brain across Anthropic, OpenAI, Desktop, terminal, and other MCP clients. Version 7.31.6 aligns headless notification language with the Desktop UI.",
+        "description": "Libre/open-source local cognitive runtime with a shared brain across Anthropic, OpenAI, Desktop, terminal, and other MCP clients. Version 7.31.7 adds a pre-answer evidence gate for stateful claims.",
         "applicationCategory": "DeveloperApplication",
         "operatingSystem": "macOS, Linux, Windows",
         "url": "https://nexo-brain.com",
         "downloadUrl": "https://www.npmjs.com/package/nexo-brain",
-        "softwareVersion": "7.31.6",
+        "softwareVersion": "7.31.7",
         "license": "https://www.gnu.org/licenses/agpl-3.0",
         "author": {
             "@type": "Organization",
@@ -62,6 +62,31 @@
             "@type": "Offer",
             "price": "0",
             "priceCurrency": "USD"
+        }
+    }
+    </script>
+
+    <!-- VideoObject -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "VideoObject",
+        "name": "NEXO Brain overview",
+        "description": "Overview video for NEXO Brain, a libre shared cognitive runtime for provider accounts, MCP agents, desktop and terminal clients.",
+        "thumbnailUrl": [
+            "https://nexo-brain.com/assets/nexo-brain-infographic-v5.png"
+        ],
+        "uploadDate": "2026-06-12T20:08:57Z",
+        "duration": "PT6M26S",
+        "contentUrl": "https://nexo-brain.com/assets/video/nexo-brain-v5-overview.mp4",
+        "embedUrl": "https://www.youtube.com/embed/i2lkGhKyVqI",
+        "publisher": {
+            "@type": "Organization",
+            "name": "WAzion",
+            "logo": {
+                "@type": "ImageObject",
+                "url": "https://nexo-brain.com/assets/logo-1024.png"
+            }
         }
     }
     </script>
@@ -88,7 +113,7 @@
         "@type": "WebSite",
         "name": "NEXO Brain",
         "url": "https://nexo-brain.com",
-        "description": "Libre/open-source local cognitive runtime with a shared brain across Anthropic, OpenAI, Desktop, terminal, and other MCP clients. Version 7.31.6 aligns headless notification language with the Desktop UI.",
+        "description": "Libre/open-source local cognitive runtime with a shared brain across Anthropic, OpenAI, Desktop, terminal, and other MCP clients. Version 7.31.7 adds a pre-answer evidence gate for stateful claims.",
         "publisher": {
             "@type": "Organization",
             "name": "WAzion",
@@ -697,7 +722,7 @@
     <div class="container">
         <div class="hero-badge fade-up">
             <span class="dot"></span>
-            <span id="version-badge">v7.31.6</span> Patch release - headless notification language now follows the Desktop UI. <a href="/changelog/#v7316">Read the v7.31.6 notes</a>.
+            <span id="version-badge">v7.31.7</span> Patch release - stateful answers now require evidence before status claims. <a href="/changelog/#v7317">Read the v7.31.7 notes</a>.
         </div>
         <div class="fade-up" style="display:flex;gap:8px;justify-content:center;margin-bottom:12px;">
             <img src="https://img.shields.io/npm/v/nexo-brain?color=7C3AED&label=npm" alt="npm version">
