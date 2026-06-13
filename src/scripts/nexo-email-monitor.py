@@ -183,6 +183,13 @@ CREATE INDEX IF NOT EXISTS idx_ee_ts ON email_events(timestamp);
 """
 ACTION_CLOSURE_EVENTS = ("action_done", "resolution")
 SENT_REPLY_EVENTS = ("action_done", "resolution", "replied")
+DEBT_RESOLUTION_SUPPRESSION_KEYWORDS = (
+    "expected_wait_third_party",
+    "waiting_third_party",
+    "waiting_user",
+    "wakeup queue",
+)
+DEBT_WAITING_HOT_CONTEXT_STATES = ("waiting_third_party", "waiting_user")
 EMAIL_LOOP_GUARD_SQL = """
 CREATE TABLE IF NOT EXISTS email_loop_guards (
     thread_key TEXT PRIMARY KEY,
@@ -959,6 +966,98 @@ def _debt_suppressed_recently(conn, email_id):
     return _recent_debt_flagged(conn, email_id, hours=DEBT_WAKE_COOLDOWN_HOURS)
 
 
+def _debt_suppressed_by_recent_resolution(conn, email_id, *, hours=12):
+    if not email_id:
+        return False
+    haystack = " || ' ' || ".join(
+        [
+            "COALESCE(detail, '')",
+            "COALESCE(meta, '')",
+        ]
+    )
+    keyword_clause = " OR ".join(f"LOWER({haystack}) LIKE ?" for _ in DEBT_RESOLUTION_SUPPRESSION_KEYWORDS)
+    row = conn.execute(
+        f"""
+        SELECT 1
+        FROM email_events
+        WHERE email_id = ?
+          AND event = 'resolution'
+          AND timestamp >= datetime('now','localtime', ?)
+          AND ({keyword_clause})
+        LIMIT 1
+        """,
+        (
+            email_id,
+            f"-{hours} hours",
+            *[f"%{keyword.lower()}%" for keyword in DEBT_RESOLUTION_SUPPRESSION_KEYWORDS],
+        ),
+    ).fetchone()
+    return bool(row)
+
+
+def _default_nexo_db_path():
+    override = os.environ.get("NEXO_DB") or os.environ.get("NEXO_TEST_DB")
+    if override:
+        return Path(override)
+    return NEXO_HOME / "runtime" / "data" / "nexo.db"
+
+
+def _email_context_keys(email_id):
+    raw = str(email_id or "").strip()
+    stripped = raw.strip("<>")
+    keys = {raw}
+    if stripped:
+        keys.add(stripped)
+        keys.add(f"<{stripped}>")
+        keys.add(f"email:{stripped}")
+        keys.add(f"email:<{stripped}>")
+    return tuple(key for key in keys if key)
+
+
+def _debt_suppressed_by_waiting_hot_context(email_id, *, db_path=None, now_epoch=None):
+    if not email_id:
+        return False
+    path = Path(db_path) if db_path else _default_nexo_db_path()
+    if not path.exists():
+        return False
+    keys = _email_context_keys(email_id)
+    if not keys:
+        return False
+    key_placeholders = ",".join("?" for _ in keys)
+    state_placeholders = ",".join("?" for _ in DEBT_WAITING_HOT_CONTEXT_STATES)
+    now_value = float(now_epoch if now_epoch is not None else time.time())
+    try:
+        conn = sqlite3.connect(str(path))
+        try:
+            row = conn.execute(
+                f"""
+                SELECT 1
+                FROM hot_context
+                WHERE state IN ({state_placeholders})
+                  AND expires_at > ?
+                  AND (
+                    (source_type = 'email' AND source_id IN ({key_placeholders}))
+                    OR context_key IN ({key_placeholders})
+                  )
+                LIMIT 1
+                """,
+                (*DEBT_WAITING_HOT_CONTEXT_STATES, now_value, *keys, *keys),
+            ).fetchone()
+            return bool(row)
+        finally:
+            conn.close()
+    except sqlite3.Error as exc:
+        log.debug("Debt hot_context suppression skipped: %s", exc)
+        return False
+
+
+def _debt_suppressed_by_waiting_state(conn, email_id):
+    return (
+        _debt_suppressed_by_recent_resolution(conn, email_id)
+        or _debt_suppressed_by_waiting_hot_context(email_id)
+    )
+
+
 def _has_active_processing_within(conn, email_id, *, hours=ZOMBIE_TIMEOUT_HOURS):
     row = conn.execute(
         """
@@ -1074,6 +1173,8 @@ def scan_debt(db_path=EMAIL_DB_PATH, *, max_items=5):
             continue
         if _has_action_done_after(conn, row["email_id"], row["last_ack_ts"]):
             continue
+        if _debt_suppressed_by_waiting_state(conn, row["email_id"]):
+            continue
         if _debt_suppressed_recently(conn, row["email_id"]):
             continue
         items.append(
@@ -1100,6 +1201,8 @@ def scan_debt(db_path=EMAIL_DB_PATH, *, max_items=5):
         if _has_active_processing_within(conn, row["email_id"]):
             continue
         if _has_action_done_after(conn, row["email_id"], row["last_commitment_ts"]):
+            continue
+        if _debt_suppressed_by_waiting_state(conn, row["email_id"]):
             continue
         if _debt_suppressed_recently(conn, row["email_id"]):
             continue

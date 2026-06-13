@@ -1,5 +1,11 @@
 # Changelog
 
+## [7.31.8] - 2026-06-13
+
+### Fixed - email monitor waiting-state debt suppression
+
+- **Email monitor debt scan no longer escalates intentionally waiting threads as unresolved commitments.** Commitment/action debt is now suppressed when a recent resolution or active hot-context state proves the email is waiting on the user or a third party. The unresolved path remains covered so real open commitments are still flagged.
+
 ## [7.31.7] - 2026-06-13
 
 ### Added - pre-answer evidence gate
