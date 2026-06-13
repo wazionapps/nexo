@@ -10,10 +10,13 @@ permissions:
 
 env:
   NEXO_SKIP_COGNITIVE_MODEL_DOWNLOAD: "1"
+  NEXO_NO_MODEL_DOWNLOAD: "1"
+  NEXO_LOCAL_MODELS_NO_DOWNLOAD: "1"
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
 
@@ -36,6 +39,7 @@ jobs:
   publish:
     needs: test
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
 
