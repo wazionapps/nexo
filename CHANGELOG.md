@@ -1,5 +1,11 @@
 # Changelog
 
+## [7.31.9] - 2026-06-13
+
+### Added - original symptom verification gate
+
+- **UI release closeout now has to prove the original symptom was reopened.** When a task claims a UI/front-end release is ready, `nexo_task_close` blocks generic "tests are green" evidence unless the closure names the reported/original symptom and attaches observable proof from the real surface: repro URL, headed browser/screenshot, Playwright output, curl output, or live logs. This makes the system stricter about verifying what the operator actually reported before saying a release is ready.
+
 ## [7.31.8] - 2026-06-13
 
 ### Fixed - email monitor waiting-state debt suppression

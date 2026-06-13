@@ -676,6 +676,42 @@ def _has_live_surface_verification(evidence: str) -> bool:
     return bool(re.search(r"\b(producci[oó]n|production|live)\b.*\b(logs?|bd|db|browser|navegador|playwright|url|http|tema)\b", text))
 
 
+UI_CHANGE_HINT_RE = re.compile(
+    r"\b(ui|ux|front[- ]?end|frontend|renderer|web|browser|navegador|pantalla|modal|selector|bot[oó]n|button|css|html|react|vue|electron|theme|tema|storefront)\b",
+    re.IGNORECASE,
+)
+
+RELEASE_READY_CLAIM_RE = re.compile(
+    r"\b(release\s+lista|feature\s+completa|desplegado\s+ok|despliegue\s+ok|lista\s+para\s+release|release\s+ready|feature\s+complete|deployed\s+ok)\b",
+    re.IGNORECASE,
+)
+
+ORIGINAL_SYMPTOM_REPRO_RE = re.compile(
+    r"\b(s[ií]ntoma|symptom|original|repro|reproduj|reproduc|reportad[oa]|observad[oa])\b",
+    re.IGNORECASE,
+)
+
+ORIGINAL_SYMPTOM_EVIDENCE_RE = re.compile(
+    r"\b(curl|http\s*200|url\s+(?:p[uú]blica|repro)|screenshot|captura|headed|browser|navegador|playwright)\b",
+    re.IGNORECASE,
+)
+
+
+def _requires_original_symptom_verification(task: dict, closure_text: str) -> bool:
+    if not RELEASE_READY_CLAIM_RE.search(closure_text or ""):
+        return False
+    combined = " ".join(
+        str(task.get(field) or "")
+        for field in ("goal", "area", "project_hint", "context_hint", "verification_step", "files")
+    )
+    return bool(UI_CHANGE_HINT_RE.search(combined))
+
+
+def _has_original_symptom_verification(evidence: str) -> bool:
+    text = evidence or ""
+    return bool(ORIGINAL_SYMPTOM_REPRO_RE.search(text) and ORIGINAL_SYMPTOM_EVIDENCE_RE.search(text))
+
+
 def _requires_production_change_log(
     task: dict,
     outcome: str,
@@ -1869,6 +1905,44 @@ def handle_task_close(
                 ensure_ascii=False,
                 indent=2,
             )
+
+    original_symptom_evidence = "\n".join(
+        part
+        for part in (clean_evidence, clean_change_verify, outcome_notes, verification, summary, result)
+        if part
+    )
+    if (
+        clean_outcome == "done"
+        and _requires_original_symptom_verification(task, closure_text)
+        and not _has_original_symptom_verification(original_symptom_evidence)
+    ):
+        debt = _ensure_open_debt(
+            task["session_id"],
+            task_id,
+            "verify_original_symptom_missing",
+            severity="error",
+            evidence=(
+                "UI release-ready claim attempted without evidence that the original symptom was reproduced. "
+                f"Goal: {task.get('goal','')}. Evidence provided: {original_symptom_evidence[:240]!r}"
+            ),
+            debts=debts_created,
+        )
+        return json.dumps(
+            {
+                "ok": False,
+                "error": "Cannot close UI release as done without original-symptom verification evidence.",
+                "hint": (
+                    "Attach proof that the reported symptom itself was reopened and reproduced/verified: "
+                    "repro URL, headed screenshot/browser evidence, Playwright output, or curl output."
+                ),
+                "task_id": task_id,
+                "blocked_by": "verify_original_symptom",
+                "debt_id": debt.get("id"),
+                "debt_type": "verify_original_symptom_missing",
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
 
     live_surface_required = _requires_live_surface_verification(task, clean_outcome)
     live_surface_evidence = "\n".join(

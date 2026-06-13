@@ -1725,6 +1725,70 @@ def test_task_close_accepts_state_bug_with_live_surface_evidence():
     assert closed["ok"] is True
 
 
+def test_task_close_blocks_ui_release_ready_without_original_symptom_evidence():
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    sid = _register_session("nexo-1640-2640")
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Arreglar bug del selector modal de UI",
+            task_type="edit",
+            area="frontend",
+            files="/tmp/renderer/ui.js",
+            verification_step="Reabrir el modal reportado en navegador real",
+        )
+    )
+
+    closed = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="done",
+            evidence="Tests unitarios verdes y build local completada correctamente.",
+            summary="release lista",
+            files_changed="/tmp/renderer/ui.js",
+        )
+    )
+
+    assert closed["ok"] is False
+    assert closed["blocked_by"] == "verify_original_symptom"
+    assert closed["debt_type"] == "verify_original_symptom_missing"
+
+
+def test_task_close_accepts_ui_release_ready_with_original_symptom_evidence():
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    sid = _register_session("nexo-1641-2641")
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Arreglar bug del selector modal de UI",
+            task_type="edit",
+            area="frontend",
+            files="/tmp/renderer/ui.js",
+            verification_step="Reabrir el modal reportado en navegador real",
+        )
+    )
+
+    closed = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="done",
+            evidence=(
+                "Síntoma original reproducido y verificado en navegador headed: "
+                "URL repro http://localhost:3000/modal, screenshot /tmp/modal-fixed.png, "
+                "selector abre y permite elegir opción."
+            ),
+            summary="release lista",
+            files_changed="/tmp/renderer/ui.js",
+        )
+    )
+
+    assert closed["ok"] is True
+
+
 def test_task_close_blocks_production_deploy_without_changed_files():
     from plugins.protocol import handle_task_open, handle_task_close
 
