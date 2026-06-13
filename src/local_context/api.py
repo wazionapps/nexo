@@ -4101,6 +4101,118 @@ def _search_text_score(query: str, text: str) -> float:
     return len(q & tokens) / max(len(q), 1)
 
 
+_CONTEXT_STRONG_DOCUMENT_TERMS = {
+    "acuerdo",
+    "agreement",
+    "balance",
+    "certificado",
+    "comunicado",
+    "contract",
+    "contrato",
+    "declaracion",
+    "declaración",
+    "factura",
+    "invoice",
+    "nomina",
+    "nómina",
+    "payroll",
+    "presupuesto",
+    "quote",
+    "transferencia",
+}
+
+
+_CONTEXT_BOILERPLATE_TERMS = {
+    "-ms-text-size-adjust",
+    "-webkit-text-size-adjust",
+    "body, table",
+    "cancelar suscripcion",
+    "cancelar suscripción",
+    "css",
+    "newsletter",
+    "no puedes ver el correo",
+    "politica de privacidad",
+    "política de privacidad",
+    "unsubscribe",
+    "version web",
+    "versión web",
+}
+
+
+_CONTEXT_MARKETING_TERMS = {
+    "bajan los precios",
+    "campaña",
+    "descuento",
+    "encuesta satisfaccion",
+    "encuesta satisfacción",
+    "hazte con tu regalo",
+    "oferta",
+    "promocion",
+    "promoción",
+    "prueba gratis",
+    "satisfaccion clientes",
+    "satisfacción clientes",
+    "view online",
+}
+
+
+_CONTEXT_LOW_SIGNAL_EMAIL_TERMS = {
+    "acceso bloqueado",
+    "actividad inusual",
+    "bloqueada temporalmente",
+    "cuenta esta en revision",
+    "cuenta está en revisión",
+}
+
+
+def _contains_any_text(text: str, terms: set[str]) -> bool:
+    if not text:
+        return False
+    return any(term in text for term in terms)
+
+
+def _context_quality_adjusted_score(score: float, row: Any) -> float:
+    """Apply deterministic tie-breaks for local search candidates.
+
+    The base scorer is intentionally simple, which can make boilerplate emails
+    tie with PDFs/contracts when a query has a few common terms. Keep this
+    adjustment small and explainable: strong document signals stay high, while
+    newsletter/CSS/legal-footer noise loses the tie.
+    """
+    try:
+        path = str(row["path"] or "")
+        file_type = str(row["file_type"] or "").strip().lower()
+        text = str(row["text"] or "")
+        summary = str(row["summary"] or "")
+    except Exception:
+        return max(0.0, min(float(score), 1.6))
+
+    haystack = f"{path}\n{summary}\n{text}".lower()
+    suffix = Path(path).suffix.lower()
+    adjustment = 0.0
+
+    if suffix in HIGH_VALUE_DOCUMENT_SUFFIXES or file_type in {"document", "spreadsheet", "presentation"}:
+        adjustment += 0.12
+    has_strong_document_signal = _contains_any_text(haystack, _CONTEXT_STRONG_DOCUMENT_TERMS)
+    if has_strong_document_signal:
+        adjustment += 0.12
+
+    if file_type == "email" or suffix in EMAIL_DOCUMENT_SUFFIXES:
+        if _contains_any_text(haystack, _CONTEXT_BOILERPLATE_TERMS):
+            adjustment -= 0.22
+        if _contains_any_text(haystack, _CONTEXT_MARKETING_TERMS):
+            adjustment -= 0.18
+        if _contains_any_text(haystack, _CONTEXT_LOW_SIGNAL_EMAIL_TERMS):
+            adjustment -= 0.16
+        if has_strong_document_signal:
+            adjustment += 0.08
+        else:
+            adjustment -= 0.22
+
+    base = min(float(score), 1.6)
+    return max(0.0, min(base + adjustment, 1.6))
+
+
 _QUERY_STOPWORDS = {
     "about",
     "archivos",
@@ -4739,7 +4851,7 @@ def _context_query_conn(
                 # unrelated chunks from a long document outrank direct evidence.
                 score = max(score, min(0.48, 0.28 + entity_score * 0.2))
         if score > 0:
-            scored.append((min(float(score), 1.6), row))
+            scored.append((_context_quality_adjusted_score(float(score), row), row))
     scored.sort(key=lambda item: item[0], reverse=True)
     scored = _rerank_scored_candidates(search_query, scored, limit=int(limit))
     assets = []

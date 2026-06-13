@@ -2000,6 +2000,35 @@ def test_local_context_reranker_can_reorder_top_candidates(monkeypatch):
     assert [row["chunk_id"] for _score, row in result] == ["strong", "weak"]
 
 
+def test_local_context_quality_score_downranks_boilerplate_email():
+    strong_doc = {
+        "path": "/Users/francisco/Documents/NOMINAS CREATIVE.pdf",
+        "file_type": "document",
+        "summary": "NOMINA CREATIVE STUDIO SYSTEAM SL",
+        "text": "Contrato y nómina de empresa sysTeam",
+    }
+    boilerplate_email = {
+        "path": "/Users/francisco/Library/Mail/Messages/1017363.emlx",
+        "file_type": "email",
+        "summary": "Tu cuenta BBVA está en revisión",
+        "text": "BBVA Empresas info@systeam.es body, table, td, a { -webkit-text-size-adjust: 100%; }",
+    }
+    legal_email = {
+        "path": "/Users/francisco/Library/Mail/Messages/1050781.emlx",
+        "file_type": "email",
+        "summary": "Att. CREATIVE STUDIO SYSTEAM SL.",
+        "text": "COMUNICADO contrato ref. CREATIVE STUDIO SYSTEAM SL",
+    }
+
+    doc_score = api._context_quality_adjusted_score(1.6, strong_doc)
+    legal_score = api._context_quality_adjusted_score(1.6, legal_email)
+    boilerplate_score = api._context_quality_adjusted_score(1.6, boilerplate_email)
+
+    assert doc_score == 1.6
+    assert legal_score > boilerplate_score
+    assert boilerplate_score < 1.6
+
+
 def test_model_status_has_local_fallback():
     result = api.model_status()
     assert result["ok"] is True

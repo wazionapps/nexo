@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.31.9` is the current packaged-runtime line. Patch release over v7.31.8 - UI release closeout now has to prove the original reported symptom was reopened with observable evidence before claiming the release is ready.
+Version `7.31.10` is the current packaged-runtime line. Patch release over v7.31.9 - Local Memory search now downranks boilerplate emails when stronger documents match the same query.
+
+Previously in `7.31.9`: patch release over v7.31.8 - UI release closeout now has to prove the original reported symptom was reopened with observable evidence before claiming the release is ready.
 
 Previously in `7.31.8`: patch release over v7.31.7 - email monitor debt scans no longer escalate intentionally waiting threads as unresolved commitments when recent resolution or hot-context state proves the thread is waiting on the user or a third party. Real unresolved commitments still surface.
 

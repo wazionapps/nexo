@@ -1,5 +1,11 @@
 # Changelog
 
+## [7.31.10] - 2026-06-13
+
+### Fixed - Local Memory result quality
+
+- **Local Memory search now downranks boilerplate emails when stronger documents match the same query.** The local-context scorer adds deterministic, bounded quality tie-breaks: contracts, invoices, payroll and similar high-value documents keep priority, while newsletter/CSS/footer/security-noise emails lose ties unless they carry a strong document signal. This reduces the pattern where a low-signal email outranks the PDF or document the user was actually asking about.
+
 ## [7.31.9] - 2026-06-13
 
 ### Added - original symptom verification gate
