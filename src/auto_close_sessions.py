@@ -182,6 +182,43 @@ def auto_close_open_protocol_tasks(conn, sid: str, task: str = "") -> list[str]:
     return closed
 
 
+def auto_close_abandoned_workflow_runs(conn, sid: str) -> dict:
+    """Reap durable workflow_runs / workflow_goals abandoned by a stale session.
+
+    auto_close only reaped protocol_tasks; a session that opened a durable
+    workflow_run / workflow_goal and never closed it left a zombie 'running'
+    row forever, polluting the resume surface (M10 gap). Move non-terminal ones
+    to a terminal state when their owning session is reaped. closed_at/updated_at
+    use datetime('now') to match the workflow tables' timestamp format.
+    """
+    note = "auto-close: stale session ended without explicit workflow close"
+    runs = conn.execute(
+        "SELECT run_id FROM workflow_runs "
+        "WHERE session_id = ? AND status IN ('open','running','blocked','waiting_approval')",
+        (sid,),
+    ).fetchall()
+    for row in runs:
+        conn.execute(
+            "UPDATE workflow_runs SET status='cancelled', next_action=?, "
+            "closed_at=datetime('now'), updated_at=datetime('now') "
+            "WHERE run_id=? AND status IN ('open','running','blocked','waiting_approval')",
+            (note, row["run_id"]),
+        )
+    goals = conn.execute(
+        "SELECT goal_id FROM workflow_goals "
+        "WHERE session_id = ? AND status IN ('active','blocked')",
+        (sid,),
+    ).fetchall()
+    for row in goals:
+        conn.execute(
+            "UPDATE workflow_goals SET status='abandoned', blocker_reason=?, "
+            "closed_at=datetime('now'), updated_at=datetime('now') "
+            "WHERE goal_id=? AND status IN ('active','blocked')",
+            (note, row["goal_id"]),
+        )
+    return {"runs": len(runs), "goals": len(goals)}
+
+
 def main():
     init_db()
     conn = get_db()
@@ -197,6 +234,7 @@ def main():
         draft = get_diary_draft(sid)
         closed_tasks = auto_close_open_protocol_tasks(conn, sid, task=session.get("task", ""))
         closed_task_ids.extend(closed_tasks)
+        auto_close_abandoned_workflow_runs(conn, sid)
 
         if draft:
             promote_draft_to_diary(sid, draft, task=session.get("task", ""))
