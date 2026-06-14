@@ -101,4 +101,8 @@ def test_requirements_hard_pin_fastembed_and_onnxruntime():
         return False
 
     assert _pinned("fastembed=="), "fastembed must be hard-pinned (==) for the offline wheel bundle"
-    assert _pinned("onnxruntime=="), "onnxruntime must be hard-pinned (==): it is the fragile native wheel"
+    # Regression guard: onnxruntime must NOT be hard-pinned. A `==` pin can't be
+    # satisfied across the bundle's manylinux targets (1.26 only ships for
+    # manylinux_2_28; older tags cap at 1.19.2) and breaks the cross-platform wheel
+    # bundle plus installs on older Linux. fastembed/pip resolve it per platform.
+    assert not _pinned("onnxruntime=="), "onnxruntime must stay unpinned for cross-platform wheel resolution"

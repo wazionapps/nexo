@@ -17,15 +17,19 @@ anthropic>=0.80.0
 openai>=2.20.0
 
 # Embedding model (optional but recommended for cognitive features).
-# Hard-pinned (==) so the offline wheel bundle (fetch-python-wheels.sh) is
-# reproducible across Win+Mac. onnxruntime is fastembed's transitive native
-# wheel — the fragile, platform-specific one — so it is pinned explicitly too;
-# floating it lets pip resolve an unbundled build and break offline installs.
-# >=0.8.0 was the floor (older releases need Python <3.12 and pip iterates each
-# obsolete version for ~10 min on Ubuntu 24.04 before finding a compatible one,
-# verified during Win11 clean install bootstrap); 0.8.0 is the bundled version.
+# fastembed is hard-pinned (==) so the offline wheel bundle is reproducible; it is
+# pure-python (py3-none-any) so the pin holds on every platform. >=0.8.0 was the
+# floor (older releases need Python <3.12 and pip iterates each obsolete version for
+# ~10 min on Ubuntu 24.04 before finding a compatible one, verified during Win11
+# clean install bootstrap); 0.8.0 is the bundled version.
+#
+# onnxruntime (fastembed's native transitive dep) is deliberately NOT hard-pinned:
+# its wheels are platform/glibc-specific — e.g. 1.26 only ships for manylinux_2_28,
+# while the offline bundle also targets manylinux_2_17/2014 (which cap at 1.19.2).
+# A `==` pin can't be satisfied for every target and breaks BOTH the cross-platform
+# wheel bundle and installs on older Linux. Let fastembed/pip resolve the best
+# onnxruntime wheel per platform.
 fastembed==0.8.0
-onnxruntime==1.26.0
 
 # Local Context Layer — document parsers (REQUIRED for the local memory index).
 # extractors.py imports these lazily; without them a clean bundle silently indexes

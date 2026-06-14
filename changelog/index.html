@@ -94,7 +94,7 @@
                     <span class="page-chip">Patch release</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v73112" class="btn btn-primary">Start with v7.31.12</a>
+                    <a href="#v73113" class="btn btn-primary">Start with v7.31.13</a>
                     <a href="#v7122" class="btn btn-secondary">See v7.12.2</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -348,6 +348,13 @@
     </div>
 </section>
 
+<section id="v73113" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.31.13 <span style="opacity:.5;font-weight:400;">&mdash; June 14, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">Offline wheel bundle no longer hard-pins onnxruntime</h2>
+        <p class="section-subtitle">7.31.12 pinned onnxruntime==1.26.0, but that wheel only ships for newer manylinux/macOS while the offline bundle also targets older manylinux tags (which cap at 1.19.2) and older Linux installs. The == pin could not be satisfied for every target and broke the cross-platform wheel bundle plus older-Linux installs. fastembed/pip now resolve the best onnxruntime wheel per platform; fastembed==0.8.0 stays hard-pinned.</p>
+    </div>
+</section>
 <section id="v73112" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
     <div class="container">
         <div class="section-label">New in v7.31.12 <span style="opacity:.5;font-weight:400;">&mdash; June 14, 2026 &mdash; <strong>PATCH</strong></span></div>

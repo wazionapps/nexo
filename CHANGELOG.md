@@ -1,5 +1,11 @@
 # Changelog
 
+## [7.31.13] - 2026-06-14
+
+### Fixed - offline wheel bundle / cross-platform installs
+
+- **onnxruntime is no longer hard-pinned.** 7.31.12 pinned `onnxruntime==1.26.0`, but that wheel only ships for `manylinux_2_28`/modern macOS; the offline wheel bundle also targets `manylinux_2_17`/`manylinux2014` (which cap at 1.19.2) and older Linux installs. The `==` pin could not be satisfied for every target and broke both the cross-platform wheel bundle and installs on older Linux. fastembed/pip now resolve the best onnxruntime wheel per platform; `fastembed==0.8.0` stays hard-pinned.
+
 ## [7.31.12] - 2026-06-14
 
 ### Changed - Local Memory core hardening (Release A)
