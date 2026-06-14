@@ -342,20 +342,31 @@ def check_launch_agents():
         }]
     results = []
 
-    # Get list of loaded agents
+    # Get list of loaded agents and their last exit status.
     rc, stdout, _ = run_cmd("launchctl list")
     loaded_labels = set()
+    launch_statuses = {}
     if rc == 0:
         for line in stdout.splitlines():
             parts = line.split("\t")
             if len(parts) >= 3:
-                loaded_labels.add(parts[2])
+                pid, last_status, label = parts[0], parts[1], parts[2]
+                loaded_labels.add(label)
+                if label.startswith("com.nexo."):
+                    launch_statuses[label] = {
+                        "pid": pid,
+                        "last_status": last_status,
+                    }
 
     for agent in EXPECTED_AGENTS:
         result = {"name": agent, "status": "OK", "detail": "", "repaired": False}
 
         if agent in loaded_labels:
             result["detail"] = "Loaded"
+            last_status = launch_statuses.get(agent, {}).get("last_status", "0")
+            if last_status not in ("0", ""):
+                result["status"] = "WARN"
+                result["detail"] = f"Loaded, last exit status={last_status}"
         else:
             # Try auto-repair
             plist = LAUNCH_AGENTS_DIR / f"{agent}.plist"
@@ -373,6 +384,20 @@ def check_launch_agents():
                 result["detail"] = f"Unloaded, plist not found: {plist}"
 
         results.append(result)
+
+    expected_set = set(EXPECTED_AGENTS)
+    for label, status_info in sorted(launch_statuses.items()):
+        if label in expected_set:
+            continue
+        last_status = status_info.get("last_status", "0")
+        if last_status in ("0", ""):
+            continue
+        results.append({
+            "name": label,
+            "status": "WARN",
+            "detail": f"Loaded, last exit status={last_status}",
+            "repaired": False,
+        })
 
     return results
 
