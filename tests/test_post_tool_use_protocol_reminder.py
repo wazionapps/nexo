@@ -87,7 +87,9 @@ def test_post_tool_use_detects_external_webroot_dns_cloudrun_and_vps_mutations()
 
     commands = [
         "rsync -av index.php root@cl105e:/home/site/public_html/index.php",
+        "rsync -av app/ vicshop:/home/nexodesk/app/",
         "ssh vicshop 'sed -i s/foo/bar/ /home/site/httpdocs/index.php'",
+        "ssh vicshop 'tee /home/nexodesk/app/.env >/dev/null'",
         "gcloud run deploy app --image europe-west1-docker.pkg.dev/proj/app:latest",
         "gcloud dns record-sets transaction execute --zone prod-zone",
         "whmapi1 createacct username=test domain=example.com",
