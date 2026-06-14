@@ -1,5 +1,16 @@
 # Changelog
 
+## [7.31.14] - 2026-06-14
+
+### Fixed - Cognitive OS Ola 0: critical cognition + reliability bugs
+
+- **Cron-fleet drift can no longer be caused by a test run.** `crons/sync.py` wrote (and removed) real `~/Library/LaunchAgents` plists *before* checking `launchctl_side_effects_allowed()`, so a pytest run (temp `NEXO_HOME`, real `HOME`) rewrote the operator's real consolidation plists with temp-dir paths — one reboot from silently killing the whole nightly cron fleet (deep-sleep, decay, evolution, synthesis, …). The guard now gates the plist write/removal and the LaunchAgents `mkdir`; intentional installs (real runtime or `NEXO_ALLOW_EPHEMERAL_INSTALL=1`) are unaffected.
+- **Spreading activation is process-stable again.** `cognitive/_search._canonical_co_id` used the builtin `hash()` (salted per process via `PYTHONHASHSEED`), so co-activation links written in one MCP process never matched the same memory in the next (~6× distinct ids per memory), silently degrading associative recall. It now uses `blake2b` for a deterministic id across processes and runs.
+- **`guard_context` no longer fakes evidence.** The pre-answer `guard_context` source returned `evidence_refs=["guard_context:requested"]` with no real check, silently satisfying the critical-tier required-source / gap gate for release/server/billing/legal. It now performs a real file-conditioned-learning lookup and fails closed (never fabricates evidence).
+- **Auto error→learning capture works.** `hooks/auto_capture._auto_learning_add` called a non-existent `tools_learnings.add_learning` (AttributeError swallowed), so every correction-triggered auto-learning silently failed to persist. It now calls the real `handle_learning_add`.
+- **The answer-contract (verify/ask/defer) gate can be fulfilled.** `g1_enforcer` keyed fulfillment on a `confidence_checks` table that no code ever created or wrote, so verify contracts were structurally unfulfillable. Added migration `m82` and `handle_confidence_check` now persists a row per call.
+- **Approval-paused workflows survive resume.** The portable-context resume bundle filtered `workflow_runs` by a non-canonical `needs_approval` status (canonical is `waiting_approval`), dropping approval-paused runs from the next session's resume.
+
 ## [7.31.13] - 2026-06-14
 
 ### Fixed - offline wheel bundle / cross-platform installs
