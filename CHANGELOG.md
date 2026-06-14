@@ -1,5 +1,19 @@
 # Changelog
 
+## [7.31.12] - 2026-06-14
+
+### Changed - Local Memory core hardening (Release A)
+
+- **Defensive cosine similarity.** The local-context vector score is now normalized at comparison time (without re-embedding), so ranking stays correct even if the embedding model is swapped for one that does not L2-normalize its output. Behavior is unchanged for the current fastembed profile, which already normalizes.
+- **Stable chunk ids.** `chunk_id` now keys on `(version_id, chunk_index)` only, never on chunk text, so re-indexing is idempotent and `source_chunk_id` stays stable — the entity_facts / alias dedup survives re-indexing instead of accumulating duplicates on every content edit.
+- **iCloud / dataless files no longer storm the indexer.** Files macOS has evicted to the cloud (`SF_DATALESS`) are detected with pure stdlib and indexed metadata-only instead of faulting in a download; the `EDEADLK` a failed materialization raises is classified as `offloaded`, not a reliability error. The silent 20-error logging cap is removed, and `status()` now reports a `backlog_drain_rate` (recent throughput + honest ETA to drain the backlog).
+- **SQLite performance PRAGMAs** (`wal_autocheckpoint`, `mmap_size`, `cache_size`) on the index DB writer; `fastembed`/`onnxruntime` are hard-pinned for a reproducible offline wheel bundle.
+- **entity_facts blow-up guard:** the default `max_facts` per asset is lowered 3000 → 120.
+
+### Fixed - offline-first dependency provisioning
+
+- **Clean installs no longer ship a silently-broken local memory index.** The installer provisions Python dependencies offline-first from a bundled wheel set (304 cross-platform wheels including the `.msg` parser), with per-module venv self-repair wired into startup so a missing parser/embedder is healed on boot instead of indexing every PDF/XLSX/MSG as empty text.
+
 ## [7.31.11] - 2026-06-14
 
 ### Fixed - MCP lifecycle robustness + guardrail precision

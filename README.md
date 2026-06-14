@@ -18,7 +18,7 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.31.11` is the current packaged-runtime line. Patch release over v7.31.10 - MCP lifecycle robustness + guardrail precision. Version `7.31.10` was a patch release over v7.31.9 - Local Memory search now downranks boilerplate emails when stronger documents match the same query.
+Version `7.31.12` is the current packaged-runtime line. Patch release over v7.31.11 - Local Memory core hardening (Release A: defensive cosine, stable chunk ids, iCloud dataless handling, performance PRAGMAs) plus an offline-first dependency installer. Version `7.31.11` was a patch release over v7.31.10 - MCP lifecycle robustness + guardrail precision.
 
 Previously in `7.31.9`: patch release over v7.31.8 - UI release closeout now has to prove the original reported symptom was reopened with observable evidence before claiming the release is ready.
 

@@ -94,7 +94,7 @@
                     <span class="page-chip">Patch release</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v73110" class="btn btn-primary">Start with v7.31.11</a>
+                    <a href="#v73112" class="btn btn-primary">Start with v7.31.12</a>
                     <a href="#v7122" class="btn btn-secondary">See v7.12.2</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -348,6 +348,14 @@
     </div>
 </section>
 
+<section id="v73112" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.31.12 <span style="opacity:.5;font-weight:400;">&mdash; June 14, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">Local Memory core hardening + offline-first installer</h2>
+        <p class="section-subtitle">Cosine similarity is normalized defensively so ranking survives an embedding-model swap; chunk ids are position-stable so re-indexing is idempotent and the entity-fact dedup holds; iCloud cloud-evicted (dataless) files are indexed metadata-only instead of storming the indexer with download faults, EDEADLK is classified as offloaded rather than a reliability error, the silent 20-error cap is removed, and status() now reports a backlog drain rate. Index DB writer gains wal_autocheckpoint/mmap_size/cache_size PRAGMAs.</p>
+        <p class="section-subtitle">The installer provisions Python dependencies offline-first from a bundled wheel set with per-module venv self-repair on startup, so a clean install never silently indexes PDFs, spreadsheets or emails as empty text.</p>
+    </div>
+</section>
 <section id="v73111" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
     <div class="container">
         <div class="section-label">New in v7.31.11 <span style="opacity:.5;font-weight:400;">&mdash; June 13, 2026 &mdash; <strong>PATCH</strong></span></div>
