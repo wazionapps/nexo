@@ -53,7 +53,10 @@ def _stub_learnings(monkeypatch, *, ok=True):
         learning_calls.append(kwargs)
         return {"ok": ok, "id": 999 if ok else 0}
     fake_module = types.ModuleType("tools_learnings")
-    fake_module.add_learning = _add_learning
+    # NOTE: the real public symbol is handle_learning_add. A prior stub named
+    # this `add_learning`, masking a production bug where auto_capture called a
+    # non-existent tools_learnings.add_learning (AttributeError swallowed).
+    fake_module.handle_learning_add = _add_learning
     sys.modules["tools_learnings"] = fake_module
     return learning_calls
 

@@ -317,7 +317,7 @@ def _session_portability_bundle(sid: str = "") -> dict:
         dict(row) for row in conn.execute(
             """SELECT run_id, goal_id, goal, workflow_kind, status, priority, next_action, current_step_key, updated_at
                FROM workflow_runs
-               WHERE session_id = ? AND status IN ('open', 'running', 'blocked', 'needs_approval')
+               WHERE session_id = ? AND status IN ('open', 'running', 'blocked', 'waiting_approval')
                ORDER BY updated_at DESC
                LIMIT 10""",
             (session_id,),

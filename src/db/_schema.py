@@ -3081,6 +3081,37 @@ def _m81_core_rules_product_metadata(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_core_rules_protected ON core_rules(protected, is_active)")
 
 
+def _m82_confidence_checks(conn):
+    """Persist nexo_confidence_check calls so the answer-contract gate works.
+
+    The G1 enforcer (hooks/g1_enforcer.py) treats a verify/ask/defer contract as
+    fulfilled when a confidence_checks row exists for the session created after
+    the task opened. No code ever created or wrote this table, so verify
+    contracts were structurally unfulfillable. handle_confidence_check now writes
+    a row per call; created_at uses datetime('now') to match opened_at format.
+    """
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS confidence_checks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT,
+            task_id TEXT,
+            goal_hash TEXT,
+            task_type TEXT,
+            area TEXT,
+            response_mode TEXT,
+            confidence INTEGER,
+            high_stakes INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_confidence_checks_session "
+        "ON confidence_checks(session_id, created_at)"
+    )
+
+
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
     (2, "followups_reasoning", _m2_followups_reasoning),
@@ -3163,6 +3194,7 @@ MIGRATIONS = [
     (79, "operational_closure_links_readiness", _m79_operational_closure_links_readiness),
     (80, "opportunity_orchestrator", _m80_opportunity_orchestrator),
     (81, "core_rules_product_metadata", _m81_core_rules_product_metadata),
+    (82, "confidence_checks", _m82_confidence_checks),
 ]
 
 

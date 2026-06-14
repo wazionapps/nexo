@@ -784,8 +784,19 @@ CO_ACTIVATION_MIN_STRENGTH = 0.1
 
 
 def _canonical_co_id(store: str, mid: int) -> int:
-    """Create a canonical hash ID for co-activation tracking."""
-    return hash(f"{store}:{mid}") % (2**31)
+    """Create a canonical, PROCESS-STABLE hash ID for co-activation tracking.
+
+    MUST be deterministic across processes. Python's builtin hash() is salted
+    per process (PYTHONHASHSEED), so co-activation links written in one MCP
+    process never matched the same memory's id in the next — fragmenting the
+    associative graph (observed ~6x distinct ids per memory) and silently
+    degrading spreading activation to within-a-single-process-lifetime. blake2b
+    is stable across processes and runs.
+    """
+    import hashlib
+
+    digest = hashlib.blake2b(f"{store}:{mid}".encode("utf-8"), digest_size=8).digest()
+    return int.from_bytes(digest, "big") % (2**31)
 
 
 def record_co_activation(memory_ids: list[tuple[str, int]]):
