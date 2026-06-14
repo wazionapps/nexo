@@ -511,6 +511,48 @@ def _upsert_inline_learning(
     return {"ok": True, "action": "created", "learning_id": int(learning_id)}
 
 
+def _find_retired_learning_by_title(conn: sqlite3.Connection, title: str) -> sqlite3.Row | None:
+    if not _table_exists(conn, "learnings"):
+        return None
+    columns = _table_columns(conn, "learnings")
+    if "title" not in columns:
+        return None
+    status_expr = "COALESCE(status, 'active')"
+    return conn.execute(
+        f"""SELECT *
+            FROM learnings
+            WHERE title = ?
+              AND lower({status_expr}) IN ('archived', 'deleted', 'superseded')
+            ORDER BY updated_at DESC, id DESC
+            LIMIT 1""",
+        (title,),
+    ).fetchone()
+
+
+def _link_protocol_tasks_to_learning(
+    conn: sqlite3.Connection,
+    tasks: list[sqlite3.Row],
+    learning_id: int,
+) -> int:
+    if learning_id <= 0 or not tasks or not _table_exists(conn, "protocol_tasks"):
+        return 0
+    columns = _table_columns(conn, "protocol_tasks")
+    if "learning_id" not in columns or "task_id" not in columns:
+        return 0
+    task_ids = [str(row["task_id"]) for row in tasks if str(row["task_id"] or "").strip()]
+    if not task_ids:
+        return 0
+    placeholders = ",".join("?" for _ in task_ids)
+    cur = conn.execute(
+        f"""UPDATE protocol_tasks
+            SET learning_id = ?
+            WHERE task_id IN ({placeholders})
+              AND (learning_id IS NULL OR learning_id = 0)""",
+        [learning_id] + task_ids,
+    )
+    return int(cur.rowcount or 0)
+
+
 def _supersede_learning_inline(conn: sqlite3.Connection, *, keep_id: int, retire_id: int, note: str) -> bool:
     if not _table_exists(conn, "learnings"):
         return False
@@ -1336,6 +1378,13 @@ def check_error_memory_loop():
             prevention = (
                 f"Before working around {signature}, review this cluster and capture the prevention rule in the task contract."
             )
+            retired_learning = _find_retired_learning_by_title(conn, title)
+            if retired_learning:
+                linked = _link_protocol_tasks_to_learning(conn, items, int(retired_learning["id"]))
+                if linked:
+                    resolved += 1
+                continue
+
             result = _upsert_inline_learning(
                 conn,
                 category=area,
@@ -1348,6 +1397,7 @@ def check_error_memory_loop():
             )
             if result.get("ok"):
                 resolved += 1
+                _link_protocol_tasks_to_learning(conn, items, int(result.get("learning_id") or 0))
                 if applies_to:
                     _queue_public_core_handoff(
                         conn,

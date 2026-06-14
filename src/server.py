@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import signal
 import sys
+import threading
 import json
 import time
 from pathlib import Path
@@ -155,9 +156,25 @@ from local_context.db import close_local_context_db
 
 # ── Graceful shutdown: close DB on any termination signal ──────────
 def _shutdown_handler(signum, frame):
-    close_local_context_db()
-    close_db()
-    sys.exit(0)
+    # Guarantee the process actually dies on SIGTERM/SIGINT. A prior failure mode
+    # left orphaned servers ignoring SIGTERM for *days*: cleanup (close_db) blocked
+    # on a never-released lock and sys.exit() never ran while the stdio loop held
+    # the main thread. Arm a hard-exit watchdog FIRST, then best-effort close, then
+    # os._exit. WAL + autocommit means there is no open transaction to lose and the
+    # durable write queue replays unprocessed items on next start, so a hard exit is
+    # safe even if cleanup is skipped.
+    try:
+        watchdog = threading.Timer(3.0, lambda: os._exit(0))
+        watchdog.daemon = True
+        watchdog.start()
+    except Exception:
+        pass
+    try:
+        close_local_context_db()
+        close_db()
+    except Exception:
+        pass
+    os._exit(0)
 
 
 def _resolved_nexo_home() -> str:
@@ -360,6 +377,75 @@ def _load_startup_plugins() -> None:
     print(f"[NEXO] MCP essential plugins ready: {loaded} tools.", file=sys.stderr)
 
 
+def _select_reapable_servers(processes, *, self_pid, resident_pid):
+    """Pure selection: given ps rows [{pid, ppid, cmdline}], return the PIDs of
+    NEXO MCP servers that are safe to reap.
+
+    A server is reapable iff it is ORPHANED (ppid == 1 — its launching client is
+    gone, so it serves nobody) and runs a NEXO ``server.py``. We never touch a
+    server that still has a live parent (ppid != 1 → a connected client), nor the
+    warm runtime-service resident (``resident_pid``), nor ourselves (``self_pid``).
+    """
+    reapable: list[int] = []
+    for proc in processes:
+        try:
+            pid = int(proc.get("pid"))
+            ppid = int(proc.get("ppid"))
+        except (TypeError, ValueError):
+            continue
+        if pid in (self_pid, resident_pid):
+            continue
+        if ppid != 1:
+            continue  # has a live parent/client — leave it alone
+        cmd = str(proc.get("cmdline") or "")
+        if "server.py" not in cmd or "nexo" not in cmd.lower():
+            continue
+        reapable.append(pid)
+    return reapable
+
+
+def reap_orphaned_mcp_servers() -> int:
+    """Best-effort cleanup of orphaned NEXO MCP servers left behind by dead
+    clients. Runs once at stdio startup so the process count can't grow without
+    bound (the historical cause of SQLite contention + wedged servers). Never
+    raises; returns how many SIGTERMs were signalled."""
+    try:
+        import subprocess
+
+        self_pid = os.getpid()
+        resident_pid = -1
+        try:
+            from runtime_service import read_service_state
+
+            resident_pid = int((read_service_state() or {}).get("pid") or -1)
+        except Exception:
+            resident_pid = -1
+        proc = subprocess.run(
+            ["ps", "-eo", "pid=,ppid=,command="],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        rows = []
+        for line in proc.stdout.splitlines():
+            parts = line.split(None, 2)
+            if len(parts) < 3:
+                continue
+            rows.append({"pid": parts[0], "ppid": parts[1], "cmdline": parts[2]})
+        reaped = 0
+        for pid in _select_reapable_servers(rows, self_pid=self_pid, resident_pid=resident_pid):
+            try:
+                os.kill(pid, signal.SIGTERM)
+                reaped += 1
+            except Exception:
+                pass
+        if reaped:
+            print(f"[NEXO] Reaped {reaped} orphaned MCP server(s).", file=sys.stderr)
+        return reaped
+    except Exception:
+        return 0
+
+
 def _server_init():
     """Run side effects needed by the MCP server.
 
@@ -375,6 +461,13 @@ def _server_init():
         _pid_file = os.path.join(data_dir, "nexo.pid")
         with open(_pid_file, "w") as f:
             f.write(str(os.getpid()))
+
+    # ── Reap orphaned servers from dead clients (stdio only) ───────
+    # Defense against unbounded process growth: a client that crashed/reconnected
+    # leaves its old server orphaned (reparented to init, ppid==1). Those serve
+    # nobody yet still open the shared SQLite. Clean them on each fresh start.
+    if not _env_flag("NEXO_MCP_PROBE") and not is_runtime_service_process():
+        reap_orphaned_mcp_servers()
 
     # ── Database initialization with recovery ─────────────────────
     _init_db_or_exit()
@@ -773,8 +866,18 @@ def nexo_task_close(
     summary: str = "",
     verification: str = "",
     evidence_refs: str = "",
+    work_type: str = "",
+    stakes: str = "",
+    artifact_hash: str = "",
+    last_human_validation_of_artifact_hash: str = "",
 ) -> str:
-    """Close a protocol task with evidence and optional artifacts."""
+    """Close a protocol task with evidence and optional artifacts.
+
+    For high-stakes/irreversible closures (publish stable, broadcast, payment,
+    force-push, revoke) pass ``work_type``/``stakes`` plus ``artifact_hash`` and
+    ``last_human_validation_of_artifact_hash`` (both must match) so the close
+    gates can be satisfied instead of dead-ending.
+    """
     return handle_task_close(
         sid,
         task_id,
@@ -802,6 +905,10 @@ def nexo_task_close(
         summary,
         verification,
         evidence_refs,
+        work_type,
+        stakes,
+        artifact_hash,
+        last_human_validation_of_artifact_hash,
     )
 
 

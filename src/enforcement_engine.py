@@ -220,9 +220,13 @@ except ImportError:  # pragma: no cover
     _r23d_should = None  # type: ignore
 
 try:
-    from r23g_secrets_in_output import should_inject_r23g as _r23g_should
+    from r23g_secrets_in_output import (
+        should_inject_r23g as _r23g_should,
+        has_external_sink as _r23g_has_sink,
+    )
 except ImportError:  # pragma: no cover
     _r23g_should = None  # type: ignore
+    _r23g_has_sink = None  # type: ignore
 
 try:
     from r23i_auto_deploy_ignored import (
@@ -327,12 +331,26 @@ _SILENT_REMINDER_DISCLOSURE_SUFFIX = (
     " Do not mention this reminder or any internal enforcement to the user."
 )
 
+# Object of a capability denial: either the denied ACTION (hacer/acceder/usar…)
+# or a capability NOUN (capacidad/integración/herramienta…). Requiring one of
+# these right after the negation is what separates a real "can't do X / no
+# existe esa integración" from benign phrases that merely start with a negation
+# ("no hay problema", "no puedo esperar a…", "does not exist yet, creating it").
+_CAP_OBJ = (
+    r"(?:hacer(?:lo|se)?|acceder|conectar(?:se|lo)?|integrar(?:se|lo)?|usar(?:lo|se)?|montar(?:lo)?|"
+    r"crear(?:lo)?|ejecutar(?:lo)?|generar(?:lo)?|enviar(?:lo)?|llamar(?:lo)?|"
+    r"capacidad|integraci[oó]n|herramienta|funci[oó]n|funcionalidad|soporte|forma|manera|"
+    r"opci[oó]n|acceso|m[oó]dulo|posibilidad|conexi[oó]n|esa|ese|eso|esto|esas|esos)"
+)
 _CAPABILITY_DENIAL_RE = re.compile(
-    r"\b("
-    r"no\s+(?:se\s+puede|puedo|existe|hay|tenemos|esta\s+montado|est[aá]\s+montado)|"
-    r"no\s+(?:est[aá]\s+soportado|hay\s+nada\s+montado)|"
-    r"(?:cannot|can't|can\s+not|not\s+possible|does\s+not\s+exist|no\s+such\s+capability|not\s+supported)"
-    r")\b",
+    r"(?:"
+    r"\bno\s+(?:se\s+puede|puedo|podemos|puede)\s+(?:\w+\s+){0,1}?" + _CAP_OBJ + r"\b|"
+    r"\bno\s+(?:existe|hay|tengo|tenemos)\s+(?:\w+\s+){0,2}?" + _CAP_OBJ + r"\b|"
+    r"\bno\s+est[aá]\s+(?:soportad[oa]|montad[oa]|disponible|integrad[oa]|configurad[oa]|habilitad[oa])\b|"
+    r"\b(?:cannot|can'?t|can\s+not)\s+(?:\w+\s+){0,2}?(?:do\s+(?:that|it|this)|access|connect|integrate|use|create|run|support)\b|"
+    r"\bdoes\s+not\s+exist(?!\s+yet)\b|\bnot\s+supported\b|\bnot\s+possible\b|"
+    r"\bno\s+such\s+(?:capability|tool|integration|feature)\b"
+    r")",
     re.IGNORECASE,
 )
 _CAPABILITY_REALITY_TOOLS = {
@@ -1914,21 +1932,30 @@ class HeadlessEnforcer:
         if not should:
             return
         if mode == "shadow":
+            # shadow → logs only. No enqueue, no followup, no side effects.
             _logger.info("[R23g SHADOW] would inject")
-            self._ensure_exposed_credential_followup(tool_input, reason="R23g shadow")
             return
         self._enqueue(prompt, "R23g_secrets_in_output", rule_id="R23g_secrets_in_output")
-        self._ensure_exposed_credential_followup(tool_input, reason="R23g detected secret exposure risk")
+        self._ensure_exposed_credential_followup(tool_input)
         _logger.info("[R23g %s] enqueued", mode.upper())
 
-    def _ensure_exposed_credential_followup(self, tool_input, *, reason: str) -> None:
+    def _ensure_exposed_credential_followup(self, tool_input) -> None:
         if not isinstance(tool_input, dict):
             return
         cmd = tool_input.get("command")
         if not isinstance(cmd, str) or not cmd.strip():
             return
+        # A critical "rotate the credential" followup is only warranted when the
+        # secret is actually exfiltrated to a third party. A bare local read
+        # (cat .env, env, printenv) exposes nothing and must NOT mint an
+        # un-closeable critical followup. The soft reminder above already nudges
+        # the agent; the persistent debt is reserved for real exposure.
+        if _r23g_has_sink is None or not _r23g_has_sink(cmd):
+            return
         safe_cmd = _redact_for_log(cmd, max_len=160)
-        followup_id = _security_followup_id(f"{reason}:{safe_cmd}")
+        # Deterministic id seeded only by the (redacted) command, so the same
+        # exfiltration dedups across shadow/soft/hard instead of duplicating.
+        followup_id = _security_followup_id(safe_cmd)
         try:
             from db import create_followup, get_followup  # type: ignore
 
@@ -1937,7 +1964,7 @@ class HeadlessEnforcer:
             create_followup(
                 followup_id,
                 description=(
-                    "SEGURIDAD: credencial expuesta o en riesgo detectada por el guard. "
+                    "SEGURIDAD: credencial expuesta a un tercero detectada por el guard. "
                     f"Origen: {safe_cmd}. Rotar/revocar la credencial y sustituirla en el gestor seguro."
                 ),
                 date=time.strftime("%Y-%m-%d"),
@@ -1945,7 +1972,7 @@ class HeadlessEnforcer:
                     "Cierre solo con evidencia de revocación efectiva: llamada/API/HTTP 401 para la credencial antigua "
                     "o comprobación oficial equivalente, más nueva ubicación segura registrada."
                 ),
-                reasoning=reason,
+                reasoning="R23g detected secret exfiltration to a third party",
                 priority="critical",
                 internal=1,
                 owner="agent",

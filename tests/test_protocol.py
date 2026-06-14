@@ -770,6 +770,41 @@ def test_task_close_blocks_irreversible_publish_without_specific_post_evidence_o
     assert closed["debt_type"] == "irreversible_action_missing_specific_ok"
 
 
+def test_task_close_blocks_irreversible_publish_without_matching_human_artifact_hash():
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    sid = _register_session("nexo-1003-2003-stable-hash")
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Publish stable Desktop release",
+            task_type="execute",
+            area="release",
+            plan='["verify evidence", "publish stable"]',
+            verification_step="verify public stable manifests",
+        )
+    )
+
+    closed = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="done",
+            evidence=(
+                "Smoke verified; explicit approval after evidence was captured for publish stable."
+            ),
+            outcome_notes="aprobación explícita tras evidencia verificada.",
+            artifact_hash="sha256:abc123",
+            last_human_validation_of_artifact_hash="sha256:def456",
+        )
+    )
+
+    assert closed["ok"] is False
+    assert closed["blocked_by"] == "irreversible_artifact_hash"
+    assert closed["debt_type"] == "irreversible_artifact_hash_unverified"
+    assert closed["hash_status"] == "mismatch"
+
+
 def test_task_close_reject_done_without_evidence_dedupes_protocol_debt():
     from db import get_db
     from plugins.protocol import handle_task_open, handle_task_close
@@ -1200,14 +1235,65 @@ def test_high_stakes_action_close_stays_clean_with_cortex_evaluation():
             sid=sid,
             task_id=opened["task_id"],
             outcome="done",
-            evidence="test staging production changelog version all checked",
+            evidence="test staging production changelog version all checked; curl https://nexo-desktop.com/downloads/update.json returned HTTP 200.",
             outcome_notes="Release executed with persisted cortex evaluation.",
+            work_type="release",
+            stakes="high",
         )
     )
 
     assert evaluation["ok"] is True
     assert closed["status"] == "clean"
     assert closed["cortex_evaluation"]["task_id"] == opened["task_id"]
+
+
+def test_task_close_blocks_high_stakes_release_without_public_evidence():
+    from plugins.cortex import handle_cortex_decide
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    sid = _register_session("nexo-1014-2014-public-evidence")
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Deploy the production release package",
+            task_type="execute",
+            area="release",
+            plan='["prepare", "deploy", "verify"]',
+            evidence_refs='["release contract", "staging green"]',
+            verification_step="run post-release smoke tests",
+            stakes="high",
+        )
+    )
+    handle_cortex_decide(
+        goal="Deploy the production release package",
+        task_type="execute",
+        impact_level="critical",
+        area="release",
+        session_id=sid,
+        task_id=opened["task_id"],
+        evidence_refs='["release contract", "staging green"]',
+        alternatives=json.dumps([
+            {"name": "canary_release", "description": "Deploy staged canary release with smoke tests and rollback ready"},
+            {"name": "direct_release", "description": "Deploy directly to production without staged verification"},
+        ]),
+    )
+
+    closed = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="done",
+            evidence="test staging production changelog version all checked, but no public endpoint or browser artifact was verified.",
+            outcome_notes="Release executed with persisted cortex evaluation.",
+            work_type="release",
+            stakes="high",
+        )
+    )
+
+    assert closed["ok"] is False
+    assert closed["blocked_by"] == "high_stakes_public_evidence"
+    assert closed["debt_type"] == "high_stakes_public_evidence_missing"
+    assert closed["response_mode"] == "verify"
 
 
 def test_non_release_task_does_not_open_release_alignment_debt_for_version_wording():

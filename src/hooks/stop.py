@@ -18,14 +18,24 @@ from pathlib import Path
 
 _DIR = Path(__file__).resolve().parent
 
+# Specific future-commitment phrases. Bare words like "pendiente" / "después"
+# were removed: they appear constantly in ordinary conversation and, read over a
+# GLOBAL rolling buffer, blocked closes spuriously. Each marker now expresses a
+# real deferral, not an incidental adverb.
 FUTURE_COMMITMENT_MARKERS = (
     "lo dejo como seguimiento",
-    "cuando quieras",
-    "pendiente",
     "lo cojo aparte",
-    "después",
-    "despues",
     "bloqueado por auth",
+    "queda pendiente de",
+    "lo dejo pendiente",
+    "lo retomo más tarde",
+    "lo retomo mas tarde",
+    "lo vemos en otra sesión",
+    "lo vemos en otra sesion",
+    "te lo dejo para después",
+    "te lo dejo para despues",
+    "lo dejo para más tarde",
+    "lo dejo para mas tarde",
 )
 FOLLOWUP_CREATE_MARKERS = ("nexo_followup_create", "mcp__nexo__nexo_followup_create")
 PARTIAL_TASK_CLOSE_RE = re.compile(
@@ -76,6 +86,42 @@ def _read_recent_lines(path: Path, max_lines: int = 800) -> list[str]:
         return lines[-max(1, max_lines):]
     except Exception:
         return []
+
+
+def _line_session_id(raw_line: str) -> str:
+    try:
+        payload = json.loads(raw_line)
+    except Exception:
+        return ""
+    if not isinstance(payload, dict):
+        return ""
+    for key in ("session_id", "sid", "claude_session_id", "sessionId"):
+        val = payload.get(key)
+        if isinstance(val, str) and val.strip():
+            return val.strip()
+    return ""
+
+
+def _scope_to_session(lines: list[str], sid: str) -> list[str]:
+    """Keep only buffer lines belonging to ``sid``. ``session_buffer.jsonl`` is a
+    GLOBAL rolling log shared by every session/client, so without scoping the
+    closeout gate counts *other* sessions' commitments and blocks this close
+    spuriously. If the buffer carries no session ids at all we cannot scope and
+    fall back to every line (prior behaviour)."""
+    if not sid:
+        return lines
+    tagged = [(raw, _line_session_id(raw)) for raw in lines]
+    if not any(s for _, s in tagged):
+        return lines
+    return [raw for raw, s in tagged if s == sid]
+
+
+def _current_session_id() -> str:
+    for key in ("CLAUDE_SESSION_ID", "NEXO_SID", "NEXO_SESSION_ID"):
+        val = os.environ.get(key, "").strip()
+        if val:
+            return val
+    return ""
 
 
 def _line_text(line: str) -> str:
@@ -133,8 +179,11 @@ def check_closeout_followups() -> dict:
         if chunk:
             lines.extend(chunk)
             sources.append(str(path))
+    sid = _current_session_id()
+    lines = _scope_to_session(lines, sid)
     result = scan_closeout_followup_gaps(lines)
     result["sources"] = sources
+    result["session_scoped"] = bool(sid)
     return result
 
 

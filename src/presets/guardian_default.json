@@ -61,7 +61,7 @@
     "R23m_message_duplicate": "soft",
     "R23h_shebang_mismatch": "shadow",
     "R34_identity_coherence": "hard",
-    "R37_pre_answer_evidence_gate": "hard"
+    "R37_pre_answer_evidence_gate": "shadow"
   },
   "core_rules": [
     "R13_pre_edit_guard",

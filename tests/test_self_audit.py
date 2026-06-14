@@ -558,6 +558,9 @@ def test_check_error_memory_loop_creates_prevention_learning_inline(self_audit_e
     learning = conn.execute(
         "SELECT category, title, applies_to, priority FROM learnings ORDER BY id DESC LIMIT 1"
     ).fetchone()
+    linked_tasks = conn.execute(
+        "SELECT COUNT(*) FROM protocol_tasks WHERE learning_id = (SELECT MAX(id) FROM learnings)"
+    ).fetchone()[0]
     queued = conn.execute(
         "SELECT classification, status, files_changed FROM evolution_log ORDER BY id DESC LIMIT 1"
     ).fetchone()
@@ -566,9 +569,91 @@ def test_check_error_memory_loop_creates_prevention_learning_inline(self_audit_e
     assert "repeated failures around /repo/src/plugins/workflow.py" in learning[1]
     assert learning[2] == "/repo/src/plugins/workflow.py"
     assert learning[3] == "high"
+    assert linked_tasks == 2
     assert queued[0] == "public_port_queue"
     assert queued[1] == "pending_public_port"
     assert "src/plugins/workflow.py" in queued[2]
+
+
+def test_check_error_memory_loop_does_not_reactivate_archived_prevention_learning(self_audit_env):
+    module = _load_self_audit_module()
+    module.findings.clear()
+
+    conn = sqlite3.connect(str(self_audit_env / "data" / "nexo.db"))
+    conn.execute(
+        """CREATE TABLE protocol_tasks (
+            task_id TEXT PRIMARY KEY,
+            goal TEXT,
+            area TEXT,
+            files TEXT,
+            status TEXT,
+            learning_id INTEGER,
+            opened_at TEXT
+        )"""
+    )
+    conn.execute(
+        """CREATE TABLE learnings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            category TEXT,
+            title TEXT,
+            content TEXT,
+            reasoning TEXT,
+            prevention TEXT,
+            applies_to TEXT,
+            status TEXT,
+            created_at REAL,
+            updated_at REAL,
+            priority TEXT,
+            weight REAL
+        )"""
+    )
+    conn.execute(
+        """CREATE TABLE evolution_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at TEXT DEFAULT (datetime('now')),
+            cycle_number INTEGER NOT NULL,
+            dimension TEXT NOT NULL,
+            proposal TEXT NOT NULL,
+            classification TEXT NOT NULL DEFAULT 'auto',
+            status TEXT DEFAULT 'pending',
+            files_changed TEXT,
+            snapshot_ref TEXT,
+            test_result TEXT,
+            impact INTEGER DEFAULT 0,
+            reasoning TEXT NOT NULL
+        )"""
+    )
+    title = "Prevention: repeated failures around /repo/src/plugins/workflow.py"
+    conn.execute(
+        """INSERT INTO learnings
+           (category, title, content, reasoning, prevention, applies_to, status, created_at, updated_at, priority, weight)
+           VALUES ('nexo', ?, 'old', 'archived by operator', 'old', '/repo/src/plugins/workflow.py', 'archived', 1, 1, 'high', 0.7)""",
+        (title,),
+    )
+    conn.execute(
+        "INSERT INTO protocol_tasks (task_id, goal, area, files, status, learning_id, opened_at) VALUES (?, ?, ?, ?, ?, NULL, datetime('now'))",
+        ("PT-1", "Fix workflow drift", "nexo", "/repo/src/plugins/workflow.py", "failed"),
+    )
+    conn.execute(
+        "INSERT INTO protocol_tasks (task_id, goal, area, files, status, learning_id, opened_at) VALUES (?, ?, ?, ?, ?, NULL, datetime('now'))",
+        ("PT-2", "Fix workflow drift again", "nexo", "/repo/src/plugins/workflow.py", "blocked"),
+    )
+    conn.commit()
+    conn.close()
+
+    module.check_error_memory_loop()
+
+    conn = sqlite3.connect(str(self_audit_env / "data" / "nexo.db"))
+    learning_rows = conn.execute("SELECT id, status, content FROM learnings").fetchall()
+    linked_tasks = conn.execute("SELECT COUNT(*) FROM protocol_tasks WHERE learning_id = 1").fetchone()[0]
+    queued_count = conn.execute("SELECT COUNT(*) FROM evolution_log").fetchone()[0]
+    conn.close()
+
+    assert len(learning_rows) == 1
+    assert learning_rows[0][1] == "archived"
+    assert learning_rows[0][2] == "old"
+    assert linked_tasks == 2
+    assert queued_count == 0
 
 
 def test_check_repair_changes_missing_learning_capture_creates_debt_and_followup(self_audit_env):

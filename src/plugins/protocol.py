@@ -1289,6 +1289,59 @@ SPECIFIC_OK_AFTER_EVIDENCE_RE = re.compile(
     r".{0,120}\b(evidencia|evidence|smoke|verificad[oa]|verified)\b",
     re.IGNORECASE | re.DOTALL,
 )
+PUBLIC_RELEASE_EVIDENCE_RE = re.compile(
+    r"("
+    r"screenshot|captura|"
+    r"url\s+p[uú]blica|public\s+url|url-public|"
+    r"https?://[^\s]+|"
+    r"\bHTTP/?\d?(?:\.\d)?\s+200\b|"                   # HTTP 200, HTTP/1.1 200, HTTP/2 200
+    r"\b200\s+OK\b|"                                    # 200 OK
+    r"\bhttp[_\s-]?code\b[^\n]{0,40}\b200\b|"          # http_code: 200 (curl -w '%{http_code}')
+    r"\bstatus(?:[_\s-]?code)?\b[^\n]{0,20}\b200\b|"   # status 200 / status_code 200
+    r"\bc[oó]digo\b[^\n]{0,20}\b200\b"                 # código 200 / código de estado 200
+    r")",
+    re.IGNORECASE,
+)
+PUBLIC_RELEASE_WORK_RE = re.compile(
+    r"\b(release|deploy|deployment|publish|publicar|desplegar|lanzar|stable|producci[oó]n|production)\b",
+    re.IGNORECASE,
+)
+HIGH_STAKES_WORK_TYPES = {"release", "deploy", "deployment", "publish", "publicar", "desplegar"}
+
+
+def _normalize_artifact_hash(value: str) -> str:
+    clean = (value or "").strip().lower()
+    clean = re.sub(r"^(sha256|sha1|md5):", "", clean).strip()
+    return clean
+
+
+def _requires_irreversible_artifact_hash(closure_text: str, artifact_hash: str, validated_hash: str) -> tuple[bool, str]:
+    if not IRREVERSIBLE_ACTION_RE.search(closure_text):
+        return False, ""
+    current = _normalize_artifact_hash(artifact_hash)
+    validated = _normalize_artifact_hash(validated_hash)
+    if not current or not validated:
+        return True, "missing"
+    if current != validated:
+        return True, "mismatch"
+    return False, ""
+
+
+def _is_high_stakes_public_work(task: dict, work_type: str, stakes: str, closure_text: str) -> bool:
+    high_override = _parse_high_stakes_override(stakes or "")
+    high_stakes = bool(task.get("response_high_stakes")) if high_override is None else high_override
+    if not high_stakes:
+        return False
+    clean_work_type = (work_type or "").strip().lower()
+    if clean_work_type in HIGH_STAKES_WORK_TYPES:
+        return True
+    return bool(PUBLIC_RELEASE_WORK_RE.search(closure_text or ""))
+
+
+def _has_public_release_evidence(evidence: str) -> bool:
+    if _is_trivial_evidence(evidence)[0]:
+        return False
+    return bool(PUBLIC_RELEASE_EVIDENCE_RE.search(evidence or ""))
 
 
 def _active_followup_snapshot(limit: int = 5) -> list[dict]:
@@ -1729,6 +1782,10 @@ def handle_task_close(
     summary: str = "",
     verification: str = "",
     evidence_refs: str = "",
+    work_type: str = "",
+    stakes: str = "",
+    artifact_hash: str = "",
+    last_human_validation_of_artifact_hash: str = "",
 ) -> str:
     """Close a protocol task and automatically record the required discipline artifacts."""
     task = get_protocol_task(task_id.strip())
@@ -1861,6 +1918,41 @@ def handle_task_close(
                     "blocked_by": "irreversible_specific_ok_gate",
                     "debt_id": debt.get("id"),
                     "debt_type": "irreversible_action_missing_specific_ok",
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        hash_blocked, hash_reason = _requires_irreversible_artifact_hash(
+            closure_text,
+            artifact_hash,
+            last_human_validation_of_artifact_hash,
+        )
+        if hash_blocked:
+            debt = _ensure_open_debt(
+                task["session_id"],
+                task_id,
+                "irreversible_artifact_hash_unverified",
+                severity="error",
+                evidence=(
+                    "Irreversible action close lacks matching human-validated artifact hash. "
+                    f"reason={hash_reason} artifact_hash={_normalize_artifact_hash(artifact_hash)[:16]} "
+                    f"validated_hash={_normalize_artifact_hash(last_human_validation_of_artifact_hash)[:16]}"
+                ),
+                debts=debts_created,
+            )
+            return json.dumps(
+                {
+                    "ok": False,
+                    "error": "Cannot close irreversible publish/broadcast/payment action without a matching human-validated artifact hash.",
+                    "hint": (
+                        "Run the release decision in verify mode and retry with "
+                        "`artifact_hash` plus `last_human_validation_of_artifact_hash`; both values must match."
+                    ),
+                    "task_id": task_id,
+                    "blocked_by": "irreversible_artifact_hash",
+                    "debt_id": debt.get("id"),
+                    "debt_type": "irreversible_artifact_hash_unverified",
+                    "hash_status": hash_reason,
                 },
                 ensure_ascii=False,
                 indent=2,
@@ -2352,6 +2444,37 @@ def handle_task_close(
                     ensure_ascii=False,
                     indent=2,
                 )
+
+    if (
+        clean_outcome == "done"
+        and _is_high_stakes_public_work(task, work_type, stakes, closure_text)
+        and not _has_public_release_evidence(live_surface_evidence)
+    ):
+        debt = _ensure_open_debt(
+            task["session_id"],
+            task_id,
+            "high_stakes_public_evidence_missing",
+            severity="error",
+            evidence=(
+                "High-stakes release/deploy/publish close lacked screenshot, public URL, or curl HTTP 200 evidence. "
+                f"Evidence provided: {live_surface_evidence[:240]!r}"
+            ),
+            debts=debts_created,
+        )
+        return json.dumps(
+            {
+                "ok": False,
+                "error": "Cannot close high-stakes release/deploy/publish as done without public verification evidence.",
+                "hint": "Attach screenshot path, public URL evidence, or curl output showing HTTP 200, then retry.",
+                "task_id": task_id,
+                "blocked_by": "high_stakes_public_evidence",
+                "debt_id": debt.get("id"),
+                "debt_type": "high_stakes_public_evidence_missing",
+                "response_mode": "verify",
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
 
     if task.get("guard_has_blocking") and not files_changed_list:
         open_task_debts = list_protocol_debts(status="open", task_id=task_id, limit=200)
