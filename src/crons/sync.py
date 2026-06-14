@@ -727,12 +727,17 @@ def install_plist(label: str, plist: dict, plist_path: Path, dry_run: bool):
         log(f"  DRY-RUN: would install {plist_path.name}")
         return
 
+    # Ephemeral/test runtimes (temp NEXO_HOME or HOME, e.g. a pytest run) must
+    # NOT touch the operator's real ~/Library/LaunchAgents. The guard is checked
+    # BEFORE writing the plist file: otherwise a test run rewrites the real
+    # plists with temp-dir ProgramArguments, and one reboot/reload silently
+    # kills the whole consolidation cron fleet (cron-fleet-drift incident).
+    if not launchctl_side_effects_allowed():
+        log(f"  Skipped plist write in ephemeral runtime: {plist_path.name}")
+        return
+
     with open(plist_path, "wb") as f:
         plistlib.dump(plist, f)
-
-    if not launchctl_side_effects_allowed():
-        log(f"  Installed but skipped launchctl in ephemeral runtime: {plist_path.name}")
-        return
 
     result = reload_launchagent_plist(plist_path, label=label)
     if result.get("action") == "skipped-ephemeral-runtime":
@@ -751,8 +756,8 @@ def unload_plist(plist_path: Path, dry_run: bool):
         return
 
     if not launchctl_side_effects_allowed():
-        plist_path.unlink(missing_ok=True)
-        log(f"  Removed without launchctl in ephemeral runtime: {plist_path.name}")
+        # Ephemeral/test runtime: never delete the operator's real plists.
+        log(f"  Skipped plist removal in ephemeral runtime: {plist_path.name}")
         return
 
     result = unload_launchagent_plist(plist_path)
@@ -830,7 +835,9 @@ def sync(dry_run: bool = False):
         return
 
     LOG_DIR.mkdir(parents=True, exist_ok=True)
-    LAUNCH_AGENTS_DIR.mkdir(parents=True, exist_ok=True)
+    # In an ephemeral/test runtime, do not even create the real LaunchAgents dir.
+    if launchctl_side_effects_allowed():
+        LAUNCH_AGENTS_DIR.mkdir(parents=True, exist_ok=True)
 
     manifest_crons = load_manifest()
     manifest_ids = {c["id"] for c in manifest_crons}

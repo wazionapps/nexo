@@ -559,7 +559,14 @@ def test_sync_script_runs_directly_from_runtime_root(tmp_path):
     assert "ModuleNotFoundError" not in result.stderr
 
 
-def test_sync_writes_plist_but_skips_launchctl_when_home_is_ephemeral(tmp_path, monkeypatch):
+def test_sync_skips_plist_write_when_home_is_ephemeral(tmp_path, monkeypatch):
+    """Regression (cron-fleet-drift, 2026-06-14): an ephemeral/test runtime
+    (temp HOME or NEXO_HOME, e.g. a pytest run) must NOT write LaunchAgent
+    plists into the operator's real ~/Library/LaunchAgents. The old behavior
+    wrote the plist with temp-dir ProgramArguments and merely 'skipped
+    launchctl', which still corrupts the on-disk plists so one reboot/reload
+    silently kills the whole consolidation cron fleet. The guard must skip the
+    file write itself, not only the launchctl reload."""
     from crons import sync as cron_sync
 
     home = tmp_path / "pytest-of-user" / "pytest-1" / "test_case0"
@@ -606,8 +613,60 @@ def test_sync_writes_plist_but_skips_launchctl_when_home_is_ephemeral(tmp_path, 
 
     cron_sync.sync()
 
-    assert (launch_agents_dir / "com.nexo.watchdog.plist").is_file()
+    # The real fix: NO plist is written to the (real) LaunchAgents dir, and
+    # launchctl is never invoked, in an ephemeral runtime.
+    assert not (launch_agents_dir / "com.nexo.watchdog.plist").exists()
     assert calls == []
+
+
+def test_sync_writes_plist_when_ephemeral_install_explicitly_allowed(tmp_path, monkeypatch):
+    """When side effects ARE allowed (real install, or NEXO_ALLOW_EPHEMERAL_INSTALL=1)
+    the plist write + launchctl reload proceed normally — the guard only blocks
+    accidental writes from ephemeral/test runtimes, not intentional installs."""
+    from crons import sync as cron_sync
+
+    home = tmp_path / "real-home"
+    launch_agents_dir = home / "Library" / "LaunchAgents"
+    runtime_root = home / "nexo"
+    source_root = tmp_path / "repo-src"
+    launch_agents_dir.mkdir(parents=True)
+    (runtime_root / "runtime" / "logs").mkdir(parents=True)
+    (source_root / "scripts").mkdir(parents=True)
+    script = source_root / "scripts" / "nexo-watchdog.sh"
+    script.write_text("#!/bin/bash\nexit 0\n")
+    script.chmod(0o755)
+    wrapper = source_root / "scripts" / "nexo-cron-wrapper.sh"
+    wrapper.write_text("#!/bin/bash\nexit 0\n")
+    wrapper.chmod(0o755)
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(
+        json.dumps({
+            "crons": [
+                {"id": "watchdog", "script": "scripts/nexo-watchdog.sh", "type": "shell", "interval_seconds": 1800}
+            ]
+        })
+    )
+
+    reload_calls: list = []
+
+    monkeypatch.setattr(cron_sync.platform, "system", lambda: "Darwin")
+    # Force the guard to "allowed" to deterministically exercise the install path
+    # regardless of which launchctl_side_effects_allowed implementation is loaded.
+    monkeypatch.setattr(cron_sync, "launchctl_side_effects_allowed", lambda: True)
+    monkeypatch.setattr(cron_sync, "LAUNCH_AGENTS_DIR", launch_agents_dir)
+    monkeypatch.setattr(cron_sync, "SOURCE_ROOT", source_root)
+    monkeypatch.setattr(cron_sync, "RUNTIME_ROOT", runtime_root)
+    monkeypatch.setattr(cron_sync, "NEXO_HOME", runtime_root)
+    monkeypatch.setattr(cron_sync, "LOG_DIR", runtime_root / "runtime" / "logs")
+    monkeypatch.setattr(cron_sync, "MANIFEST", manifest)
+    monkeypatch.setattr(cron_sync, "OPTIONALS_FILE", runtime_root / "config" / "optionals.json")
+    monkeypatch.setattr(cron_sync, "SCHEDULE_FILE", runtime_root / "config" / "schedule.json")
+    monkeypatch.setattr(cron_sync, "reload_launchagent_plist", lambda *a, **k: (reload_calls.append(True), {"ok": True})[1])
+
+    cron_sync.sync()
+
+    assert (launch_agents_dir / "com.nexo.watchdog.plist").is_file()
+    assert reload_calls == [True]
 
 
 def test_sync_linux_weekday_uses_launchd_convention(tmp_path, monkeypatch):
