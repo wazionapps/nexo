@@ -1,5 +1,18 @@
 # Changelog
 
+## [7.31.11] - 2026-06-14
+
+### Fixed - MCP lifecycle robustness + guardrail precision
+
+- **The MCP server can no longer wedge ignoring SIGTERM.** `_shutdown_handler` now arms a hard-exit watchdog and `os._exit`s, so a server whose cleanup blocks on a DB lock still dies instead of lingering for days (the root cause behind the occasional "stuck" MCP after an update). Stdio startup also reaps orphaned servers (ppid==1) left by dead clients, so the process count and SQLite contention can't grow unbounded.
+- **R23g stops minting un-closeable "rotate credential" critical followups on benign local reads.** The followup now fires only on real third-party exfiltration (pipe to network/email/cloud/repo), never on `cat .env` / `env` / `printenv`; it produces no side effects in shadow mode and uses a deterministic id so shadow/soft/hard dedup instead of duplicating.
+- **R34 capability-denial detection no longer false-positives on benign negations** ("no hay problema", "no puedo esperar", "does not exist yet"): the pattern now requires an actual capability object.
+- **The Stop closeout gate is scoped to the current session** (the buffer is a global rolling log) and keyed on specific commitment phrases instead of bare adverbs, so a clean session no longer gets blocked by another session's "pendiente"/"después".
+
+### Changed
+
+- **`R37_pre_answer_evidence_gate` default lowered `hard` → `shadow`** to match reality: it has no runtime enforcement yet, so declaring it `hard` falsely claimed it would block. Re-promote when implemented.
+
 ## [7.31.10] - 2026-06-13
 
 ### Fixed - Local Memory result quality
