@@ -2382,6 +2382,22 @@ def handle_task_close(
                     debt_types=["missing_change_log"],
                     resolution="Change log created by nexo_task_close",
                 )
+                # Cognitive OS Ola 1 — materialize causal/provenance edges from the
+                # closed task (task→change_log "ops:produced" + change_log→task
+                # "causal:motivated_by"). record_task_close_edges had NO caller, so
+                # the causal graph stayed empty (0 candidates) and could never feed
+                # connect-the-dots at answer time. Best-effort: graph wiring must
+                # never break a task close.
+                try:
+                    import causal_graph
+                    causal_graph.record_task_close_edges(
+                        task_id=task_id,
+                        change_log_id=change_log_id,
+                        project_key=str(task.get("project_hint") or task.get("area") or ""),
+                        reason_public=(clean_change_summary or task.get("goal") or "")[:200],
+                    )
+                except Exception:
+                    pass
         else:
             debt = _ensure_open_debt(
                 task["session_id"],
