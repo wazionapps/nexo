@@ -18,7 +18,7 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.31.13` is the current packaged-runtime line. Patch release over v7.31.12 - the offline wheel bundle no longer hard-pins onnxruntime, so cross-platform/offline installs (including older Linux) resolve a compatible native wheel instead of failing. Version `7.31.11` was a patch release over v7.31.10 - MCP lifecycle robustness + guardrail precision.
+Version `7.32.0` is the current packaged-runtime line. Minor release - Cognitive OS Ola 1: the causal/provenance graph now populates from every evidence-backed task close (the connect-the-dots substrate that was previously empty), and abandoned durable workflows are reaped so the cross-session resume surface stays clean. Bundles the 7.31.14 critical fixes (cron-fleet drift guard, deterministic spreading-activation id, real guard_context evidence, auto error->learning capture, fulfillable confidence-check gate, approval-paused workflow resume).
 
 Previously in `7.31.9`: patch release over v7.31.8 - UI release closeout now has to prove the original reported symptom was reopened with observable evidence before claiming the release is ready.
 

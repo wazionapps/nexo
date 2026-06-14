@@ -1,5 +1,14 @@
 # Changelog
 
+## [7.32.0] - 2026-06-15
+
+### Added - Cognitive OS Ola 1: connect-the-dots + reliability wiring
+
+- **The causal/provenance graph finally populates.** `record_task_close_edges` existed but had no caller, so the causal graph stayed empty (0 candidates) and could never feed connect-the-dots at answer time. `nexo_task_close` now materializes `protocol_task → change_log` (`ops:produced`) + `change_log → protocol_task` (`causal:motivated_by`) edges on every evidence-backed close (best-effort; never blocks a close). The associative substrate the audit found dead now grows with real work.
+- **No more zombie workflows.** `auto_close` reaped only `protocol_tasks`; durable `workflow_runs` / `workflow_goals` a stale session left open/running/active lingered forever, polluting the cross-session resume surface. They are now reaped to a terminal state (run → `cancelled`, goal → `abandoned`) when their owning session is reaped.
+
+This is the first wave of the "NEXO Cognitive OS" plan (full read-only audit shipped as a strategic spec). It builds on the 7.31.14 critical fixes below.
+
 ## [7.31.14] - 2026-06-14
 
 ### Fixed - Cognitive OS Ola 0: critical cognition + reliability bugs
