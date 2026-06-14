@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import errno
 import json
 import os
 import re
@@ -54,7 +55,7 @@ ENTITY_FACTS_JOB = "entity_facts"
 BACKGROUND_INDEX_JOB_TYPES = {ENTITY_FACTS_JOB}
 ENTITY_DOSSIER_MAX_ASSETS = int(os.environ.get("NEXO_ENTITY_DOSSIER_MAX_ASSETS", "500") or "500")
 ENTITY_DOSSIER_MAX_CHUNKS = int(os.environ.get("NEXO_ENTITY_DOSSIER_MAX_CHUNKS", "1200") or "1200")
-ENTITY_DOSSIER_MAX_FACTS = int(os.environ.get("NEXO_ENTITY_DOSSIER_MAX_FACTS", "3000") or "3000")
+ENTITY_DOSSIER_MAX_FACTS = int(os.environ.get("NEXO_ENTITY_DOSSIER_MAX_FACTS", "120") or "120")
 ENTITY_FACT_MIN_CONFIDENCE = float(os.environ.get("NEXO_ENTITY_FACT_MIN_CONFIDENCE", "0.45") or "0.45")
 # Hard ceilings to stop the entity_facts cartesian blow-up (chunks × entities × candidates).
 # Without these a single document could emit thousands of facts; 258k assets produced 337M rows / 255 GB.
@@ -247,7 +248,7 @@ def _conn():
 
 
 def _read_conn():
-    conn = connect_local_context_db_readonly(timeout_ms=1200)
+    conn = connect_local_context_db_readonly()
     _validate_status_schema(conn)
     return conn
 
@@ -273,7 +274,9 @@ def _with_sqlite_busy_retry(callback, *, attempts: int | None = None):
             if not _sqlite_is_busy(exc) or attempt >= max_attempts - 1:
                 raise
             last_exc = exc
-            close_local_context_db()
+            # Do NOT close the cached writer handle here: it is shared, and closing
+            # it invalidates the connection for every other caller. The busy_timeout
+            # (now in parity for readers and writer) already absorbs transient locks.
             time.sleep(DEFAULT_SQLITE_BUSY_RETRY_DELAY_SECONDS * (attempt + 1))
     if last_exc:
         raise last_exc
@@ -2288,13 +2291,49 @@ def _record_index_error(
     )
 
 
+# macOS sets SF_DATALESS on iCloud files whose data has been evicted to the
+# cloud ("Optimize Mac Storage"). stat() still works on them, but reading their
+# bytes faults in a download; from the headless index daemon that materialization
+# fails with EDEADLK. Detect the flag with pure stdlib (no pyobjc) so such files
+# can be indexed metadata-only until the user materializes them.
+SF_DATALESS = getattr(stat, "SF_DATALESS", 0x40000000)
+
+
+def _is_dataless(st) -> bool:
+    """True when a stat result carries the macOS SF_DATALESS (cloud-evicted) flag."""
+    return bool(getattr(st, "st_flags", 0) & SF_DATALESS)
+
+
+def _is_offloaded_error(exc: BaseException) -> bool:
+    """True for the EDEADLK raised when faulting in a cloud-offloaded file fails.
+
+    errno values are platform-specific (Darwin EDEADLK=11, Linux=35), so this
+    compares the symbol, never a literal.
+    """
+    return isinstance(exc, OSError) and exc.errno == errno.EDEADLK
+
+
 def _record_scan_error(conn, stats: dict | None, path: str, phase: str, exc: Exception) -> None:
+    if _is_offloaded_error(exc):
+        # Cloud-offloaded file, NOT a reliability failure: count it separately and
+        # never let it inflate the error metric or (previously) consume the budget.
+        if stats is not None:
+            stats["offloaded"] = int(stats.get("offloaded", 0) or 0) + 1
+        _record_index_error(
+            conn,
+            path=path,
+            phase=phase,
+            error_code="offloaded",
+            user_message="File is stored in iCloud and not downloaded locally",
+            technical_detail=str(exc),
+            retryable=True,
+        )
+        return
     if stats is not None:
         stats["errors"] = int(stats.get("errors", 0) or 0) + 1
-        logged = int(stats.get("_errors_logged", 0) or 0)
-        if logged >= 20:
-            return
-        stats["_errors_logged"] = logged + 1
+    # No per-run cap: the old "log at most 20" silently hid the true failure scope
+    # (a whole unreadable tree reported as just "20 errors"). The per-cycle scan
+    # limit already bounds how many rows a single run can write.
     _record_index_error(
         conn,
         path=path,
@@ -2870,7 +2909,12 @@ def _replace_chunks(conn, asset_id: str, version_id: str, text: str) -> None:
     conn.execute("DELETE FROM local_chunks WHERE asset_id=?", (asset_id,))
     conn.execute("DELETE FROM local_embeddings WHERE asset_id=?", (asset_id,))
     for index, chunk in enumerate(chunk_text(text)):
-        chunk_id = stable_id("chunk", f"{version_id}:{index}:{chunk[:80]}")
+        # Position-stable id: key on (version_id, index) ONLY, never chunk text.
+        # chunk_index already guarantees uniqueness within the batch; hashing the
+        # text used to make the id churn on every edit, which broke the
+        # entity_facts / alias dedup (UNIQUE on source_chunk_id) across re-indexing
+        # and the embedding-refresh join on chunk_id. Stable ids → idempotent reindex.
+        chunk_id = stable_id("chunk", f"{version_id}:{index}")
         conn.execute(
             """
             INSERT INTO local_chunks(chunk_id, asset_id, version_id, chunk_index, text, token_count, created_at)
@@ -3322,6 +3366,26 @@ def process_jobs(*, limit: int = 100) -> dict:
                 conn.commit()
                 continue
             if job_type == "light_extraction":
+                try:
+                    offloaded = _is_dataless(Path(row["path"]).stat())
+                except OSError:
+                    offloaded = False
+                if offloaded:
+                    # Cloud-offloaded file: index metadata-only. The asset already
+                    # carries its path/size/dates from the scan; reading the bytes
+                    # would trigger a download / EDEADLK. Reconcile re-enqueues
+                    # extraction once the fingerprint changes (user materializes it).
+                    conn.execute(
+                        "UPDATE local_assets SET phase='metadata_only', updated_at=? WHERE asset_id=?",
+                        (now(), asset_id),
+                    )
+                    conn.execute(
+                        "UPDATE local_index_jobs SET status='done', updated_at=?, last_error_code='offloaded' WHERE job_id=?",
+                        (now(), job_id),
+                    )
+                    processed += 1
+                    conn.commit()
+                    continue
                 text, metadata = extract_text(Path(row["path"]))
                 version_id = _latest_version_id(conn, asset_id)
                 if metadata.get("content_secret_detected") or contains_secret(text):
@@ -3363,6 +3427,21 @@ def process_jobs(*, limit: int = 100) -> dict:
             processed += 1
             conn.commit()
         except Exception as exc:
+            if _is_offloaded_error(exc):
+                # A file became offloaded between scan and read (or the flag was
+                # absent but the fault-in still EDEADLK'd): index it metadata-only
+                # and finish cleanly instead of retry-storming on the download.
+                conn.execute(
+                    "UPDATE local_assets SET phase='metadata_only', updated_at=? WHERE asset_id=?",
+                    (now(), asset_id),
+                )
+                conn.execute(
+                    "UPDATE local_index_jobs SET status='done', claimed_by='', lease_expires_at=NULL, last_error_code='offloaded', updated_at=? WHERE job_id=?",
+                    (now(), job_id),
+                )
+                processed += 1
+                conn.commit()
+                continue
             failed += 1
             attempts = int(row["attempt_count"] or 0) + 1
             terminal = attempts >= DEFAULT_MAX_JOB_ATTEMPTS
@@ -3748,6 +3827,33 @@ def _index_timing(conn, *, done: int, active_jobs: int, percent: int, readonly: 
     return {"started_at": first_seen, "elapsed_seconds": elapsed_seconds, "eta_seconds": eta_seconds}
 
 
+BACKLOG_DRAIN_WINDOW_SECONDS = 300
+
+
+def _backlog_drain_rate(conn, *, pending: int, window_seconds: int = BACKLOG_DRAIN_WINDOW_SECONDS) -> dict:
+    """How fast the job backlog is draining, from jobs completed in a recent window.
+
+    Unlike the lifetime-average ETA in _index_timing, this reflects *current*
+    throughput, so a stalled indexer (rate→0) is visible and the ETA to clear the
+    pending backlog is honest.
+    """
+    window_seconds = max(1, int(window_seconds))
+    cutoff = now() - float(window_seconds)
+    row = conn.execute(
+        "SELECT COUNT(*) AS done FROM local_index_jobs WHERE status='done' AND updated_at >= ?",
+        (cutoff,),
+    ).fetchone()
+    completed = int((row["done"] if row else 0) or 0)
+    per_second = completed / float(window_seconds)
+    eta_seconds = int(pending / per_second) if per_second > 0 and pending > 0 else None
+    return {
+        "window_seconds": window_seconds,
+        "completed_in_window": completed,
+        "per_minute": round(per_second * 60.0, 3),
+        "eta_seconds": eta_seconds,
+    }
+
+
 def _service_scheduler_has_error(service: dict) -> bool:
     if service.get("manager") == "launchagent":
         code = str(service.get("last_exit_code") or "").strip()
@@ -3983,6 +4089,7 @@ def _status_from_conn(conn, *, readonly: bool = False) -> dict:
             "jobs_failed": failed_jobs,
             "elapsed_seconds": timing["elapsed_seconds"],
             "eta_seconds": timing["eta_seconds"],
+            "backlog_drain_rate": _backlog_drain_rate(conn, pending=pending),
             "index_started_at": index_started_at,
             "initial_scan_complete": bool(initial_index_complete),
             "initial_discovery_complete": bool(initial_scan["complete"]),
@@ -4559,7 +4666,70 @@ def _sync_context_payload_refs(payload: dict) -> None:
         payload["evidence_refs"] = []
 
 
+def _truncate_dossier_payload(payload: dict, *, max_chars: int) -> dict:
+    """Shape-aware truncation for entity_dossier payloads.
+
+    Unlike context_query payloads (assets/chunks only), a dossier also carries
+    ``facts`` and ``aggregates`` — the gold of the answer (importes, fechas). The
+    generic truncator never trimmed those, so a heavy entity overflowed max_chars
+    and fell back to an EMPTY minimal payload (learning #1234). Here we trim the
+    cheap/low-value parts first (extra chunks, low-confidence facts, extra assets)
+    while keeping ``aggregates``, ``entity``, ``recall`` and the highest-confidence
+    facts. We never empty the dossier.
+    """
+    if not max_chars or max_chars <= 0 or _payload_size(payload) <= max_chars:
+        return payload
+    warnings = list(payload.get("warnings") or [])
+    warnings.append(
+        "Entity dossier truncated to fit max_chars: lower-confidence facts and extra "
+        "chunks were trimmed. Aggregates and top facts are preserved — raise max_chars "
+        "or refine the entity for the full set."
+    )
+    payload["warnings"] = warnings
+    payload["truncated"] = True
+    payload["query"] = _compact_text(payload.get("query") or "", max_chars=240)
+    if isinstance(payload.get("candidates"), list) and len(payload["candidates"]) > 3:
+        payload["candidates"] = payload["candidates"][:3]
+    for chunk in payload.get("chunks") or []:
+        chunk["text"] = _compact_text(chunk.get("text") or "", max_chars=240)
+    facts = payload.get("facts") or []
+    if facts:
+        facts.sort(key=lambda fact: float(fact.get("confidence") or 0.0), reverse=True)
+        payload["facts"] = facts
+    # Trim cheapest-first: extra chunks -> low-confidence facts -> extra assets.
+    while _payload_size(payload) > max_chars and len(payload.get("chunks") or []) > 1:
+        payload["chunks"].pop()
+    while _payload_size(payload) > max_chars and len(payload.get("facts") or []) > 1:
+        payload["facts"].pop()
+    while _payload_size(payload) > max_chars and len(payload.get("assets") or []) > 1:
+        payload["assets"].pop()
+    if _payload_size(payload) > max_chars:
+        payload["chunks"] = (payload.get("chunks") or [])[:1]
+        aggregates = payload.get("aggregates")
+        if isinstance(aggregates, dict):
+            # Keep the gold (documents_total, numeric_by_predicate, date_range);
+            # shed only the secondary, repeatable lists.
+            aggregates["frequent_predicates"] = (aggregates.get("frequent_predicates") or [])[:5]
+            aggregates["atypical_documents"] = []
+    _sync_dossier_evidence_refs(payload)
+    payload["usage_hint"] = _context_usage_hint(payload)
+    return payload
+
+
+def _sync_dossier_evidence_refs(payload: dict) -> None:
+    refs: list[str] = []
+    for fact in payload.get("facts") or []:
+        if fact.get("source_chunk_id"):
+            refs.append(f"local_asset:{fact.get('source_asset_id')}#chunk:{fact.get('source_chunk_id')}")
+    for chunk in payload.get("chunks") or []:
+        if chunk.get("chunk_id"):
+            refs.append(f"local_asset:{chunk.get('asset_id')}#chunk:{chunk.get('chunk_id')}")
+    payload["evidence_refs"] = list(dict.fromkeys(refs))
+
+
 def _truncate_context_payload(payload: dict, *, max_chars: int) -> dict:
+    if payload.get("mode") == "entity_dossier":
+        return _truncate_dossier_payload(payload, max_chars=max_chars)
     if not max_chars or max_chars <= 0 or _payload_size(payload) <= max_chars:
         return payload
     warnings = list(payload.get("warnings") or [])
@@ -4859,6 +5029,8 @@ def _context_query_conn(
     evidence_refs = []
     seen_assets = set()
     for score, row in scored[: int(limit)]:
+        if contains_secret(str(row["text"] or "")):
+            continue  # defense-in-depth: never egress a chunk carrying a secret
         if row["asset_id"] not in seen_assets:
             assets.append({
                 "asset_id": row["asset_id"],
@@ -4890,7 +5062,7 @@ def _context_query_conn(
             """,
             [*asset_ids, int(limit) * 3],
         ).fetchall()
-        relations_payload = [dict(row) for row in relation_rows]
+        relations_payload = _egress_safe_relations(relation_rows)
     warnings = list(mode_warnings)
     if query_embedding.get("kind") == "deterministic_embedding":
         warnings.append("Local semantic model unavailable; using deterministic fallback until models are installed.")
@@ -5347,6 +5519,17 @@ def get_asset(asset_id: str, *, readonly: bool = True) -> dict:
             _close_read_conn(conn)
 
 
+def _egress_safe_relations(rows) -> list[dict]:
+    """Drop relations whose evidence text carries a secret (defense-in-depth)."""
+    safe: list[dict] = []
+    for row in rows:
+        record = dict(row)
+        if contains_secret(str(record.get("evidence") or "")):
+            continue
+        safe.append(record)
+    return safe
+
+
 def get_neighbors(asset_id: str, *, limit: int = 30, readonly: bool = True) -> dict:
     conn = _read_conn() if readonly else _conn()
     try:
@@ -5359,7 +5542,7 @@ def get_neighbors(asset_id: str, *, limit: int = 30, readonly: bool = True) -> d
             """,
             (asset_id, int(limit)),
         ).fetchall()
-        return {"ok": True, "relations": [dict(row) for row in rows]}
+        return {"ok": True, "relations": _egress_safe_relations(rows)}
     finally:
         if readonly:
             _close_read_conn(conn)

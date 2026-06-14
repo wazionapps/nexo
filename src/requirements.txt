@@ -17,10 +17,23 @@ anthropic>=0.80.0
 openai>=2.20.0
 
 # Embedding model (optional but recommended for cognitive features).
-# Pin >=0.8.0: older releases require Python <3.12 and pip iterates each
-# obsolete version for ~10 min on Ubuntu 24.04 (Python 3.12) before finding
-# a compatible one. Verified empirically during Win11 clean install bootstrap.
-fastembed>=0.8.0
+# Hard-pinned (==) so the offline wheel bundle (fetch-python-wheels.sh) is
+# reproducible across Win+Mac. onnxruntime is fastembed's transitive native
+# wheel — the fragile, platform-specific one — so it is pinned explicitly too;
+# floating it lets pip resolve an unbundled build and break offline installs.
+# >=0.8.0 was the floor (older releases need Python <3.12 and pip iterates each
+# obsolete version for ~10 min on Ubuntu 24.04 before finding a compatible one,
+# verified during Win11 clean install bootstrap); 0.8.0 is the bundled version.
+fastembed==0.8.0
+onnxruntime==1.26.0
+
+# Local Context Layer — document parsers (REQUIRED for the local memory index).
+# extractors.py imports these lazily; without them a clean bundle silently indexes
+# every PDF / XLSX / MSG as EMPTY text (the try/except returns ''). Real bug: on a
+# clean venv `import pypdf` raised ModuleNotFoundError and all invoices read blank.
+pypdf>=4.0
+openpyxl>=3.1
+extract-msg>=0.48
 
 # Dashboard (optional, only needed for `python -m dashboard.app`)
 fastapi

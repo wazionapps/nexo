@@ -371,6 +371,24 @@ def _is_home_hidden_path(path: str) -> bool:
     return bool(rel.parts) and rel.parts[0].startswith(".")
 
 
+def _name_has_sensitive_marker(name: str, stem: str) -> bool:
+    """Token match (not substring) so 'secret' does not flag 'secretaria'/'secreto'."""
+    import re
+
+    norm = re.sub(r"[^a-z0-9]+", "_", f"{name}_{stem}".lower()).strip("_")
+    if not norm:
+        return False
+    tokens = set(norm.split("_"))
+    padded = f"_{norm}_"
+    for marker in SENSITIVE_NAME_MARKERS:
+        if "_" in marker:
+            if f"_{marker}_" in padded:
+                return True
+        elif marker in tokens:
+            return True
+    return False
+
+
 def is_sensitive_path(path: str) -> bool:
     p = Path(path)
     lowered = _normalized(path)
@@ -389,7 +407,7 @@ def is_sensitive_path(path: str) -> bool:
         return True
     if parts & SENSITIVE_PARTS:
         return True
-    if any(marker in name or marker in stem for marker in SENSITIVE_NAME_MARKERS):
+    if _name_has_sensitive_marker(name, stem):
         return True
     return _contains_path_marker(lowered, SENSITIVE_PARTS)
 

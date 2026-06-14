@@ -272,7 +272,12 @@ def _extract_pdf(path: Path) -> str:
 
 
 def clean_text(text: str) -> str:
-    text = html.unescape(text or "")
+    text = text or ""
+    # Drop the CONTENT of style/script/head blocks (not just their tags) BEFORE
+    # stripping tags, or CSS/JS boilerplate survives as text and poisons chunks,
+    # embeddings, NER and facts (e.g. 'mso-table-lspace', 'font-family').
+    text = re.sub(r"(?is)<(style|script|head)\b[^>]*>.*?</\1>", " ", text)
+    text = html.unescape(text)
     text = re.sub(r"<[^>]+>", " ", text)
     text = re.sub(r"\s+", " ", text).strip()
     return text[:MAX_CHARS]

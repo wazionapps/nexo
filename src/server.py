@@ -1437,7 +1437,7 @@ def nexo_entity_dossier(
     query: str,
     max_assets: int = 500,
     max_chunks: int = 1200,
-    max_facts: int = 3000,
+    max_facts: int = 120,
     max_chars: int = 20000,
 ) -> str:
     """Build a full local dossier for one entity with aggregates and evidence."""

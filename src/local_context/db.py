@@ -80,10 +80,23 @@ def _connect(db_path: Path) -> sqlite3.Connection:
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")
     conn.execute("PRAGMA temp_store=MEMORY")
+    # Performance PRAGMAs for the index DB: it sees bursty writes from the 60s
+    # cron indexer while read-only retrieval queries run concurrently.
+    # - wal_autocheckpoint above the 1000-page default → fewer checkpoints during
+    #   indexing bursts, WAL still bounded (~8 MB @ 4 KB pages).
+    # - mmap_size 256 MB → memory-mapped reads for the read-heavy workload.
+    # - cache_size -16000 → 16 MB page cache (negative = KiB), up from 2 MB.
+    conn.execute("PRAGMA wal_autocheckpoint=2000")
+    conn.execute("PRAGMA mmap_size=268435456")
+    conn.execute("PRAGMA cache_size=-16000")
     return conn
 
 
-def connect_local_context_db_readonly(*, timeout_ms: int = 1200) -> sqlite3.Connection:
+def connect_local_context_db_readonly(*, timeout_ms: int | None = None) -> sqlite3.Connection:
+    # Parity with the writer: readers must wait as long as the writer can hold the
+    # lock, otherwise they raise 'database is locked' prematurely under load.
+    if timeout_ms is None:
+        timeout_ms = _busy_timeout_ms()
     db_path = local_context_db_path()
     if not db_path.is_file():
         raise FileNotFoundError(str(db_path))

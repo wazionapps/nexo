@@ -110,3 +110,109 @@ def test_entity_dossier_privacy_blocks_secrets_and_excluded_trees(tmp_path):
     assert "secret.txt" not in paths
     assert "hidden.txt" not in paths
     assert "Bearer" not in values
+
+
+def _heavy_entity_dossier_payload():
+    """Payload realista de un proveedor con cientos de facts/chunks (como Banco
+    Sabadell en producción), suficiente para desbordar el budget de chars."""
+    from local_context import api
+
+    assets = [
+        {
+            "asset_id": f"asset_{i:03d}",
+            "display_path": f"~/Documents/facturas/proveedor_x/factura_{i:03d}.pdf",
+            "file_type": "pdf",
+            "extension": ".pdf",
+            "size_bytes": 12000 + i,
+            "created_at_fs": 1700000000 + i * 86400,
+            "modified_at_fs": 1700000000 + i * 86400,
+            "first_seen_at": 1700000000 + i * 86400,
+            "last_seen_at": 1700000000 + i * 86400,
+        }
+        for i in range(40)
+    ]
+    facts = [
+        {
+            "fact_id": f"fact_{i:04d}",
+            "entity_id": "entity_proveedor_x",
+            "predicate": "importe total" if i % 2 == 0 else "fecha factura",
+            "value": f"{1000 + i},{i % 100:02d} EUR — factura del proveedor X, concepto detallado {i}",
+            "value_number": float(1000 + i) if i % 2 == 0 else None,
+            "value_date": "" if i % 2 == 0 else f"2026-{(i % 12) + 1:02d}-{(i % 28) + 1:02d}",
+            "source_asset_id": f"asset_{i % 40:03d}",
+            "source_chunk_id": f"chunk_{i:04d}",
+            "confidence": 0.40 + (i % 50) / 100.0,
+            "created_at": 1700000000 + i,
+        }
+        for i in range(400)
+    ]
+    chunks = [
+        {
+            "chunk_id": f"chunk_{i:04d}",
+            "asset_id": f"asset_{i % 40:03d}",
+            "chunk_index": i,
+            "text": "Factura del proveedor X. Importe total y fecha de emision. " * 12,
+        }
+        for i in range(80)
+    ]
+    aggregates = api._aggregate_dossier(assets, facts)
+    evidence_refs = [
+        f"local_asset:{f['source_asset_id']}#chunk:{f['source_chunk_id']}" for f in facts[:60]
+    ]
+    return {
+        "ok": True,
+        "mode": "entity_dossier",
+        "query": "Proveedor X",
+        "confidence": 1.0,
+        "needs_disambiguation": False,
+        "entity": {
+            "entity_id": "entity_proveedor_x",
+            "display_name": "Proveedor X",
+            "entity_type": "entity",
+            "score": 1.0,
+            "confidence": 0.9,
+            "aliases": ["Proveedor X"],
+            "asset_count": 40,
+        },
+        "candidates": [{"entity_id": "entity_proveedor_x", "display_name": "Proveedor X", "score": 1.0}],
+        "recall": {
+            "assets_total": 40,
+            "assets_returned": 40,
+            "facts_returned": 400,
+            "chunks_returned": 80,
+            "hard_caps": {"assets": 500, "facts": 3000, "chunks": 1200},
+        },
+        "aggregates": aggregates,
+        "assets": assets,
+        "facts": facts,
+        "chunks": chunks,
+        "evidence_refs": evidence_refs,
+        "warnings": [],
+        "llm_presence": {"enabled": False, "available": False},
+        "synthesis_contract": {"instruction": "Use only aggregates/facts/evidence_refs.", "evidence_required": True},
+    }
+
+
+def test_entity_dossier_truncation_keeps_facts_and_aggregates_at_production_max_chars():
+    """Regresion (G-A): un proveedor pesado NO debe volver vacio al truncar al
+    max_chars REAL de produccion (20000). El bug: _truncate_context_payload solo
+    recortaba chunks/assets, nunca facts/aggregates, asi que el payload seguia
+    desbordando y caia a _minimal_truncated_context_payload (todo vacio, sin el
+    oro: importes y fechas agregados)."""
+    from local_context import api
+
+    payload = _heavy_entity_dossier_payload()
+    # El payload pesado supera de verdad el budget de produccion (si no, el test no prueba nada).
+    assert api._payload_size(payload) > 20000
+
+    result = api._truncate_context_payload(payload, max_chars=20000)
+
+    # Cabe en el budget...
+    assert api._payload_size(result) <= 20000
+    # ...pero NO se vacio al minimal: el dossier sigue siendo util para el LLM.
+    assert result.get("mode") == "entity_dossier"
+    assert result.get("facts"), "facts no debe quedar vacio tras truncar"
+    aggregates = result.get("aggregates") or {}
+    assert aggregates.get("documents_total", 0) > 0, "aggregates debe sobrevivir al truncado"
+    assert aggregates.get("numeric_by_predicate"), "los importes agregados (el oro) deben sobrevivir"
+    assert result.get("evidence_refs"), "evidence_refs (trazabilidad) no debe quedar vacio"

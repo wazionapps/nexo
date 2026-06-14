@@ -132,6 +132,23 @@ def embed_text(text: str) -> list[float]:
 
 
 def cosine(a: list[float], b: list[float]) -> float:
+    # Defensive cosine: normalize at comparison time WITHOUT re-embedding.
+    # The fallback hash embedding is already L2-normalized and fastembed
+    # L2-normalizes its output too, so a bare dot product happens to be correct
+    # today — but it silently breaks the moment a model that does not normalize
+    # is swapped in (e.g. e5-small needs custom ONNX MEAN-pool + normalize).
+    # Dividing by the product of norms keeps the score bounded to [-1, 1] for
+    # any vectors, which is what the api.py max() fusion against lexical scores
+    # in [0, 1] relies on. For already-unit vectors this is a no-op.
     if not a or not b or len(a) != len(b):
         return 0.0
-    return float(sum(x * y for x, y in zip(a, b)))
+    dot = 0.0
+    norm_a = 0.0
+    norm_b = 0.0
+    for x, y in zip(a, b):
+        dot += x * y
+        norm_a += x * x
+        norm_b += y * y
+    if norm_a <= 0.0 or norm_b <= 0.0:
+        return 0.0
+    return float(dot / math.sqrt(norm_a * norm_b))
