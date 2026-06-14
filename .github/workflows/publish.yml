@@ -16,7 +16,7 @@ env:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
 
@@ -31,7 +31,7 @@ jobs:
         run: python3 scripts/verify_managed_mcp_lock.py
 
       - name: Run tests
-        run: PYTHONPATH=src pytest tests/ -v
+        run: PYTHONPATH=src pytest tests/ -q
 
       - name: Verify release readiness
         run: python3 scripts/verify_release_readiness.py --ci
@@ -39,7 +39,7 @@ jobs:
   publish:
     needs: test
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
 
