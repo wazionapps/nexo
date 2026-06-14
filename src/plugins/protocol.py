@@ -1307,6 +1307,58 @@ PUBLIC_RELEASE_WORK_RE = re.compile(
     re.IGNORECASE,
 )
 HIGH_STAKES_WORK_TYPES = {"release", "deploy", "deployment", "publish", "publicar", "desplegar"}
+VISIBLE_RELEASE_SURFACE_PATTERNS = {
+    "api": (
+        re.compile(r"\bapi\b\s*[:=-]", re.IGNORECASE),
+        re.compile(r"\bendpoint(?:s)?\b\s*[:=-]", re.IGNORECASE),
+        re.compile(r"\bruta(?:s)?\b\s*[:=-]", re.IGNORECASE),
+    ),
+    "ui": (
+        re.compile(r"\bui\b\s*[:=-]", re.IGNORECASE),
+        re.compile(r"\bux\b\s*[:=-]", re.IGNORECASE),
+        re.compile(r"\binterfaz\b\s*[:=-]", re.IGNORECASE),
+        re.compile(r"\bnavegador\b\s*[:=-]", re.IGNORECASE),
+        re.compile(r"\bbrowser\b\s*[:=-]", re.IGNORECASE),
+    ),
+    "dominio_publico": (
+        re.compile(r"\bdominio\s+p[uú]blico\b\s*[:=-]", re.IGNORECASE),
+        re.compile(r"\bpublic\s+domain\b\s*[:=-]", re.IGNORECASE),
+        re.compile(r"\burl\s+p[uú]blica\b\s*[:=-]", re.IGNORECASE),
+        re.compile(r"\bpublic\s+url\b\s*[:=-]", re.IGNORECASE),
+        re.compile(r"https?://[^\s]+", re.IGNORECASE),
+    ),
+    "rama_publicacion": (
+        re.compile(r"\brama\b\s*[:=-]", re.IGNORECASE),
+        re.compile(r"\bbranch\b\s*[:=-]", re.IGNORECASE),
+        re.compile(r"\borigin/(?:main|master|stable|release|gh-pages)\b", re.IGNORECASE),
+        re.compile(r"\bgh-pages\b", re.IGNORECASE),
+    ),
+    "artefactos": (
+        re.compile(r"\bartefacto(?:s)?\b\s*[:=-]", re.IGNORECASE),
+        re.compile(r"\bartifact(?:s)?\b\s*[:=-]", re.IGNORECASE),
+        re.compile(r"\b(?:dmg|exe|zip|image|imagen|cloud\s+build|github\s+release)\b", re.IGNORECASE),
+    ),
+    "manifiestos": (
+        re.compile(r"\bmanifiesto(?:s)?\b\s*[:=-]", re.IGNORECASE),
+        re.compile(r"\bmanifest(?:s)?\b\s*[:=-]", re.IGNORECASE),
+        re.compile(r"\b(?:manifest\.json|update\.json|package\.json|composer\.json)\b", re.IGNORECASE),
+    ),
+    "prueba_viva": (
+        re.compile(r"\bprueba\s+viva\b\s*[:=-]", re.IGNORECASE),
+        re.compile(r"\blive\s+test\b\s*[:=-]", re.IGNORECASE),
+        re.compile(r"\bsmoke\b\s*[:=-]", re.IGNORECASE),
+        re.compile(r"\b(?:curl|playwright|logs?\s+vivos?|gcloud\s+logs|http\s*200|200\s+ok)\b", re.IGNORECASE),
+    ),
+}
+VISIBLE_RELEASE_SURFACE_LABELS = {
+    "api": "API",
+    "ui": "UI",
+    "dominio_publico": "dominio público",
+    "rama_publicacion": "rama de publicación",
+    "artefactos": "artefactos",
+    "manifiestos": "manifiestos",
+    "prueba_viva": "prueba viva",
+}
 
 
 def _normalize_artifact_hash(value: str) -> str:
@@ -1342,6 +1394,15 @@ def _has_public_release_evidence(evidence: str) -> bool:
     if _is_trivial_evidence(evidence)[0]:
         return False
     return bool(PUBLIC_RELEASE_EVIDENCE_RE.search(evidence or ""))
+
+
+def _missing_visible_release_surfaces(evidence: str) -> list[str]:
+    text = evidence or ""
+    missing: list[str] = []
+    for key, patterns in VISIBLE_RELEASE_SURFACE_PATTERNS.items():
+        if not any(pattern.search(text) for pattern in patterns):
+            missing.append(VISIBLE_RELEASE_SURFACE_LABELS[key])
+    return missing
 
 
 def _active_followup_snapshot(limit: int = 5) -> list[dict]:
@@ -2475,6 +2536,40 @@ def handle_task_close(
             ensure_ascii=False,
             indent=2,
         )
+
+    if clean_outcome == "done" and _is_high_stakes_public_work(task, work_type, stakes, closure_text):
+        missing_surfaces = _missing_visible_release_surfaces(live_surface_evidence)
+        if missing_surfaces:
+            debt = _ensure_open_debt(
+                task["session_id"],
+                task_id,
+                "visible_release_surface_matrix_incomplete",
+                severity="error",
+                evidence=(
+                    "Visible release/deploy/fix close lacked the full evidence matrix. "
+                    f"Missing surfaces: {', '.join(missing_surfaces)}. "
+                    f"Evidence provided: {live_surface_evidence[:240]!r}"
+                ),
+                debts=debts_created,
+            )
+            return json.dumps(
+                {
+                    "ok": False,
+                    "error": "Cannot close visible release/deploy/fix as done without the full surface evidence matrix.",
+                    "hint": (
+                        "Enumerate API, UI, public domain, publication branch, artifacts, manifests, "
+                        "and live test evidence. Use N/A only for a surface that truly does not exist."
+                    ),
+                    "task_id": task_id,
+                    "blocked_by": "visible_release_surface_matrix",
+                    "debt_id": debt.get("id"),
+                    "debt_type": "visible_release_surface_matrix_incomplete",
+                    "missing_surfaces": missing_surfaces,
+                    "response_mode": "verify",
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
 
     if task.get("guard_has_blocking") and not files_changed_list:
         open_task_debts = list_protocol_debts(status="open", task_id=task_id, limit=200)

@@ -188,3 +188,45 @@ def test_post_tool_use_queues_change_log_from_task_close(monkeypatch):
     assert message is None
     assert calls[0][0] == "change_log"
     assert calls[0][1]["files"] == "src/server.py"
+
+
+def test_post_tool_use_warns_shared_mutation_without_scope_checklist():
+    from hooks import post_tool_use
+
+    message = post_tool_use.check_shared_scope_closeout(
+        {
+            "tool_name": "Edit",
+            "tool_input": {
+                "file_path": "/Users/franciscoc/Documents/_PhpstormProjects/nexo/src/plugins/protocol.py",
+                "old_string": "old",
+                "new_string": "new",
+            },
+        }
+    )
+
+    assert message is not None
+    assert "conversación afectada" in message
+    assert "tenant/tienda" in message
+    assert "estado de deploy" in message
+
+
+def test_post_tool_use_accepts_shared_mutation_with_scope_checklist():
+    from hooks import post_tool_use
+
+    message = post_tool_use.check_shared_scope_closeout(
+        {
+            "tool_name": "Edit",
+            "tool_input": {
+                "file_path": "/Users/franciscoc/Documents/_PhpstormProjects/nexo/src/plugins/protocol.py",
+                "scope_context": (
+                    "conversación: NF-DS-ED3253EC; tenant/tienda: N/A; "
+                    "idiomas: es; entorno: producto fuente; superficie: API/UI; "
+                    "deploy: no publicado todavía"
+                ),
+                "old_string": "old",
+                "new_string": "new",
+            },
+        }
+    )
+
+    assert message is None

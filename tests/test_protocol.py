@@ -1235,10 +1235,24 @@ def test_high_stakes_action_close_stays_clean_with_cortex_evaluation():
             sid=sid,
             task_id=opened["task_id"],
             outcome="done",
-            evidence="test staging production changelog version all checked; curl https://nexo-desktop.com/downloads/update.json returned HTTP 200.",
+            evidence=(
+                "API: curl https://nexo-desktop.com/api/health returned HTTP 200. "
+                "UI: browser smoke loaded /dashboard and screenshot /tmp/nexo-release-ui.png exists. "
+                "Dominio público: https://nexo-desktop.com/downloads/update.json returned HTTP 200. "
+                "Rama: origin/main at abc1234. "
+                "Artefactos: GitHub Release assets DMG and EXE uploaded. "
+                "Manifiestos: update.json and package.json match the release version. "
+                "Test: regression suite passed before publication. "
+                "Prueba viva: staging smoke green and production smoke passed against the public domain. "
+                "Changelog updated and version confirmed in public manifests."
+            ),
             outcome_notes="Release executed with persisted cortex evaluation.",
             work_type="release",
             stakes="high",
+            files_changed="/tmp/release-artifact",
+            change_summary="Deploy production release package",
+            change_why="Exercise clean high-stakes release closure with full evidence matrix",
+            change_verify="Public API/UI/domain/manifests/artifacts/live smoke evidence supplied",
         )
     )
 
@@ -1900,3 +1914,56 @@ def test_task_close_blocks_production_deploy_without_changed_files():
 
     assert closed["ok"] is False
     assert closed["blocked_by"] == "g1_change_log"
+
+
+def test_task_close_blocks_visible_release_without_surface_matrix():
+    from plugins.cortex import handle_cortex_decide
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    sid = _register_session("nexo-1661-2661")
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Deploy visible production fix",
+            task_type="execute",
+            area="release",
+            plan='["prepare", "deploy", "verify"]',
+            evidence_refs='["release contract", "staging green"]',
+            verification_step="verify public production surfaces",
+            stakes="high",
+        )
+    )
+    handle_cortex_decide(
+        goal="Deploy visible production fix",
+        task_type="execute",
+        impact_level="critical",
+        area="release",
+        session_id=sid,
+        task_id=opened["task_id"],
+        evidence_refs='["release contract", "staging green"]',
+        alternatives=json.dumps([
+            {"name": "canary_release", "description": "Deploy staged canary release with smoke tests and rollback ready"},
+            {"name": "direct_release", "description": "Deploy directly to production without staged verification"},
+        ]),
+    )
+
+    closed = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="done",
+            evidence="curl https://nexo-desktop.com returned HTTP 200 after deploy.",
+            work_type="release",
+            stakes="high",
+            files_changed="/tmp/release-artifact",
+            change_summary="Deploy visible production fix",
+            change_why="Exercise visible release surface matrix gate",
+            change_verify="curl public domain HTTP 200",
+        )
+    )
+
+    assert closed["ok"] is False
+    assert closed["blocked_by"] == "visible_release_surface_matrix"
+    assert closed["debt_type"] == "visible_release_surface_matrix_incomplete"
+    assert "API" in closed["missing_surfaces"]
+    assert "rama de publicación" in closed["missing_surfaces"]

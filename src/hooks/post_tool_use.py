@@ -415,6 +415,73 @@ def check_production_change_log_closeout(payload: dict, sid: str) -> str | None:
     return append_operator_language_contract(message)
 
 
+_SHARED_MUTATION_TOOLS = {
+    "Edit",
+    "Write",
+    "MultiEdit",
+    "NotebookEdit",
+    "apply_patch",
+    "functions.apply_patch",
+}
+_SHARED_PATH_RE = re.compile(
+    r"("
+    r"/Users/[^ \n\r\t'\"]+/Documents/_PhpstormProjects/|"
+    r"/Users/[^ \n\r\t'\"]+/.nexo/core/|"
+    r"/home/nexodesk/|"
+    r"/var/www/|"
+    r"/public_html/|"
+    r"/httpdocs/"
+    r")",
+    re.IGNORECASE,
+)
+_SCOPE_REQUIRED_MARKERS = {
+    "conversation": re.compile(r"\b(conversation|conversaci[oó]n|hilo|thread|email|ticket|mensaje|message|n/a)\b", re.IGNORECASE),
+    "tenant": re.compile(r"\b(tenant|tienda|shop|cuenta|account|cliente|client|n/a)\b", re.IGNORECASE),
+    "language": re.compile(r"\b(idioma|language|lang|locale|es|en|de|fr|pt|it|ca|n/a)\b", re.IGNORECASE),
+    "environment": re.compile(r"\b(entorno|environment|local|runtime|producto|producci[oó]n|production|prod|staging)\b", re.IGNORECASE),
+    "surface": re.compile(r"\b(superficie|surface|api|ui|dominio|domain|web|public)\b", re.IGNORECASE),
+    "deploy": re.compile(r"\b(deploy|despliegue|publicado|published|release|rama|branch|n/a)\b", re.IGNORECASE),
+}
+
+
+def _payload_scope_text(payload: dict) -> str:
+    try:
+        return json.dumps(_tool_input(payload), ensure_ascii=False)
+    except Exception:
+        return str(_tool_input(payload) or "")
+
+
+def _is_shared_mutation_payload(payload: dict) -> bool:
+    tool_name = _tool_name(payload)
+    cmd = _extract_command(payload)
+    input_text = _payload_scope_text(payload)
+    combined = "\n".join(part for part in (tool_name, cmd, input_text) if part)
+    if tool_name in _SHARED_MUTATION_TOOLS and _SHARED_PATH_RE.search(combined):
+        return True
+    if cmd and (_is_production_mutation_command(cmd) or _SHARED_PATH_RE.search(cmd)):
+        return True
+    return False
+
+
+def check_shared_scope_closeout(payload: dict) -> str | None:
+    if not _is_shared_mutation_payload(payload):
+        return None
+    scope_text = _payload_scope_text(payload)
+    missing = [
+        label
+        for label, pattern in _SCOPE_REQUIRED_MARKERS.items()
+        if not pattern.search(scope_text)
+    ]
+    if not missing:
+        return None
+    message = (
+        "Antes de seguir con este cambio compartido, deja fijado el alcance operativo: "
+        "conversación afectada, tenant/tienda, idiomas, entorno, superficie pública y estado de deploy. "
+        "Si algún campo no aplica, márcalo como N/A y continúa con evidencia."
+    )
+    return append_operator_language_contract(message)
+
+
 def _run_auto_capture(payload: dict) -> int:
     """Pipe the tool result into auto_capture for post-output classification."""
     text = _extract_tool_text(payload)
@@ -484,13 +551,20 @@ def main() -> int:
         sid = _resolve_sid_from_payload(payload)
         reminder = check_inbox_and_emit_reminder(sid)
         change_log_message = check_production_change_log_closeout(payload, sid)
+        shared_scope_message = check_shared_scope_closeout(payload)
         g1_message: str | None = None
         try:
             from g1_enforcer import check_response_contract_gate  # type: ignore
             g1_message = check_response_contract_gate(sid)
         except Exception:
             g1_message = None
-        combined = _combine_system_messages(protocol_message, reminder, change_log_message, g1_message)
+        combined = _combine_system_messages(
+            protocol_message,
+            reminder,
+            change_log_message,
+            shared_scope_message,
+            g1_message,
+        )
         if combined:
             print(json.dumps({"systemMessage": combined}))
     except Exception:
