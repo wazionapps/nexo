@@ -289,7 +289,7 @@ def _content_hash(fact_type: str, content: str) -> str:
 
 
 def _auto_learning_add(title: str, content: str) -> bool:
-    """Best-effort call to tools_learnings.add_learning.
+    """Best-effort call to tools_learnings.handle_learning_add.
 
     Returns True when the learning was stored, False otherwise. Failures
     are silent so the hook itself never breaks the user's prompt flow.
@@ -300,13 +300,19 @@ def _auto_learning_add(title: str, content: str) -> bool:
         return False
 
     try:
-        result = tools_learnings.add_learning(
+        # The public symbol is handle_learning_add. A prior call to a
+        # non-existent tools_learnings.add_learning raised AttributeError that
+        # was swallowed below, so EVERY auto-captured correction silently
+        # failed to persist a learning (error-capture / never-repeat broken).
+        result = tools_learnings.handle_learning_add(
             category="auto",
             title=title,
             content=content,
             priority="medium",
             reasoning="auto-captured from correction pattern in UserPromptSubmit/PostToolUse hook",
         )
+        if isinstance(result, str):
+            return not result.strip().upper().startswith("ERROR")
         if isinstance(result, dict):
             return bool(result.get("ok") or result.get("id") or result.get("learning_id"))
         return bool(result)

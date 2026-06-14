@@ -1987,15 +1987,48 @@ def _source_filesystem(request: SourceRequest) -> SourceResult:
 
 
 def _source_guard_context(request: SourceRequest) -> SourceResult:
-    # G01 cannot call the MCP guard from this pure core. Return the file scope
-    # so G15 can wire real guard context without changing the source plan.
-    if not request.files:
+    # Real guard verification: surface the file-conditioned blocking learnings
+    # for the requested files. Previously this returned fake evidence
+    # (evidence_refs=["guard_context:requested"], result_count=1) WITHOUT any
+    # check, which silently satisfied the critical-tier required-source / gap
+    # gate for release/server/billing/legal areas. Never fake evidence again.
+    files = [f.strip() for f in (request.files or "").split(",") if f.strip()]
+    if not files:
         return SourceResult(source="guard_context")
+    try:
+        from db import get_db
+        from plugins.guard import _load_conditioned_learnings
+        conn = get_db()
+        conditioned = _load_conditioned_learnings(conn, files)
+    except Exception:
+        # Fail-closed: do NOT fake evidence; report that verification could not run.
+        return SourceResult(
+            source="guard_context",
+            rendered="Guard verification could not run for: " + ", ".join(files),
+            result_count=0,
+        )
+    refs: list[str] = []
+    lines: list[str] = []
+    for filepath, entries in conditioned.items():
+        for entry in entries:
+            refs.append(f"learning:{entry.get('id')}")
+            lines.append(
+                f"- [{entry.get('priority', 'medium')}] {entry.get('title', '')} (applies_to {filepath})"
+            )
+    if lines:
+        return SourceResult(
+            source="guard_context",
+            rendered="Blocking/file-conditioned learnings:\n" + "\n".join(lines),
+            evidence_refs=refs,
+            result_count=len(refs),
+        )
+    # Guard ran and found nothing blocking — a real verified-clean result.
     return SourceResult(
         source="guard_context",
-        rendered=f"Guard context requested for files: {request.files}",
-        evidence_refs=["guard_context:requested"],
-        result_count=1,
+        rendered="Guard verified: no blocking file-conditioned learnings for "
+        + ", ".join(files),
+        evidence_refs=["guard_context:verified_clean"],
+        result_count=0,
     )
 
 

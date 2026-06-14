@@ -1437,6 +1437,7 @@ def handle_confidence_check(
     unknowns: str = "[]",
     verification_step: str = "",
     stakes: str = "",
+    sid: str = "",
 ) -> str:
     """Return the metacognitive response mode: answer, verify, ask, or defer."""
     clean_goal = (goal or "").strip()
@@ -1465,6 +1466,37 @@ def handle_confidence_check(
         verification_step=(verification_step or "").strip(),
         stakes=(stakes or "").strip(),
     )
+    # Persist the check so the G1 answer-contract gate can detect fulfillment of
+    # verify/ask/defer contracts (this table was previously never written, so
+    # verify contracts were structurally unfulfillable). Best-effort: a failure
+    # here must never break the metacognitive answer — g1 simply re-nudges, a
+    # visible signal rather than a silent corruption.
+    try:
+        import hashlib
+        from db import get_db
+        from plugins.guard import _resolve_active_sid
+        conn = get_db()
+        resolved_sid = (sid or "").strip() or _resolve_active_sid(conn)
+        if resolved_sid:
+            conn.execute(
+                """INSERT INTO confidence_checks
+                   (session_id, task_id, goal_hash, task_type, area,
+                    response_mode, confidence, high_stakes, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))""",
+                (
+                    resolved_sid,
+                    "",
+                    hashlib.sha256(clean_goal.encode("utf-8")).hexdigest()[:16],
+                    clean_type,
+                    (area or "").strip(),
+                    str(result.get("mode") or ""),
+                    int(result.get("confidence") or 0),
+                    1 if result.get("high_stakes") else 0,
+                ),
+            )
+            conn.commit()
+    except Exception:
+        pass
     return json.dumps({"ok": True, **result}, ensure_ascii=False, indent=2)
 
 
