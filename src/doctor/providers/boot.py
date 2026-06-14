@@ -654,6 +654,99 @@ def check_managed_venv_python(fix: bool = False) -> DoctorCheck:
     )
 
 
+# Critical importable modules the managed venv must always have. A missing one
+# fails silently (e.g. pypdf absent -> every PDF/XLSX/MSG indexed as empty text).
+# Verified by importing INSIDE the managed venv, not the current interpreter.
+MANAGED_VENV_REQUIRED_MODULES = (
+    "fastmcp",
+    "numpy",
+    "anthropic",
+    "openai",
+    "fastembed",
+    "pypdf",
+    "openpyxl",
+    "extract_msg",
+)
+
+
+def _missing_venv_modules(venv_python: Path | str, modules) -> list[str]:
+    """Return the subset of ``modules`` that ``venv_python`` cannot import."""
+    mods = [str(m) for m in modules if str(m).strip()]
+    if not mods:
+        return []
+    probe = (
+        "import importlib.util as u, sys\n"
+        "print('\\n'.join(m for m in sys.argv[1:] if u.find_spec(m) is None))"
+    )
+    try:
+        result = subprocess.run(
+            [str(venv_python), "-c", probe, *mods],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except Exception:
+        return []
+    if result.returncode != 0:
+        return []
+    return [line.strip() for line in (result.stdout or "").splitlines() if line.strip()]
+
+
+def _repair_managed_venv_deps() -> bool:
+    try:
+        import auto_update
+
+        return bool(auto_update._reinstall_pip_deps())
+    except Exception:
+        return False
+
+
+def check_managed_venv_modules(fix: bool = False) -> DoctorCheck:
+    """Ensure the managed venv has every critical importable module.
+
+    A missing optional parser (pypdf/openpyxl/extract_msg) makes the local index
+    read PDF/XLSX/MSG as empty, silently. With ``fix=True`` (run automatically on
+    startup preflight) this reinstalls them, so the runtime repairs itself with no
+    user action.
+    """
+    venv_python = _managed_venv_python_path()
+    if not venv_python.exists():
+        # The python-version check already reports a missing venv; stay quiet here.
+        return DoctorCheck(
+            id="boot.managed_venv_modules",
+            tier="boot",
+            status="healthy",
+            severity="info",
+            summary="Managed Python venv not present yet",
+            evidence=[str(venv_python)],
+        )
+    missing = _missing_venv_modules(venv_python, MANAGED_VENV_REQUIRED_MODULES)
+    if not missing:
+        return DoctorCheck(
+            id="boot.managed_venv_modules",
+            tier="boot",
+            status="healthy",
+            severity="info",
+            summary=f"All {len(MANAGED_VENV_REQUIRED_MODULES)} critical venv modules present",
+            evidence=[str(venv_python)],
+        )
+    if fix and _repair_managed_venv_deps():
+        post = check_managed_venv_modules(fix=False)
+        if post.status == "healthy":
+            post.fixed = True
+            post.summary += " (repaired missing modules)"
+            return post
+    return DoctorCheck(
+        id="boot.managed_venv_modules",
+        tier="boot",
+        status="degraded",
+        severity="warn",
+        summary=f"{len(missing)} critical venv module(s) missing: {', '.join(missing)}",
+        evidence=[str(venv_python), *missing],
+        repair_plan=["Run nexo doctor --tier boot --fix or nexo update to reinstall managed dependencies"],
+    )
+
+
 CRITICAL_CONFIG_FILES = (
     ("schedule.json", ("config", "schedule.json")),
     ("optionals.json", ("config", "optionals.json")),
@@ -909,6 +1002,7 @@ def run_boot_checks(fix: bool = False, plane: str = "") -> list[DoctorCheck]:
         safe_check(check_wrapper_scripts),
         safe_check(check_python_runtime),
         safe_check(check_managed_venv_python, fix=fix),
+        safe_check(check_managed_venv_modules, fix=fix),
         safe_check(check_config_parse),
         safe_check(check_core_dev_packaged_install),
         safe_check(check_dashboard_desktop_contract),

@@ -4103,6 +4103,19 @@ async function runSetup() {
     log("Try manually: python3 -m venv ~/.nexo/.venv && ~/.nexo/.venv/bin/pip install -r src/requirements.txt");
     process.exit(1);
   }
+  // Mirror the bundled wheels into NEXO_HOME so the Python runtime (startup
+  // self-heal, update, cron) can reinstall any missing dep OFFLINE later, with no
+  // access to the Desktop bundle path. auto_update._bundled_wheels_dir() looks in
+  // <NEXO_HOME>/runtime/python-wheels. Works for WSL (linux) and macOS.
+  try {
+    if (fs.existsSync(bundledWheelsDir)) {
+      const runtimeWheels = path.join(NEXO_HOME, "runtime", "python-wheels");
+      fs.mkdirSync(runtimeWheels, { recursive: true });
+      fs.cpSync(bundledWheelsDir, runtimeWheels, { recursive: true });
+    }
+  } catch (e) {
+    log("  (note) could not mirror bundled wheels into runtime: " + (e && e.message));
+  }
   // Update python reference to use venv python for the rest of setup
   if (fs.existsSync(venvPython)) {
     python = venvPython;

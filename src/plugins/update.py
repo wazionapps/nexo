@@ -913,25 +913,29 @@ def _reinstall_pip_deps() -> str | None:
         alt_pip = NEXO_HOME / ".venv" / "bin" / "pip3"
         if alt_pip.exists():
             venv_pip = alt_pip
+    # Offline-first: prefer the bundled wheels, fall back to PyPI. Shared with
+    # auto_update so install / update / self-heal all behave identically.
+    from auto_update import _bundled_wheels_dir, _pip_install_argv
+
+    wheels_dir = _bundled_wheels_dir()
     if not venv_pip.exists():
         if desktop_product_requested():
             return "managed Desktop venv pip is unavailable after repair"
-        # No venv, try system pip with --break-system-packages
-        try:
-            result = subprocess.run(
-                [sys.executable, "-m", "pip", "install", "--quiet", "-r", str(req_file), "--break-system-packages"],
-                capture_output=True, text=True, timeout=120,
-            )
-            if result.returncode != 0:
-                return f"pip install failed: {result.stderr or result.stdout}"
-        except Exception as e:
-            return f"pip install error: {e}"
-        return None
+        pip_bin, use_python_m, break_system = sys.executable, True, True
+    else:
+        pip_bin, use_python_m, break_system = venv_pip, False, False
     try:
-        result = subprocess.run(
-            [str(venv_pip), "install", "--quiet", "-r", str(req_file)],
-            capture_output=True, text=True, timeout=120,
+        argv = _pip_install_argv(
+            pip_bin, req_file, wheels_dir=wheels_dir,
+            use_python_m=use_python_m, break_system=break_system,
         )
+        result = subprocess.run(argv, capture_output=True, text=True, timeout=600)
+        if result.returncode != 0 and wheels_dir is not None:
+            argv_online = _pip_install_argv(
+                pip_bin, req_file, wheels_dir=None,
+                use_python_m=use_python_m, break_system=break_system,
+            )
+            result = subprocess.run(argv_online, capture_output=True, text=True, timeout=600)
         if result.returncode != 0:
             return f"pip install failed: {result.stderr or result.stdout}"
     except Exception as e:

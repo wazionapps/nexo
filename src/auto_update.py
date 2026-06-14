@@ -1058,8 +1058,46 @@ def _ensure_runtime_venv(runtime_root: Path = NEXO_HOME) -> Path | None:
     return None
 
 
+def _bundled_wheels_dir() -> "Path | None":
+    """Locate the bundled Python wheels for offline install.
+
+    Priority: explicit NEXO_BUNDLED_WHEELS_DIR (set by the Desktop bundle) →
+    a canonical runtime copy under NEXO_HOME. Returns the dir only if it holds
+    at least one .whl, else None (caller falls back to PyPI).
+    """
+    candidates = []
+    env_dir = os.environ.get("NEXO_BUNDLED_WHEELS_DIR", "").strip()
+    if env_dir:
+        candidates.append(Path(env_dir).expanduser())
+    candidates.append(NEXO_HOME / "runtime" / "python-wheels")
+    for directory in candidates:
+        try:
+            if directory.is_dir() and any(directory.glob("*.whl")):
+                return directory
+        except Exception:
+            continue
+    return None
+
+
+def _pip_install_argv(pip_bin, req_file, *, wheels_dir=None, use_python_m=False, break_system=False) -> list:
+    """Build a pip install argv. Offline (--no-index --find-links) when wheels_dir is set."""
+    argv = [str(pip_bin)]
+    if use_python_m:
+        argv += ["-m", "pip"]
+    argv += ["install", "--quiet", "-r", str(req_file)]
+    if wheels_dir is not None:
+        argv += ["--no-index", "--find-links", str(wheels_dir)]
+    if break_system:
+        argv.append("--break-system-packages")
+    return argv
+
+
 def _reinstall_pip_deps() -> bool:
-    """Reinstall Python deps from requirements.txt. Returns True on success."""
+    """Reinstall Python deps from requirements.txt. Returns True on success.
+
+    Prefers the bundled wheels (offline) so a user with no internet still gets a
+    self-repairing runtime; falls back to PyPI if the bundle can't satisfy it.
+    """
     req_file = SRC_DIR / "requirements.txt"
     if not req_file.exists():
         return True
@@ -1069,24 +1107,32 @@ def _reinstall_pip_deps() -> bool:
         alt_pip = NEXO_HOME / ".venv" / "bin" / "pip3"
         if alt_pip.exists():
             venv_pip = alt_pip
+    wheels_dir = _bundled_wheels_dir()
+    # Large wheel sets / slow links need more than the old 120s.
+    timeout_s = 600
+    use_python_m = not venv_pip.exists()
+    if use_python_m and desktop_product_requested():
+        _log(f"managed venv unavailable for Desktop dependency repair: {venv_python}")
+        return False
+    pip_bin = venv_pip if venv_pip.exists() else sys.executable
     try:
-        if venv_pip.exists():
-            result = subprocess.run(
-                [str(venv_pip), "install", "--quiet", "-r", str(req_file)],
-                capture_output=True, text=True, timeout=120,
+        argv = _pip_install_argv(
+            pip_bin, req_file, wheels_dir=wheels_dir,
+            use_python_m=use_python_m, break_system=use_python_m,
+        )
+        result = subprocess.run(argv, capture_output=True, text=True, timeout=timeout_s)
+        if result.returncode != 0 and wheels_dir is not None:
+            # Offline set couldn't satisfy it (missing/incompatible wheel) → retry online.
+            _log(f"offline pip install failed, retrying via PyPI: {result.stderr or result.stdout}")
+            argv_online = _pip_install_argv(
+                pip_bin, req_file, wheels_dir=None,
+                use_python_m=use_python_m, break_system=use_python_m,
             )
-        elif not desktop_product_requested():
-            result = subprocess.run(
-                [sys.executable, "-m", "pip", "install", "--quiet", "-r", str(req_file), "--break-system-packages"],
-                capture_output=True, text=True, timeout=120,
-            )
-        else:
-            _log(f"managed venv unavailable for Desktop dependency repair: {venv_python}")
-            return False
+            result = subprocess.run(argv_online, capture_output=True, text=True, timeout=timeout_s)
         if result.returncode != 0:
             _log(f"pip install failed (exit {result.returncode}): {result.stderr or result.stdout}")
             return False
-        _log("Reinstalled Python dependencies after update")
+        _log("Reinstalled Python dependencies" + (" (offline)" if wheels_dir is not None else ""))
         return True
     except Exception as e:
         _log(f"pip reinstall failed: {e}")
@@ -6107,6 +6153,18 @@ def startup_preflight(*, entrypoint: str, interactive: bool = False) -> dict:
             result["actions"].extend(extra_actions)
             if reconcile_message:
                 _log(reconcile_message)
+            # Self-heal: if the managed venv lost a critical importable module
+            # (e.g. pypdf -> PDFs indexed empty), reinstall it automatically. No
+            # user action, no prompt — the runtime repairs itself on startup.
+            try:
+                from doctor.providers.boot import check_managed_venv_modules
+
+                dep_check = check_managed_venv_modules(fix=True)
+                if getattr(dep_check, "fixed", False):
+                    result["actions"].append("venv-deps-repaired")
+                    _log(f"Managed venv dependencies repaired on startup: {dep_check.summary}")
+            except Exception as dep_exc:
+                _log(f"managed venv module check skipped: {dep_exc}")
         except Exception as e:
             result["error"] = str(e)
             _write_update_summary(result)
