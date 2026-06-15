@@ -1844,6 +1844,60 @@ def nexo_memory_maintenance(
 
 
 @mcp.tool
+def nexo_memory_forget(
+    value: str,
+    mode: str = "secret",
+    dry_run: bool = True,
+    confirm: bool = False,
+    use_regex: bool = False,
+    reason: str = "",
+) -> str:
+    """SELECTIVE-FORGET: verifiably erase a revoked secret, or correct a fact.
+
+    Two modes, never mixed:
+      * mode='secret' (HARD-FORGET): scrubs the secret from EVERY table of ALL
+        LIVE DBs the agent retrieves from — nexo, cognitive, local-context,
+        local-context-usage, and email — discovered by live introspection
+        (sqlite_master + PRAGMA) over each subsystem's own canonical path
+        resolver, not a curated list — plus every FTS index (incl.
+        local_chunks_fts), on-disk transcripts, and legacy shadow DBs (cognitive
+        + local-context). The row is DELETED where it IS the secret (or carries
+        an embedding/FTS copy), and REDACTED in place where the secret is
+        embedded in an otherwise-useful record (diary, item_history.note,
+        local_chunks.text, entity_facts.value, change_log...). It then
+        RE-ENUMERATES and RE-SCANS everything and only returns complete=True at
+        total zero; any survivor (even in a table not anticipated) is reported
+        as complete=False with its <db>.<table> location. Use ONLY for revoked
+        credentials/secrets or toxic data. Destructive run requires
+        dry_run=False AND confirm=True (a dry-run count is returned otherwise).
+        HNSW persisted indices are invalidated. SCOPE: point-in-time backups /
+        snapshots are NOT swept (retention) — rotate the secret; the report's
+        backup_scope field states this so complete=True never overclaims.
+      * mode='fact' (CORRECT-FACT): does NOT delete. Useful memory is preserved
+        via the existing reversible supersede; correct it with
+        nexo_learning_update / supersede instead.
+
+    Args:
+        value: the literal secret value to forget.
+        mode: 'secret' (default, hard) or 'fact' (soft, reversible).
+        dry_run: when True (default) only count matches; never mutate.
+        confirm: required (with dry_run=False) to actually delete in secret mode.
+        use_regex: also match generic secret-shaped tokens (secret mode only).
+        reason: free-text audit note recorded in the ledger.
+    """
+    import memory_forget
+
+    return memory_forget.handle_memory_forget(
+        value=value,
+        mode=mode,
+        dry_run=dry_run,
+        confirm=confirm,
+        use_regex=use_regex,
+        reason=reason,
+    )
+
+
+@mcp.tool
 def nexo_memory_search(
     query: str,
     project_hint: str = "",

@@ -8,6 +8,7 @@ sent even when the send path did not originate from an inbound email row.
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -43,6 +44,12 @@ RECENT_SENT_EMAILS_TITLE = "EMAILS ENVIADOS ULTIMAS 24H POR LA OPERATIVA"
 
 
 def sent_email_db_path() -> Path:
+    # NEXO_EMAIL_DB lets tests (and the selective-forget live-DB enumerator)
+    # isolate / discover the email store deterministically without rewiring
+    # NEXO_HOME. Falls back to the canonical runtime location.
+    override = os.environ.get("NEXO_EMAIL_DB", "").strip()
+    if override:
+        return Path(override).expanduser()
     return paths.nexo_email_dir() / "nexo-email.db"
 
 

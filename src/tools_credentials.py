@@ -320,13 +320,71 @@ def handle_credential_delete(service: str, key: str = '') -> str:
             return f"Credential deleted."
         return f"All BYOK credentials deleted ({removed} files)."
 
+    # Capture the secret value(s) BEFORE deletion so the forget sweep can scrub
+    # any grep-able copies that leaked into memory (FTS, KG, transcripts, etc.).
+    leaked_values: list[str] = []
+    try:
+        existing = get_credential(service, key if key else None) or []
+        for entry in existing:
+            val = str((entry or {}).get("value") or "").strip()
+            if len(val) >= 8:
+                leaked_values.append(val)
+    except Exception:
+        leaked_values = []
+
     deleted = delete_credential(service, key if key else None)
     if not deleted:
         target = f"{service}/{key}" if key else service
         return f"ERROR: No credentials found for '{target}'."
+
+    # Auto-trigger SELECTIVE-FORGET (hard, secret mode) over the revoked value(s)
+    # so revoking the credential leaves no leaked copies in memory. Best-effort:
+    # never let a sweep failure block the credential deletion.
+    forgotten = 0
+    swept = False
+    incomplete = False
+    residual_detail = ""
+    for val in leaked_values:
+        try:
+            import memory_forget
+
+            sweep = memory_forget.sweep_revoked_secret(val, reason=f"credential_deleted:{service}")
+            if sweep.get("destructive"):
+                swept = True
+                # Count BOTH deleted rows and redacted-in-place rows: a leaked
+                # copy embedded in a useful record is scrubbed via redaction, not
+                # deletion, so counting only deletions would under-report.
+                forgotten += int(sweep.get("deleted_total") or 0)
+                forgotten += int(sweep.get("redacted_total") or 0)
+                if not sweep.get("complete", True):
+                    incomplete = True
+                    verification = sweep.get("verification") or {}
+                    survivors = {
+                        **(verification.get("residual_stores") or {}),
+                        **(verification.get("residual_fts") or {}),
+                    }
+                    if verification.get("residual_shadows"):
+                        survivors["shadow_dbs"] = len(verification["residual_shadows"])
+                    if verification.get("residual_transcripts"):
+                        survivors["transcripts"] = len(verification["residual_transcripts"])
+                    if survivors and not residual_detail:
+                        residual_detail = ", ".join(f"{k}={v}" for k, v in survivors.items())
+        except Exception:
+            continue
+
+    suffix = ""
+    if swept:
+        suffix = f" Forget sweep removed {forgotten} leaked copy/copies from memory."
+        if incomplete:
+            suffix += (
+                " WARNING: forget sweep reported RESIDUAL matches — the secret is "
+                "STILL grep-able and was NOT fully removed. Verify manually"
+            )
+            suffix += f" ({residual_detail})." if residual_detail else "."
+
     if key:
-        return f"Credential deleted."
-    return f"All credentials for service deleted."
+        return f"Credential deleted.{suffix}"
+    return f"All credentials for service deleted.{suffix}"
 
 
 def handle_credential_list(service: str = '') -> str:
