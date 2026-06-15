@@ -336,6 +336,38 @@ def test_token_only_actions_do_not_inject_via_pre_action(isolated_db):
         assert not bundle.get("diagnostic_templates"), (action, bundle.get("diagnostic_templates"))
 
 
+def test_lone_weak_marker_does_not_classify(isolated_db):
+    """A single WEAK marker is ambiguous (a healthy deploy exits 0 / is silent)
+    and must NOT seed the archetype — that was the residual spurious-injection."""
+    _, _, sa = _reload_stack()
+    lone_weak = [
+        "exit 0 on success",
+        "silent deploy",
+        "make the script return 0 when it finishes",
+        "deploy with no alert noise",
+    ]
+    for action in lone_weak:
+        assert sa.classify_archetype(action) == "", action
+
+
+def test_strong_marker_or_two_weak_classify(isolated_db):
+    """One STRONG marker, or two WEAK markers, DO classify — recall on the
+    self-error / silent-failure shape Francisco cares about is preserved."""
+    _, _, sa = _reload_stack()
+    one_strong = [
+        "add the missing cron to gcloud",
+        "olvidé crear el cron en gcloud",
+        "the wrapper swallowed the error with || echo {}",
+        "the cron ran but didn't fetch the reviews",
+    ]
+    two_weak = [
+        "exit 0 but it failed silently",  # exit 0 + silent
+        "returned 0 with no error but nothing happened",  # returned 0 + no error
+    ]
+    for action in one_strong + two_weak:
+        assert sa.classify_archetype(action) == "silent_failure", action
+
+
 def test_clear_archetype_action_still_injects(isolated_db):
     """An action that DOES classify into the archetype must still inject —
     the fix tightens precision without killing the real match."""

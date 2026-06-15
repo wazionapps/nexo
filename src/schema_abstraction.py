@@ -86,13 +86,15 @@ INJECT_MATCH_THRESHOLD = 0.55
 # detect it from objective lexical markers in the symptom/missed-signal text.
 # The silent_failure archetype is the one the self_error_detector already covers
 # ("cron exit 0 but the tool failed silently" / "shipped but a step was missing").
-_SILENT_FAILURE_MARKERS = [
-    # exit-0-but-failed / swallowed-error shape
-    re.compile(r"\b(?:exit(?:ed)?\s*0|exit\s*code\s*0|returned?\s*0|status\s*0)\b", re.IGNORECASE),
-    re.compile(r"\b(?:silent(?:ly)?|in\s+silence|swallow(?:ed|ing)?|suppress(?:ed|ing)?|masked?|hid(?:den)?)\b", re.IGNORECASE),
+# STRONG markers self-evidently describe a silent failure or a missing step
+# (the self-error archetype). Any single one is enough to classify, because on
+# its own it already names error-hiding (`|| echo`, "swallowed") or an omitted
+# step ("forgot the cron", "missing the trigger") — exactly the cron/deploy
+# omissions Francisco wants primed before he repeats them.
+_SILENT_FAILURE_STRONG = [
     re.compile(r"\|\|\s*(?:echo|true|:)\b", re.IGNORECASE),  # `|| echo {}` / `|| true`
-    re.compile(r"\b(?:no\s+(?:error|alert|alarm|warning)|without\s+(?:error|alert|failing))\b", re.IGNORECASE),
-    # shipped-but-a-step-missing shape (the self-error archetype)
+    re.compile(r"\b(?:swallow(?:ed|ing)?|suppress(?:ed|ing)?|masked?|hid(?:den)?)\b", re.IGNORECASE),
+    # shipped-but-a-step-missing shape
     re.compile(r"\b(?:forgot|forgotten|missed|omitted|never\s+(?:created|added|set\s*up|configured|ran|deployed))\b", re.IGNORECASE),
     re.compile(r"\b(?:was\s+(?:never|not)\s+(?:created|added|configured|deployed|wired|registered|executed))\b", re.IGNORECASE),
     re.compile(r"\b(?:missing\s+(?:the\s+)?(?:cron|step|trigger|hook|migration|index|webhook|deploy|alert))\b", re.IGNORECASE),
@@ -104,10 +106,26 @@ _SILENT_FAILURE_MARKERS = [
     re.compile(r"\b(?:corr[íi]a?\s+pero|parec[íi]a\s+(?:que\s+)?(?:funcionaba|iba\s+bien)\s+pero)\b", re.IGNORECASE),
 ]
 
+# WEAK markers are ambiguous on their own: a healthy script also "exits 0", a
+# routine deploy can be "silent", and "no alerts" can mean nothing broke. A
+# lone weak hit must NOT seed a template (that was the spurious-injection on
+# "exit 0 on success" / "silent deploy"). Two weak hits, or any strong hit,
+# do classify.
+_SILENT_FAILURE_WEAK = [
+    re.compile(r"\b(?:exit(?:ed)?\s*0|exit\s*code\s*0|returned?\s*0|status\s*0)\b", re.IGNORECASE),
+    re.compile(r"\b(?:silent(?:ly)?|in\s+silence)\b", re.IGNORECASE),
+    re.compile(r"\b(?:no\s+(?:error|alert|alarm|warning)|without\s+(?:error|alert|failing))\b", re.IGNORECASE),
+]
+
+# Backwards-compatible flat view (introspection / any future consumer).
+_SILENT_FAILURE_MARKERS = _SILENT_FAILURE_STRONG + _SILENT_FAILURE_WEAK
+
 ARCHETYPES: dict[str, dict[str, Any]] = {
     "silent_failure": {
         "label": "Silent failure — the job reported success but the real work did not happen",
         "markers": _SILENT_FAILURE_MARKERS,
+        "strong_markers": _SILENT_FAILURE_STRONG,
+        "weak_markers": _SILENT_FAILURE_WEAK,
         # The COMPLETE diagnosis, primed instantly. This is the load-bearing
         # payload: when the archetype reappears, prime these checks first.
         "diagnosis_steps": [
@@ -175,14 +193,29 @@ def _normalize(value: object) -> str:
 def classify_archetype(text: str) -> str:
     """Return the archetype key whose markers the text matches, or "".
 
-    A text belongs to an archetype when it hits at least one objective marker.
-    Deterministic and pure. Ambiguity (no marker) → "" (no archetype), so the
-    incident never seeds a template on its own.
+    A text belongs to an archetype when it hits at least one STRONG marker, or
+    at least two WEAK markers. A lone weak marker ("exit 0", "silent") is
+    ambiguous and must NOT seed a template — a healthy deploy also exits 0 and
+    can be silent. Strong markers ("|| echo", "forgot the cron", "swallowed")
+    name the failure on their own, so one is enough. This keeps the cron/deploy
+    omissions primed while dropping spurious hits on benign success phrasing.
+
+    Deterministic and pure. Ambiguity → "" (no archetype), so the incident
+    never seeds a template on its own. Archetypes without an explicit
+    strong/weak split fall back to the legacy any-marker rule.
     """
     clean = str(text or "")
     if not clean.strip():
         return ""
     for key, spec in ARCHETYPES.items():
+        strong = spec.get("strong_markers")
+        weak = spec.get("weak_markers")
+        if strong is not None or weak is not None:
+            if any(m.search(clean) for m in (strong or [])):
+                return key
+            if sum(1 for m in (weak or []) if m.search(clean)) >= 2:
+                return key
+            continue
         for marker in spec["markers"]:
             if marker.search(clean):
                 return key
