@@ -39,6 +39,7 @@ sys.path.insert(0, str(NEXO_CODE))
 from agent_runner import AutomationBackendUnavailableError, run_automation_prompt
 from constants import AUTOMATION_SUBPROCESS_TIMEOUT
 from core_prompts import render_core_prompt
+import consolidation_prep
 import paths
 
 try:
@@ -186,12 +187,41 @@ def consolidate_with_cli(data: dict) -> bool:
     if len(diaries_json) > 12000:
         diaries_json = diaries_json[:12000] + "\n... (truncated)"
 
+    # Precompute ALL corpus-wide mechanical work here (read-only) so the LLM gets
+    # a tiny, bounded brief and never lists the full learnings corpus — which is
+    # what blew up the headless context and caused the exit-124 timeout. Guarded:
+    # any failure degrades to a safe empty brief; the prompt still forbids the LLM
+    # from scanning the corpus, and Stage 3 runs regardless.
+    try:
+        brief = consolidation_prep.build_consolidation_brief(diaries_with_critique)
+        log(
+            f"Stage 2: brief built — corpus_size={brief.get('corpus_size')}, "
+            f"shortlist={len(brief.get('shortlist', []))}, "
+            f"contradictions={len(brief.get('contradiction_pairs', []))}, "
+            f"truncated={brief.get('truncated')}"
+        )
+    except Exception as e:
+        log(f"Stage 2: brief builder failed ({e}); degrading to empty brief")
+        brief = {
+            "corpus_size": None,
+            "today_topics": [],
+            "shortlist": [],
+            "contradiction_pairs": [],
+            "supersession_stubs": [],
+            "stale_candidates": [],
+            "preference_key_dupes": [],
+            "truncated": False,
+            "_helper_error": str(e),
+        }
+    brief_json = json.dumps(brief, ensure_ascii=False)
+
     prompt = render_core_prompt(
         "postmortem-consolidator",
         date=data["date"],
         session_total=len(data["diaries"]),
         sessions_with_critique=len(diaries_with_critique),
         diaries_json=diaries_json,
+        brief_json=brief_json,
         existing_feedback_count=len(data["existing_feedbacks"]),
         existing_feedbacks_json=json.dumps(data["existing_feedbacks"][:30], ensure_ascii=False),
         recent_rules_json=json.dumps(data["history_summary"].get("recent_rules", []), ensure_ascii=False),
@@ -206,7 +236,20 @@ def consolidate_with_cli(data: dict) -> bool:
             caller="postmortem_consolidator",
             timeout=AUTOMATION_SUBPROCESS_TIMEOUT,
             output_format="text",
-            allowed_tools="Read,Write,Edit,Glob,Grep,Bash,mcp__nexo__*",
+            # Defense in depth: REMOVE the blanket mcp__nexo__* grant so the model
+            # structurally CANNOT call nexo_learning_list / nexo_learning_search and
+            # re-pull the whole corpus into context (the exit-124 root cause). It
+            # keeps only the tools the consolidation actually needs to write its
+            # decisions; all corpus analysis is already precomputed in brief_json.
+            allowed_tools=(
+                "Read,Write,Edit,Glob,Grep,Bash,"
+                "mcp__nexo__nexo_startup,"
+                "mcp__nexo__nexo_learning_add,"
+                "mcp__nexo__nexo_followup_create,"
+                "mcp__nexo__nexo_task_open,"
+                "mcp__nexo__nexo_task_close,"
+                "mcp__nexo__nexo_heartbeat"
+            ),
         )
 
         if result.returncode != 0:
