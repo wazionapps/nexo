@@ -1034,6 +1034,7 @@ def test_postmortem_prompt_is_catalog_backed_and_generic(tmp_path, monkeypatch):
         existing_feedback_count=2,
         existing_feedbacks_json='["feedback_postmortem_verify_before_done"]',
         recent_rules_json='["Always verify before closing."]',
+        brief_json='{"corpus_size": 0, "shortlist": [], "contradiction_pairs": []}',
         memory_dir=Path("/tmp/memory"),
         postmortem_daily_file=Path("/tmp/postmortem-daily.md"),
     )

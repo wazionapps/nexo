@@ -9,11 +9,23 @@ from typing import Any
 
 from db import (
     build_pre_action_context,
+    get_memory_observations_by_uids,
     list_memory_events,
     list_memory_observations,
     process_memory_observation_queue,
     search_memory_observations_fts,
+    vector_scan_observations,
 )
+
+# Weight for the semantic (vector) signal when fused with the lexical/FTS score.
+# A strong paraphrase match (high cosine) can carry an observation that the
+# token-overlap score missed entirely, while still ranking below an exact
+# lexical hit on the same query.
+_VECTOR_FUSION_WEIGHT = 0.85
+# Minimum cosine for a semantic-only candidate to survive the relaxed filter.
+# Below this, a vector "match" is noise and must not resurrect an observation
+# that the lexical path already rejected.
+_VECTOR_MIN_SCORE = 0.30
 
 
 def _tokens(text: str) -> set[str]:
@@ -35,6 +47,41 @@ def _score(query: str, text: str, base: float = 0.0) -> float:
     if not overlap:
         return 0.0
     return min(1.0, base + len(overlap) / max(1, len(query_tokens)))
+
+
+def _model_is_warm() -> bool:
+    """True only when embedding the query will NOT trigger a cold model load."""
+    try:
+        import cognitive._core as cog
+    except Exception:
+        return False
+    try:
+        if cog._model_download_disabled():
+            return True
+    except Exception:
+        return False
+    return getattr(cog, "_model", None) is not None
+
+
+def _maybe_query_embedding(query: str):
+    """Embed the query ONCE for semantic fusion, or return None.
+
+    CRITICAL latency guard: this never loads a cold model. It returns None
+    (degrading to the FTS/token path) unless the deterministic offline fallback
+    is active or the real model is already warm in-process. Any failure also
+    yields None.
+    """
+    clean = (query or "").strip()
+    if not clean:
+        return None
+    if not _model_is_warm():
+        return None
+    try:
+        import cognitive._core as cog
+
+        return cog.embed(clean)
+    except Exception:
+        return None
 
 
 def _project_hint_values(project_hint: str = "") -> set[str]:
@@ -225,6 +272,30 @@ def memory_search(
     ):
         uid = item.get("observation_uid") or f"id:{item.get('id')}"
         observations_by_uid.setdefault(uid, item)
+    # Semantic fusion: embed the query ONCE (only when a model is already warm —
+    # never trigger a cold model load on this latency path) and run a bounded
+    # vector scan over precomputed observation embeddings. Paraphrases that the
+    # lexical/FTS path missed are pulled in here.
+    vector_scores: dict[str, float] = {}
+    if clean_query:
+        query_vector = _maybe_query_embedding(clean_query)
+        if query_vector is not None:
+            for hit in vector_scan_observations(
+                query_vector,
+                limit=max_items * 3,
+                start_ts=start,
+                end_ts=end,
+                min_score=_VECTOR_MIN_SCORE,
+            ):
+                uid = hit.get("observation_uid")
+                if uid:
+                    vector_scores[uid] = float(hit.get("vector_score") or 0.0)
+            # Materialise semantic-only observations the lexical scan did not see.
+            missing_uids = [uid for uid in vector_scores if uid not in observations_by_uid]
+            if missing_uids:
+                for uid, item in get_memory_observations_by_uids(missing_uids).items():
+                    observations_by_uid.setdefault(uid, item)
+
     observations = list(observations_by_uid.values())
     events = list_memory_events(
         query=clean_query,
@@ -234,12 +305,23 @@ def memory_search(
         end_ts=end,
     )
 
-    candidates = [
-        _observation_to_candidate(item, clean_query)
-        for item in observations
-        if _within_range(item.get("created_at"), start, end)
-        and _project_matches(item.get("project_key") or "", project_hint)
-    ]
+    candidates = []
+    for item in observations:
+        if not _within_range(item.get("created_at"), start, end):
+            continue
+        if not _project_matches(item.get("project_key") or "", project_hint):
+            continue
+        candidate = _observation_to_candidate(item, clean_query)
+        uid = item.get("observation_uid") or f"id:{item.get('id')}"
+        vector_score = vector_scores.get(uid, 0.0)
+        if vector_score > 0:
+            # Fuse: keep the higher of the lexical score and the weighted vector
+            # signal so a strong paraphrase survives while exact lexical hits
+            # still outrank weak semantic ones.
+            fused = max(float(candidate.get("score") or 0.0), _VECTOR_FUSION_WEIGHT * vector_score)
+            candidate["score"] = round(fused, 4)
+            candidate["vector_score"] = round(vector_score, 4)
+        candidates.append(candidate)
     candidates.extend(
         _event_to_candidate(item, clean_query)
         for item in events
@@ -248,7 +330,14 @@ def memory_search(
     )
 
     if clean_query:
-        candidates = [item for item in candidates if item.get("score", 0) > 0]
+        # Relaxed filter: a candidate survives if it has a positive lexical score
+        # OR a qualifying semantic (vector) match. Previously the hard score>0
+        # filter dropped semantic-only paraphrase hits before they could rank.
+        candidates = [
+            item
+            for item in candidates
+            if item.get("score", 0) > 0 or item.get("vector_score", 0) > 0
+        ]
     candidates.sort(key=lambda item: (item.get("score", 0), item.get("created_at") or 0), reverse=True)
     candidates = candidates[:max_items]
 

@@ -173,6 +173,46 @@ def applies_overlap(left: str, right: str) -> bool:
     return False
 
 
+def normalized_key(title: str, applies_to: str = "") -> str:
+    """Stable dedup key for a learning: normalized title + sorted applies scope.
+
+    Public thin wrapper so callers (e.g. the nightly consolidation brief builder)
+    depend only on the resolver's public surface for dedup math. Two learnings
+    that differ only in casing/whitespace of the title and ordering of applies_to
+    tokens collapse to the same key.
+    """
+    title_key = _normalize_text(title)
+    scope_tokens = sorted(
+        {_normalize_applies_token(item) for item in _split_applies_to(applies_to)} - {""}
+    )
+    if scope_tokens:
+        return f"{title_key}|{','.join(scope_tokens)}"
+    return title_key
+
+
+def candidate_similarity(text_a: str, text_b: str) -> float:
+    """Similarity between two free-text snippets using the resolver's own math.
+
+    Wraps hybrid_similarity_score with the SAME thresholds used in _similarity
+    (the per-candidate resolution path) so consolidation_prep and the resolver
+    stay in lockstep. Returns 0.0 when either side is empty.
+    """
+    left = str(text_a or "").strip()
+    right = str(text_b or "").strip()
+    if not left or not right:
+        return 0.0
+    return float(
+        hybrid_similarity_score(
+            left,
+            right,
+            keyword_extractor=extract_keywords,
+            strong_semantic_threshold=0.82,
+            moderate_semantic_threshold=0.74,
+            moderate_keyword_floor=0.08,
+        )
+    )
+
+
 def _table_columns(conn: sqlite3.Connection, table: str) -> set[str]:
     try:
         return {str(row["name"]) for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
@@ -413,7 +453,9 @@ __all__ = [
     "CANONICAL_ACTIONS",
     "applies_overlap",
     "authority_rank",
+    "candidate_similarity",
     "looks_contradictory",
     "normalize_authority",
+    "normalized_key",
     "resolve_learning_candidate",
 ]

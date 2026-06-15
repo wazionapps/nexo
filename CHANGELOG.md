@@ -1,5 +1,18 @@
 # Changelog
 
+## [7.33.0] - 2026-06-15
+
+### Added - Cognitive OS Ola 1 (phase 2): semantic recall, graph-at-answer-time, reliability
+
+- **Memory search now finds by MEANING, not just keywords.** `nexo_memory_search` over observations was FTS/token-overlap only, so a paraphrased query (no shared literal token) returned nothing. Observations are now embedded at write time (shadow column, migration m83) with a bounded idempotent backfill, and `memory_search` fuses FTS + vector cosine and relaxes the hard `score>0` filter so paraphrases retrieve the right observation. Degrades to the FTS path when no embedding model is loaded; the query is never embedded on a cold model (no latency hit).
+- **The KG/causal graph is read at answer time.** A new bounded, fail-open `kg_neighbors` pre-answer source surfaces KG neighbors + verified causal/ops edges for the entities/files in your message (wired into the deep intents). Combined with 7.32.0's task_close edge-writing, "connect the dots the moment you say something" now has both a write and a read path.
+- **Local file recall by keyword via FTS5.** An FTS5 index over `local_chunks` (migration m84, incremental/idempotent/resumable backfill, dual-read with the legacy LIKE path, privacy-filtered, feature-flagged, no VACUUM) replaces blind `LIKE` prefiltering when ready.
+- **Nightly learning consolidation no longer times out (error 124).** The consolidator fed the LLM the entire learnings corpus (305-879 rules) to dedup / detect contradictions, blowing its context. Mechanical corpus analysis moves to a read-only `consolidation_prep` helper that hands the LLM a bounded shortlist + precomputed contradiction pairs; the tool grant is tightened so the corpus can't re-enter context. Full consolidation quality preserved.
+- **Reliable error capture (soft enforcement).** Correction->learning capture logs + retries instead of failing silently, a failed capture no longer arms the 1h dedup gate, and `task_close` opens a non-blocking debt instead of hard-blocking on a pending correction.
+- **No duplicate concurrent LLM spend.** The followup runner's PID-file lock (TOCTOU race) is replaced with an atomic `fcntl.flock` so two concurrent runners can never both run.
+
+Builds on 7.32.0 (causal-graph populate + workflow reaper + the 7.31.14 critical fixes).
+
 ## [7.32.0] - 2026-06-15
 
 ### Added - Cognitive OS Ola 1: connect-the-dots + reliability wiring

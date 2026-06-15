@@ -88,3 +88,31 @@ def test_resolver_allows_francisco_correction_to_supersede_conflict(isolated_db)
     assert result["action"] == "supersede"
     assert result["reason"] == "higher_authority_conflict"
     assert result["target_id"] == 1
+
+
+def test_normalized_key_and_candidate_similarity_public(isolated_db):
+    _db, resolver = _reload_stack()
+
+    # normalized_key collapses casing/whitespace of the title.
+    key_a = resolver.normalized_key("Guard Before Edit")
+    key_b = resolver.normalized_key("  guard   before edit ")
+    assert key_a == key_b
+
+    # applies_to ordering does not change the key.
+    key_c = resolver.normalized_key("Rule", "/a/x.py, /b/y.py")
+    key_d = resolver.normalized_key("Rule", "/b/y.py, /a/x.py")
+    assert key_c == key_d
+
+    # candidate_similarity: 1.0 for identical text, low for unrelated.
+    same = resolver.candidate_similarity(
+        "Always run guard before editing code",
+        "Always run guard before editing code",
+    )
+    assert same == 1.0
+    unrelated = resolver.candidate_similarity(
+        "Pin fastembed minimum version in requirements",
+        "Rotate the Stripe billing API key after exposure",
+    )
+    assert unrelated < 0.85
+    # Empty input yields 0.0.
+    assert resolver.candidate_similarity("", "anything") == 0.0

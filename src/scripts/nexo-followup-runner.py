@@ -27,12 +27,15 @@ From the operator's point of view, these are all "pending items". Internally,
 followups and reminders remain distinct, but the runner focuses on executable work.
 """
 
+import atexit
 import json
 import os
 import re
+import signal
 import sqlite3
 import subprocess
 import sys
+import time
 from difflib import SequenceMatcher
 from email.utils import parsedate_to_datetime
 from datetime import datetime, date, timedelta
@@ -74,6 +77,7 @@ RESULTS_FILE = data_dir() / "followup-runner-results.json"
 
 CLI_TIMEOUT = AUTOMATION_SUBPROCESS_TIMEOUT
 LOCK_FILE = LOG_DIR / "followup-runner.lock"
+FOLLOWUP_LOCK_STALE_SECONDS = 7200  # reclaim a leftover lock FILE from a hard-killed prior run
 MAX_FOLLOWUPS_PER_RUN = 5  # Focus: Opus can actually execute 5, not 30
 COOLDOWN_DAYS = 3  # Don't retry waiting_user/stale_review/blocked for 3 days
 STALE_FOLLOWUP_TRIAGE_DAYS = 14
@@ -802,25 +806,123 @@ def render_history_preview(events) -> list[str]:
 
 
 # ── Lock ────────────────────────────────────────────────────────────────
-def acquire_lock() -> bool:
-    if LOCK_FILE.exists():
+_LOCK_FH = None
+_LOCK_RELEASED = False
+
+
+def _register_lock_cleanup() -> None:
+    """Release the flock on normal exit and on SIGTERM/SIGINT (cron supervisor)."""
+    atexit.register(release_lock)
+
+    def _handler(signum, _frame):
+        release_lock()
+        raise SystemExit(128 + signum)
+
+    for _sig in (signal.SIGTERM, signal.SIGINT):
         try:
-            pid = int(LOCK_FILE.read_text().strip())
-            os.kill(pid, 0)
-            return False
-        except (ProcessLookupError, ValueError):
+            signal.signal(_sig, _handler)
+        except Exception:
             pass
-        except PermissionError:
-            return False
-    LOCK_FILE.write_text(str(os.getpid()))
+
+
+def acquire_lock() -> bool:
+    """Atomically acquire the single-runner lock via fcntl.flock.
+
+    Replaces the previous PID-file check-then-write, which had a TOCTOU race
+    that let two concurrent runners both acquire and both spend LLM budget.
+    flock is kernel-enforced and auto-released when the holder process dies; a
+    leftover lock FILE from a hard-killed prior holder is reclaimed via a
+    dead-PID / stale-mtime check before re-attempting the flock.
+    """
+    global _LOCK_FH, _LOCK_RELEASED
+    try:
+        LOCK_FILE.parent.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        pass
+    # Pre-steal a stale lock FILE only if its owner is dead or the file is old.
+    try:
+        if LOCK_FILE.exists():
+            stale = False
+            try:
+                raw = LOCK_FILE.read_text().strip()
+                pid = int(raw.split(":", 1)[0])  # tolerate legacy bare-int format
+                try:
+                    os.kill(pid, 0)
+                except ProcessLookupError:
+                    stale = True
+                except PermissionError:
+                    stale = False
+            except (ValueError, OSError):
+                stale = True
+            try:
+                if time.time() - LOCK_FILE.stat().st_mtime > FOLLOWUP_LOCK_STALE_SECONDS:
+                    stale = True
+            except OSError:
+                pass
+            if stale:
+                try:
+                    LOCK_FILE.unlink()
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+    try:
+        fh = open(LOCK_FILE, "a+")
+    except Exception:
+        return False
+
+    try:
+        import fcntl
+        fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except ImportError:
+        # Non-POSIX platform (Windows). Best-effort PID stamp and proceed.
+        try:
+            fh.seek(0); fh.truncate(); fh.write(f"{os.getpid()}:{time.time()}\n"); fh.flush()
+        except Exception:
+            pass
+        _LOCK_FH = fh
+        _LOCK_RELEASED = False
+        _register_lock_cleanup()
+        return True
+    except (OSError, BlockingIOError):
+        try:
+            fh.close()
+        except Exception:
+            pass
+        return False
+
+    # We hold the flock — stamp pid:timestamp so observers can see who.
+    try:
+        fh.seek(0); fh.truncate(); fh.write(f"{os.getpid()}:{time.time()}\n"); fh.flush()
+    except Exception:
+        pass
+    _LOCK_FH = fh
+    _LOCK_RELEASED = False
+    _register_lock_cleanup()
     return True
 
 
 def release_lock():
+    """Idempotent, ownership-aware release. Only acts if we actually hold the lock."""
+    global _LOCK_FH, _LOCK_RELEASED
+    if _LOCK_RELEASED or _LOCK_FH is None:
+        return
+    try:
+        import fcntl
+        fcntl.flock(_LOCK_FH.fileno(), fcntl.LOCK_UN)
+    except Exception:
+        pass
+    try:
+        _LOCK_FH.close()
+    except Exception:
+        pass
     try:
         LOCK_FILE.unlink(missing_ok=True)
     except Exception:
         pass
+    _LOCK_FH = None
+    _LOCK_RELEASED = True
 
 
 # ── Recent activity context ────────────────────────────────────────────

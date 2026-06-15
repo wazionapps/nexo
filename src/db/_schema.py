@@ -2119,6 +2119,81 @@ def _m64_local_context_live_dirs(conn):
     )
 
 
+def _m84_local_chunks_fts(conn):
+    """FTS5 keyword index over local_chunks for semantic-keyword local-file recall.
+
+    Additive + idempotent + reversible. Creates an FTS5 virtual table
+    ``local_chunks_fts`` keyed by ``local_chunks.rowid`` (local_chunks is NOT
+    WITHOUT ROWID, so its implicit rowid is stable and usable as the FTS key)
+    plus triggers that mirror local_chunks insert/delete/update. The FTS row
+    stores a denormalized snapshot of the owning asset's ``privacy_class`` /
+    ``status`` so privacy can be coarse-prefiltered INSIDE the FTS query without
+    a heavy join. The authoritative privacy check stays on the real
+    local_assets join + is_queryable_path in the retrieval path.
+
+    NOTE: no bulk INSERT...SELECT backfill here (that would scan/lock the live
+    19GB DB at schema time). The incremental, resumable backfill runs in the
+    cron tick (local_context/api.py:_backfill_fts_rows). No vector_blob column,
+    no VACUUM — explicitly out of scope.
+    """
+    try:
+        conn.execute(
+            """
+            CREATE VIRTUAL TABLE IF NOT EXISTS local_chunks_fts USING fts5(
+                text,
+                privacy_class UNINDEXED,
+                asset_status UNINDEXED,
+                tokenize='unicode61 remove_diacritics 2'
+            )
+            """
+        )
+    except Exception:
+        # Hosts without FTS5 support: fall back to a plain shadow table so the
+        # triggers below still succeed and the dual-read simply never flips on
+        # (FTS MATCH would raise OperationalError -> retrieval stays on LIKE).
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS local_chunks_fts (
+                rowid INTEGER PRIMARY KEY,
+                text TEXT DEFAULT '',
+                privacy_class TEXT DEFAULT '',
+                asset_status TEXT DEFAULT ''
+            )
+            """
+        )
+    conn.executescript(
+        """
+        CREATE TRIGGER IF NOT EXISTS local_chunks_fts_insert
+        AFTER INSERT ON local_chunks BEGIN
+            INSERT INTO local_chunks_fts(rowid, text, privacy_class, asset_status)
+            VALUES (
+                new.rowid,
+                new.text,
+                COALESCE((SELECT privacy_class FROM local_assets WHERE asset_id=new.asset_id), 'normal'),
+                COALESCE((SELECT status FROM local_assets WHERE asset_id=new.asset_id), 'active')
+            );
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS local_chunks_fts_delete
+        AFTER DELETE ON local_chunks BEGIN
+            DELETE FROM local_chunks_fts WHERE rowid = old.rowid;
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS local_chunks_fts_update
+        AFTER UPDATE OF text, asset_id ON local_chunks BEGIN
+            DELETE FROM local_chunks_fts WHERE rowid = old.rowid;
+            INSERT INTO local_chunks_fts(rowid, text, privacy_class, asset_status)
+            VALUES (
+                new.rowid,
+                new.text,
+                COALESCE((SELECT privacy_class FROM local_assets WHERE asset_id=new.asset_id), 'normal'),
+                COALESCE((SELECT status FROM local_assets WHERE asset_id=new.asset_id), 'active')
+            );
+        END;
+        """
+    )
+
+
 def _backfill_diary_quality(conn):
     for table in ("session_diary", "diary_archive"):
         conn.execute(f"""
@@ -3112,6 +3187,32 @@ def _m82_confidence_checks(conn):
     )
 
 
+def _m83_observation_embeddings(conn):
+    """Shadow embedding columns for semantic retrieval over observations.
+
+    Additive + reversible: two nullable columns on memory_observations. The
+    embedding is precomputed at write time (after the row is committed) and by a
+    bounded backfill. memory_search fuses the precomputed vector with the
+    existing FTS/token score so paraphrases retrieve the right observation.
+
+    The query/latency path never triggers a cold model load — it embeds the
+    query once only when a model is already warm (or the deterministic offline
+    fallback is active) and otherwise degrades to today's FTS-only behaviour.
+    """
+    # Ensure the base table exists before ALTER: partial-DB upgrade paths (which
+    # mark earlier migrations applied without materializing every table) would
+    # otherwise hit "no such table: memory_observations". m60 is idempotent.
+    _m60_memory_observations(conn)
+    _migrate_add_column(conn, "memory_observations", "embedding", "BLOB")
+    _migrate_add_column(conn, "memory_observations", "embedding_model", "TEXT DEFAULT ''")
+    # Partial index so the bounded backfill can find un-embedded rows cheaply.
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_memory_obs_embedding_pending "
+        "ON memory_observations(id) WHERE embedding IS NULL"
+    )
+    conn.commit()
+
+
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
     (2, "followups_reasoning", _m2_followups_reasoning),
@@ -3195,6 +3296,7 @@ MIGRATIONS = [
     (80, "opportunity_orchestrator", _m80_opportunity_orchestrator),
     (81, "core_rules_product_metadata", _m81_core_rules_product_metadata),
     (82, "confidence_checks", _m82_confidence_checks),
+    (83, "observation_embeddings", _m83_observation_embeddings),
 ]
 
 
