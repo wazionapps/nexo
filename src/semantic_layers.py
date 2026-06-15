@@ -445,11 +445,37 @@ def _version_from_db(conn: sqlite3.Connection, source_kind: str, ref_value: str)
         if not row:
             return None
         return {"version": _row_version(row, ["candidate_uid", "updated_at", "privacy_level", "status", "confidence"]), "updated_at": str(row["updated_at"] or "")}
+    # ── kinds added for the resolution cache's anti-stale fingerprint ──────
+    # These are mutated by tools that do NOT write change_log (learning_add /
+    # update, set_preference, the local indexer), so without a real per-row
+    # version they would fall through to a CONSTANT validator digest and a
+    # superseded learning / changed preference / re-indexed file would be
+    # invisible to the cache (stale-serve). Versioning them from their DB row
+    # makes the fingerprint react to the actual content change.
+    if source_kind == "learning":
+        row = _row_by(conn, "learnings", "id", ref_value)
+        if not row:
+            return None
+        data = dict(row)
+        fields = [f for f in ("id", "updated_at", "status", "title", "content", "reasoning", "category") if f in data]
+        return {"version": _row_version(row, fields), "updated_at": str(data.get("updated_at") or "")}
+    if source_kind == "preference":
+        row = _row_by(conn, "preferences", "key", ref_value)
+        if not row:
+            return None
+        return {"version": _row_version(row, ["key", "value", "category", "updated_at"]), "updated_at": str(row["updated_at"] or "")}
+    if source_kind == "local_asset":
+        # ``local_asset:<asset_id>[#<version>]`` — the asset row carries the
+        # current fingerprint/mtime; that is what changes on a re-index.
+        asset_id = ref_value.split("#", 1)[0]
+        row = _row_by(conn, "local_assets", "asset_id", asset_id)
+        if not row:
+            return None
+        return {"version": _row_version(row, ["asset_id", "updated_at", "quick_fingerprint", "modified_at_fs", "size_bytes", "status"]), "updated_at": str(row["updated_at"] or "")}
     return None
 
 
 def source_version_for(source_ref: str, *, conn: sqlite3.Connection | None = None) -> dict[str, Any]:
-    own_conn = conn is None
     conn = conn or _conn()
     validation = validate_source_ref_namespace(source_ref)
     if not validation.get("ok"):
@@ -471,6 +497,9 @@ def source_version_for(source_ref: str, *, conn: sqlite3.Connection | None = Non
             "memory_observation", "hot_context", "recent_event", "transcript_index",
             "continuity_snapshot", "entity", "entity_profile", "artifact_registry",
             "artifact_alias", "managed_asset", "causal_edge_candidate",
+            # Added for the resolution-cache fingerprint: a missing row here is a
+            # real "source gone" signal (distinct marker), not a stable digest.
+            "learning", "preference", "local_asset",
         }
         if db_backed:
             return {
@@ -489,8 +518,6 @@ def source_version_for(source_ref: str, *, conn: sqlite3.Connection | None = Non
             "source_updated_at": "",
             "privacy_level": "normal",
         }
-    if own_conn:
-        pass
     return {
         **validation,
         "source_version": str(version["version"]),

@@ -352,6 +352,7 @@ def record_router_usage(
     elapsed_ms: int | None = None,
     deadline_ms: int | None = None,
     used_before_response: bool = True,
+    cache_hit: bool = False,
     db_path: str | os.PathLike[str] | None = None,
 ) -> dict[str, Any]:
     evidence_refs = router_payload.get("evidence_refs") or []
@@ -374,6 +375,7 @@ def record_router_usage(
         "escalated_from": router_payload.get("escalated_from") or budget_policy.get("escalated_from") or "",
         "escalated_to": router_payload.get("escalated_to") or budget_policy.get("escalated_to") or "",
         "route_cache_key": budget_policy.get("route_cache_key") or "",
+        "cache_hit": bool(cache_hit or router_payload.get("cache_hit")),
         "max_sources": budget_policy.get("max_sources") or 0,
         "max_source_timeout_ms": budget_policy.get("max_source_timeout_ms") or 0,
         "allowed_sources": budget_policy.get("allowed_sources") or [],

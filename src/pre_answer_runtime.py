@@ -12,6 +12,41 @@ from pre_answer_router import DEFAULT_BUDGET_MS, DEFAULT_TOKEN_BUDGET, classify_
 
 RUNTIME_BUDGET_POLICY_VERSION = "runtime_budget_v1"
 
+# Working-memory TTL for "I just resolved this" intents (Francisco's brief:
+# don't re-search project X / "what do you know about María" from zero).
+# Protected by the 3 invalidations (TTL + per-row snapshot + change_watermark),
+# so a real change still forces a fresh resolution regardless of TTL.
+#
+# DEFENSE IN DEPTH: the TTL is now 15 MINUTES (900s), down from 6h. The per-row
+# snapshot is the primary anti-stale guard, but it can only catch a change it can
+# RESOLVE; a short TTL bounds the maximum obsolescence to minutes for anything
+# that ever slips past resolution (a newly-introduced untracked store, a row-
+# correctness regression), without losing the "lo acabo de mirar" repeat-question
+# win — 15 minutes still covers the same-conversation re-ask. Configurable via
+# NEXO_RESOLUTION_CACHE_PRIOR_WORK_TTL (seconds); set to 0 to disable the override
+# and fall back to the tier's short TTL. Instant stays 0 (volatile) and critical
+# keeps its short tier TTL (excluded below).
+WORKING_MEMORY_INTENTS = {
+    "prior_work",
+    "identity_authorship",
+    "live_state_claim",
+    "memory_question",
+}
+_DEFAULT_WORKING_MEMORY_TTL = 15 * 60  # 900s — defense-in-depth obsolescence cap
+
+
+def _working_memory_ttl_override() -> int:
+    import os
+
+    raw = os.environ.get("NEXO_RESOLUTION_CACHE_PRIOR_WORK_TTL")
+    if raw is None or str(raw).strip() == "":
+        return _DEFAULT_WORKING_MEMORY_TTL
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return _DEFAULT_WORKING_MEMORY_TTL
+    return max(0, value)
+
 HEAVY_SOURCES = {"memory", "cognitive", "local_context", "transcripts"}
 CANONICAL_ROUTER_SOURCES = {
     "semantic_layers",
@@ -87,6 +122,14 @@ def _as_optional_positive_int(value: Any) -> int | None:
     except Exception:
         return None
     return number if number > 0 else None
+
+
+def _truthy(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _clean(value: Any) -> str:
@@ -327,6 +370,22 @@ def select_budget_policy(
             required_checks.append("server_verification")
         if clean_area in {"billing", "legal", "external_publication"}:
             required_checks.append("permissions")
+    cache_ttl_seconds = int(spec.get("cache_ttl_seconds") or 0)
+    # Working-memory TTL: extend caching for "I just resolved this" intents so a
+    # repeat question in the same window is served from memory instead of a cold
+    # re-search. Never applied to instant (ttl=0, volatile) or critical
+    # (release/server/billing/legal must keep their short ttl). Safe because the
+    # source_fingerprint + change_watermark invalidations still fire.
+    if (
+        cache_ttl_seconds > 0
+        and tier != "critical"
+        and intent in WORKING_MEMORY_INTENTS
+    ):
+        override = _working_memory_ttl_override()
+        if override > cache_ttl_seconds:
+            cache_ttl_seconds = override
+            reasons.append("working_memory_ttl_extended")
+
     deadline_ms = int(spec["deadline_ms"])
     token_budget = int(spec["token_budget"])
     if budget_ms_override is not None:
@@ -381,7 +440,7 @@ def select_budget_policy(
         can_delay_first_response=bool(spec.get("can_delay_first_response", False)),
         must_disclose_gap=bool(spec.get("must_disclose_gap", False)),
         delay_message_threshold_ms=int(spec.get("delay_message_threshold_ms") or 0),
-        cache_ttl_seconds=int(spec.get("cache_ttl_seconds") or 0),
+        cache_ttl_seconds=cache_ttl_seconds,
         route_cache_key=route_key,
         privacy_level=str(spec.get("privacy_level") or "normal"),
         reason_codes=tuple(dict.fromkeys(reasons)),
@@ -485,6 +544,69 @@ def run_pre_answer_route(
         budget_ms_override=_as_optional_positive_int(payload.get("budget_ms")),
         token_budget_override=_as_optional_positive_int(payload.get("token_budget")),
     )
+
+    # ── FAST-PATH: working-memory / resolution cache ──────────────────────
+    # The cache key (route_cache_key) and TTL (cache_ttl_seconds) were already
+    # computed by select_budget_policy; here we finally READ them. A valid hit
+    # serves the prior FINAL result without re-running route_pre_answer or the
+    # escalation pass. 'instant' tier (ttl=0) never caches. The anti-stale
+    # contract (TTL + status + source_fingerprint + change_watermark) lives in
+    # resolution_cache.is_valid — any failure is a MISS and falls through.
+    sid = str(payload.get("sid") or payload.get("session_id") or "")
+    cache_enabled = (
+        policy.cache_ttl_seconds > 0
+        and bool(policy.route_cache_key)
+        and not _truthy(payload.get("no_cache"))
+        and not _truthy(payload.get("bypass_cache"))
+    )
+    if cache_enabled:
+        try:
+            import resolution_cache
+
+            expected_sid = sid if policy.intent in resolution_cache.SESSION_SCOPED_INTENTS else ""
+            hit = resolution_cache.get(policy.route_cache_key, expected_sid=expected_sid)
+        except Exception:
+            hit = None
+        if hit and isinstance(hit.get("result"), dict) and hit["result"]:
+            # Serving from cache skips route_pre_answer (and thus the cognitive
+            # source's process_queue=True). Don't lose memory-observation
+            # ingestion just because we hit the cache: process the queue
+            # directly on the hit turn. Bounded, best-effort, never blocks the
+            # answer — failures are swallowed.
+            try:
+                from memory_retrieval import process_memory_observation_queue
+
+                process_memory_observation_queue(limit=50)
+            except Exception:
+                pass
+            cached_result = dict(hit["result"])
+            cached_result["cache_hit"] = True
+            cached_result["resolution_cache"] = {
+                "cache_key": policy.route_cache_key,
+                "hit": True,
+                "resolved_at": hit.get("resolved_at"),
+                "expires_at": hit.get("expires_at"),
+                "hit_count": hit.get("hit_count"),
+            }
+            try:
+                from local_context.usage_events import record_router_usage
+
+                cached_result["usage_event"] = record_router_usage(
+                    query,
+                    cached_result,
+                    client=str(payload.get("source") or payload.get("client") or "unknown"),
+                    tool="pre_answer_router",
+                    route_stage="pre_answer",
+                    intent=str(cached_result.get("intent") or policy.intent or "auto"),
+                    elapsed_ms=0,
+                    deadline_ms=int(cached_result.get("deadline_ms") or policy.deadline_ms),
+                    used_before_response=True,
+                    cache_hit=True,
+                )
+            except Exception:
+                pass
+            return cached_result
+
     result = _run_with_policy(
         query=query,
         payload=payload,
@@ -524,6 +646,36 @@ def run_pre_answer_route(
         result["escalated_from"] = policy.budget_tier
         result["escalated_to"] = escalated_policy.budget_tier
 
+    # ── SET: cache the FINAL result (post-escalation), never mid-way ──────
+    # Only cache real, source-backed answers: an empty/no-evidence pass should
+    # not poison the cache (it would mask a future genuine resolution). The
+    # 'instant' tier and missing key are rejected inside resolution_cache.set.
+    result["cache_hit"] = False
+    if cache_enabled and (result.get("should_inject") or result.get("evidence_refs")):
+        try:
+            import resolution_cache
+
+            set_outcome = resolution_cache.set(
+                policy.route_cache_key,
+                result,
+                ttl_seconds=int(policy.cache_ttl_seconds),
+                kind="route",
+                intent=str(policy.intent or ""),
+                area=str(payload.get("area") or ""),
+                sid=sid if policy.intent in resolution_cache.SESSION_SCOPED_INTENTS else "",
+                source_refs=result.get("evidence_refs"),
+                policy_version=str(policy.policy_version or ""),
+            )
+            result["resolution_cache"] = {
+                "cache_key": policy.route_cache_key,
+                "hit": False,
+                "stored": bool(set_outcome.get("ok")),
+                "store_reason": set_outcome.get("reason", ""),
+                "expires_at": set_outcome.get("expires_at"),
+            }
+        except Exception:
+            pass
+
     try:
         from local_context.usage_events import record_router_usage
 
@@ -537,6 +689,7 @@ def run_pre_answer_route(
             elapsed_ms=int(float(result.get("elapsed_ms") or 0)),
             deadline_ms=int(result.get("deadline_ms") or policy.deadline_ms),
             used_before_response=True,
+            cache_hit=False,
         )
     except Exception as exc:
         result["usage_event"] = {

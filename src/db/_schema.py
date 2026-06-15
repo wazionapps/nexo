@@ -3248,6 +3248,73 @@ def _m85_eval_runs(conn):
     conn.commit()
 
 
+def _m86_resolution_cache(conn):
+    """Working-memory / resolution cache for the pre-answer router and repo maps.
+
+    Non-authoritative, like semantic_layers (_m76): the canonical facts still
+    live in diary/workflows/tasks/evidence/memory/learnings/change_log and in
+    the git repos themselves. This table only caches the FINAL organized
+    result of a retrieval (a ``PreAnswerRoute.to_dict()`` for ``kind='route'``)
+    or a lightweight repo snapshot (``kind='repo_map'``), keyed by a
+    deterministic ``cache_key`` (route_cache_key | ``repo:{project_key}``).
+
+    The anti-stale contract (Francisco's rule of gold) lives in the read path
+    (``resolution_cache.is_valid``): a HIT is only valid when ALL hold —
+    (1) now() < expires_at, (2) status=='fresh',
+    (3) source_fingerprint recomputed == stored, (4) change_watermark global ==
+    stored. The columns below exist to support exactly that check. The
+    ``instant`` tier (ttl=0) never writes here.
+    """
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS resolution_cache (
+            cache_key          TEXT PRIMARY KEY,
+            kind               TEXT NOT NULL DEFAULT 'route',
+            intent             TEXT NOT NULL DEFAULT '',
+            area               TEXT NOT NULL DEFAULT '',
+            sid                TEXT NOT NULL DEFAULT '',
+            result_json        TEXT NOT NULL,
+            source_fingerprint TEXT NOT NULL,
+            source_refs_json   TEXT NOT NULL DEFAULT '[]',
+            change_watermark   INTEGER NOT NULL DEFAULT 0,
+            status             TEXT NOT NULL DEFAULT 'fresh',
+            policy_version     TEXT NOT NULL DEFAULT '',
+            resolved_at        REAL NOT NULL,
+            expires_at         REAL NOT NULL DEFAULT 0,
+            hit_count          INTEGER NOT NULL DEFAULT 0,
+            CHECK(kind IN ('route', 'repo_map')),
+            CHECK(status IN ('fresh', 'stale', 'expired', 'invalid'))
+        )
+        """
+    )
+    _migrate_add_index(conn, "idx_resolution_cache_status_exp", "resolution_cache", "status, expires_at")
+    _migrate_add_index(conn, "idx_resolution_cache_kind", "resolution_cache", "kind, sid")
+    _migrate_add_index(conn, "idx_resolution_cache_fingerprint", "resolution_cache", "source_fingerprint")
+    conn.commit()
+
+
+def _m87_resolution_cache_content_snapshot(conn):
+    """Per-row content snapshot for the resolution cache's anti-stale check.
+
+    The fingerprint (``source_fingerprint``) is a single opaque digest over the
+    versions of the consulted refs. It proved the AGGREGATE changed but could
+    not by itself say WHICH ref moved, and — more importantly — it relied on
+    ``semantic_layers.source_version_for`` keyed by CANONICAL prefixes
+    (``followup:``), while the pre-answer router emits its own SOURCE-NAME refs
+    (``followups:``). Those source-name refs resolved to an ``unsupported``
+    namespace → empty version → an inert fingerprint, so a followup completed by
+    a plain UPDATE (no change_log write → watermark unmoved) was served stale.
+
+    This column stores an explicit ``{ref: version}`` map captured from the REAL
+    rows at write time (``resolution_cache.row_version_snapshot``). On read we
+    re-read those same rows by id and compare — the snapshot is now the PRIMARY
+    freshness guarantee; TTL and the global watermark remain cheap fast-fails.
+    Idempotent, append-only ALTER (non-destructive).
+    """
+    _migrate_add_column(conn, "resolution_cache", "content_snapshot_json", "TEXT NOT NULL DEFAULT '{}'")
+    conn.commit()
+
+
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
     (2, "followups_reasoning", _m2_followups_reasoning),
@@ -3333,6 +3400,8 @@ MIGRATIONS = [
     (82, "confidence_checks", _m82_confidence_checks),
     (83, "observation_embeddings", _m83_observation_embeddings),
     (85, "eval_runs", _m85_eval_runs),
+    (86, "resolution_cache", _m86_resolution_cache),
+    (87, "resolution_cache_content_snapshot", _m87_resolution_cache_content_snapshot),
 ]
 
 

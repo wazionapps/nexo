@@ -1861,7 +1861,28 @@ def _source_memory(request: SourceRequest) -> SourceResult:
     from db import recall
 
     rows = recall(request.query, days=45)[:5]
-    return _rows_result("memory", rows, ("source", "title", "snippet", "category"), request.max_chars)
+    # ``recall`` returns heterogeneous FTS rows keyed by (source, source_id) in
+    # the unified_search index, NOT a single ``id`` column. The default
+    # ``_rows_result`` ref would collapse to a POSITIONAL ``memory:<idx>`` that
+    # identifies no row, so the resolution cache could not version it (and would
+    # refuse to cache, or worse, serve stale). Emit a RESOLVABLE ref
+    # ``memory:<source>:<source_id>`` that the cache versions via
+    # unified_search(source, source_id).updated_at, so an edited memory row
+    # invalidates the cached answer. Falls back to the positional ref only when
+    # a row carries no (source, source_id) pair (which the cache then treats as
+    # untrackable and refuses to cache — conservative, never stale).
+    if not rows:
+        return SourceResult(source="memory")
+    result = _rows_result("memory", rows, ("source", "title", "snippet", "category"), request.max_chars)
+    resolvable_refs: list[str] = []
+    for row in rows[:5]:
+        src = str(row.get("source") or "").strip()
+        sid = str(row.get("source_id") or "").strip()
+        if src and sid:
+            resolvable_refs.append(f"memory:{src}:{sid}")
+    if resolvable_refs:
+        result.evidence_refs = resolvable_refs
+    return result
 
 
 def _source_project_atlas(request: SourceRequest) -> SourceResult:
@@ -2338,9 +2359,46 @@ def _filter_rows_by_query(rows: Iterable[dict[str, Any]], query: str, fields: tu
     return matched
 
 
-def _rows_result(source: str, rows: list[dict[str, Any]], fields: tuple[str, ...], max_chars: int) -> SourceResult:
+# The resolution-cache versioner (``resolution_cache._SOURCE_VERSIONERS``) looks
+# up each cached ref by an EXACT id-column. If ``_rows_result`` builds the ref
+# from a DIFFERENT column than the versioner reads, ``ref_version`` resolves to
+# the wrong row (or, on a value collision between a free-text id column of one
+# row and the numeric id of another, to a REAL but WRONG row) → editing the row
+# the ref encodes does not move the snapshot → STALE HIT. The generic
+# ``id -> evidence_id -> task_id -> run_id -> session_id -> idx`` chain is exactly
+# such a mismatch source: e.g. a ``session_diary`` row carries BOTH ``id`` (the
+# versioner column) and ``session_id`` (a free-text column the OLD chain never
+# reached because ``id`` won), so the emitted ref and the versioner agreed only
+# by luck — and ``lifecycle_events`` has no ``id`` column at all, so the chain
+# fell through to ``session_id``/positional ``idx`` while the versioner read
+# ``event_id``.
+#
+# ``_ROUTER_REF_ID_FIELD`` pins, per source, the SINGLE column whose value builds
+# the ref. It MUST equal the ``id_column`` the resolution-cache versioner uses
+# for that source so ``ref_version('{source}:{id}')`` resolves to the exact row
+# the ref encodes. When the pinned column is absent/empty on a row, we emit a
+# deliberately positional ``{source}:__row<idx>`` ref: positional refs do not
+# match any id-column, so the write gate refuses to cache them (untrackable) —
+# never a silent fallback to a colliding column. Sources NOT listed here keep the
+# legacy chain (their adapters emit a composite/canonical ref, e.g.
+# ``evidence_ledger`` → ``evidence_id``, or are watermark/untrackable anyway).
+_ROUTER_REF_ID_FIELD: dict[str, str] = {
+    "diary": "id",            # versioner: session_diary.id  (NOT session_id — collides)
+    "runtime_db": "event_id", # versioner: lifecycle_events.event_id (no ``id`` column)
+}
+
+
+def _rows_result(
+    source: str,
+    rows: list[dict[str, Any]],
+    fields: tuple[str, ...],
+    max_chars: int,
+    *,
+    id_field: str | None = None,
+) -> SourceResult:
     if not rows:
         return SourceResult(source=source)
+    pinned = id_field or _ROUTER_REF_ID_FIELD.get(source)
     lines: list[str] = []
     refs: list[str] = []
     for idx, row in enumerate(rows[:5], start=1):
@@ -2350,7 +2408,15 @@ def _rows_result(source: str, rows: list[dict[str, Any]], fields: tuple[str, ...
             if value not in (None, ""):
                 parts.append(f"{field_name}={_clip(str(value), 180)}")
         lines.append(f"- " + " | ".join(parts))
-        ref_id = row.get("id") or row.get("evidence_id") or row.get("task_id") or row.get("run_id") or row.get("session_id") or idx
+        if pinned is not None:
+            # Pinned source: the ref MUST use the same column the versioner reads.
+            value = row.get(pinned)
+            # A positional fallback ref deliberately matches no id-column so the
+            # resolution-cache write gate refuses to cache it (untrackable) rather
+            # than silently emit a ref under a colliding column.
+            ref_id = value if value not in (None, "") else f"__row{idx}"
+        else:
+            ref_id = row.get("id") or row.get("evidence_id") or row.get("task_id") or row.get("run_id") or row.get("session_id") or idx
         refs.append(f"{source}:{ref_id}")
     return SourceResult(
         source=source,

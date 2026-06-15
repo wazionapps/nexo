@@ -93,6 +93,38 @@ def search_changes(query: str = '', files: str = '', days: int = 30) -> list[dic
     return [dict(r) for r in rows]
 
 
+def get_change_watermark(sid: str | None = None) -> int:
+    """Cheap monotonic integer that rises whenever a relevant mutation lands.
+
+    Used by the resolution cache (working memory) as the "nothing changed"
+    invalidation signal — Francisco's third rule. ``change_log`` is the ledger
+    where the PostToolUse hook records every code/config/state mutation, so
+    ``MAX(id)`` is a one-SELECT, monotonic, append-only proxy for "did anything
+    change since I cached this answer?". If the watermark advanced, the cache
+    is invalidated by conservatism (prefer recomputing over serving stale).
+
+    ``sid`` optionally narrows the watermark to a single session's mutations.
+    Returns 0 when the ledger is empty or unavailable (which a fresh cache
+    entry will also store, so an empty ledger never spuriously invalidates).
+    """
+    try:
+        conn = get_db()
+        if sid:
+            row = conn.execute(
+                "SELECT MAX(id) FROM change_log WHERE session_id = ?", (str(sid),)
+            ).fetchone()
+        else:
+            row = conn.execute("SELECT MAX(id) FROM change_log").fetchone()
+    except Exception:
+        return 0
+    if not row or row[0] is None:
+        return 0
+    try:
+        return int(row[0])
+    except (TypeError, ValueError):
+        return 0
+
+
 def auto_resolve_followups(change: dict) -> list[str]:
     """Cross-reference a change_log entry with open followups. Auto-completes matches.
 
