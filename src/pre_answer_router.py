@@ -565,6 +565,7 @@ _SOURCE_PLANS: dict[str, SourcePlan] = {
             SourceStep("workflows", timeout_ms=260),
             SourceStep("change_log", timeout_ms=260),
             SourceStep("causal_graph", timeout_ms=120, max_chars=900),
+            SourceStep("kg_neighbors", timeout_ms=120, max_chars=900),
             SourceStep("diary", timeout_ms=260),
         ),
         fallback=(
@@ -592,6 +593,7 @@ _SOURCE_PLANS: dict[str, SourcePlan] = {
             SourceStep("guard_context", timeout_ms=160),
             SourceStep("change_log", timeout_ms=300),
             SourceStep("workflows", timeout_ms=260),
+            SourceStep("kg_neighbors", timeout_ms=120, max_chars=900),
         ),
         fallback=(
             SourceStep("transcripts", phase="fallback", timeout_ms=650),
@@ -625,6 +627,7 @@ _SOURCE_PLANS: dict[str, SourcePlan] = {
             SourceStep("diary", timeout_ms=280),
             SourceStep("change_log", timeout_ms=300),
             SourceStep("transcripts", timeout_ms=700),
+            SourceStep("kg_neighbors", timeout_ms=120, max_chars=900),
         ),
         fallback=(SourceStep("continuity", phase="fallback", timeout_ms=400),),
     ),
@@ -654,6 +657,7 @@ _SOURCE_PLANS: dict[str, SourcePlan] = {
             SourceStep("project_atlas", timeout_ms=160),
             SourceStep("system_catalog", timeout_ms=420),
             SourceStep("diary", timeout_ms=280),
+            SourceStep("kg_neighbors", timeout_ms=120, max_chars=900),
         ),
         fallback=(
             SourceStep("transcripts", phase="fallback", timeout_ms=700),
@@ -667,6 +671,7 @@ _SOURCE_PLANS: dict[str, SourcePlan] = {
             SourceStep("system_catalog", timeout_ms=420),
             SourceStep("project_atlas", timeout_ms=160),
             SourceStep("runtime_docs", timeout_ms=300),
+            SourceStep("kg_neighbors", timeout_ms=120, max_chars=900),
         ),
         fallback=(
             SourceStep("source_grep", phase="fallback", timeout_ms=600),
@@ -1218,6 +1223,7 @@ def default_source_adapters() -> dict[str, SourceAdapter]:
         "workflows": _source_workflows,
         "change_log": _source_change_log,
         "causal_graph": _source_causal_graph,
+        "kg_neighbors": _source_kg_neighbors,
         "diary": _source_diary,
         "transcripts": _source_transcripts,
         "memory": _source_memory,
@@ -1705,6 +1711,77 @@ def _source_causal_graph(request: SourceRequest) -> SourceResult:
     return SourceResult(
         source="causal_graph",
         rendered="\n".join(rendered_parts),
+        evidence_refs=list(dict.fromkeys(evidence_refs)),
+        result_count=result_count,
+    )
+
+
+def _source_kg_neighbors(request: SourceRequest) -> SourceResult:
+    """KG neighbors + verified causal/ops edges for entities/files in the query.
+
+    task_close (7.32.0) writes causal/provenance edges but nothing READ the KG at
+    answer time, so the richer non-causal structure (touched/applies_to/belongs_to/
+    mentions/...) never reached an answer. This bounded, fail-open, 1-hop source
+    reads it. Hard-limited (<=3 refs, <=6 neighbors), index-backed, respects the
+    per-source timeout — it can never block the answer.
+    """
+    try:
+        import knowledge_graph as kg
+        import causal_graph
+    except Exception as exc:
+        return SourceResult(source="kg_neighbors", ok=False, skipped=True, aborted_reason="source_error", error=str(exc))
+
+    refs: list[str] = []
+    for raw in (request.files or "").split(","):
+        clean = raw.strip()
+        if clean:
+            refs.append(clean)
+    if not refs:
+        for match in _PATHISH_RE.findall(request.query or ""):
+            refs.append(match)
+        for match in re.findall(r"\b[\w.-]+(?:/[\w.@+-]+)+\b", request.query or ""):
+            refs.append(match)
+    refs = list(dict.fromkeys(refs))
+    if not refs:
+        return SourceResult(source="kg_neighbors")
+
+    rendered_parts: list[str] = []
+    evidence_refs: list[str] = []
+    result_count = 0
+    for ref in refs[:3]:
+        try:
+            node = None
+            for ntype, nref in (("file", ref), ("file", f"file:{ref}"), ("entity", ref), ("entity", f"entity:{ref}")):
+                node = kg.get_node(ntype, nref)
+                if node:
+                    break
+            if node:
+                for nb in kg.get_neighbors(int(node["id"]), active_only=True)[:6]:
+                    relation = str(nb.get("relation") or "")
+                    if relation.startswith("causal:") or relation.startswith("ops:"):
+                        continue  # surfaced via query_edges below (avoid duplicate)
+                    line = f"- {relation} ({nb.get('direction')}) {nb.get('node_type')}:{nb.get('node_ref')}"
+                    if nb.get("label"):
+                        line += f" ({nb.get('label')})"
+                    rendered_parts.append(line)
+                    evidence_refs.append(f"kg:node:{node['id']}:{nb.get('id')}")
+                    result_count += 1
+            cg = causal_graph.query_edges(
+                ref_type="file", ref=ref, project_key=request.area, include_historical=False, limit=4,
+            )
+            if cg.get("has_evidence"):
+                rendered_parts.append(causal_graph.render_query_result(cg, max_chars=request.max_chars))
+                result_count += len(cg.get("edges") or [])
+                for edge in cg.get("edges") or []:
+                    props = edge.get("properties_dict") or {}
+                    evidence_refs.extend(str(i) for i in props.get("evidence_refs") or [] if str(i).strip())
+        except Exception:
+            continue
+    if not rendered_parts:
+        return SourceResult(source="kg_neighbors")
+    return SourceResult(
+        source="kg_neighbors",
+        rendered=_clip("\n".join(rendered_parts), request.max_chars),
         evidence_refs=list(dict.fromkeys(evidence_refs)),
         result_count=result_count,
     )
