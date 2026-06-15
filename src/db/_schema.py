@@ -2712,11 +2712,20 @@ def _m75_failure_prevention_ledger(conn):
     _migrate_add_index(conn, "idx_antibody_actions_status", "antibody_actions", "status")
     _migrate_add_index(conn, "idx_antibody_actions_target", "antibody_actions", "action_type, target_system, target_ref")
     _migrate_add_index(conn, "idx_antibody_actions_verification", "antibody_actions", "verification_status, review_due_at")
-    _m75b_schema_abstraction_templates(conn)
 
 
-def _m75b_schema_abstraction_templates(conn):
+def _m88_schema_abstraction_templates(conn):
     """Ola 4 — diagnostic templates distilled from recurring incident archetypes.
+
+    NOTE (append-only migration discipline): this used to be called inline from
+    ``_m75_failure_prevention_ledger`` (as ``_m75b_...``). That meant any install
+    already at schema v75 would NEVER create ``diagnostic_templates`` through
+    ``run_migrations()`` (v75 was already marked applied), so the table only
+    appeared via the lazy ``_ensure_tables`` fallback. Promoting it to its own
+    appended migration version makes a normal upgrade from v75 create the table
+    through the standard migration path. Idempotent (``IF NOT EXISTS``), so it is
+    a no-op on installs where ``_ensure_tables``/the old inline call already
+    created it.
 
     A diagnostic template is the destillation of a GENUINELY recurring class of
     incident (>= MIN_CLUSTER_SIZE distinct failure cases of the same archetype,
@@ -3455,6 +3464,7 @@ MIGRATIONS = [
     (85, "eval_runs", _m85_eval_runs),
     (86, "resolution_cache", _m86_resolution_cache),
     (87, "resolution_cache_content_snapshot", _m87_resolution_cache_content_snapshot),
+    (88, "schema_abstraction_templates", _m88_schema_abstraction_templates),
 ]
 
 

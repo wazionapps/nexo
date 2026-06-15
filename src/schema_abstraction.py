@@ -610,19 +610,26 @@ def match_templates_for_action(
             continue
         overlap = action_tokens & match_tokens
         token_score = len(overlap) / max(1, min(len(action_tokens), len(match_tokens)))
-        # Archetype agreement is the strongest signal.
+        # Archetype agreement is a HARD precondition (precision-first contract).
+        # The action must classify into the SAME archetype as the template before
+        # token overlap is even considered. Token overlap alone NEVER qualifies:
+        # real actions like "deploy the webhook trigger", "add a health alert to
+        # the deploy", or "set up deploy alert health monitoring" share tokens
+        # (deploy/webhook/trigger/alert/health) with the silent-failure archetype
+        # but are NOT silent-failure incidents — they must not over-fire an
+        # injection. Francisco's rule: a spurious template is worse than none.
         archetype_match = bool(action_archetype) and action_archetype == row["archetype"]
+        if not archetype_match:
+            continue
         # Area must not contradict (empty area on either side is permissive).
         area_ok = (not clean_area) or (not row["area"]) or clean_area == row["area"]
         if not area_ok:
             continue
-        score = token_score + (0.4 if archetype_match else 0.0)
-        # Require a CLEAR match: either an archetype agreement with some overlap,
-        # or strong token overlap on its own.
-        if archetype_match and overlap:
-            qualifies = score >= INJECT_MATCH_THRESHOLD
-        else:
-            qualifies = token_score >= 0.6 and len(overlap) >= 3
+        # Archetype agreed: token overlap then has to clear the inject threshold
+        # (some concrete shared vocabulary, not a bare archetype guess). The
+        # archetype bonus keeps the strongest signal weighted highest.
+        score = token_score + 0.4
+        qualifies = bool(overlap) and score >= INJECT_MATCH_THRESHOLD
         if not qualifies:
             continue
         scored.append(

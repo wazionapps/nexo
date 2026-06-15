@@ -2052,6 +2052,72 @@
       },
       "triggers_after": []
     },
+    "nexo_schema_abstraction_distill": {
+      "description": "Distill recurring incident archetypes into reusable diagnostic templates (idempotent clustering pass)",
+      "category": "failure_prevention",
+      "source": "plugin:schema_abstraction",
+      "requires": [
+        "failure_prevention_cases"
+      ],
+      "provides": [
+        "diagnostic_templates"
+      ],
+      "internal_calls": [
+        "learning_resolver.candidate_similarity"
+      ],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_schema_abstraction_templates": {
+      "description": "List distilled diagnostic templates",
+      "category": "failure_prevention",
+      "source": "plugin:schema_abstraction",
+      "requires": [
+        "diagnostic_templates"
+      ],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_schema_abstraction_match": {
+      "description": "Match an action against diagnostic-template archetypes (primed diagnosis)",
+      "category": "failure_prevention",
+      "source": "plugin:schema_abstraction",
+      "requires": [
+        "diagnostic_templates"
+      ],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_schema_abstraction_retire": {
+      "description": "Retire a diagnostic template (lifecycle, guidance-only)",
+      "category": "failure_prevention",
+      "source": "plugin:schema_abstraction",
+      "requires": [
+        "diagnostic_templates"
+      ],
+      "provides": [
+        "diagnostic_templates"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
     "nexo_goal_engine_status": {
       "description": "Goal Engine telemetry readiness",
       "category": "goal",

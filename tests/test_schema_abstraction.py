@@ -289,3 +289,173 @@ def test_retire_template_lifecycle(isolated_db):
     assert sa.list_templates(status="active") == []
     # A retired template no longer injects.
     assert sa.match_templates_for_action(query="cron exit 0 swallowed error scrape empty") == []
+
+
+# ── (e) PRECISION: archetype is a HARD precondition (no token-only over-fire) ─
+
+
+# Real actions that SHARE tokens with the silent-failure archetype's match_tokens
+# (deploy / webhook / trigger / alert / health) but are NOT silent-failure
+# incidents. Before the fix these over-fired via the token-only OR fallback.
+_OVERFIRE_ACTIONS = [
+    "deploy the webhook trigger",
+    "add a health alert to the deploy",
+    "set up deploy alert health monitoring",
+]
+
+
+def test_token_only_actions_do_not_inject(isolated_db):
+    """The 3 actions that used to over-fire (token overlap, wrong archetype)
+    must NOT inject now that archetype agreement is a hard precondition."""
+    db, fp, sa = _reload_stack()
+    for v in (1, 2, 3):
+        _ingest_silent_failure(fp, area="recambios", variant=v)
+    assert sa.distill_templates()["templates_created"] == 1
+    # Sanity: there IS an active template to (wrongly) match against.
+    assert len(sa.list_templates(status="active")) == 1
+
+    for action in _OVERFIRE_ACTIONS:
+        # None of these classify into the silent_failure archetype...
+        assert sa.classify_archetype(action) != "silent_failure", action
+        # ...so despite token overlap, the matcher must return NOTHING.
+        hits = sa.match_templates_for_action(query=action)
+        assert hits == [], (action, hits)
+
+
+def test_token_only_actions_do_not_inject_via_pre_action(isolated_db):
+    """Same precision contract through the real injection point."""
+    db, fp, sa = _reload_stack()
+    for v in (1, 2, 3):
+        _ingest_silent_failure(fp, area="recambios", variant=v)
+    assert sa.distill_templates()["templates_created"] == 1
+
+    from db import build_pre_action_context
+
+    for action in _OVERFIRE_ACTIONS:
+        bundle = build_pre_action_context(query=action, hours=24, limit=5)
+        assert not bundle.get("diagnostic_templates"), (action, bundle.get("diagnostic_templates"))
+
+
+def test_clear_archetype_action_still_injects(isolated_db):
+    """An action that DOES classify into the archetype must still inject —
+    the fix tightens precision without killing the real match."""
+    db, fp, sa = _reload_stack()
+    for v in (1, 2, 3):
+        _ingest_silent_failure(fp, area="recambios", variant=v)
+    assert sa.distill_templates()["templates_created"] == 1
+
+    action = (
+        "the weekly cron exited 0 but the scrape silently failed — the wrapper "
+        "swallowed the error so the output is stale/frozen and no alert fired"
+    )
+    assert sa.classify_archetype(action) == "silent_failure"
+    hits = sa.match_templates_for_action(query=action)
+    assert len(hits) == 1, hits
+    assert hits[0]["archetype"] == "silent_failure"
+
+
+# ── (f) PLUGIN: the 4 MCP tools load (R11 inventory gate passes) ─────────────
+
+
+def test_plugin_passes_r11_and_registers_tools(isolated_db):
+    """The schema_abstraction plugin must pass the R11 inventory gate (its
+    tools are declared in tool-enforcement-map.json) and register all 4 tools."""
+    import os
+
+    import plugin_loader as pl
+
+    plugin_path = os.path.join(str(REPO_SRC), "plugins", "schema_abstraction.py")
+    ok, reason = pl.verify_plugin_in_inventory("schema_abstraction.py", plugin_path)
+    assert ok, reason
+
+    expected = {
+        "nexo_schema_abstraction_distill",
+        "nexo_schema_abstraction_templates",
+        "nexo_schema_abstraction_match",
+        "nexo_schema_abstraction_retire",
+    }
+    # All 4 tools are present in the canonical enforcement map.
+    known = pl._collect_declared_plugin_names_from_map()
+    assert expected <= known, sorted(expected - known)
+
+    # And the plugin actually registers all 4 through the real loader path.
+    class _Provider:
+        def __init__(self):
+            self.tools = {}
+
+        def remove_tool(self, name):
+            self.tools.pop(name, None)
+
+    class _MCP:
+        def __init__(self):
+            self.local_provider = _Provider()
+            self.added = []
+
+        def add_tool(self, t):
+            self.added.append(getattr(t, "name", None))
+
+    mcp = _MCP()
+    n = pl.load_plugin(mcp, "schema_abstraction.py", plugins_dir=os.path.join(str(REPO_SRC), "plugins"))
+    assert n == 4, n
+    assert set(x for x in mcp.added if x) == expected
+
+
+# ── (g) MIGRATION: upgrade from a v75 schema creates diagnostic_templates ─────
+
+
+def test_migration_88_creates_table_on_v75_upgrade(isolated_db):
+    """An install already at schema v75 (without diagnostic_templates) must get
+    the table created by run_migrations() through the normal migration path —
+    not only via the lazy _ensure_tables fallback. Regression guard for the
+    bug where the table was minted inline inside migration 75 (_m75b)."""
+    import sqlite3
+
+    from db._schema import MIGRATIONS
+
+    # Migration 88 must be a real, appended version (append-only discipline).
+    versions = [v for v, _, _ in MIGRATIONS]
+    assert 88 in versions
+    assert max(versions) == 88
+
+    def has_table(c, t):
+        return bool(
+            c.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (t,)
+            ).fetchone()
+        )
+
+    # Build a fresh DB that is "already at v75" but WITHOUT diagnostic_templates,
+    # by running migrations 1..75 then marking them applied — without the table.
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute(
+        "CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, name TEXT NOT NULL, "
+        "applied_at TEXT DEFAULT (datetime('now')))"
+    )
+    # Mark 1..75 as applied without running them (we only care that v75 is 'done'
+    # yet the table is absent — exactly the broken state in the field).
+    for v, name, _ in MIGRATIONS:
+        if v <= 75:
+            conn.execute("INSERT INTO schema_migrations(version,name) VALUES(?,?)", (v, name))
+    conn.commit()
+    assert not has_table(conn, "diagnostic_templates")
+
+    # Apply the remaining migrations; migration 88 is independent (CREATE TABLE
+    # IF NOT EXISTS) and must create the table even though v75 was already done.
+    applied = {int(r[0]) for r in conn.execute("SELECT version FROM schema_migrations")}
+    for version, name, fn in MIGRATIONS:
+        if version != 88:
+            continue
+        assert version not in applied  # 88 is genuinely pending on a v75 install
+        fn(conn)
+        conn.execute("INSERT OR IGNORE INTO schema_migrations(version,name) VALUES(?,?)", (version, name))
+        conn.commit()
+
+    assert has_table(conn, "diagnostic_templates")
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(diagnostic_templates)").fetchall()}
+    assert {"template_uid", "archetype", "diagnosis_steps_json", "status"} <= cols
+    # Idempotent: re-running migration 88 is a no-op.
+    from db._schema import _m88_schema_abstraction_templates
+
+    _m88_schema_abstraction_templates(conn)
+    assert has_table(conn, "diagnostic_templates")
