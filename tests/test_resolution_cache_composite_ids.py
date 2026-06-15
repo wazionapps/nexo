@@ -262,6 +262,10 @@ _WATERMARK_SOURCES = {
     "filesystem": "filesystem:inline",
     "recent_context": "recent_context:inline",
     "causal_graph": "causal_graph:somefile.py",
+    # kg_neighbors + associative_graph both emit kg:node:<id> synthetic markers
+    # whose freshness rides the global watermark (see resolution_cache docstring).
+    "kg_neighbors": "kg:node:42",
+    "associative_graph": "kg:node:99",
     "guard_context": "guard_context:verified_clean",
     "cognitive": "cognitive:inline",
 }

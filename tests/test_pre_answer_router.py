@@ -74,6 +74,7 @@ def test_pre_answer_router_intent_matrix_multilingual(fake_pre_answer_semantic_r
         "change_log",
         "causal_graph",
         "kg_neighbors",
+        "associative_graph",
         "diary",
     ]
     assert prior_plan.fallback[0].name == "transcripts"

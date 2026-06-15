@@ -57,6 +57,8 @@ CANONICAL_ROUTER_SOURCES = {
     "workflows",
     "change_log",
     "causal_graph",
+    "kg_neighbors",
+    "associative_graph",
     "diary",
     "transcripts",
     "memory",

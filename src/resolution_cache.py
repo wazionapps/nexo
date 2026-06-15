@@ -278,7 +278,7 @@ _EVIDENCE_LEDGER_COMPOSITE: dict[str, tuple[str, str, tuple[str, ...]] | None] =
 # UNKNOWN source_name is never silently assumed to be watermark-tracked.
 _WATERMARK_TRACKED_SOURCES: frozenset[str] = frozenset({
     "filesystem", "recent_context", "kg", "causal_graph", "kg_neighbors",
-    "commitments", "guard_context", "cognitive",
+    "associative_graph", "commitments", "guard_context", "cognitive",
 })
 # NOTE: ``memory_event`` is deliberately NOT watermark-tracked. It resolves to a
 # REAL memory_events row through the canonical resolver (``source_version_for``),

@@ -566,6 +566,7 @@ _SOURCE_PLANS: dict[str, SourcePlan] = {
             SourceStep("change_log", timeout_ms=260),
             SourceStep("causal_graph", timeout_ms=120, max_chars=900),
             SourceStep("kg_neighbors", timeout_ms=120, max_chars=900),
+            SourceStep("associative_graph", timeout_ms=120, max_chars=900),
             SourceStep("diary", timeout_ms=260),
         ),
         fallback=(
@@ -594,6 +595,7 @@ _SOURCE_PLANS: dict[str, SourcePlan] = {
             SourceStep("change_log", timeout_ms=300),
             SourceStep("workflows", timeout_ms=260),
             SourceStep("kg_neighbors", timeout_ms=120, max_chars=900),
+            SourceStep("associative_graph", timeout_ms=120, max_chars=900),
         ),
         fallback=(
             SourceStep("transcripts", phase="fallback", timeout_ms=650),
@@ -1224,6 +1226,7 @@ def default_source_adapters() -> dict[str, SourceAdapter]:
         "change_log": _source_change_log,
         "causal_graph": _source_causal_graph,
         "kg_neighbors": _source_kg_neighbors,
+        "associative_graph": _source_associative_graph,
         "diary": _source_diary,
         "transcripts": _source_transcripts,
         "memory": _source_memory,
@@ -1785,6 +1788,173 @@ def _source_kg_neighbors(request: SourceRequest) -> SourceResult:
         evidence_refs=list(dict.fromkeys(evidence_refs)),
         result_count=result_count,
     )
+
+
+def _associative_graph_basename_match(kg, ref: str, *, limit: int = 3) -> list[int]:
+    """Resolve a bare basename to KG file node ids via one bounded indexed LIKE.
+
+    Only fires for path-ish refs (contains a '.' extension or '/'), so a generic
+    word never triggers a table-wide LIKE. Returns at most ``limit`` node ids.
+    """
+    clean = str(ref or "").strip()
+    if not clean or ("." not in clean and "/" not in clean):
+        return []
+    base = clean.rsplit("/", 1)[-1]
+    if len(base) < 4:
+        return []
+    try:
+        rows = kg._get_db().execute(
+            "SELECT id FROM kg_nodes WHERE node_type='file' AND node_ref LIKE ? LIMIT ?",
+            (f"%{base}", int(limit)),
+        ).fetchall()
+        return [int(r["id"]) for r in rows]
+    except Exception:
+        return []
+
+
+def _associative_graph_seeds(request: SourceRequest, kg, *, max_seeds: int = 8) -> dict[int, float]:
+    """Resolve the personalization vector for the associative-graph PPR.
+
+    Two sources, union'd and capped (plan section 2.1):
+      (i)  entities — entity_live_profile.resolve_entity(limit=8) — only when the
+           query looks entity/path-worthy (reuses the local_context gate so we do
+           NOT scan the entities table on generic queries).
+      (ii) paths/files — request.files or the _PATHISH_RE / slash-token regex,
+           same extraction as kg_neighbors.
+
+    Returns {kg_node_id: weight}. Weight = entity score (i) or 1.0 (ii).
+    """
+    seeds: dict[int, float] = {}
+
+    # (i) Entities — gated by the same worthiness check used for local_context so
+    # generic queries never pay the full-table scan in resolve_entity.
+    if _local_context_query_worthwhile(request):
+        try:
+            import entity_live_profile
+
+            resolved = entity_live_profile.resolve_entity(request.query or "", limit=max_seeds)
+            for cand in (resolved.get("candidates") or [])[:max_seeds]:
+                ent_id = cand.get("entity_id")
+                if not ent_id:
+                    continue
+                node = kg.get_node("entity", f"entity:{ent_id}") or kg.get_node("entity", str(ent_id))
+                if node:
+                    nid = int(node["id"])
+                    score = float(cand.get("score") or 0.0) or 1.0
+                    seeds[nid] = max(seeds.get(nid, 0.0), score)
+        except Exception:
+            pass
+
+    # (ii) Paths / files — identical extraction to kg_neighbors.
+    refs: list[str] = []
+    for raw in (request.files or "").split(","):
+        clean = raw.strip()
+        if clean:
+            refs.append(clean)
+    if not refs:
+        for match in _PATHISH_RE.findall(request.query or ""):
+            refs.append(match)
+        for match in re.findall(r"\b[\w.-]+(?:/[\w.@+-]+)+\b", request.query or ""):
+            refs.append(match)
+    for ref in list(dict.fromkeys(refs)):
+        try:
+            node = None
+            for ntype, nref in (("file", ref), ("file", f"file:{ref}"), ("entity", ref), ("entity", f"entity:{ref}")):
+                node = kg.get_node(ntype, nref)
+                if node:
+                    break
+            if node:
+                seeds.setdefault(int(node["id"]), 1.0)
+            else:
+                # Basename suffix-match: the KG stores files under full paths
+                # (file:/Users/.../foo.py) while a query usually carries the bare
+                # basename (foo.py). One bounded indexed LIKE recovers those — a
+                # capability kg_neighbors (exact-match only) lacks.
+                for nid in _associative_graph_basename_match(kg, ref, limit=3):
+                    seeds.setdefault(nid, 1.0)
+                    if len(seeds) >= max_seeds:
+                        break
+        except Exception:
+            continue
+        if len(seeds) >= max_seeds:
+            break
+
+    # Cap to <=max_seeds (entities first by insertion order, then paths).
+    if len(seeds) > max_seeds:
+        seeds = dict(list(seeds.items())[:max_seeds])
+    return seeds
+
+
+def _source_associative_graph(request: SourceRequest) -> SourceResult:
+    """Multi-hop associative recall via Personalized PageRank over the KG (Ola 2).
+
+    Generalises ``kg_neighbors`` (bounded 1-hop fan-out) to a ranked multi-hop
+    spreading-activation (HippoRAG2-style "connect the dots at answer time").
+    Seeds from query entities + paths, runs a pure-Python forward-push PPR over
+    the active ``kg_edges`` (column-stochastic -> hub-safe), and surfaces the
+    top-ranked related nodes that a 1-hop fan-out would miss.
+
+    Fail-open absolute: any error / missing module / 0 seeds returns a bare
+    SourceResult (no evidence). Bounded by ``max_push`` and the per-source
+    timeout — it can never block the answer. Refs are ``kg:node:<id>`` (cacheable
+    via the resolution_cache global watermark, identical to kg_neighbors).
+    """
+    try:
+        import knowledge_graph as kg
+        import ppr
+    except Exception as exc:
+        return SourceResult(
+            source="associative_graph", ok=False, skipped=True,
+            aborted_reason="source_error", error=str(exc),
+        )
+
+    try:
+        seeds = _associative_graph_seeds(request, kg, max_seeds=ppr.DEFAULT_MAX_SEEDS)
+        if not seeds:
+            return SourceResult(source="associative_graph")
+
+        # Cold-start contract: the FULL graph build (~13k edges) plus a cold
+        # process's imports/first-DB-touch overruns the 120ms step timeout, which
+        # would make the dispatcher abort the step and the feature contribute
+        # nothing on query-1. So we never build inline. If the per-process cache
+        # is already warm (query-2+, or a process whose pre-warm finished), we run
+        # the multi-hop PPR straight off the cached graph (~5-7ms). If it is cold,
+        # we kick off a non-blocking background pre-warm and degrade THIS query to
+        # the bounded 1-hop fan-out (parity with kg_neighbors) — fast, never times
+        # out — so the next query gets multi-hop.
+        if ppr.cache_is_warm():
+            ranked = ppr.rank_related(seeds, top_n=ppr.DEFAULT_TOP_N)
+            if not ranked:
+                # Warm but PPR returned nothing (e.g. seeds isolated) -> 1-hop.
+                ranked = ppr.fallback_neighbors(list(seeds), limit=6)
+        else:
+            ppr.prewarm_async()
+            ranked = ppr.fallback_neighbors(list(seeds), limit=6)
+        if not ranked:
+            return SourceResult(source="associative_graph")
+
+        rendered_parts: list[str] = []
+        evidence_refs: list[str] = []
+        for node in ranked:
+            line = f"- {node.node_type}:{node.node_ref}"
+            if node.label:
+                line += f" ({node.label})"
+            if node.score:
+                line += f" [ppr={node.score:.4f}]"
+            rendered_parts.append(line)
+            evidence_refs.append(f"kg:node:{node.node_id}")
+
+        return SourceResult(
+            source="associative_graph",
+            rendered=_clip("\n".join(rendered_parts), request.max_chars),
+            evidence_refs=list(dict.fromkeys(evidence_refs)),
+            result_count=len(ranked),
+        )
+    except Exception as exc:
+        return SourceResult(
+            source="associative_graph", ok=False, skipped=True,
+            aborted_reason="source_error", error=str(exc),
+        )
 
 
 def _source_diary(request: SourceRequest) -> SourceResult:
