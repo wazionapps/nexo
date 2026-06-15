@@ -24,6 +24,103 @@ def _core():
     return module
 
 
+def _cognitive():
+    """Lazy import of the cognitive embedding core.
+
+    Imported lazily so the DB layer never hard-depends on the (heavy) cognitive
+    stack and so importing db._memory_v2 cannot fail when numpy/fastembed are
+    unavailable in a stripped environment.
+    """
+    module = sys.modules.get("cognitive._core")
+    if module is None:
+        module = importlib.import_module("cognitive._core")
+    return module
+
+
+# Identifier persisted alongside each precomputed observation vector so the
+# fusion path can refuse to compare vectors produced by an incompatible model.
+OBSERVATION_EMBEDDING_MODEL = "bge-base-embeddings"
+
+
+def _model_is_warm() -> bool:
+    """Return True only when embedding will NOT trigger a cold model load.
+
+    Two safe cases:
+      * the deterministic offline fallback is active
+        (NEXO_SKIP_COGNITIVE_MODEL_DOWNLOAD) — fast and dependency-free, so it is
+        always safe to embed; and
+      * the real fastembed model is already loaded in this process.
+
+    A cold real model returns False so the latency path degrades to FTS instead
+    of paying a download/load cost on a single query.
+    """
+    try:
+        cog = _cognitive()
+    except Exception:
+        return False
+    try:
+        if cog._model_download_disabled():
+            return True
+    except Exception:
+        return False
+    return getattr(cog, "_model", None) is not None
+
+
+def _embedding_columns_present(conn) -> bool:
+    try:
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(memory_observations)").fetchall()}
+    except Exception:
+        return False
+    return "embedding" in cols and "embedding_model" in cols
+
+
+def _embed_text_blob(text: str):
+    """Embed text into (blob, model_name). Returns (None, '') on any failure.
+
+    Never raises; never blocks indefinitely on a cold model — callers gate on
+    _model_is_warm() before calling on the latency path.
+    """
+    clean = str(text or "").strip()
+    if not clean:
+        return None, ""
+    try:
+        cog = _cognitive()
+        vector = cog.embed(clean)
+        blob = cog._array_to_blob(vector)
+        if not blob:
+            return None, ""
+        return blob, OBSERVATION_EMBEDDING_MODEL
+    except Exception:
+        return None, ""
+
+
+def _write_observation_embedding(uid: str, *, summary: str = "", subject: str = "") -> bool:
+    """Precompute and store an observation embedding. Guarded; never raises.
+
+    Called AFTER the observation row is committed. A failure here must never
+    surface to the write path — the observation is already durable; the vector
+    is a shadow optimisation that the bounded backfill can fill in later.
+    """
+    try:
+        conn = _core().get_db()
+        if not _table_exists(conn, "memory_observations") or not _embedding_columns_present(conn):
+            return False
+        if not _model_is_warm():
+            return False
+        text = " ".join(part for part in [str(subject or "").strip(), str(summary or "").strip()] if part).strip()
+        blob, model_name = _embed_text_blob(text)
+        if blob is None:
+            return False
+        conn.execute(
+            "UPDATE memory_observations SET embedding = ?, embedding_model = ? WHERE observation_uid = ?",
+            (blob, model_name, uid),
+        )
+        conn.commit()
+        return True
+    except Exception:
+        return False
+
+
 _REDACT_PATTERNS = (
     re.compile(r"sk-[a-zA-Z0-9_\-]{20,}"),
     re.compile(r"ghp_[a-zA-Z0-9]{20,}"),
@@ -254,6 +351,12 @@ def _row_to_observation(row) -> dict:
     item["evidence_refs"] = _parse_json(item.pop("evidence_refs_json", "[]"), [])
     item["entities"] = _parse_json(item.pop("entities_json", "[]"), [])
     item["metadata"] = _parse_json(item.pop("metadata_json", "{}"), {})
+    # The shadow embedding BLOB is an internal optimisation, not user-facing
+    # payload. Drop the raw bytes (they are not JSON-serialisable) but expose a
+    # cheap boolean so callers/tests can assert it was precomputed.
+    embedding_blob = item.pop("embedding", None)
+    item.pop("embedding_model", None)
+    item["has_embedding"] = bool(embedding_blob)
     return item
 
 
@@ -671,6 +774,11 @@ def upsert_memory_observation(observation: dict) -> dict:
         ),
     )
     conn.commit()
+    # Precompute the semantic embedding AFTER the write is durable. This is a
+    # shadow optimisation: it is guarded, never blocks the write, and skips
+    # entirely when the model is cold/unavailable (the bounded backfill fills
+    # those rows later). The summary/subject already passed redaction above.
+    _write_observation_embedding(uid, summary=clean_summary, subject=clean_subject)
     row = conn.execute("SELECT * FROM memory_observations WHERE observation_uid = ?", (uid,)).fetchone()
     result = _row_to_observation(row) if row else {"observation_uid": uid}
     result["ok"] = True
@@ -896,6 +1004,174 @@ def search_memory_observations_fts(
     except Exception:
         return []
     return [_row_to_observation(row) for row in rows]
+
+
+def backfill_observation_embeddings(*, limit: int = 200) -> dict:
+    """Bounded, idempotent backfill of precomputed observation embeddings.
+
+    Only touches rows whose ``embedding IS NULL`` (idempotent — re-running after
+    a full pass is a no-op). Bounded by ``limit`` so it never scans the whole
+    table in one call; callers loop until ``remaining == 0``. Skips entirely
+    when the model is cold so it never triggers a download on a hot path.
+    """
+    conn = _core().get_db()
+    if not _table_exists(conn, "memory_observations"):
+        return {"ok": True, "updated": 0, "skipped": True, "reason": "memory_observations table unavailable"}
+    if not _embedding_columns_present(conn):
+        return {"ok": True, "updated": 0, "skipped": True, "reason": "embedding columns unavailable"}
+    if not _model_is_warm():
+        return {"ok": True, "updated": 0, "skipped": True, "reason": "embedding model cold"}
+
+    max_rows = max(1, min(int(limit or 200), 1000))
+    try:
+        rows = conn.execute(
+            """
+            SELECT id, observation_uid, subject, summary
+              FROM memory_observations
+             WHERE embedding IS NULL
+             ORDER BY created_at DESC, id DESC
+             LIMIT ?
+            """,
+            (max_rows,),
+        ).fetchall()
+    except Exception as exc:
+        return {"ok": False, "updated": 0, "error": _truncate(str(exc), 300)}
+
+    updated = 0
+    failed = 0
+    for row in rows:
+        item = dict(row)
+        text = " ".join(
+            part for part in [str(item.get("subject") or "").strip(), str(item.get("summary") or "").strip()] if part
+        ).strip()
+        blob, model_name = _embed_text_blob(text)
+        if blob is None:
+            failed += 1
+            continue
+        try:
+            conn.execute(
+                "UPDATE memory_observations SET embedding = ?, embedding_model = ? WHERE id = ?",
+                (blob, model_name, item.get("id")),
+            )
+            updated += 1
+        except Exception:
+            failed += 1
+    if updated:
+        conn.commit()
+
+    try:
+        remaining = int(
+            conn.execute("SELECT COUNT(*) FROM memory_observations WHERE embedding IS NULL").fetchone()[0]
+        )
+    except Exception:
+        remaining = 0
+    return {
+        "ok": failed == 0,
+        "updated": updated,
+        "failed": failed,
+        "seen": len(rows),
+        "remaining": remaining,
+    }
+
+
+def vector_scan_observations(
+    query_vector,
+    *,
+    limit: int = 50,
+    scan_limit: int = 400,
+    start_ts: float | None = None,
+    end_ts: float | None = None,
+    project_key: str = "",
+    min_score: float = 0.0,
+) -> list[dict]:
+    """Bounded cosine scan over precomputed observation embeddings.
+
+    ``scan_limit`` caps how many embedded rows are deserialised/compared so a
+    single query can never walk an unbounded table. Returns the top ``limit``
+    matches as ``{observation_uid, vector_score}`` dicts. Never raises — any
+    failure yields an empty list so the caller degrades to FTS.
+    """
+    if query_vector is None:
+        return []
+    conn = _core().get_db()
+    if not _table_exists(conn, "memory_observations") or not _embedding_columns_present(conn):
+        return []
+    try:
+        cog = _cognitive()
+    except Exception:
+        return []
+
+    clauses = ["embedding IS NOT NULL"]
+    params: list[Any] = []
+    if start_ts is not None:
+        clauses.append("created_at >= ?")
+        params.append(float(start_ts))
+    if end_ts is not None:
+        clauses.append("created_at < ?")
+        params.append(float(end_ts))
+    if project_key.strip():
+        clauses.append("project_key = ?")
+        params.append(project_key.strip())
+
+    bounded_scan = max(1, min(int(scan_limit or 400), 2000))
+    bounded_limit = max(1, min(int(limit or 50), 200))
+    try:
+        rows = conn.execute(
+            f"""
+            SELECT observation_uid, embedding
+              FROM memory_observations
+             WHERE {' AND '.join(clauses)}
+             ORDER BY salience DESC, created_at DESC, id DESC
+             LIMIT ?
+            """,
+            params + [bounded_scan],
+        ).fetchall()
+    except Exception:
+        return []
+
+    scored: list[dict] = []
+    for row in rows:
+        blob = row["embedding"]
+        if not blob:
+            continue
+        try:
+            candidate_vector = cog._blob_to_array(blob)
+            score = cog.cosine_similarity(query_vector, candidate_vector)
+        except Exception:
+            continue
+        if score <= min_score:
+            continue
+        scored.append({"observation_uid": row["observation_uid"], "vector_score": float(score)})
+
+    scored.sort(key=lambda item: item["vector_score"], reverse=True)
+    return scored[:bounded_limit]
+
+
+def get_memory_observations_by_uids(uids: list[str]) -> dict[str, dict]:
+    """Fetch observation rows by uid (bounded). Returns {uid: observation}.
+
+    Used by the retrieval fusion path to materialise semantic-only matches that
+    the lexical/FTS scan did not surface. Bounded to a small batch; never raises.
+    """
+    conn = _core().get_db()
+    if not _table_exists(conn, "memory_observations"):
+        return {}
+    clean = [str(uid).strip() for uid in (uids or []) if str(uid).strip()][:200]
+    if not clean:
+        return {}
+    placeholders = ",".join("?" for _ in clean)
+    try:
+        rows = conn.execute(
+            f"SELECT * FROM memory_observations WHERE observation_uid IN ({placeholders})",
+            clean,
+        ).fetchall()
+    except Exception:
+        return {}
+    result: dict[str, dict] = {}
+    for row in rows:
+        item = _row_to_observation(row)
+        result[item.get("observation_uid")] = item
+    return result
 
 
 def memory_observation_stats(days: int = 7) -> dict:

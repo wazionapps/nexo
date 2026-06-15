@@ -3112,6 +3112,28 @@ def _m82_confidence_checks(conn):
     )
 
 
+def _m83_observation_embeddings(conn):
+    """Shadow embedding columns for semantic retrieval over observations.
+
+    Additive + reversible: two nullable columns on memory_observations. The
+    embedding is precomputed at write time (after the row is committed) and by a
+    bounded backfill. memory_search fuses the precomputed vector with the
+    existing FTS/token score so paraphrases retrieve the right observation.
+
+    The query/latency path never triggers a cold model load — it embeds the
+    query once only when a model is already warm (or the deterministic offline
+    fallback is active) and otherwise degrades to today's FTS-only behaviour.
+    """
+    _migrate_add_column(conn, "memory_observations", "embedding", "BLOB")
+    _migrate_add_column(conn, "memory_observations", "embedding_model", "TEXT DEFAULT ''")
+    # Partial index so the bounded backfill can find un-embedded rows cheaply.
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_memory_obs_embedding_pending "
+        "ON memory_observations(id) WHERE embedding IS NULL"
+    )
+    conn.commit()
+
+
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
     (2, "followups_reasoning", _m2_followups_reasoning),
@@ -3195,6 +3217,7 @@ MIGRATIONS = [
     (80, "opportunity_orchestrator", _m80_opportunity_orchestrator),
     (81, "core_rules_product_metadata", _m81_core_rules_product_metadata),
     (82, "confidence_checks", _m82_confidence_checks),
+    (83, "observation_embeddings", _m83_observation_embeddings),
 ]
 
 
