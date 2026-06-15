@@ -1,0 +1,30 @@
+{"id": "q-abstain-fontlicense", "intent": "abstention", "relevant_uids": [], "text": "which commercial font license covers the print catalog"}
+{"id": "q-para-vin-session-rotation", "intent": "paraphrase", "relevant_uids": ["ola1-obs-vin-session-rotation"], "text": "the parts diagram never arrived over chat for a few days"}
+{"id": "q-abstain-payroll", "intent": "abstention", "relevant_uids": [], "text": "what is the monthly payroll run schedule for employees"}
+{"id": "q-lex-wazion-shopid-na", "intent": "lexical", "relevant_uids": ["ola1-obs-wazion-shopid-na"], "text": "authenticated_id_shop empty shop_id"}
+{"id": "q-lex-grw-geocoding-key", "intent": "lexical", "relevant_uids": ["ola1-obs-grw-geocoding-key"], "text": "browser key referer REQUEST_DENIED geocoding"}
+{"id": "q-para-openai-key-leak", "intent": "paraphrase", "relevant_uids": ["ola1-obs-openai-key-leak"], "text": "spending on the language model provider jumped suddenly one day"}
+{"id": "q-abstain-bluetooth", "intent": "abstention", "relevant_uids": [], "text": "which bluetooth speaker firmware version do we ship"}
+{"id": "q-lex-newsletter-pixel", "intent": "lexical", "relevant_uids": ["ola1-obs-newsletter-pixel"], "text": "open pixel ignored real clicks suppressed"}
+{"id": "q-lex-dnssec-firebase", "intent": "lexical", "relevant_uids": ["ola1-obs-dnssec-firebase"], "text": "DNSSEC DS record DNS_SERVFAIL firebase"}
+{"id": "q-abstain-drone", "intent": "abstention", "relevant_uids": [], "text": "what is the maximum flight altitude of the delivery drone"}
+{"id": "q-lex-playwright-chromium", "intent": "lexical", "relevant_uids": ["ola1-obs-playwright-chromium"], "text": "playwright chromium browser deleted"}
+{"id": "q-para-playwright-chromium", "intent": "paraphrase", "relevant_uids": ["ola1-obs-playwright-chromium"], "text": "why did the store rating widgets stop updating for several weeks"}
+{"id": "q-lex-stripe-tax-canarias", "intent": "lexical", "relevant_uids": ["ola1-obs-stripe-tax-canarias"], "text": "Stripe Tax IGIC Canary Islands reverse charge"}
+{"id": "q-para-grw-geocoding-key", "intent": "paraphrase", "relevant_uids": ["ola1-obs-grw-geocoding-key"], "text": "the spoken street name could not be turned into coordinates on the server"}
+{"id": "q-lex-cron-exit-zero", "intent": "lexical", "relevant_uids": ["ola1-obs-cron-exit-zero"], "text": "cron exit code zero wrapper swallowed"}
+{"id": "q-abstain-quantum", "intent": "abstention", "relevant_uids": [], "text": "how is the quantum encryption key exchange configured"}
+{"id": "q-abstain-tax-japan", "intent": "abstention", "relevant_uids": [], "text": "how do we file consumption tax returns in japan"}
+{"id": "q-para-dnssec-firebase", "intent": "paraphrase", "relevant_uids": ["ola1-obs-dnssec-firebase"], "text": "the website custom domain refused to verify with a resolver failure"}
+{"id": "q-para-wazion-shopid-na", "intent": "paraphrase", "relevant_uids": ["ola1-obs-wazion-shopid-na"], "text": "the WhatsApp QR pairing complains the account id is missing"}
+{"id": "q-abstain-solarpanel", "intent": "abstention", "relevant_uids": [], "text": "how many solar panels power the office rooftop array"}
+{"id": "q-lex-wsl-unregister", "intent": "lexical", "relevant_uids": ["ola1-obs-wsl-unregister"], "text": "wsl unregister deletes ext4 vhdx"}
+{"id": "q-para-stripe-tax-canarias", "intent": "paraphrase", "relevant_uids": ["ola1-obs-stripe-tax-canarias"], "text": "how the payment processor handles sales tax for the islands and mainland"}
+{"id": "q-lex-openai-key-leak", "intent": "lexical", "relevant_uids": ["ola1-obs-openai-key-leak"], "text": "compromised global API key rotated isolated"}
+{"id": "q-para-wsl-unregister", "intent": "paraphrase", "relevant_uids": ["ola1-obs-wsl-unregister"], "text": "the Linux subsystem lost all its files after a cleanup command"}
+{"id": "q-abstain-podcast", "intent": "abstention", "relevant_uids": [], "text": "what microphone do we use for recording the podcast"}
+{"id": "q-lex-vin-session-rotation", "intent": "lexical", "relevant_uids": ["ola1-obs-vin-session-rotation"], "text": "fixed session_key rotates active session"}
+{"id": "q-abstain-warehouse", "intent": "abstention", "relevant_uids": [], "text": "where is the physical warehouse inventory audit stored"}
+{"id": "q-para-cron-exit-zero", "intent": "paraphrase", "relevant_uids": ["ola1-obs-cron-exit-zero"], "text": "a scheduled job reported success but produced no real output"}
+{"id": "q-abstain-kubernetes", "intent": "abstention", "relevant_uids": [], "text": "how do we autoscale the kubernetes cluster nodes"}
+{"id": "q-para-newsletter-pixel", "intent": "paraphrase", "relevant_uids": ["ola1-obs-newsletter-pixel"], "text": "engaged readers stopped receiving the mailing because of tracking"}

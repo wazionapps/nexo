@@ -3213,6 +3213,41 @@ def _m83_observation_embeddings(conn):
     conn.commit()
 
 
+def _m85_eval_runs(conn):
+    """Time series for the memory eval bench (recall@k / MRR / semantic gain).
+
+    One row per (run, metric) so the table is queryable as a series: the
+    before/after delta of an Ola 1 change is just two rows for the same metric
+    with different ``ola1_enabled``. ``model_warm`` distinguishes numbers from
+    the real embedding model (1) vs the deterministic offline fallback (0), so
+    a CI run (fallback, pipeline check) is never confused with a Deep Sleep run
+    (real model, semantic quality). Append-only and additive — re-running the
+    harness inserts new rows, never mutates old ones.
+
+    Mirrors the existing _m28_automation_runs / _m34_cortex_evaluations shape.
+    """
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS eval_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            suite TEXT NOT NULL DEFAULT '',
+            case_set_id TEXT DEFAULT '',
+            case_set_version TEXT DEFAULT '',
+            fixture_hash TEXT DEFAULT '',
+            metric TEXT NOT NULL DEFAULT '',
+            value REAL NOT NULL DEFAULT 0.0,
+            ola1_enabled INTEGER NOT NULL DEFAULT 1,
+            model_warm INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT DEFAULT (datetime('now'))
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_eval_runs_suite ON eval_runs(suite)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_eval_runs_metric ON eval_runs(suite, metric)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_eval_runs_created ON eval_runs(created_at)")
+    conn.commit()
+
+
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
     (2, "followups_reasoning", _m2_followups_reasoning),
@@ -3297,6 +3332,7 @@ MIGRATIONS = [
     (81, "core_rules_product_metadata", _m81_core_rules_product_metadata),
     (82, "confidence_checks", _m82_confidence_checks),
     (83, "observation_embeddings", _m83_observation_embeddings),
+    (85, "eval_runs", _m85_eval_runs),
 ]
 
 

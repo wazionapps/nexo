@@ -1,0 +1,14 @@
+{
+  "case_set_id": "ola1-golden",
+  "case_set_version": "2026-06-15",
+  "fixture_hash": "7bad74c2009995ff40e7dce8f4c6088f13671af6310fcc0c3688406bbdfbbd7e",
+  "fixture_kind": "synthetic",
+  "generator": "benchmarks/golden/generate.py",
+  "n_abstention": 10,
+  "n_lexical": 10,
+  "n_observations": 10,
+  "n_paraphrase": 10,
+  "n_queries": 30,
+  "project_key": "ola1-bench",
+  "seed": "ola1-golden-v1"
+}
