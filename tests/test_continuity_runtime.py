@@ -19,11 +19,15 @@ if str(SRC) not in sys.path:
 def continuity_runtime(tmp_path, monkeypatch, isolated_db):
     home = tmp_path / "nexo-home"
     monkeypatch.setenv("NEXO_HOME", str(home))
+    # Pop only the non-db client modules; reload the db stack IN PLACE. Popping
+    # the 'db' package object (or its submodules) creates NEW module objects that
+    # orphan the collection-time ``import db`` / ``import db._reminders`` of other
+    # test modules (test_resolution_cache, test_semantic_similarity_hybrid),
+    # leaking stale connections / monkeypatch targets into them. ``db/__init__``
+    # reloads its submodules in place, so reloading the package re-points the
+    # whole stack coherently while preserving module identity.
     for name in (
         "paths",
-        "db._continuity",
-        "db._sessions",
-        "db",
         "tools_sessions",
         "continuity",
         "runtime_power",
@@ -31,16 +35,12 @@ def continuity_runtime(tmp_path, monkeypatch, isolated_db):
     ):
         sys.modules.pop(name, None)
     import paths
-    import db._continuity
-    import db._sessions
     import db
     import tools_sessions
     import continuity
     import runtime_versioning
 
     importlib.reload(paths)
-    importlib.reload(db._continuity)
-    importlib.reload(db._sessions)
     importlib.reload(db)
     importlib.reload(tools_sessions)
     importlib.reload(continuity)

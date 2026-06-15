@@ -21,14 +21,16 @@ def isolated_home(tmp_path, monkeypatch):
     (home / "data").mkdir(parents=True)
     (home / "scripts").mkdir(parents=True)
     monkeypatch.setenv("NEXO_HOME", str(home))
-    # Drop only db.* from sys.modules so init_db() rebinds DB_PATH to
-    # this tmp NEXO_HOME. Do NOT pop 'script_registry' — its module
-    # state (NEXO_HOME constant cached at import time) is shared with
-    # tests/test_script_registry.py and popping here invalidates that
-    # other test file's already-bound references, causing CI pollution.
-    for mod in list(sys.modules):
-        if mod == "db" or mod.startswith("db."):
-            sys.modules.pop(mod, None)
+    # Reload the db stack IN PLACE so init_db() rebinds DB_PATH to this tmp
+    # NEXO_HOME. Do NOT pop the 'db' package object (or 'script_registry'): a
+    # pop+reimport creates a NEW module object and orphans the ``import db``
+    # global of other already-collected test modules (e.g. test_resolution_cache),
+    # leaking a stale connection into them — the resolution_cache isolation flake.
+    # ``db/__init__`` reloads its submodules in place, so reloading the package
+    # re-points DB_PATH coherently while preserving module identity.
+    import importlib
+    import db as _db
+    importlib.reload(_db)
     # Repoint the cached NEXO_HOME constant in script_registry without
     # popping the module — keeps test_script_registry.py's bindings live.
     try:

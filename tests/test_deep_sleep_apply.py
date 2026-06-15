@@ -23,8 +23,15 @@ def _load_apply_module(monkeypatch, home: Path):
     monkeypatch.setenv("NEXO_DB", str(home / "nexo-home" / "data" / "nexo.db"))
     monkeypatch.setenv("NEXO_TEST_DB", str(home / "nexo-home" / "data" / "nexo.db"))
     sys.modules.pop("deep_sleep_apply_test", None)
-    for name in ("db", "db._core", "db._schema", "db._reminders", "db._fts"):
-        sys.modules.pop(name, None)
+    # Reload the db stack IN PLACE instead of popping the 'db' package object.
+    # A pop+reimport (here or via the script's ``import db``) makes a NEW module
+    # object, orphaning the collection-time ``import db`` / ``import db._reminders``
+    # of other test modules (test_resolution_cache, test_semantic_similarity_hybrid)
+    # and leaking stale connections / monkeypatch targets into them. ``db/__init__``
+    # reloads its submodules in place, so reloading the package re-points the stack
+    # while preserving module identity.
+    import db
+    importlib.reload(db)
     spec = importlib.util.spec_from_file_location("deep_sleep_apply_test", APPLY_PATH)
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None

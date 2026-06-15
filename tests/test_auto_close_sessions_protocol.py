@@ -14,19 +14,18 @@ def test_auto_close_marks_open_protocol_tasks_partial(tmp_path, monkeypatch):
     nexo_home = tmp_path / "nexo-home"
     monkeypatch.setenv("NEXO_HOME", str(nexo_home))
 
-    for name in (
-        "db",
-        "db._core",
-        "db._schema",
-        "db._protocol",
-        "auto_close_sessions",
-    ):
-        sys.modules.pop(name, None)
+    # Reload the db stack IN PLACE (never pop the 'db' package object): a
+    # pop+reimport creates a NEW module object that orphans the collection-time
+    # ``import db`` / ``import db._reminders`` of other test modules
+    # (test_resolution_cache, test_semantic_similarity_hybrid), leaking stale
+    # connections / monkeypatch targets into them. ``db/__init__`` reloads its
+    # submodules in place, so reloading the package re-points DB_PATH coherently
+    # while preserving module identity.
+    sys.modules.pop("auto_close_sessions", None)
 
     import db
-    import auto_close_sessions
-
     importlib.reload(db)
+    import auto_close_sessions
     importlib.reload(auto_close_sessions)
 
     db.init_db()

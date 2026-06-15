@@ -93,13 +93,18 @@ def test_fresh_install_has_all_columns(tmp_path, monkeypatch):
     (home / "brain").mkdir(parents=True, exist_ok=True)
     monkeypatch.setenv("NEXO_HOME", str(home))
 
-    # Force a clean import so init_db picks up the new NEXO_HOME
+    # Force a re-resolution of NEXO_HOME by reloading the db stack IN PLACE.
+    # Do NOT pop the ``db`` package object: that creates a NEW module object and
+    # orphans the ``import db`` global of other already-collected test modules
+    # (e.g. test_resolution_cache), leaking a stale connection into them — the
+    # resolution_cache isolation flake. ``db/__init__`` reloads its submodules in
+    # place, so reloading the package re-points DB_PATH coherently.
     import importlib
     import sys
 
-    for mod in [m for m in list(sys.modules) if m == "db" or m.startswith("db.")]:
-        sys.modules.pop(mod, None)
+    import db
 
+    importlib.reload(db)
     from db._core import init_db, get_db
 
     init_db()

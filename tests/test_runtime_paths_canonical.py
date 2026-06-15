@@ -32,8 +32,14 @@ def test_auto_close_sessions_logs_follow_runtime_paths(tmp_path, monkeypatch):
     (nexo_home / "runtime" / "coordination").mkdir(parents=True)
     monkeypatch.setenv("NEXO_HOME", str(nexo_home))
 
-    for name in ("db", "db._core", "db._schema", "db._reminders", "db._fts", "auto_close_sessions"):
-        sys.modules.pop(name, None)
+    # Reload the db stack IN PLACE (never pop the 'db' package/submodule objects):
+    # a pop+reimport orphans the collection-time ``import db`` / ``import db._reminders``
+    # of other test modules (test_resolution_cache, test_semantic_similarity_hybrid),
+    # leaking stale connections / monkeypatch targets into them.
+    sys.modules.pop("auto_close_sessions", None)
+    _db = sys.modules.get("db")
+    if _db is not None:
+        importlib.reload(_db)
 
     import auto_close_sessions
     importlib.reload(auto_close_sessions)
@@ -80,8 +86,11 @@ def test_fts_builtin_dirs_follow_runtime_and_personal_layout(tmp_path, monkeypat
     nexo_home = tmp_path / "nexo-home"
     monkeypatch.setenv("NEXO_HOME", str(nexo_home))
 
-    for name in ("db", "db._core", "db._schema", "db._reminders", "db._fts"):
-        sys.modules.pop(name, None)
+    # Reload the db stack IN PLACE (see note above) instead of popping the db
+    # package/submodule objects, which would orphan other test modules' bindings.
+    _db = sys.modules.get("db")
+    if _db is not None:
+        importlib.reload(_db)
 
     import db._fts as db_fts
     importlib.reload(db_fts)

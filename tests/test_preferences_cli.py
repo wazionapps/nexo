@@ -13,9 +13,20 @@ if SRC not in sys.path:
 
 
 def _clear_modules():
+    # Pop only the non-db client modules so they re-resolve NEXO_HOME on next
+    # import. Do NOT pop the db submodules: popping ``db._reminders`` (etc.)
+    # replaces them with NEW objects, orphaning the collection-time
+    # ``import db._reminders`` of other test modules (test_semantic_similarity_hybrid)
+    # so their monkeypatch lands on a stale object. Reload the db stack IN PLACE
+    # instead — ``db/__init__`` reloads its submodules in place, re-resolving
+    # DB_PATH while preserving module identity.
+    import importlib
     for mod in list(sys.modules):
-        if mod in {"paths", "runtime_power", "client_preferences"} or mod.startswith("db."):
+        if mod in {"paths", "runtime_power", "client_preferences"}:
             sys.modules.pop(mod, None)
+    db_module = sys.modules.get("db")
+    if db_module is not None:
+        importlib.reload(db_module)
 
 
 def test_preferences_show_includes_automation_fields(tmp_path, monkeypatch, capsys):

@@ -36,6 +36,24 @@ if str(SRC / "scripts" / "deep-sleep") not in sys.path:
     sys.path.insert(0, str(SRC / "scripts" / "deep-sleep"))
 
 
+def _close_shared_conn() -> None:
+    """Close ``db._core._shared_conn`` if the package is importable.
+
+    Mirror conftest's teardown order (learning #776): shut down the shared
+    pre-answer executor BEFORE closing the SQLite connection so no background
+    source worker writes into a closed DB."""
+    try:
+        import pre_answer_router
+        pre_answer_router.shutdown_executor(wait=True)
+    except Exception:
+        pass
+    try:
+        import db._core as db_core
+        db_core.close_db()
+    except Exception:
+        pass
+
+
 def _fresh_home(tmp_path: Path, monkeypatch) -> tuple[object, object, Path]:
     """Reload the db stack + rewrite/apply modules against an isolated /tmp DB."""
     home = tmp_path / "nexo-home"
@@ -48,26 +66,48 @@ def _fresh_home(tmp_path: Path, monkeypatch) -> tuple[object, object, Path]:
     monkeypatch.delenv("REWRITE_DRY_RUN", raising=False)
     monkeypatch.delenv("REWRITE_MAX_CHANGES_PER_NIGHT", raising=False)
 
-    # Reload the DB stack so it points at the isolated home.
-    for name in list(sys.modules):
-        if name == "db" or name.startswith("db."):
-            sys.modules.pop(name, None)
-    for name in ("apply_findings", "rewrite", "learning_resolver"):
-        sys.modules.pop(name, None)
-
+    # Repoint the db stack at the isolated home WITHOUT swapping the ``db`` module
+    # object.
+    #
+    # ISOLATION INVARIANT — do NOT ``sys.modules.pop('db')`` + re-import here.
+    # Every other test module (e.g. test_resolution_cache) binds its global ``db``
+    # name to ``sys.modules['db']`` at COLLECTION time. Popping ``db`` and
+    # re-importing makes a NEW module object: those other modules keep referencing
+    # the ORPHANED original, which conftest's autouse ``isolated_db`` then cannot
+    # refresh (it reloads ``sys.modules['db']``, not the orphan). The orphan's
+    # re-exported ``get_change_watermark`` / ``log_change`` stay frozen against a
+    # stale ``db._core._shared_conn`` pointing at a PREVIOUS test's temp DB —
+    # producing a cross-test HIT where the resolution_cache anti-stale tests
+    # expect a MISS. Reloading IN PLACE keeps one stable ``db`` object that
+    # conftest can re-point, so freshness reads and writes share one connection.
+    _close_shared_conn()
     import db as nexo_db
-    import db._core as db_core
-    import db._schema as db_schema
-    importlib.reload(db_core)
-    importlib.reload(db_schema)
-    importlib.reload(nexo_db)
+    importlib.reload(nexo_db)  # db/__init__ reloads its submodules in place
     nexo_db.init_db()
 
+    for name in ("apply_findings", "rewrite", "collect", "learning_resolver"):
+        sys.modules.pop(name, None)
     apply_mod = importlib.import_module("apply_findings")
     rewrite_mod = importlib.import_module("rewrite")
-    importlib.reload(apply_mod)
-    importlib.reload(rewrite_mod)
     return nexo_db, rewrite_mod, home
+
+
+@pytest.fixture(autouse=True)
+def _restore_db_after_reload():
+    """Teardown guard for the manual ``_fresh_home`` reload.
+
+    Close the connection ``_fresh_home`` opened and reload the (still-stable)
+    ``db`` object so conftest's autouse fixtures start the next test from a clean,
+    coherent module graph instead of one repointed at this test's now-deleted
+    temp home.
+    """
+    yield
+    _close_shared_conn()
+    try:
+        import db as nexo_db
+        importlib.reload(nexo_db)
+    except Exception:
+        pass
 
 
 def _seed(nexo_db, *, category, title, content, applies_to="", status="active",

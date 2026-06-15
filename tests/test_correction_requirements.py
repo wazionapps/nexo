@@ -17,9 +17,15 @@ def _fresh_db(monkeypatch, tmp_path):
     (home / "data").mkdir(parents=True, exist_ok=True)
     monkeypatch.setenv("NEXO_HOME", str(home))
     monkeypatch.setenv("NEXO_TEST_DB", str(db_path))
-    for name in list(sys.modules):
-        if name == "db" or name.startswith("db.") or name in {"tools_learnings", "tools_sessions", "plugins.protocol"}:
-            sys.modules.pop(name, None)
+    # Drop only the dependent client modules so they rebind to the reloaded db.
+    # Reload ``db`` IN PLACE (never pop the ``db`` package object): popping ``db``
+    # and re-importing makes a NEW module object that orphans the ``import db``
+    # global other already-collected test modules (e.g. test_resolution_cache)
+    # bound at collection time, contaminating the resolution_cache isolation
+    # tests with a stale connection. ``db/__init__`` reloads its submodules in
+    # place, so reloading the package object re-points the stack coherently.
+    for name in ("tools_learnings", "tools_sessions", "plugins.protocol"):
+        sys.modules.pop(name, None)
     import db
 
     importlib.reload(db)

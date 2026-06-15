@@ -24,8 +24,17 @@ if str(REPO_SRC) not in sys.path:
 def _load_self_audit_module():
     module_name = "nexo_daily_self_audit_test"
     sys.modules.pop(module_name, None)
-    for name in ("db", "db._core", "db._schema", "db._reminders", "db._fts", "tools_learnings"):
+    # Reload the db stack IN PLACE rather than popping the ``db`` package object.
+    # Popping ``db`` and letting the script re-import it creates a NEW module
+    # object, orphaning the ``import db`` global of other already-collected test
+    # modules (e.g. test_resolution_cache) — they then keep calling a stale ``db``
+    # whose re-exports point at a previous test's connection, the resolution_cache
+    # isolation flake. ``db/__init__`` reloads its submodules in place, so an
+    # in-place reload re-points the stack while preserving module identity.
+    for name in ("db._reminders", "db._fts", "tools_learnings"):
         sys.modules.pop(name, None)
+    import db
+    importlib.reload(db)
     spec = importlib.util.spec_from_file_location(module_name, SCRIPT_PATH)
     module = importlib.util.module_from_spec(spec)
     assert spec and spec.loader
