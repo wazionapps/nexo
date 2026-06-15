@@ -178,6 +178,15 @@ except ImportError:  # pragma: no cover
     _R24_WINDOW = 3
 
 try:
+    from r37_reality_preflight import (
+        should_inject_r37 as _r37_should,
+        INJECTION_PROMPT_TEMPLATE as _R37_PROMPT,
+    )
+except ImportError:  # pragma: no cover
+    _r37_should = None  # type: ignore
+    _R37_PROMPT = ""  # type: ignore
+
+try:
     from r23b_deploy_vhost import (
         should_inject_r23b as _r23b_should,
         INJECTION_PROMPT_TEMPLATE as _R23B_PROMPT,
@@ -490,6 +499,8 @@ class HeadlessEnforcer:
         # ("force OK", "si borra", etc). Populated by on_user_message.
         self._r25_last_user_text = ""
         self._first_assistant_text_checked_for_jargon = False
+        self._r37_last_user_text = ""
+        self._r37_checked_for_turn = False
         # R17 promise-debt state. Opened on a detected promise, counts
         # down on each tool call.
         self._r17_window_remaining = 0
@@ -756,6 +767,8 @@ class HeadlessEnforcer:
         # (critical fix: R14 import failure was silently killing R15/R25 too).
         self._r25_last_user_text = text or ""
         self._first_assistant_text_checked_for_jargon = False
+        self._r37_last_user_text = text or ""
+        self._r37_checked_for_turn = False
         try:
             self.on_user_message_r15(text or "")
         except Exception as _r15_exc:  # noqa: BLE001
@@ -1078,6 +1091,7 @@ class HeadlessEnforcer:
         if not self._first_assistant_text_checked_for_jargon:
             self._first_assistant_text_checked_for_jargon = True
             self._check_jargon_text(text, tag="r26:first-response-jargon")
+        self._check_reality_preflight_before_answer()
         self._check_execute_before_ask(text)
         self._check_capability_denial_requires_reality(text)
         self._check_r14_accepted_correction(
@@ -1182,6 +1196,32 @@ class HeadlessEnforcer:
             rule_id="R34_capability_reality_check",
         )
         _logger.info("[R34 %s] enqueued capability reality check", mode.upper())
+
+    def _check_reality_preflight_before_answer(self) -> None:
+        if self._r37_checked_for_turn:
+            return
+        self._r37_checked_for_turn = True
+        if _r37_should is None:
+            return
+        try:
+            should = bool(_r37_should(self._r37_last_user_text or "", self.recent_tool_records))
+        except Exception as exc:  # noqa: BLE001
+            _logger.warning("R37 reality preflight failed (%s); staying silent", exc)
+            return
+        if not should:
+            return
+        mode = self._guardian_rule_mode("R37_reality_preflight")
+        if mode == "off":
+            return
+        if mode == "shadow":
+            _logger.info("[R37 SHADOW] would enqueue reality preflight")
+            return
+        self._enqueue(
+            _R37_PROMPT,
+            "r37:reality-preflight",
+            rule_id="R37_reality_preflight",
+        )
+        _logger.info("[R37 %s] enqueued reality preflight", mode.upper())
 
     def _r25_context(self) -> tuple[set[str], list[str]]:
         """Resolve the (read_only_hosts, destructive_patterns) pair from

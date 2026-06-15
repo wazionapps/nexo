@@ -2005,6 +2005,25 @@ class TestRuntimeChecks:
         assert audit["files"] == 0
         assert audit["history_baseline_epoch"] == baseline_epoch
 
+    def test_codex_parity_counts_bootstrap_sessions_with_zero_tool_uses(self, nexo_home, monkeypatch):
+        from doctor.providers import runtime
+
+        session_file = nexo_home / ".codex" / "sessions" / "2026" / "06" / "15" / "zero-tools.jsonl"
+        session_file.parent.mkdir(parents=True, exist_ok=True)
+        session_file.write_text(
+            json.dumps({"type": "session_meta", "payload": {"originator": "codex_cli_rs"}}) + "\n"
+            + json.dumps({"type": "event_msg", "payload": {"type": "user_message", "message": "NEXO Shared Brain for Codex"}}) + "\n"
+            + json.dumps({"type": "event_msg", "payload": {"type": "assistant_message", "message": "ok"}}) + "\n"
+        )
+        monkeypatch.setattr(runtime.Path, "home", lambda: nexo_home)
+
+        audit = runtime._recent_codex_session_parity_status(days=1)
+
+        assert audit["files"] == 1
+        assert audit["zero_tool_bootstrap_sessions"] == 1
+        assert audit["samples"][0]["tool_call_count"] == 0
+        assert audit["samples"][0]["zero_tool_bootstrap"] is True
+
     def test_codex_conditioned_file_discipline_warns_on_read_without_protocol(self, nexo_home, monkeypatch):
         from doctor.providers import runtime
 

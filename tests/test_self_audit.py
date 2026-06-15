@@ -291,6 +291,7 @@ def test_check_codex_startup_discipline_creates_protocol_debt(self_audit_env, mo
             "bootstrap_sessions": 1,
             "startup_sessions": 0,
             "heartbeat_sessions": 1,
+            "zero_tool_bootstrap_sessions": 1,
             "origins": ["codex_cli_rs"],
             "samples": [
                 {
@@ -298,6 +299,7 @@ def test_check_codex_startup_discipline_creates_protocol_debt(self_audit_env, mo
                     "bootstrap": False,
                     "startup": False,
                     "heartbeat": False,
+                    "zero_tool_bootstrap": False,
                     "origin": "codex_cli_rs",
                 },
                 {
@@ -305,6 +307,15 @@ def test_check_codex_startup_discipline_creates_protocol_debt(self_audit_env, mo
                     "bootstrap": True,
                     "startup": True,
                     "heartbeat": False,
+                    "zero_tool_bootstrap": False,
+                    "origin": "codex_cli_rs",
+                },
+                {
+                    "file": "/tmp/codex-zero-tools.jsonl",
+                    "bootstrap": True,
+                    "startup": False,
+                    "heartbeat": False,
+                    "zero_tool_bootstrap": True,
                     "origin": "codex_cli_rs",
                 },
             ],
@@ -323,6 +334,7 @@ def test_check_codex_startup_discipline_creates_protocol_debt(self_audit_env, mo
     ).fetchall()
     conn.close()
     assert rows == [
+        ("codex_session_bootstrap_zero_tool_uses", "error"),
         ("codex_session_missing_heartbeat", "warn"),
         ("codex_session_missing_startup", "error"),
     ]

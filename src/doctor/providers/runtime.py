@@ -334,6 +334,7 @@ def _recent_codex_session_parity_status(*, days: int = 7, max_files: int = 24) -
         "bootstrap_sessions": 0,
         "startup_sessions": 0,
         "heartbeat_sessions": 0,
+        "zero_tool_bootstrap_sessions": 0,
         "origins": set(),
         "samples": [],
     }
@@ -341,6 +342,7 @@ def _recent_codex_session_parity_status(*, days: int = 7, max_files: int = 24) -
         saw_bootstrap = False
         saw_startup = False
         saw_heartbeat = False
+        tool_call_count = 0
         origin = ""
         try:
             with path.open() as fh:
@@ -365,6 +367,7 @@ def _recent_codex_session_parity_status(*, days: int = 7, max_files: int = 24) -
                         continue
                     if payload.get("type") != "function_call":
                         continue
+                    tool_call_count += 1
                     name = str(payload.get("name", "") or "")
                     if name in {"mcp__nexo__nexo_startup", "nexo_startup"}:
                         saw_startup = True
@@ -382,12 +385,16 @@ def _recent_codex_session_parity_status(*, days: int = 7, max_files: int = 24) -
             status["startup_sessions"] += 1
         if saw_heartbeat:
             status["heartbeat_sessions"] += 1
+        if saw_bootstrap and tool_call_count == 0:
+            status["zero_tool_bootstrap_sessions"] += 1
         status["samples"].append(
             {
                 "file": str(path),
                 "bootstrap": saw_bootstrap,
                 "startup": saw_startup,
                 "heartbeat": saw_heartbeat,
+                "tool_call_count": tool_call_count,
+                "zero_tool_bootstrap": bool(saw_bootstrap and tool_call_count == 0),
                 "origin": origin,
             }
         )
@@ -2580,6 +2587,7 @@ def check_codex_session_parity() -> DoctorCheck:
         f"bootstrap markers seen in {audit['bootstrap_sessions']}/{audit['files']}",
         f"nexo_startup seen in {audit['startup_sessions']}/{audit['files']}",
         f"nexo_heartbeat seen in {audit['heartbeat_sessions']}/{audit['files']}",
+        f"bootstrap sessions with Tool uses: 0: {audit.get('zero_tool_bootstrap_sessions', 0)}",
     ]
     if audit["origins"]:
         evidence.append(f"origins: {', '.join(audit['origins'])}")
@@ -2590,6 +2598,7 @@ def check_codex_session_parity() -> DoctorCheck:
     missing_bootstrap = max(0, audit["files"] - audit["bootstrap_sessions"])
     missing_startup = max(0, audit["files"] - audit["startup_sessions"])
     missing_heartbeat = max(0, audit["files"] - audit["heartbeat_sessions"])
+    zero_tool_bootstrap = int(audit.get("zero_tool_bootstrap_sessions") or 0)
     if missing_bootstrap:
         status = "degraded"
         severity = "warn"
@@ -2597,17 +2606,27 @@ def check_codex_session_parity() -> DoctorCheck:
             "Run `nexo update` or `nexo clients sync` so every Codex session inherits the managed bootstrap, not just a subset"
         )
     if missing_startup:
+        status = "critical"
+        severity = "error"
         repair_plan.append(
             "Use `nexo chat` or keep the global Codex bootstrap intact so every Codex session actually calls `nexo_startup`"
         )
     if missing_heartbeat:
+        if status == "healthy":
+            status = "degraded"
+            severity = "warn"
         repair_plan.append("Keep `nexo_heartbeat` on every user turn so restored/plain Codex sessions do not drift off-protocol")
-    if missing_bootstrap or missing_startup or missing_heartbeat:
+    if zero_tool_bootstrap:
+        status = "critical"
+        severity = "error"
+        repair_plan.append("Fail soak/parity checks when a Codex transcript contains NEXO bootstrap text but `Tool uses: 0`")
+    if missing_bootstrap or missing_startup or missing_heartbeat or zero_tool_bootstrap:
         evidence.append(
             "session drift: "
             f"{missing_bootstrap} missing bootstrap, "
             f"{missing_startup} missing startup, "
-            f"{missing_heartbeat} missing heartbeat"
+            f"{missing_heartbeat} missing heartbeat, "
+            f"{zero_tool_bootstrap} bootstrap with Tool uses: 0"
         )
 
     return DoctorCheck(
