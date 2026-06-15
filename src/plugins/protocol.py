@@ -157,10 +157,40 @@ def _requires_external_real_world_check(task: dict, *parts: str) -> bool:
     if str(task.get("task_type") or "").strip() not in ACTION_TASKS:
         return False
     text = _external_real_world_text(task, *parts)
+    if _is_local_only_followup_runner_close(task, text):
+        return False
     return any(
         _contains_external_action_keyword(text, keyword)
         for keyword in EXTERNAL_REAL_WORLD_ACTION_KEYWORDS
     )
+
+
+def _is_local_only_followup_runner_close(task: dict, text: str) -> bool:
+    area = str(task.get("area") or "").lower()
+    goal = str(task.get("goal") or "").lower()
+    if "followup-runner" not in f"{area} {goal} {text}":
+        return False
+
+    local_only_markers = (
+        "sin envio externo",
+        "sin envío externo",
+        "no envio externo",
+        "no envío externo",
+        "no external send",
+        "no external delivery",
+        "internal followup-runner",
+        "followup-runner interna",
+        "followup-runner internas",
+        "solo lectura db",
+        "solo lectura de db",
+        "solo lectura bd",
+        "solo lectura de bd",
+        "archivos locales",
+        "local files",
+        "db/archivos locales",
+        "db/local files",
+    )
+    return any(marker in text for marker in local_only_markers)
 
 
 def _has_external_real_world_evidence(text: str) -> bool:

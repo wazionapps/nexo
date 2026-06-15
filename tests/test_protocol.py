@@ -923,6 +923,44 @@ def test_task_close_does_not_treat_local_summary_file_as_external_message():
     assert closed["status"] == "clean"
 
 
+def test_task_close_local_only_followup_runner_not_flagged_external():
+    """A local-only followup-runner close (DB/local-files only, no external send)
+    must NOT be misclassified as external-real-world stakes by the closure gate,
+    even though delivery-sounding words appear. Closes the false-positive that
+    blocked a local followup-runner task on 'envio/message' keywords."""
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    sid = _register_session("nexo-1003-2003g")
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Ejecutar el followup-runner interno (solo lectura DB/archivos locales, sin envio externo)",
+            task_type="execute",
+            area="followup-runner/runtime_personal",
+            files=json.dumps(["src/scripts/nexo-followup-runner.py"]),
+            plan='["leer followups due", "ejecutar acciones locales"]',
+            verification_step="Verificar localmente que los followups se procesaron en la DB.",
+        )
+    )
+
+    closed = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="done",
+            evidence=(
+                "followup-runner interna ejecutada: solo lectura DB y archivos locales, "
+                "sin envio externo (no email, no message). Procesados los followups due "
+                "en la DB local; verificado con consulta a la tabla followups."
+            ),
+        )
+    )
+
+    assert closed["ok"] is True
+    assert closed["status"] == "clean", closed
+    assert closed.get("blocked_by") != "external_real_world_verify"
+
+
 def test_task_close_accepts_external_done_with_real_world_verification():
     from db import get_db
     from plugins.protocol import handle_task_open, handle_task_close
