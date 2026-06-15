@@ -288,36 +288,68 @@ def _content_hash(fact_type: str, content: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _auto_learning_add(title: str, content: str) -> bool:
-    """Best-effort call to tools_learnings.handle_learning_add.
+def _get_auto_capture_logger():
+    """Lazy, guarded logger so capture failures are observable, never silent.
 
-    Returns True when the learning was stored, False otherwise. Failures
-    are silent so the hook itself never breaks the user's prompt flow.
+    Import must never raise (tmp/read-only homes in tests) — falls back to a
+    NullHandler. Mirrors the enforcement_engine logger pattern.
     """
+    import logging
+    log = logging.getLogger("nexo.auto_capture")
+    if log.handlers:
+        return log
+    try:
+        import paths
+        d = paths.logs_dir()
+        d.mkdir(parents=True, exist_ok=True)
+        handler = logging.FileHandler(d / "auto_capture.log")
+        handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+        log.addHandler(handler)
+        log.setLevel(logging.INFO)
+    except Exception:
+        log.addHandler(logging.NullHandler())
+    return log
+
+
+def _auto_learning_add(title: str, content: str) -> bool:
+    """Persist a correction-derived learning via tools_learnings.handle_learning_add.
+
+    Failures are LOGGED (never silently swallowed) and retried once with a tiny
+    backoff so a transient DB-lock contention on the shared Brain self-heals
+    within the same prompt. Never raises and never breaks the prompt flow
+    (returns bool); all logging/retry stays inside the hook's exit-0 contract.
+    """
+    import time
+    log = _get_auto_capture_logger()
     try:
         import tools_learnings  # type: ignore
-    except Exception:
+    except Exception as exc:
+        log.info("auto_capture: tools_learnings unavailable (%s)", exc.__class__.__name__)
         return False
 
-    try:
-        # The public symbol is handle_learning_add. A prior call to a
-        # non-existent tools_learnings.add_learning raised AttributeError that
-        # was swallowed below, so EVERY auto-captured correction silently
-        # failed to persist a learning (error-capture / never-repeat broken).
-        result = tools_learnings.handle_learning_add(
-            category="auto",
-            title=title,
-            content=content,
-            priority="medium",
-            reasoning="auto-captured from correction pattern in UserPromptSubmit/PostToolUse hook",
-        )
-        if isinstance(result, str):
-            return not result.strip().upper().startswith("ERROR")
-        if isinstance(result, dict):
-            return bool(result.get("ok") or result.get("id") or result.get("learning_id"))
-        return bool(result)
-    except Exception:
-        return False
+    for attempt in range(2):
+        try:
+            result = tools_learnings.handle_learning_add(
+                category="auto",
+                title=title,
+                content=content,
+                priority="medium",
+                reasoning="auto-captured from correction pattern in UserPromptSubmit/PostToolUse hook",
+            )
+            if isinstance(result, str):
+                ok = not result.strip().upper().startswith("ERROR")
+            elif isinstance(result, dict):
+                ok = bool(result.get("ok") or result.get("id") or result.get("learning_id"))
+            else:
+                ok = bool(result)
+            if ok:
+                return True
+            log.warning("auto_capture learning_add failed (attempt %d/2): %r", attempt + 1, result)
+        except Exception as exc:
+            log.warning("auto_capture learning_add error (attempt %d/2): %s", attempt + 1, exc)
+        if attempt == 0:
+            time.sleep(0.05)
+    return False
 
 
 # ---------------------------------------------------------------------------
@@ -408,7 +440,11 @@ def process_conversation(messages: list[str]) -> dict:
                 learning_added = True
                 learnings_added += 1
 
-        _dedup_record(dedup_conn, content_hash, fact_type)
+        # A FAILED correction-learning must stay retryable on the next identical
+        # prompt, so only arm the 1h dedup gate for a correction once its learning
+        # actually persisted. Non-correction facts dedup as before.
+        if not (fact_type == "correction" and not learning_added):
+            _dedup_record(dedup_conn, content_hash, fact_type)
 
         extracted_details.append({
             "type": fact_type,

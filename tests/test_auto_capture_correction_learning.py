@@ -129,3 +129,61 @@ def test_hook_never_raises_when_learnings_module_missing(monkeypatch, auto_captu
     ])
     assert result["corrections"] == 1
     assert result["learnings_added"] == 0
+
+
+# ── Ola 1: failures are logged + retried, not silently swallowed ──────────
+
+def test_auto_learning_failure_is_logged_not_swallowed(monkeypatch, auto_capture_mod, caplog):
+    import logging
+    import types
+    _stub_cognitive(monkeypatch, auto_capture_mod)
+    fake = types.ModuleType("tools_learnings")
+    fake.handle_learning_add = lambda **kw: {"ok": False, "id": 0}
+    sys.modules["tools_learnings"] = fake
+    with caplog.at_level(logging.WARNING, logger="nexo.auto_capture"):
+        result = auto_capture_mod.process_conversation([
+            "no, that's wrong — the cache must stay read-only in production",
+        ])
+    assert result["corrections"] == 1
+    assert result["learnings_added"] == 0
+    assert any("learning_add" in r.message for r in caplog.records), "failure must be logged, not swallowed"
+
+
+def test_auto_learning_retries_then_succeeds(monkeypatch, auto_capture_mod):
+    import types
+    _stub_cognitive(monkeypatch, auto_capture_mod)
+    calls = {"n": 0}
+
+    def _flaky(**kw):
+        calls["n"] += 1
+        return {"ok": False, "id": 0} if calls["n"] == 1 else {"ok": True, "id": 7}
+
+    fake = types.ModuleType("tools_learnings")
+    fake.handle_learning_add = _flaky
+    sys.modules["tools_learnings"] = fake
+    result = auto_capture_mod.process_conversation([
+        "actually that's wrong — the migration must run before the deploy step",
+    ])
+    assert result["learnings_added"] == 1
+    assert calls["n"] == 2  # first attempt failed, bounded retry succeeded
+
+
+def test_failed_correction_is_not_dedup_suppressed(monkeypatch, auto_capture_mod):
+    import types
+    _stub_cognitive(monkeypatch, auto_capture_mod)
+    calls = {"n": 0}
+
+    def _failing(**kw):
+        calls["n"] += 1
+        return {"ok": False, "id": 0}
+
+    fake = types.ModuleType("tools_learnings")
+    fake.handle_learning_add = _failing
+    sys.modules["tools_learnings"] = fake
+    line = "stop, that is wrong — the webhook signature must be verified first"
+    first = auto_capture_mod.process_conversation([line])
+    second = auto_capture_mod.process_conversation([line])
+    assert first["corrections"] == 1 and second["corrections"] == 1
+    # The failed first learning must NOT arm the 1h dedup gate, so the identical
+    # second prompt re-attempts the learning instead of being suppressed.
+    assert calls["n"] >= 3

@@ -2170,31 +2170,30 @@ def handle_task_close(
         limit=3,
     )
     if pending_corrections:
-        debt = _ensure_open_debt(
-            task["session_id"],
-            task_id,
-            "missing_learning_after_correction",
-            severity="error",
-            evidence=(
-                "User correction was detected for this session and has not "
-                "been resolved by nexo_learning_add. task_close is blocked "
-                "until a durable learning is persisted."
-            ),
-            debts=debts_created,
+        # SOFT enforcement (Ola 1): do NOT block the close. A detected user
+        # correction without a durable nexo_learning_add opens/dedupes an
+        # error-severity protocol_debt and the task still closes. The daily
+        # self-audit + correction_requirement_summary surface the open debt, and
+        # if THIS close supplies the learning, the `if correction:` block below
+        # captures it and resolves both the requirement and the debt. A hard
+        # block here interrupted the operator on every correction (friction);
+        # the debt is the non-blocking signal instead.
+        learning_in_this_close = bool(
+            (learning_title or "").strip() and (learning_content or "").strip()
         )
-        return json.dumps(
-            {
-                "ok": False,
-                "error": "Cannot close task while a detected user correction has no durable nexo_learning_add.",
-                "hint": "Call nexo_learning_add with the reusable rule learned from the correction, then retry nexo_task_close.",
-                "task_id": task_id,
-                "blocked_by": "d5_correction_learning_required",
-                "debt_id": debt.get("id"),
-                "pending_corrections": len(pending_corrections),
-            },
-            ensure_ascii=False,
-            indent=2,
-        )
+        if not learning_in_this_close:
+            _ensure_open_debt(
+                task["session_id"],
+                task_id,
+                "missing_learning_after_correction",
+                severity="error",
+                evidence=(
+                    "User correction detected for this session without a durable "
+                    "nexo_learning_add; debt opened (soft enforcement) — task closed "
+                    "but a follow-up learning is required."
+                ),
+                debts=debts_created,
+            )
 
     # ── Evidence enforcement: reject 'done' without proof ──
     # G1 hardening: "done" is no longer allowed to degrade into a debt-only

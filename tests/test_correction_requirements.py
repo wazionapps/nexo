@@ -27,7 +27,10 @@ def _fresh_db(monkeypatch, tmp_path):
     return db
 
 
-def test_detected_correction_blocks_task_close_until_learning_add(monkeypatch, tmp_path):
+def test_detected_correction_opens_debt_but_does_not_block_task_close(monkeypatch, tmp_path):
+    """Ola 1: a detected correction without a learning no longer BLOCKS the close
+    (hard block was friction). It closes the task AND opens a non-blocking debt;
+    persisting the learning resolves the requirement."""
     db = _fresh_db(monkeypatch, tmp_path)
     from plugins.protocol import handle_task_close
     from tools_learnings import handle_learning_add
@@ -45,23 +48,31 @@ def test_detected_correction_blocks_task_close_until_learning_add(monkeypatch, t
         source="heartbeat",
     )
 
-    blocked = json.loads(handle_task_close(sid, task["task_id"], outcome="done", evidence="Verified with targeted regression test output."))
-    assert blocked["ok"] is False
-    assert blocked["blocked_by"] == "d5_correction_learning_required"
+    # SOFT enforcement: the close SUCCEEDS but opens an error-severity debt.
+    closed = json.loads(handle_task_close(sid, task["task_id"], outcome="done", evidence="Verified with targeted regression test output."))
+    assert closed["ok"] is True
+    assert closed.get("blocked_by") != "d5_correction_learning_required"
+    debts = db.list_protocol_debts(session_id=sid, status="open", debt_type="missing_learning_after_correction")
+    assert len(debts) >= 1
+    assert db.list_session_correction_requirements(session_id=sid, status="open")
 
+    # Closing again must NOT stack a second debt (idempotent _ensure_open_debt).
+    json.loads(handle_task_close(sid, task["task_id"], outcome="done", evidence="Verified again."))
+    debts_again = db.list_protocol_debts(session_id=sid, status="open", debt_type="missing_learning_after_correction")
+    assert len(debts_again) == len(debts)
+
+    # Persisting the learning resolves the open correction requirement.
     added = handle_learning_add(
         "nexo-ops",
         "Persist learning after user correction before closure",
-        "When a user correction is detected, persist the reusable rule with nexo_learning_add before closing the task or session.",
-        reasoning="Regression test for D.5 autonomous correction compliance.",
+        "When a user correction is detected, persist the reusable rule with nexo_learning_add.",
+        reasoning="Regression test for D.5 soft correction compliance.",
         prevention="Check session_correction_requirements before task_close.",
         applies_to="/repo/src/plugins/protocol.py",
         priority="high",
     )
     assert "D.5: resolved 1 pending correction" in added
-
-    closed = json.loads(handle_task_close(sid, task["task_id"], outcome="done", evidence="Verified with targeted regression test output."))
-    assert closed["ok"] is True
+    assert not db.list_session_correction_requirements(session_id=sid, status="open")
 
 
 def test_detected_correction_blocks_session_stop_until_learning_add(monkeypatch, tmp_path):
