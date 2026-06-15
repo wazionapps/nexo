@@ -102,6 +102,16 @@ if ! python3 "$SCRIPT_DIR/deep-sleep/apply_findings.py" "$RUN_ID" >> "$LOG_DIR/d
     exit 1
 fi
 
+# Phase 5: REWRITE — deterministic memory hygiene (dedup learnings via
+# reversible soft-supersede). Non-LLM, idempotent, fail-closed backup, capped.
+# A REWRITE failure must NOT block Deep Sleep: the phase is purely additive
+# hygiene and idempotent, so the watermark still advances. Set REWRITE_DRY_RUN=1
+# to emit the manifest without mutating (recommended for the first week).
+log "Phase 5: REWRITE memory hygiene (dedup learnings)..."
+if ! python3 "$SCRIPT_DIR/deep-sleep/rewrite.py" "$RUN_ID" >> "$LOG_DIR/deep-sleep.log" 2>&1; then
+    log "REWRITE warning: memory hygiene phase failed (non-blocking; will retry next run)."
+fi
+
 # Update watermark on success
 echo "$UNTIL" > "$WATERMARK_FILE"
 log "Watermark updated to $UNTIL"

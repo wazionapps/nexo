@@ -221,17 +221,65 @@ def load_recent_dedupe_keys(target_date: str, days: int = 7) -> set[str]:
     return keys
 
 
-def backup_db(db_path: Path, run_id: str) -> Path | None:
-    """Create a backup of a database before mutations."""
+class BackupError(RuntimeError):
+    """Raised when a fail-closed backup cannot be produced."""
+
+
+def backup_db(db_path: Path, run_id: str, *, fail_closed: bool = False) -> Path | None:
+    """Create a consistent snapshot of a database before mutations.
+
+    Uses the SQLite online backup API (``conn.backup``) so the snapshot is
+    transaction-consistent and folds in any pending ``-wal``/``-shm`` state.
+    The previous implementation used ``shutil.copy2`` of only the ``.db`` file,
+    which could capture a torn copy when a WAL sidecar was live and silently
+    swallowed failures while still mutating the DB afterwards.
+
+    fail_closed=True makes the caller's intent explicit: if a consistent
+    snapshot cannot be written, raise ``BackupError`` instead of returning
+    ``None``. Callers that mutate memory MUST pass fail_closed=True so the
+    mutation phase aborts when no recovery point exists. Anti-data-loss
+    invariant: never mutate without a verified backup.
+    """
     if not db_path.exists():
+        if fail_closed:
+            # No source DB means nothing to back up and nothing to mutate; that
+            # is a safe no-op, not a backup failure.
+            return None
         return None
-    backup_path = BACKUP_DIR / f"{run_id}-backup-{db_path.name}"
+    backup_path = Path(BACKUP_DIR) / f"{run_id}-backup-{db_path.name}"
     try:
-        import shutil
-        shutil.copy2(str(db_path), str(backup_path))
+        backup_path.parent.mkdir(parents=True, exist_ok=True)
+        # Online backup API: consistent snapshot even with a live WAL.
+        src = sqlite3.connect(str(db_path))
+        try:
+            dst = sqlite3.connect(str(backup_path))
+            try:
+                src.backup(dst)
+            finally:
+                dst.close()
+        finally:
+            src.close()
+        # Verify the snapshot is a readable SQLite DB before trusting it.
+        verify = sqlite3.connect(str(backup_path))
+        try:
+            verify.execute("PRAGMA schema_version").fetchone()
+        finally:
+            verify.close()
+        if not backup_path.exists() or backup_path.stat().st_size == 0:
+            raise BackupError(f"backup snapshot empty for {db_path.name}")
         return backup_path
     except Exception as e:
-        print(f"  [apply] Warning: backup failed for {db_path.name}: {e}", file=sys.stderr)
+        # Best-effort cleanup of a partial/torn snapshot.
+        try:
+            if backup_path.exists():
+                backup_path.unlink()
+        except Exception:
+            pass
+        msg = f"backup failed for {db_path.name}: {e}"
+        if fail_closed:
+            print(f"  [apply] ABORT: {msg}", file=sys.stderr)
+            raise BackupError(msg) from e
+        print(f"  [apply] Warning: {msg}", file=sys.stderr)
         return None
 
 
@@ -534,10 +582,35 @@ def _update_learning_row(learning_id: int, updates: dict[str, object]) -> None:
     if not updates:
         return
     conn = sqlite3.connect(str(NEXO_DB))
+    conn.row_factory = sqlite3.Row
+    # Capture before-state for the changed columns so the edit is auditable and
+    # reversible (item_history is append-only; nothing is overwritten).
+    before: dict[str, object] = {}
+    try:
+        cols = ", ".join(updates.keys())
+        prev = conn.execute(
+            f"SELECT {cols} FROM learnings WHERE id = ?", (learning_id,)
+        ).fetchone()
+        if prev is not None:
+            before = {k: prev[k] for k in updates.keys()}
+    except Exception:
+        before = {}
     set_clause = ", ".join(f"{column} = ?" for column in updates)
     conn.execute(f"UPDATE learnings SET {set_clause} WHERE id = ?", list(updates.values()) + [learning_id])
     conn.commit()
     conn.close()
+    # Append an immutable history event. Failure here must never break the edit.
+    try:
+        nexo_db.add_item_history(
+            "learning",
+            str(learning_id),
+            "deep_sleep_update",
+            note="Deep Sleep edited learning fields",
+            actor="deep_sleep",
+            metadata={"before": before, "after": updates, "primitive": "_update_learning_row"},
+        )
+    except Exception:
+        pass
 
 
 def _bump_weight(existing_value, amount: float) -> float:
@@ -2351,12 +2424,16 @@ def main():
     existing_keys = load_recent_dedupe_keys(target_date)
     print(f"[apply] Existing dedupe keys (7d): {len(existing_keys)}")
 
-    # Backup databases before mutations
+    # Backup databases before mutations (fail-closed: abort if no recovery point)
     auto_apply_count = sum(1 for a in actions if a.get("action_class") == "auto_apply")
     if auto_apply_count > 0:
         print("[apply] Creating database backups...")
-        nexo_backup = backup_db(NEXO_DB, run_id)
-        cog_backup = backup_db(COGNITIVE_DB, run_id)
+        try:
+            nexo_backup = backup_db(NEXO_DB, run_id, fail_closed=True)
+            cog_backup = backup_db(COGNITIVE_DB, run_id, fail_closed=True)
+        except BackupError as e:
+            print(f"[apply] ABORT: cannot mutate without a backup ({e}).", file=sys.stderr)
+            sys.exit(1)
         if nexo_backup:
             print(f"  Backup: {nexo_backup}")
         if cog_backup:
