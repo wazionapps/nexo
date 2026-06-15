@@ -2712,6 +2712,59 @@ def _m75_failure_prevention_ledger(conn):
     _migrate_add_index(conn, "idx_antibody_actions_status", "antibody_actions", "status")
     _migrate_add_index(conn, "idx_antibody_actions_target", "antibody_actions", "action_type, target_system, target_ref")
     _migrate_add_index(conn, "idx_antibody_actions_verification", "antibody_actions", "verification_status, review_due_at")
+    _m75b_schema_abstraction_templates(conn)
+
+
+def _m75b_schema_abstraction_templates(conn):
+    """Ola 4 — diagnostic templates distilled from recurring incident archetypes.
+
+    A diagnostic template is the destillation of a GENUINELY recurring class of
+    incident (>= MIN_CLUSTER_SIZE distinct failure cases of the same archetype,
+    by symptom similarity) into a reusable, complete-diagnosis-first checklist
+    that primes the right diagnosis instantly when the archetype reappears,
+    instead of re-diagnosing from scratch (Francisco's canonical case: "cron
+    exit 0 but the tool failed in SILENCE").
+
+    Non-authoritative guidance: templates never block; they only inject a primed
+    diagnosis into pre_action_context on a clear archetype match. Idempotent:
+    deduped by ``template_uid`` (stable hash of archetype key). A template is
+    minted only at high confidence; ambiguity yields nothing (a low-confidence
+    candidate, never an active template).
+    """
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS diagnostic_templates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            template_uid TEXT NOT NULL UNIQUE,
+            policy_version TEXT NOT NULL DEFAULT 'schema_abstraction.v1',
+            archetype TEXT NOT NULL,
+            archetype_key TEXT NOT NULL,
+            failure_type TEXT NOT NULL DEFAULT 'other',
+            area TEXT NOT NULL DEFAULT '',
+            symptom_pattern TEXT NOT NULL DEFAULT '',
+            diagnosis_steps_json TEXT NOT NULL DEFAULT '[]',
+            prevention TEXT NOT NULL DEFAULT '',
+            match_tokens_json TEXT NOT NULL DEFAULT '[]',
+            member_uids_json TEXT NOT NULL DEFAULT '[]',
+            incident_count INTEGER NOT NULL DEFAULT 0,
+            confidence REAL NOT NULL DEFAULT 0.0,
+            status TEXT NOT NULL DEFAULT 'active',
+            privacy_level TEXT NOT NULL DEFAULT 'normal',
+            created_at REAL NOT NULL,
+            updated_at REAL NOT NULL,
+            retired_at REAL,
+            retired_reason TEXT NOT NULL DEFAULT '',
+            metadata_json TEXT NOT NULL DEFAULT '{}',
+            CHECK(status IN ('active','candidate','retired','superseded')),
+            CHECK(privacy_level IN ('public','normal','private','sensitive','secret')),
+            CHECK(incident_count >= 0),
+            CHECK(confidence >= 0.0 AND confidence <= 1.0)
+        )
+        """
+    )
+    _migrate_add_index(conn, "idx_diagnostic_templates_archetype", "diagnostic_templates", "archetype_key")
+    _migrate_add_index(conn, "idx_diagnostic_templates_status", "diagnostic_templates", "status, area")
+    _migrate_add_index(conn, "idx_diagnostic_templates_type", "diagnostic_templates", "failure_type, status")
 
 
 def _m76_semantic_layers(conn):

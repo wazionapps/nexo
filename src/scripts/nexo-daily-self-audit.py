@@ -2194,6 +2194,28 @@ def _run_protocol_debt_drain_inline() -> dict:
     }
 
 
+def _run_schema_abstraction_distill_inline() -> dict:
+    """Ola 4 — distill recurring incident archetypes into diagnostic templates.
+
+    Runs the clustering pass over the failure-prevention ledger (+ self-error
+    learnings) and mints/refreshes diagnostic templates idempotently. Guidance
+    only; never blocks. Best-effort: any failure is reported, not raised.
+    """
+    try:
+        import schema_abstraction as sa
+
+        report = sa.distill_templates()
+    except Exception as exc:
+        return {"ok": False, "error": f"distill_failed: {exc}"}
+    return {
+        "ok": bool(report.get("ok")),
+        "templates_created": int(report.get("templates_created") or 0),
+        "templates_refreshed": int(report.get("templates_refreshed") or 0),
+        "incidents": int(report.get("incidents") or 0),
+        "clusters": int(report.get("clusters") or 0),
+    }
+
+
 def _sanitize_watchdog_registry_inline() -> dict:
     hash_registry = _hash_registry_path()
     if not hash_registry.exists():
@@ -2328,6 +2350,24 @@ def run_mechanical_autofixes():
                 finding("INFO", "autofix", "Self-audit protocol debt drain: " + " | ".join(detail_bits))
         elif debt_drain.get("error"):
             finding("WARN", "autofix", f"Protocol debt drain inline failed: {debt_drain['error']}")
+
+        # Ola 4 SCHEMA-ABSTRACTION: distill recurring-incident archetypes into
+        # reusable diagnostic templates (idempotent). Surfaces only when a new
+        # template is minted/refreshed; silence otherwise (anti-noise).
+        distill = _run_schema_abstraction_distill_inline()
+        if distill.get("ok"):
+            created = int(distill.get("templates_created") or 0)
+            refreshed = int(distill.get("templates_refreshed") or 0)
+            if created or refreshed:
+                finding(
+                    "INFO",
+                    "autofix",
+                    f"Schema-abstraction distilled diagnostic templates: "
+                    f"created={created}, refreshed={refreshed} "
+                    f"(from {int(distill.get('incidents') or 0)} incidents)",
+                )
+        elif distill.get("error"):
+            finding("WARN", "autofix", f"Schema-abstraction distill inline failed: {distill['error']}")
 
         if NEXO_DB.exists():
             conn = sqlite3.connect(str(NEXO_DB))

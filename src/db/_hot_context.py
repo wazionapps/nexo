@@ -570,6 +570,21 @@ def build_pre_action_context(
     reminders = _find_related_items("reminders", clean_query, hours=hours, limit=4) if clean_query else []
     followups = _find_related_items("followups", clean_query, hours=hours, limit=4) if clean_query else []
 
+    # Ola 4 SCHEMA-ABSTRACTION: if the current action CLEARLY matches a distilled
+    # recurring-incident archetype (e.g. "cron exit 0 but the tool failed
+    # silently"), prime the complete diagnosis instead of re-diagnosing from
+    # scratch. Best-effort, non-authoritative, precision-first: a template is
+    # surfaced only on a clear archetype match, never in general, and it NEVER
+    # blocks. Any failure here must not break pre-action context.
+    diagnostic_templates: list[dict] = []
+    if clean_query:
+        try:
+            import schema_abstraction as sa
+
+            diagnostic_templates = sa.match_templates_for_action(query=clean_query, limit=1)
+        except Exception:
+            diagnostic_templates = []
+
     return {
         "query": clean_query,
         "context_key": clean_key,
@@ -578,7 +593,8 @@ def build_pre_action_context(
         "events": events,
         "reminders": reminders,
         "followups": followups,
-        "has_matches": bool(contexts or events or reminders or followups),
+        "diagnostic_templates": diagnostic_templates,
+        "has_matches": bool(contexts or events or reminders or followups or diagnostic_templates),
     }
 
 
@@ -591,6 +607,19 @@ def format_pre_action_context_bundle(bundle: dict, *, compact: bool = False) -> 
     if bundle.get("query"):
         header += f" — query: {bundle['query'][:120]}"
     lines.append(header)
+
+    # Ola 4: primed diagnosis from a matched recurring-incident archetype goes
+    # FIRST — the whole point is to lead with the right diagnosis.
+    templates = bundle.get("diagnostic_templates") or []
+    if templates:
+        try:
+            import schema_abstraction as sa
+
+            rendered = sa.format_templates_for_injection(templates)
+            if rendered:
+                lines.append(rendered)
+        except Exception:
+            pass
 
     contexts = bundle.get("contexts") or []
     if contexts:
