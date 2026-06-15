@@ -2087,11 +2087,12 @@ def check_codex_startup_discipline():
     samples = audit.get("samples", [])
     missing_startup = [sample for sample in samples if not sample.get("startup")]
     missing_heartbeat = [sample for sample in samples if sample.get("startup") and not sample.get("heartbeat")]
+    zero_tool_bootstrap = [sample for sample in samples if sample.get("zero_tool_bootstrap")]
     missing_bootstrap = [
         sample for sample in samples
         if sample.get("startup") and sample.get("heartbeat") and not sample.get("bootstrap")
     ]
-    if not missing_startup and not missing_heartbeat and not missing_bootstrap:
+    if not missing_startup and not missing_heartbeat and not missing_bootstrap and not zero_tool_bootstrap:
         return
 
     created_debts = 0
@@ -2101,7 +2102,10 @@ def check_codex_startup_discipline():
             for sample in samples:
                 debt_type = ""
                 severity = "warn"
-                if not sample.get("startup"):
+                if sample.get("zero_tool_bootstrap"):
+                    debt_type = "codex_session_bootstrap_zero_tool_uses"
+                    severity = "error"
+                elif not sample.get("startup"):
                     debt_type = "codex_session_missing_startup"
                     severity = "error"
                 elif not sample.get("heartbeat"):
@@ -2125,7 +2129,8 @@ def check_codex_startup_discipline():
         "Codex startup discipline drift: "
         f"{len(missing_bootstrap)} session(s) missing bootstrap marker, "
         f"{len(missing_startup)} missing startup, "
-        f"{len(missing_heartbeat)} missing heartbeat"
+        f"{len(missing_heartbeat)} missing heartbeat, "
+        f"{len(zero_tool_bootstrap)} bootstrap session(s) with Tool uses: 0"
     )
     if created_debts:
         message += f" | opened {created_debts} protocol debt item(s)"
