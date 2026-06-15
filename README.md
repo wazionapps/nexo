@@ -18,7 +18,7 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.33.0` is the current packaged-runtime line. Minor release - Cognitive OS Ola 1 (phase 2): memory search now finds by MEANING (observation embeddings + FTS/vector fusion), the KG/causal graph is read at answer time (kg_neighbors pre-answer source), local files are recalled via FTS5, nightly learning consolidation no longer times out, correction capture is reliable (soft), and the followup runner uses an atomic lock. Builds on v7.32.0 (causal-graph populate + workflow reaper + the 7.31.14 critical fixes).
+Version `7.34.0` is the current packaged-runtime line. Minor release - Cognitive OS Ola 2: a working-memory `resolution_cache` fast-path avoids re-resolving what was just resolved (never-stale, fail-closed: content-snapshot + global watermark + 15-min TTP, repo-map for code), a later action that reveals a prior self-error auto-captures a learning + prevention, the associative graph (Personalized PageRank) connects the dots multi-hop over the KG at answer time (anti-hub, fail-open, per-process cache), Deep Sleep gains a nightly phase that safely merges duplicate learnings (reversible, zero hard-delete, fail-closed backup, daily cap), and a reproducible memory-recall eval bank (recall@k/MRR) lands with a baseline. Builds on v7.33.0 (semantic recall + graph-at-answer + reliability).
 
 Previously in `7.31.9`: patch release over v7.31.8 - UI release closeout now has to prove the original reported symptom was reopened with observable evidence before claiming the release is ready.
 

@@ -1,5 +1,18 @@
 # Changelog
 
+## [7.34.0] - 2026-06-15
+
+### Added - Cognitive OS Ola 2: working memory, self-error learning, associative graph, deep-sleep rewrite, evals
+
+- **Working memory (`resolution_cache`) — never re-resolve what you just resolved.** A fast-path cache short-circuits a repeated resolution (entity, file, fact) instead of re-running the full search. It is never-stale by construction: fail-closed (any doubt -> miss -> full path), keyed on a content-snapshot, gated by a global write watermark so any newer mutation invalidates it, with a 15-minute TTL; code resolutions carry a repo-map so a changed file forces a re-resolve. Pure latency/cost win on hot repeats, zero risk of serving an outdated answer.
+- **Self-error -> learning: auto-capture when a later action reveals a prior mistake.** When a subsequent step exposes that an earlier action of mine was wrong, the system now creates a learning plus a concrete prevention automatically (high precision, no-noise gating) so the same error is caught next time instead of relying on the operator to flag it.
+- **Associative graph at answer time (Personalized PageRank).** Answering now runs a bounded "connect-the-dots" multi-hop walk over the knowledge graph from the entities/files in your message, surfacing non-obvious related context. Anti-hub weighting stops generic high-degree nodes from dominating, it is fail-open (never blocks an answer), and results are cached per process.
+- **Deep Sleep that rewrites: safe overnight dedup of learnings.** A nightly phase merges duplicate/near-duplicate learnings so the rule corpus stops bloating. It is safe and reversible by design: zero hard-delete (supersede/merge only), a fail-closed backup before any change, and a daily cap on how much it will touch.
+- **Memory eval bank (recall@k / MRR).** A reproducible benchmark for memory recall quality with a committed baseline, so retrieval regressions are caught between releases instead of in production.
+- **Reliability.** Fixed a `kg_neighbors` parity gap in the router's canonical sources, and hardened cross-module test isolation (resolution_cache + semantic_similarity DB state) so the suite no longer flakes.
+
+Builds on 7.33.0 (semantic recall + graph-at-answer + reliability).
+
 ## [7.33.0] - 2026-06-15
 
 ### Added - Cognitive OS Ola 1 (phase 2): semantic recall, graph-at-answer-time, reliability
