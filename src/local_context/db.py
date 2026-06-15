@@ -8,7 +8,7 @@ from typing import Iterable
 from urllib.parse import quote
 
 import paths
-from db._schema import _m63_local_context_layer, _m64_local_context_live_dirs
+from db._schema import _m63_local_context_layer, _m64_local_context_live_dirs, _m84_local_chunks_fts
 
 LOCAL_CONTEXT_DB_NAME = "local-context.db"
 MIGRATION_STATE_KEY = "local_context_db_migrated_from_main"
@@ -118,7 +118,8 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
     _m64_local_context_live_dirs(conn)
     _ensure_entity_dossier_schema(conn)
     _ensure_local_context_v2_schema(conn)
-    conn.execute("PRAGMA user_version=65")
+    _m84_local_chunks_fts(conn)
+    conn.execute("PRAGMA user_version=84")
     conn.commit()
 
 

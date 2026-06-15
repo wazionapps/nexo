@@ -2119,6 +2119,81 @@ def _m64_local_context_live_dirs(conn):
     )
 
 
+def _m84_local_chunks_fts(conn):
+    """FTS5 keyword index over local_chunks for semantic-keyword local-file recall.
+
+    Additive + idempotent + reversible. Creates an FTS5 virtual table
+    ``local_chunks_fts`` keyed by ``local_chunks.rowid`` (local_chunks is NOT
+    WITHOUT ROWID, so its implicit rowid is stable and usable as the FTS key)
+    plus triggers that mirror local_chunks insert/delete/update. The FTS row
+    stores a denormalized snapshot of the owning asset's ``privacy_class`` /
+    ``status`` so privacy can be coarse-prefiltered INSIDE the FTS query without
+    a heavy join. The authoritative privacy check stays on the real
+    local_assets join + is_queryable_path in the retrieval path.
+
+    NOTE: no bulk INSERT...SELECT backfill here (that would scan/lock the live
+    19GB DB at schema time). The incremental, resumable backfill runs in the
+    cron tick (local_context/api.py:_backfill_fts_rows). No vector_blob column,
+    no VACUUM — explicitly out of scope.
+    """
+    try:
+        conn.execute(
+            """
+            CREATE VIRTUAL TABLE IF NOT EXISTS local_chunks_fts USING fts5(
+                text,
+                privacy_class UNINDEXED,
+                asset_status UNINDEXED,
+                tokenize='unicode61 remove_diacritics 2'
+            )
+            """
+        )
+    except Exception:
+        # Hosts without FTS5 support: fall back to a plain shadow table so the
+        # triggers below still succeed and the dual-read simply never flips on
+        # (FTS MATCH would raise OperationalError -> retrieval stays on LIKE).
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS local_chunks_fts (
+                rowid INTEGER PRIMARY KEY,
+                text TEXT DEFAULT '',
+                privacy_class TEXT DEFAULT '',
+                asset_status TEXT DEFAULT ''
+            )
+            """
+        )
+    conn.executescript(
+        """
+        CREATE TRIGGER IF NOT EXISTS local_chunks_fts_insert
+        AFTER INSERT ON local_chunks BEGIN
+            INSERT INTO local_chunks_fts(rowid, text, privacy_class, asset_status)
+            VALUES (
+                new.rowid,
+                new.text,
+                COALESCE((SELECT privacy_class FROM local_assets WHERE asset_id=new.asset_id), 'normal'),
+                COALESCE((SELECT status FROM local_assets WHERE asset_id=new.asset_id), 'active')
+            );
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS local_chunks_fts_delete
+        AFTER DELETE ON local_chunks BEGIN
+            DELETE FROM local_chunks_fts WHERE rowid = old.rowid;
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS local_chunks_fts_update
+        AFTER UPDATE OF text, asset_id ON local_chunks BEGIN
+            DELETE FROM local_chunks_fts WHERE rowid = old.rowid;
+            INSERT INTO local_chunks_fts(rowid, text, privacy_class, asset_status)
+            VALUES (
+                new.rowid,
+                new.text,
+                COALESCE((SELECT privacy_class FROM local_assets WHERE asset_id=new.asset_id), 'normal'),
+                COALESCE((SELECT status FROM local_assets WHERE asset_id=new.asset_id), 'active')
+            );
+        END;
+        """
+    )
+
+
 def _backfill_diary_quality(conn):
     for table in ("session_diary", "diary_archive"):
         conn.execute(f"""

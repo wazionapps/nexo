@@ -50,6 +50,12 @@ INITIAL_INDEX_STARTED_AT_KEY = "initial_index_started_at"
 PERFORMANCE_PROFILE_KEY = "performance_profile"
 DEFAULT_PERFORMANCE_PROFILE = os.environ.get("NEXO_LOCAL_INDEX_PERFORMANCE_PROFILE", "medium").strip().lower() or "medium"
 VALID_CONTEXT_MODES = {"compact", "full"}
+# FTS5 keyword recall over local_chunks. Additive, guarded, reversible.
+# Backfill batch size; 0 disables the incremental backfill entirely.
+FTS_BACKFILL_BATCH = int(os.environ.get("NEXO_LOCAL_FTS_BACKFILL_BATCH", "500") or "500")
+FTS_MIGRATION_CURSOR_KEY = "fts_migration_cursor"
+FTS_MIGRATION_DONE_KEY = "fts_migration_done"
+FTS_BACKFILL_TOTAL_KEY = "fts_backfill_total"
 EMBEDDING_REFRESH_JOB = "embedding_refresh"
 ENTITY_FACTS_JOB = "entity_facts"
 BACKGROUND_INDEX_JOB_TYPES = {ENTITY_FACTS_JOB}
@@ -3541,6 +3547,14 @@ def run_once(
         }
     scan_result = scan_once(limit=effective_scan_limit)
     job_result = process_jobs(limit=effective_process_limit)
+    # Incremental FTS backfill: bounded one-batch-per-tick, after the disk-budget
+    # gate (above) and after process_jobs. Best-effort — never let it break the
+    # cron tick. Skips itself when disabled (batch=0) or already done.
+    if FTS_BACKFILL_BATCH > 0:
+        try:
+            _backfill_fts_rows(conn, batch_limit=FTS_BACKFILL_BATCH)
+        except Exception:
+            pass
     conn_after = _conn()
     initial_after = _initial_scan_status(conn_after, list_roots(readonly=False))
     blocking_active_after = _active_job_count(conn_after, blocking_only=True)
@@ -4109,6 +4123,32 @@ def _status_from_conn(conn, *, readonly: bool = False) -> dict:
         "permissions": [],
         "models": model_status()["models"],
         "support_log_available": True,
+        "fts_recall": _fts_status(conn),
+    }
+
+
+def _fts_status(conn) -> dict:
+    """Operator-facing FTS5 backfill progress (so progress can be watched)."""
+    try:
+        done = _get_state_conn(conn, FTS_MIGRATION_DONE_KEY, "0") == "1"
+    except Exception:
+        done = False
+    try:
+        cursor = int(_get_state_conn(conn, FTS_MIGRATION_CURSOR_KEY, "0") or "0")
+    except Exception:
+        cursor = 0
+    try:
+        total = int(_get_state_conn(conn, FTS_BACKFILL_TOTAL_KEY, "0") or "0")
+    except Exception:
+        total = 0
+    return {
+        "enabled": _fts_enabled_env(),
+        "available": _fts_available(conn),
+        "done": done,
+        "cursor": cursor,
+        "total": total,
+        "read_path": "fts" if _fts_ready(conn) else "like",
+        "backfill_batch": FTS_BACKFILL_BATCH,
     }
 
 
@@ -4433,6 +4473,136 @@ def _context_prefilter_limit(default: int = 1200) -> int:
     return max(100, min(value, 5000))
 
 
+def _fts_enabled_env() -> bool:
+    """Feature flag for the FTS5 read path (default on; set 0/false to roll back)."""
+    value = os.environ.get("NEXO_LOCAL_CONTEXT_FTS_ENABLED", "1").strip().lower()
+    return value not in {"0", "false", "no", "off"}
+
+
+def _fts_available(conn) -> bool:
+    """True if the local_chunks_fts FTS5 vtab exists and MATCH works.
+
+    Hosts without FTS5 support fall back to a plain shadow table that does NOT
+    support MATCH, so the cheap probe runs a trivial MATCH and catches
+    OperationalError. The probe (a sqlite_master lookup + MATCH LIMIT 0) is fast
+    enough to run inline without caching, which avoids stale per-connection
+    cache bugs across reconnects.
+    """
+    try:
+        row = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type IN ('table','view') AND name='local_chunks_fts' LIMIT 1"
+        ).fetchone()
+        if not row:
+            return False
+        # Trivial MATCH proves this is a real FTS5 vtab (shadow fallback raises).
+        conn.execute(
+            "SELECT rowid FROM local_chunks_fts WHERE local_chunks_fts MATCH ? LIMIT 0",
+            ("nexo_fts_probe",),
+        ).fetchall()
+        return True
+    except sqlite3.OperationalError:
+        return False
+    except Exception:
+        return False
+
+
+def _fts_ready(conn) -> bool:
+    """The FTS read path is authoritative only when: backfill done AND the
+    feature flag is on AND FTS5 is actually available on this host."""
+    if not _fts_enabled_env():
+        return False
+    if _get_state_conn(conn, FTS_MIGRATION_DONE_KEY, "0") != "1":
+        return False
+    return _fts_available(conn)
+
+
+def _fts_match_expr(terms: list[str]) -> str:
+    """Build a safe FTS5 MATCH expression from query terms.
+
+    Each term is double-quoted (FTS5 phrase syntax) with embedded double quotes
+    doubled, neutralizing FTS operators/special chars; terms are OR-joined.
+    Returns '' when there is nothing safe to match.
+    """
+    quoted = []
+    for term in terms:
+        cleaned = str(term or "").strip()
+        if not cleaned:
+            continue
+        quoted.append('"' + cleaned.replace('"', '""') + '"')
+    return " OR ".join(quoted)
+
+
+def _backfill_fts_rows(conn, *, batch_limit: int | None = None) -> dict:
+    """Incrementally mirror legacy local_chunks rows into local_chunks_fts.
+
+    Idempotent + resumable: a cursor (max processed rowid) is persisted in
+    local_index_state per batch and committed, so a crash resumes from the last
+    committed rowid. INSERT OR REPLACE keyed by rowid makes re-runs safe.
+    When no rows remain past the cursor the done flag is set. Returns a small
+    status dict. NOTE: new chunks written after schema migration already get FTS
+    rows via the local_chunks_fts triggers, so this only handles pre-existing
+    rows (the legacy 19GB DB).
+    """
+    if batch_limit is None:
+        batch_limit = FTS_BACKFILL_BATCH
+    batch_limit = int(batch_limit)
+    if batch_limit <= 0:
+        return {"ok": True, "skipped": "disabled", "done": _get_state_conn(conn, FTS_MIGRATION_DONE_KEY, "0") == "1"}
+    if not _fts_available(conn):
+        return {"ok": True, "skipped": "fts_unavailable", "done": False}
+    if _get_state_conn(conn, FTS_MIGRATION_DONE_KEY, "0") == "1":
+        return {"ok": True, "skipped": "already_done", "done": True}
+
+    def _run() -> dict:
+        try:
+            cursor = int(_get_state_conn(conn, FTS_MIGRATION_CURSOR_KEY, "0") or "0")
+        except Exception:
+            cursor = 0
+        # Snapshot the total once (first backfill tick) so the operator status
+        # surface can show progress without a COUNT(*) on the 19GB table per tick.
+        if _get_state_conn(conn, FTS_BACKFILL_TOTAL_KEY, "") == "":
+            try:
+                total_row = conn.execute("SELECT COUNT(*) AS total FROM local_chunks").fetchone()
+                _set_state_conn(conn, FTS_BACKFILL_TOTAL_KEY, str(int(total_row["total"] or 0)))
+            except Exception:
+                pass
+        rows = conn.execute(
+            """
+            SELECT c.rowid AS rid, c.text AS text,
+                   COALESCE(a.privacy_class, 'normal') AS privacy_class,
+                   COALESCE(a.status, 'active') AS asset_status
+            FROM local_chunks c
+            LEFT JOIN local_assets a ON a.asset_id = c.asset_id
+            WHERE c.rowid > ?
+            ORDER BY c.rowid ASC
+            LIMIT ?
+            """,
+            (cursor, batch_limit),
+        ).fetchall()
+        if not rows:
+            _set_state_conn(conn, FTS_MIGRATION_DONE_KEY, "1")
+            conn.commit()
+            return {"ok": True, "done": True, "processed": 0, "cursor": cursor}
+        max_rid = cursor
+        for row in rows:
+            rid = int(row["rid"])
+            conn.execute("DELETE FROM local_chunks_fts WHERE rowid = ?", (rid,))
+            conn.execute(
+                """
+                INSERT INTO local_chunks_fts(rowid, text, privacy_class, asset_status)
+                VALUES (?, ?, ?, ?)
+                """,
+                (rid, str(row["text"] or ""), str(row["privacy_class"] or "normal"), str(row["asset_status"] or "active")),
+            )
+            if rid > max_rid:
+                max_rid = rid
+        _set_state_conn(conn, FTS_MIGRATION_CURSOR_KEY, str(max_rid))
+        conn.commit()
+        return {"ok": True, "done": False, "processed": len(rows), "cursor": max_rid}
+
+    return _with_sqlite_busy_retry(_run)
+
+
 def _context_candidate_rows(
     conn,
     entity_asset_ids: list[str],
@@ -4444,39 +4614,73 @@ def _context_candidate_rows(
     prefilter_limit = min(int(base_limit or 5000), _context_prefilter_limit())
     prefilter_rows = []
     if terms:
-        term_clauses = []
-        params: list[str] = []
-        for term in terms:
-            term_clauses.append("(lower(a.path) LIKE ? OR lower(COALESCE(v.summary, '')) LIKE ? OR lower(c.text) LIKE ?)")
-            like = f"%{term}%"
-            params.extend([like, like, like])
-        prefilter_rows = conn.execute(
-            f"""
-            SELECT c.chunk_id, c.asset_id, c.text, a.path, a.file_type, a.privacy_class, v.summary,
-                   e.vector_json, e.model_id, e.model_revision, e.dimension
-            FROM local_chunks c
-            JOIN local_assets a ON a.asset_id = c.asset_id
-            LEFT JOIN local_asset_versions v ON v.version_id = c.version_id
-            LEFT JOIN local_embeddings e ON e.chunk_id = c.chunk_id
-            WHERE a.status='active'
-              AND a.privacy_class='normal'
-              AND ({" OR ".join(term_clauses)})
-            ORDER BY
-              CASE
-                WHEN {" OR ".join("lower(a.path) LIKE ?" for _ in terms)} THEN 0
-                WHEN {" OR ".join("lower(COALESCE(v.summary, '')) LIKE ?" for _ in terms)} THEN 1
-                ELSE 2
-              END,
-              c.created_at DESC
-            LIMIT ?
-            """,
-            [
-                *params,
-                *(f"%{term}%" for term in terms),
-                *(f"%{term}%" for term in terms),
-                prefilter_limit,
-            ],
-        ).fetchall()
+        used_fts = False
+        # DUAL-READ: only take the FTS path once the backfill is done AND the
+        # flag is on AND FTS5 is available. Until then (or on rollback) the
+        # EXACT legacy LIKE path runs, so retrieval is unaffected mid-migration.
+        if _fts_ready(conn):
+            match_expr = _fts_match_expr(terms)
+            if match_expr:
+                try:
+                    prefilter_rows = conn.execute(
+                        """
+                        SELECT c.chunk_id, c.asset_id, c.text, a.path, a.file_type, a.privacy_class, v.summary,
+                               e.vector_json, e.model_id, e.model_revision, e.dimension
+                        FROM local_chunks_fts f
+                        JOIN local_chunks c ON c.rowid = f.rowid
+                        JOIN local_assets a ON a.asset_id = c.asset_id
+                        LEFT JOIN local_asset_versions v ON v.version_id = c.version_id
+                        LEFT JOIN local_embeddings e ON e.chunk_id = c.chunk_id
+                        WHERE local_chunks_fts MATCH ?
+                          AND f.privacy_class='normal'
+                          AND f.asset_status='active'
+                          AND a.status='active'
+                          AND a.privacy_class='normal'
+                        ORDER BY bm25(local_chunks_fts), c.created_at DESC
+                        LIMIT ?
+                        """,
+                        (match_expr, prefilter_limit),
+                    ).fetchall()
+                    used_fts = True
+                except sqlite3.OperationalError:
+                    # Malformed FTS expression (odd user input) -> fall back to
+                    # the legacy LIKE path below instead of erroring the answer.
+                    prefilter_rows = []
+                    used_fts = False
+        if not used_fts:
+            term_clauses = []
+            params: list[str] = []
+            for term in terms:
+                term_clauses.append("(lower(a.path) LIKE ? OR lower(COALESCE(v.summary, '')) LIKE ? OR lower(c.text) LIKE ?)")
+                like = f"%{term}%"
+                params.extend([like, like, like])
+            prefilter_rows = conn.execute(
+                f"""
+                SELECT c.chunk_id, c.asset_id, c.text, a.path, a.file_type, a.privacy_class, v.summary,
+                       e.vector_json, e.model_id, e.model_revision, e.dimension
+                FROM local_chunks c
+                JOIN local_assets a ON a.asset_id = c.asset_id
+                LEFT JOIN local_asset_versions v ON v.version_id = c.version_id
+                LEFT JOIN local_embeddings e ON e.chunk_id = c.chunk_id
+                WHERE a.status='active'
+                  AND a.privacy_class='normal'
+                  AND ({" OR ".join(term_clauses)})
+                ORDER BY
+                  CASE
+                    WHEN {" OR ".join("lower(a.path) LIKE ?" for _ in terms)} THEN 0
+                    WHEN {" OR ".join("lower(COALESCE(v.summary, '')) LIKE ?" for _ in terms)} THEN 1
+                    ELSE 2
+                  END,
+                  c.created_at DESC
+                LIMIT ?
+                """,
+                [
+                    *params,
+                    *(f"%{term}%" for term in terms),
+                    *(f"%{term}%" for term in terms),
+                    prefilter_limit,
+                ],
+            ).fetchall()
 
     fallback_limit = prefilter_limit if not terms else max(120, min(500, prefilter_limit // 3))
     base_rows = conn.execute(
