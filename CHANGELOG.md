@@ -1,5 +1,15 @@
 # Changelog
 
+## [7.35.0] - 2026-06-16
+
+### Added - Cognitive OS Ola 4: selective forget + recurring-incident diagnostic templates (+ protocol precision fix)
+
+- **Selective forget — delete what should not be remembered, and prove it is gone.** Two reversible-by-design modes. `hard-forget` removes a leaked secret or a genuinely-wrong memory and then verifies zero survivors across every live store (all canonical databases, FTS, vector index, transcripts), with `secure_delete=ON` so the bytes are overwritten, not just unlinked. `correct-fact` supersedes a wrong fact with a soft, undoable correction. Closes the long tail of incidents where a secret (an API key, a token) landed in memory and had to be scrubbed everywhere at once.
+- **Recurring-incident diagnostic templates (schema abstraction).** When the same failure *archetype* recurs across separate incidents (e.g. a job that exits 0 but silently did nothing), Deep Sleep distills it into a reusable diagnosis that is primed *before* a matching action — so the known checks run first instead of rediscovering the failure. Strong/weak marker tiers keep benign success phrasing ("exit 0 on success") from ever seeding a template: a single weak hint is ambiguous and ignored; a strong signal (`|| echo`, "forgot the cron", "swallowed the error") or two weak ones are required. Injection is guidance-only and never blocks.
+- **Protocol precision.** Closing a local-only followup-runner is no longer mis-flagged as an external, real-world-stakes action (false-positive gate removed) — fewer spurious closure challenges on routine local work.
+
+Builds on 7.34.0 (working memory + self-error learning + associative graph + deep-sleep rewrite + evals).
+
 ## [7.34.0] - 2026-06-15
 
 ### Added - Cognitive OS Ola 2: working memory, self-error learning, associative graph, deep-sleep rewrite, evals
