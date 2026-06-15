@@ -1161,13 +1161,16 @@ def _capture_learning(
     content: str,
     reasoning: str,
     priority: str = "high",
+    prevention: str = "",
+    applies_to_override: str = "",
+    source_authority: str = "explicit_instruction",
 ) -> dict:
     from tools_learnings import find_conflicting_active_learning, handle_learning_add
 
     clean_title = (title or "").strip()[:120]
     clean_content = (content or "").strip()
     clean_reasoning = (reasoning or f"Captured from protocol task {task_id}").strip()
-    applies_to = ",".join(effective_files)
+    applies_to = applies_to_override.strip() if applies_to_override.strip() else ",".join(effective_files)
     if not clean_title or not clean_content:
         return {"ok": False, "error": "insufficient context for learning capture"}
 
@@ -1183,15 +1186,31 @@ def _capture_learning(
         title=clean_title,
         content=clean_content,
         reasoning=clean_reasoning,
+        prevention=prevention,
         applies_to=applies_to,
         priority=priority,
         supersedes_id=supersedes_id,
+        source_authority=source_authority,
     )
     match = re.search(r"Learning #(\d+) added", response)
     if match:
         return {
             "ok": True,
             "id": int(match.group(1)),
+            "response": response,
+            "superseded_id": supersedes_id or None,
+        }
+    # A near/exact duplicate is a SUCCESSFUL no-op merge — the learning already
+    # exists and no duplicate row was created (handle_learning_add returns
+    # "already exists" / "resolved as merge"). Treat it as success so idempotent
+    # re-captures (e.g. the same self-detected error twice) do not report a
+    # phantom learning_ok=False in the close-response telemetry.
+    dedup = re.search(r"Learning #(\d+) (?:already exists|resolved as merge)", response)
+    if dedup:
+        return {
+            "ok": True,
+            "deduped": True,
+            "id": int(dedup.group(1)),
             "response": response,
             "superseded_id": supersedes_id or None,
         }
@@ -1230,6 +1249,136 @@ def _auto_capture_learning(task: dict, task_id: str, effective_files: list[str],
         reasoning=f"Auto-captured from corrected protocol task {task_id}.",
         priority="high",
     )
+
+
+# ── Forgotten-step followup detector (objective omission markers) ──────
+_FORGOTTEN_STEP_FOLLOWUP_RE = re.compile(
+    r"\b(?:forgot|forgotten|missed|omitted|never (?:created|added|set up|configured|deployed|ran)|"
+    r"missing (?:the )?(?:cron|step|trigger|hook|migration|index|webhook|deploy)|"
+    r"olvid[éeè]|me olvid[éeè]|falt[óoa]ba?|no se (?:cre[óo]|configur[óo]|despleg[óo]|registr[óo]))\b",
+    re.IGNORECASE,
+)
+
+
+def _followup_signals_forgotten_step(*descriptions: object) -> bool:
+    """True only when a followup description objectively states an omission.
+
+    A generic 'verify weekly' or 'monitor X' followup must NOT count — only an
+    explicit 'forgot/missing/never created the cron' style description does.
+    """
+    for desc in descriptions:
+        text = str(desc or "").strip()
+        if text and _FORGOTTEN_STEP_FOLLOWUP_RE.search(text):
+            return True
+    return False
+
+
+def _detect_and_capture_self_error(
+    task: dict,
+    task_id: str,
+    *,
+    clean_outcome: str,
+    closure_text: str,
+    correction: bool,
+    effective_files: list[str],
+    forgotten_step_followup: bool,
+    debts_created: list[dict],
+) -> dict | None:
+    """Ola 2 — auto-detect that a PRIOR own action was wrong and learn from it.
+
+    Runs AFTER the current task is closed. Compares it against recently
+    closed-as-done tasks; on high-confidence objective evidence it creates a
+    learning with a concrete prevention rule (source_authority=code_test_evidence,
+    NOT a Francisco correction). On low confidence it records a low-confidence
+    candidate as an INFO protocol_debt — never a learning. Best-effort: any
+    failure returns None and never blocks the close.
+
+    Returns a small dict describing what happened (for the close response), or
+    None when nothing was detected / on error.
+    """
+    try:
+        import self_error_detector as sed
+        from db import list_recent_closed_tasks
+
+        # Only closes that actually claim progress can host / reveal a self-error.
+        if clean_outcome not in {"done", "partial"}:
+            return None
+
+        prior_tasks = list_recent_closed_tasks(
+            outcome="done",
+            exclude_task_id=task_id,
+            within_days=sed.LOOKBACK_DAYS,
+            limit=sed.MAX_PRIOR_TASKS,
+        )
+        if not prior_tasks:
+            # Nothing previously declared done → cannot have a revealed self-error
+            # from file overlap. A forgotten-step followup alone is candidate-only.
+            if not forgotten_step_followup:
+                return None
+
+        evaluation = sed.evaluate_self_error(
+            current_task=task,
+            prior_tasks=prior_tasks,
+            closure_text=closure_text,
+            correction_happened=correction,
+            forgotten_step_followup=forgotten_step_followup,
+        )
+
+        decision = evaluation.get("decision")
+        if decision == "none":
+            return None
+
+        if decision == "candidate":
+            # Low-confidence: record a quiet INFO candidate, NEVER a learning.
+            # Reuses the existing open-debt dedup so the same candidate does not
+            # pile up across repeated closes of the same task.
+            debt = _ensure_open_debt(
+                task.get("session_id", ""),
+                task_id,
+                "self_error_candidate",
+                severity="info",
+                evidence=(
+                    f"Low-confidence self-error candidate (confidence="
+                    f"{evaluation.get('confidence')}, signal={evaluation.get('signal')}). "
+                    f"{'; '.join(evaluation.get('reasons') or [])[:400]}"
+                ),
+                debts=debts_created,
+            )
+            return {
+                "decision": "candidate",
+                "confidence": evaluation.get("confidence"),
+                "signal": evaluation.get("signal"),
+                "debt_id": debt.get("id"),
+            }
+
+        # decision == "fire": create the learning with a concrete prevention.
+        payload = sed.build_self_error_learning(current_task=task, evaluation=evaluation)
+        learning = _capture_learning(
+            task,
+            task_id,
+            effective_files,
+            category=payload["category"],
+            title=payload["title"],
+            content=payload["content"],
+            reasoning=payload["reasoning"],
+            priority="high",
+            prevention=payload["prevention"],
+            applies_to_override=payload["applies_to"],
+            source_authority=payload["source_authority"],
+        )
+        return {
+            "decision": "fire",
+            "confidence": evaluation.get("confidence"),
+            "signal": evaluation.get("signal"),
+            "prior_task_id": evaluation.get("prior_task_id"),
+            "overlap_files": evaluation.get("overlap_files"),
+            "learning_ok": bool(learning.get("ok")),
+            "learning_id": learning.get("id"),
+            "learning_error": None if learning.get("ok") else learning.get("error"),
+        }
+    except Exception:
+        # Self-error detection is strictly best-effort; never break a close.
+        return None
 
 
 def _append_debt_ref(debts: list[dict], debt: dict, *, debt_type: str, severity: str):
@@ -2657,6 +2806,25 @@ def handle_task_close(
         followup_id=created_followup_id,
         outcome_notes=outcome_notes,
     )
+
+    # ── Ola 2: auto-detect a PRIOR own action that this close reveals as
+    # wrong (e.g. code shipped earlier but the cron was never created). On
+    # high-confidence objective evidence, capture an immediate learning +
+    # prevention rule (source_authority=code_test_evidence, not a Francisco
+    # correction); on low confidence, only a quiet INFO candidate. Strictly
+    # best-effort — runs after the task is already persisted-closed.
+    self_error = _detect_and_capture_self_error(
+        task,
+        task_id,
+        clean_outcome=clean_outcome,
+        closure_text=closure_text,
+        correction=correction,
+        effective_files=effective_files,
+        forgotten_step_followup=_followup_signals_forgotten_step(
+            followup_description, outcome_notes
+        ),
+        debts_created=debts_created,
+    )
     capture_context_event(
         event_type=f"protocol_task_{clean_outcome}",
         title=(task.get("goal") or task_id)[:160],
@@ -2738,10 +2906,17 @@ def handle_task_close(
         pass  # Drive detection is best-effort
 
     open_debts = list_protocol_debts(status="open", task_id=task_id, limit=20)
+    # The self-error CANDIDATE debt is an informational, non-actionable signal
+    # (low confidence; recorded for audit/dedup, never a learning). It must not
+    # flip an otherwise-clean close into "done_with_debts" — that would be the
+    # exact kind of noise/debt Francisco rejects.
+    status_debts = [
+        debt for debt in open_debts if debt.get("debt_type") != "self_error_candidate"
+    ]
 
     status = "clean"
     next_action = "Task closed cleanly."
-    if open_debts:
+    if status_debts:
         if clean_outcome == "done":
             status = "done_with_debts"
             next_action = "Task closed as done, but resolve the open protocol debt next."
@@ -2793,6 +2968,8 @@ def handle_task_close(
         "memory_event": memory_event,
         "memory_event_ok": bool(memory_event and memory_event.get("ok")),
     }
+    if self_error:
+        response["self_error"] = self_error
     if durable_checkpoint:
         response["durable_checkpoint"] = durable_checkpoint
     return json.dumps(response, ensure_ascii=False, indent=2)

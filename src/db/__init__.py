@@ -197,6 +197,7 @@ from db._protocol import (
     VALID_TASK_TYPES,
     VALID_CLOSE_OUTCOMES,
     create_protocol_task, get_protocol_task, close_protocol_task,
+    list_recent_closed_tasks,
     set_protocol_task_guard_acknowledged,
     create_protocol_debt, resolve_protocol_debts, list_protocol_debts,
     record_session_correction_requirement, list_session_correction_requirements,

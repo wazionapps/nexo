@@ -436,6 +436,41 @@ def close_protocol_task(
     return get_protocol_task(task_id) or {}
 
 
+def list_recent_closed_tasks(
+    *,
+    outcome: str = "done",
+    exclude_task_id: str = "",
+    limit: int = 200,
+    within_days: int = 0,
+) -> list[dict]:
+    """Return recently CLOSED protocol tasks for self-error detection.
+
+    Read-only. Ordered most-recent-first by ``closed_at``. The self-error
+    detector compares the just-closed task against these prior closures to
+    spot a later action that corrects something a previous task already
+    claimed as ``done``. Kept deliberately narrow (status filter + small
+    limit) so it never scans the whole history on every close.
+    """
+    conn = get_db()
+    clauses = ["status = ?", "closed_at IS NOT NULL"]
+    params: list[object] = [str(outcome).strip() or "done"]
+    if exclude_task_id:
+        clauses.append("task_id != ?")
+        params.append(exclude_task_id.strip())
+    if within_days and within_days > 0:
+        clauses.append("closed_at >= datetime('now', ?)")
+        params.append(f"-{int(within_days)} days")
+    where = " AND ".join(clauses)
+    rows = conn.execute(
+        f"""SELECT * FROM protocol_tasks
+            WHERE {where}
+            ORDER BY closed_at DESC
+            LIMIT ?""",
+        (*params, max(1, int(limit))),
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
 def create_protocol_debt(
     session_id: str,
     debt_type: str,
