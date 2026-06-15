@@ -157,7 +157,10 @@ def _requires_external_real_world_check(task: dict, *parts: str) -> bool:
     if str(task.get("task_type") or "").strip() not in ACTION_TASKS:
         return False
     text = _external_real_world_text(task, *parts)
-    return any(keyword in text for keyword in EXTERNAL_REAL_WORLD_ACTION_KEYWORDS)
+    return any(
+        _contains_external_action_keyword(text, keyword)
+        for keyword in EXTERNAL_REAL_WORLD_ACTION_KEYWORDS
+    )
 
 
 def _has_external_real_world_evidence(text: str) -> bool:
@@ -167,6 +170,18 @@ def _has_external_real_world_evidence(text: str) -> bool:
     has_verify_verb = any(keyword in lowered for keyword in REAL_WORLD_VERIFICATION_VERBS)
     has_artifact = any(keyword in lowered for keyword in REAL_WORLD_ARTIFACT_KEYWORDS)
     return has_verify_verb and has_artifact
+
+
+def _contains_external_action_keyword(text: str, keyword: str) -> bool:
+    clean_text = str(text or "").lower()
+    clean_keyword = str(keyword or "").lower().strip()
+    if not clean_text or not clean_keyword:
+        return False
+    return re.search(
+        rf"(?<![a-z0-9]){re.escape(clean_keyword)}(?![a-z0-9])",
+        clean_text,
+        re.IGNORECASE,
+    ) is not None
 
 
 ACTION_TASKS = {"edit", "execute", "delegate"}

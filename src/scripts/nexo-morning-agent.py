@@ -415,6 +415,45 @@ def _item_priority(value: object) -> str:
     return ""
 
 
+def _parse_timestamp(value: object) -> datetime | None:
+    if value in (None, ""):
+        return None
+    if isinstance(value, (int, float)):
+        try:
+            return datetime.fromtimestamp(float(value)).astimezone()
+        except (OSError, OverflowError, ValueError):
+            return None
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        if text.replace(".", "", 1).isdigit():
+            return datetime.fromtimestamp(float(text)).astimezone()
+        return datetime.fromisoformat(text.replace("Z", "+00:00")).astimezone()
+    except ValueError:
+        return None
+
+
+def _followup_recency_fields(row: dict) -> dict:
+    created = _parse_timestamp(row.get("created_at"))
+    updated = _parse_timestamp(row.get("updated_at")) or created
+    now = datetime.now().astimezone()
+    days_open = None
+    days_since_activity = None
+    if created:
+        days_open = max(0, (now.date() - created.date()).days)
+    if updated:
+        days_since_activity = max(0, (now.date() - updated.date()).days)
+    stale = bool(days_since_activity is not None and days_since_activity >= 3)
+    return {
+        "created_at": created.isoformat() if created else "",
+        "last_activity": updated.isoformat() if updated else "",
+        "days_open": days_open,
+        "days_since_activity": days_since_activity,
+        "stale_without_recent_signal": stale,
+    }
+
+
 def _serialize_reminders(filter_type: str, *, limit: int) -> list[dict]:
     rows = list(nexo_db.get_reminders(filter_type))
     result: list[dict] = []
@@ -436,7 +475,7 @@ def _serialize_followups(filter_type: str, *, limit: int) -> list[dict]:
         status = str(row.get("status") or "").strip().upper()
         if status.startswith("COMPLETED") or status in {"DELETED", "ARCHIVED"}:
             continue
-        result.append({
+        item = {
             "id": str(row.get("id") or ""),
             "description": _clean_text(row.get("description")),
             "date": str(row.get("date") or ""),
@@ -445,7 +484,9 @@ def _serialize_followups(filter_type: str, *, limit: int) -> list[dict]:
             "status": str(row.get("status") or ""),
             "verification": _clean_text(row.get("verification"), limit=180),
             "reasoning": _clean_text(row.get("reasoning"), limit=180),
-        })
+        }
+        item.update(_followup_recency_fields(row))
+        result.append(item)
         if len(result) >= limit:
             break
     return result

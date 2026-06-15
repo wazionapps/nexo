@@ -28,6 +28,30 @@ def test_morning_agent_prompt_sets_start_of_day_assistant_intent():
     assert "Do not ask the operator to choose a user type" in prompt
     assert "Include news and weather only when verified collected data exists" in prompt
     assert "Public headlines are not a generic news block" in prompt
+    assert "stale_without_recent_signal" in prompt
+    assert "Never reconstruct an old crisis" in prompt
+
+
+def test_followup_recency_fields_expose_age_and_staleness(monkeypatch, tmp_path):
+    monkeypatch.setenv("NEXO_HOME", str(tmp_path / "nexo"))
+    module = _load_morning_agent("nexo_morning_agent_recency_contract_test")
+
+    class FixedDateTime(module.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            base = cls.fromisoformat("2026-06-15T09:00:00+02:00")
+            return base if tz is None else base.astimezone(tz)
+
+    monkeypatch.setattr(module, "datetime", FixedDateTime)
+    fields = module._followup_recency_fields({
+        "created_at": "2026-06-07T02:20:00+00:00",
+        "updated_at": "2026-06-10T07:01:00+00:00",
+    })
+
+    assert fields["days_open"] == 8
+    assert fields["days_since_activity"] == 5
+    assert fields["stale_without_recent_signal"] is True
+    assert fields["last_activity"].startswith("2026-06-10")
 
 
 def test_collect_news_uses_interests_and_exclusions(monkeypatch, tmp_path):

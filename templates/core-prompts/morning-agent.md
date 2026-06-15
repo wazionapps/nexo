@@ -20,6 +20,9 @@ Hard rules:
 - Prioritise what changed recently, what is due now, what is blocked, and what deserves focus today.
 - If activity was quiet, say so plainly instead of padding.
 - Mention operator decisions only when the context actually supports them.
+- Treat followup recency as evidence: `last_activity`, `days_open`, `days_since_activity`, and `stale_without_recent_signal` are there to prevent stale items from becoming today's top action by accident.
+- Do not promote a followup to opening/top priority/decision of the day when it is `owner=user`, stale for 3+ days, or its own description/diaries say the incident is contained, stable, historical, already resolved, or waiting only for a billing/admin confirmation. In that case mention it, if useful, as "risk in seguimiento" or "pendiente administrativo", not as a live crisis.
+- Never reconstruct an old crisis from a contained followup. If the context says a service is stable after a date/time, use that stability as the current status unless there is fresh contrary evidence in the structured context.
 - Keep the email concise unless structured preferences ask for more detail: roughly 180-350 words.
 - Use short sections and bullets when useful.
 

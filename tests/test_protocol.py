@@ -884,6 +884,45 @@ def test_task_close_rejects_external_done_without_real_world_verification():
     assert count == 1
 
 
+def test_task_close_does_not_treat_local_summary_file_as_external_message():
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    sid = _register_session("nexo-1003-2003f")
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal=(
+                "Crear /tmp/self-audit-interpreted.md y /tmp/self-audit-summary.json "
+                "con causas raiz y acciones concretas."
+            ),
+            task_type="execute",
+            area="self-audit/runtime_personal",
+            files=json.dumps([
+                "/tmp/self-audit-interpreted.md",
+                "/tmp/self-audit-summary.json",
+            ]),
+            plan='["write files", "validate local artifacts"]',
+            verification_step="Verificar con test -s, python3 -m json.tool y grep de encabezados markdown.",
+        )
+    )
+
+    closed = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="done",
+            evidence=(
+                "Validacion local: test -s OK para ambos ficheros; python3 -m json.tool "
+                "/tmp/self-audit-summary.json parseo correctamente; grep confirmo encabezados "
+                "requeridos en self-audit-interpreted.md."
+            ),
+        )
+    )
+
+    assert closed["ok"] is True
+    assert closed["status"] == "clean"
+
+
 def test_task_close_accepts_external_done_with_real_world_verification():
     from db import get_db
     from plugins.protocol import handle_task_open, handle_task_close
