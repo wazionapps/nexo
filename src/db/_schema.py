@@ -3199,6 +3199,10 @@ def _m83_observation_embeddings(conn):
     query once only when a model is already warm (or the deterministic offline
     fallback is active) and otherwise degrades to today's FTS-only behaviour.
     """
+    # Ensure the base table exists before ALTER: partial-DB upgrade paths (which
+    # mark earlier migrations applied without materializing every table) would
+    # otherwise hit "no such table: memory_observations". m60 is idempotent.
+    _m60_memory_observations(conn)
     _migrate_add_column(conn, "memory_observations", "embedding", "BLOB")
     _migrate_add_column(conn, "memory_observations", "embedding_model", "TEXT DEFAULT ''")
     # Partial index so the bounded backfill can find un-embedded rows cheaply.
