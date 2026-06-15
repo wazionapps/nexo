@@ -18,7 +18,7 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.32.0` is the current packaged-runtime line. Minor release - Cognitive OS Ola 1: the causal/provenance graph now populates from every evidence-backed task close (the connect-the-dots substrate that was previously empty), and abandoned durable workflows are reaped so the cross-session resume surface stays clean. Bundles the 7.31.14 critical fixes (cron-fleet drift guard, deterministic spreading-activation id, real guard_context evidence, auto error->learning capture, fulfillable confidence-check gate, approval-paused workflow resume).
+Version `7.33.0` is the current packaged-runtime line. Minor release - Cognitive OS Ola 1 (phase 2): memory search now finds by MEANING (observation embeddings + FTS/vector fusion), the KG/causal graph is read at answer time (kg_neighbors pre-answer source), local files are recalled via FTS5, nightly learning consolidation no longer times out, correction capture is reliable (soft), and the followup runner uses an atomic lock. Builds on v7.32.0 (causal-graph populate + workflow reaper + the 7.31.14 critical fixes).
 
 Previously in `7.31.9`: patch release over v7.31.8 - UI release closeout now has to prove the original reported symptom was reopened with observable evidence before claiming the release is ready.
 
