@@ -535,6 +535,60 @@ def test_process_pre_tool_event_allows_public_contribution_checkout(guardrail_en
     assert debt["count"] == 0
 
 
+def test_process_pre_tool_event_observes_external_production_path_without_hard_block(
+    guardrail_env,
+    monkeypatch,
+):
+    external_root = guardrail_env.parent / "recambios-theme"
+    target = external_root / "sections" / "main.liquid"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("existing")
+    atlas = {
+        "recambios-bmw": {
+            "locations": {
+                "theme_local": str(external_root),
+            }
+        }
+    }
+    (guardrail_env / "brain" / "project-atlas.json").write_text(json.dumps(atlas), encoding="utf-8")
+
+    monkeypatch.setenv("NEXO_AUTOMATION", "1")
+    monkeypatch.delenv("NEXO_PUBLIC_CONTRIBUTION", raising=False)
+    db, hook_guardrails = _reload_guardrail_stack()
+    db.init_db()
+    sid = "nexo-2007-3010"
+    db.register_session(
+        sid,
+        "external production observe",
+        external_session_id="claude-auto-prodpath",
+        session_client="claude_code",
+    )
+    db.create_protocol_task(
+        sid,
+        "Edit external production path",
+        task_type="edit",
+        files=[str(target)],
+        opened_with_guard=True,
+    )
+
+    result = hook_guardrails.process_pre_tool_event(
+        {
+            "session_id": "claude-auto-prodpath",
+            "tool_name": "Edit",
+            "tool_input": {"file_path": str(target)},
+        }
+    )
+
+    assert result["status"] == "warn"
+    assert not result.get("blocks")
+    reason_codes = [item.get("reason_code") for item in result.get("warnings", [])]
+    assert "external_production_path_observed" in reason_codes
+    debt = db.get_db().execute(
+        "SELECT debt_type, severity FROM protocol_debt WHERE debt_type = 'external_production_path_write_observed'"
+    ).fetchone()
+    assert debt["severity"] == "warn"
+
+
 def test_process_pre_tool_event_does_not_treat_runtime_home_as_live_repo_when_not_git_checkout(
     guardrail_env,
     monkeypatch,

@@ -578,6 +578,85 @@ def _is_live_repo_path(path: str) -> bool:
         return False
 
 
+def _project_atlas_path() -> Path:
+    return paths.brain_dir() / "project-atlas.json"
+
+
+def _looks_like_atlas_path(value: str) -> bool:
+    text = str(value or "").strip()
+    if not text.startswith(("/", "~/")):
+        return False
+    if any(token in text for token in (" ", "\n", "\t", "$(", "`", "|", "&&", ";")):
+        return False
+    return True
+
+
+def _iter_atlas_strings(value) -> list[str]:
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, dict):
+        strings: list[str] = []
+        for item in value.values():
+            strings.extend(_iter_atlas_strings(item))
+        return strings
+    if isinstance(value, list):
+        strings: list[str] = []
+        for item in value:
+            strings.extend(_iter_atlas_strings(item))
+        return strings
+    return []
+
+
+def _external_production_roots_from_atlas() -> list[tuple[str, Path]]:
+    try:
+        raw = json.loads(_project_atlas_path().read_text(encoding="utf-8"))
+    except Exception:
+        return []
+    if not isinstance(raw, dict):
+        return []
+
+    excluded_roots = [
+        Path.home() / ".nexo",
+        LIVE_REPO_ROOT,
+    ]
+    roots: list[tuple[str, Path]] = []
+    seen: set[str] = set()
+    for project, config in raw.items():
+        if str(project).startswith("_"):
+            continue
+        for value in _iter_atlas_strings(config):
+            if not _looks_like_atlas_path(value):
+                continue
+            try:
+                root = Path(os.path.expandvars(value)).expanduser().resolve(strict=False)
+            except Exception:
+                continue
+            if any(_is_relative_to(root, excluded) or root == excluded for excluded in excluded_roots):
+                continue
+            key = str(root)
+            if key in seen:
+                continue
+            seen.add(key)
+            roots.append((str(project), root))
+    return roots
+
+
+def _match_external_production_root(filepath: str) -> tuple[str, str] | None:
+    if not str(filepath or "").strip():
+        return None
+    try:
+        candidate = _resolve_runtime_path(filepath)
+    except Exception:
+        return None
+    for project, root in _external_production_roots_from_atlas():
+        try:
+            if candidate == root or _is_relative_to(candidate, root):
+                return project, str(root)
+        except Exception:
+            continue
+    return None
+
+
 def _legacy_memory_write_allowed() -> bool:
     return os.environ.get("NEXO_ALLOW_LEGACY_MEMORY_WRITE", "").strip().lower() in {"1", "true", "yes", "on"}
 
@@ -1453,6 +1532,55 @@ def _collect_automation_live_repo_blocks(
     return blocks
 
 
+def _collect_external_production_path_warnings(
+    conn,
+    *,
+    sid: str,
+    tool_name: str,
+    files: list[str],
+) -> list[dict]:
+    if not _automation_live_repo_guard_enabled():
+        return []
+    warnings: list[dict] = []
+    for filepath in files:
+        match = _match_external_production_root(filepath)
+        if not match:
+            continue
+        if sid and _session_has_guard_for_file(conn, sid, filepath):
+            continue
+        project, root = match
+        debt = _ensure_protocol_debt(
+            conn,
+            session_id=sid,
+            task_id="",
+            debt_type="external_production_path_write_observed",
+            severity="warn",
+            evidence=(
+                f"{tool_name} attempted on {filepath} from an automation session. "
+                f"Path falls under project-atlas entry '{project}' root {root}. "
+                "Observation only: no hard block; run nexo_guard_check before editing external production paths."
+            ),
+            file_token=filepath,
+        )
+        warnings.append(
+            {
+                "file": filepath,
+                "task_id": "",
+                "debt_id": debt.get("id"),
+                "debt_type": "external_production_path_write_observed",
+                "reason_code": "external_production_path_observed",
+                "severity": "warn",
+                "message": (
+                    f"{filepath} está dentro de '{project}' en project-atlas ({root}). "
+                    "Observación sin bloqueo; requiere guard_check antes de editar rutas externas de producción."
+                ),
+                "project": project,
+                "root": root,
+            }
+        )
+    return warnings
+
+
 def _collect_runtime_core_write_blocks(
     conn,
     *,
@@ -1930,6 +2058,15 @@ def process_pre_tool_event(payload: dict) -> dict:
             "warnings": warnings,
             "status": "blocked",
         }
+
+    warnings.extend(
+        _collect_external_production_path_warnings(
+            conn,
+            sid=sid,
+            tool_name=tool_name,
+            files=files,
+        )
+    )
 
     core_blocks = _collect_runtime_core_write_blocks(
         conn,
