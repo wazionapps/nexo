@@ -139,6 +139,7 @@ from tools_api_call import (
 from runtime_versioning import (
     RestartRequiredMiddleware,
     build_mcp_status,
+    maybe_selfheal_on_boot,
     prime_process_fingerprint,
     prime_process_version,
 )
@@ -3264,4 +3265,10 @@ if __name__ == "__main__":
                 port=port,
                 on_exit=lambda: (close_local_context_db(), close_db()),
             )
+        else:
+            # stdio child: if we booted already-stale (spawned right after an
+            # update), re-exec into the new code transparently before serving —
+            # covers the case where only allowlisted tools are called and the
+            # per-call drift middleware would never trip. Fail-open.
+            maybe_selfheal_on_boot(client=str(os.environ.get("NEXO_MCP_CLIENT", "") or "").strip())
         mcp.run(**run_kwargs)

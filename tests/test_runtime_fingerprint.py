@@ -674,3 +674,97 @@ def test_prime_process_fingerprint_warms_cache(tmp_path, fingerprint_runtime, mo
     fp = fingerprint_runtime.prime_process_fingerprint()
     assert fp and fp != "unknown"
     assert fingerprint_runtime.fingerprint_cache_path().is_file()
+
+
+# --- self-heal re-exec (transparent reload on post-update drift) -------------
+
+def _arm_drift(rv, monkeypatch, tmp_path, *, resident=False, target_fp="n" * 64):
+    # Real os.execv/os._exit never return; the fakes only RECORD (returning is
+    # fine — the function has no code after them) so the test can inspect which
+    # path ran without killing the test process.
+    root = tmp_path / "active"
+    root.mkdir()
+    (root / "server.py").write_text("# entry\n", encoding="utf-8")
+    monkeypatch.setattr(rv, "active_runtime_root", lambda: root)
+    monkeypatch.setattr(rv, "installed_runtime_fingerprint", lambda use_cache=False: target_fp)
+    monkeypatch.setattr(rv, "_running_as_resident_service", lambda: resident)
+    monkeypatch.setattr(rv, "_selfheal_teardown", lambda: None)
+    rv._INFLIGHT_TOOL_CALLS = 0
+    rv._drift_reexec_defers = 0
+    for var in ("NEXO_SELFHEAL_COUNT", "NEXO_SELFHEAL_GEN", "NEXO_DISABLE_SELFHEAL_REEXEC"):
+        monkeypatch.delenv(var, raising=False)
+    calls = {"execv": None, "exit": None}
+
+    monkeypatch.setattr(rv.os, "execv", lambda exe, argv: calls.__setitem__("execv", (exe, list(argv))))
+    monkeypatch.setattr(rv.os, "_exit", lambda code: calls.__setitem__("exit", code))
+    return root, calls
+
+
+def test_drift_reexec_is_transparent(fingerprint_runtime, monkeypatch, tmp_path):
+    import os
+
+    if os.name != "posix":
+        pytest.skip("execv self-heal is posix-only")
+    rv = fingerprint_runtime
+    root, calls = _arm_drift(rv, monkeypatch, tmp_path)
+    rv._request_drift_exit()
+    assert calls["exit"] is None
+    assert calls["execv"] is not None
+    assert calls["execv"][0] == sys.executable
+    assert calls["execv"][1][:2] == [sys.executable, str(root / "server.py")]
+    assert os.environ.get("NEXO_SELFHEAL_COUNT") == "1"
+
+
+def test_drift_reexec_fails_open_to_exit(fingerprint_runtime, monkeypatch, tmp_path):
+    import os
+
+    if os.name != "posix":
+        pytest.skip("execv self-heal is posix-only")
+    rv = fingerprint_runtime
+    root, calls = _arm_drift(rv, monkeypatch, tmp_path)
+
+    def boom(exe, argv):
+        raise OSError("execv unavailable")
+
+    monkeypatch.setattr(rv.os, "execv", boom)
+    rv._request_drift_exit()
+    assert calls["exit"] == rv._DRIFT_EXIT_CODE
+
+
+def test_drift_reexec_anti_loop_count(fingerprint_runtime, monkeypatch, tmp_path):
+    import os
+
+    if os.name != "posix":
+        pytest.skip("execv self-heal is posix-only")
+    rv = fingerprint_runtime
+    root, calls = _arm_drift(rv, monkeypatch, tmp_path)
+    monkeypatch.setenv("NEXO_SELFHEAL_COUNT", str(rv._SELFHEAL_MAX_GENERATIONS))
+    rv._request_drift_exit()
+    assert calls["execv"] is None
+    assert calls["exit"] == rv._DRIFT_EXIT_CODE
+
+
+def test_drift_reexec_anti_loop_same_target(fingerprint_runtime, monkeypatch, tmp_path):
+    import os
+
+    if os.name != "posix":
+        pytest.skip("execv self-heal is posix-only")
+    rv = fingerprint_runtime
+    target = "z" * 64
+    root, calls = _arm_drift(rv, monkeypatch, tmp_path, target_fp=target)
+    monkeypatch.setenv("NEXO_SELFHEAL_GEN", target[:16])
+    rv._request_drift_exit()
+    assert calls["execv"] is None
+    assert calls["exit"] == rv._DRIFT_EXIT_CODE
+
+
+def test_drift_reexec_skips_resident_service(fingerprint_runtime, monkeypatch, tmp_path):
+    import os
+
+    if os.name != "posix":
+        pytest.skip("execv self-heal is posix-only")
+    rv = fingerprint_runtime
+    root, calls = _arm_drift(rv, monkeypatch, tmp_path, resident=True)
+    rv._request_drift_exit()
+    assert calls["execv"] is None
+    assert calls["exit"] == rv._DRIFT_EXIT_CODE

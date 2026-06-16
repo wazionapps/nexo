@@ -1130,13 +1130,126 @@ def prime_process_fingerprint() -> str:
 _DRIFT_AUTOEXIT_SCHEDULED = False
 _DRIFT_EXIT_CODE = 75
 _DRIFT_EXIT_DELAY_SECONDS = 0.5
+# Anti crash-loop: cap how many times one process-chain may self-heal-reexec
+# before giving up and falling back to a plain exit. A half-written update or
+# an unreadable tree must never thrash.
+_SELFHEAL_MAX_GENERATIONS = 3
+# Tool calls currently executing: never re-exec mid-request (would desync the
+# JSON-RPC stream of a sibling call). Incremented/decremented in on_call_tool.
+_INFLIGHT_TOOL_CALLS = 0
+_DRIFT_REEXEC_DEFER_MAX = 20
+_drift_reexec_defers = 0
 
 
-def _request_drift_exit() -> None:
+def _selfheal_reexec_disabled() -> bool:
+    return str(os.environ.get("NEXO_DISABLE_SELFHEAL_REEXEC", "") or "").strip().lower() in {"1", "true", "yes"}
+
+
+def _running_as_resident_service() -> bool:
+    # The resident HTTP runtime-service serves multiple clients and has its own
+    # self-retire (start_resident_obsolescence_watch). It must NOT execv. Lazy
+    # import to avoid a circular import; fall back to an env sentinel.
+    try:
+        from runtime_service import is_runtime_service_process
+
+        return bool(is_runtime_service_process())
+    except Exception:
+        return str(os.environ.get("NEXO_RUNTIME_SERVICE", "") or "").strip().lower() in {"1", "true", "yes"}
+
+
+def _selfheal_teardown() -> None:
+    """Release SQLite/WAL handles before re-exec so the new image does not fight
+    its own locks. Best-effort: a teardown failure must never block the heal."""
+    try:
+        from local_context.db import close_local_context_db
+
+        close_local_context_db()
+    except Exception:
+        pass
+    try:
+        from db import close_db
+
+        close_db()
+    except Exception:
+        pass
+
+
+def _drift_hard_exit() -> None:
+    # Fallback (today's behavior): exit so a relaunching client (e.g. Claude
+    # Code) spawns a fresh process on the new code. Used when re-exec can't run.
     try:
         os._exit(_DRIFT_EXIT_CODE)
     except Exception:
         os._exit(1)
+
+
+def _request_drift_exit() -> None:
+    """Heal a post-update fingerprint drift TRANSPARENTLY: re-exec the live
+    process in place (os.execv -> same PID, same inherited stdio pipes to the
+    MCP client) so it loads the new code on disk without the client/session
+    breaking and without the user restarting anything. Falls back to a plain
+    exit on any obstacle. FAIL-OPEN: this must never be worse than today's exit.
+    """
+    global _drift_reexec_defers
+    try:
+        # 0. Opt-out / non-posix / resident service -> today's behavior.
+        #    (execv on native Windows spawns+exits, dropping inherited stdio.)
+        if _selfheal_reexec_disabled() or os.name != "posix" or _running_as_resident_service():
+            _drift_hard_exit()
+            return
+
+        # 1. Never re-exec mid tool-call: defer until in-flight calls drain.
+        if _INFLIGHT_TOOL_CALLS > 0 and _drift_reexec_defers < _DRIFT_REEXEC_DEFER_MAX:
+            _drift_reexec_defers += 1
+            try:
+                loop = asyncio.get_running_loop()
+                loop.call_later(_DRIFT_EXIT_DELAY_SECONDS, _request_drift_exit)
+                return
+            except RuntimeError:
+                pass  # no running loop -> proceed to re-exec now
+
+        # 2. Resolve the target fingerprint + anti-loop guards.
+        try:
+            target_fp = installed_runtime_fingerprint(use_cache=False) or ""
+        except Exception:
+            target_fp = ""
+        already_healed_target = bool(target_fp) and os.environ.get("NEXO_SELFHEAL_GEN", "") == target_fp[:16]
+        try:
+            count = int(os.environ.get("NEXO_SELFHEAL_COUNT", "0") or "0")
+        except ValueError:
+            count = 0
+        # We already re-exec'd toward this exact target (or hit the cap) and STILL
+        # drift -> the update is broken/unstable; stop looping, exit once so a
+        # relaunching client gets a clean process; a non-relaunching client keeps
+        # the stale-but-alive server returning mcp_restart_required.
+        if already_healed_target or count >= _SELFHEAL_MAX_GENERATIONS:
+            _drift_hard_exit()
+            return
+
+        # 3. Resolve the new entrypoint (the active snapshot's server.py).
+        server_path = ""
+        try:
+            candidate = active_runtime_root() / "server.py"
+            if candidate.is_file():
+                server_path = str(candidate)
+        except Exception:
+            server_path = ""
+        if not server_path and len(sys.argv) > 1 and os.path.isfile(sys.argv[1]):
+            server_path = sys.argv[1]
+        if not server_path:
+            _drift_hard_exit()
+            return
+
+        # 4. Best-effort teardown, stamp anti-loop env, re-exec in place.
+        _selfheal_teardown()
+        os.environ["NEXO_SELFHEAL_COUNT"] = str(count + 1)
+        if target_fp:
+            os.environ["NEXO_SELFHEAL_GEN"] = target_fp[:16]
+        argv_tail = sys.argv[2:] if len(sys.argv) > 2 else []
+        os.execv(sys.executable, [sys.executable, server_path, *argv_tail])
+    except Exception:
+        # Fail-open: any failure (execv raised, teardown, platform) -> plain exit.
+        _drift_hard_exit()
 
 
 def _schedule_drift_autoexit() -> None:
@@ -1150,6 +1263,25 @@ def _schedule_drift_autoexit() -> None:
         _request_drift_exit()
         return
     loop.call_later(_DRIFT_EXIT_DELAY_SECONDS, _request_drift_exit)
+
+
+def maybe_selfheal_on_boot(client: str = "") -> bool:
+    """Pre-serve drift check: if a freshly-spawned stdio child already loaded
+    stale code (launched right after an update and would only ever receive
+    allowlisted tools, so the per-call middleware never trips), re-exec into the
+    new code BEFORE serving the first request. Normally does not return (execv
+    replaces the process). Fail-open: any error -> return False and serve as-is.
+    Call only in stdio-child mode (the resident HTTP service self-retires)."""
+    try:
+        state = resolve_restart_required(client=client)
+        if not state.get("restart_required"):
+            return False
+        if state.get("reason") not in ("fingerprint_mismatch", "version_mismatch"):
+            return False
+        _request_drift_exit()
+        return True
+    except Exception:
+        return False
 
 
 @dataclass
@@ -1214,11 +1346,18 @@ class RestartRequiredMiddleware(Middleware):
         )
 
     async def on_call_tool(self, context, call_next):
+        global _INFLIGHT_TOOL_CALLS
         tool_name = str(getattr(context.message, "name", "") or "").strip()
         state = resolve_restart_required(client=self.client)
         state = self._ack_current_client_if_restarted(state)
         if not state["restart_required"] or tool_name in RESTART_ALLOWLIST:
-            return await call_next(context)
+            # Track in-flight executions so a drift self-heal re-exec defers until
+            # no tool call is mid-stream (avoids desyncing the JSON-RPC framing).
+            _INFLIGHT_TOOL_CALLS += 1
+            try:
+                return await call_next(context)
+            finally:
+                _INFLIGHT_TOOL_CALLS -= 1
 
         payload = {
             "ok": False,
