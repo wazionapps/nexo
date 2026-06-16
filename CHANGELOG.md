@@ -1,5 +1,21 @@
 # Changelog
 
+## [7.37.0] - 2026-06-16
+
+### Added - The server heals itself after an update (no more "please restart")
+
+- **Updates apply transparently — you never see a restart prompt.** Until now, when a NEXO update landed while a Brain server was already running, that resident process kept the old code and the client told the user to restart so the new version could load. Now the server re-launches itself in place the moment it detects the version drift: same process, same live connection, the new code running — with zero user action and nothing visible. The fix that ships in an update is the fix that's running, immediately.
+  - Re-exec preserves the process identity and the MCP pipes, so the client connection is never dropped.
+  - **Fail-open by design:** anything unusual (non-POSIX host, a re-exec error, a resident background service, or the `NEXO_DISABLE_SELFHEAL_REEXEC` kill switch) falls straight back to the previous safe behavior — it can only ever do as well as before, never worse.
+  - **Anti-loop:** bounded re-exec generations plus a same-target guard mean a stubborn mismatch can't spin in a restart loop.
+  - **Never mid-response:** the re-exec waits for any in-flight tool call to finish first, so it can't tear down in the middle of doing work. A boot-time check also heals before the server starts serving.
+
+### Fixed - Already-replied emails can't be re-sent as duplicate replies
+
+- If a session died right after sending a reply, the email monitor could later find that email still marked "processing" and reinject it — producing a duplicate reply to the same person. The monitor now recognizes the already-sent reply, closes the email as terminally `processed` (never reinjected), and reports the reconciliation so the cleanup is visible rather than silent.
+
+Builds on 7.36.0 (local index disk reclaim).
+
 ## [7.36.0] - 2026-06-16
 
 ### Added - Local index disk reclaim (the index no longer grows without bound)

@@ -94,7 +94,7 @@
                     <span class="page-chip">Patch release</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v7360" class="btn btn-primary">Start with v7.36.0</a>
+                    <a href="#v7370" class="btn btn-primary">Start with v7.37.0</a>
                     <a href="#v7122" class="btn btn-secondary">See v7.12.2</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -348,6 +348,13 @@
     </div>
 </section>
 
+<section id="v7370" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.37.0 <span style="opacity:.5;font-weight:400;">&mdash; June 16, 2026 &mdash; <strong>MINOR</strong></span></div>
+        <h2 class="section-title">The server heals itself after an update &mdash; no more &ldquo;please restart&rdquo;</h2>
+        <p class="section-subtitle">When an update landed while a Brain MCP server was already running, that resident process kept the old code and the client asked the user to restart so the new version could load. Now the stdio child server re-execs itself in place the moment it detects the version drift &mdash; same process, same MCP pipes, same live connection &mdash; so the updated code runs immediately with zero user action and nothing visible. <strong>Fail-open</strong> (non-POSIX host, a re-exec error, a resident background service, or the <code>NEXO_DISABLE_SELFHEAL_REEXEC</code> kill switch all fall back to the prior safe hard-exit). <strong>Anti-loop</strong> (bounded re-exec generations + a same-target guard so a stubborn mismatch can't spin). <strong>Never mid-response</strong> (the re-exec defers until any in-flight tool call finishes, plus a boot-time pre-serve heal). Also fixes email-monitor zombie reinjection: an already-replied email left in <code>processing</code> after a crash is closed as terminal <code>processed</code> and never re-sent as a duplicate reply. Builds on v7.36.0.</p>
+    </div>
+</section>
 <section id="v7360" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
     <div class="container">
         <div class="section-label">New in v7.36.0 <span style="opacity:.5;font-weight:400;">&mdash; June 16, 2026 &mdash; <strong>MINOR</strong></span></div>
