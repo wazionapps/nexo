@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.37.3: release pipeline timeout hardening</title>
+<meta name="description" content="NEXO Brain v7.37.3 keeps the full pre-publish pytest gate and gives slow GitHub runners enough time to finish before public-channel publication.">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-37-3/">
+<meta name="robots" content="index, follow">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.37.3: release pipeline timeout hardening","datePublished":"2026-06-16","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head>
+<body>
+<main class="section-compact">
+<div class="container" style="max-width:860px;">
+<a href="/blog/">Back to blog</a>
+<p class="section-label">Release notes</p>
+<h1>NEXO 7.37.3 - release pipeline timeout hardening</h1>
+<p>v7.37.3 is the public release line for the 7.37.2 runtime hardening plus one release-pipeline fix. The v7.37.2 tag attempt did not publish npm or GitHub release artifacts because the publish workflow test job timed out while pytest was still progressing.</p>
+<p><strong>The full test gate stays in place.</strong> The publish workflow still runs the full Brain pytest suite before public-channel publication. The change is the budget: slow runners now have enough time to finish the suite and release readiness.</p>
+<p><strong>No partial public Brain release was shipped from v7.37.2.</strong> The downstream publish job was skipped after the timeout, so v7.37.3 is the version users and installers should consume.</p>
+<p><a href="/changelog/#v7373">Read the full v7.37.3 changelog</a></p>
+</div>
+</main>
+</body>
+</html>

@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.37.2` is the current packaged-runtime line. Patch release over v7.37.1 - runtime shutdown and CI stability: session keepalive writers now stop before the shared SQLite connection closes, SQLite close is serialized under the write lock, and the full Brain test workflow has enough time to finish instead of cancelling slow-but-valid runs.
+Version `7.37.3` is the current packaged-runtime line. Patch release over v7.37.2 - release pipeline timeout hardening: the Brain publish workflow keeps the full pre-publish pytest gate, but now gives slow GitHub runners enough time to finish the suite and release readiness before public-channel publication.
+
+Previously in `7.37.2`: patch release over v7.37.1 - runtime shutdown and CI stability: session keepalive writers now stop before the shared SQLite connection closes, SQLite close is serialized under the write lock, and the full Brain test workflow has enough time to finish instead of cancelling slow-but-valid runs. The v7.37.2 tag attempt did not publish npm/GitHub release artifacts; v7.37.3 is the public line.
 
 Previously in `7.37.1`: patch release over v7.37.0 - release hardening for Desktop-bundled Brain: large existing `local-context.db` files no longer run a surprise full `VACUUM` on the first writer, `schema_abstraction` MCP tools are loaded by the essential startup set, and learning tools tolerate Desktop compatibility payloads. Builds on v7.37.0 (transparent server self-heal + email zombie reinjection guard).
 

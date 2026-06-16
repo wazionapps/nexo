@@ -144,25 +144,25 @@
                 <div class="section-label">Latest release</div>
                 <div class="blog-featured-meta">
                     <span class="compare-chip">June 16, 2026</span>
-                    <span class="compare-chip">Runtime</span>
-                    <span class="compare-chip">Shutdown</span>
+                    <span class="compare-chip">Release</span>
+                    <span class="compare-chip">Pipeline</span>
                     <span class="compare-chip">CI stability</span>
                     <span class="compare-chip">Patch</span>
                 </div>
-                <h2>NEXO 7.37.2: Runtime shutdown and CI stability</h2>
-                <p>Patch release over v7.37.1. Session keepalive writers now stop before the shared SQLite connection closes, close is serialized under the same write lock used for mutations, and the full Brain test workflow has enough time to finish instead of cancelling slow-but-valid runs.</p>
+                <h2>NEXO 7.37.3: Release pipeline timeout hardening</h2>
+                <p>Patch release over v7.37.2. The Brain publish workflow keeps the full pre-publish pytest gate, but now gives slow GitHub runners enough time to finish the suite and release readiness before public-channel publication.</p>
                 <div class="hero-actions" style="justify-content:flex-start;margin-bottom:18px;">
-                    <a href="/blog/nexo-7-37-2/" class="btn btn-primary">Open article</a>
-                    <a href="/changelog/#v7372" class="btn btn-secondary">Open changelog</a>
+                    <a href="/blog/nexo-7-37-3/" class="btn btn-primary">Open article</a>
+                    <a href="/changelog/#v7373" class="btn btn-secondary">Open changelog</a>
                 </div>
                 <div class="blog-mini-stack">
                     <div class="blog-mini-card">
                         <strong>Companion view</strong>
-                        <span><a href="/changelog/#v7372">See the full v7.37.2 changelog</a></span>
+                        <span><a href="/changelog/#v7373">See the full v7.37.3 changelog</a></span>
                     </div>
                     <div class="blog-mini-card">
                         <strong>Previous release</strong>
-                        <span><a href="/changelog/#v7371">NEXO 7.37.1: Release hardening for Desktop-bundled Brain</a>.</span>
+                        <span><a href="/changelog/#v7372">NEXO 7.37.2: Runtime shutdown and CI stability</a>.</span>
                     </div>
                 </div>
             </div>

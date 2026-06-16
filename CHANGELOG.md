@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.37.3] - 2026-06-16
+
+### Fixed - Release pipeline timeout hardening
+
+- **The Brain publish workflow now has enough headroom for slow-but-valid full test runs.** The 7.37.2 tag attempt proved that the full pytest suite can still be progressing at 94% when a slow GitHub runner reaches the old 60-minute publish gate. The publish test job now has a 90-minute budget, preserving the full pre-publish test gate while avoiding cancellation before release readiness and public-channel publication can run.
+
+Builds on 7.37.2 (runtime shutdown and CI stability). The v7.37.2 tag attempt did not publish npm/GitHub release artifacts; v7.37.3 is the public release line for the same runtime hardening plus this release-pipeline fix.
+
 ## [7.37.2] - 2026-06-16
 
 ### Fixed - Runtime shutdown and CI stability
