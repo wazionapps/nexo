@@ -134,7 +134,7 @@
                     <span class="page-chip">Shared brain product notes</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="/blog/nexo-7-37-0/" class="btn btn-primary">Read latest release</a>
+                    <a href="/blog/nexo-7-37-1/" class="btn btn-primary">Read latest release</a>
                     <a href="/changelog/" class="btn btn-secondary">Latest release notes</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -145,24 +145,24 @@
                 <div class="blog-featured-meta">
                     <span class="compare-chip">June 16, 2026</span>
                     <span class="compare-chip">Runtime</span>
-                    <span class="compare-chip">Self-heal</span>
-                    <span class="compare-chip">Zero-touch updates</span>
-                    <span class="compare-chip">Minor</span>
+                    <span class="compare-chip">Release hardening</span>
+                    <span class="compare-chip">Desktop bundle</span>
+                    <span class="compare-chip">Patch</span>
                 </div>
-                <h2>NEXO 7.37.0: The server heals itself after an update — no more "please restart"</h2>
-                <p>Minor release over v7.36.0. When an update landed while a Brain server was already running, the resident process kept the old code and the client asked the user to restart. Now the server re-launches itself in place the moment it detects the version drift — same process, same live connection, the new code running, with zero user action and nothing visible. It is fail-open (anything unusual falls back to the prior safe behavior), anti-loop, and never tears down mid-response. Also fixes email-monitor zombie reinjection: an already-replied email left in "processing" after a crash is closed as terminal "processed" and never re-sent as a duplicate reply.</p>
+                <h2>NEXO 7.37.1: Release hardening for Desktop-bundled Brain</h2>
+                <p>Patch release over v7.37.0. Large existing local indexes no longer run a surprise foreground <code>VACUUM</code> on the first writer, <code>schema_abstraction</code> tools load in the essential MCP startup set, and learning tools tolerate Desktop compatibility payloads. This is the Brain line intended for the coordinated Desktop corrective build.</p>
                 <div class="hero-actions" style="justify-content:flex-start;margin-bottom:18px;">
-                    <a href="/blog/nexo-7-37-0/" class="btn btn-primary">Open article</a>
-                    <a href="/changelog/#v7370" class="btn btn-secondary">Open changelog</a>
+                    <a href="/blog/nexo-7-37-1/" class="btn btn-primary">Open article</a>
+                    <a href="/changelog/#v7371" class="btn btn-secondary">Open changelog</a>
                 </div>
                 <div class="blog-mini-stack">
                     <div class="blog-mini-card">
                         <strong>Companion view</strong>
-                        <span><a href="/changelog/#v7370">See the full v7.37.0 changelog</a></span>
+                        <span><a href="/changelog/#v7371">See the full v7.37.1 changelog</a></span>
                     </div>
                     <div class="blog-mini-card">
                         <strong>Previous release</strong>
-                        <span><a href="/blog/nexo-7-36-0/">NEXO 7.36.0: Local index disk reclaim — no more unbounded growth</a>.</span>
+                        <span><a href="/changelog/#v7370">NEXO 7.37.0: Transparent server self-heal</a>.</span>
                     </div>
                 </div>
             </div>

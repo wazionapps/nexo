@@ -20,6 +20,8 @@ MAIN_CLEANUP_STATE_KEY = "local_context_main_tables_drained"
 # per never-converted DB (guarded by free disk) and record it here so it never
 # re-runs the expensive rewrite. See ensure_local_context_db().
 AUTO_VACUUM_CONVERTED_KEY = "auto_vacuum_converted"
+AUTO_VACUUM_MAX_SYNC_BYTES_ENV = "NEXO_LOCAL_CONTEXT_AUTO_VACUUM_MAX_SYNC_BYTES"
+DEFAULT_AUTO_VACUUM_MAX_SYNC_BYTES = 128 * 1024 * 1024
 
 LOCAL_CONTEXT_TABLES: tuple[str, ...] = (
     "local_index_roots",
@@ -472,6 +474,9 @@ def _convert_auto_vacuum_once(conn: sqlite3.Connection, db_path: Path) -> None:
             free = shutil.disk_usage(db_path.parent).free
         except OSError:
             return
+        max_sync_bytes = _auto_vacuum_max_sync_bytes()
+        if max_sync_bytes <= 0 or db_size > max_sync_bytes:
+            return
         if free <= db_size * 2:
             # Not enough scratch room — leave NONE mode, retry on a later boot.
             return
@@ -484,6 +489,16 @@ def _convert_auto_vacuum_once(conn: sqlite3.Connection, db_path: Path) -> None:
     except Exception:
         # Conversion is an optimization; never break startup over it.
         pass
+
+
+def _auto_vacuum_max_sync_bytes() -> int:
+    value = os.environ.get(AUTO_VACUUM_MAX_SYNC_BYTES_ENV, "")
+    if value:
+        try:
+            return max(0, int(value))
+        except (TypeError, ValueError):
+            return DEFAULT_AUTO_VACUUM_MAX_SYNC_BYTES
+    return DEFAULT_AUTO_VACUUM_MAX_SYNC_BYTES
 
 
 def get_local_context_db() -> sqlite3.Connection:

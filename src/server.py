@@ -340,6 +340,7 @@ _ESSENTIAL_MCP_STARTUP_PLUGINS = (
     "preferences.py",
     "protocol.py",
     "recover.py",
+    "schema_abstraction.py",
     "skills.py",
     "user_state_tools.py",
     "workflow.py",
@@ -2630,12 +2631,14 @@ def nexo_learning_resolve_candidate(
 
 
 @mcp.tool
-def nexo_learning_search(query: str, category: str = "") -> str:
+def nexo_learning_search(query: str, category: str = "", limit: int = 0) -> str:
     """Search learnings by keyword. Searches title and content.
 
     Args:
         query: Search term.
         category: Filter by category (optional).
+        limit: Accepted for Desktop/client compatibility; search ranking is
+            owned by the Brain handler.
     """
     return handle_learning_search(query, category)
 
@@ -2767,13 +2770,15 @@ def nexo_learning_delete(id: int) -> str:
 
 
 @mcp.tool
-def nexo_learning_list(category: str = "", created_after: str = "", created_before: str = "") -> str:
+def nexo_learning_list(category: str = "", created_after: str = "", created_before: str = "", limit: int = 0) -> str:
     """List all learnings, grouped by category.
 
     Args:
         category: Filter by category (optional). If empty, shows all grouped.
         created_after: Filter to learnings created at or after this date/time (optional).
         created_before: Filter to learnings created at or before this date/time (optional).
+        limit: Accepted for Desktop/client compatibility; grouping is owned by
+            the Brain handler.
     """
     return handle_learning_list(category, created_after, created_before)
 

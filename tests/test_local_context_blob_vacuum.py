@@ -161,3 +161,26 @@ def test_existing_db_converts_to_incremental_auto_vacuum(tmp_path):
     finally:
         conn.close()
     close_local_context_db()
+
+
+def test_existing_large_db_defers_synchronous_auto_vacuum(tmp_path, monkeypatch):
+    db_path = Path(tmp_path) / "large-legacy.db"
+    raw = sqlite3.connect(str(db_path))
+    try:
+        raw.execute("CREATE TABLE local_index_state (key TEXT PRIMARY KEY, value TEXT, updated_at REAL)")
+        raw.execute("CREATE TABLE t (x BLOB)")
+        raw.execute("INSERT INTO t(x) VALUES (?)", (b"\x00" * 4096,))
+        raw.commit()
+    finally:
+        raw.close()
+
+    monkeypatch.setenv(lcdb.AUTO_VACUUM_MAX_SYNC_BYTES_ENV, "1")
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    try:
+        lcdb._convert_auto_vacuum_once(conn, db_path)
+        assert int(conn.execute("PRAGMA auto_vacuum").fetchone()[0]) == 0
+        assert lcdb._state(conn, lcdb.AUTO_VACUUM_CONVERTED_KEY) != "1"
+    finally:
+        conn.close()
+    close_local_context_db()

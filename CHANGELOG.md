@@ -1,5 +1,15 @@
 # Changelog
 
+## [7.37.1] - 2026-06-16
+
+### Fixed - Release hardening for Desktop-bundled Brain
+
+- **Large existing local indexes no longer run a surprise full `VACUUM` on the first writer.** The 7.36.0 disk-reclaim line still converts small/normal legacy `local-context.db` files to `auto_vacuum=INCREMENTAL`, but now defers the one-time synchronous rewrite when the DB is too large for a safe foreground startup path. The default cap is 128 MiB and can be adjusted with `NEXO_LOCAL_CONTEXT_AUTO_VACUUM_MAX_SYNC_BYTES`, so established oversized indexes avoid minutes-long SQLite/I/O stalls while retaining the opt-in maintenance path.
+- **Schema abstraction tools are now actually in the essential MCP startup set.** `nexo_schema_abstraction_*` tools were registered and present in the enforcement map, but a default/essential plugin startup could leave them unavailable. The essential list now includes the plugin, so the advertised tools and runtime surface are aligned.
+- **Learning tools tolerate Desktop/client compatibility payloads.** `nexo_learning_list` and `nexo_learning_search` now accept a `limit` argument without failing schema validation, preserving compatibility with Desktop builds that sent that key while Brain continues to own grouping/ranking semantics.
+
+Builds on 7.37.0 (transparent server self-heal + email zombie reinjection guard).
+
 ## [7.37.0] - 2026-06-16
 
 ### Added - The server heals itself after an update (no more "please restart")

@@ -18,7 +18,7 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.37.0` is the current packaged-runtime line. Minor release - transparent server self-heal: when an update lands while a Brain MCP server is already running, the resident stdio child now re-execs itself in place (same process, same live MCP connection) instead of telling the user to restart, so the updated code runs immediately with nothing visible. Fail-open (non-POSIX, re-exec error, resident service, or `NEXO_DISABLE_SELFHEAL_REEXEC` kill switch all fall back to the prior safe hard-exit), anti-loop (bounded generations + same-target guard), defers past any in-flight tool call, and a boot-time pre-serve heal. Also fixes email-monitor zombie reinjection: an already-replied email left in 'processing' after a crash is closed as terminal 'processed' and never re-sent as a duplicate reply. Builds on v7.36.0 (local index disk reclaim).
+Version `7.37.1` is the current packaged-runtime line. Patch release over v7.37.0 - release hardening for Desktop-bundled Brain: large existing `local-context.db` files no longer run a surprise full `VACUUM` on the first writer, `schema_abstraction` MCP tools are loaded by the essential startup set, and learning tools tolerate Desktop compatibility payloads. Builds on v7.37.0 (transparent server self-heal + email zombie reinjection guard).
 
 Previously in `7.31.9`: patch release over v7.31.8 - UI release closeout now has to prove the original reported symptom was reopened with observable evidence before claiming the release is ready.
 

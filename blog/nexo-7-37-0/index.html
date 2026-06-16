@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.37.0: transparent server self-heal</title>
+<meta name="description" content="NEXO Brain v7.37.0 makes updates apply transparently by re-launching the resident server in place after version drift, and prevents already-replied emails from being reinjected as duplicate replies.">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-37-0/">
+<meta name="robots" content="index, follow">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.37.0: transparent server self-heal","datePublished":"2026-06-16","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head>
+<body>
+<main class="section-compact">
+<div class="container" style="max-width:860px;">
+<a href="/blog/">Back to blog</a>
+<p class="section-label">Release notes</p>
+<h1>NEXO 7.37.0 - transparent server self-heal</h1>
+<p>v7.37.0 removes the user-visible restart gap after a Brain update. When a resident server detects that the installed code has moved to a newer version, it re-launches itself in place before continuing to serve the client.</p>
+<p><strong>Updates apply without a manual restart.</strong> The server preserves the live connection and waits for any in-flight tool call before re-execing, so an update can take effect without interrupting the current response. Boot-time checking also heals before the server starts serving a stale runtime.</p>
+<p><strong>The self-heal path fails open.</strong> Non-POSIX hosts, resident background services, re-exec errors, and the <code>NEXO_DISABLE_SELFHEAL_REEXEC</code> kill switch fall back to the previous safe behavior. Bounded generations and same-target guards prevent restart loops.</p>
+<p><strong>Already-replied emails are not resent.</strong> If a session died after sending a reply while the email was still marked <code>processing</code>, the monitor could later reinject that email and send a duplicate. The monitor now recognizes the already-sent reply, marks the email <code>processed</code>, and reports the reconciliation.</p>
+<p><a href="/changelog/#v7370">Read the full v7.37.0 changelog</a></p>
+</div>
+</main>
+</body>
+</html>

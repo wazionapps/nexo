@@ -432,6 +432,12 @@ def test_plugin_passes_r11_and_registers_tools(isolated_db):
     assert set(x for x in mcp.added if x) == expected
 
 
+def test_schema_abstraction_plugin_is_in_essential_startup_set():
+    server_source = (REPO_SRC / "server.py").read_text(encoding="utf-8")
+    essential_block = server_source.split("_ESSENTIAL_MCP_STARTUP_PLUGINS = (", 1)[1].split(")", 1)[0]
+    assert '"schema_abstraction.py"' in essential_block
+
+
 # ── (g) MIGRATION: upgrade from a v75 schema creates diagnostic_templates ─────
 
 

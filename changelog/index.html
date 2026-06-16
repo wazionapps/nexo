@@ -94,7 +94,7 @@
                     <span class="page-chip">Patch release</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v7370" class="btn btn-primary">Start with v7.37.0</a>
+                    <a href="#v7371" class="btn btn-primary">Start with v7.37.1</a>
                     <a href="#v7122" class="btn btn-secondary">See v7.12.2</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -348,6 +348,13 @@
     </div>
 </section>
 
+<section id="v7371" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.37.1 <span style="opacity:.5;font-weight:400;">&mdash; June 16, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">Release hardening for Desktop-bundled Brain</h2>
+        <p class="section-subtitle">Patch release over v7.37.0. Large existing <code>local-context.db</code> files no longer run a surprise foreground <code>VACUUM</code> on the first writer; <code>schema_abstraction</code> tools now load in the essential MCP startup set, matching the advertised tool map; and <code>nexo_learning_list</code>/<code>nexo_learning_search</code> tolerate Desktop compatibility payloads while preserving Brain-owned grouping and ranking. This line is intended for the coordinated Desktop corrective release that bundles the current Brain snapshot.</p>
+    </div>
+</section>
 <section id="v7370" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
     <div class="container">
         <div class="section-label">New in v7.37.0 <span style="opacity:.5;font-weight:400;">&mdash; June 16, 2026 &mdash; <strong>MINOR</strong></span></div>
