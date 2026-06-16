@@ -2007,6 +2007,7 @@ def _m63_local_context_layer(conn):
             model_revision TEXT NOT NULL DEFAULT '',
             dimension INTEGER NOT NULL,
             vector_json TEXT NOT NULL,
+            vector_blob BLOB,
             created_at REAL NOT NULL
         );
 

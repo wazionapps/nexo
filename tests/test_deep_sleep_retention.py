@@ -48,6 +48,29 @@ def test_deep_sleep_retention_keeps_recent_db_backups_and_analyzed_contexts(tmp_
     assert (root / "2026-05-10-context.txt").exists()
 
 
+def test_deep_sleep_retention_sweeps_orphan_sidecars(tmp_path):
+    home = tmp_path / "nexo"
+    root = home / "runtime" / "operations" / "deep-sleep"
+
+    # A live backup with its own sidecars (base .db exists) — must be kept.
+    _write(root / "2026-05-06-050000-backup-nexo.db", 100)
+    _write(root / "2026-05-06-050000-backup-nexo.db-wal", 0)
+    _write(root / "2026-05-06-050000-backup-nexo.db-shm", 32)
+    # Orphan sidecars whose base .db is gone (interrupted process) — must go.
+    _write(root / "2026-04-18-050000-backup-nexo.db-wal", 0)
+    _write(root / "2026-04-18-050000-backup-cognitive.db-shm", 32)
+
+    report = prune_deep_sleep_runtime(nexo_home=home, apply=True, keep_db_backups=3, keep_contexts=7)
+
+    assert not (root / "2026-04-18-050000-backup-nexo.db-wal").exists()
+    assert not (root / "2026-04-18-050000-backup-cognitive.db-shm").exists()
+    # The base .db (within keep) and its sidecars are untouched.
+    assert (root / "2026-05-06-050000-backup-nexo.db").exists()
+    assert (root / "2026-05-06-050000-backup-nexo.db-wal").exists()
+    assert (root / "2026-05-06-050000-backup-nexo.db-shm").exists()
+    assert any(d.get("reason") == "orphan-db-sidecar" for d in report.get("deleted", []))
+
+
 def test_deep_sleep_retention_rotates_deep_sleep_logs(tmp_path):
     home = tmp_path / "nexo"
     log_file = home / "runtime" / "logs" / "deep-sleep.log"

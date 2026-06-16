@@ -84,14 +84,15 @@ def _seed_embedding(conn, asset_id: str, chunk_id: str, vector_json: str = "[0.1
 def test_m84_adds_fts_table_and_bumps_user_version():
     conn = get_local_context_db()
     version = conn.execute("PRAGMA user_version").fetchone()[0]
-    assert int(version) >= 84
+    assert int(version) >= 85
     row = conn.execute(
         "SELECT name FROM sqlite_master WHERE name='local_chunks_fts' AND type IN ('table','view')"
     ).fetchone()
     assert row is not None
-    # No vector_blob column was added (operator cut that part).
+    # v85: compact float32 vector_blob column added alongside legacy vector_json.
     cols = {r["name"] for r in conn.execute("PRAGMA table_info(local_embeddings)").fetchall()}
-    assert "vector_blob" not in cols
+    assert "vector_blob" in cols
+    assert "vector_json" in cols  # legacy column kept for dual-read/back-compat
 
 
 def test_m84_is_idempotent():

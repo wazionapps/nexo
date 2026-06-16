@@ -186,6 +186,20 @@ def _seed_runtime_memory_benchmark_summary(
     (summary_dir / "latest_summary.json").write_text(json.dumps(payload), encoding="utf-8")
 
 
+def _literal_conditions():
+    return [
+        {
+            "id": "release_published",
+            "literal_text": "publicar release Brain/Desktop con tag, manifiestos y smoke verificados",
+            "status": "verified",
+            "live_evidence": [
+                "curl https://nexo-desktop.com/downloads/update.json HTTP 200",
+                "gh release view v0.44.10",
+            ],
+        }
+    ]
+
+
 def test_check_contract_accepts_valid_contract(tmp_path):
     module = _load_module()
     website_root = tmp_path / "site"
@@ -202,6 +216,7 @@ def test_check_contract_accepts_valid_contract(tmp_path):
         },
         "required_repo_files": ["repo-artifact.txt"],
         "required_website_files": ["index.html"],
+        "literal_conditions": _literal_conditions(),
         "gates": [
             {
                 "id": "manual",
@@ -239,6 +254,7 @@ def test_check_contract_runs_runtime_memory_benchmark_gate(tmp_path):
         },
         "required_repo_files": ["repo-artifact.txt"],
         "required_website_files": ["index.html"],
+        "literal_conditions": _literal_conditions(),
         "gates": [
             {
                 "id": "runtime_memory_benchmark",
@@ -281,6 +297,7 @@ def test_check_contract_blocks_runtime_memory_benchmark_failures(tmp_path):
         },
         "required_repo_files": ["repo-artifact.txt"],
         "required_website_files": ["index.html"],
+        "literal_conditions": _literal_conditions(),
         "gates": [
             {
                 "id": "runtime_memory_benchmark",
@@ -350,6 +367,7 @@ def test_check_contract_requires_completion_when_requested(tmp_path):
         },
         "required_repo_files": ["repo-artifact.txt"],
         "required_website_files": ["index.html"],
+        "literal_conditions": _literal_conditions(),
         "gates": [
             {
                 "id": "manual",
@@ -390,6 +408,7 @@ def test_check_contract_validates_critical_surfaces_and_publication_state(tmp_pa
         },
         "required_repo_files": ["repo-artifact.txt"],
         "required_website_files": ["index.html"],
+        "literal_conditions": _literal_conditions(),
         "critical_surfaces": [
             {
                 "id": "managed_surface",
@@ -442,6 +461,7 @@ def test_check_contract_rejects_open_high_publication_blocker(tmp_path):
         },
         "required_repo_files": ["repo-artifact.txt"],
         "required_website_files": ["index.html"],
+        "literal_conditions": _literal_conditions(),
         "publication": {
             "status": "blocked",
             "checklist_complete": True,
@@ -465,6 +485,88 @@ def test_check_contract_rejects_open_high_publication_blocker(tmp_path):
             contract_path=tmp_path / "contract.json",
             website_root=website_root,
             nexo_home=nexo_home,
+            require_complete=True,
+            repo_root=tmp_path,
+        )
+
+
+def test_check_contract_requires_literal_conditions_matrix(tmp_path):
+    module = _load_module()
+    website_root = tmp_path / "site"
+    website_root.mkdir()
+    (tmp_path / "repo-artifact.txt").write_text("ok", encoding="utf-8")
+    (website_root / "index.html").write_text("ok", encoding="utf-8")
+
+    contract = {
+        "release_line": "v4.5",
+        "target_version": "4.5.0",
+        "distribution": {
+            "git_updates_on": "merge_to_main",
+            "packaged_release_on": "tag_publish",
+        },
+        "required_repo_files": ["repo-artifact.txt"],
+        "required_website_files": ["index.html"],
+        "gates": [
+            {
+                "id": "manual",
+                "title": "Manual",
+                "status": "complete",
+                "evidence_required": ["doc exists"],
+            }
+        ],
+    }
+
+    with pytest.raises(SystemExit, match="missing literal_conditions matrix"):
+        module._check_contract(
+            contract,
+            contract_path=tmp_path / "contract.json",
+            website_root=website_root,
+            nexo_home=tmp_path / "nexo-home",
+            require_complete=True,
+            repo_root=tmp_path,
+        )
+
+
+def test_check_contract_requires_verified_live_evidence_per_literal_condition(tmp_path):
+    module = _load_module()
+    website_root = tmp_path / "site"
+    website_root.mkdir()
+    (tmp_path / "repo-artifact.txt").write_text("ok", encoding="utf-8")
+    (website_root / "index.html").write_text("ok", encoding="utf-8")
+
+    contract = {
+        "release_line": "v4.5",
+        "target_version": "4.5.0",
+        "distribution": {
+            "git_updates_on": "merge_to_main",
+            "packaged_release_on": "tag_publish",
+        },
+        "required_repo_files": ["repo-artifact.txt"],
+        "required_website_files": ["index.html"],
+        "literal_conditions": [
+            {
+                "id": "desktop_smoke",
+                "literal_text": "soak instalado Mac/Win antes de cerrar",
+                "status": "in_progress",
+                "live_evidence": [],
+            }
+        ],
+        "gates": [
+            {
+                "id": "manual",
+                "title": "Manual",
+                "status": "complete",
+                "evidence_required": ["doc exists"],
+            }
+        ],
+    }
+
+    with pytest.raises(SystemExit, match="literal conditions matrix failed"):
+        module._check_contract(
+            contract,
+            contract_path=tmp_path / "contract.json",
+            website_root=website_root,
+            nexo_home=tmp_path / "nexo-home",
             require_complete=True,
             repo_root=tmp_path,
         )

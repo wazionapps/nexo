@@ -146,6 +146,14 @@ def _prune_db_backups(deep_sleep_dir: Path, report: dict, *, keep: int, apply: b
             _record_delete(report, backup, reason=f"old-db-backup:{family}", apply=apply)
             for sidecar in _sidecars(backup):
                 _record_delete(report, sidecar, reason=f"old-db-backup-sidecar:{family}", apply=apply)
+    # Orphan sweep: -wal/-shm sidecars whose base .db no longer exists (left by
+    # interrupted/legacy deep-sleep processes). The online-backup path produces
+    # sidecar-free snapshots, so any sidecar with a missing base is a true
+    # orphan. Scoped strictly to this deep-sleep backup dir; never the live DBs.
+    for sidecar in list(deep_sleep_dir.glob("*-backup-*.db-wal")) + list(deep_sleep_dir.glob("*-backup-*.db-shm")):
+        base = Path(str(sidecar)[: -len("-wal")]) if str(sidecar).endswith("-wal") else Path(str(sidecar)[: -len("-shm")])
+        if not base.exists():
+            _record_delete(report, sidecar, reason="orphan-db-sidecar", apply=apply)
 
 
 def _prune_contexts(deep_sleep_dir: Path, report: dict, *, keep: int, apply: bool) -> None:

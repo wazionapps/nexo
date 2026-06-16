@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import sqlite3
 import time
 from pathlib import Path
@@ -14,6 +15,11 @@ LOCAL_CONTEXT_DB_NAME = "local-context.db"
 MIGRATION_STATE_KEY = "local_context_db_migrated_from_main"
 MIGRATION_SKIPPED_KEY = "local_context_db_migration_skipped"
 MAIN_CLEANUP_STATE_KEY = "local_context_main_tables_drained"
+# One-time conversion flag: auto_vacuum=INCREMENTAL is a no-op on an already
+# populated DB until exactly one full VACUUM runs. We do that conversion once
+# per never-converted DB (guarded by free disk) and record it here so it never
+# re-runs the expensive rewrite. See ensure_local_context_db().
+AUTO_VACUUM_CONVERTED_KEY = "auto_vacuum_converted"
 
 LOCAL_CONTEXT_TABLES: tuple[str, ...] = (
     "local_index_roots",
@@ -77,6 +83,12 @@ def _connect(db_path: Path) -> sqlite3.Connection:
     conn = sqlite3.connect(str(db_path), timeout=max(_busy_timeout_ms() / 1000.0, 1.0), check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute(f"PRAGMA busy_timeout={_busy_timeout_ms()}")
+    # auto_vacuum must be set BEFORE the first table is created to take effect on
+    # a brand-new DB (it is a no-op on an already-populated file — those are
+    # converted once via a guarded full VACUUM in ensure_local_context_db()).
+    # INCREMENTAL lets deletes (privacy purge, reconcile, purge_asset) reclaim
+    # pages via `PRAGMA incremental_vacuum` instead of growing the file forever.
+    conn.execute("PRAGMA auto_vacuum=INCREMENTAL")
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")
     conn.execute("PRAGMA temp_store=MEMORY")
@@ -119,8 +131,18 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
     _ensure_entity_dossier_schema(conn)
     _ensure_local_context_v2_schema(conn)
     _m84_local_chunks_fts(conn)
-    conn.execute("PRAGMA user_version=84")
+    _m85_local_embeddings_blob(conn)
+    conn.execute("PRAGMA user_version=85")
     conn.commit()
+
+
+def _m85_local_embeddings_blob(conn: sqlite3.Connection) -> None:
+    """v85: compact float32 BLOB embedding storage alongside the legacy
+    vector_json TEXT. Nullable + no DEFAULT so the ALTER is metadata-only (a
+    DEFAULT would rewrite the whole table). The write path dual-writes both
+    columns; the read path prefers the BLOB and falls back to JSON, so adding
+    the column is safe even before any backfill runs."""
+    _add_column_if_missing(conn, "local_embeddings", "vector_blob", "BLOB")
 
 
 def _table_columns(conn: sqlite3.Connection, table: str) -> set[str]:
@@ -421,9 +443,47 @@ def ensure_local_context_db() -> None:
                 pass
         return
     _ensure_schema(_CONN)
+    _convert_auto_vacuum_once(_CONN, db_path)
     _LAST_MIGRATION_ATTEMPT = now
     migration = migrate_from_main_if_needed(_CONN)
     _READY = True
+
+
+def _convert_auto_vacuum_once(conn: sqlite3.Connection, db_path: Path) -> None:
+    """Flip an existing DB from auto_vacuum=NONE to INCREMENTAL.
+
+    Setting the PRAGMA only takes effect after one full VACUUM that writes the
+    pointer-map pages. This rewrites the whole file once, so we guard on free
+    disk (VACUUM needs ~1x the DB size of scratch; require 2x margin) and only
+    record the done-flag once the mode is actually INCREMENTAL, so a machine
+    that was too full retries on a later boot. Best-effort: a failure here must
+    never block index startup. Runs on the writer connection only.
+    """
+    try:
+        if _state(conn, AUTO_VACUUM_CONVERTED_KEY) == "1":
+            return
+        mode = int(conn.execute("PRAGMA auto_vacuum").fetchone()[0])
+        if mode == 2:  # already INCREMENTAL (e.g. freshly created DB)
+            _set_state(conn, AUTO_VACUUM_CONVERTED_KEY, "1")
+            conn.commit()
+            return
+        try:
+            db_size = db_path.stat().st_size
+            free = shutil.disk_usage(db_path.parent).free
+        except OSError:
+            return
+        if free <= db_size * 2:
+            # Not enough scratch room — leave NONE mode, retry on a later boot.
+            return
+        conn.execute("PRAGMA auto_vacuum=INCREMENTAL")
+        conn.execute("VACUUM")
+        new_mode = int(conn.execute("PRAGMA auto_vacuum").fetchone()[0])
+        if new_mode == 2:
+            _set_state(conn, AUTO_VACUUM_CONVERTED_KEY, "1")
+            conn.commit()
+    except Exception:
+        # Conversion is an optimization; never break startup over it.
+        pass
 
 
 def get_local_context_db() -> sqlite3.Connection:

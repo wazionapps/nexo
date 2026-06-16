@@ -1043,19 +1043,63 @@ def check_db_size():
 
         local_ctx = paths_module.memory_dir() / "local-context.db"
         if local_ctx.exists():
-            size_gb = local_ctx.stat().st_size / (1024 ** 3)
-            if size_gb > 60:
-                finding(
-                    "ERROR",
-                    "database",
-                    f"local-context.db is {size_gb:.1f} GB — local index runaway; purge + VACUUM (see roots/exclusions)",
-                )
-            elif size_gb > 25:
-                finding(
-                    "WARN",
-                    "database",
-                    f"local-context.db is {size_gb:.1f} GB — local index growing; review indexed roots/exclusions",
-                )
+            def _index_bytes() -> int:
+                # Include the -wal/-shm sidecars: a large orphan WAL was invisible
+                # to a bare stat() and could hide real growth.
+                total = 0
+                for suffix in ("", "-wal", "-shm"):
+                    p = local_ctx.with_name(local_ctx.name + suffix)
+                    try:
+                        total += p.stat().st_size
+                    except OSError:
+                        pass
+                return total
+
+            # Distinct, stricter audit cap (NOT the 60 GiB runtime soft-pause
+            # NEXO_LOCAL_CONTEXT_MAX_DB_BYTES). Default 25 GiB.
+            try:
+                hard_cap = int(os.environ.get("NEXO_LOCAL_INDEX_MAX_BYTES", str(25 * 1024 ** 3)) or str(25 * 1024 ** 3))
+            except ValueError:
+                hard_cap = 25 * 1024 ** 3
+
+            size_gb = _index_bytes() / (1024 ** 3)
+            if size_gb > 25:
+                # ACT, don't just warn (learning #824: the 268 GB burst went
+                # unseen because this check was advisory-only). Reclaim freed
+                # pages cheaply: checkpoint the WAL + incremental_vacuum (no-op
+                # unless auto_vacuum=INCREMENTAL is active). Best-effort, short
+                # timeout so we never fight the live indexer's write lock.
+                reclaimed_gb = 0.0
+                try:
+                    import sqlite3 as _sqlite3
+
+                    conn = _sqlite3.connect(str(local_ctx), timeout=5.0)
+                    try:
+                        conn.execute("PRAGMA busy_timeout=5000")
+                        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                        conn.execute("PRAGMA incremental_vacuum")
+                        conn.commit()
+                    finally:
+                        conn.close()
+                    after_gb = _index_bytes() / (1024 ** 3)
+                    reclaimed_gb = max(0.0, size_gb - after_gb)
+                    size_gb = after_gb
+                except Exception:
+                    pass
+                reclaimed_note = f" (reclaimed {reclaimed_gb:.1f} GB)" if reclaimed_gb > 0.05 else ""
+                if (size_gb * 1024 ** 3) > hard_cap or size_gb > 60:
+                    finding(
+                        "ERROR",
+                        "database",
+                        f"local-context.db is {size_gb:.1f} GB{reclaimed_note} — over the local-index cap; "
+                        f"review indexed roots/exclusions or run clear_index (operator decision)",
+                    )
+                else:
+                    finding(
+                        "WARN",
+                        "database",
+                        f"local-context.db is {size_gb:.1f} GB{reclaimed_note} — local index growing; review roots/exclusions",
+                    )
     except Exception as exc:
         finding("WARN", "database", f"Could not check local-context.db size: {exc}")
 

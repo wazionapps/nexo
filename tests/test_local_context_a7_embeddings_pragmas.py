@@ -74,6 +74,7 @@ def test_connect_sets_performance_pragmas(tmp_path):
         wal_autocheckpoint = int(conn.execute("PRAGMA wal_autocheckpoint").fetchone()[0])
         mmap_size = int(conn.execute("PRAGMA mmap_size").fetchone()[0])
         cache_size = int(conn.execute("PRAGMA cache_size").fetchone()[0])
+        auto_vacuum = int(conn.execute("PRAGMA auto_vacuum").fetchone()[0])
     finally:
         conn.close()
 
@@ -84,6 +85,9 @@ def test_connect_sets_performance_pragmas(tmp_path):
     assert mmap_size >= 256 * 1024 * 1024
     # Negative cache_size = KiB; must be at least a 16 MB page cache.
     assert cache_size <= -16000
+    # A brand-new DB must be created with auto_vacuum=INCREMENTAL (mode 2) so
+    # deletes can reclaim disk via incremental_vacuum instead of growing forever.
+    assert auto_vacuum == 2
 
 
 # --- 3. pinned deps --------------------------------------------------------

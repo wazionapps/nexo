@@ -714,6 +714,36 @@ def _check_publication_state(contract: dict, *, require_complete: bool) -> None:
     )
 
 
+def _check_literal_conditions_matrix(contract: dict, *, require_complete: bool) -> int:
+    conditions = contract.get("literal_conditions")
+    if not isinstance(conditions, list) or not conditions:
+        raise SystemExit("[release-readiness] contract missing literal_conditions matrix")
+
+    failures: list[str] = []
+    allowed_statuses = {"pending", "in_progress", "verified"}
+    for index, item in enumerate(conditions, start=1):
+        if not isinstance(item, dict):
+            raise SystemExit("[release-readiness] literal_conditions entries must be objects")
+        condition_id = str(item.get("id", "") or f"condition-{index}").strip()
+        literal_text = str(item.get("literal_text", "") or item.get("condition", "") or "").strip()
+        status = str(item.get("status", "") or "").strip().lower()
+        live_evidence = item.get("live_evidence")
+
+        if not literal_text:
+            failures.append(f"{condition_id}: missing literal_text")
+        if status not in allowed_statuses:
+            failures.append(f"{condition_id}: invalid status {status!r}")
+        if not isinstance(live_evidence, list) or not all(isinstance(entry, str) and entry.strip() for entry in live_evidence):
+            failures.append(f"{condition_id}: missing live_evidence list")
+        if require_complete and status != "verified":
+            failures.append(f"{condition_id}: status {status or 'missing'} is not verified")
+
+    if failures:
+        raise SystemExit("[release-readiness] literal conditions matrix failed:\n- " + "\n- ".join(failures))
+    print(f"[release-readiness] literal conditions OK ({len(conditions)})")
+    return len(conditions)
+
+
 def _check_runtime_memory_benchmark_gate(repo_root: Path = ROOT) -> None:
     summary_path = repo_root / RUNTIME_MEMORY_BENCHMARK_SUMMARY.relative_to(ROOT)
     if not summary_path.is_file():
@@ -792,6 +822,7 @@ def _check_contract(
         raise SystemExit(f"[release-readiness] contract missing required_website_files: {contract_path}")
     if not isinstance(gates, list) or not gates:
         raise SystemExit(f"[release-readiness] contract missing gates: {contract_path}")
+    literal_condition_count = _check_literal_conditions_matrix(contract, require_complete=require_complete)
 
     missing_repo = [
         str(path.relative_to(repo_root))
@@ -840,7 +871,8 @@ def _check_contract(
 
     print(
         f"[release-readiness] contract OK "
-        f"({contract_path}, release_line={release_line}, target_version={target_version}, gates={len(gates)})"
+        f"({contract_path}, release_line={release_line}, target_version={target_version}, "
+        f"gates={len(gates)}, literal_conditions={literal_condition_count})"
     )
 
 

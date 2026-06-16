@@ -7,6 +7,7 @@ import re
 import shutil
 import sqlite3
 import stat
+import struct
 import subprocess
 import sys
 import time
@@ -56,6 +57,16 @@ FTS_BACKFILL_BATCH = int(os.environ.get("NEXO_LOCAL_FTS_BACKFILL_BATCH", "500") 
 FTS_MIGRATION_CURSOR_KEY = "fts_migration_cursor"
 FTS_MIGRATION_DONE_KEY = "fts_migration_done"
 FTS_BACKFILL_TOTAL_KEY = "fts_backfill_total"
+# Compact float32 BLOB embedding storage (replaces JSON-text vector_json, which
+# bloated the index ~4-6x). Dual-write both columns, read prefers the BLOB and
+# falls back to JSON, backfill converts old rows incrementally. Feature flags
+# are kill switches that revert to JSON-only with no redeploy.
+EMB_BLOB_WRITE_ENABLED = os.environ.get("NEXO_LOCAL_EMB_BLOB_WRITE", "1") != "0"
+EMB_BLOB_READ_ENABLED = os.environ.get("NEXO_LOCAL_EMB_BLOB_READ", "1") != "0"
+EMB_BLOB_BACKFILL_BATCH = int(os.environ.get("NEXO_LOCAL_EMB_BLOB_BACKFILL_BATCH", "500") or "500")
+EMB_BLOB_CURSOR_KEY = "emb_blob_backfill_cursor"
+EMB_BLOB_DONE_KEY = "emb_blob_backfill_done"
+EMB_BLOB_TOTAL_KEY = "emb_blob_backfill_total"
 EMBEDDING_REFRESH_JOB = "embedding_refresh"
 ENTITY_FACTS_JOB = "entity_facts"
 BACKGROUND_INDEX_JOB_TYPES = {ENTITY_FACTS_JOB}
@@ -2888,6 +2899,47 @@ def _latest_version_id(conn, asset_id: str) -> str:
     return row["version_id"] if row else stable_id("ver", asset_id)
 
 
+def _encode_embedding_blob(vector) -> bytes | None:
+    """Pack a vector of floats into a little-endian float32 BLOB (dimension*4
+    bytes). Returns None when blob writes are disabled or the vector is empty,
+    so the caller still writes vector_json (the source of truth during the
+    transition). float32 vs the legacy float64 JSON is a deliberate, negligible
+    cosine drift (vectors are L2-normalized / already 8-dp-rounded)."""
+    if not EMB_BLOB_WRITE_ENABLED:
+        return None
+    try:
+        floats = [float(v) for v in (vector or [])]
+        if not floats:
+            return None
+        return struct.pack(f"<{len(floats)}f", *floats)
+    except (TypeError, ValueError, struct.error):
+        return None
+
+
+def _decode_embedding(row) -> list:
+    """Read a stored embedding, preferring the compact BLOB and falling back to
+    the legacy JSON text. The BLOB is trusted only when its length matches
+    dimension*4 (4 bytes per float32); a short/garbage blob falls through to
+    JSON so it can never reach the cosine loop. Returns a plain Python list so
+    embeddings.cosine() and the `elif vector:` truthiness need no changes."""
+    if EMB_BLOB_READ_ENABLED:
+        try:
+            blob = row["vector_blob"]
+        except (KeyError, IndexError):
+            blob = None
+        if blob:
+            try:
+                dim = int(row["dimension"] or 0)
+            except (KeyError, IndexError, TypeError, ValueError):
+                dim = 0
+            if dim and len(blob) == dim * 4:
+                try:
+                    return list(struct.unpack(f"<{dim}f", blob))
+                except struct.error:
+                    pass  # fall through to JSON
+    return json_loads(row["vector_json"], [])
+
+
 def _insert_chunk_embedding(conn, asset_id: str, chunk_id: str, text: str) -> None:
     record = embeddings.embed_record(text)
     model_id = str(record["model_id"])
@@ -2895,8 +2947,8 @@ def _insert_chunk_embedding(conn, asset_id: str, chunk_id: str, text: str) -> No
     dimension = int(record["dimension"])
     conn.execute(
         """
-        INSERT INTO local_embeddings(embedding_id, asset_id, chunk_id, model_id, model_revision, dimension, vector_json, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO local_embeddings(embedding_id, asset_id, chunk_id, model_id, model_revision, dimension, vector_json, vector_blob, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             stable_id("emb", f"{chunk_id}:{model_id}:{model_revision}:{dimension}"),
@@ -2906,6 +2958,7 @@ def _insert_chunk_embedding(conn, asset_id: str, chunk_id: str, text: str) -> No
             model_revision,
             dimension,
             json_dumps(record["vector"]),
+            _encode_embedding_blob(record["vector"]),
             now(),
         ),
     )
@@ -3553,6 +3606,13 @@ def run_once(
     if FTS_BACKFILL_BATCH > 0:
         try:
             _backfill_fts_rows(conn, batch_limit=FTS_BACKFILL_BATCH)
+        except Exception:
+            pass
+    # Incremental embedding TEXT->BLOB backfill: same bounded one-batch-per-tick
+    # discipline. Best-effort; skips when disabled or already done.
+    if EMB_BLOB_BACKFILL_BATCH > 0:
+        try:
+            _backfill_embedding_blobs(conn, batch_limit=EMB_BLOB_BACKFILL_BATCH)
         except Exception:
             pass
     conn_after = _conn()
@@ -4603,6 +4663,76 @@ def _backfill_fts_rows(conn, *, batch_limit: int | None = None) -> dict:
     return _with_sqlite_busy_retry(_run)
 
 
+def _backfill_embedding_blobs(conn, *, batch_limit: int | None = None) -> dict:
+    """Incrementally convert legacy vector_json TEXT rows to compact float32
+    vector_blob. Idempotent + resumable via a rowid cursor in local_index_state,
+    committing per batch. Converts the EXISTING JSON in place (never re-embeds —
+    re-embedding could re-stamp model_id if fastembed availability differs). New
+    rows already get vector_blob from the dual-write, so this only handles
+    pre-existing rows (the legacy ~19GB DB). Rows whose JSON length != dimension
+    are skipped (left JSON-only; dual-read falls back) but still advance the
+    cursor so they are not retried forever.
+    """
+    if batch_limit is None:
+        batch_limit = EMB_BLOB_BACKFILL_BATCH
+    batch_limit = int(batch_limit)
+    if batch_limit <= 0:
+        return {"ok": True, "skipped": "disabled", "done": _get_state_conn(conn, EMB_BLOB_DONE_KEY, "0") == "1"}
+    if not EMB_BLOB_WRITE_ENABLED:
+        return {"ok": True, "skipped": "blob_write_disabled", "done": False}
+    if _get_state_conn(conn, EMB_BLOB_DONE_KEY, "0") == "1":
+        return {"ok": True, "skipped": "already_done", "done": True}
+
+    def _run() -> dict:
+        try:
+            cursor = int(_get_state_conn(conn, EMB_BLOB_CURSOR_KEY, "0") or "0")
+        except Exception:
+            cursor = 0
+        if _get_state_conn(conn, EMB_BLOB_TOTAL_KEY, "") == "":
+            try:
+                total_row = conn.execute(
+                    "SELECT COUNT(*) AS total FROM local_embeddings WHERE vector_blob IS NULL"
+                ).fetchone()
+                _set_state_conn(conn, EMB_BLOB_TOTAL_KEY, str(int(total_row["total"] or 0)))
+            except Exception:
+                pass
+        rows = conn.execute(
+            """
+            SELECT rowid AS rid, dimension, vector_json
+            FROM local_embeddings
+            WHERE rowid > ? AND vector_blob IS NULL
+            ORDER BY rowid ASC
+            LIMIT ?
+            """,
+            (cursor, batch_limit),
+        ).fetchall()
+        if not rows:
+            _set_state_conn(conn, EMB_BLOB_DONE_KEY, "1")
+            conn.commit()
+            return {"ok": True, "done": True, "processed": 0, "cursor": cursor}
+        max_rid = cursor
+        converted = 0
+        for row in rows:
+            rid = int(row["rid"])
+            if rid > max_rid:
+                max_rid = rid
+            try:
+                dim = int(row["dimension"] or 0)
+            except (TypeError, ValueError):
+                dim = 0
+            vec = json_loads(row["vector_json"], [])
+            if dim and len(vec) == dim:
+                blob = _encode_embedding_blob(vec)
+                if blob is not None and len(blob) == dim * 4:
+                    conn.execute("UPDATE local_embeddings SET vector_blob=? WHERE rowid=?", (blob, rid))
+                    converted += 1
+        _set_state_conn(conn, EMB_BLOB_CURSOR_KEY, str(max_rid))
+        conn.commit()
+        return {"ok": True, "done": False, "processed": len(rows), "converted": converted, "cursor": max_rid}
+
+    return _with_sqlite_busy_retry(_run)
+
+
 def _context_candidate_rows(
     conn,
     entity_asset_ids: list[str],
@@ -4625,7 +4755,7 @@ def _context_candidate_rows(
                     prefilter_rows = conn.execute(
                         """
                         SELECT c.chunk_id, c.asset_id, c.text, a.path, a.file_type, a.privacy_class, v.summary,
-                               e.vector_json, e.model_id, e.model_revision, e.dimension
+                               e.vector_json, e.vector_blob, e.model_id, e.model_revision, e.dimension
                         FROM local_chunks_fts f
                         JOIN local_chunks c ON c.rowid = f.rowid
                         JOIN local_assets a ON a.asset_id = c.asset_id
@@ -4657,7 +4787,7 @@ def _context_candidate_rows(
             prefilter_rows = conn.execute(
                 f"""
                 SELECT c.chunk_id, c.asset_id, c.text, a.path, a.file_type, a.privacy_class, v.summary,
-                       e.vector_json, e.model_id, e.model_revision, e.dimension
+                       e.vector_json, e.vector_blob, e.model_id, e.model_revision, e.dimension
                 FROM local_chunks c
                 JOIN local_assets a ON a.asset_id = c.asset_id
                 LEFT JOIN local_asset_versions v ON v.version_id = c.version_id
@@ -4686,7 +4816,7 @@ def _context_candidate_rows(
     base_rows = conn.execute(
         """
         SELECT c.chunk_id, c.asset_id, c.text, a.path, a.file_type, a.privacy_class, v.summary,
-               e.vector_json, e.model_id, e.model_revision, e.dimension
+               e.vector_json, e.vector_blob, e.model_id, e.model_revision, e.dimension
         FROM local_chunks c
         JOIN local_assets a ON a.asset_id = c.asset_id
         LEFT JOIN local_asset_versions v ON v.version_id = c.version_id
@@ -4713,7 +4843,7 @@ def _context_candidate_rows(
     entity_rows = conn.execute(
         f"""
         SELECT c.chunk_id, c.asset_id, c.text, a.path, a.file_type, a.privacy_class, v.summary,
-               e.vector_json, e.model_id, e.model_revision, e.dimension
+               e.vector_json, e.vector_blob, e.model_id, e.model_revision, e.dimension
         FROM local_chunks c
         JOIN local_assets a ON a.asset_id = c.asset_id
         LEFT JOIN local_asset_versions v ON v.version_id = c.version_id
@@ -5200,7 +5330,7 @@ def _context_query_conn(
     for row in rows:
         if not is_queryable_path(str(row["path"] or ""), str(row["privacy_class"] or "")):
             continue
-        vector = json_loads(row["vector_json"], [])
+        vector = _decode_embedding(row)
         text_score = _search_text_score(search_query, row["text"])
         path_score = _search_text_score(search_query, row["path"] or "")
         summary_score = _search_text_score(search_query, row["summary"] or "")
@@ -5756,6 +5886,14 @@ def purge_asset(asset_id: str) -> dict:
     conn = _conn()
     _purge_asset_ids(conn, [asset_id])
     conn.commit()
+    # Reclaim the just-freed pages. Cheap incremental_vacuum (not a full VACUUM
+    # — this is a frequent single-asset op; a 19GB rewrite per purge would be
+    # catastrophic). No-op unless auto_vacuum=INCREMENTAL is active. Best-effort.
+    try:
+        conn.execute("PRAGMA incremental_vacuum")
+        conn.commit()
+    except Exception:
+        pass
     log_event("info", "asset_purged", "Asset purged", asset_id=asset_id)
     return {"ok": True, "asset_id": asset_id}
 
@@ -5790,6 +5928,18 @@ def clear_index() -> dict:
     )
     _set_initial_index_complete(conn, False)
     conn.commit()
+    # The index is now near-empty, so a full VACUUM rewrites a tiny file and
+    # actually returns the freed disk to the OS (DELETE alone only moves pages
+    # to the free-list). Checkpoint the WAL first so its pages are folded in,
+    # VACUUM, then checkpoint again — in WAL mode VACUUM's rewrite lands in the
+    # WAL, so the main file is only truncated by the trailing checkpoint. Works
+    # regardless of auto_vacuum mode. Best-effort — never fail the clear.
+    try:
+        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        conn.execute("VACUUM")
+        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    except Exception:
+        pass
     log_event("warn", "index_cleared", "Local memory index cleared")
     return {"ok": True}
 
