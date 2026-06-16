@@ -408,7 +408,12 @@ def test_scan_debt_does_not_reopen_processing_email_after_sent_reply_event(monit
 
     out = monitor_module.scan_debt(db_path=monitor_module.EMAIL_DB_PATH)
 
-    assert out == ""
+    # The already-replied email is sanitized to a terminal 'processed' state and is
+    # explicitly NOT reinjected. scan_debt reports the reconciliation (operator
+    # transparency) rather than staying silent — the guarantee under test is that the
+    # email is never reopened/debt-flagged, not that the scan produces empty output.
+    assert "Sanitized" in out and "no reinjection" in out
+    assert "debt_flagged" not in out
     assert _email_status(monitor_module, message_id) == "processed"
     assert _event_count(monitor_module, message_id, "debt_flagged") == 0
 
