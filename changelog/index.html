@@ -94,7 +94,7 @@
                     <span class="page-chip">Patch release</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v7350" class="btn btn-primary">Start with v7.35.0</a>
+                    <a href="#v7360" class="btn btn-primary">Start with v7.36.0</a>
                     <a href="#v7122" class="btn btn-secondary">See v7.12.2</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -348,6 +348,13 @@
     </div>
 </section>
 
+<section id="v7360" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.36.0 <span style="opacity:.5;font-weight:400;">&mdash; June 16, 2026 &mdash; <strong>MINOR</strong></span></div>
+        <h2 class="section-title">Local index disk reclaim &mdash; no more unbounded growth</h2>
+        <p class="section-subtitle">The local file/code index (<code>local-context.db</code>) was the one place NEXO grew without bound for every user: <code>auto_vacuum=NONE</code> with no VACUUM (deletes only hit the free-list, the file never shrank), embeddings stored as JSON text, purge/clear that never returned disk, and a self-audit that only warned. This release sets <code>auto_vacuum=INCREMENTAL</code> + a one-time guarded VACUUM to convert existing dbs, stores embeddings as compact float32 BLOBs (~4-6x smaller; back-compatible dual-write/dual-read + resumable backfill + kill switches), reclaims disk on purge/clear, and makes the daily self-audit actively compact at its size cap (<code>NEXO_LOCAL_INDEX_MAX_BYTES</code>) instead of only warning. An established index reclaims ~10-20GB immediately and grows several-fold slower; the backup subsystem was audited and is already bounded. Builds on v7.35.0.</p>
+    </div>
+</section>
 <section id="v7350" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
     <div class="container">
         <div class="section-label">New in v7.35.0 <span style="opacity:.5;font-weight:400;">&mdash; June 16, 2026 &mdash; <strong>MINOR</strong></span></div>

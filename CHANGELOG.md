@@ -1,5 +1,19 @@
 # Changelog
 
+## [7.36.0] - 2026-06-16
+
+### Added - Local index disk reclaim (the index no longer grows without bound)
+
+- **The local file/code index (`local-context.db`) stops leaking disk.** It was the one place NEXO grew unbounded for every user: the DB used `auto_vacuum=NONE` with no `VACUUM` anywhere, so deletes only moved pages to the free-list and the file never shrank; embeddings were stored as JSON text (several-fold larger than needed); purging or clearing the index never returned disk; and the daily self-audit only *warned* at 25/60 GB while doing nothing (a 268 GB runaway once went unseen). This release fixes all of it:
+  - `auto_vacuum=INCREMENTAL` on new databases plus a one-time, disk-guarded full `VACUUM` that converts an existing index, so deletes become reclaimable space.
+  - Embeddings are stored as compact little-endian **float32 BLOBs** instead of JSON text (~4-6x smaller). The change is fully back-compatible — a new `vector_blob` column is added (the legacy `vector_json` is kept), writes fill both, reads prefer the BLOB and fall back to JSON, and a resumable background backfill converts old rows one batch at a time. Kill switches (`NEXO_LOCAL_EMB_BLOB_READ`/`_WRITE`) revert to JSON instantly if ever needed.
+  - Clearing the index now `VACUUM`s and returns the space to the OS; purging an asset reclaims its pages incrementally.
+  - The daily self-audit now **acts** at its size cap (`NEXO_LOCAL_INDEX_MAX_BYTES`, default 25 GiB) — checkpoint + incremental vacuum, counting the `-wal`/`-shm` sidecars — instead of only logging a warning.
+  - Deep Sleep sweeps orphaned `-wal`/`-shm` backup sidecars.
+- **Net effect:** an established index reclaims roughly 10-20 GB immediately and grows several-fold slower thereafter. The backup subsystem was audited and confirmed already bounded — no change there.
+
+Builds on 7.35.0 (selective forget + recurring-incident diagnostic templates).
+
 ## [7.35.0] - 2026-06-16
 
 ### Added - Cognitive OS Ola 4: selective forget + recurring-incident diagnostic templates (+ protocol precision fix)

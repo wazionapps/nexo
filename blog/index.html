@@ -134,7 +134,7 @@
                     <span class="page-chip">Shared brain product notes</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="/blog/nexo-7-35-0/" class="btn btn-primary">Read latest release</a>
+                    <a href="/blog/nexo-7-36-0/" class="btn btn-primary">Read latest release</a>
                     <a href="/changelog/" class="btn btn-secondary">Latest release notes</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -149,20 +149,20 @@
                     <span class="compare-chip">iCloud</span>
                     <span class="compare-chip">Patch</span>
                 </div>
-                <h2>NEXO 7.35.0: Cognitive OS Ola 4 — selective forget + recurring-incident diagnostic templates</h2>
-                <p>Minor release over v7.34.0. Selective forget deletes a leaked secret or a wrong memory and proves it is gone across every live store (or corrects a fact reversibly), recurring failure archetypes are distilled into reusable diagnostic templates primed before a matching action (guidance-only, with strong/weak marker precision so benign success phrasing never triggers them), and closing a local-only followup-runner is no longer mis-flagged as an external real-world action.</p>
+                <h2>NEXO 7.36.0: Local index disk reclaim — no more unbounded growth</h2>
+                <p>Minor release over v7.35.0. The local file/code index (local-context.db) was the one place NEXO grew without bound for every user. It now uses auto_vacuum=INCREMENTAL with a one-time guarded VACUUM to convert existing databases, stores embeddings as compact float32 BLOBs instead of JSON text (~4-6x smaller, back-compatible with a resumable backfill), reclaims disk when you purge or clear, and the daily self-audit actively compacts at its size cap instead of only warning. The backup subsystem was audited and is already bounded.</p>
                 <div class="hero-actions" style="justify-content:flex-start;margin-bottom:18px;">
-                    <a href="/blog/nexo-7-35-0/" class="btn btn-primary">Open article</a>
-                    <a href="/changelog/#v7350" class="btn btn-secondary">Open changelog</a>
+                    <a href="/blog/nexo-7-36-0/" class="btn btn-primary">Open article</a>
+                    <a href="/changelog/#v7360" class="btn btn-secondary">Open changelog</a>
                 </div>
                 <div class="blog-mini-stack">
                     <div class="blog-mini-card">
                         <strong>Companion view</strong>
-                        <span><a href="/changelog/#v7350">See the full v7.35.0 changelog</a></span>
+                        <span><a href="/changelog/#v7360">See the full v7.36.0 changelog</a></span>
                     </div>
                     <div class="blog-mini-card">
                         <strong>Previous release</strong>
-                        <span><a href="/blog/nexo-7-34-0/">NEXO 7.34.0: Cognitive OS Ola 2 — working memory + associative graph at answer time</a>.</span>
+                        <span><a href="/blog/nexo-7-35-0/">NEXO 7.35.0: Cognitive OS Ola 4 — selective forget + recurring-incident diagnostic templates</a>.</span>
                     </div>
                 </div>
             </div>
