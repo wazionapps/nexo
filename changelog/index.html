@@ -87,14 +87,14 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v7.31.10 live</span>
-                    <span class="page-chip">Local Memory</span>
-                    <span class="page-chip">Search quality</span>
-                    <span class="page-chip">Email noise</span>
+                    <span class="page-chip">v7.37.2 live</span>
+                    <span class="page-chip">Runtime shutdown</span>
+                    <span class="page-chip">SQLite close</span>
+                    <span class="page-chip">CI stability</span>
                     <span class="page-chip">Patch release</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v7371" class="btn btn-primary">Start with v7.37.1</a>
+                    <a href="#v7372" class="btn btn-primary">Start with v7.37.2</a>
                     <a href="#v7122" class="btn btn-secondary">See v7.12.2</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -102,7 +102,7 @@
             <div class="page-visual">
                 <div class="page-stack">
                     <div class="page-stack-card">
-                        <strong>v7.31.10</strong>
+                        <strong>v7.37.2</strong>
                         <span>Patch - Local Memory search now downranks boilerplate emails when stronger documents match the same query.</span>
                     </div>
                     <div class="page-stack-card">
@@ -348,6 +348,13 @@
     </div>
 </section>
 
+<section id="v7372" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v7.37.2 <span style="opacity:.5;font-weight:400;">&mdash; June 16, 2026 &mdash; <strong>PATCH</strong></span></div>
+        <h2 class="section-title">Runtime shutdown and CI stability</h2>
+        <p class="section-subtitle">Patch release over v7.37.1. Session keepalive writers now stop cleanly before the shared SQLite connection closes, the serialized SQLite wrapper closes under the same write lock used for mutations, and the full Brain test workflow has enough time to finish instead of cancelling slow-but-valid full-suite runs. Builds on v7.37.1.</p>
+    </div>
+</section>
 <section id="v7371" class="section-compact" style="background:linear-gradient(135deg,#1f2937 0%,#7c3aed 100%);">
     <div class="container">
         <div class="section-label">New in v7.37.1 <span style="opacity:.5;font-weight:400;">&mdash; June 16, 2026 &mdash; <strong>PATCH</strong></span></div>

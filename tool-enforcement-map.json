@@ -3283,6 +3283,19 @@
       },
       "triggers_after": []
     },
+    "nexo_memory_forget": {
+      "description": "Selective forget for revoked secrets or reversible fact correction",
+      "category": "memory",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
     "nexo_memory_health": {
       "description": "Report Memory Observations v2 health and table status",
       "category": "memory",

@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.37.1` is the current packaged-runtime line. Patch release over v7.37.0 - release hardening for Desktop-bundled Brain: large existing `local-context.db` files no longer run a surprise full `VACUUM` on the first writer, `schema_abstraction` MCP tools are loaded by the essential startup set, and learning tools tolerate Desktop compatibility payloads. Builds on v7.37.0 (transparent server self-heal + email zombie reinjection guard).
+Version `7.37.2` is the current packaged-runtime line. Patch release over v7.37.1 - runtime shutdown and CI stability: session keepalive writers now stop before the shared SQLite connection closes, SQLite close is serialized under the write lock, and the full Brain test workflow has enough time to finish instead of cancelling slow-but-valid runs.
+
+Previously in `7.37.1`: patch release over v7.37.0 - release hardening for Desktop-bundled Brain: large existing `local-context.db` files no longer run a surprise full `VACUUM` on the first writer, `schema_abstraction` MCP tools are loaded by the essential startup set, and learning tools tolerate Desktop compatibility payloads. Builds on v7.37.0 (transparent server self-heal + email zombie reinjection guard).
 
 Previously in `7.31.9`: patch release over v7.31.8 - UI release closeout now has to prove the original reported symptom was reopened with observable evidence before claiming the release is ready.
 

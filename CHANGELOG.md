@@ -1,5 +1,14 @@
 # Changelog
 
+## [7.37.2] - 2026-06-16
+
+### Fixed - Runtime shutdown and CI stability
+
+- **Session keepalive writers now stop cleanly before the shared SQLite connection closes.** The keepalive supervisor now tracks and joins its background threads, test setup/teardown drains them before closing the Brain DB, and the serialized SQLite wrapper closes under the same write lock used for mutations. This removes the shutdown race that could crash the full pytest suite with a segmentation fault while preserving the session keepalive behavior.
+- **The full Brain test suite has enough CI time to finish.** The GitHub Actions test timeout is raised from 25 to 45 minutes so slow-but-valid full-suite runs fail on real errors instead of being cancelled mid-run.
+
+Builds on 7.37.1 (Desktop bundle hardening).
+
 ## [7.37.1] - 2026-06-16
 
 ### Fixed - Release hardening for Desktop-bundled Brain
