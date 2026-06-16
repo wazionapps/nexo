@@ -465,6 +465,7 @@ class HeadlessEnforcer:
         self.user_message_count = 0
         self.tool_timestamps: dict[str, float] = {}
         self.msg_since_tool: dict[str, int] = {}
+        self._tool_user_message_index: dict[str, int] = {}
         self.injection_queue: list[dict] = []
         self._started_at = time.time()
         self._injections_done = 0
@@ -551,6 +552,8 @@ class HeadlessEnforcer:
         # seen, periodic/conditional reminders stay suppressed so cron
         # runners can reach TURN_END instead of reopening the task loop.
         self._session_stopped: bool = False
+        self._first_visible_startup_gate_fired: bool = False
+        self._first_visible_text_allowed: bool = False
         try:
             self._post_close_cooldown_seconds = max(
                 0,
@@ -1035,6 +1038,52 @@ class HeadlessEnforcer:
             self.raise_event("done_claimed_with_open_task", {"source": "R16"})
         except Exception:
             pass
+
+    def should_block_first_visible_text(self) -> bool:
+        """Fail closed before the first visible answer when startup context is missing."""
+        if self._first_visible_text_allowed:
+            return False
+        if self.user_message_count <= 0:
+            self._first_visible_text_allowed = True
+            return False
+
+        current_turn = int(self.user_message_count or 0)
+        has_startup = "nexo_startup" in self.tools_called
+        continuity_tools = {
+            "nexo_smart_startup",
+            "nexo_session_diary_read",
+            "nexo_reminders",
+            "nexo_checkpoint_read",
+        }
+        has_continuity = bool(self.tools_called.intersection(continuity_tools))
+        heartbeat_turn = max(
+            self._tool_user_message_index.get("nexo_heartbeat", -1),
+            self._tool_user_message_index.get("nexo_task_open", -1),
+        )
+        has_turn_heartbeat = heartbeat_turn >= current_turn
+
+        missing = []
+        if not has_startup:
+            missing.append("nexo_startup")
+        if not has_continuity:
+            missing.append("continuidad minima")
+        if not has_turn_heartbeat:
+            missing.append("nexo_heartbeat")
+        if not missing:
+            self._first_visible_text_allowed = True
+            return False
+        if self._first_visible_startup_gate_fired:
+            return True
+
+        prompt = (
+            "Before any visible answer, register the session, load minimal continuity, "
+            "and associate the current user message with a heartbeat. Missing: "
+            f"{', '.join(missing)}. Execute the required NEXO tool calls now. "
+            "Do not produce visible text for this reminder."
+        )
+        self._enqueue(prompt, "first-visible-startup-heartbeat-gate", rule_id="R38_first_visible_startup_gate")
+        self._first_visible_startup_gate_fired = True
+        return True
 
     def _check_capability_denial_requires_reality(self, text: str):
         """Block unsupported capability denials until a live source was checked."""
@@ -2537,6 +2586,7 @@ class HeadlessEnforcer:
         self.tools_called.add(name)
         self.tool_timestamps[name] = time.time()
         self.msg_since_tool[name] = 0
+        self._tool_user_message_index[name] = int(self.user_message_count or 0)
 
         # v7.6 conditional counter advance. Tools watched by a
         # conditional rule tick a counter on every non-matching call.
@@ -3346,6 +3396,14 @@ def run_with_enforcement(
             msg = event.get("message", {})
             for block in msg.get("content", []):
                 if block.get("type") == "text":
+                    try:
+                        if enforcer.should_block_first_visible_text():
+                            item = enforcer.flush()
+                            if item:
+                                _inject(item["prompt"])
+                            return False
+                    except Exception as _startup_gate_exc:  # noqa: BLE001
+                        _logger.warning("first visible startup gate failed: %s", _startup_gate_exc)
                     collected_text.append(block["text"])
                     # R16 — probe each assistant text block as it arrives
                     # so a declared-done line is caught on the same turn

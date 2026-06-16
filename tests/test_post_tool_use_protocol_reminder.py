@@ -190,6 +190,74 @@ def test_post_tool_use_queues_change_log_from_task_close(monkeypatch):
     assert calls[0][1]["files"] == "src/server.py"
 
 
+def test_post_tool_use_blocks_task_close_when_trace_missing_guard(monkeypatch):
+    from hooks import post_tool_use
+
+    monkeypatch.setattr(post_tool_use, "_production_closeout_dir", lambda: Path(post_tool_use.os.environ["NEXO_HOME"]) / "runtime" / "operations" / "protocol-closeout")
+    sid = "nexo-trace-missing-guard"
+    post_tool_use.check_post_change_trace_closeout(
+        {
+            "tool_name": "Edit",
+            "tool_input": {
+                "file_path": "/Users/franciscoc/Documents/_PhpstormProjects/nexo/src/server.py",
+                "old_string": "old",
+                "new_string": "new",
+            },
+        },
+        sid,
+    )
+
+    message = post_tool_use.check_post_change_trace_closeout(
+        {
+            "tool_name": "nexo_task_close",
+            "tool_input": {
+                "files_changed": "/Users/franciscoc/Documents/_PhpstormProjects/nexo/src/server.py",
+                "change_summary": "Cambio verificado",
+                "change_why": "Prueba",
+            },
+        },
+        sid,
+    )
+
+    assert message is not None
+    assert "guardias ejecutados" in message
+
+
+def test_post_tool_use_allows_task_close_with_guard_and_change_trace(monkeypatch):
+    from hooks import post_tool_use
+
+    monkeypatch.setattr(post_tool_use, "_production_closeout_dir", lambda: Path(post_tool_use.os.environ["NEXO_HOME"]) / "runtime" / "operations" / "protocol-closeout")
+    sid = "nexo-trace-complete"
+    file_path = "/Users/franciscoc/Documents/_PhpstormProjects/nexo/src/server.py"
+    post_tool_use.check_post_change_trace_closeout(
+        {"tool_name": "nexo_guard_check", "tool_input": {"files": file_path}},
+        sid,
+    )
+    post_tool_use.check_post_change_trace_closeout(
+        {"tool_name": "Edit", "tool_input": {"file_path": file_path, "old_string": "old", "new_string": "new"}},
+        sid,
+    )
+    post_tool_use.check_post_change_trace_closeout(
+        {"tool_name": "nexo_change_log", "tool_input": {"files": file_path}},
+        sid,
+    )
+
+    message = post_tool_use.check_post_change_trace_closeout(
+        {
+            "tool_name": "nexo_task_close",
+            "tool_input": {
+                "files_changed": file_path,
+                "change_summary": "Cambio verificado",
+                "change_why": "Prueba",
+                "change_verify": "pytest ok",
+            },
+        },
+        sid,
+    )
+
+    assert message is None
+
+
 def test_post_tool_use_warns_shared_mutation_without_scope_checklist():
     from hooks import post_tool_use
 

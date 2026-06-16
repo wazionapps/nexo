@@ -374,6 +374,118 @@ def _write_json(path: Path, payload: dict) -> None:
     tmp.replace(path)
 
 
+def _pending_trace_path(sid: str) -> Path:
+    safe_sid = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in (sid or "unknown"))
+    return _production_closeout_dir() / f"post-change-trace-{safe_sid}.json"
+
+
+def _split_files(value: object) -> set[str]:
+    if value is None:
+        return set()
+    if isinstance(value, (list, tuple, set)):
+        raw = "\n".join(str(item) for item in value)
+    else:
+        raw = str(value)
+    parts = re.split(r"[\n,;]+", raw)
+    return {part.strip() for part in parts if part and part.strip()}
+
+
+def _record_post_change_trace(payload: dict, sid: str) -> None:
+    if not sid:
+        sid = "unknown"
+    path = _pending_trace_path(sid)
+    trace = _read_json(path) or {
+        "sid": sid,
+        "touched_files": [],
+        "guard_files": [],
+        "change_log_files": [],
+        "production_mutation": False,
+        "created_at": time.time(),
+    }
+    tool_name = _tool_name(payload)
+    tool_input = _tool_input(payload)
+    cmd = _extract_command(payload)
+
+    touched = set(trace.get("touched_files") or [])
+    guards = set(trace.get("guard_files") or [])
+    logged = set(trace.get("change_log_files") or [])
+
+    if _is_shared_mutation_payload(payload):
+        touched.update(_split_files(tool_input.get("file_path")))
+        touched.update(_split_files(tool_input.get("path")))
+        touched.update(_split_files(tool_input.get("files")))
+        touched.update(_split_files(tool_input.get("paths")))
+        if cmd:
+            trace["last_mutation_command"] = cmd[:500]
+            if _is_production_mutation_command(cmd):
+                trace["production_mutation"] = True
+
+    if tool_name in {"nexo_guard_check", "mcp__nexo__nexo_guard_check"}:
+        guards.update(_split_files(tool_input.get("files")))
+
+    if _is_change_log_tool(tool_name):
+        logged.update(_split_files(tool_input.get("files")))
+        logged.update(_split_files(tool_input.get("files_changed")))
+        if not logged and touched:
+            logged.update(touched)
+
+    if _is_task_close_tool(tool_name):
+        touched.update(_split_files(tool_input.get("files_changed")))
+
+    trace["touched_files"] = sorted(touched)
+    trace["guard_files"] = sorted(guards)
+    trace["change_log_files"] = sorted(logged)
+    trace["updated_at"] = time.time()
+
+    if touched or guards or logged or trace.get("production_mutation"):
+        _write_json(path, trace)
+
+
+def _missing_trace_items(payload: dict, sid: str) -> list[str]:
+    if not _is_task_close_tool(_tool_name(payload)):
+        return []
+    trace = _read_json(_pending_trace_path(sid or "unknown"))
+    if not trace:
+        return []
+    tool_input = _tool_input(payload)
+    touched = set(trace.get("touched_files") or [])
+    if not touched and not trace.get("production_mutation"):
+        return []
+    guards = set(trace.get("guard_files") or [])
+    logged = set(trace.get("change_log_files") or [])
+    closing_files = _split_files(tool_input.get("files_changed"))
+
+    missing = []
+    if touched and not guards:
+        missing.append("guardias ejecutados")
+    if trace.get("production_mutation") and not logged and not _task_close_payload_has_change_trace(payload):
+        missing.append("registro de cambios")
+    if touched and closing_files and not touched.issubset(closing_files):
+        missing.append("files_changed completo")
+    if touched and not closing_files:
+        missing.append("files_changed")
+    return missing
+
+
+def check_post_change_trace_closeout(payload: dict, sid: str) -> str | None:
+    if not sid:
+        sid = "unknown"
+    _record_post_change_trace(payload, sid)
+    missing = _missing_trace_items(payload, sid)
+    if not missing:
+        if _is_task_close_tool(_tool_name(payload)):
+            _pending_trace_path(sid).unlink(missing_ok=True)
+        return None
+    trace = _read_json(_pending_trace_path(sid))
+    files = ", ".join((trace.get("touched_files") or [])[:6]) or "cambio detectado"
+    message = (
+        "Cierre bloqueado: antes de marcar completado hay que cuadrar archivos tocados, "
+        f"guardias y registro de cambios. Falta: {', '.join(missing)}. "
+        f"Archivos detectados: {files}."
+    )
+    return append_operator_language_contract(message)
+
+
 def check_production_change_log_closeout(payload: dict, sid: str) -> str | None:
     if not sid:
         sid = "unknown"
@@ -551,6 +663,7 @@ def main() -> int:
         sid = _resolve_sid_from_payload(payload)
         reminder = check_inbox_and_emit_reminder(sid)
         change_log_message = check_production_change_log_closeout(payload, sid)
+        post_change_trace_message = check_post_change_trace_closeout(payload, sid)
         shared_scope_message = check_shared_scope_closeout(payload)
         g1_message: str | None = None
         try:
@@ -562,6 +675,7 @@ def main() -> int:
             protocol_message,
             reminder,
             change_log_message,
+            post_change_trace_message,
             shared_scope_message,
             g1_message,
         )

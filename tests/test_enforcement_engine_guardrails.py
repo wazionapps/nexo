@@ -161,6 +161,41 @@ def test_first_response_jargon_enqueues_rewrite(monkeypatch):
     assert any(item.get("tag") == "r26:first-response-jargon" for item in engine.injection_queue)
 
 
+def test_first_visible_text_blocks_until_startup_continuity_and_heartbeat(monkeypatch):
+    import enforcement_engine
+
+    engine = enforcement_engine.HeadlessEnforcer()
+    monkeypatch.setattr(engine, "_guardian_rule_mode", lambda _rule: "hard")
+    engine.on_user_message("haz el seguimiento")
+
+    assert engine.should_block_first_visible_text() is True
+    assert any(item.get("tag") == "first-visible-startup-heartbeat-gate" for item in engine.injection_queue)
+
+    engine.on_tool_call("nexo_startup", {"task": "test"})
+    engine.on_tool_call("nexo_session_diary_read", {"last_day": True})
+    engine.on_tool_call("nexo_heartbeat", {"sid": "nexo-test", "task": "test"})
+
+    assert engine.should_block_first_visible_text() is False
+
+
+def test_first_visible_text_requires_heartbeat_for_current_user_message(monkeypatch):
+    import enforcement_engine
+
+    engine = enforcement_engine.HeadlessEnforcer()
+    monkeypatch.setattr(engine, "_guardian_rule_mode", lambda _rule: "hard")
+    engine.on_user_message("primer mensaje")
+    engine.on_tool_call("nexo_startup", {"task": "test"})
+    engine.on_tool_call("nexo_smart_startup", {})
+    engine.on_tool_call("nexo_heartbeat", {"sid": "nexo-test", "task": "test"})
+    assert engine.should_block_first_visible_text() is False
+
+    engine._first_visible_text_allowed = False
+    engine._first_visible_startup_gate_fired = False
+    engine.on_user_message("segundo mensaje")
+
+    assert engine.should_block_first_visible_text() is True
+
+
 def test_execute_before_ask_enqueues_after_clear_imperative(monkeypatch):
     import enforcement_engine
 
