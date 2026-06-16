@@ -131,7 +131,8 @@ class _SerializedConnection:
             return self._conn.commit()
 
     def close(self):
-        return self._conn.close()
+        with _write_lock:
+            return self._conn.close()
 
     def __getattr__(self, name):
         return getattr(self._conn, name)

@@ -111,7 +111,7 @@ def _safe_packet_payload(value, *, _depth: int = 0):
         return [_safe_packet_payload(item, _depth=_depth + 1) for item in list(value)[:100]]
     return _safe_packet_text(value)
 
-_keepalive_threads: dict[str, threading.Event] = {}  # sid → stop_event
+_keepalive_threads: dict[str, tuple[threading.Event, threading.Thread]] = {}  # sid -> (stop_event, thread)
 
 
 def _env_flag(name: str, default: bool = False) -> bool:
@@ -235,16 +235,34 @@ def _start_keepalive(sid: str) -> None:
     """Start a keepalive thread for the given session."""
     _stop_keepalive(sid)  # clean up any leftover
     stop_event = threading.Event()
-    _keepalive_threads[sid] = stop_event
     t = threading.Thread(target=_keepalive_loop, args=(sid, stop_event), daemon=True)
+    _keepalive_threads[sid] = (stop_event, t)
     t.start()
 
 
-def _stop_keepalive(sid: str) -> None:
+def _stop_keepalive(sid: str, join_timeout: float = 1.0) -> None:
     """Signal the keepalive thread for the given session to stop."""
-    stop_event = _keepalive_threads.pop(sid, None)
-    if stop_event is not None:
+    entry = _keepalive_threads.pop(sid, None)
+    if entry is None:
+        return
+    stop_event, thread = entry
+    stop_event.set()
+    if thread is not threading.current_thread():
+        thread.join(timeout=max(0.0, join_timeout))
+
+
+def _stop_all_keepalives(join_timeout: float = 1.0) -> None:
+    """Signal and briefly join all keepalive threads before DB shutdown."""
+    entries = list(_keepalive_threads.values())
+    _keepalive_threads.clear()
+    for stop_event, _thread in entries:
         stop_event.set()
+    deadline = time.monotonic() + max(0.0, join_timeout)
+    for _stop_event, thread in entries:
+        if thread is threading.current_thread():
+            continue
+        remaining = max(0.0, deadline - time.monotonic())
+        thread.join(timeout=remaining)
 
 
 def _generate_sid() -> str:

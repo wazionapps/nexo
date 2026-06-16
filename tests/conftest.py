@@ -119,6 +119,11 @@ def isolated_db(tmp_path, monkeypatch):
         local_context_db = None
 
     # Close existing connections
+    try:
+        import tools_sessions
+        tools_sessions._stop_all_keepalives(join_timeout=1.0)
+    except Exception:
+        pass
     db_core.close_db()
     if local_context_db is not None:
         local_context_db.close_local_context_db()
@@ -160,6 +165,11 @@ def isolated_db(tmp_path, monkeypatch):
     try:
         import pre_answer_router
         pre_answer_router.shutdown_executor(wait=True)
+    except Exception:
+        pass
+    try:
+        import tools_sessions
+        tools_sessions._stop_all_keepalives(join_timeout=1.0)
     except Exception:
         pass
 
