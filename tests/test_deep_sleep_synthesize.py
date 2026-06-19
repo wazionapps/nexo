@@ -74,7 +74,7 @@ def test_synthesize_accepts_nested_direct_write(monkeypatch, tmp_path):
     assert payload["actions"][0]["text"] == "Recovered from nested synthesis path"
 
 
-def test_backfill_engineering_actions_adds_fix_followup():
+def test_backfill_engineering_actions_reports_product_gap_for_scripts():
     module = _load_module()
     payload = {
         "date": "2026-04-05",
@@ -99,9 +99,42 @@ def test_backfill_engineering_actions_adds_fix_followup():
 
     assert len(result["actions"]) == 1
     action = result["actions"][0]
-    assert action["action_type"] == "followup_create"
+    assert action["action_type"] == "product_gap_report"
     assert action["action_class"] == "auto_apply"
     assert action["content"]["description"].startswith("Add a pre-release validation script")
+    assert action["content"]["deliverable"] == "script"
+    assert action["content"]["sessions_count"] == 2
+    assert action["content"]["evidence_count"] == 1
+    assert action["dedupe_key"].startswith("product-gap:")
+
+
+def test_backfill_engineering_actions_keeps_manual_checklist_as_followup():
+    module = _load_module()
+    payload = {
+        "date": "2026-04-05",
+        "cross_session_patterns": [
+            {
+                "pattern": "Release notes often miss verification",
+                "sessions": ["one", "two"],
+                "severity": "medium",
+                "evidence": [{"type": "transcript", "quote": "missing checks"}],
+                "proposed_fix": {
+                    "title": "Review release checklist",
+                    "description": "Review the release checklist with explicit validation evidence.",
+                    "deliverable": "checklist",
+                    "confidence": 0.8,
+                },
+            }
+        ],
+        "actions": [],
+    }
+
+    result = module.backfill_engineering_actions(payload)
+
+    assert len(result["actions"]) == 1
+    action = result["actions"][0]
+    assert action["action_type"] == "followup_create"
+    assert action["action_class"] == "draft_for_morning"
     assert action["dedupe_key"].startswith("engineering-fix:")
 
 

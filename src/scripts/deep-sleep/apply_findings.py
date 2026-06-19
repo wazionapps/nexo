@@ -129,6 +129,108 @@ CONTRADICTION_PAIRS = (
 )
 TABLE_COLUMNS_CACHE: dict[tuple[str, str], set[str]] = {}
 
+_EMAIL_RE = re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.IGNORECASE)
+_URL_RE = re.compile(r"\bhttps?://[^\s<>'\"]+", re.IGNORECASE)
+_MAC_PATH_RE = re.compile(r"(?<!\w)/(?:Users|Volumes|private|tmp|var)/[^\s<>'\"]+")
+_WIN_PATH_RE = re.compile(r"\b[A-Za-z]:\\(?:Users|ProgramData|Windows|Temp)\\[^\s<>'\"]+")
+_SECRET_ASSIGNMENT_RE = re.compile(
+    r"(?i)\b(api[_-]?key|authorization|bearer|cookie|credential|password|secret|session|token)\b\s*[:=]\s*[^\s,;]+"
+)
+_SECRET_VALUE_RE = re.compile(
+    r"\b(?:sk-[A-Za-z0-9_-]{12,}|pk-[A-Za-z0-9_-]{12,}|gh[pousr]_[A-Za-z0-9_]{12,}|AKIA[0-9A-Z]{12,})\b"
+)
+
+
+def sanitize_product_gap_text(value: object, *, limit: int = 600) -> str:
+    """Redact tenant/operator data before sending product-gap reports to Desktop."""
+    text = str(value or "")
+    home = str(Path.home())
+    if home:
+        text = text.replace(home, "[redacted-home]")
+    for raw in (str(NEXO_HOME), str(NEXO_CODE)):
+        if raw:
+            text = text.replace(raw, "[redacted-path]")
+    text = _EMAIL_RE.sub("[redacted-email]", text)
+    text = _URL_RE.sub("[redacted-url]", text)
+    text = _SECRET_ASSIGNMENT_RE.sub(lambda m: f"{m.group(1)}=[redacted-secret]", text)
+    text = _SECRET_VALUE_RE.sub("[redacted-secret]", text)
+    text = _MAC_PATH_RE.sub("[redacted-path]", text)
+    text = _WIN_PATH_RE.sub("[redacted-path]", text)
+    text = re.sub(r"\b(?:AGENTS|CLAUDE|MEMORY)\.md\b", "[redacted-bootstrap]", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    if limit > 0 and len(text) > limit:
+        return text[: max(0, limit - 3)].rstrip() + "..."
+    return text
+
+
+def _product_gap_evidence_examples(action: dict, limit: int = 3) -> list[str]:
+    examples: list[str] = []
+    for entry in action.get("evidence", []) or []:
+        if isinstance(entry, dict):
+            raw = entry.get("quote") or entry.get("text") or entry.get("summary") or entry.get("evidence") or entry
+        else:
+            raw = entry
+        cleaned = sanitize_product_gap_text(raw, limit=220)
+        if cleaned:
+            examples.append(cleaned)
+        if len(examples) >= limit:
+            break
+    return examples
+
+
+def create_product_gap_report(action: dict, content: dict, dedupe_key: str) -> dict:
+    """Create a sanitized NEXO Desktop support ticket for a recurring product gap."""
+    try:
+        from tools_api_call import handle_support_ticket_create
+    except Exception as exc:
+        return {"success": False, "error": f"support ticket API unavailable: {exc}"}
+
+    title = sanitize_product_gap_text(content.get("title") or "Deep Sleep product gap", limit=140)
+    description = sanitize_product_gap_text(content.get("description") or title, limit=900)
+    pattern = sanitize_product_gap_text(content.get("pattern") or "", limit=500)
+    deliverable = sanitize_product_gap_text(content.get("deliverable") or "", limit=120)
+    sessions_count = content.get("sessions_count", "")
+    evidence_count = content.get("evidence_count", len(action.get("evidence", []) or []))
+    impact = sanitize_product_gap_text(action.get("impact") or "", limit=80)
+    confidence = action.get("confidence", "")
+    examples = _product_gap_evidence_examples(action)
+
+    lines = [
+        "Deep Sleep detected a recurring NEXO product gap that should be reviewed by the product team.",
+        "",
+        f"Impact: {impact or 'unspecified'}",
+        f"Confidence: {confidence}",
+        f"Suggested deliverable: {deliverable or 'product improvement'}",
+        f"Observed sessions: {sessions_count or 'unknown'}",
+        f"Evidence items: {evidence_count or 0}",
+        "",
+        f"Pattern: {pattern or 'No compact pattern supplied.'}",
+        f"Requested behavior: {description}",
+        "",
+        "Privacy: operator/client-specific paths, URLs, emails, bootstrap filenames and secret-looking values were redacted before sending.",
+    ]
+    if examples:
+        lines.extend(["", "Redacted examples:"])
+        lines.extend(f"- {example}" for example in examples)
+
+    client_message_id = sanitize_product_gap_text(dedupe_key or "", limit=120) or (
+        "product-gap-" + hashlib.md5(description.encode("utf-8"), usedforsecurity=False).hexdigest()[:16]
+    )
+    priority = "high" if str(action.get("impact") or "").lower() in {"high", "critical"} else "normal"
+    response = handle_support_ticket_create(
+        f"[NEXO-PRODUCT-GAP] {title}",
+        "\n".join(lines),
+        priority=priority,
+        client_message_id=client_message_id,
+        origin="auto_incident",
+    )
+    return {
+        "success": str(response).startswith("HTTP 2") or str(response).startswith("HTTP 201"),
+        "response": response,
+        "client_message_id": client_message_id,
+        "sanitized": True,
+    }
+
 
 def generate_run_id(target_date: str) -> str:
     """Generate a unique run ID for this execution."""
@@ -2260,6 +2362,11 @@ def apply_action(action: dict, run_id: str) -> dict:
             internal=content.get("internal", 1),
             owner=content.get("owner", "agent"),
         )
+        log_entry["status"] = "applied" if result.get("success") else "error"
+        log_entry["details"] = result
+
+    elif action_type == "product_gap_report":
+        result = create_product_gap_report(action, content, dedupe_key)
         log_entry["status"] = "applied" if result.get("success") else "error"
         log_entry["details"] = result
 

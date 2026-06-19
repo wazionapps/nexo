@@ -1198,6 +1198,183 @@ def test_self_audit_followup_helpers_record_history(self_audit_env):
     assert "Resolved inline by self-audit test." in history[-1][2]
 
 
+def test_self_audit_preserves_closed_canonical_followup(self_audit_env):
+    import importlib
+    import db._core as db_core
+    import db._schema as db_schema
+    import db
+
+    importlib.reload(db_core)
+    importlib.reload(db_schema)
+    importlib.reload(db)
+    db.init_db()
+
+    module = _load_self_audit_module()
+    conn = sqlite3.connect(str(self_audit_env / "data" / "nexo.db"))
+    conn.row_factory = sqlite3.Row
+
+    description = "Capture resolved self-audit opportunity"
+    followup_id = module._ensure_followup(
+        conn,
+        prefix="TEST",
+        description=description,
+        verification="Original verification",
+        reasoning="Original reasoning",
+        priority="high",
+    )
+    module._complete_matching_followup(conn, description, "Already covered by automation.")
+    refreshed_id = module._ensure_followup(
+        conn,
+        prefix="TEST",
+        description=description,
+        verification="Updated verification that must not reopen",
+        reasoning="Updated reasoning that must not reopen",
+        priority="high",
+    )
+    conn.close()
+
+    assert refreshed_id == followup_id
+
+    conn = sqlite3.connect(str(self_audit_env / "data" / "nexo.db"))
+    row = conn.execute(
+        "SELECT status, verification, reasoning FROM followups WHERE id = ?",
+        (followup_id,),
+    ).fetchone()
+    history = conn.execute(
+        """SELECT event_type, actor, note
+           FROM item_history
+           WHERE item_type = 'followup' AND item_id = ?
+           ORDER BY id ASC""",
+        (followup_id,),
+    ).fetchall()
+    conn.close()
+
+    assert row[0] == "COMPLETED"
+    assert row[1].startswith("Original verification")
+    assert "Updated verification that must not reopen" not in row[1]
+    assert row[2] == "Original reasoning"
+    assert [item[0] for item in history] == ["created", "completed", "note"]
+    assert history[-1][1] == "self-audit"
+    assert "preserved" in history[-1][2]
+
+
+def test_self_audit_drains_covered_opportunity_from_history(self_audit_env):
+    import importlib
+    import db._core as db_core
+    import db._schema as db_schema
+    import db
+
+    importlib.reload(db_core)
+    importlib.reload(db_schema)
+    importlib.reload(db)
+    db.init_db()
+
+    module = _load_self_audit_module()
+    conn = sqlite3.connect(str(self_audit_env / "data" / "nexo.db"))
+    conn.row_factory = sqlite3.Row
+    conn.execute(
+        """INSERT INTO followups (
+            id, description, verification, status, reasoning, created_at, updated_at, priority
+        ) VALUES (?, ?, ?, 'PENDING', ?, 1, 1, 'medium')""",
+        (
+            "NF-OPPORTUNITY-HISTORY",
+            "Extract a reusable automation for repeated release work around 'publish NEXO release'.",
+            "A reusable skill, script, or workflow now covers the repeated manual pattern",
+            "Daily self-audit found repeated successful manual work.",
+        ),
+    )
+    conn.execute(
+        """INSERT INTO item_history (item_type, item_id, event_type, note, actor, metadata, created_at)
+           VALUES ('followup', 'NF-OPPORTUNITY-HISTORY', 'completed', ?, 'runner', '{}', 2)""",
+        ("Already covered by existing script; do not keep this opportunity operational.",),
+    )
+    conn.execute(
+        """INSERT INTO followups (
+            id, description, verification, status, reasoning, created_at, updated_at, priority
+        ) VALUES (?, ?, ?, 'PENDING', ?, 1, 1, 'medium')""",
+        (
+            "NF-OPPORTUNITY-OPEN",
+            "Extract a reusable automation for repeated unrelated manual work around 'new uncaptured thing'.",
+            "A reusable skill, script, or workflow now covers the repeated manual pattern",
+            "Daily self-audit found repeated successful manual work.",
+        ),
+    )
+    conn.commit()
+
+    result = module._drain_covered_opportunity_backlog(conn)
+    conn.close()
+
+    assert result["completed"] == 1
+
+    conn = sqlite3.connect(str(self_audit_env / "data" / "nexo.db"))
+    statuses = dict(conn.execute("SELECT id, status FROM followups").fetchall())
+    history = conn.execute(
+        """SELECT event_type, note
+           FROM item_history
+           WHERE item_id = 'NF-OPPORTUNITY-HISTORY'
+           ORDER BY id DESC
+           LIMIT 1"""
+    ).fetchone()
+    conn.close()
+
+    assert statuses["NF-OPPORTUNITY-HISTORY"] == "COMPLETED"
+    assert statuses["NF-OPPORTUNITY-OPEN"] == "PENDING"
+    assert history[0] == "completed"
+    assert "existing coverage" in history[1]
+
+
+def test_self_audit_drains_covered_opportunity_from_skill(self_audit_env):
+    import importlib
+    import db._core as db_core
+    import db._schema as db_schema
+    import db
+
+    importlib.reload(db_core)
+    importlib.reload(db_schema)
+    importlib.reload(db)
+    db.init_db()
+
+    module = _load_self_audit_module()
+    conn = sqlite3.connect(str(self_audit_env / "data" / "nexo.db"))
+    conn.row_factory = sqlite3.Row
+    conn.execute(
+        """INSERT INTO followups (
+            id, description, verification, status, reasoning, created_at, updated_at, priority
+        ) VALUES (?, ?, ?, 'PENDING', ?, 1, 1, 'medium')""",
+        (
+            "NF-OPPORTUNITY-SKILL",
+            "Extract a reusable automation for repeated release changelog sitemap publishing work.",
+            "A reusable skill, script, or workflow now covers the repeated manual pattern",
+            "Daily self-audit found repeated successful manual work.",
+        ),
+    )
+    conn.execute(
+        """INSERT INTO skills (id, name, description, content, level, trust_score, success_count)
+           VALUES (?, ?, ?, ?, 'stable', 90, 3)""",
+        (
+            "SK-RELEASE-PUBLISH",
+            "Release changelog sitemap publishing",
+            "Covers repeated release changelog sitemap publishing work.",
+            "Use this skill when publishing release changelog and sitemap artifacts.",
+        ),
+    )
+    conn.commit()
+
+    result = module._drain_covered_opportunity_backlog(conn)
+    conn.close()
+
+    assert result["completed"] == 1
+    assert result["examples"][0].startswith("NF-OPPORTUNITY-SKILL -> skill:SK-RELEASE-PUBLISH")
+
+    conn = sqlite3.connect(str(self_audit_env / "data" / "nexo.db"))
+    status = conn.execute(
+        "SELECT status FROM followups WHERE id = 'NF-OPPORTUNITY-SKILL'"
+    ).fetchone()[0]
+    conn.close()
+
+    assert status == "COMPLETED"
+
+
 def test_run_mechanical_autofixes_sanitizes_registry_and_refreshes_snapshots(self_audit_env, monkeypatch):
     module = _load_self_audit_module()
     module.findings[:] = [

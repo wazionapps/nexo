@@ -1,5 +1,17 @@
 # Changelog
 
+## [7.37.4] - 2026-06-18
+
+### Fixed - Product-gap reporting, stale briefing noise, and opportunity loops
+
+- **Deep Sleep now reports recurring NEXO product gaps through sanitized Desktop support tickets instead of reopening private operator work.** Recurring patterns that call for scripts, hooks, skills, guardrails, tools, workflows, or automation are converted into `product_gap_report` actions and applied through the real support-ticket API with stable client-message dedupe. Outbound ticket bodies redact operator/client paths, URLs, emails, bootstrap filenames and secret-looking values before they leave the local runtime.
+- **The daily self-audit no longer reopens closed internal `NF-OPPORTUNITY` items.** When the canonical opportunity id already exists in a closed or non-operational state (`COMPLETED`, `DELETED`, `ARCHIVED`, `BLOCKED`, `WAITING`), the audit preserves that state and appends history instead of putting it back in `PENDING`.
+- **The morning briefing now gets enough state to stop resurfacing stale decisions.** Followups and reminders include recent item history, a resolution-state hint, and a status-claim guard; the prompt treats that history as stronger than an older description, deduplicates topics across sections, and forbids claims like "authorized", "done", or "deployed" without direct evidence.
+- **Support-ticket tools now match the live backend contract and can close tickets with evidence.** The Brain wrapper sends `title`/`description` and `per_page`, maps legacy `urgent` priority to backend `critical`, and exposes message/close/reopen helpers so backend tickets can be triaged without substituting private followups.
+- **Transcript-index continuity search keeps strong indexed matches even when they are just outside the freshness window.** This preserves the intended "index before raw fallback" path for specific prior-work queries while keeping weak broad transcript matches bounded by recency.
+
+Builds on 7.37.3 (release pipeline timeout hardening).
+
 ## [7.37.3] - 2026-06-16
 
 ### Fixed - Release pipeline timeout hardening

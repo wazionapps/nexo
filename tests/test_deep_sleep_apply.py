@@ -748,3 +748,68 @@ def test_apply_action_skips_code_change_when_action_class_not_auto_apply(monkeyp
     count = conn.execute("SELECT COUNT(*) FROM evolution_log").fetchone()[0]
     conn.close()
     assert count == 0
+
+
+def test_apply_action_dispatches_sanitized_product_gap_report(monkeypatch, tmp_path):
+    apply_mod = _load_apply_module(monkeypatch, tmp_path)
+    calls = []
+
+    import tools_api_call
+
+    def fake_create(subject, message, priority="normal", client_message_id="", origin="desktop"):
+        calls.append(
+            {
+                "subject": subject,
+                "message": message,
+                "priority": priority,
+                "client_message_id": client_message_id,
+                "origin": origin,
+            }
+        )
+        return "HTTP 201 POST /api/support/tickets\n{}"
+
+    monkeypatch.setattr(tools_api_call, "handle_support_ticket_create", fake_create)
+
+    action = {
+        "action_type": "product_gap_report",
+        "action_class": "auto_apply",
+        "dedupe_key": "product-gap:test123",
+        "impact": "high",
+        "confidence": 0.91,
+        "evidence": [
+            {
+                "quote": (
+                    "Client path /Users/franciscoc/.nexo/runtime/data/nexo.db "
+                    "email user@example.com token=sk-testsecret123456 "
+                    "url https://client.example/private"
+                )
+            }
+        ],
+        "content": {
+            "title": "Add release guardrail",
+            "description": "Build a product guardrail for repeated release misses.",
+            "deliverable": "guardrail",
+            "pattern": "Repeated release misses in /Users/franciscoc/private-project",
+            "sessions_count": 2,
+            "evidence_count": 1,
+        },
+    }
+
+    log_entry = apply_mod.apply_action(action, run_id="ds-test")
+
+    assert log_entry["status"] == "applied"
+    assert log_entry["action_type"] == "product_gap_report"
+    assert log_entry["details"]["client_message_id"] == "product-gap:test123"
+    assert calls[0]["subject"] == "[NEXO-PRODUCT-GAP] Add release guardrail"
+    assert calls[0]["priority"] == "high"
+    assert calls[0]["origin"] == "auto_incident"
+    assert calls[0]["client_message_id"] == "product-gap:test123"
+    outbound = calls[0]["message"]
+    assert "/Users/franciscoc" not in outbound
+    assert "user@example.com" not in outbound
+    assert "sk-testsecret123456" not in outbound
+    assert "https://client.example/private" not in outbound
+    assert "[redacted-path]" in outbound
+    assert "[redacted-email]" in outbound
+    assert "[redacted-url]" in outbound
+    assert "[redacted-secret]" in outbound

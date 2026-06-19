@@ -132,9 +132,12 @@ from tools_guardian import handle_guardian_rule_override
 from tools_api_call import (
     handle_api_call,
     handle_create_app_token,
+    handle_support_ticket_close,
     handle_support_ticket_create,
     handle_support_ticket_list,
+    handle_support_ticket_message,
     handle_support_ticket_read,
+    handle_support_ticket_reopen,
 )
 from runtime_versioning import (
     RestartRequiredMiddleware,
@@ -3198,9 +3201,33 @@ def nexo_support_ticket_read(ticket_id: str) -> str:
 
 
 @mcp.tool
-def nexo_support_ticket_create(subject: str, message: str, priority: str = "normal") -> str:
+def nexo_support_ticket_create(
+    subject: str,
+    message: str,
+    priority: str = "normal",
+    client_message_id: str = "",
+    origin: str = "desktop",
+) -> str:
     """Create a real NEXO support ticket for a product bug/setup issue."""
-    return handle_support_ticket_create(subject, message, priority)
+    return handle_support_ticket_create(subject, message, priority, client_message_id, origin)
+
+
+@mcp.tool
+def nexo_support_ticket_message(ticket_id: str, body: str, client_message_id: str = "") -> str:
+    """Append an evidence note to a real NEXO support ticket before status changes."""
+    return handle_support_ticket_message(ticket_id, body, client_message_id)
+
+
+@mcp.tool
+def nexo_support_ticket_close(ticket_id: str) -> str:
+    """Close a real NEXO support ticket after evidence has been recorded."""
+    return handle_support_ticket_close(ticket_id)
+
+
+@mcp.tool
+def nexo_support_ticket_reopen(ticket_id: str) -> str:
+    """Reopen a real NEXO support ticket if fresh evidence shows it is active."""
+    return handle_support_ticket_reopen(ticket_id)
 
 
 @mcp.tool

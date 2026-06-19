@@ -41,6 +41,7 @@ EVIDENCE_REQUIRED_INTENTS = {"live_state_claim"}
 
 DEFAULT_BUDGET_MS = 2500
 DEFAULT_TOKEN_BUDGET = 2500
+STRONG_TRANSCRIPT_INDEX_MATCH = 0.75
 MAX_SOURCE_WORKERS = int(os.environ.get("NEXO_PRE_ANSWER_SOURCE_WORKERS", "6") or "6")
 PRE_ANSWER_SEMANTIC_DECISION_KIND = "pre_answer_intent"
 
@@ -1989,20 +1990,23 @@ def _source_transcripts(request: SourceRequest) -> SourceResult:
         query_tokens = _tokenize(request.query)
         indexed_rows: list[dict[str, Any]] = []
         for row in rows:
-            modified = str(row.get("modified_at") or "")
-            if modified:
-                try:
-                    if datetime.fromisoformat(modified) < cutoff:
-                        continue
-                except Exception:
-                    pass
             haystack = " ".join(
                 str(row.get(field) or "")
                 for field in ("sanitized_summary", "display_name", "session_id", "conversation_id", "path_ref", "metadata_json")
             )
             score = _score_text_match(query_tokens, haystack) if query_tokens else 0.0
-            if _row_ref_matches(request.query, row):
+            ref_matches = _row_ref_matches(request.query, row)
+            if ref_matches:
                 score = max(score, 2.0)
+            modified = str(row.get("modified_at") or "")
+            stale = False
+            if modified:
+                try:
+                    stale = datetime.fromisoformat(modified) < cutoff
+                except Exception:
+                    pass
+            if stale and not ref_matches and score < STRONG_TRANSCRIPT_INDEX_MATCH:
+                continue
             if score <= 0:
                 continue
             row["_score"] = round(score, 4)

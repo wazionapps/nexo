@@ -294,6 +294,16 @@ def _ensure_followup(conn: sqlite3.Connection, *, prefix: str, description: str,
         (followup_id,),
     ).fetchone()
     if existing_id_row:
+        closed_status = str(existing_id_row["status"] or "").upper()
+        if closed_status.startswith("COMPLETED") or closed_status in {"DELETED", "ARCHIVED", "BLOCKED", "WAITING"}:
+            conn.commit()
+            nexo_db.add_followup_note(
+                followup_id,
+                "Daily self-audit saw this canonical opportunity again and preserved its closed/non-operational status.",
+                actor="self-audit",
+            )
+            return followup_id
+
         update_fields = {
             "description": description,
             "verification": verification,
@@ -305,9 +315,6 @@ def _ensure_followup(conn: sqlite3.Connection, *, prefix: str, description: str,
             update_fields["internal"] = int(bool(internal))
         if "owner" in columns:
             update_fields["owner"] = owner
-        closed_status = str(existing_id_row["status"] or "").upper()
-        if closed_status.startswith("COMPLETED") or closed_status in {"DELETED", "ARCHIVED", "BLOCKED", "WAITING"}:
-            update_fields["status"] = "PENDING"
         conn.commit()
         result = nexo_db.update_followup(
             followup_id,
@@ -797,6 +804,23 @@ TOPIC_STOPWORDS = {
     "prepare", "finish", "open", "another", "around", "must",
 }
 
+OPPORTUNITY_DRAIN_LIMIT = int(os.environ.get("NEXO_SELFAUDIT_OPPORTUNITY_DRAIN_LIMIT", "500"))
+OPPORTUNITY_DRAIN_STOPWORDS = TOPIC_STOPWORDS | {
+    "extract", "reusable", "automation", "automations", "automated", "manual",
+    "pattern", "patterns", "successful", "protocol", "tasks", "days", "seen",
+    "operator", "time", "skill", "skills", "script", "scripts", "workflow",
+    "workflows", "candidate", "opportunity", "opportunities", "around",
+}
+OPPORTUNITY_HISTORY_COVERAGE_RE = re.compile(
+    r"\b("
+    r"already covered|covered by|coverage exists|automation exists|skill exists|script exists|"
+    r"ya cubiert[oa]s?|cubiert[oa]s? por|automatizad[oa]s?|"
+    r"automatizaci[oó]n(?:es)? existente(?:s)?|skills? existente(?:s)?|"
+    r"scripts? existente(?:s)?|workflows? existente(?:s)?|resuelt[oa]s?|resolved|"
+    r"no actionable|no accionable|suppressed|suprimid[oa]s?"
+    r")\b",
+    re.IGNORECASE,
+)
 
 def _topic_signature(text: str) -> str:
     tokens = [
@@ -804,6 +828,156 @@ def _topic_signature(text: str) -> str:
         if len(token) >= 3 and token not in TOPIC_STOPWORDS
     ]
     return " ".join(tokens[:2])
+
+
+def _opportunity_terms(text: str) -> set[str]:
+    return {
+        token
+        for token in re.findall(r"[a-z0-9]+", (text or "").lower())
+        if len(token) >= 4 and token not in OPPORTUNITY_DRAIN_STOPWORDS and not token.isdigit()
+    }
+
+
+def _opportunity_match(terms: set[str], candidate_text: str, *, min_overlap: int = 4) -> tuple[bool, list[str]]:
+    if not terms:
+        return False, []
+    candidate_terms = _opportunity_terms(candidate_text)
+    overlap = sorted(terms & candidate_terms)
+    required = min(min_overlap, max(2, len(terms)))
+    return len(overlap) >= required, overlap
+
+
+def _coverage_from_history(conn: sqlite3.Connection, followup_id: str) -> str:
+    if not _table_exists(conn, "item_history"):
+        return ""
+    rows = conn.execute(
+        """SELECT event_type, note
+           FROM item_history
+           WHERE item_type = 'followup' AND item_id = ?
+           ORDER BY created_at DESC, id DESC
+           LIMIT 25""",
+        (followup_id,),
+    ).fetchall()
+    for row in rows:
+        note = str(row["note"] or "").strip()
+        if note and OPPORTUNITY_HISTORY_COVERAGE_RE.search(note):
+            snippet = " ".join(note.split())[:180]
+            return f"history:{row['event_type']}:{snippet}"
+    return ""
+
+
+def _coverage_from_skills(conn: sqlite3.Connection, terms: set[str]) -> str:
+    if not _table_exists(conn, "skills"):
+        return ""
+    rows = conn.execute(
+        """SELECT id, name, description, content, steps, trigger_patterns, tags
+           FROM skills
+           ORDER BY COALESCE(success_count, 0) DESC, COALESCE(trust_score, 0) DESC
+           LIMIT 500"""
+    ).fetchall()
+    for row in rows:
+        candidate = " ".join(
+            str(row[key] or "")
+            for key in ("name", "description", "content", "steps", "trigger_patterns", "tags")
+        )
+        ok, overlap = _opportunity_match(terms, candidate)
+        if ok:
+            return f"skill:{row['id']} overlap={','.join(overlap[:6])}"
+    return ""
+
+
+def _coverage_from_scripts(conn: sqlite3.Connection, terms: set[str]) -> str:
+    if not _table_exists(conn, "personal_scripts"):
+        return ""
+    rows = conn.execute(
+        """SELECT id, name, description, path, metadata_json
+           FROM personal_scripts
+           WHERE COALESCE(enabled, 1) = 1
+           LIMIT 500"""
+    ).fetchall()
+    for row in rows:
+        candidate = " ".join(
+            str(row[key] or "")
+            for key in ("name", "description", "path", "metadata_json")
+        )
+        ok, overlap = _opportunity_match(terms, candidate)
+        if ok:
+            return f"script:{row['id']} overlap={','.join(overlap[:6])}"
+    return ""
+
+
+def _coverage_from_learnings(conn: sqlite3.Connection, terms: set[str]) -> str:
+    if not _table_exists(conn, "learnings"):
+        return ""
+    rows = conn.execute(
+        """SELECT id, title, content, reasoning, prevention, applies_to
+           FROM learnings
+           WHERE COALESCE(status, 'active') = 'active'
+           ORDER BY COALESCE(updated_at, created_at, 0) DESC
+           LIMIT 500"""
+    ).fetchall()
+    for row in rows:
+        candidate = " ".join(
+            str(row[key] or "")
+            for key in ("title", "content", "reasoning", "prevention", "applies_to")
+        )
+        if not OPPORTUNITY_HISTORY_COVERAGE_RE.search(candidate):
+            continue
+        ok, overlap = _opportunity_match(terms, candidate, min_overlap=3)
+        if ok:
+            return f"learning:{row['id']} overlap={','.join(overlap[:6])}"
+    return ""
+
+
+def _covered_opportunity_evidence(conn: sqlite3.Connection, row: sqlite3.Row) -> str:
+    followup_id = str(row["id"] or "")
+    history = _coverage_from_history(conn, followup_id)
+    if history:
+        return history
+    text = " ".join(
+        str(row[key] or "")
+        for key in ("description", "verification", "reasoning")
+    )
+    terms = _opportunity_terms(text)
+    return (
+        _coverage_from_skills(conn, terms)
+        or _coverage_from_scripts(conn, terms)
+        or _coverage_from_learnings(conn, terms)
+    )
+
+
+def _drain_covered_opportunity_backlog(conn: sqlite3.Connection, *, limit: int = OPPORTUNITY_DRAIN_LIMIT) -> dict:
+    if not _table_exists(conn, "followups"):
+        return {"ok": False, "checked": 0, "completed": 0, "reason": "followups_missing"}
+    rows = conn.execute(
+        """SELECT id, description, verification, reasoning
+           FROM followups
+           WHERE id LIKE 'NF-OPPORTUNITY-%'
+             AND status NOT LIKE 'COMPLETED%'
+             AND UPPER(COALESCE(status, '')) NOT IN ('DELETED','ARCHIVED','BLOCKED','WAITING')
+           ORDER BY COALESCE(created_at, updated_at, 0) ASC
+           LIMIT ?""",
+        (max(1, int(limit or OPPORTUNITY_DRAIN_LIMIT)),),
+    ).fetchall()
+    completed = 0
+    examples: list[str] = []
+    for row in rows:
+        evidence = _covered_opportunity_evidence(conn, row)
+        if not evidence:
+            continue
+        note = (
+            "Daily self-audit backlog drain closed this NF-OPPORTUNITY because existing coverage was found. "
+            f"Evidence: {evidence}. "
+            "No backlog history was deleted; this item remains traceable in item_history."
+        )
+        conn.commit()
+        result = nexo_db.complete_followup(str(row["id"]), note)
+        if result.get("error"):
+            continue
+        completed += 1
+        if len(examples) < 5:
+            examples.append(f"{row['id']} -> {evidence}")
+    return {"ok": True, "checked": len(rows), "completed": completed, "examples": examples}
 
 
 REPAIR_KEYWORDS = {
@@ -1673,6 +1847,13 @@ def check_automation_opportunities():
     conn = sqlite3.connect(str(NEXO_DB))
     conn.row_factory = sqlite3.Row
     if not _table_exists(conn, "protocol_tasks"):
+        drain = _drain_covered_opportunity_backlog(conn)
+        if drain.get("completed"):
+            finding(
+                "INFO",
+                "opportunities",
+                f"drained {drain['completed']} covered NF-OPPORTUNITY backlog item(s)",
+            )
         conn.close()
         return
 
@@ -1684,6 +1865,13 @@ def check_automation_opportunities():
            ORDER BY closed_at DESC"""
     ).fetchall()
     if not rows:
+        drain = _drain_covered_opportunity_backlog(conn)
+        if drain.get("completed"):
+            finding(
+                "INFO",
+                "opportunities",
+                f"drained {drain['completed']} covered NF-OPPORTUNITY backlog item(s)",
+            )
         conn.close()
         return
 
@@ -1721,6 +1909,17 @@ def check_automation_opportunities():
                 priority="medium",
             )
         conn.commit()
+    drain = _drain_covered_opportunity_backlog(conn)
+    if drain.get("completed"):
+        example_text = ""
+        examples = drain.get("examples") or []
+        if examples:
+            example_text = f" | examples: {'; '.join(examples)}"
+        finding(
+            "INFO",
+            "opportunities",
+            f"drained {drain['completed']} covered NF-OPPORTUNITY backlog item(s){example_text}",
+        )
     conn.close()
 
 

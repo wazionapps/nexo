@@ -34,6 +34,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -85,11 +86,50 @@ CLI_TIMEOUT = 1500
 MAX_DUE_ITEMS = 8
 MAX_ACTIVE_ITEMS = 8
 MAX_DIARY_ITEMS = 6
+HISTORY_SIGNAL_LIMIT = 5
 MORNING_BRIEFING_STALE_HOURS = 12
 _ACTIVE_CLAIM: dict[str, str] = {}
 HTTP_TIMEOUT = 7
 NEWS_MAX_HEADLINES = 8
 NEWS_MAX_FEEDS = 5
+RESOLUTION_SIGNAL_WORDS = (
+    "already decided",
+    "already resolved",
+    "cerrado",
+    "closed",
+    "completed",
+    "covered",
+    "cubierto",
+    "decidido",
+    "descartad",
+    "false alarm",
+    "falsa alarma",
+    "monitor activo",
+    "no accionable",
+    "resolved",
+    "resuelto",
+)
+APPROVAL_SIGNAL_WORDS = (
+    "awaiting approval",
+    "espera luz verde",
+    "esperando luz verde",
+    "needs approval",
+    "pending approval",
+)
+TOPIC_STOPWORDS = {
+    "about",
+    "after",
+    "before",
+    "briefing",
+    "check",
+    "para",
+    "pendiente",
+    "review",
+    "sobre",
+    "ticket",
+    "update",
+    "with",
+}
 NEWS_INTEREST_QUERY_ES = {
     "business": "empresa economia negocios",
     "technology": "tecnologia inteligencia artificial software",
@@ -454,16 +494,115 @@ def _followup_recency_fields(row: dict) -> dict:
     }
 
 
+def _compact_item_history(item_type: str, item_id: str, *, limit: int = HISTORY_SIGNAL_LIMIT) -> list[dict]:
+    if not item_id:
+        return []
+    try:
+        rows = nexo_db.get_item_history(item_type, item_id, limit=limit)
+    except Exception:
+        return []
+    result: list[dict] = []
+    for row in rows:
+        note = _clean_text(row.get("note"), limit=220)
+        event_type = str(row.get("event_type") or "")
+        if not note and not event_type:
+            continue
+        result.append({
+            "event_type": event_type,
+            "actor": str(row.get("actor") or ""),
+            "note": note,
+            "created_at": str(row.get("created_at") or ""),
+        })
+    return result
+
+
+def _resolution_state(status: str, history: list[dict], *text_fields: object) -> str:
+    clean_status = str(status or "").strip().upper()
+    if clean_status.startswith("COMPLETED") or clean_status in {"DELETED", "ARCHIVED", "BLOCKED", "WAITING"}:
+        return "closed_or_non_operational"
+
+    signal_text = " ".join(
+        [
+            str(status or ""),
+            *[str(value or "") for value in text_fields],
+            *[
+                f"{entry.get('event_type', '')} {entry.get('note', '')}"
+                for entry in history
+                if isinstance(entry, dict)
+            ],
+        ]
+    ).lower()
+    if any(word in signal_text for word in APPROVAL_SIGNAL_WORDS):
+        return "awaiting_user_approval"
+    if any(word in signal_text for word in RESOLUTION_SIGNAL_WORDS):
+        return "resolved_or_decided_signal"
+    return "active"
+
+
+def _status_claim_guard(resolution_state: str) -> str:
+    if resolution_state == "awaiting_user_approval":
+        return "Do not describe as authorized/done; state that it is waiting for approval."
+    if resolution_state == "resolved_or_decided_signal":
+        return "Do not present resolved/decided subtopics as new decisions."
+    if resolution_state == "closed_or_non_operational":
+        return "Do not present this as operationally pending."
+    return ""
+
+
+def _topic_signature(item: dict) -> str:
+    text = " ".join(
+        str(item.get(key) or "")
+        for key in ("description", "verification", "reasoning")
+    )
+    normalized = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii").lower()
+    tokens = [
+        token
+        for token in re.findall(r"[a-z0-9]{4,}", normalized)
+        if token not in TOPIC_STOPWORDS
+    ]
+    unique = list(dict.fromkeys(tokens))
+    if len(unique) < 3:
+        return f"id:{item.get('id', '')}"
+    return "topic:" + " ".join(sorted(unique[:10]))
+
+
+def _dedupe_context_groups(*groups: list[dict]) -> tuple[list[dict], ...]:
+    seen: set[str] = set()
+    output: list[list[dict]] = []
+    for group in groups:
+        kept: list[dict] = []
+        for item in group:
+            signature = _topic_signature(item)
+            if signature and signature in seen:
+                continue
+            if signature:
+                seen.add(signature)
+            kept.append(item)
+        output.append(kept)
+    return tuple(output)
+
+
 def _serialize_reminders(filter_type: str, *, limit: int) -> list[dict]:
     rows = list(nexo_db.get_reminders(filter_type))
     result: list[dict] = []
     for row in rows[:limit]:
+        item_id = str(row.get("id") or "")
+        history = _compact_item_history("reminder", item_id)
+        resolution_state = _resolution_state(
+            str(row.get("status") or ""),
+            history,
+            row.get("description"),
+        )
         result.append({
-            "id": str(row.get("id") or ""),
+            "id": item_id,
             "description": _clean_text(row.get("description")),
             "date": str(row.get("date") or ""),
             "category": str(row.get("category") or ""),
             "status": str(row.get("status") or ""),
+            "recent_history": history,
+            "resolution_state": resolution_state,
+            "has_resolution_signal": resolution_state in {"closed_or_non_operational", "resolved_or_decided_signal"},
+            "status_claim_guard": _status_claim_guard(resolution_state),
         })
     return result
 
@@ -475,8 +614,17 @@ def _serialize_followups(filter_type: str, *, limit: int) -> list[dict]:
         status = str(row.get("status") or "").strip().upper()
         if status.startswith("COMPLETED") or status in {"DELETED", "ARCHIVED"}:
             continue
+        item_id = str(row.get("id") or "")
+        history = _compact_item_history("followup", item_id)
+        resolution_state = _resolution_state(
+            row.get("status"),
+            history,
+            row.get("description"),
+            row.get("verification"),
+            row.get("reasoning"),
+        )
         item = {
-            "id": str(row.get("id") or ""),
+            "id": item_id,
             "description": _clean_text(row.get("description")),
             "date": str(row.get("date") or ""),
             "priority": _item_priority(row.get("priority")),
@@ -484,6 +632,10 @@ def _serialize_followups(filter_type: str, *, limit: int) -> list[dict]:
             "status": str(row.get("status") or ""),
             "verification": _clean_text(row.get("verification"), limit=180),
             "reasoning": _clean_text(row.get("reasoning"), limit=180),
+            "recent_history": history,
+            "resolution_state": resolution_state,
+            "has_resolution_signal": resolution_state in {"closed_or_non_operational", "resolved_or_decided_signal"},
+            "status_claim_guard": _status_claim_guard(resolution_state),
         }
         item.update(_followup_recency_fields(row))
         result.append(item)
@@ -935,6 +1087,12 @@ def collect_context(profile: dict, preferences: dict | None = None) -> dict:
         for row in _serialize_reminders("active", limit=MAX_ACTIVE_ITEMS + MAX_DUE_ITEMS)
         if row["id"] not in due_reminder_ids
     ][:MAX_ACTIVE_ITEMS]
+    due_followups, active_followups, due_reminders, active_reminders = _dedupe_context_groups(
+        due_followups,
+        active_followups,
+        due_reminders,
+        active_reminders,
+    )
     recent_sent = _serialize_recent_sent_emails()
     external = _collect_external_context(profile, preferences)
     return {

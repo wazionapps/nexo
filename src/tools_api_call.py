@@ -1,11 +1,14 @@
 """HTTP API calls to the nexo-desktop-web backend using the user's session bearer.
 
-Exposes two MCP tools registered in server.py:
+Exposes MCP tools registered in server.py:
   - nexo_api_call(method, path, body_json, idempotency_key, headers_json, base_url)
   - nexo_create_app_token(name, abilities, allowed_platforms, expires_at)
   - nexo_support_ticket_list(status, limit)
   - nexo_support_ticket_read(ticket_id)
   - nexo_support_ticket_create(subject, message, priority)
+  - nexo_support_ticket_message(ticket_id, body, client_message_id)
+  - nexo_support_ticket_close(ticket_id)
+  - nexo_support_ticket_reopen(ticket_id)
 
 The session bearer (Sanctum personal access token) is stored by NEXO Desktop in
 the OS keychain at:
@@ -210,7 +213,7 @@ def handle_support_ticket_list(status: str = "", limit: int = 20) -> str:
         parsed_limit = max(1, min(100, int(limit or 20)))
     except Exception:
         parsed_limit = 20
-    query["limit"] = str(parsed_limit)
+    query["per_page"] = str(parsed_limit)
     suffix = "?" + urlencode(query) if query else ""
     return handle_api_call("GET", f"/api/support/tickets{suffix}")
 
@@ -223,20 +226,75 @@ def handle_support_ticket_read(ticket_id: str) -> str:
     return handle_api_call("GET", f"/api/support/tickets/{quote(clean, safe='')}")
 
 
-def handle_support_ticket_create(subject: str, message: str, priority: str = "normal") -> str:
+def _normalize_support_priority(priority: str) -> str:
+    clean_priority = (priority or "normal").strip().lower()
+    if clean_priority == "urgent":
+        return "critical"
+    if clean_priority not in {"low", "normal", "high", "critical"}:
+        return "normal"
+    return clean_priority
+
+
+def handle_support_ticket_create(
+    subject: str,
+    message: str,
+    priority: str = "normal",
+    client_message_id: str = "",
+    origin: str = "desktop",
+) -> str:
     """Create a real NEXO support ticket instead of a private/internal followup."""
     clean_subject = (subject or "").strip()
     clean_message = (message or "").strip()
-    clean_priority = (priority or "normal").strip().lower()
+    clean_priority = _normalize_support_priority(priority)
+    clean_origin = (origin or "desktop").strip().lower()
     if not clean_subject:
         return "ERROR: subject is required."
     if not clean_message:
         return "ERROR: message is required."
-    if clean_priority not in {"low", "normal", "high", "urgent"}:
-        clean_priority = "normal"
+    if clean_origin not in {"desktop", "web", "auto_incident"}:
+        clean_origin = "desktop"
     payload = {
-        "subject": clean_subject,
-        "message": clean_message,
+        "title": clean_subject,
+        "description": clean_message,
         "priority": clean_priority,
+        "origin": clean_origin,
     }
+    clean_client_message_id = (client_message_id or "").strip()
+    if clean_client_message_id:
+        payload["client_message_id"] = clean_client_message_id
     return handle_api_call("POST", "/api/support/tickets", body_json=json.dumps(payload, ensure_ascii=False))
+
+
+def handle_support_ticket_message(ticket_id: str, body: str, client_message_id: str = "") -> str:
+    """Append an evidence note to a real NEXO support ticket."""
+    clean = (ticket_id or "").strip()
+    clean_body = (body or "").strip()
+    if not clean:
+        return "ERROR: ticket_id is required."
+    if not clean_body:
+        return "ERROR: body is required."
+    payload = {"body": clean_body}
+    clean_client_message_id = (client_message_id or "").strip()
+    if clean_client_message_id:
+        payload["client_message_id"] = clean_client_message_id
+    return handle_api_call(
+        "POST",
+        f"/api/support/tickets/{quote(clean, safe='')}/messages",
+        body_json=json.dumps(payload, ensure_ascii=False),
+    )
+
+
+def handle_support_ticket_close(ticket_id: str) -> str:
+    """Close a real NEXO support ticket after evidence has been recorded."""
+    clean = (ticket_id or "").strip()
+    if not clean:
+        return "ERROR: ticket_id is required."
+    return handle_api_call("POST", f"/api/support/tickets/{quote(clean, safe='')}/close")
+
+
+def handle_support_ticket_reopen(ticket_id: str) -> str:
+    """Reopen a real NEXO support ticket when fresh evidence shows it is still active."""
+    clean = (ticket_id or "").strip()
+    if not clean:
+        return "ERROR: ticket_id is required."
+    return handle_api_call("POST", f"/api/support/tickets/{quote(clean, safe='')}/reopen")

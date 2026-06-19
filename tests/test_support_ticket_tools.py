@@ -18,6 +18,8 @@ def test_support_ticket_create_calls_real_support_endpoint(monkeypatch):
         "Fallo Email NEXO",
         "El agente no encuentra el ticket real.",
         "urgent",
+        client_message_id="nexo-gap-1",
+        origin="auto_incident",
     )
 
     assert result.startswith("HTTP 201")
@@ -25,9 +27,11 @@ def test_support_ticket_create_calls_real_support_endpoint(monkeypatch):
     assert calls[0][1] == "/api/support/tickets"
     payload = json.loads(calls[0][2])
     assert payload == {
-        "subject": "Fallo Email NEXO",
-        "message": "El agente no encuentra el ticket real.",
-        "priority": "urgent",
+        "title": "Fallo Email NEXO",
+        "description": "El agente no encuentra el ticket real.",
+        "priority": "critical",
+        "origin": "auto_incident",
+        "client_message_id": "nexo-gap-1",
     }
 
 
@@ -43,7 +47,7 @@ def test_support_ticket_list_and_read_use_real_support_routes(monkeypatch):
     tools_api_call.handle_support_ticket_list("waiting customer", 250)
     tools_api_call.handle_support_ticket_read("ticket/18")
 
-    assert calls[0] == ("GET", "/api/support/tickets?status=waiting+customer&limit=100")
+    assert calls[0] == ("GET", "/api/support/tickets?status=waiting+customer&per_page=100")
     assert calls[1] == ("GET", "/api/support/tickets/ticket%2F18")
 
 
@@ -52,3 +56,31 @@ def test_support_ticket_create_validates_required_fields(monkeypatch):
 
     assert tools_api_call.handle_support_ticket_create("", "body").startswith("ERROR:")
     assert tools_api_call.handle_support_ticket_create("subject", "").startswith("ERROR:")
+
+
+def test_support_ticket_message_close_and_reopen_use_real_routes(monkeypatch):
+    calls = []
+
+    def fake_api_call(method, path, body_json="", idempotency_key="", headers_json="", base_url=""):
+        calls.append((method, path, body_json))
+        return f"HTTP 200 {method} {path}"
+
+    monkeypatch.setattr(tools_api_call, "handle_api_call", fake_api_call)
+
+    tools_api_call.handle_support_ticket_message("ticket/18", "Evidence note", "note-1")
+    tools_api_call.handle_support_ticket_close("ticket/18")
+    tools_api_call.handle_support_ticket_reopen("ticket/18")
+
+    assert calls[0][0:2] == ("POST", "/api/support/tickets/ticket%2F18/messages")
+    assert json.loads(calls[0][2]) == {"body": "Evidence note", "client_message_id": "note-1"}
+    assert calls[1] == ("POST", "/api/support/tickets/ticket%2F18/close", "")
+    assert calls[2] == ("POST", "/api/support/tickets/ticket%2F18/reopen", "")
+
+
+def test_support_ticket_message_and_status_validate_required_fields(monkeypatch):
+    monkeypatch.setattr(tools_api_call, "handle_api_call", lambda *args, **kwargs: "should-not-call")
+
+    assert tools_api_call.handle_support_ticket_message("", "body").startswith("ERROR:")
+    assert tools_api_call.handle_support_ticket_message("18", "").startswith("ERROR:")
+    assert tools_api_call.handle_support_ticket_close("").startswith("ERROR:")
+    assert tools_api_call.handle_support_ticket_reopen("").startswith("ERROR:")

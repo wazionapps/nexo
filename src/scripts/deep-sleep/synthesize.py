@@ -40,6 +40,16 @@ DEEP_SLEEP_DIR = paths.operations_dir() / "deep-sleep"
 
 CLAUDE_TIMEOUT = AUTOMATION_SUBPROCESS_TIMEOUT
 ACTION_VERBS = {"add", "implement", "create", "write", "build", "enforce", "automate", "validate", "guard", "fix", "review"}
+PRODUCT_GAP_DELIVERABLES = {
+    "automation",
+    "guard",
+    "guardrail",
+    "hook",
+    "script",
+    "skill",
+    "tool",
+    "workflow",
+}
 
 
 def extract_json_from_response(text: str) -> dict | None:
@@ -107,6 +117,19 @@ def _looks_concrete_action(text: str) -> bool:
     return bool(words & ACTION_VERBS)
 
 
+def _looks_product_gap_deliverable(value: str) -> bool:
+    words = {
+        word.strip(".,:;()[]{}").lower()
+        for word in str(value or "").replace("/", " ").replace("-", " ").split()
+    }
+    return bool(words & PRODUCT_GAP_DELIVERABLES)
+
+
+def _product_gap_fingerprint(*parts: str) -> str:
+    normalized = _normalize_action_text(" ".join(str(part or "") for part in parts))
+    return hashlib.md5(normalized.encode("utf-8"), usedforsecurity=False).hexdigest()[:16]
+
+
 def _pattern_followup_from_fix(pattern: dict) -> dict | None:
     severity = str(pattern.get("severity", "") or "").lower()
     sessions = pattern.get("sessions", []) or []
@@ -141,13 +164,37 @@ def _pattern_followup_from_fix(pattern: dict) -> dict | None:
     if not _looks_concrete_action(followup_description):
         followup_description = f"Implement this fix: {followup_description}"
 
+    confidence = round(max(float(proposed_fix.get("confidence", 0.0) or 0.0), 0.86 if severity == "high" else 0.78), 2)
+    impact = "high" if severity == "high" else "medium"
+    evidence = pattern.get("evidence", []) or []
+    if _looks_product_gap_deliverable(deliverable):
+        fingerprint = _product_gap_fingerprint(pattern_text, title, description, deliverable)
+        return {
+            "action_type": "product_gap_report",
+            "action_class": "auto_apply",
+            "confidence": confidence,
+            "impact": impact,
+            "reversibility": "reversible",
+            "evidence": evidence,
+            "dedupe_key": f"product-gap:{fingerprint}",
+            "content": {
+                "title": title or f"Product gap for: {pattern_text[:90]}",
+                "description": followup_description,
+                "deliverable": deliverable,
+                "pattern": pattern_text,
+                "sessions_count": len(sessions),
+                "evidence_count": len(evidence),
+                "reasoning": f"Deep Sleep product gap from recurring pattern: {pattern_text}",
+            },
+        }
+
     return {
         "action_type": "followup_create",
         "action_class": "auto_apply" if severity == "high" else "draft_for_morning",
-        "confidence": round(max(float(proposed_fix.get("confidence", 0.0) or 0.0), 0.86 if severity == "high" else 0.78), 2),
-        "impact": "high" if severity == "high" else "medium",
+        "confidence": confidence,
+        "impact": impact,
         "reversibility": "reversible",
-        "evidence": pattern.get("evidence", []) or [],
+        "evidence": evidence,
         # Content fingerprint, not security-sensitive.
         "dedupe_key": "engineering-fix:" + hashlib.md5(
             _normalize_action_text(followup_description).encode("utf-8"),

@@ -30,6 +30,9 @@ def test_morning_agent_prompt_sets_start_of_day_assistant_intent():
     assert "Public headlines are not a generic news block" in prompt
     assert "stale_without_recent_signal" in prompt
     assert "Never reconstruct an old crisis" in prompt
+    assert "recent_history" in prompt
+    assert "Do not duplicate the same topic" in prompt
+    assert "Never say \"authorized\"" in prompt
 
 
 def test_followup_recency_fields_expose_age_and_staleness(monkeypatch, tmp_path):
@@ -52,6 +55,64 @@ def test_followup_recency_fields_expose_age_and_staleness(monkeypatch, tmp_path)
     assert fields["days_since_activity"] == 5
     assert fields["stale_without_recent_signal"] is True
     assert fields["last_activity"].startswith("2026-06-10")
+
+
+def test_followup_serialization_exposes_history_resolution_signal(monkeypatch, tmp_path):
+    monkeypatch.setenv("NEXO_HOME", str(tmp_path / "nexo"))
+    module = _load_morning_agent("nexo_morning_agent_history_contract_test")
+
+    monkeypatch.setattr(
+        module.nexo_db,
+        "get_followups",
+        lambda _filter: [
+            {
+                "id": "NF-VICSHOP-STOCK-EMAIL-TEMPLATE-20260616",
+                "description": "Decide Vicshop sender and continue stock false-positive review",
+                "date": "2026-06-18",
+                "priority": "high",
+                "owner": "agent",
+                "status": "PENDING",
+                "verification": "Stock false-positive still open",
+                "reasoning": "Sender may be stale in description",
+                "created_at": "2026-06-17T20:00:00+00:00",
+                "updated_at": "2026-06-18T09:00:00+00:00",
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        module.nexo_db,
+        "get_item_history",
+        lambda item_type, item_id, limit=5: [
+            {
+                "event_type": "decision",
+                "actor": "nexo",
+                "note": "Remitente decidido: opcion B, nero@nexoagentmail.com.",
+                "created_at": "2026-06-17T23:02:00+00:00",
+            }
+        ],
+    )
+
+    items = module._serialize_followups("active", limit=5)
+
+    assert len(items) == 1
+    item = items[0]
+    assert item["resolution_state"] == "resolved_or_decided_signal"
+    assert item["has_resolution_signal"] is True
+    assert item["recent_history"][0]["event_type"] == "decision"
+    assert "Do not present resolved/decided subtopics" in item["status_claim_guard"]
+
+
+def test_context_dedupe_removes_repeated_topic_across_groups(monkeypatch, tmp_path):
+    monkeypatch.setenv("NEXO_HOME", str(tmp_path / "nexo"))
+    module = _load_morning_agent("nexo_morning_agent_dedupe_contract_test")
+
+    first = [{"id": "F1", "description": "Vicshop sender decision stock alert format"}]
+    duplicate = [{"id": "R1", "description": "Vicshop sender decision stock alert format"}]
+
+    kept_first, kept_duplicate = module._dedupe_context_groups(first, duplicate)
+
+    assert kept_first == first
+    assert kept_duplicate == []
 
 
 def test_collect_news_uses_interests_and_exclusions(monkeypatch, tmp_path):

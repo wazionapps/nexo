@@ -354,6 +354,19 @@
       },
       "triggers_after": []
     },
+    "nexo_support_ticket_close": {
+      "description": "Close a real authenticated NEXO support ticket",
+      "category": "support",
+      "source": "server",
+      "requires": [],
+      "provides": ["support_ticket"],
+      "internal_calls": ["nexo_api_call"],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
     "nexo_support_ticket_list": {
       "description": "List authenticated NEXO support tickets",
       "category": "support",
@@ -367,8 +380,34 @@
       },
       "triggers_after": []
     },
+    "nexo_support_ticket_message": {
+      "description": "Append an evidence note to a real authenticated NEXO support ticket",
+      "category": "support",
+      "source": "server",
+      "requires": [],
+      "provides": ["support_ticket"],
+      "internal_calls": ["nexo_api_call"],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
     "nexo_support_ticket_read": {
       "description": "Read one authenticated NEXO support ticket by ID",
+      "category": "support",
+      "source": "server",
+      "requires": [],
+      "provides": ["support_ticket"],
+      "internal_calls": ["nexo_api_call"],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_support_ticket_reopen": {
+      "description": "Reopen a real authenticated NEXO support ticket",
       "category": "support",
       "source": "server",
       "requires": [],
