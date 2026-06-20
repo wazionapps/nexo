@@ -1,0 +1,36 @@
+{
+  "domains": {
+    "nexo": {
+      "repo": "/Users/franciscoc/Documents/_PhpstormProjects/nexo",
+      "branch": "main",
+      "server": "local-runtime",
+      "cloud_project": "none",
+      "live_table": "/Users/franciscoc/.nexo/runtime/data/nexo.db",
+      "time_window": "last_24h_or_explicit_incident_window"
+    },
+    "recambios-bmw": {
+      "repo": "/Users/franciscoc/Documents/_PhpstormProjects/recambiosyaccesoriosbmw.com",
+      "branch": "main",
+      "server": "Shopify theme 179656687946 + vicshop email server",
+      "cloud_project": "recambiosyaccesoriosbmw",
+      "live_table": "vicsys + Shopify live theme",
+      "time_window": "last_24h_or_explicit_incident_window"
+    },
+    "vicshop.systeam.es": {
+      "repo": "server:/home/vicshopsysteam/public_html",
+      "branch": "main",
+      "server": "cl105e.mundiserver.com:85 /home/vicshopsysteam/public_html",
+      "cloud_project": "none",
+      "live_table": "vicsys on Mundiserver/MySQL",
+      "time_window": "last_24h_or_explicit_incident_window"
+    },
+    "wazion": {
+      "repo": "/Users/franciscoc/Documents/_PhpstormProjects/WAzion/WAzion",
+      "branch": "main",
+      "server": "Cloud Run chrome-extension-op-google + wazion-whatsapp-vps",
+      "cloud_project": "recambiosyaccesoriosbmw",
+      "live_table": "allinoneapp_main",
+      "time_window": "last_24h_or_explicit_incident_window"
+    }
+  }
+}
