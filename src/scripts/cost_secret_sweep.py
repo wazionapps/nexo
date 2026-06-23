@@ -7,8 +7,13 @@ import os
 import sys
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
+# Insert the library dir (src/) UNCONDITIONALLY at position 0 so it is searched
+# before this script's own directory (src/scripts/), which holds a same-named CLI
+# shim. A plain ``if ROOT not in sys.path`` guard is not enough: when src/ is
+# already on the path later (e.g. CI runs with PYTHONPATH=src), the guard skips
+# the insert and sys.path[0] (src/scripts/) shadows the library, so
+# ``import cost_secret_sweep`` imports THIS script and self-circular-imports.
+sys.path.insert(0, ROOT)
 
 from cost_secret_sweep import append_jsonl_report, default_paths, run_sweep
 
