@@ -126,6 +126,82 @@ def _decode_body(raw: bytes) -> dict[str, Any]:
         return {"raw": raw.decode("utf-8", errors="replace")[:1000]}
 
 
+def _support_second_ticket_match(query: str, *, include_protocol: bool = True, locale: str = "en") -> dict[str, Any] | None:
+    text = str(query or "").strip().lower()
+    if not text:
+        return None
+    support_hit = any(token in text for token in ("support", "soporte", "ticket", "cliente", "customer"))
+    flow_hit = any(
+        token in text
+        for token in (
+            "segundo",
+            "second",
+            "72h",
+            "multi-cliente",
+            "multicliente",
+            "cloud",
+            "credits",
+            "créditos",
+            "creditos",
+            "provisioning",
+            "voz",
+            "voice",
+            "imagen",
+            "image",
+        )
+    )
+    if not support_hit or not flow_hit:
+        return None
+    protocol_es = (
+        "Skill obligatoria: SK-SUPPORT-SECOND-TICKET-PARALLEL-SWEEP. "
+        "Si aparece un segundo fallo de cliente en la misma área en menos de 72h "
+        "(cloud, créditos, provisioning, voz o imagen), no responder ticket a ticket. "
+        "Abrir workflow P1 y lanzar 2-3 subagentes paralelos: idempotencia/reservas, "
+        "scope tokens/configuración, errores cacheados/logs y smoke final. Cerrar el P1 "
+        "en la misma tanda con evidencia."
+    )
+    protocol_en = (
+        "Mandatory skill: SK-SUPPORT-SECOND-TICKET-PARALLEL-SWEEP. "
+        "When a second customer failure appears in the same area within 72h "
+        "(cloud, credits, provisioning, voice, or image), do not answer tickets one by one. "
+        "Open a P1 workflow and spawn 2-3 parallel subagents for idempotency/reservations, "
+        "scope tokens/configuration, cached errors/logs, and final smoke. Close the P1 in the "
+        "same batch with evidence."
+    )
+    card: dict[str, Any] = {
+        "slug": "support-second-ticket-parallel-sweep",
+        "title": "Barrido paralelo tras segundo ticket" if _normalize_locale(locale) == "es" else "Parallel sweep after second ticket",
+        "category": "support",
+        "business_type": "nexo",
+        "skill_id": "SK-SUPPORT-SECOND-TICKET-PARALLEL-SWEEP",
+        "mandatory": True,
+        "source": "local_mandatory_skill",
+    }
+    if include_protocol:
+        card["protocol"] = protocol_es if _normalize_locale(locale) == "es" else protocol_en
+    return card
+
+
+def _merge_local_mandatory_matches(payload: dict[str, Any], query: str, *, include_protocol: bool = True, locale: str = "en") -> dict[str, Any]:
+    local = _support_second_ticket_match(query, include_protocol=include_protocol, locale=locale)
+    if not local:
+        return payload
+    if not payload.get("ok"):
+        if payload.get("error", {}).get("type") != "not_authenticated":
+            return payload
+        return {
+            "ok": True,
+            "status": 200,
+            "matches": [local],
+            "source": "local_mandatory_skill_fallback",
+            "warning": payload.get("error", {}).get("message", ""),
+        }
+    matches = payload.setdefault("matches", [])
+    if isinstance(matches, list) and not any(item.get("slug") == local["slug"] for item in matches if isinstance(item, dict)):
+        matches.insert(0, local)
+    return payload
+
+
 def _request_json(method: str, path: str, *, body: dict[str, Any] | None = None, locale: str = "en") -> dict[str, Any]:
     token = _read_token()
     if not token:
@@ -211,7 +287,14 @@ def handle_card_match(
         body["category"] = str(category).strip()
     if business_type:
         body["business_type"] = str(business_type).strip()
-    return _json(_request_json("POST", "/api/cards/match", body=body, locale=locale))
+    payload = _request_json("POST", "/api/cards/match", body=body, locale=locale)
+    payload = _merge_local_mandatory_matches(
+        payload,
+        clean_query,
+        include_protocol=body["include_protocol"],
+        locale=locale,
+    )
+    return _json(payload)
 
 
 TOOLS = [

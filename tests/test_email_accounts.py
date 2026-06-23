@@ -280,7 +280,36 @@ def test_email_credentials_use_keyring_marker_when_available(isolated_home, monk
     assert row is not None
     assert row[0] == marker
     assert row[0] != "sekret-1"
+    fallback = get_db().execute(
+        "SELECT value FROM credentials WHERE service='email::headless-fallback' AND key='primary'"
+    ).fetchone()
+    assert fallback is not None
+    assert fallback[0] == "sekret-1"
     assert fake.values[(KEYRING_SERVICE, "email:primary")] == "sekret-1"
+    assert read_email_credential("email", "primary") == "sekret-1"
+
+
+def test_email_credentials_fall_back_when_keyring_is_unavailable(isolated_home, monkeypatch):
+    import types
+    from email_credentials import read_email_credential, store_email_credential
+
+    fake = FakeKeyring()
+    monkeypatch.setenv("NEXO_EMAIL_CREDENTIAL_STORE", "keyring")
+    monkeypatch.setitem(sys.modules, "keyring", types.SimpleNamespace(
+        set_password=fake.set_password,
+        get_password=fake.get_password,
+        delete_password=fake.delete_password,
+    ))
+
+    marker = store_email_credential("email", "primary", "sekret-1", "test email password")
+    assert marker.startswith("keyring://")
+
+    monkeypatch.setitem(sys.modules, "keyring", types.SimpleNamespace(
+        set_password=fake.set_password,
+        get_password=lambda *_args: (_ for _ in ()).throw(RuntimeError("keychain locked")),
+        delete_password=fake.delete_password,
+    ))
+
     assert read_email_credential("email", "primary") == "sekret-1"
 
 

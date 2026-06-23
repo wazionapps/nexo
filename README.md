@@ -18,9 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.37.4` is the current packaged-runtime line. Patch release over v7.37.3 - product-gap reporting, stale briefing noise, and opportunity loops: Deep Sleep reports recurring NEXO product gaps through sanitized Desktop support tickets, self-audit preserves closed internal opportunities, the morning briefing reads item history before resurfacing decisions, and support-ticket tools match the live backend contract.
+Version `7.38.0` is the current packaged-runtime line. Minor release over v7.37.4 - closeout integrity and operator-facing discipline: proactive status on long opaque work, per-item verified state on batch closeouts, decision-readable first responses, an automatic production change ledger across a wider mutation surface, new closure/evidence/cost-secret audit modules, and a correction-learning gate that never blocks mid-work. New behavioral rules ship in shadow/log mode by default.
 
-Previously in `7.37.3`: patch release over v7.37.2 - release pipeline timeout hardening: the Brain publish workflow keeps the full pre-publish pytest gate, but now gives slow GitHub runners enough time to finish the suite and release readiness before public-channel publication.
+Previously in `7.37.4`: patch release over v7.37.3 - product-gap reporting, stale briefing noise, and opportunity loops: Deep Sleep reports recurring NEXO product gaps through sanitized Desktop support tickets, self-audit preserves closed internal opportunities, the morning briefing reads item history before resurfacing decisions, and support-ticket tools match the live backend contract.
 
 Previously in `7.37.2`: patch release over v7.37.1 - runtime shutdown and CI stability: session keepalive writers now stop before the shared SQLite connection closes, SQLite close is serialized under the write lock, and the full Brain test workflow has enough time to finish instead of cancelling slow-but-valid runs. The v7.37.2 tag attempt did not publish npm/GitHub release artifacts; v7.37.3 is the public line.
 

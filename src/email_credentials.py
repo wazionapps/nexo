@@ -16,6 +16,7 @@ from urllib.parse import quote, unquote
 
 KEYRING_SERVICE = "com.nexo.email"
 KEYRING_MARKER_PREFIX = "keyring://"
+HEADLESS_FALLBACK_SERVICE_SUFFIX = "::headless-fallback"
 
 
 def _db():
@@ -40,6 +41,10 @@ def _parse_marker(value: str) -> tuple[str, str] | None:
 
 def _account_name(service: str, key: str) -> str:
     return f"{service}:{key}"
+
+
+def _headless_fallback_ref(service: str, key: str) -> tuple[str, str]:
+    return f"{service}{HEADLESS_FALLBACK_SERVICE_SUFFIX}", key
 
 
 def _keyring_module():
@@ -78,6 +83,32 @@ def _write_db_value(service: str, key: str, value: str, notes: str) -> None:
     conn.commit()
 
 
+def _delete_db_value(service: str, key: str) -> None:
+    conn = _db()
+    conn.execute("DELETE FROM credentials WHERE service = ? AND key = ?", (service, key))
+    conn.commit()
+
+
+def _write_headless_fallback(service: str, key: str, value: str, notes: str) -> None:
+    fallback_service, fallback_key = _headless_fallback_ref(service, key)
+    _write_db_value(
+        fallback_service,
+        fallback_key,
+        value,
+        notes + " (headless fallback mirror)",
+    )
+
+
+def _read_headless_fallback(service: str, key: str) -> str:
+    fallback_service, fallback_key = _headless_fallback_ref(service, key)
+    return _read_stored_value(fallback_service, fallback_key)
+
+
+def _delete_headless_fallback(service: str, key: str) -> None:
+    fallback_service, fallback_key = _headless_fallback_ref(service, key)
+    _delete_db_value(fallback_service, fallback_key)
+
+
 def store_email_credential(service: str, key: str, value: str, notes: str = "email account password") -> str:
     """Store an email password and return the SQLite value written.
 
@@ -96,6 +127,7 @@ def store_email_credential(service: str, key: str, value: str, notes: str = "ema
     if keyring is not None:
         try:
             keyring.set_password(KEYRING_SERVICE, _account_name(service, key), value)
+            _write_headless_fallback(service, key, value, notes)
             stored = _marker(service, key)
             _write_db_value(service, key, stored, notes + " (stored in system keyring)")
             return stored
@@ -118,12 +150,13 @@ def read_email_credential(service: str, key: str) -> str:
 
     keyring = _keyring_module()
     if keyring is None:
-        return ""
+        return _read_headless_fallback(*parsed)
     try:
         value = keyring.get_password(KEYRING_SERVICE, _account_name(*parsed))
     except Exception:
-        return ""
-    return str(value or "")
+        value = ""
+    value = str(value or "")
+    return value or _read_headless_fallback(*parsed)
 
 
 def delete_email_credential(service: str, key: str) -> None:
@@ -140,9 +173,8 @@ def delete_email_credential(service: str, key: str) -> None:
         except Exception:
             pass
 
-    conn = _db()
-    conn.execute("DELETE FROM credentials WHERE service = ? AND key = ?", (service, key))
-    conn.commit()
+    _delete_db_value(service, key)
+    _delete_headless_fallback(service, key)
 
 
 def is_keyring_marker(value: str) -> bool:

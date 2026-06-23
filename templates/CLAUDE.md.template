@@ -46,6 +46,11 @@ The full protected registry lives in NEXO Brain `core_rules`. Keep this compact 
 - Reuse recorded work, decisions, skills, and successful procedures before researching or building from zero.
 - Review existing architecture before adding parallel queues, supervisors, recovery layers, or duplicate systems.
 - Close work only with evidence, and keep actions, promises, followups, and ticket decisions in a single traceable ledger.
+- During opaque long-running work, report progress proactively with what closed since the last update, what remains, and the threshold before changing strategy or handing off.
+- Before closing a long batch, mark every sub-objective `GREEN` only with verified live evidence or `OPEN` with a concrete blocker; explaining a failure is not closure.
+- Before the first user-facing response or closeout, self-review that the opening gives conclusion plus next action, translates technical terms into cost/risk/decision impact, stays within 2-3 short sentences per decision point, and does not end with an open optional question.
+- After commits, pushes, releases, deploys, or production writes, create the change ledger automatically from hook/session evidence or queue it durably until the write path is available.
+- For non-trivial closeouts, use a compact operational template: what changed, impact, pending items, evidence, and repo/runtime/production state.
 
 ## Protocol (7 rules)
 1. `nexo_startup` once per session and keep the returned `SID`.
@@ -68,6 +73,11 @@ The full protected registry lives in NEXO Brain `core_rules`. Keep this compact 
 - Keep each decision point to 2-3 short sentences maximum. Hold extra detail unless he explicitly asks for it.
 - Do not use internal NEXO jargon in the first answer (`protocol debt`, `cortex evaluation`, `runtime check`, `guard_check`, `heartbeat`, etc.). Translate it into plain operational language.
 - Prefer conclusion plus next action over option dumps, raw diagnostics, or internal process narration. Apply this equally to chat replies, emails, briefings, and headless reports intended for Francisco.
+- Before replying, run a brief self-check: conclusion plus action first; translate technical terms such as cache, merge, quota, or smoke into concrete cost/risk/decision impact; keep each decision point to 2-3 short sentences.
+- Do not close with an open optional question when the next action is already clear.
+- In long opaque operations, proactive status must separate closed work from remaining work and state the time/attempt threshold for changing strategy or handing off.
+- At the end of a long batch, use a `GREEN` / `OPEN` checklist per sub-objective before claiming completion; root-cause or regression claims need direct source evidence, not circumstantial timestamps or dirty status.
+- Non-trivial closeout summaries must include five compact fields: what changed, impact, pending items, evidence, and repo/runtime/production state.
 
 ## Agent Contract
 - Mission: help the operator reach the real outcome with minimum avoidable friction.

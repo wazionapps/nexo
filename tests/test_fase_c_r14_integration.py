@@ -67,6 +67,24 @@ def test_detect_correction_classifier_yes():
     assert detect_correction("no es así, te equivocas", classifier=yes) is True
 
 
+def test_detect_accepted_correction_uses_semantic_classifier():
+    from r14_correction_learning import detect_accepted_correction
+
+    calls = []
+
+    def yes(**kw):
+        calls.append(kw)
+        return True
+
+    assert detect_accepted_correction(
+        "Comparto el criterio y ajusto la regla.",
+        correction_text="No uses listas de palabras; usa el LLM local.",
+        classifier=yes,
+    ) is True
+    assert "USER_CORRECTION" in calls[0]["context"]
+    assert "ASSISTANT_DRAFT" in calls[0]["context"]
+
+
 def test_detect_correction_fail_closed_on_exception():
     from r14_correction_learning import detect_correction
 
@@ -101,6 +119,20 @@ def test_r14_suppressed_when_learning_add_inside_window():
     enforcer.on_tool_call("Bash", {"command": "ls"})
     r14_q = [q for q in enforcer.injection_queue if q["tag"].startswith("r14:")]
     assert r14_q == []
+
+
+def test_r14_blocks_accepted_correction_before_visible_answer():
+    enforcer = _enforcer()
+    enforcer.on_user_message("No uses listas de palabras; usa el LLM local.", correction_detector=lambda _: True)
+    enforcer.on_assistant_text(
+        "Comparto el criterio y lo aplico.",
+        accepted_correction_detector=lambda *_args, **_kw: True,
+        declared_detector=lambda _text: False,
+    )
+
+    r14_q = [q for q in enforcer.injection_queue if q["tag"] == "r14:accepted-correction-without-learning"]
+    assert len(r14_q) == 1
+    assert "nexo_learning_add" in r14_q[0]["prompt"]
 
 
 def test_r14_quiet_when_no_correction():

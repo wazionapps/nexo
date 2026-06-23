@@ -1,5 +1,24 @@
 # Changelog
 
+## [7.38.0] - 2026-06-23
+
+### Added - Closeout integrity and operator-facing discipline
+
+- **Proactive status on long, opaque work.** When a task runs long without visible progress, the protocol now expects a periodic plain-language status update instead of silence, so the operator is never left guessing during multi-step or cross-session work.
+- **Per-item verified state on batch closeouts.** Closing many items at once (tickets, files, tasks) now expects each item's individual verified state rather than a blanket "all done", so a batch closeout cannot hide an unverified item.
+- **Decision-readable first responses.** The first answer to a request is expected to lead with the decision, status, or recommendation in plain language — no internal jargon up front.
+- **Automatic production change ledger.** Production mutations are detected across a much wider surface — `gcloud builds/run/dns`, database migrations (alembic, prisma, sequelize, knex, rails, django, artisan), cPanel (`whmapi`/`uapi`/`cpapi`), and Cloudflare DNS — and a change-log entry is expected automatically at closeout.
+- **Compact operational closeout template.** Closeouts converge on a short, consistent operational format.
+- **New audit modules.** `closure_promise_audit` reconciles promises against actual closeouts, `evidence_matrix` structures closeout evidence, and `cost_secret_sweep` scans for accidental cost or secret exposure.
+- **New reusable skills.** `verify-prod-config` and `support-second-ticket-parallel-sweep` capture two recurring operational procedures.
+
+### Fixed - Correction-learning gate never blocks mid-work
+
+- **A detected user correction without a persisted learning no longer blocks `task_close`.** The earlier hard block was friction and could trap the agent mid-work; the close now SUCCEEDS and opens a non-blocking `missing_learning_after_correction` debt that a later `nexo_learning_add` resolves. An explicit no-learning justification still resolves the requirement directly.
+- **R14 acceptance gate** detects when a draft response verbally accepts a correction without persisting the rule, and its prompts now load from the core prompt catalog instead of inline literals.
+
+New behavioral rules ship in shadow/log mode by default and observe before they ever gate. Builds on 7.37.4 (product-gap reporting and briefing hygiene).
+
 ## [7.37.4] - 2026-06-18
 
 ### Fixed - Product-gap reporting, stale briefing noise, and opportunity loops

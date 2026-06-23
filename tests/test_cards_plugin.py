@@ -82,6 +82,40 @@ def test_cards_return_auth_error_without_token(monkeypatch):
     assert payload["error"]["type"] == "not_authenticated"
 
 
+def test_card_match_local_mandatory_support_second_ticket_without_token(monkeypatch):
+    monkeypatch.delenv("NEXO_DESKTOP_AUTH_TOKEN", raising=False)
+    monkeypatch.delenv("NEXO_CARDS_TOKEN", raising=False)
+    monkeypatch.delenv("NEXO_AUTH_TOKEN", raising=False)
+    monkeypatch.setattr(cards, "_shared_auth_candidates", lambda: [])
+
+    payload = json.loads(
+        cards.handle_card_match(
+            "segundo ticket de soporte cloud creditos mismo cliente 72h",
+            include_protocol="true",
+            locale="es",
+        )
+    )
+
+    assert payload["ok"] is True
+    assert payload["matches"][0]["skill_id"] == "SK-SUPPORT-SECOND-TICKET-PARALLEL-SWEEP"
+    assert payload["matches"][0]["mandatory"] is True
+    assert "subagentes paralelos" in payload["matches"][0]["protocol"]
+
+
+def test_card_match_merges_local_mandatory_support_second_ticket_with_backend(monkeypatch):
+    def fake_urlopen(_request, timeout):
+        return FakeResponse({"matches": [{"slug": "backend-card"}]})
+
+    monkeypatch.setenv("NEXO_DESKTOP_AUTH_TOKEN", "tok_cards")
+    monkeypatch.setattr(cards, "_urlopen", fake_urlopen)
+
+    payload = json.loads(cards.handle_card_match("support second ticket cloud credits", locale="en"))
+
+    assert payload["ok"] is True
+    assert payload["matches"][0]["slug"] == "support-second-ticket-parallel-sweep"
+    assert payload["matches"][1]["slug"] == "backend-card"
+
+
 def test_open_source_brain_does_not_embed_protocol_catalog():
     source = (ROOT / "src" / "plugins" / "cards.py").read_text(encoding="utf-8")
     package_json = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))

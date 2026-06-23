@@ -39,6 +39,7 @@ _NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 INBOX_CHECK_THRESHOLD_SECONDS = int(
     os.environ.get("NEXO_INBOX_CHECK_THRESHOLD_SECONDS", "60")
 )
+AUTO_GUARD_TTL_SECONDS = int(os.environ.get("NEXO_AUTO_GUARD_TTL_SECONDS", "300"))
 
 
 def _resolve_sid_from_payload(payload: dict) -> str:
@@ -238,11 +239,20 @@ def _extract_command(payload: dict) -> str:
 
 def _is_production_mutation_command(cmd: str) -> bool:
     patterns = (
+        r"\bgit\s+push\s+origin\s+main\b(?!.*--dry-run)",
+        r"\bfirebase\s+deploy\b(?!.*--dry-run)",
+        r"\bshopify\s+theme\s+push\b(?!.*--dry-run)",
+        r"\bgh\s+pr\s+merge\b(?!.*--dry-run)",
+        r"\baz\s+vm\s+create\b(?!.*--dry-run)",
+        r"\bgcloud\s+run\s+deploy\b(?!.*--dry-run)",
         r"\bgit\s+push\b(?!.*--dry-run)(?=.*\b(?:origin\s+)?(?:main|master|stable|release)\b)",
+        r"\bgit\s+push\b(?!.*--dry-run)(?=.*--tags\b)",
+        r"\bgh\s+release\s+(?:create|upload|edit)\b",
         r"\bgcloud\s+builds\s+submit\b",
         r"\bgcloud\s+builds\s+triggers\s+run\b",
         r"\bgcloud\s+run\s+(?:deploy|services\s+update|jobs\s+deploy|jobs\s+update)\b",
         r"\bgcloud\s+dns\s+record-sets\s+transaction\s+execute\b",
+        r"\b(?:alembic\s+upgrade|prisma\s+migrate\s+deploy|sequelize\s+db:migrate|knex\s+migrate:latest|rails\s+db:migrate|python(?:3)?\s+manage\.py\s+migrate|php\s+artisan\s+migrate)\b",
         r"\bg(?:sutil|cloud\s+storage)\b.*\b(?:cp|rsync)\b.*\b(?:release|stable|cdn|bucket|buckets)\b",
         r"\b(?:rsync|scp)\b(?!.*--dry-run).+\s+\S+:(?:/[^ \n\r;]*)(?:public_html|httpdocs|www|webroot|home/nexodesk)\b",
         r"\bssh\b[^'\"]*['\"][^'\"]*(?:sed\s+-i|tee\s+|>\s*\S|>>\s*\S|rm\s+-|mv\s+|cp\s+)[^'\"]*(?:public_html|httpdocs|/var/www|/opt/|/home/nexodesk)[^'\"]*['\"]",
@@ -251,6 +261,167 @@ def _is_production_mutation_command(cmd: str) -> bool:
         r"\bcurl\b(?=.*api\.cloudflare\.com/client/v4/zones/.*/dns_records)(?=.*(?:-X|--request)\s*(?:POST|PUT|PATCH|DELETE)\b)",
         r"\bcws-upload(?:\.sh)?\b.*\bpublish\b",
         r"\bnpm\s+publish\b",
+    )
+    return any(re.search(pattern, cmd, re.IGNORECASE | re.DOTALL) for pattern in patterns)
+
+
+def _mutation_files(payload: dict) -> list[str]:
+    if not _is_shared_mutation_payload(payload):
+        return []
+    tool_input = _tool_input(payload)
+    files: set[str] = set()
+    for key in ("file_path", "path", "files", "paths"):
+        files.update(_split_files(tool_input.get(key)))
+    return sorted(files)
+
+
+def _project_atlas_path() -> Path:
+    try:
+        import paths  # type: ignore
+
+        return paths.brain_dir() / "project-atlas.json"
+    except Exception:
+        return _NEXO_HOME / "brain" / "project-atlas.json"
+
+
+def _atlas_projects(atlas: dict) -> dict:
+    if isinstance(atlas.get("projects"), dict):
+        return atlas["projects"]
+    return {key: value for key, value in atlas.items() if isinstance(value, dict) and not str(key).startswith("_")}
+
+
+def _iter_atlas_locations(entry: dict):
+    locations = entry.get("locations")
+    if isinstance(locations, dict):
+        for value in locations.values():
+            if isinstance(value, str) and value.strip():
+                yield value.strip()
+    for key in ("repo", "local", "theme_local", "main_repo", "mcp_server"):
+        value = entry.get(key)
+        if isinstance(value, str) and value.strip():
+            yield value.strip()
+
+
+def _resolve_area_from_atlas(files: list[str]) -> str:
+    if not files:
+        return ""
+    try:
+        atlas = json.loads(_project_atlas_path().read_text(encoding="utf-8"))
+    except Exception:
+        return ""
+    expanded_files = [str(Path(item).expanduser()) for item in files if item]
+    best: tuple[int, str] = (0, "")
+    for project_key, entry in _atlas_projects(atlas).items():
+        if not isinstance(entry, dict):
+            continue
+        for raw_location in _iter_atlas_locations(entry):
+            location = str(Path(raw_location.replace("~", str(Path.home()))).expanduser())
+            if not location or location == ".":
+                continue
+            for filepath in expanded_files:
+                if filepath == location or filepath.startswith(location.rstrip("/") + "/"):
+                    score = len(location)
+                    if score > best[0]:
+                        best = (score, str(project_key))
+    if best[1]:
+        return best[1]
+    joined = "\n".join(expanded_files).lower()
+    if "/.nexo/core/" in joined or "/documents/_phpstormprojects/nexo/" in joined:
+        return "nexo"
+    return ""
+
+
+def _recent_guard_check_exists(sid: str, files: list[str], area: str, now: float | None = None) -> bool:
+    if not sid:
+        return False
+    try:
+        from db import get_db  # type: ignore
+    except Exception:
+        return False
+    cutoff = float(now) if now is not None else time.time()
+    cutoff -= AUTO_GUARD_TTL_SECONDS
+    try:
+        conn = get_db()
+        rows = conn.execute(
+            "SELECT files, area, strftime('%s', created_at) AS created_epoch "
+            "FROM guard_checks WHERE session_id = ? ORDER BY id DESC LIMIT 50",
+            (sid,),
+        ).fetchall()
+    except Exception:
+        return False
+    file_tokens = {Path(item).name for item in files if item}
+    file_tokens.update(item for item in files if item)
+    for row in rows:
+        try:
+            created_epoch = float(row["created_epoch"] or 0)
+        except Exception:
+            created_epoch = 0.0
+        if created_epoch and created_epoch < cutoff:
+            continue
+        row_area = str(row["area"] or "").strip()
+        row_files = str(row["files"] or "")
+        if area and row_area == area:
+            return True
+        if any(token and token in row_files for token in file_tokens):
+            return True
+    return False
+
+
+def _record_auto_guard_debt(sid: str, evidence: str) -> None:
+    try:
+        from db import create_protocol_debt  # type: ignore
+
+        create_protocol_debt(
+            sid or "unknown",
+            "auto_guard_check_failed",
+            severity="error",
+            evidence=evidence[:4000],
+        )
+    except Exception:
+        pass
+
+
+def _queue_auto_guard_check(payload: dict, sid: str, now: float | None = None) -> str | None:
+    files = _mutation_files(payload)
+    if not files:
+        return None
+    area = _resolve_area_from_atlas(files)
+    if _recent_guard_check_exists(sid, files, area, now=now):
+        return None
+    guard_payload = {
+        "files": ",".join(files),
+        "area": area,
+        "project_hint": area,
+        "include_schemas": "true",
+        "enforce_runtime_core_block": "true",
+    }
+    try:
+        from mcp_write_queue import enqueue_write  # type: ignore
+
+        queued = enqueue_write("guard_check", guard_payload, priority="high", wait=True, timeout_ms=2500)
+    except Exception as exc:
+        evidence = f"PostToolUse auto guard_check could not enqueue: {type(exc).__name__}: {exc}"
+        _record_auto_guard_debt(sid, evidence)
+        return append_operator_language_contract(
+            "No he podido registrar automáticamente la revisión previa del cambio; queda marcada para revisión antes del cierre."
+        )
+    error_text = str(queued.get("last_error") or queued.get("error") or "")
+    if not queued.get("accepted") or queued.get("status") in {"failed", "dead_letter"} or "Unknown tool" in error_text:
+        evidence = f"PostToolUse auto guard_check failed for files={files}, area={area}: {queued}"
+        _record_auto_guard_debt(sid, evidence)
+        return append_operator_language_contract(
+            "No he podido registrar automáticamente la revisión previa del cambio; queda marcada para revisión antes del cierre."
+        )
+    return None
+
+
+def _is_release_publication_command(cmd: str) -> bool:
+    patterns = (
+        r"\bgit\s+push\b(?!.*--dry-run)(?=.*--tags\b)",
+        r"\bnpm\s+publish\b",
+        r"\bgh\s+release\s+(?:create|upload|edit)\b",
+        r"\bupload-release\.sh\b",
+        r"\bcws-upload(?:\.sh)?\b.*\bpublish\b",
     )
     return any(re.search(pattern, cmd, re.IGNORECASE | re.DOTALL) for pattern in patterns)
 
@@ -335,6 +506,27 @@ def _task_close_payload_has_change_trace(payload: dict) -> bool:
     return bool(files and what and why)
 
 
+def _change_log_has_production_release_refs(payload: dict) -> bool:
+    tool_input = _tool_input(payload)
+    try:
+        joined = json.dumps(tool_input, ensure_ascii=False).lower()
+    except Exception:
+        joined = str(tool_input).lower()
+    has_production_scope = (
+        str(tool_input.get("scope") or "").strip().lower() == "production"
+        or "scope=production" in joined
+        or '"scope": "production"' in joined
+        or '"scope":"production"' in joined
+    )
+    has_commit = bool(
+        re.search(r"\bcommit(?:_ref)?\b", joined)
+        and re.search(r"\b[0-9a-f]{7,40}\b", joined, re.IGNORECASE)
+    )
+    has_tag = bool(re.search(r"\b(?:tag|version)\b", joined) and re.search(r"\bv?\d+\.\d+\.\d+(?:[-+][a-z0-9_.-]+)?\b", joined, re.IGNORECASE))
+    has_release_url = bool(re.search(r"https://github\.com/[^ \n\r\t'\"<>]+/releases/(?:tag|download)/[^ \n\r\t'\"<>]+", joined, re.IGNORECASE))
+    return has_production_scope and (has_commit or has_tag or has_release_url)
+
+
 def _queue_change_log_from_task_close(payload: dict, sid: str, pending: dict) -> bool:
     if not _task_close_payload_has_change_trace(payload):
         return False
@@ -356,6 +548,94 @@ def _queue_change_log_from_task_close(payload: dict, sid: str, pending: dict) ->
             "verify": str(tool_input.get("change_verify") or tool_input.get("verification") or tool_input.get("evidence") or ""),
             "commit_ref": str(tool_input.get("commit_ref") or ""),
         },
+        priority="high",
+    )
+    return bool(queued.get("accepted"))
+
+
+def _extract_workdir(payload: dict) -> str:
+    tool_input = _tool_input(payload)
+    for key in ("cwd", "workdir", "working_dir"):
+        value = tool_input.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ""
+
+
+def _git_head_change_context(workdir: str) -> dict:
+    if not workdir:
+        return {}
+    path = Path(workdir)
+    if not path.is_dir():
+        return {}
+    try:
+        inside = subprocess.run(
+            ["git", "rev-parse", "--is-inside-work-tree"],
+            cwd=str(path),
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+        if inside.returncode != 0 or inside.stdout.strip() != "true":
+            return {}
+        head = subprocess.run(
+            ["git", "rev-parse", "--short=12", "HEAD"],
+            cwd=str(path),
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+        files = subprocess.run(
+            ["git", "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"],
+            cwd=str(path),
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+    except Exception:
+        return {}
+    result: dict[str, str] = {}
+    if head.returncode == 0 and head.stdout.strip():
+        result["commit_ref"] = head.stdout.strip()
+    if files.returncode == 0 and files.stdout.strip():
+        result["files"] = ", ".join(line.strip() for line in files.stdout.splitlines() if line.strip())
+    return result
+
+
+def _production_change_log_payload(payload: dict, sid: str) -> dict:
+    cmd = _extract_command(payload)
+    tool_text = _extract_tool_text(payload)
+    context = _git_head_change_context(_extract_workdir(payload))
+    combined = "\n".join(part for part in (cmd, tool_text) if part)
+    version_match = re.search(r"\bv?\d+\.\d+\.\d+(?:[-+][A-Za-z0-9_.-]+)?\b", combined)
+    sha_match = re.search(r"\b[0-9a-f]{7,40}\b", combined, re.IGNORECASE)
+    files = context.get("files") or "produccion: mutacion detectada por comando"
+    commit_ref = context.get("commit_ref") or (sha_match.group(0)[:12] if sha_match else "")
+    evidence = tool_text.strip()[:1000] if tool_text.strip() else "PostToolUse detecto comando de produccion; pendiente de evidencia adicional en task_close si aplica."
+    what = "Cambio de produccion detectado automaticamente"
+    if version_match:
+        what += f" ({version_match.group(0)})"
+    return {
+        "session_id": sid,
+        "files": files,
+        "what_changed": what,
+        "why": cmd[:500],
+        "triggered_by": "PostToolUse automatic production mutation detector",
+        "affects": "produccion",
+        "risks": "registro automatico conservador; revisar si el comando fue un falso positivo",
+        "verify": evidence,
+        "commit_ref": commit_ref,
+    }
+
+
+def _queue_change_log_from_production_mutation(payload: dict, sid: str) -> bool:
+    try:
+        from mcp_write_queue import enqueue_write  # type: ignore
+    except Exception:
+        return False
+    queued = enqueue_write(
+        "change_log",
+        _production_change_log_payload(payload, sid),
         priority="high",
     )
     return bool(queued.get("accepted"))
@@ -493,11 +773,19 @@ def check_production_change_log_closeout(payload: dict, sid: str) -> str | None:
     pending_path = _pending_change_log_path(sid)
     rotation_followup_id = _ensure_webroot_backup_rotation_followup(payload, sid)
     if _is_change_log_tool(tool_name):
+        pending = _read_json(pending_path)
+        if pending.get("requires_explicit_production_change_log") and not _change_log_has_production_release_refs(payload):
+            message = (
+                "Cierre pendiente: el cambio de release/tag/publicación requiere `nexo_change_log(...)` "
+                "con `scope=production` y una referencia verificable a commit, tag o URL de release."
+            )
+            return append_operator_language_contract(message)
         pending_path.unlink(missing_ok=True)
         return None
 
     cmd = _extract_command(payload)
     if cmd and _is_production_mutation_command(cmd):
+        is_release_publication = _is_release_publication_command(cmd)
         _write_json(
             pending_path,
             {
@@ -506,24 +794,200 @@ def check_production_change_log_closeout(payload: dict, sid: str) -> str | None:
                 "tool_name": tool_name,
                 "created_at": time.time(),
                 "triggered_by": "PostToolUse production mutation detector",
+                "requires_explicit_production_change_log": is_release_publication,
             },
         )
+        if not is_release_publication and _queue_change_log_from_production_mutation(payload, sid):
+            pending_path.unlink(missing_ok=True)
+            return None
 
     pending = _read_json(pending_path)
     if not pending:
         return None
 
-    if _is_task_close_tool(tool_name) and _queue_change_log_from_task_close(payload, sid, pending):
+    if (
+        _is_task_close_tool(tool_name)
+        and not pending.get("requires_explicit_production_change_log")
+        and _queue_change_log_from_task_close(payload, sid, pending)
+    ):
         pending_path.unlink(missing_ok=True)
         return None
 
-    message = (
-        "Cierre pendiente: se detectó una señal de despliegue/publicación de producción y todavía no consta "
-        "`nexo_change_log(...)` ni un `nexo_task_close(...)` con archivos, motivo y verificación suficiente. "
-        "Registra el cambio antes de declarar la tarea cerrada."
-    )
+    if pending.get("requires_explicit_production_change_log"):
+        message = (
+            "Cierre pendiente: se detectó una publicación/tag/release. Antes de cerrar debe constar "
+            "`nexo_change_log(...)` con `scope=production` y referencia a commit, tag o URL de release."
+        )
+    else:
+        message = (
+            "Cierre pendiente: se detectó una señal de despliegue/publicación de producción y todavía no consta "
+            "`nexo_change_log(...)` ni un `nexo_task_close(...)` con archivos, motivo y verificación suficiente. "
+            "Registra el cambio antes de declarar la tarea cerrada."
+        )
     if rotation_followup_id:
         message += f" Además, el canary webroot creó el followup de rotación {rotation_followup_id}."
+    return append_operator_language_contract(message)
+
+
+def _domain_error_cascade_path(sid: str) -> Path:
+    safe_sid = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in (sid or "unknown"))
+    return _production_closeout_dir() / f"domain-error-cascade-{safe_sid}.json"
+
+
+def _payload_error_text(payload: dict) -> str:
+    parts = [_extract_command(payload), _extract_tool_text(payload)]
+    for key in ("stderr", "stdout", "output", "tool_response"):
+        value = payload.get(key)
+        if isinstance(value, str):
+            parts.append(value)
+    for key in ("exit_code", "returncode", "status"):
+        value = payload.get(key)
+        if value not in (None, "", 0, "0", "success", "ok"):
+            parts.append(f"{key}={value}")
+    return "\n".join(part for part in parts if part)
+
+
+def _detect_error_domain(payload: dict) -> str:
+    text = _payload_error_text(payload)
+    if not text:
+        return ""
+    if not re.search(
+        r"\b(error|failed|failure|traceback|exception|timeout|denied|quota|resource_exhausted|429|5\d\d|could not|no se pudo|fall[oó])\b",
+        text,
+        re.IGNORECASE,
+    ):
+        return ""
+    domain_patterns = (
+        ("gcloud", r"\b(gcloud|cloudbuild|cloud\s+build|cloud\s+run|cloud\s+sql|googleapis|resource_exhausted)\b"),
+        ("credits", r"\b(credits?|billing|stripe|saldo|recarga|quota|coste|cost)\b"),
+        ("imap", r"\b(imap|mailbox|email|correo|mxroute|smtp)\b"),
+        ("recovery", r"\b(recovery|carrito|abandon|checkout|whatsappqueue|queuedrain)\b"),
+        ("cloud", r"\b(cloud|dns|cloudflare|secret\s+manager|secretmanager|cloud\s+storage)\b"),
+    )
+    for domain, pattern in domain_patterns:
+        if re.search(pattern, text, re.IGNORECASE):
+            return domain
+    return "general"
+
+
+def check_domain_error_cascade(payload: dict, sid: str, now: float | None = None) -> str | None:
+    domain = _detect_error_domain(payload)
+    if not domain:
+        return None
+    current = float(now) if now is not None else time.time()
+    path = _domain_error_cascade_path(sid or "unknown")
+    state = _read_json(path) or {"sid": sid or "unknown", "domains": {}}
+    domains = state.setdefault("domains", {})
+    events = [
+        item for item in domains.get(domain, [])
+        if isinstance(item, dict) and current - float(item.get("ts") or 0) <= 1800
+    ]
+    events.append({"ts": current, "tool": _tool_name(payload), "command": _extract_command(payload)[:240]})
+    domains[domain] = events[-5:]
+    _write_json(path, state)
+    if len(events) < 2:
+        return None
+    last_prompt = float(state.get("last_prompted", {}).get(domain, 0) if isinstance(state.get("last_prompted"), dict) else 0)
+    if current - last_prompt < 900:
+        return None
+    prompted = state.setdefault("last_prompted", {})
+    prompted[domain] = current
+    _write_json(path, state)
+    message = (
+        f"Cascada detectada en `{domain}`: van {len(events)} errores del mismo dominio en la ventana reciente. "
+        "Antes de seguir parcheando en serie, abre subagentes en paralelo con piezas independientes: "
+        "1) causa raíz/logs, 2) credenciales/cuotas/configuración, 3) fix mínimo + prueba de cierre. "
+        "Cada subagente debe recibir alcance acotado y parar si no puede verificar."
+    )
+    return append_operator_language_contract(message)
+
+
+_SUPPORT_TICKET_TOOLS = {
+    "nexo_support_ticket_create",
+    "mcp__nexo__nexo_support_ticket_create",
+    "nexo_support_ticket_message",
+    "mcp__nexo__nexo_support_ticket_message",
+}
+
+
+def _support_ticket_failure_domain(payload: dict) -> str:
+    if _tool_name(payload) not in _SUPPORT_TICKET_TOOLS:
+        return ""
+    try:
+        text = json.dumps(_tool_input(payload), ensure_ascii=False)
+    except Exception:
+        text = str(_tool_input(payload) or "")
+    combined = "\n".join(part for part in (text, _extract_tool_text(payload)) if part)
+    if not combined:
+        return ""
+    domain_patterns = (
+        ("cloud", r"\b(cloud|gcloud|cloudflare|dns|provision(?:ing)?|secret\s*manager|secretmanager|cloud\s*run|cloud\s*sql)\b"),
+        ("credits", r"\b(credits?|cr[eé]ditos?|billing|saldo|stripe|checkout|portal|quota|cuota|coste|cost)\b"),
+        ("voice", r"\b(voice|voz|vapi|elevenlabs|audio|tts|stt)\b"),
+        ("image", r"\b(image|imagen|imagenes|im[aá]genes|fal|replicate|gpt-image|render)\b"),
+        ("provisioning", r"\b(provision(?:ing)?|alta|tenant|workspace|account|cuenta|api\s*key|scope|token)\b"),
+    )
+    for domain, pattern in domain_patterns:
+        if re.search(pattern, combined, re.IGNORECASE):
+            return domain
+    return ""
+
+
+def _support_ticket_client_key(payload: dict) -> str:
+    tool_input = _tool_input(payload)
+    for key in ("client_message_id", "ticket_id", "customer_id", "account_id", "shop_id", "tenant_id"):
+        value = tool_input.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()[:160]
+    subject = str(tool_input.get("subject") or tool_input.get("title") or "").strip()
+    message = str(tool_input.get("message") or tool_input.get("body") or "").strip()
+    seed = (subject or message or _extract_tool_text(payload) or _extract_command(payload)).strip()
+    return seed[:160]
+
+
+def _support_ticket_cascade_path(sid: str) -> Path:
+    safe_sid = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in (sid or "unknown"))
+    return _production_closeout_dir() / f"support-ticket-cascade-{safe_sid}.json"
+
+
+def check_support_ticket_second_failure_sweep(payload: dict, sid: str, now: float | None = None) -> str | None:
+    domain = _support_ticket_failure_domain(payload)
+    if not domain:
+        return None
+    current = float(now) if now is not None else time.time()
+    path = _support_ticket_cascade_path(sid or "unknown")
+    state = _read_json(path) or {"sid": sid or "unknown", "domains": {}}
+    domains = state.setdefault("domains", {})
+    events = [
+        item for item in domains.get(domain, [])
+        if isinstance(item, dict) and current - float(item.get("ts") or 0) <= 72 * 3600
+    ]
+    client_key = _support_ticket_client_key(payload)
+    events.append(
+        {
+            "ts": current,
+            "tool": _tool_name(payload),
+            "client": client_key,
+            "summary": str(_tool_input(payload).get("subject") or _tool_input(payload).get("title") or "")[:240],
+        }
+    )
+    domains[domain] = events[-20:]
+    _write_json(path, state)
+    distinct_clients = {str(item.get("client") or "").strip() for item in events if str(item.get("client") or "").strip()}
+    if len(events) < 2 or len(distinct_clients) < 2:
+        return None
+    prompted = state.setdefault("last_prompted", {})
+    last_prompt = float(prompted.get(domain, 0) if isinstance(prompted, dict) else 0)
+    if last_prompt and current - last_prompt < 6 * 3600:
+        return None
+    prompted[domain] = current
+    _write_json(path, state)
+    message = (
+        f"Segundo fallo de cliente en `{domain}` detectado dentro de 72h. "
+        "Antes de responder el siguiente ticket, activa `SK-SUPPORT-SECOND-TICKET-PARALLEL-SWEEP` "
+        "y lanza 2-3 subagentes en paralelo sobre el flujo completo: idempotencia/reservas, "
+        "scope tokens/configuración, errores cacheados/logs y smoke final. Cierra el P1 en la misma tanda."
+    )
     return append_operator_language_contract(message)
 
 
@@ -662,9 +1126,12 @@ def main() -> int:
     try:
         sid = _resolve_sid_from_payload(payload)
         reminder = check_inbox_and_emit_reminder(sid)
+        auto_guard_message = _queue_auto_guard_check(payload, sid)
         change_log_message = check_production_change_log_closeout(payload, sid)
         post_change_trace_message = check_post_change_trace_closeout(payload, sid)
         shared_scope_message = check_shared_scope_closeout(payload)
+        cascade_message = check_domain_error_cascade(payload, sid)
+        support_second_ticket_message = check_support_ticket_second_failure_sweep(payload, sid)
         g1_message: str | None = None
         try:
             from g1_enforcer import check_response_contract_gate  # type: ignore
@@ -674,9 +1141,12 @@ def main() -> int:
         combined = _combine_system_messages(
             protocol_message,
             reminder,
+            auto_guard_message,
             change_log_message,
             post_change_trace_message,
             shared_scope_message,
+            cascade_message,
+            support_second_ticket_message,
             g1_message,
         )
         if combined:

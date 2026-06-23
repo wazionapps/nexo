@@ -11,7 +11,19 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MATRIX = ROOT / "config" / "live-source-matrix.json"
-REQUIRED_FIELDS = ("repo", "branch", "server", "cloud_project", "live_table", "time_window")
+REQUIRED_FIELDS = (
+    "source_of_truth",
+    "repo",
+    "path",
+    "branch",
+    "server",
+    "credential_or_port",
+    "cloud_project",
+    "runtime_environment",
+    "live_table",
+    "minimum_smoke",
+    "time_window",
+)
 
 
 def load_matrix(path: Path) -> dict:
@@ -46,10 +58,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--domain", required=True, help="Domain key, e.g. wazion or vicshop.systeam.es")
     parser.add_argument("--matrix-file", default=str(DEFAULT_MATRIX))
     parser.add_argument("--repo", default="")
+    parser.add_argument("--path", default="")
     parser.add_argument("--branch", default="")
     parser.add_argument("--server", default="")
+    parser.add_argument("--credential-or-port", default="", dest="credential_or_port")
     parser.add_argument("--cloud-project", default="", dest="cloud_project")
+    parser.add_argument("--runtime-environment", default="", dest="runtime_environment")
     parser.add_argument("--table", default="", dest="live_table")
+    parser.add_argument("--minimum-smoke", default="", dest="minimum_smoke")
     parser.add_argument("--window", default="", dest="time_window")
     parser.add_argument("--print", action="store_true", dest="print_entry")
     args = parser.parse_args(argv)
@@ -62,10 +78,14 @@ def main(argv: list[str] | None = None) -> int:
 
     expected = {
         "repo": args.repo,
+        "path": args.path,
         "branch": args.branch,
         "server": args.server,
+        "credential_or_port": args.credential_or_port,
         "cloud_project": args.cloud_project,
+        "runtime_environment": args.runtime_environment,
         "live_table": args.live_table,
+        "minimum_smoke": args.minimum_smoke,
         "time_window": args.time_window,
     }
     failures = validate_entry(args.domain, entry, expected)
@@ -82,7 +102,10 @@ def main(argv: list[str] | None = None) -> int:
             "OK: live-source matrix fixed "
             f"domain={args.domain} repo={entry['repo']} branch={entry['branch']} "
             f"server={entry['server']} cloud_project={entry['cloud_project']} "
-            f"live_table={entry['live_table']} time_window={entry['time_window']}"
+            f"credential_or_port={entry['credential_or_port']} "
+            f"runtime_environment={entry['runtime_environment']} "
+            f"live_table={entry['live_table']} minimum_smoke={entry['minimum_smoke']} "
+            f"time_window={entry['time_window']}"
         )
     return 0
 

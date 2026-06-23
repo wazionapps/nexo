@@ -1,36 +1,82 @@
 {
   "domains": {
     "nexo": {
+      "source_of_truth": "NEXO Brain source repo plus live runtime DB",
       "repo": "/Users/franciscoc/Documents/_PhpstormProjects/nexo",
+      "path": "/Users/franciscoc/Documents/_PhpstormProjects/nexo",
       "branch": "main",
       "server": "local-runtime",
+      "credential_or_port": "/Users/franciscoc/.nexo/runtime/data/nexo.db",
       "cloud_project": "none",
+      "runtime_environment": "local Python/Node runtime with NEXO_HOME=/Users/franciscoc/.nexo",
       "live_table": "/Users/franciscoc/.nexo/runtime/data/nexo.db",
+      "minimum_smoke": "python3 scripts/nexo-live-source-preflight.py --domain nexo",
       "time_window": "last_24h_or_explicit_incident_window"
     },
     "recambios-bmw": {
+      "source_of_truth": "Shopify live theme plus vicshop email server",
       "repo": "/Users/franciscoc/Documents/_PhpstormProjects/recambiosyaccesoriosbmw.com",
+      "path": "Shopify theme 179656687946",
       "branch": "main",
       "server": "Shopify theme 179656687946 + vicshop email server",
+      "credential_or_port": "shopify/admin-api-token + cl105e.mundiserver.com:85",
       "cloud_project": "recambiosyaccesoriosbmw",
+      "runtime_environment": "Shopify live theme and Mundiserver PHP cron surface",
       "live_table": "vicsys + Shopify live theme",
+      "minimum_smoke": "Shopify asset/read smoke plus public storefront HTTP 200",
       "time_window": "last_24h_or_explicit_incident_window"
     },
     "vicshop.systeam.es": {
+      "source_of_truth": "Mundiserver production docroot",
       "repo": "server:/home/vicshopsysteam/public_html",
+      "path": "/home/vicshopsysteam/public_html",
       "branch": "main",
       "server": "cl105e.mundiserver.com:85 /home/vicshopsysteam/public_html",
+      "credential_or_port": "servidor-web-vicshopsysteam/ssh on port 85",
       "cloud_project": "none",
+      "runtime_environment": "Mundiserver PHP web runtime",
       "live_table": "vicsys on Mundiserver/MySQL",
+      "minimum_smoke": "curl public endpoint or SSH php/web smoke against production docroot",
       "time_window": "last_24h_or_explicit_incident_window"
     },
     "wazion": {
+      "source_of_truth": "WAzion main repo, Cloud Run backend, and WAzion WhatsApp VPS",
       "repo": "/Users/franciscoc/Documents/_PhpstormProjects/WAzion/WAzion",
+      "path": "/Users/franciscoc/Documents/_PhpstormProjects/WAzion/WAzion + /opt/wazion-wa",
       "branch": "main",
       "server": "Cloud Run chrome-extension-op-google + wazion-whatsapp-vps",
+      "credential_or_port": "bd-wazion-cloud-sql-proxy/* + gcloud recambiosyaccesoriosbmw/europe-west1-b",
       "cloud_project": "recambiosyaccesoriosbmw",
+      "runtime_environment": "Cloud Run chrome-extension-op-google and PM2 on wazion-whatsapp-vps",
       "live_table": "allinoneapp_main",
+      "minimum_smoke": "Cloud Run public health plus gcloud SSH pm2/x-proxy/nexo-alert-state check",
       "time_window": "last_24h_or_explicit_incident_window"
+    },
+    "cloudflare": {
+      "source_of_truth": "Cloudflare live zone configuration, DNS records, Workers/routes, rulesets, SSL/TLS and cache settings",
+      "repo": "Cloudflare account live API/dashboard",
+      "path": "zones/routes/rulesets/workers for the exact domain under diagnosis",
+      "branch": "live",
+      "server": "Cloudflare API for the target zone",
+      "credential_or_port": "cloudflare/* token with zone read scope",
+      "cloud_project": "none",
+      "runtime_environment": "Cloudflare edge live configuration",
+      "live_table": "zone DNS records, worker routes, rulesets and SSL/TLS settings",
+      "minimum_smoke": "query exact zone plus DNS/routes/rulesets and curl affected public URL",
+      "time_window": "current_live_state_plus_explicit_incident_window"
+    },
+    "billing": {
+      "source_of_truth": "Existing product catalog, pricing configuration and provider billing records",
+      "repo": "/Users/franciscoc/Documents/_PhpstormProjects/nexo-desktop-web",
+      "path": "product catalog, pricing config, Stripe/provider dashboard and live DB records",
+      "branch": "main",
+      "server": "nexo-desktop.com production backend plus provider billing dashboard/API",
+      "credential_or_port": "nexo-desktop-web production credentials + provider billing credentials",
+      "cloud_project": "none",
+      "runtime_environment": "Laravel production billing backend and provider billing surface",
+      "live_table": "plans/prices/subscriptions/invoices/credits ledger",
+      "minimum_smoke": "read catalog/config and one live provider/DB record before quoting or diagnosing billing",
+      "time_window": "current_catalog_config_plus_explicit_invoice_window"
     }
   }
 }

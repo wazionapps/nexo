@@ -31,12 +31,16 @@ except ImportError:  # pragma: no cover  — fallback for editable installs with
 try:
     from r14_correction_learning import (
         detect_correction as _detect_correction,
+        detect_accepted_correction as _detect_accepted_correction,
         INJECTION_PROMPT_TEMPLATE as _R14_PROMPT,
+        ACCEPTANCE_INJECTION_PROMPT_TEMPLATE as _R14_ACCEPTANCE_PROMPT,
         DEFAULT_WINDOW_TOOL_CALLS as _R14_WINDOW,
     )
 except ImportError:  # pragma: no cover
     _detect_correction = None  # type: ignore
+    _detect_accepted_correction = None  # type: ignore
     _R14_PROMPT = ""  # type: ignore
+    _R14_ACCEPTANCE_PROMPT = ""  # type: ignore
     _R14_WINDOW = 3
 
 try:
@@ -981,7 +985,78 @@ class HeadlessEnforcer:
         self._r14_correction_seen_for_turn = False
         self._r14_correction_text = ""
 
-    def on_assistant_text(self, text: str, *, declared_detector=None, has_open_task=None):
+    def _learning_add_seen_for_current_turn(self) -> bool:
+        current_turn = int(self.user_message_count or 0)
+        return any(
+            self._tool_user_message_index.get(tool, -1) >= current_turn
+            for tool in ("nexo_learning_add",)
+        )
+
+    def _record_missing_learning_after_accepted_correction(self) -> None:
+        if not self._session_id:
+            return
+        try:
+            from db import create_protocol_debt, list_protocol_debts, record_session_correction_requirement  # type: ignore
+
+            record_session_correction_requirement(
+                self._session_id,
+                self._r14_correction_text,
+                source="r14_accepted_correction_gate",
+            )
+            existing = list_protocol_debts(
+                status="open",
+                session_id=self._session_id,
+                debt_type="missing_learning_after_correction",
+                limit=1,
+            )
+            if not existing:
+                create_protocol_debt(
+                    self._session_id,
+                    "missing_learning_after_correction",
+                    severity="error",
+                    evidence=(
+                        "R14 detected that the assistant accepted a user correction "
+                        "before nexo_learning_add was called."
+                    ),
+                )
+        except Exception:
+            pass
+
+    def _check_r14_accepted_correction(self, text: str, *, accepted_detector=None) -> None:
+        if not self._r14_correction_seen_for_turn:
+            return
+        if self._learning_add_seen_for_current_turn():
+            return
+        detector = accepted_detector if accepted_detector is not None else _detect_accepted_correction
+        if detector is None:
+            return
+        mode = self._guardian_rule_mode("R14_correction_learning")
+        if mode == "off":
+            return
+        try:
+            accepted = bool(
+                detector(
+                    text or "",
+                    correction_text=self._r14_correction_text,
+                )
+            )
+        except Exception as exc:  # noqa: BLE001
+            _logger.warning("R14 accepted-correction detector failed (%s); staying silent", exc)
+            accepted = False
+        if not accepted:
+            return
+        if mode == "shadow":
+            _logger.info("[R14 SHADOW] would block accepted correction without learning_add")
+            return
+        self._enqueue(
+            _R14_ACCEPTANCE_PROMPT,
+            "r14:accepted-correction-without-learning",
+            rule_id="R14_correction_learning",
+        )
+        self._record_missing_learning_after_accepted_correction()
+        _logger.info("[R14 %s] enqueued accepted-correction learning gate", mode.upper())
+
+    def on_assistant_text(self, text: str, *, declared_detector=None, has_open_task=None, accepted_correction_detector=None):
         """R16 — scan assistant message for done-claim with open protocol_task.
 
         Args:
@@ -1005,6 +1080,10 @@ class HeadlessEnforcer:
             self._check_jargon_text(text, tag="r26:first-response-jargon")
         self._check_execute_before_ask(text)
         self._check_capability_denial_requires_reality(text)
+        self._check_r14_accepted_correction(
+            text,
+            accepted_detector=accepted_correction_detector,
+        )
         if _detect_declared_done is None:
             return
         mode = self._guardian_rule_mode("R16_declared_done")
@@ -1362,6 +1441,7 @@ class HeadlessEnforcer:
             r"\bgcloud\s+builds\s+(?:submit|triggers\s+run)\b",
             r"\bgcloud\s+run\s+(?:deploy|services\s+update|jobs\s+deploy|jobs\s+update)\b",
             r"\bgcloud\s+dns\s+record-sets\s+transaction\s+execute\b",
+            r"\b(?:alembic\s+upgrade|prisma\s+migrate\s+deploy|sequelize\s+db:migrate|knex\s+migrate:latest|rails\s+db:migrate|python(?:3)?\s+manage\.py\s+migrate|php\s+artisan\s+migrate)\b",
             r"\b(?:whmapi1|uapi|cpapi2)\b",
             r"\b(?:cloudflare|cfcli)\b.*\b(?:dns|record)\b.*\b(?:create|delete|update|patch|put|post)\b",
             r"\bcurl\b(?=.*api\.cloudflare\.com/client/v4/zones/.*/dns_records)(?=.*(?:-X|--request)\s*(?:POST|PUT|PATCH|DELETE)\b)",

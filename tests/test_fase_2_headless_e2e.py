@@ -92,6 +92,23 @@ def test_r14_exhaustion_records_correction_debt_without_keyword_detector():
     assert pending and pending[0]["source"] == "r14_window_exhausted"
 
 
+def test_r36_detects_production_migration_before_task_close():
+    from enforcement_engine import HeadlessEnforcer
+
+    enforcer = HeadlessEnforcer()
+    enforcer._guardian_mode_cache["R36_production_change_log"] = "soft"
+    enforcer.on_tool_call("Bash", {"command": "python manage.py migrate --settings=prod"})
+    enforcer.on_tool_call(
+        "nexo_task_close",
+        {
+            "summary": "Migración terminada",
+            "evidence": "Comando ejecutado",
+        },
+    )
+
+    assert any(q["tag"] == "r36:production-change-log" for q in enforcer.injection_queue)
+
+
 def test_enqueue_tags_carry_canonical_rule_id_for_telemetry():
     """Telemetry aggregation requires every enqueue to carry `rule_id`."""
     from enforcement_engine import HeadlessEnforcer

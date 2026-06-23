@@ -1,0 +1,36 @@
+{
+  "id": "SK-VERIFY-PROD-CONFIG",
+  "name": "Verify Production Configuration",
+  "description": "Mandatory checklist before citing internal docs as truth for production configuration such as Stripe, SMTP, domains, providers, or tax. Requires live .env/service/API verification, comparison against internal docs, and stale-doc followup creation on mismatch.",
+  "level": "published",
+  "mode": "guide",
+  "source_kind": "core",
+  "execution_level": "none",
+  "approval_required": false,
+  "tags": [
+    "production",
+    "config",
+    "stripe",
+    "smtp",
+    "domains",
+    "providers",
+    "tax",
+    "verification",
+    "stale-docs"
+  ],
+  "trigger_patterns": [
+    "production config",
+    "configuracion de produccion",
+    "Stripe production",
+    "SMTP production",
+    "dominios produccion",
+    "providers production",
+    "tax production",
+    "DEPLOY-NOTES",
+    "LAUNCH-NOTES",
+    "MIGRATION-PLAN-GCP",
+    "internal docs as truth",
+    "citar docs internos como verdad"
+  ],
+  "stable_after_uses": 5
+}

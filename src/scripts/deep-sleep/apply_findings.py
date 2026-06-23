@@ -107,6 +107,7 @@ STOPWORDS = {
     "que", "con", "para", "por", "los", "las", "una", "uno", "sobre", "desde",
     "cuando", "como", "pero", "todo", "toda", "cada", "into", "across", "using",
 }
+CAPABILITY_OVERLAP_THRESHOLD = 0.74
 CONCRETE_ACTION_VERBS = {
     "add", "implement", "create", "write", "build", "introduce", "enforce",
     "automate", "validate", "check", "verify", "guard", "fix", "migrate",
@@ -230,6 +231,134 @@ def create_product_gap_report(action: dict, content: dict, dedupe_key: str) -> d
         "client_message_id": client_message_id,
         "sanitized": True,
     }
+
+
+def _compact_action_text(action: dict, content: dict) -> str:
+    parts: list[str] = [
+        str(action.get("action_type") or ""),
+        str(action.get("impact") or ""),
+        str(action.get("dedupe_key") or ""),
+    ]
+    for key in (
+        "title",
+        "description",
+        "content",
+        "action",
+        "reasoning",
+        "why",
+        "deliverable",
+        "artifact",
+        "dimension",
+    ):
+        value = content.get(key) if isinstance(content, dict) else ""
+        if value:
+            parts.append(str(value))
+    for change in content.get("changes", []) if isinstance(content, dict) else []:
+        if isinstance(change, dict):
+            parts.extend(str(change.get(key) or "") for key in ("file", "operation", "content", "search"))
+    for evidence in action.get("evidence", []) or []:
+        if isinstance(evidence, dict):
+            parts.append(str(evidence.get("quote") or evidence.get("summary") or evidence.get("text") or ""))
+        else:
+            parts.append(str(evidence))
+    text = " ".join(part for part in parts if part)
+    return text[:3000]
+
+
+def _overlap_result(source: str, identifier: str, score: float, summary: str) -> dict:
+    return {
+        "source": source,
+        "id": str(identifier or ""),
+        "score": round(float(score), 4),
+        "summary": sanitize_product_gap_text(summary, limit=260),
+    }
+
+
+def _find_existing_capability_overlap(action: dict, content: dict, *, threshold: float = CAPABILITY_OVERLAP_THRESHOLD) -> dict | None:
+    """Find whether a Deep Sleep proposal already maps to a tool, skill, learning, or module.
+
+    This preflight keeps nightly proposals from becoming duplicate code work
+    when NEXO already has an equivalent capability or durable rule.
+    """
+    query = _compact_action_text(action, content)
+    if not query.strip():
+        return None
+
+    candidates: list[dict] = []
+
+    try:
+        from system_catalog import search_system_catalog
+
+        for entry in search_system_catalog(query, limit=16):
+            if not isinstance(entry, dict):
+                continue
+            haystack = " ".join(
+                str(entry.get(key) or "")
+                for key in ("name", "kind", "category", "description", "summary", "path", "location")
+            )
+            score = max(
+                _text_similarity(query, haystack),
+                float(entry.get("_score") or entry.get("score") or 0.0),
+            )
+            if score >= threshold:
+                candidates.append(
+                    _overlap_result(
+                        str(entry.get("kind") or entry.get("source") or "system_catalog"),
+                        str(entry.get("name") or entry.get("path") or ""),
+                        score,
+                        haystack,
+                    )
+                )
+    except Exception:
+        pass
+
+    try:
+        for row in _fetch_learning_candidates():
+            if str(row.get("status") or "active").lower() not in {"", "active"}:
+                continue
+            haystack = " ".join(
+                str(row.get(key) or "")
+                for key in ("category", "title", "content", "reasoning", "prevention", "applies_to")
+            )
+            score = _text_similarity(query, haystack)
+            if score >= threshold:
+                candidates.append(
+                    _overlap_result(
+                        "learning",
+                        str(row.get("id") or ""),
+                        score,
+                        f"{row.get('title', '')}: {row.get('content', '')}",
+                    )
+                )
+    except Exception:
+        pass
+
+    if not candidates:
+        return None
+    candidates.sort(key=lambda item: item["score"], reverse=True)
+    return candidates[0]
+
+
+def _create_overlap_product_gap_report(action: dict, content: dict, overlap: dict, dedupe_key: str) -> dict:
+    title = content.get("title") or content.get("action") or content.get("description") or "Deep Sleep proposal overlaps existing NEXO capability"
+    description = (
+        "Deep Sleep proposed new implementation work, but the preflight found high overlap "
+        "with an existing NEXO capability. Review whether to reuse/merge the existing item "
+        "instead of adding new code."
+    )
+    ticket_content = {
+        "title": f"Reuse existing capability: {title}",
+        "description": description,
+        "deliverable": "merge_or_reuse",
+        "pattern": f"Overlap {overlap.get('score')} with {overlap.get('source')} {overlap.get('id')}: {overlap.get('summary')}",
+        "sessions_count": content.get("sessions_count", ""),
+        "evidence_count": len(action.get("evidence", []) or []),
+    }
+    ticket_key = f"product-gap:overlap:{hashlib.md5((dedupe_key or _compact_action_text(action, content)).encode('utf-8'), usedforsecurity=False).hexdigest()[:16]}"
+    result = create_product_gap_report(action, ticket_content, ticket_key)
+    result["overlap"] = overlap
+    result["outcome"] = "overlap_ticket_created" if result.get("success") else "overlap_ticket_failed"
+    return result
 
 
 def generate_run_id(target_date: str) -> str:
@@ -2341,6 +2470,22 @@ def apply_action(action: dict, run_id: str) -> dict:
         log_entry["status"] = "error"
         log_entry["details"] = {"error": "content is not a dict"}
         return log_entry
+
+    if action_type in {"code_change", "followup_create", "product_gap_report", "skill_create"}:
+        overlap = _find_existing_capability_overlap(action, content)
+        if overlap:
+            if action_type == "followup_create":
+                log_entry["status"] = "applied"
+                log_entry["details"] = {
+                    "success": True,
+                    "outcome": "matched_existing_capability",
+                    "overlap": overlap,
+                }
+                return log_entry
+            result = _create_overlap_product_gap_report(action, content, overlap, dedupe_key)
+            log_entry["status"] = "applied" if result.get("success") else "error"
+            log_entry["details"] = result
+            return log_entry
 
     if action_type == "learning_add":
         result = add_learning(

@@ -1,0 +1,30 @@
+{
+  "id": "SK-SUPPORT-SECOND-TICKET-PARALLEL-SWEEP",
+  "name": "Support Second Ticket Parallel Sweep",
+  "description": "Mandatory support workflow for second customer failure in the same production flow within 72h: open a P1 workflow and run 2-3 parallel subagents across the whole flow before answering ticket-by-ticket.",
+  "level": "published",
+  "mode": "guide",
+  "source_kind": "core",
+  "execution_level": "none",
+  "approval_required": false,
+  "tags": [
+    "support",
+    "tickets",
+    "p1",
+    "parallel-sweep",
+    "multi-client",
+    "cloud",
+    "credits",
+    "provisioning",
+    "voice",
+    "image"
+  ],
+  "trigger_patterns": [
+    "second support ticket same area",
+    "segundo ticket soporte misma area",
+    "segundo fallo cliente 72h",
+    "multi-client production flow failure",
+    "support ticket cloud credits provisioning voice image"
+  ],
+  "stable_after_uses": 5
+}

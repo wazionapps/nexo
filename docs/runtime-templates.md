@@ -17,6 +17,7 @@ Use it when scaffolding new personal artifacts, reviewing operator-generated fil
 | Claude bootstrap | `templates/CLAUDE.md.template` | Managed Claude Code bootstrap skeleton |
 | Codex bootstrap | `templates/CODEX.AGENTS.md.template` | Managed Codex bootstrap skeleton |
 | Helper module | `templates/nexo_helper.py` | Stable helper API for personal scripts |
+| Real-data smoke test | `docs/templates/smoke-test-real-data.md` | Mandatory checklist before closing critical engine execute tasks using booking, payment, voice routing, or availability |
 
 ## Prompt Catalog Templates
 

@@ -78,6 +78,43 @@ def test_confidence_check_requires_verify_when_answer_has_no_evidence():
     assert "no evidence_refs supplied" in payload["reasons"]
 
 
+def test_confidence_check_requires_verify_for_stale_written_sources_without_live_evidence():
+    from plugins.protocol import handle_confidence_check
+
+    payload = json.loads(
+        handle_confidence_check(
+            goal="Answer from DEPLOY-NOTES whether Stripe SMTP is configured",
+            task_type="answer",
+            context_hint="The answer depends on internal docs older than 24h and a transcript from last week.",
+            evidence_refs='["docs:DEPLOY-NOTES.md updated_at=2026-06-20"]',
+            verification_step="Check the cited note before replying",
+        )
+    )
+
+    assert payload["ok"] is True
+    assert payload["mode"] == "verify"
+    assert "stale written reference requires live source verification" in payload["reasons"]
+
+
+def test_confidence_check_allows_stale_written_sources_with_live_evidence():
+    from plugins.protocol import handle_confidence_check
+
+    payload = json.loads(
+        handle_confidence_check(
+            goal="Answer from DEPLOY-NOTES whether the release manifest is current",
+            task_type="answer",
+            context_hint="The note is older than 24h, but production was checked.",
+            evidence_refs='["docs:DEPLOY-NOTES.md updated_at=2026-06-20", "repo:main@abc123 verified_at=2026-06-22", "endpoint:https://nexo-desktop.com/downloads/update.json HTTP 200"]',
+            verification_step="Use the live repo and endpoint evidence when answering",
+            stakes="low",
+        )
+    )
+
+    assert payload["ok"] is True
+    assert payload["mode"] == "answer"
+    assert "stale written reference requires live source verification" not in payload["reasons"]
+
+
 def test_task_open_persists_defer_mode_for_high_stakes_answer():
     from db import get_db
     from plugins.protocol import handle_task_open
@@ -504,7 +541,7 @@ def test_task_close_resolves_guard_debt_when_no_file_changes_happened(monkeypatc
     )
 
     assert closed["ok"] is True
-    assert closed["status"] == "clean"
+    assert "blocked_by" not in closed
     debt_count = get_db().execute(
         "SELECT COUNT(*) FROM protocol_debt WHERE task_id = ? AND debt_type = 'unacknowledged_guard_blocking' AND status = 'open'",
         (opened["task_id"],),
@@ -647,6 +684,7 @@ def test_task_close_creates_change_log_and_stays_clean():
     )
 
     assert closed["ok"] is True
+    assert "blocked_by" not in closed
     assert closed["status"] == "clean"
     assert closed["change_log_id"] is not None
     row = get_db().execute(
@@ -741,6 +779,85 @@ def test_task_close_blocks_total_closure_claim_when_followups_are_open():
     assert row["status"] == "open"
 
 
+def test_task_close_blocks_done_with_manual_pending_steps_without_followup():
+    from db import get_db
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    sid = _register_session("nexo-1003-2003-manual-block")
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Cerrar auditoria aprobada con pasos manuales",
+            task_type="execute",
+            area="nexo-ops",
+            plan='["verificar", "cerrar"]',
+            verification_step="pytest focal",
+        )
+    )
+
+    closed = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="done",
+            evidence="pytest -q tests/test_protocol.py::test_task_close_blocks_done_with_manual_pending_steps_without_followup passed",
+            outcome_notes="Aprobado. Siguiente paso: configurar el monitor y verificarlo en runtime.",
+        )
+    )
+
+    assert closed["ok"] is False
+    assert closed["blocked_by"] == "manual_pending_followup_gate"
+    assert closed["debt_type"] == "manual_pending_steps_without_followup"
+    row = get_db().execute(
+        "SELECT status, closed_at FROM protocol_tasks WHERE task_id = ?",
+        (opened["task_id"],),
+    ).fetchone()
+    assert row["status"] == "open"
+    assert row["closed_at"] is None
+
+
+def test_task_close_allows_manual_pending_steps_with_created_followup():
+    from db import get_db
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    sid = _register_session("nexo-1003-2003-manual-followup")
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Cerrar auditoria aprobada con seguimiento manual",
+            task_type="execute",
+            area="nexo-ops",
+            plan='["verificar", "crear seguimiento", "cerrar"]',
+            verification_step="pytest focal",
+        )
+    )
+
+    closed = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="done",
+            evidence="pytest -q tests/test_protocol.py::test_task_close_allows_manual_pending_steps_with_created_followup passed",
+            outcome_notes="Aprobado. Siguiente paso: configurar el monitor y verificarlo en runtime.",
+            followup_needed=True,
+            followup_id="NF-MANUAL-PENDING-GATE-TEST",
+            followup_description="Configurar el monitor aprobado y verificarlo en runtime.",
+            followup_verification="Evidencia de configuración y verificación runtime.",
+            followup_reasoning="Creado por gate de task_close para pasos manuales pendientes.",
+        )
+    )
+
+    assert closed["ok"] is True
+    assert closed["status"] == "clean"
+    assert closed["followup_id"] == "NF-MANUAL-PENDING-GATE-TEST"
+    followup = get_db().execute(
+        "SELECT description, status FROM followups WHERE id = ?",
+        ("NF-MANUAL-PENDING-GATE-TEST",),
+    ).fetchone()
+    assert followup["status"] == "PENDING"
+    assert "Configurar el monitor aprobado" in followup["description"]
+
+
 def test_task_close_blocks_irreversible_publish_without_specific_post_evidence_ok():
     from plugins.protocol import handle_task_open, handle_task_close
 
@@ -771,6 +888,7 @@ def test_task_close_blocks_irreversible_publish_without_specific_post_evidence_o
 
 
 def test_task_close_blocks_irreversible_publish_without_matching_human_artifact_hash():
+    from plugins.cortex import handle_cortex_decide
     from plugins.protocol import handle_task_open, handle_task_close
 
     sid = _register_session("nexo-1003-2003-stable-hash")
@@ -783,6 +901,19 @@ def test_task_close_blocks_irreversible_publish_without_matching_human_artifact_
             plan='["verify evidence", "publish stable"]',
             verification_step="verify public stable manifests",
         )
+    )
+    handle_cortex_decide(
+        goal="Verify publish stable Desktop artifact sha256:abc123",
+        task_type="execute",
+        impact_level="critical",
+        area="release",
+        session_id=sid,
+        task_id=opened["task_id"],
+        context_hint="Human validation evidence is specific to artifact sha256:abc123 before publish stable.",
+        alternatives=json.dumps([
+            {"name": "publish_validated_artifact", "description": "Publish stable only after human validation evidence matches artifact sha256:abc123"},
+            {"name": "hold_release", "description": "Hold if the validated artifact hash differs"},
+        ]),
     )
 
     closed = json.loads(
@@ -803,6 +934,130 @@ def test_task_close_blocks_irreversible_publish_without_matching_human_artifact_
     assert closed["blocked_by"] == "irreversible_artifact_hash"
     assert closed["debt_type"] == "irreversible_artifact_hash_unverified"
     assert closed["hash_status"] == "mismatch"
+
+
+def test_task_close_blocks_irreversible_publish_without_cortex_decide():
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    sid = _register_session("nexo-1003-2003-stable-cortex")
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Publish stable Desktop release",
+            task_type="execute",
+            area="release",
+            plan='["verify evidence", "publish stable"]',
+            verification_step="verify public stable manifests",
+        )
+    )
+
+    closed = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="done",
+            evidence=(
+                "Smoke verified; explicit approval after evidence was captured for publish stable "
+                "artifact sha256:abc123. "
+                "API: curl https://nexo-desktop.com/api/health returned HTTP 200. "
+                "UI: browser smoke loaded /dashboard and screenshot /tmp/nexo-release-ui.png exists. "
+                "Dominio público: https://nexo-desktop.com/downloads/update.json returned HTTP 200. "
+                "Rama: origin/main at abc1234. "
+                "Git limpio: git status --short empty, working tree clean. "
+                "Artefactos: GitHub Release assets DMG and EXE uploaded. "
+                "Artefacto correcto: sha256 verified and version matches package.json. "
+                "Firma/notarización: codesign, spctl and notarytool verified the macOS artifact. "
+                "Manifiestos: update.json and package.json match the release version. "
+                "Smoke público: curl https://nexo-desktop.com/downloads/update.json returned HTTP 200. "
+                "Captura visual: screenshot /tmp/nexo-release-ui.png exists. "
+                "Flujo E2E usuario final: usuario final descarga, instala y abre la versión estable publicada. "
+                "Criterio de éxito específico del operador: Francisco validó que el artefacto sha256:abc123 es el candidato aprobado. "
+                "Monitor sin redirects implícitos: public uptime monitor checked with no implicit redirects. "
+                "Prueba viva: production smoke passed against the public domain."
+            ),
+            outcome_notes="aprobación explícita tras evidencia verificada para el artefacto sha256:abc123.",
+            artifact_hash="sha256:abc123",
+            last_human_validation_of_artifact_hash="sha256:abc123",
+            files_changed="/tmp/release-artifact",
+            change_summary="Publish stable Desktop release",
+            change_why="Regression test for irreversible cortex gate",
+            change_verify="Artifact hash matches the human-validated release candidate",
+        )
+    )
+
+    assert closed["ok"] is False
+    assert closed["blocked_by"] == "irreversible_cortex_decide_gate"
+    assert closed["debt_type"] == "irreversible_action_missing_cortex_decide"
+    assert closed["response_mode"] == "verify"
+
+
+def test_task_close_allows_irreversible_publish_with_cortex_and_matching_artifact():
+    from plugins.cortex import handle_cortex_decide
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    sid = _register_session("nexo-1003-2003-stable-cortex-ok")
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Publish stable Desktop release",
+            task_type="execute",
+            area="release",
+            plan='["verify evidence", "publish stable"]',
+            verification_step="verify public stable manifests",
+        )
+    )
+    handle_cortex_decide(
+        goal="Verify and publish stable Desktop artifact sha256:abc123",
+        task_type="execute",
+        impact_level="critical",
+        area="release",
+        session_id=sid,
+        task_id=opened["task_id"],
+        context_hint="Human validation evidence is specific to artifact sha256:abc123 before publish stable.",
+        evidence_refs='["operator validation: sha256:abc123", "public manifest verified"]',
+        alternatives=json.dumps([
+            {"name": "publish_validated_artifact", "description": "Publish stable only after human validation evidence matches artifact sha256:abc123"},
+            {"name": "hold_release", "description": "Do not publish until the operator validates the exact artifact hash"},
+        ]),
+    )
+
+    closed = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="done",
+            evidence=(
+                "Smoke verified; explicit approval after evidence was captured for publish stable "
+                "artifact sha256:abc123. "
+                "API: curl https://nexo-desktop.com/api/health returned HTTP 200. "
+                "UI: browser smoke loaded /dashboard and screenshot /tmp/nexo-release-ui.png exists. "
+                "Dominio público: https://nexo-desktop.com/downloads/update.json returned HTTP 200. "
+                "Rama: origin/main at abc1234. "
+                "Git limpio: git status --short empty, working tree clean. "
+                "Artefactos: GitHub Release assets DMG and EXE uploaded. "
+                "Artefacto correcto: sha256 verified and version matches package.json. "
+                "Firma/notarización: codesign, spctl and notarytool verified the macOS artifact. "
+                "Manifiestos: update.json and package.json match the release version. "
+                "Smoke público: curl https://nexo-desktop.com/downloads/update.json returned HTTP 200. "
+                "Captura visual: screenshot /tmp/nexo-release-ui.png exists. "
+                "Flujo E2E usuario final: usuario final descarga, instala y abre la versión estable publicada. "
+                "Criterio de éxito específico del operador: Francisco validó que el artefacto sha256:abc123 es el candidato aprobado. "
+                "Monitor sin redirects implícitos: public uptime monitor checked with no implicit redirects. "
+                "Prueba viva: production smoke passed against the public domain."
+            ),
+            outcome_notes="aprobación explícita tras evidencia verificada para el artefacto sha256:abc123.",
+            artifact_hash="sha256:abc123",
+            last_human_validation_of_artifact_hash="sha256:abc123",
+            files_changed="/tmp/release-artifact",
+            change_summary="Publish stable Desktop release",
+            change_why="Regression test for irreversible cortex gate",
+            change_verify="Artifact hash matches the human-validated release candidate",
+        )
+    )
+
+    assert closed["ok"] is True
+    assert "blocked_by" not in closed
+    assert closed["cortex_evaluation"]["task_id"] == opened["task_id"]
 
 
 def test_task_close_reject_done_without_evidence_dedupes_protocol_debt():
@@ -1186,6 +1441,106 @@ def test_task_close_auto_captures_learning_when_correction_has_no_learning():
     assert "/Users/franciscoc/Documents/_PhpstormProjects/nexo/src/plugins/guard.py" in learning["applies_to"]
 
 
+def test_task_close_soft_opens_debt_for_open_correction_without_learning_or_justification():
+    # Ola 1 SOFT contract: a detected correction without a durable learning or an
+    # explicit no-learning justification no longer BLOCKS the close (the hard
+    # block was friction and could trap the agent mid-work). The close SUCCEEDS
+    # and opens a non-blocking ``missing_learning_after_correction`` debt; the
+    # correction requirement stays open until a learning resolves it. This is the
+    # coherent counterpart of
+    # test_correction_requirements.py::test_detected_correction_opens_debt_but_does_not_block_task_close.
+    from db import get_db, record_session_correction_requirement
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    sid = _register_session("nexo-1004-2104")
+    record_session_correction_requirement(
+        sid,
+        "No, that was the wrong source of truth.",
+        source="test",
+    )
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Verify correction close gate",
+            task_type="edit",
+            area="nexo-ops",
+            files="/Users/franciscoc/Documents/_PhpstormProjects/nexo/src/plugins/protocol.py",
+            plan='["inspect", "verify", "close"]',
+            verification_step="run pytest",
+        )
+    )
+    closed = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="done",
+            evidence="pytest -q tests/test_protocol.py::test_task_close_soft_opens_debt_for_open_correction_without_learning_or_justification passed",
+            change_summary="Verified correction close gate",
+            change_why="Regression test for correction requirements",
+        )
+    )
+
+    assert closed["ok"] is True
+    assert closed.get("blocked_by") != "correction_learning_required"
+    debt_count = get_db().execute(
+        "SELECT COUNT(*) FROM protocol_debt WHERE task_id = ? "
+        "AND debt_type = 'missing_learning_after_correction' AND status = 'open'",
+        (opened["task_id"],),
+    ).fetchone()[0]
+    assert debt_count == 1
+    open_correction = get_db().execute(
+        "SELECT COUNT(*) FROM session_correction_requirements WHERE session_id = ? AND status = 'open'",
+        (sid,),
+    ).fetchone()[0]
+    assert open_correction == 1
+
+
+def test_task_close_allows_open_correction_with_explicit_no_learning_justification():
+    from db import get_db, record_session_correction_requirement
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    sid = _register_session("nexo-1004-2204")
+    record_session_correction_requirement(
+        sid,
+        "No, that was an expected detector false positive.",
+        source="test",
+    )
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Close correction with no-learning justification",
+            task_type="edit",
+            area="nexo-ops",
+            files="/Users/franciscoc/Documents/_PhpstormProjects/nexo/src/plugins/protocol.py",
+            plan='["inspect", "verify", "close"]',
+            verification_step="run pytest",
+        )
+    )
+    closed = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="done",
+            evidence="pytest -q tests/test_protocol.py::test_task_close_allows_open_correction_with_explicit_no_learning_justification passed",
+            change_summary="Accepted correction justification without learning",
+            change_why="No reusable rule changed in this synthetic correction test",
+            learning_reasoning=(
+                "Justificación: no aprendizaje reutilizable; fue un falso positivo del detector "
+                "en una prueba sintética y no cambia la regla canónica."
+            ),
+        )
+    )
+
+    assert closed["status"] == "clean"
+    assert closed["learning_id"] is None
+    row = get_db().execute(
+        "SELECT status, resolved_learning_id FROM session_correction_requirements WHERE session_id = ?",
+        (sid,),
+    ).fetchone()
+    assert row["status"] == "resolved"
+    assert row["resolved_learning_id"] is None
+
+
 def test_high_stakes_action_close_rejects_done_without_cortex_evaluation():
     from db import get_db
     from plugins.protocol import handle_task_open, handle_task_close
@@ -1317,8 +1672,16 @@ def test_high_stakes_action_close_stays_clean_with_cortex_evaluation():
                 "UI: browser smoke loaded /dashboard and screenshot /tmp/nexo-release-ui.png exists. "
                 "Dominio público: https://nexo-desktop.com/downloads/update.json returned HTTP 200. "
                 "Rama: origin/main at abc1234. "
+                "Git limpio: git status --short empty, working tree clean. "
                 "Artefactos: GitHub Release assets DMG and EXE uploaded. "
+                "Artefacto correcto: sha256 verified and version matches package.json. "
+                "Firma/notarización: codesign, spctl and notarytool verified the macOS artifact. "
                 "Manifiestos: update.json and package.json match the release version. "
+                "Smoke público: curl https://nexo-desktop.com/downloads/update.json returned HTTP 200. "
+                "Captura visual: screenshot /tmp/nexo-release-ui.png exists. "
+                "Flujo E2E usuario final: usuario final abre la app, descarga el update y completa el arranque sin fallback. "
+                "Criterio de éxito específico del operador: Francisco validó que la versión publicada coincide con el artefacto candidato y arranca sin regresión. "
+                "Monitor sin redirects implícitos: public uptime monitor checked with no implicit redirects. "
                 "Test: regression suite passed before publication. "
                 "Prueba viva: staging smoke green and production smoke passed against the public domain. "
                 "Changelog updated and version confirmed in public manifests."
@@ -1385,6 +1748,61 @@ def test_task_close_blocks_high_stakes_release_without_public_evidence():
     assert closed["blocked_by"] == "high_stakes_public_evidence"
     assert closed["debt_type"] == "high_stakes_public_evidence_missing"
     assert closed["response_mode"] == "verify"
+
+
+def test_task_close_blocks_high_stakes_release_without_ux_first_checklist():
+    from plugins.cortex import handle_cortex_decide
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    sid = _register_session("nexo-1014-2014-ux-first")
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Deploy the production release package",
+            task_type="execute",
+            area="release",
+            plan='["prepare", "deploy", "verify"]',
+            evidence_refs='["release contract", "staging green"]',
+            verification_step="run post-release smoke tests",
+            stakes="high",
+        )
+    )
+    handle_cortex_decide(
+        goal="Deploy the production release package",
+        task_type="execute",
+        impact_level="critical",
+        area="release",
+        session_id=sid,
+        task_id=opened["task_id"],
+        evidence_refs='["release contract", "staging green"]',
+        alternatives=json.dumps([
+            {"name": "canary_release", "description": "Deploy staged canary release with smoke tests and rollback ready"},
+            {"name": "direct_release", "description": "Deploy directly to production without staged verification"},
+        ]),
+    )
+
+    closed = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="done",
+            evidence="curl https://nexo-desktop.com/downloads/update.json returned HTTP 200 after deploy.",
+            outcome_notes="Release executed with persisted cortex evaluation.",
+            work_type="release",
+            stakes="high",
+            files_changed="/tmp/release-artifact",
+            change_summary="Deploy production release package",
+            change_why="Regression test for UX-first release close gate",
+            change_verify="Public manifest HTTP 200 but no visual/e2e/operator checklist",
+        )
+    )
+
+    assert closed["ok"] is False
+    assert closed["blocked_by"] == "ux_first_release_gate"
+    assert closed["debt_type"] == "ux_first_release_gate_incomplete"
+    assert "captura o evidencia visual pública" in closed["missing_items"]
+    assert "flujo end-to-end como usuario final" in closed["missing_items"]
+    assert "criterio de éxito específico del operador" in closed["missing_items"]
 
 
 def test_non_release_task_does_not_open_release_alignment_debt_for_version_wording():
@@ -2029,13 +2447,18 @@ def test_task_close_blocks_visible_release_without_surface_matrix():
             sid=sid,
             task_id=opened["task_id"],
             outcome="done",
-            evidence="curl https://nexo-desktop.com returned HTTP 200 after deploy.",
+            evidence=(
+                "curl https://nexo-desktop.com returned HTTP 200 after deploy. "
+                "Captura visual: screenshot /tmp/release-visible.png exists. "
+                "Flujo E2E usuario final: usuario final abre la pantalla visible y completa el recorrido afectado. "
+                "Criterio de éxito específico del operador: Francisco validó que el arreglo visible aparece en la superficie pública."
+            ),
             work_type="release",
             stakes="high",
             files_changed="/tmp/release-artifact",
             change_summary="Deploy visible production fix",
             change_why="Exercise visible release surface matrix gate",
-            change_verify="curl public domain HTTP 200",
+            change_verify="curl public domain HTTP 200 plus visual and final-user UX checklist",
         )
     )
 
@@ -2044,3 +2467,6 @@ def test_task_close_blocks_visible_release_without_surface_matrix():
     assert closed["debt_type"] == "visible_release_surface_matrix_incomplete"
     assert "API" in closed["missing_surfaces"]
     assert "rama de publicación" in closed["missing_surfaces"]
+    assert "git limpio" in closed["missing_surfaces"]
+    assert "firma/notarización" in closed["missing_surfaces"]
+    assert "monitor sin redirects implícitos" in closed["missing_surfaces"]

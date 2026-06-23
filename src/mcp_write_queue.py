@@ -267,6 +267,13 @@ def _apply_write(record: dict[str, Any]) -> None:
         if str(result).startswith("ERROR:"):
             raise ValueError(result)
         return
+    if kind == "guard_check":
+        from plugins.guard import handle_guard_check
+
+        result = handle_guard_check(**payload)
+        if str(result).startswith("ERROR:"):
+            raise ValueError(result)
+        return
     if kind == "learning_add":
         from tools_learnings import handle_learning_add
 

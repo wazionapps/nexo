@@ -144,6 +144,19 @@ class TestSkillsRuntime:
         assert skill["mode"] == "execute"
         assert skill["file_path"].startswith(str(skills_env / "skills-runtime"))
 
+    def test_sync_discovers_support_second_ticket_parallel_sweep_skill(self, skills_env):
+        db, skills_runtime, _, _ = _reload_skill_stack()
+        db.init_db()
+
+        result = skills_runtime.sync_skills()
+
+        assert "SK-SUPPORT-SECOND-TICKET-PARALLEL-SWEEP" in result["ids"]
+        skill = db.get_skill("SK-SUPPORT-SECOND-TICKET-PARALLEL-SWEEP")
+        assert skill is not None
+        assert skill["source_kind"] == "core"
+        assert skill["mode"] == "guide"
+        assert "support" in skill["tags"]
+
     def test_sync_prunes_filesystem_skill_whose_definition_was_removed(self, skills_env):
         personal_dir = _write_skill_definition(
             skills_env / "skills",

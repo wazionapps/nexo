@@ -23,6 +23,7 @@ from db import (
     capture_context_event,
     format_pre_action_context_bundle,
     get_db,
+    get_followup,
     get_followups,
     get_protocol_task,
     list_session_correction_requirements,
@@ -91,6 +92,71 @@ def _is_trivial_evidence(text: str) -> tuple[bool, str]:
     if len(stripped) < R03_MIN_EVIDENCE_CHARS:
         return True, f"too_short (<{R03_MIN_EVIDENCE_CHARS} chars, got {len(stripped)})"
     return False, ""
+
+
+def _has_correction_no_learning_justification(*parts: str) -> bool:
+    """Return true when close payload explicitly justifies not persisting a learning."""
+    text = " ".join(str(part or "").strip() for part in parts if str(part or "").strip())
+    if len(text) < 60:
+        return False
+    lowered = text.lower()
+    has_justification_marker = any(
+        marker in lowered
+        for marker in (
+            "justificacion",
+            "justificación",
+            "justified",
+            "justification",
+            "no reusable learning",
+            "no aprendizaje reutilizable",
+        )
+    )
+    has_no_learning_reason = any(
+        marker in lowered
+        for marker in (
+            "no aprendizaje",
+            "sin aprendizaje",
+            "no learning",
+            "no reusable",
+            "no reutilizable",
+            "falso positivo",
+            "false positive",
+            "sin cambio de regla",
+            "no canonical rule",
+            "no cambia la regla",
+        )
+    )
+    return has_justification_marker and has_no_learning_reason
+
+
+def _resolve_correction_requirements_with_justification(session_id: str, task_id: str, justification: str) -> int:
+    clean_sid = str(session_id or "").strip()
+    if not clean_sid:
+        return 0
+    conn = get_db()
+    cursor = conn.execute(
+        """UPDATE session_correction_requirements
+           SET status = 'resolved',
+               resolved_at = datetime('now'),
+               resolved_learning_id = NULL
+           WHERE session_id = ? AND status = 'open'""",
+        (clean_sid,),
+    )
+    conn.commit()
+    if cursor.rowcount:
+        resolved = resolve_protocol_debts(
+            session_id=clean_sid,
+            task_id=task_id,
+            debt_types=["missing_learning_after_correction"],
+            resolution=f"No-learning justification accepted: {justification[:240]}",
+        )
+        if not resolved:
+            resolve_protocol_debts(
+                session_id=clean_sid,
+                debt_types=["missing_learning_after_correction"],
+                resolution=f"No-learning justification accepted: {justification[:240]}",
+            )
+    return int(cursor.rowcount or 0)
 
 
 def _existing_analyze_artifact_paths(refs: list[str]) -> list[Path]:
@@ -797,6 +863,62 @@ def _requires_production_change_log(
     )
 
 
+WRITTEN_REFERENCE_DEPENDENCY_RE = re.compile(
+    r"\b("
+    r"deploy[-_\s]?notes|internal\s+docs?|docs?/|documentation|documentaci[oó]n|"
+    r"transcripts?|transcripciones?|session\s+diar(?:y|ies)|diarios?|notes?|notas?"
+    r")\b",
+    re.IGNORECASE,
+)
+STALE_WRITTEN_REFERENCE_RE = re.compile(
+    r"("
+    r">\s*24h|24\+?\s*(?:h|hours?|horas?)|older\s+than\s+24\s*(?:h|hours?)|"
+    r"m[aá]s\s+de\s+24\s*horas|stale|obsolet[ao]s?|viejos?|antigu[ao]s?|"
+    r"yesterday|ayer|last\s+week|semana\s+pasada|"
+    r"\b20\d{2}-\d{2}-\d{2}\b"
+    r")",
+    re.IGNORECASE,
+)
+LIVE_SOURCE_EVIDENCE_RE = re.compile(
+    r"\b("
+    r"repo|git(?:_head| status| show| log)?|commit|branch|"
+    r"bd|db|database|sql|endpoint|public\s+endpoint|producci[oó]n|production|live|"
+    r"curl|http\s*\d{3}|gcloud|cloud\s+run|ssh|manifest|update\.json"
+    r")\b",
+    re.IGNORECASE,
+)
+
+
+def _written_reference_requires_live_verify(
+    *,
+    goal: str,
+    area: str,
+    context_hint: str,
+    constraints: list[str],
+    evidence_refs: list[str],
+    unknowns: list[str],
+    verification_step: str,
+) -> bool:
+    combined = "\n".join(
+        str(part or "")
+        for part in [
+            goal,
+            area,
+            context_hint,
+            verification_step,
+            *constraints,
+            *evidence_refs,
+            *unknowns,
+        ]
+    )
+    if not WRITTEN_REFERENCE_DEPENDENCY_RE.search(combined):
+        return False
+    if not STALE_WRITTEN_REFERENCE_RE.search(combined):
+        return False
+    evidence_text = "\n".join(str(ref or "") for ref in evidence_refs)
+    return not LIVE_SOURCE_EVIDENCE_RE.search(evidence_text)
+
+
 def evaluate_response_confidence(
     *,
     goal: str,
@@ -857,6 +979,18 @@ def evaluate_response_confidence(
     if high_stakes:
         score -= 20
         reasons.append("high-stakes context detected")
+    stale_written_reference_without_live = _written_reference_requires_live_verify(
+        goal=goal,
+        area=area,
+        context_hint=context_hint,
+        constraints=constraints,
+        evidence_refs=evidence_refs,
+        unknowns=unknowns,
+        verification_step=verification_step,
+    )
+    if stale_written_reference_without_live:
+        score -= 30
+        reasons.append("stale written reference requires live source verification")
 
     # v5.2.0: Positive signals. Before this release the score was purely
     # a penalty accumulator — there was no way to reward tasks that had
@@ -881,6 +1015,8 @@ def evaluate_response_confidence(
         elif unknowns:
             mode = "ask"
         elif high_stakes or not evidence_refs or not verification_step.strip():
+            mode = "verify"
+        if mode == "answer" and stale_written_reference_without_live:
             mode = "verify"
 
         # v5.2.0: Numeric safeguard. The boolean decision tree above
@@ -1474,6 +1610,34 @@ PENDING_RELEASE_GATE_RE = re.compile(
     r"\b(smoke|tag|tags|merge|release|stable|broadcast|publicaci[oó]n)\b.{0,80}\b(pendiente|pending|falta|sin\s+verificar|sin\s+evidencia)\b",
     re.IGNORECASE | re.DOTALL,
 )
+MANUAL_PENDING_NEGATION_RE = re.compile(
+    r"\b(?:no|sin)\s+queda\s+(?:nada\s+)?pendiente\b",
+    re.IGNORECASE,
+)
+MANUAL_PENDING_MARKER_RE = re.compile(
+    r"\b("
+    r"qued(?:a|an)\s+pendiente(?:s)?|"
+    r"pasos?\s+manual(?:es)?\s+pendiente(?:s)?|"
+    r"tras\s+esto|"
+    r"una\s+vez\s+aprobado|"
+    r"siguientes?\s+pasos?|"
+    r"manual\s+steps?|"
+    r"pending\s+manual\s+steps?"
+    r")\b",
+    re.IGNORECASE,
+)
+MANUAL_PENDING_ACTION_RE = re.compile(
+    r"\b("
+    r"stage|commit|tag|publish|deploy|"
+    r"configurar|contratar|verificar|publicar|desplegar|"
+    r"etiquetar|subir|firmar|notari[sz]ar"
+    r")\b",
+    re.IGNORECASE,
+)
+MANUAL_PENDING_STEP_LINE_RE = re.compile(
+    r"(?im)^\s*(?:[-*+]|\d+[.)])\s*"
+    r"(?:stage|commit|tag|publish|deploy|configurar|contratar|verificar|publicar|desplegar|etiquetar|subir|firmar|notari[sz]ar)\b"
+)
 IRREVERSIBLE_ACTION_RE = re.compile(
     r"\b(publish\s+stable|publicar\s+stable|promocionar\s+stable|broadcast|enviar\s+a\s+clientes|cobrar|payment|force-push|revocar)\b",
     re.IGNORECASE,
@@ -1498,6 +1662,18 @@ PUBLIC_RELEASE_EVIDENCE_RE = re.compile(
 )
 PUBLIC_RELEASE_WORK_RE = re.compile(
     r"\b(release|deploy|deployment|publish|publicar|desplegar|lanzar|stable|producci[oó]n|production)\b",
+    re.IGNORECASE,
+)
+VISUAL_PUBLIC_EVIDENCE_RE = re.compile(
+    r"\b(?:screenshot|captura|captura\s+visual|visual\s+capture)\b[^\n]{0,160}\b(?:\.png|\.jpg|\.jpeg|\.webp|playwright|browser|navegador|headed)\b",
+    re.IGNORECASE,
+)
+END_USER_E2E_EVIDENCE_RE = re.compile(
+    r"\b(?:flujo|recorrido|flow|journey|e2e|end[- ]to[- ]end)\b[^\n]{0,180}\b(?:usuario\s+final|final\s+user|end\s+user|cliente|customer)\b|\b(?:usuario\s+final|final\s+user|end\s+user|cliente|customer)\b[^\n]{0,180}\b(?:flujo|recorrido|flow|journey|e2e|end[- ]to[- ]end)\b",
+    re.IGNORECASE,
+)
+OPERATOR_SUCCESS_CRITERION_RE = re.compile(
+    r"\b(?:criterio\s+de\s+[eé]xito\s+espec[ií]fico(?:\s+del\s+operador)?|operator\s+success\s+criterion|specific\s+success\s+criterion|criterio\s+francisco|francisco\s+criterion)\b\s*[:=-]\s*\S.{20,}",
     re.IGNORECASE,
 )
 HIGH_STAKES_WORK_TYPES = {"release", "deploy", "deployment", "publish", "publicar", "desplegar"}
@@ -1527,15 +1703,47 @@ VISIBLE_RELEASE_SURFACE_PATTERNS = {
         re.compile(r"\borigin/(?:main|master|stable|release|gh-pages)\b", re.IGNORECASE),
         re.compile(r"\bgh-pages\b", re.IGNORECASE),
     ),
+    "git_limpio": (
+        re.compile(r"\bgit\s+limpio\b\s*[:=-]", re.IGNORECASE),
+        re.compile(r"\bclean\s+(?:git|worktree|working\s+tree)\b\s*[:=-]?", re.IGNORECASE),
+        re.compile(r"\bgit\s+status\b[^\n]{0,80}\b(?:clean|limpio|sin\s+cambios|nothing\s+to\s+commit)\b", re.IGNORECASE),
+    ),
     "artefactos": (
         re.compile(r"\bartefacto(?:s)?\b\s*[:=-]", re.IGNORECASE),
         re.compile(r"\bartifact(?:s)?\b\s*[:=-]", re.IGNORECASE),
         re.compile(r"\b(?:dmg|exe|zip|image|imagen|cloud\s+build|github\s+release)\b", re.IGNORECASE),
     ),
+    "artefacto_correcto": (
+        re.compile(r"\bartefacto\s+correcto\b\s*[:=-]", re.IGNORECASE),
+        re.compile(r"\bcorrect\s+artifact\b\s*[:=-]", re.IGNORECASE),
+        re.compile(r"\b(?:sha256|checksum|hash)\b[^\n]{0,120}\b(?:match|coincide|verificad[oa])\b", re.IGNORECASE),
+        re.compile(r"\bversi[oó]n\b[^\n]{0,80}\b(?:coincide|match|verificad[oa])\b", re.IGNORECASE),
+    ),
+    "firma_notarizacion": (
+        re.compile(r"\bfirma(?:do)?(?:\s*/\s*|\s+y\s+)notari[sz]aci[oó]n\b\s*[:=-]", re.IGNORECASE),
+        re.compile(r"\b(?:signature|signed)(?:\s*/\s*|\s+and\s+)notari[sz](?:ed|ation)\b\s*[:=-]", re.IGNORECASE),
+        re.compile(r"\b(?:codesign|spctl|notarytool|notarized|notarizado|signed|firmado)\b", re.IGNORECASE),
+        re.compile(r"\bfirma(?:do)?\b\s*[:=-]\s*N/?A\b", re.IGNORECASE),
+    ),
     "manifiestos": (
         re.compile(r"\bmanifiesto(?:s)?\b\s*[:=-]", re.IGNORECASE),
         re.compile(r"\bmanifest(?:s)?\b\s*[:=-]", re.IGNORECASE),
         re.compile(r"\b(?:manifest\.json|update\.json|package\.json|composer\.json)\b", re.IGNORECASE),
+    ),
+    "smoke_publico": (
+        re.compile(r"\bsmoke\s+p[uú]blico\b\s*[:=-]", re.IGNORECASE),
+        re.compile(r"\bpublic\s+smoke\b\s*[:=-]", re.IGNORECASE),
+        re.compile(r"\bsmoke\b[^\n]{0,120}\bhttps?://[^\s]+[^\n]{0,80}\b(?:HTTP\s*200|200\s+OK|status(?:_code)?\s*200)\b", re.IGNORECASE),
+    ),
+    "captura_visual_ui": (
+        re.compile(r"\bcaptura\s+visual\b\s*[:=-]", re.IGNORECASE),
+        re.compile(r"\bvisual\s+capture\b\s*[:=-]", re.IGNORECASE),
+        re.compile(r"\b(?:screenshot|captura)\b[^\n]{0,120}\b(?:\.png|\.jpg|\.jpeg|\.webp|N/?A)\b", re.IGNORECASE),
+    ),
+    "monitor_sin_redirects": (
+        re.compile(r"\bmonitor\b[^\n]{0,120}\b(?:sin\s+redirects?|no\s+implicit\s+redirects?|without\s+implicit\s+redirects?)\b", re.IGNORECASE),
+        re.compile(r"\b(?:redirects?\s+impl[ií]citos?|implicit\s+redirects?)\b[^\n]{0,80}\b(?:none|ninguno|no|0|sin)\b", re.IGNORECASE),
+        re.compile(r"\bmonitor\s+sin\s+redirects?\s+impl[ií]citos\b\s*[:=-]", re.IGNORECASE),
     ),
     "prueba_viva": (
         re.compile(r"\bprueba\s+viva\b\s*[:=-]", re.IGNORECASE),
@@ -1549,8 +1757,14 @@ VISIBLE_RELEASE_SURFACE_LABELS = {
     "ui": "UI",
     "dominio_publico": "dominio público",
     "rama_publicacion": "rama de publicación",
+    "git_limpio": "git limpio",
     "artefactos": "artefactos",
+    "artefacto_correcto": "artefacto correcto",
+    "firma_notarizacion": "firma/notarización",
     "manifiestos": "manifiestos",
+    "smoke_publico": "smoke público",
+    "captura_visual_ui": "captura visual UI",
+    "monitor_sin_redirects": "monitor sin redirects implícitos",
     "prueba_viva": "prueba viva",
 }
 
@@ -1573,6 +1787,33 @@ def _requires_irreversible_artifact_hash(closure_text: str, artifact_hash: str, 
     return False, ""
 
 
+def _latest_cortex_evaluation_satisfies_irreversible_verify(task_id: str) -> tuple[bool, str]:
+    evaluation = latest_cortex_evaluation_for_task(task_id)
+    if not evaluation:
+        return False, "missing"
+    impact = str(evaluation.get("impact_level") or "").strip().lower()
+    if impact not in {"high", "critical"}:
+        return False, "impact_level"
+    evidence_text = "\n".join(
+        str(evaluation.get(field) or "")
+        for field in (
+            "context_hint",
+            "recommended_reasoning",
+            "heuristic_reasoning",
+            "selection_reason",
+            "alternatives",
+            "scores",
+        )
+    )
+    if not re.search(
+        r"\b(verify|verific|evidencia|evidence|validaci[oó]n\s+humana|human\s+validation|artifact|artefacto|hash|sha256)\b",
+        evidence_text,
+        re.IGNORECASE,
+    ):
+        return False, "verify_evidence"
+    return True, ""
+
+
 def _is_high_stakes_public_work(task: dict, work_type: str, stakes: str, closure_text: str) -> bool:
     high_override = _parse_high_stakes_override(stakes or "")
     high_stakes = bool(task.get("response_high_stakes")) if high_override is None else high_override
@@ -1588,6 +1829,18 @@ def _has_public_release_evidence(evidence: str) -> bool:
     if _is_trivial_evidence(evidence)[0]:
         return False
     return bool(PUBLIC_RELEASE_EVIDENCE_RE.search(evidence or ""))
+
+
+def _missing_ux_first_release_gate_items(evidence: str) -> list[str]:
+    text = evidence or ""
+    missing: list[str] = []
+    if not VISUAL_PUBLIC_EVIDENCE_RE.search(text):
+        missing.append("captura o evidencia visual pública")
+    if not END_USER_E2E_EVIDENCE_RE.search(text):
+        missing.append("flujo end-to-end como usuario final")
+    if not OPERATOR_SUCCESS_CRITERION_RE.search(text):
+        missing.append("criterio de éxito específico del operador")
+    return missing
 
 
 def _missing_visible_release_surfaces(evidence: str) -> list[str]:
@@ -1619,6 +1872,30 @@ def _active_followup_snapshot(limit: int = 5) -> list[dict]:
 
 def _closure_claim_text(*parts: object) -> str:
     return "\n".join(str(part or "") for part in parts if str(part or "").strip())
+
+
+def _manual_pending_close_requires_followup(text: str) -> bool:
+    """Detect visible close text that leaves manual steps pending."""
+    clean = MANUAL_PENDING_NEGATION_RE.sub("", str(text or ""))
+    if not clean.strip():
+        return False
+    if MANUAL_PENDING_STEP_LINE_RE.search(clean):
+        return True
+    return bool(MANUAL_PENDING_MARKER_RE.search(clean) and MANUAL_PENDING_ACTION_RE.search(clean))
+
+
+def _has_followup_for_manual_pending(created_followup_id: str, *parts: object) -> bool:
+    if str(created_followup_id or "").strip():
+        return True
+    for part in parts:
+        for followup_ref in FOLLOWUP_REF_PATTERN.findall(str(part or "")):
+            try:
+                row = get_followup(followup_ref.upper())
+            except Exception:
+                row = None
+            if row and str(row.get("status") or "").upper() != "DELETED":
+                return True
+    return False
 
 
 def handle_confidence_check(
@@ -2209,6 +2486,37 @@ def handle_task_close(
                 ensure_ascii=False,
                 indent=2,
             )
+        cortex_ok, cortex_reason = _latest_cortex_evaluation_satisfies_irreversible_verify(task_id)
+        if IRREVERSIBLE_ACTION_RE.search(closure_text) and not cortex_ok:
+            debt = _ensure_open_debt(
+                task["session_id"],
+                task_id,
+                "irreversible_action_missing_cortex_decide",
+                severity="error",
+                evidence=(
+                    "Irreversible action close lacks a persisted nexo_cortex_decide verification "
+                    f"for the published artifact. reason={cortex_reason} claim={closure_text[:240]!r}"
+                ),
+                debts=debts_created,
+            )
+            return json.dumps(
+                {
+                    "ok": False,
+                    "error": "Cannot close irreversible publish/broadcast/payment action without nexo_cortex_decide verification for the specific artifact.",
+                    "hint": (
+                        "Run `nexo_cortex_decide(...)` with alternatives and evidence tied to the operator-validated "
+                        "artifact/version, then retry with matching artifact hashes."
+                    ),
+                    "task_id": task_id,
+                    "blocked_by": "irreversible_cortex_decide_gate",
+                    "debt_id": debt.get("id"),
+                    "debt_type": "irreversible_action_missing_cortex_decide",
+                    "cortex_status": cortex_reason,
+                    "response_mode": "verify",
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
         hash_blocked, hash_reason = _requires_irreversible_artifact_hash(
             closure_text,
             artifact_hash,
@@ -2363,28 +2671,47 @@ def handle_task_close(
         status="open",
         limit=3,
     )
+    correction_justification_text = "\n".join(
+        part
+        for part in (learning_reasoning, outcome_notes, clean_evidence, clean_change_verify, result, summary)
+        if part
+    )
+    correction_justified_without_learning = _has_correction_no_learning_justification(correction_justification_text)
     if pending_corrections:
-        # SOFT enforcement (Ola 1): do NOT block the close. A detected user
-        # correction without a durable nexo_learning_add opens/dedupes an
-        # error-severity protocol_debt and the task still closes. The daily
-        # self-audit + correction_requirement_summary surface the open debt, and
-        # if THIS close supplies the learning, the `if correction:` block below
-        # captures it and resolves both the requirement and the debt. A hard
-        # block here interrupted the operator on every correction (friction);
-        # the debt is the non-blocking signal instead.
         learning_in_this_close = bool(
             (learning_title or "").strip() and (learning_content or "").strip()
         )
-        if not learning_in_this_close:
+        auto_learning_possible = bool(
+            correction
+            and (
+                clean_change_summary
+                or clean_evidence
+                or outcome_notes
+                or change_why
+            )
+        )
+        if correction_justified_without_learning:
+            _resolve_correction_requirements_with_justification(
+                task["session_id"],
+                task_id,
+                correction_justification_text,
+            )
+        elif not (learning_in_this_close or auto_learning_possible):
+            # SOFT enforcement (Ola 1): a detected correction without a durable
+            # learning no longer BLOCKS the close — the hard block was friction
+            # and could trap the agent mid-work. Open a non-blocking,
+            # error-severity debt and let the close proceed. Persisting the
+            # learning later (nexo_learning_add) resolves the open correction
+            # requirement. _ensure_open_debt is idempotent, so re-closing the
+            # same task never stacks a second debt.
             _ensure_open_debt(
                 task["session_id"],
                 task_id,
                 "missing_learning_after_correction",
                 severity="error",
                 evidence=(
-                    "User correction detected for this session without a durable "
-                    "nexo_learning_add; debt opened (soft enforcement) — task closed "
-                    "but a follow-up learning is required."
+                    "User correction detected for this session without a durable learning "
+                    "or an explicit no-learning justification."
                 ),
                 debts=debts_created,
             )
@@ -2628,14 +2955,28 @@ def handle_task_close(
                 priority="high",
             )
             if not learning.get("ok"):
-                _record_debt(
+                debt = _ensure_open_debt(
                     task["session_id"],
                     task_id,
                     "missing_learning_after_correction",
-                    severity="warn",
+                    severity="error",
                     evidence=f"learning_add failed: {learning.get('error', 'unknown error')}",
                     debts=debts_created,
                 )
+                if not correction_justified_without_learning:
+                    return json.dumps(
+                        {
+                            "ok": False,
+                            "error": "Cannot close corrected work because the learning could not be persisted.",
+                            "hint": "Fix the learning payload or provide an explicit no-learning justification, then retry nexo_task_close.",
+                            "task_id": task_id,
+                            "blocked_by": "correction_learning_persist_failed",
+                            "debt_id": debt.get("id"),
+                            "debt_type": "missing_learning_after_correction",
+                        },
+                        ensure_ascii=False,
+                        indent=2,
+                    )
             else:
                 learning_id = learning.get("id")
                 resolve_protocol_debts(
@@ -2643,6 +2984,16 @@ def handle_task_close(
                     debt_types=["missing_learning_after_correction"],
                     resolution="Learning captured during task_close",
                 )
+                if pending_corrections:
+                    try:
+                        from db import resolve_session_correction_requirements  # type: ignore
+
+                        resolve_session_correction_requirements(
+                            session_id=task["session_id"],
+                            learning_id=int(learning_id or 0) or None,
+                        )
+                    except Exception:
+                        pass
                 if learning.get("superseded_id"):
                     resolve_protocol_debts(
                         task_id=task_id,
@@ -2666,24 +3017,54 @@ def handle_task_close(
                     debt_types=["missing_learning_after_correction"],
                     resolution="Learning auto-captured during task_close",
                 )
+                if pending_corrections:
+                    try:
+                        from db import resolve_session_correction_requirements  # type: ignore
+
+                        resolve_session_correction_requirements(
+                            session_id=task["session_id"],
+                            learning_id=int(learning_id or 0) or None,
+                        )
+                    except Exception:
+                        pass
                 if auto_learning.get("superseded_id"):
                     resolve_protocol_debts(
                         task_id=task_id,
                         debt_types=["unacknowledged_guard_blocking"],
                         resolution=f"Guard blocking rule superseded by canonical learning #{learning_id}",
                     )
+            elif correction_justified_without_learning:
+                _resolve_correction_requirements_with_justification(
+                    task["session_id"],
+                    task_id,
+                    correction_justification_text,
+                )
             else:
-                _record_debt(
+                debt = _ensure_open_debt(
                     task["session_id"],
                     task_id,
                     "missing_learning_after_correction",
-                    severity="warn",
+                    severity="error",
                     evidence=f"Task was marked as corrected but reusable learning capture failed: {auto_learning.get('error', 'missing payload')}",
                     debts=debts_created,
                 )
-                auto_followup = _create_missing_learning_followup(task, task_id, effective_files)
-                if "error" not in auto_followup and not created_followup_id:
-                    created_followup_id = auto_followup.get("id", "")
+                return json.dumps(
+                    {
+                        "ok": False,
+                        "error": "Cannot close corrected work without a persisted learning or explicit no-learning justification.",
+                        "hint": (
+                            "Pass learning_title + learning_content, strengthen change_summary/evidence so auto-capture can persist, "
+                            "or include an explicit no-learning justification."
+                        ),
+                        "task_id": task_id,
+                        "blocked_by": "correction_learning_required",
+                        "debt_id": debt.get("id"),
+                        "debt_type": "missing_learning_after_correction",
+                        "auto_capture_error": auto_learning.get("error", "missing payload"),
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                )
 
     if followup_required:
         description = (followup_description or "").strip()
@@ -2714,6 +3095,48 @@ def handle_task_close(
                 severity="warn",
                 evidence="followup_needed=true but no followup_description was supplied.",
                 debts=debts_created,
+            )
+
+    if clean_outcome == "done" and _manual_pending_close_requires_followup(closure_text):
+        if not _has_followup_for_manual_pending(
+            created_followup_id,
+            followup_id,
+            followup_description,
+            evidence_refs,
+            outcome_notes,
+            result,
+            summary,
+            verification,
+            clean_evidence,
+            clean_change_summary,
+            clean_change_verify,
+        ):
+            debt = _ensure_open_debt(
+                task["session_id"],
+                task_id,
+                "manual_pending_steps_without_followup",
+                severity="error",
+                evidence=(
+                    "Task close attempted done while visible response text left manual steps pending "
+                    f"without a linked followup. Text: {closure_text[:240]!r}"
+                ),
+                debts=debts_created,
+            )
+            return json.dumps(
+                {
+                    "ok": False,
+                    "error": "Cannot close as done while manual steps remain pending without a followup.",
+                    "hint": (
+                        "Create or link a concrete followup for the pending manual step, "
+                        "or close as partial until the step is actually verified."
+                    ),
+                    "task_id": task_id,
+                    "blocked_by": "manual_pending_followup_gate",
+                    "debt_id": debt.get("id"),
+                    "debt_type": "manual_pending_steps_without_followup",
+                },
+                ensure_ascii=False,
+                indent=2,
             )
 
     if requires_decision_support and clean_outcome in {"done", "partial", "failed"}:
@@ -2777,6 +3200,40 @@ def handle_task_close(
             ensure_ascii=False,
             indent=2,
         )
+
+    if clean_outcome == "done" and _is_high_stakes_public_work(task, work_type, stakes, closure_text):
+        missing_ux_items = _missing_ux_first_release_gate_items(live_surface_evidence)
+        if missing_ux_items:
+            debt = _ensure_open_debt(
+                task["session_id"],
+                task_id,
+                "ux_first_release_gate_incomplete",
+                severity="error",
+                evidence=(
+                    "High-stakes release/deploy/publish close lacked the UX-first release checklist. "
+                    f"Missing items: {', '.join(missing_ux_items)}. "
+                    f"Evidence provided: {live_surface_evidence[:240]!r}"
+                ),
+                debts=debts_created,
+            )
+            return json.dumps(
+                {
+                    "ok": False,
+                    "error": "Cannot close high-stakes release/deploy/publish as done without UX-first public validation.",
+                    "hint": (
+                        "Attach a screenshot or visual public-surface proof, one end-to-end final-user flow, "
+                        "and the operator's specific success criterion for this release."
+                    ),
+                    "task_id": task_id,
+                    "blocked_by": "ux_first_release_gate",
+                    "debt_id": debt.get("id"),
+                    "debt_type": "ux_first_release_gate_incomplete",
+                    "missing_items": missing_ux_items,
+                    "response_mode": "verify",
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
 
     if clean_outcome == "done" and _is_high_stakes_public_work(task, work_type, stakes, closure_text):
         missing_surfaces = _missing_visible_release_surfaces(live_surface_evidence)

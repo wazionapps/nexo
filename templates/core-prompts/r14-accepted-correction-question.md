@@ -1,0 +1,1 @@
+Decide whether the assistant text accepts, concedes, or agrees with the user correction as a real correction that should create a reusable learning. Use semantic meaning only. Do not rely on literal keyword lists. Return the positive label only when the assistant is acknowledging the user's correction or saying it will adjust its rule/criterion.

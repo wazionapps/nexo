@@ -33,15 +33,83 @@ def test_live_source_preflight_accepts_expected_wazion_matrix():
         "wazion",
         "--repo",
         "/Users/franciscoc/Documents/_PhpstormProjects/WAzion/WAzion",
+        "--path",
+        "/Users/franciscoc/Documents/_PhpstormProjects/WAzion/WAzion + /opt/wazion-wa",
         "--branch",
         "main",
+        "--credential-or-port",
+        "bd-wazion-cloud-sql-proxy/* + gcloud recambiosyaccesoriosbmw/europe-west1-b",
         "--cloud-project",
         "recambiosyaccesoriosbmw",
+        "--runtime-environment",
+        "Cloud Run chrome-extension-op-google and PM2 on wazion-whatsapp-vps",
         "--table",
         "allinoneapp_main",
+        "--minimum-smoke",
+        "Cloud Run public health plus gcloud SSH pm2/x-proxy/nexo-alert-state check",
     )
     assert result.returncode == 0, result.stderr
     assert "OK: live-source matrix fixed domain=wazion" in result.stdout
+
+
+def test_live_source_preflight_accepts_cloudflare_matrix():
+    result = run_script(
+        LIVE_SOURCE,
+        "--domain",
+        "cloudflare",
+        "--repo",
+        "Cloudflare account live API/dashboard",
+        "--path",
+        "zones/routes/rulesets/workers for the exact domain under diagnosis",
+        "--branch",
+        "live",
+        "--server",
+        "Cloudflare API for the target zone",
+        "--credential-or-port",
+        "cloudflare/* token with zone read scope",
+        "--cloud-project",
+        "none",
+        "--runtime-environment",
+        "Cloudflare edge live configuration",
+        "--table",
+        "zone DNS records, worker routes, rulesets and SSL/TLS settings",
+        "--minimum-smoke",
+        "query exact zone plus DNS/routes/rulesets and curl affected public URL",
+        "--window",
+        "current_live_state_plus_explicit_incident_window",
+    )
+    assert result.returncode == 0, result.stderr
+    assert "OK: live-source matrix fixed domain=cloudflare" in result.stdout
+
+
+def test_live_source_preflight_accepts_billing_matrix():
+    result = run_script(
+        LIVE_SOURCE,
+        "--domain",
+        "billing",
+        "--repo",
+        "/Users/franciscoc/Documents/_PhpstormProjects/nexo-desktop-web",
+        "--path",
+        "product catalog, pricing config, Stripe/provider dashboard and live DB records",
+        "--branch",
+        "main",
+        "--server",
+        "nexo-desktop.com production backend plus provider billing dashboard/API",
+        "--credential-or-port",
+        "nexo-desktop-web production credentials + provider billing credentials",
+        "--cloud-project",
+        "none",
+        "--runtime-environment",
+        "Laravel production billing backend and provider billing surface",
+        "--table",
+        "plans/prices/subscriptions/invoices/credits ledger",
+        "--minimum-smoke",
+        "read catalog/config and one live provider/DB record before quoting or diagnosing billing",
+        "--window",
+        "current_catalog_config_plus_explicit_invoice_window",
+    )
+    assert result.returncode == 0, result.stderr
+    assert "OK: live-source matrix fixed domain=billing" in result.stdout
 
 
 def test_safe_secret_view_masks_env_values(tmp_path):

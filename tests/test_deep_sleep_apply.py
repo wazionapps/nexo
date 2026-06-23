@@ -813,3 +813,80 @@ def test_apply_action_dispatches_sanitized_product_gap_report(monkeypatch, tmp_p
     assert "[redacted-email]" in outbound
     assert "[redacted-url]" in outbound
     assert "[redacted-secret]" in outbound
+
+
+def test_apply_action_routes_code_change_overlap_to_sanitized_ticket(monkeypatch, tmp_path):
+    apply_mod = _load_apply_module(monkeypatch, tmp_path)
+    _seed_evolution_log_table(Path(os.environ["NEXO_DB"]))
+
+    import db
+    import tools_api_call
+
+    db.init_db()
+    conn = sqlite3.connect(os.environ["NEXO_DB"])
+    now = 1_783_000_000
+    conn.execute(
+        "INSERT INTO learnings (category, title, content, created_at, updated_at, status) VALUES (?, ?, ?, ?, ?, ?)",
+        (
+            "deep-sleep",
+            "Reuse existing pre-release validation",
+            "Add pre-release validation script that runs doctor parity tests and publish checks before cutting release",
+            now,
+            now,
+            "active",
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+    calls = []
+
+    def fake_create(subject, message, priority="normal", client_message_id="", origin="desktop"):
+        calls.append(
+            {
+                "subject": subject,
+                "message": message,
+                "priority": priority,
+                "client_message_id": client_message_id,
+                "origin": origin,
+            }
+        )
+        return "HTTP 201 POST /api/support/tickets\n{}"
+
+    monkeypatch.setattr(tools_api_call, "handle_support_ticket_create", fake_create)
+
+    action = {
+        "action_type": "code_change",
+        "action_class": "auto_apply",
+        "dedupe_key": "ds-overlap-release-script",
+        "impact": "high",
+        "content": {
+            "dimension": "reliability",
+            "title": "Add pre-release validation script",
+            "action": "Add pre-release validation script that runs doctor parity tests and publish checks before cutting release",
+            "reasoning": "Deep Sleep saw repeated release misses.",
+            "changes": [
+                {
+                    "file": "/Users/franciscoc/private/release.py",
+                    "operation": "add",
+                    "content": "secret=sk-testsecret123456",
+                }
+            ],
+        },
+    }
+
+    log_entry = apply_mod.apply_action(action, run_id="ds-test")
+
+    assert log_entry["status"] == "applied"
+    assert log_entry["details"]["outcome"] == "overlap_ticket_created"
+    assert log_entry["details"]["overlap"]["source"] == "learning"
+    assert calls
+    assert calls[0]["origin"] == "auto_incident"
+    assert calls[0]["client_message_id"].startswith("product-gap:overlap:")
+    assert "/Users/franciscoc" not in calls[0]["message"]
+    assert "sk-testsecret123456" not in calls[0]["message"]
+
+    conn = sqlite3.connect(os.environ["NEXO_DB"])
+    count = conn.execute("SELECT COUNT(*) FROM evolution_log").fetchone()[0]
+    conn.close()
+    assert count == 0

@@ -33,8 +33,14 @@ CLASSIFIER_QUESTION = render_core_prompt("r14-correction-learning-question")
 SEMANTIC_LABELS = ("negative_feedback", "ordinary_request")
 POSITIVE_LABEL = "negative_feedback"
 
+ACCEPTANCE_CLASSIFIER_QUESTION = render_core_prompt("r14-accepted-correction-question")
+ACCEPTANCE_LABELS = ("accepted_correction", "other_response")
+ACCEPTANCE_POSITIVE_LABEL = "accepted_correction"
+
 
 INJECTION_PROMPT_TEMPLATE = render_core_prompt("r14-correction-learning-injection")
+
+ACCEPTANCE_INJECTION_PROMPT_TEMPLATE = render_core_prompt("r14-accepted-correction-injection")
 
 
 DEFAULT_WINDOW_TOOL_CALLS = 2
@@ -83,9 +89,65 @@ def detect_correction(user_text: str, *, classifier=None) -> bool:
         return False
 
 
+def detect_accepted_correction(
+    assistant_text: str,
+    *,
+    correction_text: str = "",
+    classifier=None,
+) -> bool:
+    """Return True iff assistant text accepts a previous user correction.
+
+    This is intentionally a second semantic classifier. R14's first detector
+    identifies corrections in user turns; this detector identifies the
+    dangerous follow-up pattern where the agent verbally accepts the correction
+    but has not persisted a learning yet.
+    """
+    text = (assistant_text or "").strip()
+    if not text:
+        return False
+    context = text
+    if (correction_text or "").strip():
+        context = (
+            "USER_CORRECTION:\n"
+            f"{correction_text.strip()}\n\n"
+            "ASSISTANT_DRAFT:\n"
+            f"{text}"
+        )
+    if classifier is None:
+        try:
+            from semantic_router import route as semantic_route
+        except Exception:
+            return False
+        try:
+            result = semantic_route(
+                decision_kind="r14_accepted_correction",
+                question=ACCEPTANCE_CLASSIFIER_QUESTION,
+                context=context,
+                labels=ACCEPTANCE_LABELS,
+            )
+            return bool(
+                result.ok
+                and (result.label or result.verdict) == ACCEPTANCE_POSITIVE_LABEL
+            )
+        except Exception:
+            return False
+    try:
+        return bool(
+            classifier(
+                question=ACCEPTANCE_CLASSIFIER_QUESTION,
+                context=context,
+            )
+        )
+    except Exception:
+        return False
+
+
 __all__ = [
     "detect_correction",
+    "detect_accepted_correction",
     "CLASSIFIER_QUESTION",
+    "ACCEPTANCE_CLASSIFIER_QUESTION",
     "INJECTION_PROMPT_TEMPLATE",
+    "ACCEPTANCE_INJECTION_PROMPT_TEMPLATE",
     "DEFAULT_WINDOW_TOOL_CALLS",
 ]
