@@ -358,13 +358,20 @@ def check_launch_agents():
                         "last_status": last_status,
                     }
 
+    def _is_benign_last_status(last_status: str) -> bool:
+        # launchd reports 143 when a managed cron wrapper was stopped by SIGTERM
+        # during reload/supervision. The wrapper records the real failure signal.
+        return str(last_status).strip() in ("0", "", "143")
+
     for agent in EXPECTED_AGENTS:
         result = {"name": agent, "status": "OK", "detail": "", "repaired": False}
 
         if agent in loaded_labels:
             result["detail"] = "Loaded"
             last_status = launch_statuses.get(agent, {}).get("last_status", "0")
-            if last_status not in ("0", ""):
+            if str(last_status).strip() == "143":
+                result["detail"] = "Loaded, last exit status=143 (SIGTERM/reload)"
+            elif not _is_benign_last_status(last_status):
                 result["status"] = "WARN"
                 result["detail"] = f"Loaded, last exit status={last_status}"
         else:
@@ -390,7 +397,7 @@ def check_launch_agents():
         if label in expected_set:
             continue
         last_status = status_info.get("last_status", "0")
-        if last_status in ("0", ""):
+        if _is_benign_last_status(last_status):
             continue
         results.append({
             "name": label,

@@ -1126,3 +1126,28 @@ def test_immune_database_check_skips_missing_legacy_claude_mem(tmp_path, monkeyp
 
     assert names == ["nexo.db", "cognitive.db"]
     assert all(row["status"] == "OK" for row in results)
+
+
+def test_immune_launchagent_treats_sigterm_exit_as_benign(tmp_path, monkeypatch):
+    home = tmp_path / "nexo-home"
+    home.mkdir(parents=True)
+    monkeypatch.setenv("NEXO_HOME", str(home))
+    module = _load_script_module("nexo_immune_launchagent_sigterm_test", "nexo-immune.py")
+
+    monkeypatch.setattr("platform.system", lambda: "Darwin")
+    monkeypatch.setattr(module, "EXPECTED_AGENTS", ["com.nexo.followup-runner"])
+
+    def fake_run_cmd(cmd: str):
+        assert cmd == "launchctl list"
+        return 0, "-\t143\tcom.nexo.followup-runner\n", ""
+
+    monkeypatch.setattr(module, "run_cmd", fake_run_cmd)
+
+    results = module.check_launch_agents()
+
+    assert results == [{
+        "name": "com.nexo.followup-runner",
+        "status": "OK",
+        "detail": "Loaded, last exit status=143 (SIGTERM/reload)",
+        "repaired": False,
+    }]
