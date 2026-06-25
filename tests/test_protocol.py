@@ -29,6 +29,14 @@ def _register_session(sid: str):
     return sid
 
 
+def _verified_against_real_evidence() -> str:
+    return json.dumps([
+        "Escenario reproducido: flujo de despliegue abierto en el endpoint publico tras publicar.",
+        "Datos REALES usados: URL de produccion https://nexo-desktop.com/downloads/update.json y artefacto sha256:abc123.",
+        "Hipotesis NO reproducidas: no se reprodujo fallo de descarga ni mismatch de version en manifiestos publicos.",
+    ])
+
+
 def test_task_open_records_protocol_contract():
     from db import get_db
     from plugins.protocol import handle_task_open
@@ -887,6 +895,114 @@ def test_task_close_blocks_irreversible_publish_without_specific_post_evidence_o
     assert closed["debt_type"] == "irreversible_action_missing_specific_ok"
 
 
+def test_task_close_blocks_deployed_execute_without_verified_against_real_checklist():
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    sid = _register_session("nexo-1003-2003-real-gate")
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Deploy production backend fix",
+            task_type="execute",
+            area="release",
+            plan='["deploy", "verify live endpoint"]',
+            verification_step="curl public production endpoint",
+            stakes="normal",
+        )
+    )
+
+    closed = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="deployed",
+            evidence="curl https://example.com/health returned HTTP 200 against the live production endpoint.",
+            files_changed="/tmp/deploy-marker",
+            change_summary="Deploy production backend fix",
+            change_why="Regression test for verified-against-real gate",
+            change_verify="curl public production endpoint HTTP 200",
+        )
+    )
+
+    assert closed["ok"] is False
+    assert closed["blocked_by"] == "verified_against_real"
+    assert closed["debt_type"] == "verified_against_real_missing"
+    assert "escenario reproducido" in closed["missing_items"]
+    assert closed["ack_required"] == "partial_verification_acknowledged"
+
+
+def test_task_close_allows_partial_deploy_with_verified_against_real_ack():
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    sid = _register_session("nexo-1003-2003-real-partial")
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Deploy production backend fix",
+            task_type="execute",
+            area="release",
+            plan='["deploy", "verify live endpoint"]',
+            verification_step="curl public production endpoint",
+            stakes="normal",
+        )
+    )
+
+    closed = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="partial",
+            evidence="curl https://example.com/health returned HTTP 200 against the live production endpoint.",
+            work_type="deploy",
+            stakes="high",
+            files_changed="/tmp/deploy-marker",
+            change_summary="Deploy production backend fix",
+            change_why="Regression test for partial verified-against-real ack",
+            change_verify="curl public production endpoint HTTP 200",
+            partial_verification_acknowledged=True,
+            partial_verification_reason="No hubo datos reales suficientes para reproducir el caso reportado en esta ventana.",
+        )
+    )
+
+    assert closed["ok"] is True
+    assert closed["outcome"] == "partial"
+    assert closed["status"] == "clean"
+
+
+def test_task_close_allows_deployed_execute_with_verified_against_real_checklist():
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    sid = _register_session("nexo-1003-2003-real-ok")
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Deploy production backend fix",
+            task_type="execute",
+            area="release",
+            plan='["deploy", "verify live endpoint"]',
+            verification_step="curl public production endpoint",
+            stakes="normal",
+        )
+    )
+
+    closed = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="deployed",
+            evidence="curl https://example.com/health returned HTTP 200 against the live production endpoint.",
+            files_changed="/tmp/deploy-marker",
+            change_summary="Deploy production backend fix",
+            change_why="Regression test for verified-against-real gate",
+            change_verify="curl public production endpoint HTTP 200",
+            verification_evidence=_verified_against_real_evidence(),
+        )
+    )
+
+    assert closed["ok"] is True
+    assert closed["outcome"] == "done"
+
+
 def test_task_close_blocks_irreversible_publish_without_matching_human_artifact_hash():
     from plugins.cortex import handle_cortex_decide
     from plugins.protocol import handle_task_open, handle_task_close
@@ -982,6 +1098,7 @@ def test_task_close_blocks_irreversible_publish_without_cortex_decide():
             change_summary="Publish stable Desktop release",
             change_why="Regression test for irreversible cortex gate",
             change_verify="Artifact hash matches the human-validated release candidate",
+            verification_evidence=_verified_against_real_evidence(),
         )
     )
 
@@ -1052,6 +1169,7 @@ def test_task_close_allows_irreversible_publish_with_cortex_and_matching_artifac
             change_summary="Publish stable Desktop release",
             change_why="Regression test for irreversible cortex gate",
             change_verify="Artifact hash matches the human-validated release candidate",
+            verification_evidence=_verified_against_real_evidence(),
         )
     )
 
@@ -1693,6 +1811,7 @@ def test_high_stakes_action_close_stays_clean_with_cortex_evaluation():
             change_summary="Deploy production release package",
             change_why="Exercise clean high-stakes release closure with full evidence matrix",
             change_verify="Public API/UI/domain/manifests/artifacts/live smoke evidence supplied",
+            verification_evidence=_verified_against_real_evidence(),
         )
     )
 

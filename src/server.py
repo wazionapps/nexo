@@ -875,6 +875,9 @@ def nexo_task_close(
     stakes: str = "",
     artifact_hash: str = "",
     last_human_validation_of_artifact_hash: str = "",
+    verification_evidence: str = "",
+    partial_verification_acknowledged: bool = False,
+    partial_verification_reason: str = "",
 ) -> str:
     """Close a protocol task with evidence and optional artifacts.
 
@@ -914,6 +917,9 @@ def nexo_task_close(
         stakes,
         artifact_hash,
         last_human_validation_of_artifact_hash,
+        verification_evidence,
+        partial_verification_acknowledged,
+        partial_verification_reason,
     )
 
 

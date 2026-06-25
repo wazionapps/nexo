@@ -477,6 +477,8 @@ TASK_TYPE_ALIASES = {
 CLOSE_OUTCOME_ALIASES = {
     "complete": "done",
     "completed": "done",
+    "deployed": "done",
+    "published": "done",
 }
 
 HIGH_STAKES_OVERRIDE_TRUE = {"high", "critical", "elevated"}
@@ -1852,6 +1854,51 @@ def _missing_visible_release_surfaces(evidence: str) -> list[str]:
     return missing
 
 
+VERIFIED_AGAINST_REAL_SCENARIO_RE = re.compile(
+    r"\b(?:scenario|escenario|case|caso|flow|flujo|symptom|s[ií]ntoma|reproduc(?:ed|ido|ida|ir)|repro)\b",
+    re.IGNORECASE,
+)
+VERIFIED_AGAINST_REAL_DATA_RE = re.compile(
+    r"\b(?:real(?:es)?|live|producci[oó]n|production|cliente|customer|pedido|order|booking|reserva|bd|db|cloud sql|shopify|vapi)\b",
+    re.IGNORECASE,
+)
+VERIFIED_AGAINST_REAL_HYPOTHESES_RE = re.compile(
+    r"\b(?:hip[oó]tesis|hypothes(?:is|es)|not reproduced|no reproducid(?:a|as|o|os)|descartad(?:a|as|o|os)|ruled out|no confirmad(?:a|as|o|os))\b",
+    re.IGNORECASE,
+)
+PARTIAL_VERIFICATION_ACK_TOKEN = "partial_verification_acknowledged"
+
+
+def _requires_verified_against_real_checklist(
+    task: dict,
+    original_outcome: str,
+    clean_outcome: str,
+    work_type: str,
+    stakes: str,
+    closure_text: str,
+) -> bool:
+    if str(task.get("task_type") or "").strip() != "execute":
+        return False
+    clean_original = (original_outcome or "").strip().lower()
+    explicit_publish_outcome = clean_original in {"published", "deployed"}
+    if clean_outcome not in {"done", "partial"} and not explicit_publish_outcome:
+        return False
+    return explicit_publish_outcome or _is_high_stakes_public_work(task, work_type, stakes, closure_text)
+
+
+def _missing_verified_against_real_items(verification_evidence) -> list[str]:
+    items = _parse_list(verification_evidence)
+    joined = "\n".join(items)
+    missing: list[str] = []
+    if not items or not VERIFIED_AGAINST_REAL_SCENARIO_RE.search(joined):
+        missing.append("escenario reproducido")
+    if not items or not VERIFIED_AGAINST_REAL_DATA_RE.search(joined):
+        missing.append("datos reales usados")
+    if not items or not VERIFIED_AGAINST_REAL_HYPOTHESES_RE.search(joined):
+        missing.append("hipótesis no reproducidas")
+    return missing
+
+
 def _active_followup_snapshot(limit: int = 5) -> list[dict]:
     try:
         followups = get_followups("active")
@@ -2350,6 +2397,9 @@ def handle_task_close(
     stakes: str = "",
     artifact_hash: str = "",
     last_human_validation_of_artifact_hash: str = "",
+    verification_evidence: str = "",
+    partial_verification_acknowledged: bool = False,
+    partial_verification_reason: str = "",
 ) -> str:
     """Close a protocol task and automatically record the required discipline artifacts."""
     task = get_protocol_task(task_id.strip())
@@ -3263,6 +3313,57 @@ def handle_task_close(
                     "debt_id": debt.get("id"),
                     "debt_type": "visible_release_surface_matrix_incomplete",
                     "missing_surfaces": missing_surfaces,
+                    "response_mode": "verify",
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+
+    missing_verified_against_real = _missing_verified_against_real_items(verification_evidence)
+    if _requires_verified_against_real_checklist(
+        task,
+        outcome_candidate,
+        clean_outcome,
+        work_type,
+        stakes,
+        closure_text,
+    ) and missing_verified_against_real:
+        partial_ack = _parse_bool(partial_verification_acknowledged)
+        partial_reason = (partial_verification_reason or outcome_notes or "").strip()
+        if clean_outcome == "partial" and partial_ack and partial_reason:
+            clean_evidence = (
+                f"{clean_evidence}\n"
+                f"{PARTIAL_VERIFICATION_ACK_TOKEN}: {partial_reason}\n"
+                f"missing_verified_against_real: {', '.join(missing_verified_against_real)}"
+            ).strip()
+        else:
+            debt = _ensure_open_debt(
+                task["session_id"],
+                task_id,
+                "verified_against_real_missing",
+                severity="error",
+                evidence=(
+                    "Production execute close lacked verified-against-real checklist. "
+                    f"Missing items: {', '.join(missing_verified_against_real)}. "
+                    f"verification_evidence={str(verification_evidence)[:240]!r}"
+                ),
+                debts=debts_created,
+            )
+            return json.dumps(
+                {
+                    "ok": False,
+                    "error": "Cannot close production publish/deploy as verified without the verified-against-real checklist.",
+                    "hint": (
+                        "Pass verification_evidence[] with: escenario reproducido, datos REALES usados, "
+                        "and hipótesis NO reproducidas. If verification is partial, close with outcome='partial', "
+                        "partial_verification_acknowledged=true, and partial_verification_reason."
+                    ),
+                    "task_id": task_id,
+                    "blocked_by": "verified_against_real",
+                    "debt_id": debt.get("id"),
+                    "debt_type": "verified_against_real_missing",
+                    "missing_items": missing_verified_against_real,
+                    "ack_required": PARTIAL_VERIFICATION_ACK_TOKEN,
                     "response_mode": "verify",
                 },
                 ensure_ascii=False,

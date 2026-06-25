@@ -228,6 +228,15 @@ def test_production_mutation_detects_external_surfaces(monkeypatch):
     commands = [
         "scp app.php root@server:/home/acct/public_html/app.php",
         "ssh vicshop 'cp /tmp/app.php /home/acct/httpdocs/app.php'",
+        "firebase deploy --project prod",
+        "docker push europe-west1-docker.pkg.dev/proj/app:latest",
+        "kubectl apply -f k8s/deployment.yaml",
+        "terraform apply -auto-approve",
+        "shopify theme push --store germany-vic-shop --theme 123 --allow-live",
+        "vercel --prod",
+        "netlify deploy --prod --site recambios",
+        "az webapp deployment source config-zip --resource-group prod --name app --src app.zip",
+        "git push origin feature/returns # auto_deploy",
         "gcloud run services update api --image image:latest",
         "gcloud dns record-sets transaction execute --zone prod",
         "whmapi1 createacct username=test domain=example.com",
@@ -235,6 +244,7 @@ def test_production_mutation_detects_external_surfaces(monkeypatch):
     ]
 
     assert all(engine._production_mutation_summary("Bash", {"command": cmd}) for cmd in commands)
+    assert not engine._production_mutation_summary("Bash", {"command": "git push origin feature/returns"})
 
 
 def test_production_mutation_close_with_change_trace_is_allowed(monkeypatch):
