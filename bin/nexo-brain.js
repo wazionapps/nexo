@@ -1346,7 +1346,17 @@ function getCoreRuntimeFlatFiles(srcDir = path.join(__dirname, "..", "src")) {
 }
 
 function getCoreRuntimePackages() {
-  return ["db", "cognitive", "doctor", "local_context", "managed_mcp", "product_knowledge"];
+  return [
+    "db",
+    "cognitive",
+    "doctor",
+    "local_context",
+    "managed_mcp",
+    "product_knowledge",
+    "disk_recovery",
+    "guardrails",
+    "presets",
+  ];
 }
 
 // Brain contracts — files the NEXO Brain publishes to consumers like
@@ -3582,20 +3592,85 @@ async function runSetup() {
 
       // Same version — backfill crons/ if missing (for installs before crons was shipped)
       const syncPython = findVenvPython(NEXO_HOME) || run("which python3") || "python3";
+      const copyRepairRuntimeDir = (src, dest) => {
+        fs.mkdirSync(dest, { recursive: true });
+        fs.readdirSync(src).forEach(item => {
+          if (item === "__pycache__" || item.endsWith(".pyc") || item.endsWith(".pyo") || item.endsWith(".db") || isDuplicateArtifactName(item, src)) return;
+          const srcP = path.join(src, item);
+          const destP = path.join(dest, item);
+          if (fs.statSync(srcP).isDirectory()) copyRepairRuntimeDir(srcP, destP);
+          else fs.copyFileSync(srcP, destP);
+        });
+      };
+      const refreshSameVersionCoreRuntime = () => {
+        const coreFlatFiles = getCoreRuntimeFlatFiles(bundleSrcDir);
+        coreFlatFiles.forEach((fname) => {
+          const srcFile = path.join(bundleSrcDir, fname);
+          const destFile = path.join(NEXO_HOME, "core", fname);
+          if (fs.existsSync(srcFile)) {
+            fs.mkdirSync(path.dirname(destFile), { recursive: true });
+            fs.copyFileSync(srcFile, destFile);
+          }
+        });
+
+        getCoreRuntimePackages().forEach((pkg) => {
+          const pkgSrc = path.join(bundleSrcDir, pkg);
+          if (fs.existsSync(pkgSrc)) {
+            copyRepairRuntimeDir(pkgSrc, path.join(NEXO_HOME, "core", pkg));
+          }
+        });
+
+        const hooksSrc = path.join(bundleSrcDir, "hooks");
+        if (fs.existsSync(hooksSrc)) {
+          const hooksDest = path.join(NEXO_HOME, "core", "hooks");
+          copyRepairRuntimeDir(hooksSrc, hooksDest);
+          fs.readdirSync(hooksDest).filter(f => f.endsWith(".sh")).forEach(f => {
+            fs.chmodSync(path.join(hooksDest, f), "755");
+          });
+        }
+
+        const scriptsSrc = path.join(bundleSrcDir, "scripts");
+        if (fs.existsSync(scriptsSrc)) {
+          const scriptsDest = path.join(NEXO_HOME, "core", "scripts");
+          copyRepairRuntimeDir(scriptsSrc, scriptsDest);
+          fs.readdirSync(scriptsDest).filter(f => f.endsWith(".sh")).forEach(f => {
+            fs.chmodSync(path.join(scriptsDest, f), "755");
+          });
+          syncWatchdogHashRegistry(NEXO_HOME);
+        }
+
+        const pluginsSrc = path.join(bundleSrcDir, "plugins");
+        const pluginsDest = path.join(NEXO_HOME, "core", "plugins");
+        fs.mkdirSync(pluginsDest, { recursive: true });
+        if (fs.existsSync(pluginsSrc)) {
+          fs.readdirSync(pluginsSrc)
+            .filter(f => f.endsWith(".py") && !isDuplicateArtifactName(f, pluginsSrc))
+            .forEach((f) => fs.copyFileSync(path.join(pluginsSrc, f), path.join(pluginsDest, f)));
+        }
+
+        ["dashboard", "rules", "skills"].forEach((pkg) => {
+          const pkgSrc = path.join(bundleSrcDir, pkg);
+          if (fs.existsSync(pkgSrc)) {
+            copyRepairRuntimeDir(pkgSrc, path.join(NEXO_HOME, "core", pkg));
+          }
+        });
+
+        publishBrainContracts(bundleSrcDir, NEXO_HOME);
+        writeRuntimeCoreArtifactsManifest(NEXO_HOME, bundleSrcDir);
+      };
+      refreshSameVersionCoreRuntime();
+      log("Refreshed core runtime files.");
+      syncRuntimePackageMetadata(bundleRoot, NEXO_HOME);
+      const sameVersionActivation = activateVersionedRuntimeSnapshot(syncPython, NEXO_HOME, currentVersion);
+      if (!sameVersionActivation.ok) {
+        throw new Error(`Runtime activation failed: ${sameVersionActivation.error}`);
+      }
+      log(`Runtime activation: core/current -> versions/${currentVersion}`);
+
       const cronsDest = resolveRuntimeCronsDir(NEXO_HOME);
       const cronsSrc = path.join(bundleSrcDir, "crons");
       if (fs.existsSync(cronsSrc)) {
-        const copyDirRec2 = (src, dest) => {
-          fs.mkdirSync(dest, { recursive: true });
-          fs.readdirSync(src).forEach(item => {
-            if (item === "__pycache__" || item.endsWith(".pyc") || item.endsWith(".db") || isDuplicateArtifactName(item, src)) return;
-            const srcP = path.join(src, item);
-            const destP = path.join(dest, item);
-            if (fs.statSync(srcP).isDirectory()) copyDirRec2(srcP, destP);
-            else fs.copyFileSync(srcP, destP);
-          });
-        };
-        copyDirRec2(cronsSrc, cronsDest);
+        copyRepairRuntimeDir(cronsSrc, cronsDest);
         log("Refreshed crons/ directory.");
 
         const syncStatus = syncCoreProcessesFromManifest(syncPython, NEXO_HOME, cronsSrc);
@@ -3610,17 +3685,7 @@ async function runSetup() {
       const skillsCoreDest = path.join(NEXO_HOME, "core", "skills");
       const skillsCoreSrc = path.join(bundleSrcDir, "skills");
       if (fs.existsSync(skillsCoreSrc)) {
-        const copyDirRec3 = (src, dest) => {
-          fs.mkdirSync(dest, { recursive: true });
-          fs.readdirSync(src).forEach(item => {
-            if (item === "__pycache__" || item.endsWith(".pyc") || isDuplicateArtifactName(item, src)) return;
-            const srcP = path.join(src, item);
-            const destP = path.join(dest, item);
-            if (fs.statSync(srcP).isDirectory()) copyDirRec3(srcP, destP);
-            else fs.copyFileSync(srcP, destP);
-          });
-        };
-        copyDirRec3(skillsCoreSrc, skillsCoreDest);
+        copyRepairRuntimeDir(skillsCoreSrc, skillsCoreDest);
         log("Refreshed skills-core/ directory.");
       }
 
@@ -3632,7 +3697,6 @@ async function runSetup() {
           fs.copyFileSync(srcFile, destFile);
         }
       });
-      syncRuntimePackageMetadata(bundleRoot, NEXO_HOME);
 
       const templatesSrc = bundleTemplatesDir;
       const templatesDest = path.join(NEXO_HOME, "templates");

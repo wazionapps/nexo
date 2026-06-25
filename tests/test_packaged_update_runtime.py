@@ -807,6 +807,22 @@ def test_packaged_installer_repairs_same_version_runtime_when_core_current_lags(
     assert 'log(`  Runtime activation: core/current -> versions/${currentVersion}`);' in text
 
 
+def test_packaged_installer_same_version_repair_refreshes_active_core():
+    installer = REPO_ROOT / "bin" / "nexo-brain.js"
+    text = installer.read_text(encoding="utf-8")
+
+    same_version_section = text[text.index("// Same version — backfill crons/"):]
+
+    assert '"disk_recovery"' in text
+    assert '"guardrails"' in text
+    assert '"presets"' in text
+    assert "const refreshSameVersionCoreRuntime = () => {" in same_version_section
+    assert "refreshSameVersionCoreRuntime();" in same_version_section
+    assert 'log("Refreshed core runtime files.");' in same_version_section
+    assert "const sameVersionActivation = activateVersionedRuntimeSnapshot(syncPython, NEXO_HOME, currentVersion);" in same_version_section
+    assert "throw new Error(`Runtime activation failed: ${sameVersionActivation.error}`);" in same_version_section
+
+
 def test_packaged_installer_verifies_bundled_local_models_before_locking():
     installer = REPO_ROOT / "bin" / "nexo-brain.js"
     text = installer.read_text(encoding="utf-8")
