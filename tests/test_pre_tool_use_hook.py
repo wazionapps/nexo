@@ -116,6 +116,29 @@ def test_bash_rm_rf_with_gate_off_does_not_touch_tool():
     assert "permissionDecision" not in (proc.stdout or "")
 
 
+def test_thinking_block_400_payload_blocks_tool_and_instructs_clear():
+    payload = {
+        "session_id": "test-session-thinking-400",
+        "tool_name": "Read",
+        "error": {
+            "message": (
+                "Error 400 invalid_request_error: thinking or redacted_thinking "
+                "blocks cannot be modified"
+            )
+        },
+        "tool_input": {"file_path": "/etc/hosts"},
+    }
+    proc = _invoke_hook(payload)
+    assert proc.returncode == 2, proc.stderr
+    response = json.loads(proc.stdout.strip())
+    hso = response.get("hookSpecificOutput") or {}
+    assert hso.get("hookEventName") == "PreToolUse"
+    assert hso.get("permissionDecision") == "deny"
+    reason = hso.get("permissionDecisionReason") or ""
+    assert "/clear" in reason
+    assert "thinking" in reason
+
+
 def test_ssh_remote_write_blocked_in_hard_mode():
     payload = {
         "session_id": "test-session-hard-ssh",

@@ -42,6 +42,21 @@ PARTIAL_TASK_CLOSE_RE = re.compile(
     r"(nexo_task_close|mcp__nexo__nexo_task_close).{0,800}['\"]?outcome['\"]?\s*[:=]\s*['\"]?partial",
     re.IGNORECASE | re.DOTALL,
 )
+THINKING_BLOCK_ERROR_RE = re.compile(
+    r"("
+    r"(?:error\s*400|400\s+bad\s+request|invalid_request_error|bad_request).{0,500}"
+    r"(?:thinking|redacted_thinking).{0,500}cannot\s+be\s+modified"
+    r"|"
+    r"(?:thinking|redacted_thinking).{0,500}cannot\s+be\s+modified.{0,500}"
+    r"(?:error\s*400|400\s+bad\s+request|invalid_request_error|bad_request)"
+    r")",
+    re.IGNORECASE | re.DOTALL,
+)
+THINKING_RECOVERY_MESSAGE = (
+    "Sesión bloqueada por un error 400 de bloques `thinking`/`redacted_thinking`. "
+    "He guardado un checkpoint y un borrador de diario con el contexto reciente. "
+    "Ejecuta `/clear` y dime `continúa` para retomar desde el estado guardado."
+)
 
 
 def _record(duration_ms: int, exit_code: int) -> None:
@@ -88,6 +103,22 @@ def _read_recent_lines(path: Path, max_lines: int = 800) -> list[str]:
         return []
 
 
+def _read_stdin_json() -> dict:
+    if sys.stdin.isatty():
+        return {}
+    try:
+        raw = sys.stdin.read()
+    except Exception:
+        return {}
+    if not raw.strip():
+        return {}
+    try:
+        payload = json.loads(raw)
+    except Exception:
+        return {"raw_stdin": raw[:4000]}
+    return payload if isinstance(payload, dict) else {}
+
+
 def _line_session_id(raw_line: str) -> str:
     try:
         payload = json.loads(raw_line)
@@ -132,6 +163,129 @@ def _line_text(line: str) -> str:
     if isinstance(payload, dict):
         return json.dumps(payload, ensure_ascii=False, sort_keys=True)
     return str(payload)
+
+
+def _line_role(line: str) -> str:
+    try:
+        payload = json.loads(line)
+    except Exception:
+        return ""
+    if not isinstance(payload, dict):
+        return ""
+    for key in ("role", "type", "event"):
+        val = payload.get(key)
+        if isinstance(val, str) and val.strip():
+            return val.strip().lower()
+    return ""
+
+
+def _payload_error_text(payload: dict) -> str:
+    """Extract likely error-bearing payload text without scanning tool inputs.
+
+    PreToolUse/Stop payloads can contain arbitrary user commands. Restricting
+    this to error-shaped keys avoids false positives when the user merely asks
+    us to search for the known 400 message.
+    """
+    if not isinstance(payload, dict):
+        return ""
+    chunks: list[str] = []
+    stack: list[object] = [payload]
+    error_keys = {"error", "errors", "message", "exception", "stderr", "systemmessage", "system_message"}
+    ignored_keys = {"tool_input", "toolinput", "input", "command", "prompt"}
+    while stack:
+        item = stack.pop()
+        if isinstance(item, dict):
+            for key, value in item.items():
+                lowered = str(key).lower()
+                if lowered in ignored_keys:
+                    continue
+                if lowered in error_keys and isinstance(value, str):
+                    chunks.append(value)
+                elif isinstance(value, (dict, list, tuple)):
+                    stack.append(value)
+        elif isinstance(item, (list, tuple)):
+            stack.extend(item)
+    return "\n".join(chunks)
+
+
+def detect_thinking_block_recovery_needed(lines: list[str], payload: dict | None = None) -> dict:
+    payload_text = _payload_error_text(payload or {})
+    if payload_text and THINKING_BLOCK_ERROR_RE.search(payload_text):
+        return {"match": True, "source": "payload", "excerpt": payload_text[:500]}
+
+    for idx, raw_line in enumerate(lines):
+        # Operator prompts and task briefs often mention the known bug by name.
+        # Those are not recovery signals; actual client/API failures arrive as
+        # assistant/system/tool/error records or hook payload fields.
+        if _line_role(raw_line) == "user":
+            continue
+        text = _line_text(raw_line)
+        if THINKING_BLOCK_ERROR_RE.search(text):
+            return {"match": True, "source": f"transcript:{idx + 1}", "excerpt": text[:500]}
+    return {"match": False}
+
+
+def _persist_thinking_block_recovery(sid: str, lines: list[str], sources: list[str], detection: dict) -> dict:
+    if not sid:
+        return {"checkpoint": False, "diary": False, "debt": False, "reason": "missing_session_id"}
+
+    result = {"checkpoint": False, "diary": False, "debt": False}
+    recent_tail = "\n".join(_line_text(line) for line in lines[-40:])
+    evidence = str(detection.get("excerpt") or "")[:1000]
+    try:
+        sys.path.insert(0, str(_DIR.parent))
+        from db import create_protocol_debt, get_db, save_checkpoint, upsert_diary_draft  # type: ignore
+
+        save_checkpoint(
+            sid=sid,
+            task="Recuperación de sesión tras error 400 thinking blocks",
+            task_status="blocked",
+            active_files="[]",
+            current_goal="Retomar la sesión en una conversación limpia tras /clear.",
+            decisions_summary="Se detectó el patrón 'thinking/redacted_thinking blocks cannot be modified'.",
+            errors_found=evidence or "Error 400 de bloques thinking/redacted_thinking no modificables.",
+            reasoning_thread=recent_tail[-4000:],
+            next_step="Ejecutar /clear y pedir a Nero que continúe desde el checkpoint guardado.",
+        )
+        result["checkpoint"] = True
+
+        upsert_diary_draft(
+            sid=sid,
+            tasks_seen=json.dumps(["thinking_blocks_400_recovery"], ensure_ascii=False),
+            change_ids="[]",
+            decision_ids="[]",
+            last_context_hint=(recent_tail[-1200:] or evidence),
+            heartbeat_count=0,
+            summary_draft=(
+                "Recuperación automática: sesión interrumpida por error 400 de bloques "
+                "thinking/redacted_thinking no modificables. Contexto reciente preservado "
+                "para reanudar tras /clear."
+            ),
+        )
+        result["diary"] = True
+
+        conn = get_db()
+        existing = conn.execute(
+            """SELECT id FROM protocol_debt
+               WHERE session_id = ? AND debt_type = ? AND status = 'open'
+               LIMIT 1""",
+            (sid, "thinking_blocks_400_recovery"),
+        ).fetchone()
+        if not existing:
+            create_protocol_debt(
+                sid,
+                "thinking_blocks_400_recovery",
+                severity="error",
+                evidence=(
+                    "Stop hook detected the OpenAI/Claude client error pattern "
+                    "'thinking or redacted_thinking blocks cannot be modified'. "
+                    f"sources={sources}; excerpt={evidence[:500]}"
+                ),
+            )
+        result["debt"] = True
+    except Exception as exc:
+        result["error"] = exc.__class__.__name__
+    return result
 
 
 def scan_closeout_followup_gaps(lines: list[str]) -> dict:
@@ -187,10 +341,40 @@ def check_closeout_followups() -> dict:
     return result
 
 
+def check_thinking_block_recovery(payload: dict | None = None) -> dict:
+    lines: list[str] = []
+    sources: list[str] = []
+    for path in _candidate_transcript_paths():
+        chunk = _read_recent_lines(path)
+        if chunk:
+            lines.extend(chunk)
+            sources.append(str(path))
+    sid = _current_session_id()
+    scoped_lines = _scope_to_session(lines, sid)
+    detection = detect_thinking_block_recovery_needed(scoped_lines, payload)
+    if not detection.get("match"):
+        return {"ok": True, "match": False, "sources": sources, "session_scoped": bool(sid)}
+    persisted = _persist_thinking_block_recovery(sid, scoped_lines, sources, detection)
+    return {
+        "ok": False,
+        "match": True,
+        "sources": sources,
+        "session_scoped": bool(sid),
+        "persisted": persisted,
+        "detection": detection,
+    }
+
+
 def main() -> int:
     started = time.time()
+    payload = _read_stdin_json()
     script = _DIR / "session-stop.sh"
     exit_code = 0
+    recovery = check_thinking_block_recovery(payload)
+    if recovery.get("match"):
+        print(json.dumps({"decision": "block", "systemMessage": THINKING_RECOVERY_MESSAGE}, ensure_ascii=False))
+        _record(int((time.time() - started) * 1000), 2)
+        return 0
     closeout = check_closeout_followups()
     if not closeout.get("ok", True):
         print(json.dumps({"decision": "block", "systemMessage": _closeout_followup_message(closeout)}, ensure_ascii=False))

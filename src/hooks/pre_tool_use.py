@@ -108,6 +108,16 @@ def _has_hard_block(result: dict) -> bool:
     return False
 
 
+def _thinking_block_recovery_result(payload: dict) -> dict:
+    try:
+        from hooks.stop import check_thinking_block_recovery  # type: ignore
+
+        result = check_thinking_block_recovery(payload)
+    except Exception:
+        return {"match": False}
+    return result if isinstance(result, dict) else {"match": False}
+
+
 def main() -> int:
     started = time.time()
     payload = _read_stdin_json()
@@ -124,7 +134,29 @@ def main() -> int:
         summary = f"error:{exc.__class__.__name__}"
         result = {}
 
-    if _has_hard_block(result):
+    recovery = _thinking_block_recovery_result(payload)
+    if recovery.get("match"):
+        reason = (
+            "Sesión bloqueada por error 400 de bloques thinking/redacted_thinking. "
+            "Se guardó checkpoint y borrador de diario; ejecuta /clear antes de continuar."
+        )
+        response = {
+            "hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "permissionDecision": "deny",
+                "permissionDecisionReason": reason,
+            },
+        }
+        try:
+            print(json.dumps(response, ensure_ascii=False))
+            sys.stderr.write(reason + "\n")
+            sys.stderr.flush()
+        except Exception:
+            pass
+        summary = "blocked:thinking_400_recovery"
+        exit_code = 2
+
+    elif _has_hard_block(result):
         reason = _format_block_reason(result)
         response = {
             "hookSpecificOutput": {

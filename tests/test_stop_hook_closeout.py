@@ -76,3 +76,52 @@ def test_stop_scan_counts_partial_task_close_as_followup_required():
 
     assert result["ok"] is False
     assert result["findings"][0]["kind"] == "partial_task_close"
+
+
+def test_thinking_block_recovery_detects_error_payload():
+    from hooks.stop import detect_thinking_block_recovery_needed
+
+    result = detect_thinking_block_recovery_needed(
+        [],
+        {
+            "error": {
+                "message": (
+                    "Error 400 invalid_request_error: thinking or redacted_thinking "
+                    "blocks cannot be modified"
+                )
+            }
+        },
+    )
+
+    assert result["match"] is True
+    assert result["source"] == "payload"
+
+
+def test_thinking_block_recovery_ignores_user_prompt_mentions():
+    from hooks.stop import detect_thinking_block_recovery_needed
+
+    result = detect_thinking_block_recovery_needed([
+        json.dumps({
+            "role": "user",
+            "text": "Implementa el fix para error 400: thinking blocks cannot be modified.",
+        }),
+    ])
+
+    assert result["match"] is False
+
+
+def test_thinking_block_recovery_detects_system_transcript_error():
+    from hooks.stop import detect_thinking_block_recovery_needed
+
+    result = detect_thinking_block_recovery_needed([
+        json.dumps({
+            "role": "system",
+            "text": (
+                "400 Bad Request: redacted_thinking blocks cannot be modified "
+                "after a message is submitted."
+            ),
+        }),
+    ])
+
+    assert result["match"] is True
+    assert result["source"] == "transcript:1"
