@@ -41,6 +41,22 @@ class SweepItem:
     recommendation: str
 
 
+def _first_matching_line(pattern: re.Pattern[str], text: str) -> str | None:
+    """Return the first individual line that matches the pattern, else None.
+
+    Matching per-line (instead of across the whole 20k blob with ``re.S``)
+    stops the multi-token lookahead categories from conflating trigger words
+    that live on unrelated lines far apart in a large log file. That blob-wide
+    conflation was the source of the ``rotation_pending`` false positives
+    (e.g. a HN headline with "public" on one line and "Token" on another).
+    """
+
+    for line in (text.splitlines() or [text]):
+        if pattern.search(line):
+            return line
+    return None
+
+
 def build_sweep_queue(records: Iterable[dict]) -> list[SweepItem]:
     """Return one prioritized queue sorted by economic impact x exposure."""
 
@@ -49,12 +65,13 @@ def build_sweep_queue(records: Iterable[dict]) -> list[SweepItem]:
         text = str(record.get("text") or record.get("summary") or "")
         source = str(record.get("source") or "unknown")
         for category, pattern, economic, exposure, recommendation in _CATEGORY_RULES:
-            if not pattern.search(text):
+            matched_line = _first_matching_line(pattern, text)
+            if matched_line is None:
                 continue
             item = SweepItem(
                 category=category,
                 source=source,
-                summary=redact_secrets(text)[:500],
+                summary=redact_secrets(matched_line)[:500],
                 economic_impact=int(record.get("economic_impact") or economic),
                 exposure=int(record.get("exposure") or exposure),
                 priority=int(record.get("economic_impact") or economic) * int(record.get("exposure") or exposure),
