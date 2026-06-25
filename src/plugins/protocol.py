@@ -70,6 +70,41 @@ P0_P1_FINDING_PATTERN = re.compile(
 )
 FOLLOWUP_REF_PATTERN = re.compile(r"\bNF-[A-Z0-9][A-Z0-9-]*\b", re.IGNORECASE)
 ANALYZE_ARTIFACT_SUFFIXES = {".md", ".markdown", ".txt"}
+MEDIUM_IMPACT_EDIT_EXTENSIONS = (
+    ".php",
+    ".js",
+    ".jsx",
+    ".ts",
+    ".tsx",
+    ".py",
+    ".sh",
+    ".yml",
+    ".yaml",
+)
+MEDIUM_IMPACT_EDIT_PATH_MARKERS = (
+    "/Documents/_PhpstormProjects/",
+    "/public_html/",
+    "/httpdocs/",
+    "/var/www/",
+    "/home/nexodesk/",
+    "/opt/",
+    "/scripts/",
+    "/infra/",
+    "/cron/",
+    "/src/",
+)
+LEARNING_WORTHY_EDIT_RE = re.compile(
+    r"\b("
+    r"fix|fixed|resolved|solution|reusable|pattern|"
+    r"correg(?:ir|ido|ida|i|ido)?|arregl(?:ar|ado|ada|e)|fallo|"
+    r"soluci[oó]n|reutilizable|patr[oó]n"
+    r")\b",
+    re.IGNORECASE,
+)
+LEARNING_TRACE_RE = re.compile(
+    r"\b(nexo_learning_add|learning_id|learning\s*#|aprendizaje\s*#)\b",
+    re.IGNORECASE,
+)
 
 
 def _is_trivial_evidence(text: str) -> tuple[bool, str]:
@@ -127,6 +162,41 @@ def _has_correction_no_learning_justification(*parts: str) -> bool:
         )
     )
     return has_justification_marker and has_no_learning_reason
+
+
+def _is_medium_impact_edit_file(path: str) -> bool:
+    clean = str(path or "").strip()
+    if not clean:
+        return False
+    lowered = clean.lower()
+    if not lowered.endswith(MEDIUM_IMPACT_EDIT_EXTENSIONS):
+        return False
+    return any(marker.lower() in lowered for marker in MEDIUM_IMPACT_EDIT_PATH_MARKERS)
+
+
+def _close_payload_has_learning_trace(*parts: str) -> bool:
+    text = " ".join(str(part or "").strip() for part in parts if str(part or "").strip())
+    if LEARNING_TRACE_RE.search(text):
+        return True
+    lowered = text.lower()
+    return "learning_title" in lowered and "learning_content" in lowered
+
+
+def _requires_learning_after_medium_impact_edit(
+    *,
+    task: dict,
+    clean_outcome: str,
+    effective_files: list[str],
+    closure_text: str,
+) -> bool:
+    if clean_outcome not in {"done", "partial", "failed"}:
+        return False
+    if str(task.get("task_type") or "").strip() not in {"edit", "execute", "delegate"}:
+        return False
+    candidate_files = effective_files or _parse_list(task.get("files") or "[]")
+    if not any(_is_medium_impact_edit_file(path) for path in candidate_files):
+        return False
+    return bool(LEARNING_WORTHY_EDIT_RE.search(closure_text or ""))
 
 
 def _resolve_correction_requirements_with_justification(session_id: str, task_id: str, justification: str) -> int:
@@ -2460,6 +2530,16 @@ def handle_task_close(
         summary,
         verification,
     )
+    close_payload_text = _closure_claim_text(
+        clean_evidence,
+        clean_change_summary,
+        clean_change_verify,
+        outcome_notes,
+        result,
+        summary,
+        verification,
+        change_why,
+    )
 
     if clean_outcome == "done":
         open_task_debts = list_protocol_debts(status="open", task_id=task_id, limit=5)
@@ -2765,6 +2845,64 @@ def handle_task_close(
                 ),
                 debts=debts_created,
             )
+
+    learning_trace_text = "\n".join(
+        part
+        for part in (
+            learning_title,
+            learning_content,
+            learning_reasoning,
+            clean_evidence,
+            clean_change_summary,
+            clean_change_verify,
+            outcome_notes,
+            result,
+            summary,
+            verification,
+            evidence_refs,
+        )
+        if part
+    )
+    learning_payload_present = bool((learning_title or "").strip() and (learning_content or "").strip())
+    if (
+        _requires_learning_after_medium_impact_edit(
+            task=task,
+            clean_outcome=clean_outcome,
+            effective_files=effective_files,
+            closure_text=close_payload_text,
+        )
+        and not learning_payload_present
+        and not _close_payload_has_learning_trace(learning_trace_text)
+        and not correction_justified_without_learning
+    ):
+        debt = _ensure_open_debt(
+            task["session_id"],
+            task_id,
+            "missing_learning_after_medium_impact_edit",
+            severity="error",
+            evidence=(
+                "Task close attempted after a medium-impact edit/execute that looked like a bugfix "
+                "or reusable solution, but no learning payload or prior nexo_learning_add reference was supplied. "
+                f"Files: {', '.join(effective_files)[:300]}. Claim: {closure_text[:240]!r}"
+            ),
+            debts=debts_created,
+        )
+        return json.dumps(
+            {
+                "ok": False,
+                "error": "Cannot close medium-impact edited work without a persisted learning or explicit no-learning justification.",
+                "hint": (
+                    "Call `nexo_learning_add(...)` first, pass `learning_title` and `learning_content`, "
+                    "or add a concrete no-learning justification when the edit taught nothing reusable."
+                ),
+                "task_id": task_id,
+                "blocked_by": "learning_required_after_medium_impact_edit",
+                "debt_id": debt.get("id"),
+                "debt_type": "missing_learning_after_medium_impact_edit",
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
 
     # ── Evidence enforcement: reject 'done' without proof ──
     # G1 hardening: "done" is no longer allowed to degrade into a debt-only

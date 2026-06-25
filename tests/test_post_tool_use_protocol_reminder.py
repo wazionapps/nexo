@@ -337,6 +337,76 @@ def test_post_tool_use_keeps_pending_when_auto_change_log_queue_unavailable(monk
     assert (tmp_path / "change-log-required-nexo-test-auto-change-log-down.json").exists()
 
 
+def test_post_tool_use_prompts_learning_after_bugfix_edit(monkeypatch, tmp_path):
+    from hooks import post_tool_use
+
+    monkeypatch.setattr(post_tool_use, "_production_closeout_dir", lambda: tmp_path)
+    sid = "nexo-test-learning-capture"
+    message = post_tool_use.check_learning_capture_closeout(
+        {
+            "tool_name": "Edit",
+            "tool_input": {
+                "file_path": "/Users/franciscoc/Documents/_PhpstormProjects/nexo/src/plugins/protocol.py",
+                "old_string": "return False",
+                "new_string": "return True  # fix regression",
+            },
+        },
+        sid,
+    )
+
+    assert message is not None
+    assert "nexo_learning_add" in message
+    assert (tmp_path / f"learning-required-{sid}.json").exists()
+
+
+def test_post_tool_use_blocks_task_close_until_learning_trace(monkeypatch, tmp_path):
+    from hooks import post_tool_use
+
+    monkeypatch.setattr(post_tool_use, "_production_closeout_dir", lambda: tmp_path)
+    sid = "nexo-test-learning-close"
+    file_path = "/Users/franciscoc/Documents/_PhpstormProjects/nexo/src/plugins/protocol.py"
+    post_tool_use.check_learning_capture_closeout(
+        {
+            "tool_name": "Edit",
+            "tool_input": {
+                "file_path": file_path,
+                "old_string": "bug",
+                "new_string": "fixed bug",
+            },
+        },
+        sid,
+    )
+
+    blocked = post_tool_use.check_learning_capture_closeout(
+        {
+            "tool_name": "nexo_task_close",
+            "tool_input": {
+                "files_changed": file_path,
+                "change_summary": "Fix protocol regression",
+                "evidence": "pytest ok",
+            },
+        },
+        sid,
+    )
+    allowed = post_tool_use.check_learning_capture_closeout(
+        {
+            "tool_name": "nexo_task_close",
+            "tool_input": {
+                "files_changed": file_path,
+                "change_summary": "Fix protocol regression",
+                "learning_title": "Capture protocol bugfix learnings",
+                "learning_content": "Medium-impact edits that fix regressions need a reusable learning.",
+            },
+        },
+        sid,
+    )
+
+    assert blocked is not None
+    assert "learning_title" in blocked
+    assert allowed is None
+    assert not (tmp_path / f"learning-required-{sid}.json").exists()
+
+
 def test_post_tool_use_auto_queues_guard_check_after_edit(monkeypatch):
     from hooks import post_tool_use
 

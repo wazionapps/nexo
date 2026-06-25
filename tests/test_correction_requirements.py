@@ -107,3 +107,46 @@ def test_detected_correction_blocks_session_stop_until_learning_add(monkeypatch,
     )
 
     assert handle_stop(sid) == f"Session {sid} closed."
+
+
+def test_medium_impact_bugfix_edit_requires_learning_before_task_close(monkeypatch, tmp_path):
+    db = _fresh_db(monkeypatch, tmp_path)
+    from plugins.protocol import handle_task_close
+
+    sid = "nexo-5300-6300"
+    file_path = "/Users/franciscoc/Documents/_PhpstormProjects/nexo/src/plugins/protocol.py"
+    task = db.create_protocol_task(
+        sid,
+        "Fix recurring task_close regression",
+        task_type="edit",
+        files=[file_path],
+    )
+
+    blocked = json.loads(
+        handle_task_close(
+            sid,
+            task["task_id"],
+            outcome="done",
+            files_changed=file_path,
+            evidence="pytest tests/test_correction_requirements.py::test_medium_impact_bugfix_edit_requires_learning_before_task_close passed",
+            change_summary="Fixed regression in protocol closeout",
+            change_why="Repeated learning capture misses after medium-impact edits.",
+        )
+    )
+    allowed = json.loads(
+        handle_task_close(
+            sid,
+            task["task_id"],
+            outcome="done",
+            files_changed=file_path,
+            evidence="pytest tests/test_correction_requirements.py::test_medium_impact_bugfix_edit_requires_learning_before_task_close passed",
+            change_summary="Fixed regression in protocol closeout",
+            change_why="Repeated learning capture misses after medium-impact edits.",
+            learning_title="Capture medium-impact bugfix learnings before close",
+            learning_content="When an edit fixes a regression in production-like code, closeout must include a persisted reusable learning or an explicit no-learning justification.",
+        )
+    )
+
+    assert blocked["ok"] is False
+    assert blocked["blocked_by"] == "learning_required_after_medium_impact_edit"
+    assert allowed["ok"] is True

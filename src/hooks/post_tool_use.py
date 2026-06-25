@@ -228,6 +228,11 @@ def _pending_change_log_path(sid: str) -> Path:
     return _production_closeout_dir() / f"change-log-required-{safe_sid}.json"
 
 
+def _pending_learning_path(sid: str) -> Path:
+    safe_sid = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in (sid or "unknown"))
+    return _production_closeout_dir() / f"learning-required-{safe_sid}.json"
+
+
 def _extract_command(payload: dict) -> str:
     tool_input = _tool_input(payload)
     for key in ("command", "cmd", "script"):
@@ -498,12 +503,113 @@ def _is_task_close_tool(tool_name: str) -> bool:
     return tool_name in {"nexo_task_close", "mcp__nexo__nexo_task_close"}
 
 
+def _is_learning_tool(tool_name: str) -> bool:
+    return tool_name in {"nexo_learning_add", "mcp__nexo__nexo_learning_add"}
+
+
 def _task_close_payload_has_change_trace(payload: dict) -> bool:
     tool_input = _tool_input(payload)
     files = str(tool_input.get("files_changed") or "").strip()
     what = str(tool_input.get("change_summary") or tool_input.get("summary") or "").strip()
     why = str(tool_input.get("change_why") or tool_input.get("triggered_by") or "").strip()
     return bool(files and what and why)
+
+
+def _task_close_payload_has_learning_trace(payload: dict) -> bool:
+    tool_input = _tool_input(payload)
+    title = str(tool_input.get("learning_title") or "").strip()
+    content = str(tool_input.get("learning_content") or "").strip()
+    if title and content:
+        return True
+    joined = "\n".join(str(tool_input.get(key) or "") for key in ("evidence", "evidence_refs", "verification", "summary", "result"))
+    return bool(re.search(r"\b(?:nexo_learning_add|learning_id|aprendizaje\s+#?\d+|learning\s+#?\d+)\b", joined, re.IGNORECASE))
+
+
+def _is_production_learning_file(path: str) -> bool:
+    lowered = str(path or "").lower()
+    if not lowered:
+        return False
+    if lowered.endswith((".php", ".js", ".jsx", ".ts", ".tsx", ".py", ".sh", ".yml", ".yaml", ".json")):
+        return any(
+            marker in lowered
+            for marker in (
+                "/documents/_phpstormprojects/",
+                "/public_html/",
+                "/httpdocs/",
+                "/var/www/",
+                "/home/nexodesk/",
+                "/opt/",
+                "/scripts/",
+                "/infra/",
+                "/cron/",
+                "/src/",
+            )
+        )
+    return False
+
+
+def _learning_relevant_files(payload: dict) -> list[str]:
+    if not _is_shared_mutation_payload(payload):
+        return []
+    return [path for path in _mutation_files(payload) if _is_production_learning_file(path)]
+
+
+def _edit_resolution_signal(payload: dict) -> bool:
+    tool_input = _tool_input(payload)
+    try:
+        text = json.dumps(tool_input, ensure_ascii=False)
+    except Exception:
+        text = str(tool_input or "")
+    return bool(
+        re.search(
+            r"\b(fix|fixed|bug|error|exception|regression|resolved|solution|"
+            r"correg|arregl|fallo|error|regresi[oó]n|soluci[oó]n|reusable|patr[oó]n)\b",
+            text,
+            re.IGNORECASE,
+        )
+    )
+
+
+def check_learning_capture_closeout(payload: dict, sid: str) -> str | None:
+    if not sid:
+        sid = "unknown"
+    tool_name = _tool_name(payload)
+    pending_path = _pending_learning_path(sid)
+    if _is_learning_tool(tool_name):
+        pending_path.unlink(missing_ok=True)
+        return None
+
+    files = _learning_relevant_files(payload)
+    if files and _edit_resolution_signal(payload):
+        _write_json(
+            pending_path,
+            {
+                "sid": sid,
+                "files": files[:20],
+                "tool_name": tool_name,
+                "created_at": time.time(),
+                "reason": "production edit looked like a bugfix/reusable solution",
+            },
+        )
+        return append_operator_language_contract(
+            "Antes del cierre: si esta edición resolvió un error o dejó una solución reutilizable, llama a "
+            "`nexo_learning_add(...)` antes de `nexo_task_close(...)`."
+        )
+
+    if not _is_task_close_tool(tool_name):
+        return None
+    pending = _read_json(pending_path)
+    if not pending:
+        return None
+    if _task_close_payload_has_learning_trace(payload):
+        pending_path.unlink(missing_ok=True)
+        return None
+    files_text = ", ".join((pending.get("files") or [])[:4]) or "edición productiva"
+    return append_operator_language_contract(
+        "Cierre pendiente: hay una edición productiva que parece haber resuelto un error o patrón reutilizable. "
+        f"Registra primero `nexo_learning_add(...)` o incluye `learning_title` y `learning_content` en `nexo_task_close(...)`. "
+        f"Archivos: {files_text}."
+    )
 
 
 def _change_log_has_production_release_refs(payload: dict) -> bool:
@@ -1128,6 +1234,7 @@ def main() -> int:
         reminder = check_inbox_and_emit_reminder(sid)
         auto_guard_message = _queue_auto_guard_check(payload, sid)
         change_log_message = check_production_change_log_closeout(payload, sid)
+        learning_capture_message = check_learning_capture_closeout(payload, sid)
         post_change_trace_message = check_post_change_trace_closeout(payload, sid)
         shared_scope_message = check_shared_scope_closeout(payload)
         cascade_message = check_domain_error_cascade(payload, sid)
@@ -1143,6 +1250,7 @@ def main() -> int:
             reminder,
             auto_guard_message,
             change_log_message,
+            learning_capture_message,
             post_change_trace_message,
             shared_scope_message,
             cascade_message,
