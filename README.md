@@ -18,7 +18,7 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.38.0` is the current packaged-runtime line. Minor release over v7.37.4 - closeout integrity and operator-facing discipline: proactive status on long opaque work, per-item verified state on batch closeouts, decision-readable first responses, an automatic production change ledger across a wider mutation surface, new closure/evidence/cost-secret audit modules, and a correction-learning gate that never blocks mid-work. New behavioral rules ship in shadow/log mode by default.
+Version `7.38.1` is the current packaged-runtime line. Patch release over v7.38.0 - hook recovery and runtime safety follow-through: managed hooks preserve state for known thinking-block 400 failures, then guide the operator through /clear recovery; the line also carries reviewed live-context, production-write, deploy-close, correction-learning, and cost-secret-sweep safeguards.
 
 Previously in `7.37.4`: patch release over v7.37.3 - product-gap reporting, stale briefing noise, and opportunity loops: Deep Sleep reports recurring NEXO product gaps through sanitized Desktop support tickets, self-audit preserves closed internal opportunities, the morning briefing reads item history before resurfacing decisions, and support-ticket tools match the live backend contract.
 

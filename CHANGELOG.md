@@ -1,5 +1,12 @@
 # Changelog
 
+## [7.38.1] - 2026-06-26
+
+### Fixed - Hook recovery and runtime safety follow-through
+
+- **Thinking-block 400 recovery.** Managed hooks now persist a checkpoint and diary draft when the client hits the known `thinking` / `redacted_thinking` 400 failure, then instruct the operator to run `/clear` and continue from preserved state.
+- **Reality and production-write safeguards.** Includes the reviewed R37 live-context preflight, production-path write observation, deploy-close evidence gate, correction-learning follow-through, and the `cost_secret_sweep` false-positive fix that avoids cross-line secret matches.
+
 ## [7.38.0] - 2026-06-23
 
 ### Added - Closeout integrity and operator-facing discipline
