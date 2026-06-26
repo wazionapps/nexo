@@ -25,6 +25,7 @@ from db import (
     get_db,
     get_followup,
     get_followups,
+    get_reminder,
     get_protocol_task,
     list_session_correction_requirements,
     set_protocol_task_guard_acknowledged,
@@ -1710,6 +1711,21 @@ MANUAL_PENDING_STEP_LINE_RE = re.compile(
     r"(?im)^\s*(?:[-*+]|\d+[.)])\s*"
     r"(?:stage|commit|tag|publish|deploy|configurar|contratar|verificar|publicar|desplegar|etiquetar|subir|firmar|notari[sz]ar)\b"
 )
+TIME_BOUND_COMMITMENT_RE = re.compile(
+    r"(?:"
+    r"\b(?:revisar(?:[eé]|emos)?|comprobar(?:[eé]|emos)?|verificar(?:[eé]|emos)?|mirar(?:[eé]|emos)?|"
+    r"avisar(?:[eé]|emos)?|reenviar(?:[eé]|emos)?|recordar(?:[eé]|emos)?|nudge|follow(?:\s|-)?up|"
+    r"seguimiento|build|release|merge(?:ar)?|logs?)\b"
+    r".{0,140}\b(?:en\s+\d+\s*(?:h|horas?|hours?|d[ií]as?|days?)|ma[nñ]ana(?:\s*/\s*pasado|\s+o\s+pasado)?|pasado\s+ma[nñ]ana|tomorrow|in\s+\d+\s*(?:h|hours?|days?))\b"
+    r"|"
+    r"\b(?:en\s+\d+\s*(?:h|horas?|hours?|d[ií]as?|days?)|ma[nñ]ana(?:\s*/\s*pasado|\s+o\s+pasado)?|pasado\s+ma[nñ]ana|tomorrow|in\s+\d+\s*(?:h|hours?|days?))\b"
+    r".{0,140}\b(?:revisar(?:[eé]|emos)?|comprobar(?:[eé]|emos)?|verificar(?:[eé]|emos)?|mirar(?:[eé]|emos)?|"
+    r"avisar(?:[eé]|emos)?|reenviar(?:[eé]|emos)?|recordar(?:[eé]|emos)?|nudge|follow(?:\s|-)?up|"
+    r"seguimiento|build|release|merge(?:ar)?|logs?)\b"
+    r")",
+    re.IGNORECASE | re.DOTALL,
+)
+FOLLOWUP_OR_REMINDER_REF_PATTERN = re.compile(r"\b(?:NF|R)-[A-Z0-9][A-Z0-9-]*\b", re.IGNORECASE)
 IRREVERSIBLE_ACTION_RE = re.compile(
     r"\b(publish\s+stable|publicar\s+stable|promocionar\s+stable|broadcast|enviar\s+a\s+clientes|cobrar|payment|force-push|revocar)\b",
     re.IGNORECASE,
@@ -1768,6 +1784,26 @@ VISIBLE_RELEASE_SURFACE_PATTERNS = {
         re.compile(r"\burl\s+p[uú]blica\b\s*[:=-]", re.IGNORECASE),
         re.compile(r"\bpublic\s+url\b\s*[:=-]", re.IGNORECASE),
         re.compile(r"https?://[^\s]+", re.IGNORECASE),
+    ),
+    "endpoint_vivo": (
+        re.compile(r"\bendpoint\s+vivo\b\s*[:=-]", re.IGNORECASE),
+        re.compile(r"\blive\s+endpoint\b\s*[:=-]", re.IGNORECASE),
+        re.compile(r"\b(?:curl|httpie)\b[^\n]{0,180}\bhttps?://[^\s]+[^\n]{0,120}\b(?:HTTP\s*200|200\s+OK|status(?:_code)?\s*200|http_code\b[^\n]{0,40}\b200)\b", re.IGNORECASE),
+    ),
+    "revision_desplegada": (
+        re.compile(r"\brevisi[oó]n\s+desplegada\b\s*[:=-]", re.IGNORECASE),
+        re.compile(r"\bdeployed\s+revision\b\s*[:=-]", re.IGNORECASE),
+        re.compile(r"\b(?:cloud\s+run\s+revision|revision|commit|sha)\b[^\n]{0,140}\b(?:desplegad[ao]|deployed|sirve|serving|active|activa)\b", re.IGNORECASE),
+    ),
+    "url_antigua_emitida": (
+        re.compile(r"\burl\s+antigua\s+ya\s+emitida\b\s*[:=-]", re.IGNORECASE),
+        re.compile(r"\b(?:old|legacy)\s+url\s+(?:already\s+)?issued\b\s*[:=-]", re.IGNORECASE),
+        re.compile(r"\b(?:enlace|url)\s+(?:antigu[oa]|legacy|old)\b[^\n]{0,160}\b(?:emitid[ao]|issued|ya\s+enviado|already\s+sent|N/?A)\b", re.IGNORECASE),
+    ),
+    "estado_interno_afectado": (
+        re.compile(r"\bestado\s+interno\s+afectado\b\s*[:=-]", re.IGNORECASE),
+        re.compile(r"\baffected\s+internal\s+state\b\s*[:=-]", re.IGNORECASE),
+        re.compile(r"\b(?:bd|db|database|metafields?|shopify|queue|cola|token|estado\s+interno)\b[^\n]{0,180}\b(?:verificad[ao]|checked|ok|sin\s+pendientes|consistent|N/?A)\b", re.IGNORECASE),
     ),
     "rama_publicacion": (
         re.compile(r"\brama\b\s*[:=-]", re.IGNORECASE),
@@ -1828,6 +1864,10 @@ VISIBLE_RELEASE_SURFACE_LABELS = {
     "api": "API",
     "ui": "UI",
     "dominio_publico": "dominio público",
+    "endpoint_vivo": "endpoint vivo",
+    "revision_desplegada": "revisión desplegada",
+    "url_antigua_emitida": "URL antigua ya emitida",
+    "estado_interno_afectado": "estado interno afectado",
     "rama_publicacion": "rama de publicación",
     "git_limpio": "git limpio",
     "artefactos": "artefactos",
@@ -2011,6 +2051,41 @@ def _has_followup_for_manual_pending(created_followup_id: str, *parts: object) -
             except Exception:
                 row = None
             if row and str(row.get("status") or "").upper() != "DELETED":
+                return True
+    return False
+
+
+def _has_time_bound_commitment(text: str) -> bool:
+    return bool(TIME_BOUND_COMMITMENT_RE.search(str(text or "")))
+
+
+def _item_has_active_date(ref: str) -> bool:
+    clean_ref = str(ref or "").strip().upper()
+    if not clean_ref:
+        return False
+    try:
+        row = get_followup(clean_ref) if clean_ref.startswith("NF-") else get_reminder(clean_ref)
+    except Exception:
+        row = None
+    if not row:
+        return False
+    if str(row.get("status") or "").upper() == "DELETED":
+        return False
+    return bool(str(row.get("date") or "").strip())
+
+
+def _has_dated_followup_for_time_bound_commitment(
+    created_followup_id: str,
+    provided_followup_id: str,
+    *parts: object,
+) -> bool:
+    if _item_has_active_date(created_followup_id):
+        return True
+    if _item_has_active_date(provided_followup_id):
+        return True
+    for part in parts:
+        for ref in FOLLOWUP_OR_REMINDER_REF_PATTERN.findall(str(part or "")):
+            if _item_has_active_date(ref):
                 return True
     return False
 
@@ -3283,6 +3358,48 @@ def handle_task_close(
                 severity="warn",
                 evidence="followup_needed=true but no followup_description was supplied.",
                 debts=debts_created,
+            )
+
+    if clean_outcome == "done" and _has_time_bound_commitment(closure_text):
+        if not _has_dated_followup_for_time_bound_commitment(
+            created_followup_id,
+            followup_id,
+            followup_description,
+            evidence_refs,
+            outcome_notes,
+            result,
+            summary,
+            verification,
+            clean_evidence,
+            clean_change_summary,
+            clean_change_verify,
+        ):
+            debt = _ensure_open_debt(
+                task["session_id"],
+                task_id,
+                "time_bound_commitment_without_dated_followup",
+                severity="error",
+                evidence=(
+                    "Task close attempted done while making a time-bound commitment "
+                    f"without a dated followup/reminder. Text: {closure_text[:240]!r}"
+                ),
+                debts=debts_created,
+            )
+            return json.dumps(
+                {
+                    "ok": False,
+                    "error": "Cannot close as done while a time-bound commitment lacks a dated followup or reminder.",
+                    "hint": (
+                        "Create or link a followup/reminder with a concrete date for the promised check, "
+                        "then retry task_close."
+                    ),
+                    "task_id": task_id,
+                    "blocked_by": "time_bound_commitment_followup_gate",
+                    "debt_id": debt.get("id"),
+                    "debt_type": "time_bound_commitment_without_dated_followup",
+                },
+                ensure_ascii=False,
+                indent=2,
             )
 
     if clean_outcome == "done" and _manual_pending_close_requires_followup(closure_text):

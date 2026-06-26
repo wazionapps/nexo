@@ -1078,6 +1078,10 @@ def test_task_close_blocks_irreversible_publish_without_cortex_decide():
                 "API: curl https://nexo-desktop.com/api/health returned HTTP 200. "
                 "UI: browser smoke loaded /dashboard and screenshot /tmp/nexo-release-ui.png exists. "
                 "Dominio público: https://nexo-desktop.com/downloads/update.json returned HTTP 200. "
+                "Endpoint vivo: curl https://nexo-desktop.com/downloads/update.json HTTP 200. "
+                "Revisión desplegada: commit abc123 deployed and serving. "
+                "URL antigua ya emitida: legacy URL already issued N/A for this release. "
+                "Estado interno afectado: DB checked ok. "
                 "Rama: origin/main at abc1234. "
                 "Git limpio: git status --short empty, working tree clean. "
                 "Artefactos: GitHub Release assets DMG and EXE uploaded. "
@@ -1149,6 +1153,10 @@ def test_task_close_allows_irreversible_publish_with_cortex_and_matching_artifac
                 "API: curl https://nexo-desktop.com/api/health returned HTTP 200. "
                 "UI: browser smoke loaded /dashboard and screenshot /tmp/nexo-release-ui.png exists. "
                 "Dominio público: https://nexo-desktop.com/downloads/update.json returned HTTP 200. "
+                "Endpoint vivo: curl https://nexo-desktop.com/downloads/update.json HTTP 200. "
+                "Revisión desplegada: commit abc123 deployed and serving. "
+                "URL antigua ya emitida: legacy URL already issued N/A for this release. "
+                "Estado interno afectado: DB checked ok. "
                 "Rama: origin/main at abc1234. "
                 "Git limpio: git status --short empty, working tree clean. "
                 "Artefactos: GitHub Release assets DMG and EXE uploaded. "
@@ -1789,6 +1797,10 @@ def test_high_stakes_action_close_stays_clean_with_cortex_evaluation():
                 "API: curl https://nexo-desktop.com/api/health returned HTTP 200. "
                 "UI: browser smoke loaded /dashboard and screenshot /tmp/nexo-release-ui.png exists. "
                 "Dominio público: https://nexo-desktop.com/downloads/update.json returned HTTP 200. "
+                "Endpoint vivo: curl https://nexo-desktop.com/downloads/update.json HTTP 200. "
+                "Revisión desplegada: commit abc123 deployed and serving. "
+                "URL antigua ya emitida: legacy URL already issued N/A for this release. "
+                "Estado interno afectado: DB checked ok. "
                 "Rama: origin/main at abc1234. "
                 "Git limpio: git status --short empty, working tree clean. "
                 "Artefactos: GitHub Release assets DMG and EXE uploaded. "
@@ -2589,3 +2601,177 @@ def test_task_close_blocks_visible_release_without_surface_matrix():
     assert "git limpio" in closed["missing_surfaces"]
     assert "firma/notarización" in closed["missing_surfaces"]
     assert "monitor sin redirects implícitos" in closed["missing_surfaces"]
+    assert "revisión desplegada" in closed["missing_surfaces"]
+    assert "URL antigua ya emitida" in closed["missing_surfaces"]
+    assert "estado interno afectado" in closed["missing_surfaces"]
+
+
+def test_task_close_accepts_visible_release_with_live_source_surface_checklist():
+    from plugins.cortex import handle_cortex_decide
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    sid = _register_session("nexo-1662-2662")
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Deploy visible production fix",
+            task_type="execute",
+            area="release",
+            plan='["prepare", "deploy", "verify"]',
+            evidence_refs='["release contract", "staging green"]',
+            verification_step="verify public production surfaces",
+            stakes="high",
+        )
+    )
+    handle_cortex_decide(
+        goal="Deploy visible production fix",
+        task_type="execute",
+        impact_level="critical",
+        area="release",
+        session_id=sid,
+        task_id=opened["task_id"],
+        evidence_refs='["release contract", "staging green"]',
+        alternatives=json.dumps([
+            {"name": "canary_release", "description": "Deploy staged canary release with smoke tests and rollback ready"},
+            {"name": "direct_release", "description": "Deploy directly to production without staged verification"},
+        ]),
+    )
+
+    closed = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="done",
+            evidence=(
+                "API: endpoint /api/health responde ok. "
+                "UI: navegador headed validado. "
+                "Dominio público: https://nexo-desktop.com/downloads/update.json. "
+                "Endpoint vivo: curl https://nexo-desktop.com/downloads/update.json HTTP 200. "
+                "Revisión desplegada: commit abc123 deployed y serving. "
+                "URL antigua ya emitida: enlace antiguo ya enviado verificado como N/A para esta release. "
+                "Estado interno afectado: DB checked ok. "
+                "Rama: origin/main. "
+                "Git limpio: git status nothing to commit. "
+                "Artefactos: github release. "
+                "Artefacto correcto: sha256 coincide verificado. "
+                "Firma/notarización: firmado y notarizado. "
+                "Manifiestos: update.json. "
+                "Smoke público: smoke https://nexo-desktop.com/downloads/update.json HTTP 200. "
+                "Captura visual UI: screenshot /tmp/release-visible.png. "
+                "Monitor sin redirects implícitos: ninguno. "
+                "Prueba viva: curl HTTP 200. "
+                "Captura visual: screenshot /tmp/release-visible.png exists. "
+                "Flujo E2E usuario final: usuario final abre la pantalla visible y completa el recorrido afectado. "
+                "Criterio de éxito específico del operador: Francisco validó que el arreglo visible aparece en la superficie pública."
+            ),
+            work_type="release",
+            stakes="high",
+            files_changed="/tmp/release-artifact",
+            change_summary="Deploy visible production fix",
+            change_why="Exercise complete live source surface checklist",
+            change_verify="curl public domain HTTP 200 plus full live-source surface checklist",
+            verification_evidence=_verified_against_real_evidence(),
+        )
+    )
+
+    assert closed["ok"] is True
+
+
+def test_task_close_blocks_time_bound_commitment_without_dated_followup():
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    sid = _register_session("nexo-1663-2663")
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Cerrar seguimiento Nora con compromiso operativo",
+            task_type="execute",
+            area="nora",
+            plan='["verificar correo", "cerrar turno"]',
+            evidence_refs='["correo Nora 2026-06-25"]',
+            verification_step="confirmar que cualquier compromiso con plazo queda anclado",
+        )
+    )
+
+    closed = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="done",
+            evidence="Correo revisado y respuesta preparada con trazabilidad suficiente para cerrar el turno.",
+            summary="Haré segundo nudge en 48h si BBVA Seguridad no responde antes.",
+        )
+    )
+
+    assert closed["ok"] is False
+    assert closed["blocked_by"] == "time_bound_commitment_followup_gate"
+    assert closed["debt_type"] == "time_bound_commitment_without_dated_followup"
+
+
+def test_task_close_blocks_build_release_log_commitment_without_dated_followup():
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    sid = _register_session("nexo-1665-2665")
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Cerrar release con seguimiento prometido",
+            task_type="execute",
+            area="release",
+            plan='["revisar build", "mergear", "cerrar"]',
+            evidence_refs='["release local validada"]',
+            verification_step="confirmar que el seguimiento operativo queda fechado",
+        )
+    )
+
+    closed = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="done",
+            evidence="Build validada y merge revisado con logs locales sin errores.",
+            summary="Revisaré logs de build/release mañana/pasado para confirmar que no reaparece.",
+        )
+    )
+
+    assert closed["ok"] is False
+    assert closed["blocked_by"] == "time_bound_commitment_followup_gate"
+    assert closed["debt_type"] == "time_bound_commitment_without_dated_followup"
+
+
+def test_task_close_accepts_time_bound_commitment_with_dated_followup():
+    from db import get_followup
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    sid = _register_session("nexo-1664-2664")
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Cerrar seguimiento Nora con compromiso operativo",
+            task_type="execute",
+            area="nora",
+            plan='["verificar correo", "crear seguimiento fechado", "cerrar turno"]',
+            evidence_refs='["correo Nora 2026-06-25"]',
+            verification_step="confirmar que cualquier compromiso con plazo queda anclado",
+        )
+    )
+
+    closed = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="done",
+            evidence="Correo revisado y respuesta preparada con trazabilidad suficiente para cerrar el turno.",
+            summary="Haré segundo nudge en 48h si BBVA Seguridad no responde antes.",
+            followup_needed=True,
+            followup_id="NF-TEST-TIMEBOUND-COMMITMENT-48H",
+            followup_description="Revisar respuesta BBVA Seguridad y enviar segundo nudge si no hay contestación.",
+            followup_date="2026-06-28",
+            followup_verification="Confirmar respuesta recibida o segundo nudge enviado con Message-ID.",
+        )
+    )
+
+    assert closed["ok"] is True
+    assert closed["followup_id"] == "NF-TEST-TIMEBOUND-COMMITMENT-48H"
+    row = get_followup("NF-TEST-TIMEBOUND-COMMITMENT-48H")
+    assert row["date"] == "2026-06-28"
