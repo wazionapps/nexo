@@ -1711,7 +1711,7 @@ class TestRuntimeChecks:
         monkeypatch.setattr(runtime.Path, "home", lambda: nexo_home)
 
         check = runtime.check_codex_session_parity()
-        assert check.status == "degraded"
+        assert check.status == "critical"
         assert any("nexo_startup seen in 0/" in item for item in check.evidence)
 
     def test_codex_session_parity_warns_when_only_some_recent_sessions_are_compliant(self, nexo_home, monkeypatch):
@@ -1747,7 +1747,7 @@ class TestRuntimeChecks:
         monkeypatch.setattr(runtime.Path, "home", lambda: nexo_home)
 
         check = runtime.check_codex_session_parity()
-        assert check.status == "degraded"
+        assert check.status == "critical"
         assert any("bootstrap markers seen in 1/2" in item for item in check.evidence)
         assert any("session drift: 1 missing bootstrap, 1 missing startup, 1 missing heartbeat" in item for item in check.evidence)
 
