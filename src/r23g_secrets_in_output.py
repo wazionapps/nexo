@@ -40,6 +40,90 @@ _BEARER_TOKEN_RE = re.compile(
     r"api[_-]?key\s*[:=]\s*[A-Za-z0-9._\-]{16,})",
     re.IGNORECASE,
 )
+_SAFE_SECRET_VIEW_RE = re.compile(
+    r"\b(?:nexo-safe-secret-view\.py|nexo_credential_get|security\s+find-generic-password|"
+    r"op\s+read|pass\s+show|gcloud\s+secrets\s+versions\s+access|"
+    r"aws\s+secretsmanager\s+get-secret-value)\b",
+    re.IGNORECASE,
+)
+_SECRET_ENV_ASSIGNMENT_RE = re.compile(
+    r"(?:^|[\s;|&])(?:env\s+)?[A-Za-z_][A-Za-z0-9_]*(?:TOKEN|SECRET|KEY|PASSWORD|PASS|BEARER)"
+    r"[A-Za-z0-9_]*\s*=\s*[^\s;|&]{8,}",
+    re.IGNORECASE,
+)
+_SECRET_ARG_RE = re.compile(
+    r"(?:"
+    r"\b(?:--?(?:api[-_]?key|token|secret|password|passwd|pass|bearer|authorization))"
+    r"(?:=|\s+)[^\s;|&]{8,}"
+    r"|\b(?:Authorization:\s*)?Bearer\s+(?:\$[{]?[A-Za-z_][A-Za-z0-9_]*[}]?|[A-Za-z0-9._\-~+/]{16,})"
+    r"|\s-p(?:\$[{]?[A-Za-z_][A-Za-z0-9_]*[}]?|[^\s;|&]{4,})"
+    r")",
+    re.IGNORECASE,
+)
+_PROCESS_ENV_LISTING_RE = re.compile(
+    r"(?:"
+    r"\b(?:env|printenv)\b"
+    r"|\bps\b[^\n;|&]*(?:\b(?:aux|auxww|ef|eww|e|ww)\b|-e\b|ww)"
+    r"|\bpgrep\b[^\n;|&]*(?:\s-a\b|--list-full)"
+    r")",
+    re.IGNORECASE,
+)
+_GREP_SECRET_PROBE_RE = re.compile(
+    r"\b(?:grep|rg)\b[^\n;|&]*(?:TOKEN|SECRET|PASSWORD|PASS|BEARER|api[_-]?key|sk-[A-Za-z0-9_\-]{8,}|ghp_[A-Za-z0-9_]{8,})",
+    re.IGNORECASE,
+)
+
+
+def _redact_command(cmd: str, max_len: int = 180) -> str:
+    text = str(cmd or "")
+    text = _BEARER_TOKEN_RE.sub("<redacted-secret>", text)
+    text = _SECRET_ENV_ASSIGNMENT_RE.sub(lambda m: re.sub(r"=.*$", "=<redacted-secret>", m.group(0)), text)
+    text = _SECRET_ARG_RE.sub("<redacted-secret-argv>", text)
+    text = _ECHO_SECRET_RE.sub("echo <redacted-env-ref>", text)
+    if len(text) > max_len:
+        text = text[:max_len] + "..."
+    return text
+
+
+def classify_secret_visibility_risk(tool_name: str, tool_input) -> dict | None:
+    """Return a hard-block descriptor for commands that would expose secrets
+    through process argv/env or unredacted ps/grep output.
+
+    R23g's older soft reminder covered obvious local dumps. This hook-level
+    classifier handles the higher-risk path: secrets placed in argv/env become
+    visible to process listings and shell history, and ps/grep probes can leak
+    them back to the agent/operator unless a safe redaction helper is used.
+    """
+    if tool_name != "Bash" or not isinstance(tool_input, dict):
+        return None
+    cmd = tool_input.get("command")
+    if not isinstance(cmd, str) or not cmd.strip():
+        return None
+    if _SAFE_SECRET_VIEW_RE.search(cmd):
+        return None
+    reason = ""
+    pattern = ""
+    if _SECRET_ENV_ASSIGNMENT_RE.search(cmd):
+        reason = "secret_env_visible"
+        pattern = "secret env assignment would be visible to child process/env inspection"
+    elif _SECRET_ARG_RE.search(cmd):
+        reason = "secret_argv_visible"
+        pattern = "secret-looking value/reference would be expanded into process argv"
+    elif _PROCESS_ENV_LISTING_RE.search(cmd):
+        reason = "process_env_listing"
+        pattern = "ps/env/pgrep output can expose argv/env secrets unless redacted"
+    elif _GREP_SECRET_PROBE_RE.search(cmd):
+        reason = "grep_secret_output"
+        pattern = "grep/rg output can expose secret values unless passed through a redactor"
+    if not reason:
+        return None
+    return {
+        "reason_code": f"r23g_{reason}",
+        "debt_type": "r23g_secret_visibility_requires_safe_manager",
+        "pattern": pattern,
+        "safe_command": _redact_command(cmd),
+        "safe_alternative": "Use the credential manager plus scripts/nexo-safe-secret-view.py, or pass secrets through stdin/files outside process argv and redact ps/grep output before sharing it.",
+    }
 
 
 def _detect_reason(cmd: str) -> str | None:

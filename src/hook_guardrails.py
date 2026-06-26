@@ -20,6 +20,11 @@ from protocol_settings import get_protocol_strictness
 from product_mode import core_writes_allowed, is_protected_runtime_core_path
 
 try:
+    from r23g_secrets_in_output import classify_secret_visibility_risk as _r23g_secret_visibility_risk
+except Exception:  # pragma: no cover - hook must fail open if optional rule import breaks
+    _r23g_secret_visibility_risk = None
+
+try:
     from guardrails.minimal_delta import evaluate as _minimal_delta_evaluate
 except Exception:  # pragma: no cover - guardrail must never break the hook import
     _minimal_delta_evaluate = None
@@ -1756,6 +1761,49 @@ def process_pre_tool_event(payload: dict) -> dict:
         _shell_cmd_launchagent = _extract_bash_command(tool_input)
         if _launchagent_operation_kind(_shell_cmd_launchagent):
             op = "delete"
+    if tool_name == "Bash" and _r23g_secret_visibility_risk is not None:
+        secret_visibility = _r23g_secret_visibility_risk(tool_name, tool_input)
+        if secret_visibility:
+            strictness = get_protocol_strictness()
+            conn = get_db()
+            claude_sid = str(payload.get("session_id", "") or "").strip()
+            if not claude_sid:
+                claude_sid = _read_claude_session_id_from_coordination()
+            sid = _resolve_nexo_sid(conn, claude_sid)
+            open_task = _find_any_open_task(conn, sid) if sid else None
+            task_id = str((open_task or {}).get("task_id") or "")
+            debt = _ensure_protocol_debt(
+                conn,
+                session_id=sid or "unknown",
+                task_id=task_id,
+                debt_type=str(secret_visibility.get("debt_type") or "r23g_secret_visibility_requires_safe_manager"),
+                severity="error",
+                evidence=(
+                    f"{secret_visibility.get('pattern')}: "
+                    f"{secret_visibility.get('safe_command')}. "
+                    f"{secret_visibility.get('safe_alternative')}"
+                ),
+                file_token=str(secret_visibility.get("reason_code") or "r23g_secret_visibility"),
+            )
+            return {
+                "ok": True,
+                "session_id": sid,
+                "tool_name": tool_name,
+                "operation": "execute",
+                "strictness": strictness,
+                "blocks": [
+                    {
+                        "file": "",
+                        "reason_code": str(secret_visibility.get("reason_code") or "r23g_secret_visibility_blocked"),
+                        "severity": "error",
+                        "debt_id": debt.get("id"),
+                        "debt_type": str(secret_visibility.get("debt_type") or "r23g_secret_visibility_requires_safe_manager"),
+                        "pattern": str(secret_visibility.get("pattern") or ""),
+                    }
+                ],
+                "warnings": [],
+                "status": "blocked",
+            }
     if op not in {"write", "delete"}:
         return {"ok": True, "skipped": True, "reason": "operation not blocked", "strictness": get_protocol_strictness()}
 
