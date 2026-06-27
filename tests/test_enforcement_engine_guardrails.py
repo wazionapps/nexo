@@ -266,3 +266,154 @@ def test_production_mutation_close_with_change_trace_is_allowed(monkeypatch):
     )
 
     assert not any(item.get("tag") == "r36:production-change-log" for item in engine.injection_queue)
+
+
+def test_production_edit_path_requires_change_log_before_close(monkeypatch):
+    import enforcement_engine
+
+    engine = enforcement_engine.HeadlessEnforcer()
+    monkeypatch.setattr(engine, "_guardian_rule_mode", lambda _rule: "hard")
+
+    engine.on_tool_call("Edit", {"file_path": "/srv/vicshop/public_html/Cron/Shopify.php"})
+
+    assert any(item.get("tag", "").startswith("r36:production-edit-change-log") for item in engine.injection_queue)
+    assert engine._production_mutation_tool_instance is not None
+
+
+def test_recent_change_log_suppresses_production_edit_prompt(monkeypatch):
+    import enforcement_engine
+
+    engine = enforcement_engine.HeadlessEnforcer()
+    monkeypatch.setattr(engine, "_guardian_rule_mode", lambda _rule: "hard")
+
+    engine.user_message_count = 7
+    engine.on_tool_call("nexo_change_log", {"files": "/srv/vicshop/public_html/Cron/Shopify.php"})
+    engine.user_message_count = 10
+    engine.on_tool_call("Write", {"file_path": "/Users/franciscoc/.nexo/runtime/data/state.json"})
+
+    assert not any(item.get("tag", "").startswith("r36:production-edit-change-log") for item in engine.injection_queue)
+
+
+def test_release_task_close_requires_objective_checklist(monkeypatch):
+    import enforcement_engine
+
+    engine = enforcement_engine.HeadlessEnforcer()
+    monkeypatch.setattr(engine, "_guardian_rule_mode", lambda _rule: "hard")
+
+    engine.on_tool_call(
+        "nexo_task_close",
+        {
+            "work_type": "release",
+            "summary": "Release v0.45.20 publicada estable",
+            "evidence": "Tests locales OK.",
+        },
+    )
+
+    assert any(item.get("tag", "").startswith("r43:release-verification") for item in engine.injection_queue)
+
+
+def test_release_task_close_with_full_checklist_is_allowed(monkeypatch):
+    import enforcement_engine
+
+    engine = enforcement_engine.HeadlessEnforcer()
+    monkeypatch.setattr(engine, "_guardian_rule_mode", lambda _rule: "hard")
+
+    engine.on_tool_call(
+        "nexo_task_close",
+        {
+            "work_type": "release",
+            "summary": "Release v0.45.20 publicada estable",
+            "evidence": (
+                "gh pr view 340 --json mergeStateStatus -> MERGED; "
+                "gh release view v0.45.20 existe; "
+                "gh run view 123 --json conclusion -> success; "
+                "curl https://nexo-desktop.com/update.json sirve manifest 0.45.20; "
+                "git tag -l v0.45.20 -> v0.45.20 tag pushed."
+            ),
+        },
+    )
+
+    assert not any(item.get("tag", "").startswith("r43:release-verification") for item in engine.injection_queue)
+
+
+def test_desktop_release_task_close_requires_open_promise_audit(monkeypatch):
+    import enforcement_engine
+
+    engine = enforcement_engine.HeadlessEnforcer()
+    monkeypatch.setattr(engine, "_guardian_rule_mode", lambda _rule: "hard")
+
+    engine.on_tool_call(
+        "nexo_task_close",
+        {
+            "work_type": "release",
+            "summary": "Release NEXO Desktop v0.45.22 publicada",
+            "evidence": (
+                "gh pr view 340 --json mergeStateStatus -> MERGED; "
+                "gh release view v0.45.22 existe; "
+                "gh run view 123 --json conclusion -> success; "
+                "curl https://nexo-desktop.com/update.json sirve manifest 0.45.22; "
+                "git tag -l v0.45.22 -> v0.45.22 tag pushed."
+            ),
+        },
+    )
+
+    queued = [item for item in engine.injection_queue if item.get("tag", "").startswith("r43:release-verification")]
+    assert queued
+    assert "desktop promise audit" in queued[0]["prompt"]
+
+
+def test_desktop_release_task_close_with_open_promise_audit_is_allowed(monkeypatch):
+    import enforcement_engine
+
+    engine = enforcement_engine.HeadlessEnforcer()
+    monkeypatch.setattr(engine, "_guardian_rule_mode", lambda _rule: "hard")
+
+    engine.on_tool_call(
+        "nexo_task_close",
+        {
+            "work_type": "release",
+            "summary": "Release NEXO Desktop v0.45.22 publicada",
+            "evidence": (
+                "gh pr view 340 --json mergeStateStatus -> MERGED; "
+                "gh release view v0.45.22 existe; "
+                "gh run view 123 --json conclusion -> success; "
+                "curl https://nexo-desktop.com/update.json sirve manifest 0.45.22; "
+                "git tag -l v0.45.22 -> v0.45.22 tag pushed. "
+                "Desktop open promises audit: transcript grep de promesas abiertas, "
+                "busqueda en dist/release y app.asar, 0 promesas abiertas sin implementar."
+            ),
+        },
+    )
+
+    assert not any(item.get("tag", "").startswith("r43:release-verification") for item in engine.injection_queue)
+
+
+def test_learning_promise_in_assistant_text_requires_learning_add(monkeypatch):
+    import enforcement_engine
+
+    engine = enforcement_engine.HeadlessEnforcer()
+    monkeypatch.setattr(engine, "_guardian_rule_mode", lambda _rule: "hard")
+
+    engine.user_message_count = 1
+    engine.on_assistant_text("Tienes razon, actualizo el conocimiento para no repetirlo.")
+
+    assert any(
+        item.get("tag") == "r14:learning-promise-without-learning-add"
+        for item in engine.injection_queue
+    )
+
+
+def test_learning_promise_is_allowed_after_mcp_learning_add(monkeypatch):
+    import enforcement_engine
+
+    engine = enforcement_engine.HeadlessEnforcer()
+    monkeypatch.setattr(engine, "_guardian_rule_mode", lambda _rule: "hard")
+
+    engine.user_message_count = 1
+    engine.on_tool_call("mcp__nexo__nexo_learning_add", {"title": "Regla capturada"})
+    engine.on_assistant_text("Tienes razon, actualizo el conocimiento para no repetirlo.")
+
+    assert not any(
+        item.get("tag") == "r14:learning-promise-without-learning-add"
+        for item in engine.injection_queue
+    )

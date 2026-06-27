@@ -507,6 +507,23 @@ def _is_learning_tool(tool_name: str) -> bool:
     return tool_name in {"nexo_learning_add", "mcp__nexo__nexo_learning_add"}
 
 
+def _learning_tool_result_has_id(payload: dict) -> bool:
+    result_text = _extract_tool_text(payload)
+    try:
+        serialized = json.dumps(payload.get("tool_result") or payload.get("result") or {}, ensure_ascii=False)
+    except Exception:
+        serialized = ""
+    joined = "\n".join(part for part in (result_text, serialized) if part)
+    if not joined.strip():
+        return False
+    if re.search(r"\b(?:learning_id|id)\s*[:=]\s*(?:null|none|0)\b", joined, re.IGNORECASE):
+        return False
+    return bool(
+        re.search(r"\b(?:learning_id|id)\s*[:=]\s*[1-9]\d*\b", joined, re.IGNORECASE)
+        or re.search(r"\b(?:LEARNING|aprendizaje)\s*#\s*[1-9]\d*\b", joined, re.IGNORECASE)
+    )
+
+
 def _task_close_payload_has_change_trace(payload: dict) -> bool:
     tool_input = _tool_input(payload)
     files = str(tool_input.get("files_changed") or "").strip()
@@ -576,7 +593,22 @@ def check_learning_capture_closeout(payload: dict, sid: str) -> str | None:
     tool_name = _tool_name(payload)
     pending_path = _pending_learning_path(sid)
     if _is_learning_tool(tool_name):
-        pending_path.unlink(missing_ok=True)
+        if _learning_tool_result_has_id(payload):
+            pending_path.unlink(missing_ok=True)
+            return None
+        _write_json(
+            pending_path,
+            {
+                "sid": sid,
+                "files": [],
+                "tool_name": tool_name,
+                "created_at": time.time(),
+                "reason": "learning_add returned without a durable learning id",
+            },
+        )
+        return append_operator_language_contract(
+            "`nexo_learning_add(...)` no devolvió un ID de aprendizaje válido. Reintenta la captura antes de continuar."
+        )
         return None
 
     files = _learning_relevant_files(payload)

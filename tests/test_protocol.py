@@ -1003,6 +1003,81 @@ def test_task_close_allows_deployed_execute_with_verified_against_real_checklist
     assert closed["outcome"] == "done"
 
 
+def test_task_close_downgrades_campaign_done_without_live_ads_evidence():
+    from db import get_db
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    sid = _register_session("nexo-1003-2003-campaign-live-missing")
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Aplicar campaña Google Ads desde catálogo Shopify real",
+            task_type="execute",
+            area="google ads campaign",
+            plan='["catalog", "validate urls", "validate_only", "paused upload"]',
+            verification_step="HTTP 200 de Final URLs y recuento GAQL post-mutación",
+        )
+    )
+
+    closed = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="done",
+            work_type="campaign",
+            evidence="Borrador de campaña generado desde catálogo Shopify.",
+            change_summary="Campaña Google Ads preparada.",
+        )
+    )
+
+    assert closed["ok"] is True
+    assert closed["outcome"] == "partial"
+    assert closed["followup_id"]
+    row = get_db().execute(
+        "SELECT status, description, verification FROM followups WHERE id = ?",
+        (closed["followup_id"],),
+    ).fetchone()
+    assert row["status"] == "PENDING"
+    assert "evidencia live pendiente" in row["description"]
+    assert "HTTP 200 de cada Final URL" in row["verification"]
+    assert "recuento GAQL post-mutación" in row["verification"]
+
+
+def test_task_close_allows_campaign_done_with_final_urls_and_gaql_counts():
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    sid = _register_session("nexo-1003-2003-campaign-live-ok")
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Aplicar campaña Google Ads desde catálogo Shopify real",
+            task_type="execute",
+            area="google ads campaign",
+            plan='["catalog", "validate urls", "validate_only", "paused upload"]',
+            verification_step="HTTP 200 de Final URLs y recuento GAQL post-mutación",
+        )
+    )
+
+    closed = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="done",
+            work_type="campaign",
+            evidence=(
+                "Final URLs: curl -I https://www.recambiosyaccesoriosbmw.com/products/demo -> HTTP 200. "
+                "Google Ads validate_only=true OK. GAQL post-mutación recuento: campaigns=1 PAUSED, "
+                "ad_groups=3, ads=3, keywords=24, negatives=12."
+            ),
+            change_summary="Campaña Google Ads cargada PAUSED con validación live.",
+        )
+    )
+
+    assert closed["ok"] is True
+    assert closed["outcome"] == "done"
+    assert not closed["followup_id"]
+
+
 def test_task_close_blocks_irreversible_publish_without_matching_human_artifact_hash():
     from plugins.cortex import handle_cortex_decide
     from plugins.protocol import handle_task_open, handle_task_close
@@ -1072,10 +1147,13 @@ def test_task_close_blocks_irreversible_publish_without_cortex_decide():
             sid=sid,
             task_id=opened["task_id"],
             outcome="done",
-            evidence=(
-                "Smoke verified; explicit approval after evidence was captured for publish stable "
-                "artifact sha256:abc123. "
-                "API: curl https://nexo-desktop.com/api/health returned HTTP 200. "
+                evidence=(
+                    "Smoke verified; explicit approval after evidence was captured for publish stable "
+                    "artifact sha256:abc123. "
+                    "Desktop open promises audit: transcript grep covered open release promises. "
+                    "Bundle empaquetado: search in dist/release and packaged app.asar completed. "
+                    "Resultado: 0 open promises pending and no NF followups required. "
+                    "API: curl https://nexo-desktop.com/api/health returned HTTP 200. "
                 "UI: browser smoke loaded /dashboard and screenshot /tmp/nexo-release-ui.png exists. "
                 "Dominio público: https://nexo-desktop.com/downloads/update.json returned HTTP 200. "
                 "Endpoint vivo: curl https://nexo-desktop.com/downloads/update.json HTTP 200. "
@@ -1150,6 +1228,9 @@ def test_task_close_allows_irreversible_publish_with_cortex_and_matching_artifac
             evidence=(
                 "Smoke verified; explicit approval after evidence was captured for publish stable "
                 "artifact sha256:abc123. "
+                "Desktop open promises audit: transcript grep covered open release promises. "
+                "Bundle empaquetado: search in dist/release and packaged app.asar completed. "
+                "Resultado: 0 open promises pending and no NF followups required. "
                 "API: curl https://nexo-desktop.com/api/health returned HTTP 200. "
                 "UI: browser smoke loaded /dashboard and screenshot /tmp/nexo-release-ui.png exists. "
                 "Dominio público: https://nexo-desktop.com/downloads/update.json returned HTTP 200. "
@@ -1567,14 +1648,10 @@ def test_task_close_auto_captures_learning_when_correction_has_no_learning():
     assert "/Users/franciscoc/Documents/_PhpstormProjects/nexo/src/plugins/guard.py" in learning["applies_to"]
 
 
-def test_task_close_soft_opens_debt_for_open_correction_without_learning_or_justification():
-    # Ola 1 SOFT contract: a detected correction without a durable learning or an
-    # explicit no-learning justification no longer BLOCKS the close (the hard
-    # block was friction and could trap the agent mid-work). The close SUCCEEDS
-    # and opens a non-blocking ``missing_learning_after_correction`` debt; the
-    # correction requirement stays open until a learning resolves it. This is the
-    # coherent counterpart of
-    # test_correction_requirements.py::test_detected_correction_opens_debt_but_does_not_block_task_close.
+def test_task_close_blocks_open_correction_without_learning_or_justification():
+    # A detected correction without a durable learning or explicit
+    # no-learning justification blocks task_close and leaves one idempotent
+    # ``missing_learning_after_correction`` debt.
     from db import get_db, record_session_correction_requirement
     from plugins.protocol import handle_task_open, handle_task_close
 
@@ -1595,7 +1672,7 @@ def test_task_close_soft_opens_debt_for_open_correction_without_learning_or_just
             verification_step="run pytest",
         )
     )
-    closed = json.loads(
+    blocked = json.loads(
         handle_task_close(
             sid=sid,
             task_id=opened["task_id"],
@@ -1606,8 +1683,8 @@ def test_task_close_soft_opens_debt_for_open_correction_without_learning_or_just
         )
     )
 
-    assert closed["ok"] is True
-    assert closed.get("blocked_by") != "correction_learning_required"
+    assert blocked["ok"] is False
+    assert blocked["blocked_by"] == "correction_learning_required"
     debt_count = get_db().execute(
         "SELECT COUNT(*) FROM protocol_debt WHERE task_id = ? "
         "AND debt_type = 'missing_learning_after_correction' AND status = 'open'",
@@ -2509,6 +2586,249 @@ def test_task_close_accepts_ui_release_ready_with_original_symptom_evidence():
             ),
             summary="release lista",
             files_changed="/tmp/renderer/ui.js",
+        )
+    )
+
+    assert closed["ok"] is True
+
+
+def test_task_open_tags_repeated_symptom_bug_as_p0():
+    from plugins.protocol import handle_task_open
+
+    sid = _register_session("nexo-1642-2642")
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Resolver mismo síntoma reportado 2+ veces en Stripe topup",
+            task_type="edit",
+            area="nexo-product",
+            files="/tmp/billing.py",
+            verification_step="Cerrar solo con test reproductor, backend y UI",
+        )
+    )
+
+    assert opened["contract"]["priority"] == "P0"
+    assert opened["contract"]["repeated_symptom_p0"] is True
+
+
+def test_task_close_blocks_repeated_symptom_p0_without_three_evidence_classes():
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    sid = _register_session("nexo-1643-2643")
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Resolver mismo síntoma reportado 2+ veces: No pudimos cargar los créditos",
+            task_type="edit",
+            area="nexo-product frontend backend",
+            files="/tmp/credits.py",
+            verification_step="Test reproductor rojo-verde, curl/SQL backend y evidencia UI post-fix",
+        )
+    )
+
+    blocked = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="done",
+            files_changed="/tmp/credits.py",
+            evidence="Test reproductor de regresión rojo->verde en pytest: falla pre-fix y pasa post-fix en repo.",
+            change_summary="Fix repeated credits topup bug",
+            change_why="Mismo síntoma reportado 2+ veces por Francisco.",
+        )
+    )
+
+    assert blocked["ok"] is False
+    assert blocked["priority"] == "P0"
+    assert blocked["blocked_by"] == "p0_repeated_bug_evidence"
+    assert "verificacion_backend_curl_sql" in blocked["missing_evidence"]
+    assert "evidencia_ui_post_fix" in blocked["missing_evidence"]
+
+
+def test_task_close_accepts_repeated_symptom_p0_with_three_evidence_classes():
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    sid = _register_session("nexo-1644-2644")
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Resolver mismo síntoma reportado 2+ veces: refrescar Brain rebota",
+            task_type="edit",
+            area="nexo-product frontend backend",
+            files="/tmp/brain_refresh.py",
+            verification_step="Test reproductor rojo-verde, curl/SQL backend y evidencia UI post-fix",
+        )
+    )
+
+    closed = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="done",
+            files_changed="/tmp/brain_refresh.py",
+            evidence=(
+                "Test reproductor de regresión rojo->verde en pytest: falla pre-fix y pasa post-fix en repo. "
+                "Backend flow: curl /api/brain/refresh devuelve HTTP 200 y SQL SELECT confirma estado actualizado en Cloud SQL. "
+                "UI post-fix: screenshot /tmp/brain-refresh-fixed.png y log Playwright headed muestran frontend sin rebote."
+            ),
+            change_summary="Fix repeated Brain refresh bug",
+            change_why="Mismo síntoma reportado 2+ veces por Francisco.",
+        )
+    )
+
+    assert closed["ok"] is True
+
+
+def test_task_close_blocks_desktop_release_without_open_promise_audit():
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    sid = _register_session("nexo-1645-2645")
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Cerrar release NEXO Desktop 0.45.21",
+            task_type="execute",
+            area="NEXO Desktop release",
+            verification_step="Verificar manifests, artefactos y promesas abiertas",
+        )
+    )
+
+    blocked = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="done",
+            evidence="gh release view v0.45.21 existe y curl update.json devuelve manifest 0.45.21.",
+            summary="Release NEXO Desktop 0.45.21 verificada",
+        )
+    )
+
+    assert blocked["ok"] is False
+    assert blocked["blocked_by"] == "desktop_release_promise_audit"
+    assert "transcript_promise_grep" in blocked["missing_evidence"]
+    assert "dist_release_bundle_search" in blocked["missing_evidence"]
+    assert "missing_promises_followups" in blocked["missing_evidence"]
+
+
+def test_task_close_accepts_desktop_release_with_open_promise_audit():
+    from plugins.cortex import handle_cortex_decide
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    sid = _register_session("nexo-1646-2646")
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Cerrar release NEXO Desktop 0.45.22",
+            task_type="execute",
+            area="NEXO Desktop release",
+            verification_step="Verificar manifests, artefactos y promesas abiertas",
+        )
+    )
+    handle_cortex_decide(
+        goal="Cerrar release NEXO Desktop 0.45.22 con auditoría de promesas abierta verificada",
+        task_type="execute",
+        impact_level="high",
+        area="NEXO Desktop release",
+        session_id=sid,
+        task_id=opened["task_id"],
+        evidence_refs='["desktop promise audit", "dist/release bundle search"]',
+        alternatives=json.dumps([
+            {"name": "close_with_audit", "description": "Close only after transcript promises and packaged bundle evidence are verified"},
+            {"name": "hold_release", "description": "Hold release if any promise lacks bundle evidence or followup"},
+        ]),
+    )
+
+    closed = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="done",
+            stakes="low",
+            evidence=(
+                "Desktop open promises audit: transcript grep cubrio 'meto en próxima release', "
+                "'lo incluyo', 'lo añadiré' y 'spec en Escritorio'. "
+                "Bundle empaquetado: busqueda en dist/release y app.asar completo. "
+                "Resultado: 0 promesas abiertas sin implementar y ningun NF nuevo requerido. "
+                "gh release view v0.45.22 existe; curl update.json devuelve manifest 0.45.22."
+            ),
+            summary="Release NEXO Desktop 0.45.22 verificada",
+        )
+    )
+
+    assert closed["ok"] is True
+
+
+def test_task_close_blocks_ready_claim_without_variant_matrix_evidence():
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    sid = _register_session("nexo-1647-2647")
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Preparar campaña Google Ads con URLs públicas, idiomas, marcas y RSAs 15+4+2",
+            task_type="execute",
+            area="google ads public landings variants",
+            verification_step="HEAD a URLs públicas y matriz de variantes antes de cerrar.",
+        )
+    )
+
+    blocked = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="done",
+            evidence="Tests locales OK.",
+            summary="Campaña preparada y verificada con URLs públicas y RSAs.",
+        )
+    )
+
+    assert blocked["ok"] is False
+    assert blocked["blocked_by"] == "preclose_variant_matrix"
+    assert "head_200_urls_publicas" in blocked["missing_evidence"]
+    assert "matriz_variantes_con_caso_por_variante" in blocked["missing_evidence"]
+
+
+def test_task_close_accepts_ready_claim_with_variant_matrix_evidence():
+    from plugins.cortex import handle_cortex_decide
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    sid = _register_session("nexo-1648-2648")
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Preparar campaña Google Ads con URLs públicas, idiomas, marcas, RSAs 15+4+2 y envíos reales",
+            task_type="execute",
+            area="google ads public landings variants real sends",
+            verification_step="HEAD a URLs públicas, matriz de variantes y autorización real antes de cerrar.",
+        )
+    )
+    handle_cortex_decide(
+        goal="Preparar campaña Google Ads con URLs públicas, variantes y envíos reales",
+        task_type="execute",
+        impact_level="high",
+        area="google ads",
+        session_id=sid,
+        task_id=opened["task_id"],
+        evidence_refs='["variant matrix", "explicit send authorization"]',
+        alternatives=json.dumps([
+            {"name": "prepare_with_authorized_send", "description": "Prepare and verify only after explicit authorization for real sends"},
+            {"name": "hold_before_send", "description": "Hold the campaign until authorization and variant evidence are complete"},
+        ]),
+    )
+
+    closed = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="done",
+            evidence=(
+                "HEAD URLs públicas: curl -I /landing-bmw -> HTTP 200; curl -I /landing-mini -> 200 OK. "
+                "Matriz de variantes: inventario por variante con 1 caso por variante ejecutado para BMW, MINI, idioma ES/FR, "
+                "sheet codes, send_to/customer_photo y RSAs 15+4+2 completos. "
+                "Envíos reales: autorización explícita de Francisco registrada antes del envío. "
+                "Verifiqué el artefacto enviado en sent folder: destinatario, asunto, cuerpo y Message-ID correctos."
+            ),
+            summary="Campaña preparada, verificada y lista.",
         )
     )
 

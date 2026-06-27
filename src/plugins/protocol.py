@@ -106,6 +106,83 @@ LEARNING_TRACE_RE = re.compile(
     r"\b(nexo_learning_add|learning_id|learning\s*#|aprendizaje\s*#)\b",
     re.IGNORECASE,
 )
+REPEATED_SYMPTOM_P0_RE = re.compile(
+    r"\b("
+    r"mismo\s+s[ií]ntoma|same\s+symptom|s[ií]ntoma\s+reportad[oa]|"
+    r"2\+\s*veces|dos\s+veces|3\+\s*veces|tres\s+veces|"
+    r"repetid[oa]|recurrente|reaparec|otra\s+vez|"
+    r"te\s+he\s+avisado|10000\s+veces"
+    r")\b",
+    re.IGNORECASE,
+)
+P0_REPRO_TEST_RE = re.compile(
+    r"(?=.*\b(?:test|pytest|vitest|phpunit|playwright)\b)"
+    r"(?=.*\b(?:reproductor|repro|regresi[oó]n)\b)"
+    r"(?=.*\b(?:rojo\s*[-→>]+\s*verde|red\s*[-→>]+\s*green|"
+    r"falla\s+pre[-\s]?fix|failed\s+pre[-\s]?fix|"
+    r"pasa\s+post[-\s]?fix|passed\s+post[-\s]?fix)\b)",
+    re.IGNORECASE | re.DOTALL,
+)
+P0_BACKEND_FLOW_RE = re.compile(
+    r"(?=.*\b(?:backend|api|flow|flujo|endpoint)\b)"
+    r"(?=.*\b(?:curl|sql|select\b|mysql|psql|cloud\s+sql|bd\s+producci[oó]n|production\s+db|http\s*200)\b)",
+    re.IGNORECASE | re.DOTALL,
+)
+P0_UI_EVIDENCE_RE = re.compile(
+    r"(?=.*\b(?:ui|front[- ]?end|frontend|browser|navegador|pantalla|modal|web|renderer)\b)"
+    r"(?=.*\b(?:screenshot|captura|log|playwright|headed|video)\b)"
+    r"(?=.*\b(?:post[-\s]?fix|despu[eé]s\s+del\s+fix|fixed|corregid[oa])\b)",
+    re.IGNORECASE | re.DOTALL,
+)
+DESKTOP_RELEASE_RE = re.compile(
+    r"(?=.*\b(?:nexo\s+desktop|desktop)\b)(?=.*\brelease\b)",
+    re.IGNORECASE | re.DOTALL,
+)
+DESKTOP_PROMISE_AUDIT_TRANSCRIPT_RE = re.compile(
+    r"\b(?:meto\s+en\s+pr[oó]xima\s+release|lo\s+incluyo|lo\s+a[nñ]adir[eé]|"
+    r"spec\s+en\s+escritorio|grep\s+(?:en\s+)?transcript|transcript\s+grep|"
+    r"promesas?\s+abiertas?|open\s+promises?)\b",
+    re.IGNORECASE,
+)
+DESKTOP_PROMISE_AUDIT_BUNDLE_RE = re.compile(
+    r"\b(?:dist/release|dist\\release|app\.asar|resources|bundle\s+empaquetado|"
+    r"packaged\s+bundle|win-unpacked|mac(?:-arm64)?|\.dmg|\.exe)\b",
+    re.IGNORECASE,
+)
+DESKTOP_PROMISE_AUDIT_RESOLUTION_RE = re.compile(
+    r"\b(?:0\s+promesas?\s+abiertas?|0\s+open\s+promises?|sin\s+promesas?\s+abiertas?|"
+    r"no\s+promises?\s+pending|followup(?:s)?\s+(?:cread[oa]s?|persistid[oa]s?)|"
+    r"\bNF-[A-Z0-9][A-Z0-9-]*\b)\b",
+    re.IGNORECASE,
+)
+PRECLOSE_READY_CLAIM_RE = re.compile(
+    r"\b(?:verificad[oa]s?|preparad[oa]s?|list[oa]s?|ready|verified|prepared)\b",
+    re.IGNORECASE,
+)
+PRECLOSE_PUBLIC_SURFACE_RE = re.compile(
+    r"\b(?:url|urls|landing|landings|p[uú]blic[ao]s?|shopify|google\s+ads|rsa|campaign|campaña|manifest|web)\b",
+    re.IGNORECASE,
+)
+PRECLOSE_VARIANT_SCOPE_RE = re.compile(
+    r"\b(?:variante|variantes|marca|marcas|idioma|idiomas|incompatible|incompatibles|sheet\s*codes?|send_to|customer_photo|rsa|headlines?|descriptions?|15\+4\+2)\b",
+    re.IGNORECASE,
+)
+PRECLOSE_REAL_ACTION_RE = re.compile(
+    r"\b(?:env[ií]os?\s+real(?:es)?|pago(?:s)?\s+real(?:es)?|send(?:s)?\s+real|real\s+send|real\s+payment|charge|cobro)\b",
+    re.IGNORECASE,
+)
+PRECLOSE_HEAD_OK_RE = re.compile(
+    r"\b(?:HEAD|curl\s+-I|HTTP\s*(?:status\s*)?(?:=|:|->)?\s*200|200\s+OK|status(?:=|:)?200)\b",
+    re.IGNORECASE,
+)
+PRECLOSE_VARIANT_EVIDENCE_RE = re.compile(
+    r"\b(?:matriz|inventario|variant(?:e|es)?|caso\s+por\s+variante|1\s+caso\s+por\s+variante|one\s+case\s+per\s+variant|15\+4\+2)\b",
+    re.IGNORECASE,
+)
+PRECLOSE_AUTHORIZATION_RE = re.compile(
+    r"\b(?:autorizaci[oó]n|autorizad[oa]|approved|approval|ok\s+expl[ií]cito|explicit\s+approval)\b",
+    re.IGNORECASE,
+)
 
 
 def _is_trivial_evidence(text: str) -> tuple[bool, str]:
@@ -198,6 +275,78 @@ def _requires_learning_after_medium_impact_edit(
     if not any(_is_medium_impact_edit_file(path) for path in candidate_files):
         return False
     return bool(LEARNING_WORTHY_EDIT_RE.search(closure_text or ""))
+
+
+def _is_repeated_symptom_p0_task(task: dict, closure_text: str) -> bool:
+    combined = " ".join(
+        str(task.get(field) or "")
+        for field in (
+            "goal",
+            "area",
+            "project_hint",
+            "context_hint",
+            "known_facts",
+            "constraints",
+            "evidence_refs",
+            "verification_step",
+        )
+    )
+    combined = f"{combined} {closure_text or ''}"
+    return bool(REPEATED_SYMPTOM_P0_RE.search(combined))
+
+
+def _missing_repeated_symptom_p0_evidence(evidence: str) -> list[str]:
+    text = evidence or ""
+    missing: list[str] = []
+    if not P0_REPRO_TEST_RE.search(text):
+        missing.append("test_reproductor_rojo_verde")
+    if not P0_BACKEND_FLOW_RE.search(text):
+        missing.append("verificacion_backend_curl_sql")
+    if not P0_UI_EVIDENCE_RE.search(text):
+        missing.append("evidencia_ui_post_fix")
+    return missing
+
+
+def _is_desktop_release_task(task: dict, closure_text: str) -> bool:
+    del closure_text
+    combined = " ".join(
+        str(part or "")
+        for part in (
+            task.get("goal"),
+            task.get("area"),
+            task.get("project_hint"),
+            task.get("context_hint"),
+            task.get("verification_step"),
+        )
+    )
+    return bool(DESKTOP_RELEASE_RE.search(combined))
+
+
+def _missing_desktop_release_promise_audit_evidence(evidence: str) -> list[str]:
+    text = evidence or ""
+    missing: list[str] = []
+    if not DESKTOP_PROMISE_AUDIT_TRANSCRIPT_RE.search(text):
+        missing.append("transcript_promise_grep")
+    if not DESKTOP_PROMISE_AUDIT_BUNDLE_RE.search(text):
+        missing.append("dist_release_bundle_search")
+    if not DESKTOP_PROMISE_AUDIT_RESOLUTION_RE.search(text):
+        missing.append("missing_promises_followups")
+    return missing
+
+
+def _missing_preclose_variant_gate_evidence(scope_text: str, evidence: str) -> list[str]:
+    scope = scope_text or ""
+    claim_text = f"{scope}\n{evidence or ''}"
+    if not PRECLOSE_READY_CLAIM_RE.search(claim_text):
+        return []
+    missing: list[str] = []
+    if PRECLOSE_PUBLIC_SURFACE_RE.search(scope) and not PRECLOSE_HEAD_OK_RE.search(evidence or ""):
+        missing.append("head_200_urls_publicas")
+    if PRECLOSE_VARIANT_SCOPE_RE.search(scope) and not PRECLOSE_VARIANT_EVIDENCE_RE.search(evidence or ""):
+        missing.append("matriz_variantes_con_caso_por_variante")
+    if PRECLOSE_REAL_ACTION_RE.search(scope) and not PRECLOSE_AUTHORIZATION_RE.search(evidence or ""):
+        missing.append("autorizacion_envios_pagos_reales")
+    return missing
 
 
 def _resolve_correction_requirements_with_justification(session_id: str, task_id: str, justification: str) -> int:
@@ -1683,10 +1832,25 @@ PENDING_RELEASE_GATE_RE = re.compile(
     r"\b(smoke|tag|tags|merge|release|stable|broadcast|publicaci[oó]n)\b.{0,80}\b(pendiente|pending|falta|sin\s+verificar|sin\s+evidencia)\b",
     re.IGNORECASE | re.DOTALL,
 )
+PENDING_RELEASE_NEGATED_RE = re.compile(
+    r"\b(?:0|zero)\s+(?:open\s+)?(?:promises?|items?|gates?|pendientes?)\s+pending\b|"
+    r"\bno\s+(?:open\s+)?(?:promises?|items?|gates?)\s+pending\b|"
+    r"\bsin\s+(?:promesas?|items?|gates?|pendientes?)\s+(?:abiertas?|pendientes?)\b",
+    re.IGNORECASE,
+)
 MANUAL_PENDING_NEGATION_RE = re.compile(
     r"\b(?:no|sin)\s+queda\s+(?:nada\s+)?pendiente\b",
     re.IGNORECASE,
 )
+
+
+def _has_pending_release_gate(text: str) -> bool:
+    for match in PENDING_RELEASE_GATE_RE.finditer(text or ""):
+        snippet = match.group(0)
+        if PENDING_RELEASE_NEGATED_RE.search(snippet):
+            continue
+        return True
+    return False
 MANUAL_PENDING_MARKER_RE = re.compile(
     r"\b("
     r"qued(?:a|an)\s+pendiente(?:s)?|"
@@ -1977,6 +2141,38 @@ VERIFIED_AGAINST_REAL_HYPOTHESES_RE = re.compile(
     re.IGNORECASE,
 )
 PARTIAL_VERIFICATION_ACK_TOKEN = "partial_verification_acknowledged"
+LIVE_ACTION_WORK_TYPES = {
+    "apply",
+    "aplicar",
+    "campaign",
+    "campaña",
+    "campana",
+    "deploy",
+    "deployment",
+    "desplegar",
+    "despliegue",
+    "publish",
+    "publicar",
+}
+LIVE_ACTION_FINAL_URL_RE = re.compile(
+    r"(?=.*\b(?:final\s+url|final\s+urls|url(?:s)?\s+final(?:es)?|landing(?:s)?)\b)"
+    r"(?=.*\b(?:http\s*(?:status\s*)?(?:=|:|->)?\s*200|200\s+ok|curl\s+-I|HEAD)\b)",
+    re.IGNORECASE | re.DOTALL,
+)
+LIVE_ACTION_GAQL_RE = re.compile(
+    r"(?=.*\bgaql\b)"
+    r"(?=.*\b(?:post[-\s]?mutaci[oó]n|post[-\s]?mutation|recuento|count|created|mutated)\b)",
+    re.IGNORECASE | re.DOTALL,
+)
+LIVE_ACTION_NPM_RE = re.compile(
+    r"(?=.*\bnpm\s+view\b)(?=.*\b(?:latest|dist-tags?|==|=)\b)",
+    re.IGNORECASE | re.DOTALL,
+)
+LIVE_ACTION_OS_LOGIN_RE = re.compile(
+    r"(?=.*\b(?:login|inicio\s+de\s+sesi[oó]n)\b)"
+    r"(?=.*\b(?:real|windows|macos|linux|os|so|vm)\b)",
+    re.IGNORECASE | re.DOTALL,
+)
 
 
 def _requires_verified_against_real_checklist(
@@ -2007,6 +2203,61 @@ def _missing_verified_against_real_items(verification_evidence) -> list[str]:
     if not items or not VERIFIED_AGAINST_REAL_HYPOTHESES_RE.search(joined):
         missing.append("hipótesis no reproducidas")
     return missing
+
+
+def _requires_live_action_close_gate(task: dict, work_type: str, closure_text: str) -> bool:
+    clean_work_type = (work_type or "").strip().lower()
+    if clean_work_type in LIVE_ACTION_WORK_TYPES:
+        return True
+    return False
+
+
+def _missing_live_action_evidence(task: dict, work_type: str, closure_text: str, evidence: str) -> list[str]:
+    if not _requires_live_action_close_gate(task, work_type, closure_text):
+        return []
+    evidence_text = evidence or ""
+    scope_text = " ".join(
+        str(part or "")
+        for part in (
+            work_type,
+            task.get("goal"),
+            task.get("area"),
+            task.get("project_hint"),
+            task.get("verification_step"),
+            closure_text,
+        )
+    ).lower()
+    missing: list[str] = []
+    is_campaign = bool(re.search(r"\b(?:campaign|campa(?:ñ|n)a|google\s+ads|gaql|rsa|final\s+url)\b", scope_text))
+    is_package_publish = bool(re.search(r"\b(?:npm|package|paquete)\b", scope_text))
+    is_os_target = bool(re.search(r"\b(?:windows|macos|linux|os|so|vm|desktop)\b", scope_text))
+
+    if is_campaign:
+        if not LIVE_ACTION_FINAL_URL_RE.search(evidence_text):
+            missing.append("HTTP 200 de cada Final URL")
+        if not LIVE_ACTION_GAQL_RE.search(evidence_text):
+            missing.append("recuento GAQL post-mutación")
+    elif not (
+        LIVE_ACTION_FINAL_URL_RE.search(evidence_text)
+        or LIVE_ACTION_GAQL_RE.search(evidence_text)
+        or LIVE_ACTION_NPM_RE.search(evidence_text)
+        or LIVE_ACTION_OS_LOGIN_RE.search(evidence_text)
+    ):
+        missing.append("evidencia live concreta")
+
+    if is_package_publish and not LIVE_ACTION_NPM_RE.search(evidence_text):
+        missing.append("npm view <pkg>@version == latest")
+    if is_os_target and not LIVE_ACTION_OS_LOGIN_RE.search(evidence_text):
+        missing.append("login real en el SO objetivo")
+    return missing
+
+
+def _append_note(base: str, note: str) -> str:
+    clean_note = (note or "").strip()
+    if not clean_note:
+        return (base or "").strip()
+    clean_base = (base or "").strip()
+    return f"{clean_base}\n{clean_note}".strip() if clean_base else clean_note
 
 
 def _active_followup_snapshot(limit: int = 5) -> list[dict]:
@@ -2303,6 +2554,19 @@ def handle_task_open(
     must_change_log = clean_type in {"edit", "execute"} and bool(files_list)
     must_learning_if_corrected = True
     must_write_diary_on_close = clean_type in ACTION_TASKS
+    p0_repeated_symptom = _is_repeated_symptom_p0_task(
+        {
+            "goal": clean_goal,
+            "area": area.strip(),
+            "project_hint": project_hint.strip(),
+            "context_hint": context_hint.strip(),
+            "known_facts": json.dumps(state["known_facts"], ensure_ascii=False),
+            "constraints": json.dumps(state["constraints"], ensure_ascii=False),
+            "evidence_refs": json.dumps(state["evidence_refs"], ensure_ascii=False),
+            "verification_step": state["verification_step"],
+        },
+        "",
+    )
 
     task = create_protocol_task(
         sid,
@@ -2462,6 +2726,8 @@ def handle_task_open(
             "must_learning_if_corrected": must_learning_if_corrected,
             "must_write_diary_on_close": must_write_diary_on_close,
             "protocol_strictness": protocol_strictness,
+            "priority": "P0" if p0_repeated_symptom else "",
+            "repeated_symptom_p0": p0_repeated_symptom,
         },
         "session_touch": heartbeat_result.splitlines()[0] if heartbeat_result else "",
         "open_debts": debts_created,
@@ -2616,6 +2882,46 @@ def handle_task_close(
         change_why,
     )
 
+    live_action_evidence = "\n".join(
+        part
+        for part in (
+            clean_evidence,
+            clean_change_verify,
+            outcome_notes,
+            clean_change_summary,
+            verification,
+        )
+        if part
+    )
+    missing_live_action = (
+        _missing_live_action_evidence(task, work_type, closure_text, live_action_evidence)
+        if clean_outcome == "done"
+        else []
+    )
+    if missing_live_action:
+        pending_note = (
+            "pending-verification: cierre degradado automáticamente a partial porque falta "
+            f"{', '.join(missing_live_action)}."
+        )
+        clean_outcome = "partial"
+        clean_evidence = _append_note(clean_evidence, pending_note)
+        outcome_notes = _append_note(outcome_notes, pending_note)
+        followup_required = True
+        followup_description = (
+            followup_description
+            or f"Verificar evidencia live pendiente para {task_id}: {task.get('goal', '')}"
+        )
+        followup_verification = (
+            followup_verification
+            or f"Aportar y registrar evidencia live: {', '.join(missing_live_action)}."
+        )
+        followup_reasoning = (
+            followup_reasoning
+            or "Creado automáticamente porque task_close no tenía la evidencia live mínima para outcome=done."
+        )
+        partial_verification_acknowledged = True
+        partial_verification_reason = partial_verification_reason or pending_note
+
     if clean_outcome == "done":
         open_task_debts = list_protocol_debts(status="open", task_id=task_id, limit=5)
         active_followups = _active_followup_snapshot()
@@ -2647,7 +2953,7 @@ def handle_task_close(
                 ensure_ascii=False,
                 indent=2,
             )
-        if PENDING_RELEASE_GATE_RE.search(closure_text):
+        if _has_pending_release_gate(closure_text):
             debt = _ensure_open_debt(
                 task["session_id"],
                 task_id,
@@ -2665,6 +2971,57 @@ def handle_task_close(
                     "blocked_by": "release_gate_pending_at_close",
                     "debt_id": debt.get("id"),
                     "debt_type": "release_gate_pending_at_close",
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        is_desktop_release_close = _is_desktop_release_task(task, closure_text)
+        preclose_scope_text = " ".join(
+            str(part or "")
+            for part in (
+                task.get("goal"),
+                task.get("area"),
+                task.get("project_hint"),
+                task.get("context_hint"),
+                task.get("known_facts"),
+                task.get("verification_step"),
+                clean_change_summary,
+                clean_change_verify,
+                outcome_notes,
+                result,
+                summary,
+                verification,
+            )
+        )
+        preclose_missing = [] if is_desktop_release_close else _missing_preclose_variant_gate_evidence(
+            preclose_scope_text,
+            close_payload_text,
+        )
+        if preclose_missing:
+            debt = _ensure_open_debt(
+                task["session_id"],
+                task_id,
+                "preclose_variant_matrix_missing",
+                severity="error",
+                evidence=(
+                    "Task close used ready/verified/prepared language without required pre-close matrix evidence. "
+                    f"Missing: {', '.join(preclose_missing)}. Claim: {closure_text[:300]!r}"
+                ),
+                debts=debts_created,
+            )
+            return json.dumps(
+                {
+                    "ok": False,
+                    "error": "Cannot close as verified/prepared/ready without the required public URL, variant, or real-action evidence.",
+                    "hint": (
+                        "Attach HEAD/HTTP 200 checks for public URLs, one executed case per declared variant, "
+                        "and explicit authorization for real sends/payments when applicable."
+                    ),
+                    "task_id": task_id,
+                    "blocked_by": "preclose_variant_matrix",
+                    "missing_evidence": preclose_missing,
+                    "debt_id": debt.get("id"),
+                    "debt_type": "preclose_variant_matrix_missing",
                 },
                 ensure_ascii=False,
                 indent=2,
@@ -2836,6 +3193,109 @@ def handle_task_close(
             indent=2,
         )
 
+    desktop_promise_audit_evidence = "\n".join(
+        part
+        for part in (
+            clean_evidence,
+            clean_change_verify,
+            outcome_notes,
+            verification,
+            summary,
+            result,
+            evidence_refs,
+            clean_change_summary,
+            change_why,
+        )
+        if part
+    )
+    desktop_promise_missing = (
+        _missing_desktop_release_promise_audit_evidence(desktop_promise_audit_evidence)
+        if clean_outcome == "done" and is_desktop_release_close
+        else []
+    )
+    if desktop_promise_missing:
+        debt = _ensure_open_debt(
+            task["session_id"],
+            task_id,
+            "desktop_release_promise_audit_missing",
+            severity="error",
+            evidence=(
+                "NEXO Desktop release close attempted without the pre-release open-promise checklist. "
+                f"Missing: {', '.join(desktop_promise_missing)}. Goal: {task.get('goal','')}. "
+                f"Evidence provided: {desktop_promise_audit_evidence[:300]!r}"
+            ),
+            debts=debts_created,
+        )
+        return json.dumps(
+            {
+                "ok": False,
+                "error": "Cannot close a NEXO Desktop release without the open-promise pre-release audit.",
+                "hint": (
+                    "Attach evidence that today's transcript was searched for release promises, "
+                    "dist/release or the packaged bundle was searched for each promised feature, "
+                    "and every missing promise was converted into a persistent NF followup."
+                ),
+                "task_id": task_id,
+                "blocked_by": "desktop_release_promise_audit",
+                "missing_evidence": desktop_promise_missing,
+                "debt_id": debt.get("id"),
+                "debt_type": "desktop_release_promise_audit_missing",
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+
+    p0_evidence_text = "\n".join(
+        part
+        for part in (
+            clean_evidence,
+            clean_change_verify,
+            outcome_notes,
+            verification,
+            summary,
+            result,
+            evidence_refs,
+            clean_change_summary,
+        )
+        if part
+    )
+    p0_missing = (
+        _missing_repeated_symptom_p0_evidence(p0_evidence_text)
+        if clean_outcome == "done" and _is_repeated_symptom_p0_task(task, closure_text)
+        else []
+    )
+    if p0_missing:
+        debt = _ensure_open_debt(
+            task["session_id"],
+            task_id,
+            "p0_repeated_bug_evidence_missing",
+            severity="error",
+            evidence=(
+                "Repeated-symptom/P0 bug close attempted without the required three evidence classes. "
+                f"Missing: {', '.join(p0_missing)}. Goal: {task.get('goal','')}. "
+                f"Evidence provided: {p0_evidence_text[:300]!r}"
+            ),
+            debts=debts_created,
+        )
+        return json.dumps(
+            {
+                "ok": False,
+                "error": "Cannot close repeated-symptom P0 bug without reproducer test, backend flow verification, and UI post-fix evidence.",
+                "hint": (
+                    "Attach all three: (a) reproducer regression test that failed pre-fix and passes post-fix, "
+                    "(b) backend flow verification with curl or SQL, and (c) UI post-fix screenshot/log evidence."
+                ),
+                "task_id": task_id,
+                "blocked_by": "p0_repeated_bug_evidence",
+                "priority": "P0",
+                "missing_evidence": p0_missing,
+                "debt_id": debt.get("id"),
+                "debt_type": "p0_repeated_bug_evidence_missing",
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+
     live_surface_required = _requires_live_surface_verification(task, clean_outcome)
     live_surface_evidence = "\n".join(
         part
@@ -2902,14 +3362,7 @@ def handle_task_close(
                 correction_justification_text,
             )
         elif not (learning_in_this_close or auto_learning_possible):
-            # SOFT enforcement (Ola 1): a detected correction without a durable
-            # learning no longer BLOCKS the close — the hard block was friction
-            # and could trap the agent mid-work. Open a non-blocking,
-            # error-severity debt and let the close proceed. Persisting the
-            # learning later (nexo_learning_add) resolves the open correction
-            # requirement. _ensure_open_debt is idempotent, so re-closing the
-            # same task never stacks a second debt.
-            _ensure_open_debt(
+            debt = _ensure_open_debt(
                 task["session_id"],
                 task_id,
                 "missing_learning_after_correction",
@@ -2919,6 +3372,23 @@ def handle_task_close(
                     "or an explicit no-learning justification."
                 ),
                 debts=debts_created,
+            )
+            return json.dumps(
+                {
+                    "ok": False,
+                    "error": "Cannot close after a detected user correction without a persisted learning.",
+                    "hint": (
+                        "Call `nexo_learning_add(...)` first, or close with `correction_happened=true` plus "
+                        "`learning_title` and `learning_content`. Use an explicit no-learning justification only "
+                        "for detector false positives or cases with no reusable rule."
+                    ),
+                    "task_id": task_id,
+                    "blocked_by": "correction_learning_required",
+                    "debt_id": debt.get("id"),
+                    "debt_type": "missing_learning_after_correction",
+                },
+                ensure_ascii=False,
+                indent=2,
             )
 
     learning_trace_text = "\n".join(

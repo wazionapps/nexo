@@ -407,6 +407,45 @@ def test_post_tool_use_blocks_task_close_until_learning_trace(monkeypatch, tmp_p
     assert not (tmp_path / f"learning-required-{sid}.json").exists()
 
 
+def test_post_tool_use_keeps_learning_pending_when_learning_add_has_null_id(monkeypatch, tmp_path):
+    from hooks import post_tool_use
+
+    monkeypatch.setattr(post_tool_use, "_production_closeout_dir", lambda: tmp_path)
+    sid = "nexo-test-learning-null"
+
+    message = post_tool_use.check_learning_capture_closeout(
+        {
+            "tool_name": "nexo_learning_add",
+            "tool_result": {"content": [{"type": "text", "text": '{"ok": false, "learning_id": null}'}]},
+        },
+        sid,
+    )
+
+    assert message is not None
+    assert "ID de aprendizaje" in message
+    assert (tmp_path / f"learning-required-{sid}.json").exists()
+
+
+def test_post_tool_use_clears_learning_pending_when_learning_add_has_valid_id(monkeypatch, tmp_path):
+    from hooks import post_tool_use
+
+    monkeypatch.setattr(post_tool_use, "_production_closeout_dir", lambda: tmp_path)
+    sid = "nexo-test-learning-id"
+    pending = tmp_path / f"learning-required-{sid}.json"
+    pending.write_text('{"reason":"pending"}', encoding="utf-8")
+
+    message = post_tool_use.check_learning_capture_closeout(
+        {
+            "tool_name": "mcp__nexo__nexo_learning_add",
+            "tool_result": {"content": [{"type": "text", "text": "LEARNING #1842 created"}]},
+        },
+        sid,
+    )
+
+    assert message is None
+    assert not pending.exists()
+
+
 def test_post_tool_use_auto_queues_guard_check_after_edit(monkeypatch):
     from hooks import post_tool_use
 

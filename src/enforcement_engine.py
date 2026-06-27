@@ -283,6 +283,28 @@ LOG_DIR = paths.logs_dir()
 _JARGON_PROMPT = render_core_prompt("r26-jargon-rewrite")
 _EXECUTE_BEFORE_ASK_PROMPT = render_core_prompt("r35-execute-before-ask")
 _PRODUCTION_CHANGE_LOG_PROMPT = render_core_prompt("r36-production-change-log-required")
+_PRODUCTION_EDIT_CHANGE_LOG_PROMPT = render_core_prompt(
+    "r36-production-edit-change-log-required",
+    files="{files}",
+)
+_RELEASE_VERIFICATION_PROMPT = render_core_prompt(
+    "r43-release-verification-checklist",
+    missing="{missing}",
+)
+_LEARNING_PROMISE_CAPTURE_PROMPT = render_core_prompt("r-learning-promise-capture")
+
+_LEARNING_PROMISE_CAPTURE_RE = re.compile(
+    r"\b("
+    r"actualizo\s+(?:el\s+)?(?:conocimiento|aprendizaje|memoria)|"
+    r"guardo\s+(?:el\s+)?(?:aprendizaje|conocimiento|memoria)|"
+    r"lo\s+(?:dejo|guardo|registro)\s+(?:aprendido|registrado)|"
+    r"(?:tienes|ten[íi]as)\s+raz[oó]n|"
+    r"apunto\s+que|"
+    r"ma[ñn]ana\s+reviso|"
+    r"aprendizaje\s*:"
+    r")",
+    re.IGNORECASE,
+)
 
 _logger = logging.getLogger("nexo.enforcer")
 if not _logger.handlers:
@@ -520,6 +542,7 @@ class HeadlessEnforcer:
         self._r23i_recent_push = False
         self._production_mutation_tool_instance: int | None = None
         self._production_mutation_evidence: str = ""
+        self._last_change_log_user_message_count: int | None = None
         # R23m — circular buffer of outbound-message sends with
         # {thread, body, ts}. Capped at 16 entries.
         self._r23m_recent_messages: list[dict] = []
@@ -1002,7 +1025,7 @@ class HeadlessEnforcer:
         current_turn = int(self.user_message_count or 0)
         return any(
             self._tool_user_message_index.get(tool, -1) >= current_turn
-            for tool in ("nexo_learning_add",)
+            for tool in ("nexo_learning_add", "mcp__nexo__nexo_learning_add")
         )
 
     def _record_missing_learning_after_accepted_correction(self) -> None:
@@ -1069,6 +1092,25 @@ class HeadlessEnforcer:
         self._record_missing_learning_after_accepted_correction()
         _logger.info("[R14 %s] enqueued accepted-correction learning gate", mode.upper())
 
+    def _check_learning_promise_capture(self, text: str) -> None:
+        if not _LEARNING_PROMISE_CAPTURE_RE.search(text or ""):
+            return
+        if self._learning_add_seen_for_current_turn():
+            return
+        mode = self._guardian_rule_mode("R14_correction_learning")
+        if mode == "off":
+            return
+        if mode == "shadow":
+            _logger.info("[R14 SHADOW] would require promised learning_add before next turn")
+            return
+        self._enqueue(
+            _LEARNING_PROMISE_CAPTURE_PROMPT,
+            "r14:learning-promise-without-learning-add",
+            rule_id="R14_correction_learning",
+        )
+        self._record_missing_learning_after_accepted_correction()
+        _logger.info("[R14 %s] enqueued promised learning_add gate", mode.upper())
+
     def on_assistant_text(self, text: str, *, declared_detector=None, has_open_task=None, accepted_correction_detector=None):
         """R16 — scan assistant message for done-claim with open protocol_task.
 
@@ -1098,6 +1140,7 @@ class HeadlessEnforcer:
             text,
             accepted_detector=accepted_correction_detector,
         )
+        self._check_learning_promise_capture(text)
         if _detect_declared_done is None:
             return
         mode = self._guardian_rule_mode("R16_declared_done")
@@ -1500,6 +1543,57 @@ class HeadlessEnforcer:
                 return cmd[:300]
         return ""
 
+    def _production_edit_files(self, tool_name: str, files: list[str]) -> list[str]:
+        if tool_name not in {"Edit", "Write", "MultiEdit", "NotebookEdit"}:
+            return []
+        matches: list[str] = []
+        for file_path in files:
+            path = str(file_path or "").strip()
+            if not path:
+                continue
+            posix = path.replace("\\", "/").lower()
+            if "/.nexo/runtime/" in posix:
+                matches.append(path)
+                continue
+            if "vicshop" in posix or "canarirural" in posix:
+                matches.append(path)
+                continue
+            if "/nexo-desktop/" in posix and (
+                posix.endswith("/main.js") or "/lib/" in posix or "/scripts/" in posix
+            ):
+                matches.append(path)
+        return matches
+
+    def _change_log_called_recently(self, *, within_turns: int = 5) -> bool:
+        last = self._last_change_log_user_message_count
+        if last is None:
+            last = self._tool_user_message_index.get("nexo_change_log")
+        if last is None:
+            return False
+        return int(self.user_message_count or 0) - int(last) <= within_turns
+
+    def _check_production_edit_change_log(self, tool_name: str, files: list[str]) -> None:
+        matches = self._production_edit_files(tool_name, files)
+        if not matches:
+            return
+        evidence = f"{tool_name} touched production path(s): {', '.join(matches[:5])}"
+        self._production_mutation_tool_instance = self._tool_instance_counter
+        self._production_mutation_evidence = evidence
+        if self._change_log_called_recently(within_turns=5):
+            return
+        mode = self._guardian_rule_mode("R36_production_change_log")
+        if mode == "off":
+            return
+        if mode == "shadow":
+            _logger.info("[R36 SHADOW] would inject production edit change_log requirement: %s", matches[:5])
+            return
+        self._enqueue(
+            _PRODUCTION_EDIT_CHANGE_LOG_PROMPT.format(files=", ".join(matches[:5])),
+            f"r36:production-edit-change-log:{self._tool_instance_counter}",
+            rule_id="R36_production_change_log",
+        )
+        _logger.info("[R36 %s] enqueued production edit change_log requirement", mode.upper())
+
     def _task_close_has_change_trace(self, tool_input) -> bool:
         payload = tool_input if isinstance(tool_input, dict) else {}
         fields = (
@@ -1518,6 +1612,7 @@ class HeadlessEnforcer:
 
     def _check_production_change_log_close(self, tool_name: str, tool_input) -> None:
         if tool_name in {"nexo_change_log", "mcp__nexo__nexo_change_log"}:
+            self._last_change_log_user_message_count = int(self.user_message_count or 0)
             self._production_mutation_tool_instance = None
             self._production_mutation_evidence = ""
             return
@@ -1546,6 +1641,108 @@ class HeadlessEnforcer:
             "rule_id": "R36_production_change_log",
         })
         _logger.info("[R36 %s] enqueued production change_log requirement", mode.upper())
+
+    def _release_close_scope(self, tool_input) -> bool:
+        if not isinstance(tool_input, dict):
+            return False
+        high_signal_fields = (
+            "work_type",
+            "stakes",
+            "triggered_by",
+            "followup_description",
+            "change_why",
+            "change_summary",
+            "summary",
+            "result",
+            "outcome_notes",
+        )
+        text = "\n".join(str(tool_input.get(field) or "") for field in high_signal_fields).lower()
+        if not text:
+            return False
+        if "paridad" in text:
+            return True
+        if "release" not in text:
+            return False
+        return any(token in text for token in ("publish", "public", "stable", "version", "tag", "github", "manifest", "v0.", "v7."))
+
+    def _desktop_release_close_scope(self, tool_input) -> bool:
+        if not isinstance(tool_input, dict):
+            return False
+        fields = (
+            "work_type",
+            "stakes",
+            "triggered_by",
+            "followup_description",
+            "change_why",
+            "change_summary",
+            "summary",
+            "result",
+            "outcome_notes",
+        )
+        text = "\n".join(str(tool_input.get(field) or "") for field in fields).lower()
+        return "release" in text and ("nexo desktop" in text or re.search(r"\bdesktop\b", text))
+
+    def _missing_release_verification_checks(self, tool_input) -> list[str]:
+        if not isinstance(tool_input, dict):
+            return []
+        fields = (
+            "evidence",
+            "verification",
+            "evidence_refs",
+            "change_verify",
+            "outcome_notes",
+            "summary",
+            "result",
+        )
+        text = "\n".join(str(tool_input.get(field) or "") for field in fields).lower()
+        checks = {
+            "gh pr view MERGED": (
+                ("gh pr view" in text and "merged" in text)
+                or "pr merged" in text
+                or "merge state: merged" in text
+                or "mergestatestatus: merged" in text
+            ),
+            "gh release view": "gh release view" in text or "github release" in text,
+            "gh run view conclusion=success": (
+                ("gh run view" in text or "workflow" in text)
+                and ("conclusion" in text or "success" in text or "fallo" in text or "failure" in text)
+            ),
+            "curl manifest publico": (
+                ("curl" in text and "manifest" in text)
+                or "update.json" in text
+                or "latest.yml" in text
+                or "latest-mac.yml" in text
+            ),
+            "git tag -l": "git tag -l" in text or "tag pushed" in text or "tag existe" in text,
+        }
+        if self._desktop_release_close_scope(tool_input):
+            checks["desktop promise audit"] = (
+                ("promesas abiertas" in text or "open promises" in text or "transcript grep" in text)
+                and ("dist/release" in text or "app.asar" in text or "packaged bundle" in text or "bundle empaquetado" in text)
+                and ("0 promesas" in text or "0 open promises" in text or "followup" in text or "nf-" in text)
+            )
+        return [name for name, ok in checks.items() if not ok]
+
+    def _check_release_task_close_verification(self, tool_name: str, tool_input) -> None:
+        if tool_name not in {"nexo_task_close", "mcp__nexo__nexo_task_close"}:
+            return
+        if not self._release_close_scope(tool_input):
+            return
+        missing = self._missing_release_verification_checks(tool_input)
+        if not missing:
+            return
+        mode = self._guardian_rule_mode("R43_release_verification_checklist")
+        if mode == "off":
+            return
+        if mode == "shadow":
+            _logger.info("[R43 SHADOW] would inject release verification checklist: %s", missing)
+            return
+        self._enqueue(
+            _RELEASE_VERIFICATION_PROMPT.format(missing=", ".join(missing)),
+            f"r43:release-verification:{self._tool_instance_counter}",
+            rule_id="R43_release_verification_checklist",
+        )
+        _logger.info("[R43 %s] enqueued release verification checklist", mode.upper())
 
     def _advance_r17_window(self, tool_name: str):
         if not self._r17_promise_seen_for_turn:
@@ -2744,6 +2941,7 @@ class HeadlessEnforcer:
             self.reset_task_cycle("nexo_task_open")
             self._start_post_close_cooldown()
             self._check_production_change_log_close(name, tool_input)
+            self._check_release_task_close_verification(name, tool_input)
             self._resolve_r17_commitments_from_task_close(tool_input)
 
         if name == "nexo_stop":
@@ -2791,6 +2989,7 @@ class HeadlessEnforcer:
         # a missing guard_check gets surfaced even if the tool has its own
         # after_tool dependencies.
         self._check_r13(name, files)
+        self._check_production_edit_change_log(name, files)
 
         # R14 post-correction learning — advance the window opened on the
         # last detected correction. Must run AFTER _check_r13 so the tool

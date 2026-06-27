@@ -41,6 +41,8 @@
     "R23k_script_duplicates_skill": "soft",
     "R24_stale_memory": "shadow",
     "R25_nora_maria_read_only": "hard",
+    "R36_production_change_log": "hard",
+    "R43_release_verification_checklist": "hard",
     "R30_pre_done_evidence_system_prompt": "hard",
     "R_CATALOG_before_artifact_create": "hard",
     "R_PRIMITIVE_CHOICE": "soft",
