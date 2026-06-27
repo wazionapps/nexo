@@ -4,7 +4,6 @@ import json
 import os
 from pathlib import Path
 from db import get_latest_metrics, get_evolution_history, update_evolution_log_status, get_db
-from product_mode import DESKTOP_EVOLUTION_DISABLED_REASON, desktop_product_requested
 
 
 CANONICAL_DIMENSIONS = {
@@ -36,8 +35,6 @@ def _load_objective() -> dict:
 
 
 def _desktop_disabled_message() -> str:
-    if desktop_product_requested():
-        return f"Evolution is DISABLED: {DESKTOP_EVOLUTION_DISABLED_REASON}"
     return ""
 
 

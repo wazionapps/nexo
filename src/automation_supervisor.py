@@ -174,9 +174,6 @@ def load_job_contracts(
         cron_id = str(entry.get("id") or "").strip()
         if not cron_id:
             continue
-        if _is_evolution(cron_id):
-            excluded.add(cron_id)
-            continue
         run_type = str(entry.get("run_type") or _infer_run_type(entry)).strip() or "scheduled"
         open_run_allowed = bool(entry.get("open_run_allowed") or entry.get("allow_open_run") or run_type == "daemon")
         sla_seconds = _coerce_int(
@@ -210,8 +207,6 @@ def classify_open_runs(
     classifications: list[OpenRunClassification] = []
     for row in rows:
         cron_id = str(row.get("cron_id") or "")
-        if _is_evolution(cron_id):
-            continue
         started_at = str(row.get("started_at") or "")
         started = _parse_timestamp(started_at)
         age_seconds = int((current - started).total_seconds()) if started is not None else None
@@ -353,8 +348,6 @@ def classify_cron_spool(
     grouped: dict[str, list[Path]] = {}
     for path in files:
         cron_id = _spool_cron_id(path, contracts)
-        if _is_evolution(cron_id):
-            continue
         grouped.setdefault(cron_id, []).append(path)
 
     results: list[CronSpoolClassification] = []
@@ -385,23 +378,6 @@ def classify_evolution_policy(
     manifest_path: Path | None,
     launchagent_labels: frozenset[str] | set[str] | list[str] | tuple[str, ...] | None,
 ) -> EvolutionPolicyClassification:
-    try:
-        from product_mode import DESKTOP_EVOLUTION_DISABLED_REASON, desktop_product_requested
-
-        desktop_managed = bool(desktop_product_requested())
-        disabled_reason = DESKTOP_EVOLUTION_DISABLED_REASON
-    except Exception:
-        desktop_managed = False
-        disabled_reason = "Disabled by product policy"
-
-    if desktop_managed:
-        return EvolutionPolicyClassification(
-            status="disabled_by_policy",
-            severity="OK",
-            reason=disabled_reason,
-            desktop_managed=True,
-        )
-
     manifest = _load_json(manifest_path, default={"crons": []})
     entries = manifest.get("crons") if isinstance(manifest, Mapping) else []
     evolution_entry = None
@@ -414,14 +390,14 @@ def classify_evolution_policy(
         return EvolutionPolicyClassification(
             status="unknown",
             severity="P2",
-            reason="Brain standalone mode has no Evolution cron entry in the manifest",
+            reason="No Evolution cron entry in the manifest",
         )
     label = str(evolution_entry.get("launchagent_label") or "com.nexo.evolution")
     if launchagent_labels is None:
         return EvolutionPolicyClassification(
             status="unknown",
             severity="P2",
-            reason="Brain standalone Evolution is declared, but LaunchAgent inventory was not supplied",
+            reason="Evolution is declared, but LaunchAgent inventory was not supplied",
             launchagent_label=label,
         )
     labels = {str(item) for item in launchagent_labels}
@@ -429,13 +405,13 @@ def classify_evolution_policy(
         return EvolutionPolicyClassification(
             status="enabled_and_loaded",
             severity="OK",
-            reason="Brain standalone Evolution is declared and loaded in the supplied inventory",
+            reason="Evolution is declared and loaded in the supplied inventory",
             launchagent_label=label,
         )
     return EvolutionPolicyClassification(
         status="enabled_but_not_loaded",
         severity="P1",
-        reason="Brain standalone Evolution is declared but absent from the supplied inventory",
+        reason="Evolution is declared but absent from the supplied inventory",
         launchagent_label=label,
     )
 
@@ -449,11 +425,11 @@ def format_markdown(report: Mapping[str, Any]) -> str:
         "",
         "| Area | Result |",
         "|---|---|",
-        f"| Jobs no Evolution | {summary.get('jobs', 0)} |",
+        f"| Jobs | {summary.get('jobs', 0)} |",
         f"| Classified open runs | {summary.get('open_runs', 0)} |",
         f"| Cron-spool jobs with JSON | {summary.get('cron_spool_jobs', 0)} |",
         f"| P1 findings | {summary.get('p1', 0)} |",
-        f"| Evolution excluded from cron reconciliation | {', '.join(summary.get('excluded_jobs') or []) or 'yes'} |",
+        f"| Excluded jobs | {', '.join(summary.get('excluded_jobs') or []) or 'none'} |",
         f"| Evolution policy | {evolution.get('status', 'unknown')} |",
     ]
     lines.extend(["", "| Finding | Severity | Reason |", "|---|---|---|"])

@@ -122,11 +122,12 @@ def _normalize_mode(mode: str) -> str:
         "core": "managed",
         "hybrid": "managed",
         "manual": "review",
-        "public": "public_core",
-        "contributor": "public_core",
-        "draft_prs": "public_core",
+        "public": "support_ticket",
+        "contributor": "support_ticket",
+        "draft_prs": "support_ticket",
+        "public_core": "support_ticket",
     }
-    return aliases.get(value, value if value in {"auto", "review", "managed", "public_core"} else "auto")
+    return aliases.get(value, value if value in {"auto", "review", "managed", "public_core", "support_ticket"} else "auto")
 
 
 def _immutable_files_for_mode(mode: str) -> set[str]:
@@ -166,7 +167,11 @@ from evolution_cycle import (
     dry_run_restore_test, max_auto_changes, create_snapshot,
     build_public_contribution_prompt, build_public_pr_review_prompt,
 )
-from product_mode import DESKTOP_EVOLUTION_DISABLED_REASON, desktop_product_requested
+from product_mode import (
+    DESKTOP_EVOLUTION_SUPPORT_MODE,
+    DESKTOP_LEGACY_EVOLUTION_DISABLED_REASON,
+    desktop_product_requested,
+)
 from public_contribution import (
     CONTRIB_ARTIFACTS_DIR,
     CONTRIB_REPO_DIR,
@@ -182,6 +187,7 @@ from public_evolution_queue import (
     list_pending_public_port_candidates,
     update_public_port_candidate,
 )
+from support_reports import create_evolution_support_ticket
 
 
 # ── Consecutive failure tracking ─────────────────────────────────────────
@@ -198,6 +204,9 @@ def set_consecutive_failures(count: int):
 
 # ── Automation backend call ──────────────────────────────────────────────
 CLI_TIMEOUT = AUTOMATION_SUBPROCESS_TIMEOUT
+PUBLIC_CONTRIBUTION_RETIRED_REASON = (
+    "Public GitHub contribution is retired; Evolution routes improvements through anonymized support tickets."
+)
 
 
 def verify_claude_cli() -> bool:
@@ -261,37 +270,11 @@ def _branch_slug(text: str) -> str:
 
 
 def _ensure_public_repo_cache(config: dict) -> None:
-    CONTRIB_REPO_DIR.parent.mkdir(parents=True, exist_ok=True)
-    if not (CONTRIB_REPO_DIR / ".git").exists():
-        clone = _git(CONTRIB_REPO_DIR.parent, "clone", f"https://github.com/{config['upstream_repo']}.git", str(CONTRIB_REPO_DIR), timeout=180)
-        if clone.returncode != 0:
-            raise RuntimeError(clone.stderr.strip() or clone.stdout.strip() or "git clone failed")
-    fetch = _git(CONTRIB_REPO_DIR, "fetch", "origin", timeout=120)
-    if fetch.returncode != 0:
-        raise RuntimeError(fetch.stderr.strip() or fetch.stdout.strip() or "git fetch failed")
-
-    remote_url = f"https://github.com/{config['fork_repo']}.git"
-    current = _git(CONTRIB_REPO_DIR, "remote", "get-url", "fork", timeout=10)
-    if current.returncode != 0:
-        add = _git(CONTRIB_REPO_DIR, "remote", "add", "fork", remote_url, timeout=10)
-        if add.returncode != 0:
-            raise RuntimeError(add.stderr.strip() or add.stdout.strip() or "git remote add fork failed")
-    elif current.stdout.strip() != remote_url:
-        set_url = _git(CONTRIB_REPO_DIR, "remote", "set-url", "fork", remote_url, timeout=10)
-        if set_url.returncode != 0:
-            raise RuntimeError(set_url.stderr.strip() or set_url.stdout.strip() or "git remote set-url failed")
+    raise RuntimeError(PUBLIC_CONTRIBUTION_RETIRED_REASON)
 
 
 def _prepare_public_worktree(config: dict, title_hint: str = "evolution") -> tuple[Path, str]:
-    _ensure_public_repo_cache(config)
-    CONTRIB_WORKTREES_DIR.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    branch_name = f"contrib/{config['machine_id']}/{timestamp}-{_branch_slug(title_hint)}"
-    worktree_dir = CONTRIB_WORKTREES_DIR / f"{timestamp}-{_branch_slug(title_hint)}"
-    add = _git(CONTRIB_REPO_DIR, "worktree", "add", "--detach", str(worktree_dir), "origin/main", timeout=120)
-    if add.returncode != 0:
-        raise RuntimeError(add.stderr.strip() or add.stdout.strip() or "git worktree add failed")
-    return worktree_dir, branch_name
+    raise RuntimeError(PUBLIC_CONTRIBUTION_RETIRED_REASON)
 
 
 def _prime_public_git_identity(worktree_dir: Path, config: dict) -> None:
@@ -470,75 +453,8 @@ def _candidate_paths(details: dict) -> list[str]:
 
 
 def _list_reviewable_public_prs(config: dict, limit: int = 3) -> list[dict]:
-    result = _gh(
-        "pr",
-        "list",
-        "--repo",
-        config["upstream_repo"],
-        "--state",
-        "open",
-        "--json",
-        "number,title,url,isDraft,author",
-        "--limit",
-        str(max(1, limit * 4)),
-        timeout=30,
-    )
-    if result.returncode != 0:
-        raise RuntimeError(result.stderr.strip() or result.stdout.strip() or "gh pr list failed")
-
-    github_user = str(config.get("github_user") or "").strip().lower()
-    active_pr_number = config.get("active_pr_number")
-    candidates: list[dict] = []
-    for item in json.loads(result.stdout or "[]"):
-        if not item.get("isDraft", False):
-            continue
-        number = int(item.get("number") or 0)
-        if not number or number == active_pr_number:
-            continue
-        author = item.get("author") or {}
-        author_login = str(author.get("login") or "").strip().lower()
-        if github_user and author_login == github_user:
-            continue
-
-        details_result = _gh(
-            "pr",
-            "view",
-            str(number),
-            "--repo",
-            config["upstream_repo"],
-            "--json",
-            "number,title,body,url,isDraft,author,reviews,files",
-            timeout=30,
-        )
-        if details_result.returncode != 0:
-            continue
-        details = json.loads(details_result.stdout or "{}")
-        if not details.get("isDraft", False):
-            continue
-        if not _is_public_evolution_pr(details):
-            continue
-        if _review_already_left_by_user(details, github_user):
-            continue
-        paths = _candidate_paths(details)
-        if not paths or any(not _is_allowed_public_path(path) for path in paths):
-            continue
-
-        diff_result = _gh(
-            "pr",
-            "diff",
-            str(number),
-            "--repo",
-            config["upstream_repo"],
-            timeout=60,
-        )
-        if diff_result.returncode != 0:
-            continue
-        details["files_changed"] = paths
-        details["diff_text"] = diff_result.stdout or ""
-        candidates.append(details)
-        if len(candidates) >= limit:
-            break
-    return candidates
+    log(PUBLIC_CONTRIBUTION_RETIRED_REASON)
+    return []
 
 
 _DEDUP_STOPWORDS = {
@@ -608,39 +524,7 @@ def _parse_public_review_json(text: str) -> dict:
 
 
 def _submit_public_pr_review(config: dict, pr_number: int, decision: str, body: str) -> str:
-    clean_decision = str(decision or "").strip().lower()
-    clean_body = str(body or "").strip()
-    if clean_decision == "approve":
-        result = _gh(
-            "pr",
-            "review",
-            str(pr_number),
-            "--repo",
-            config["upstream_repo"],
-            "--approve",
-            "--body",
-            clean_body or "Scoped public-core change looks correct from automated peer review.",
-            timeout=60,
-        )
-        if result.returncode != 0:
-            raise RuntimeError(result.stderr.strip() or result.stdout.strip() or "gh pr review --approve failed")
-        return "approved_review"
-    if clean_decision == "comment":
-        result = _gh(
-            "pr",
-            "review",
-            str(pr_number),
-            "--repo",
-            config["upstream_repo"],
-            "--comment",
-            "--body",
-            clean_body or "Automated peer review left a note but did not approve.",
-            timeout=60,
-        )
-        if result.returncode != 0:
-            raise RuntimeError(result.stderr.strip() or result.stdout.strip() or "gh pr review --comment failed")
-        return "commented_review"
-    return "review_skipped"
+    raise RuntimeError(PUBLIC_CONTRIBUTION_RETIRED_REASON)
 
 
 def _write_public_review_artifacts(pr_number: int, candidate: dict, review: dict) -> Path:
@@ -655,289 +539,50 @@ def _write_public_review_artifacts(pr_number: int, candidate: dict, review: dict
 
 def run_public_pr_validation_cycle(*, objective: dict, cycle_num: int, config: dict | None = None) -> int:
     config = config or load_public_contribution_config()
-    if not verify_claude_cli():
-        log("Automation backend not available or not authenticated. Skipping peer PR validation.")
-        mark_public_contribution_result(result="skipped:peer_review_cli_unavailable", config=config)
-        return 0
-
-    _ensure_public_repo_cache(config)
-    candidates = _list_reviewable_public_prs(config, limit=3)
-    if not candidates:
-        log("No reviewable peer public-evolution PRs found.")
-        mark_public_contribution_result(result="skipped:no_peer_prs", config=config)
-        return 0
-
-    repo_root = str(CONTRIB_REPO_DIR if CONTRIB_REPO_DIR.exists() else Path.cwd())
-    conn = sqlite3.connect(str(NEXO_DB), timeout=10)
-    conn.execute("PRAGMA busy_timeout=5000")
-    reviewed = 0
-    try:
-        for candidate in candidates:
-            pr_number = int(candidate.get("number") or 0)
-            prompt = build_public_pr_review_prompt(
-                pr_number=pr_number,
-                title=str(candidate.get("title") or "").strip(),
-                author=str((candidate.get("author") or {}).get("login") or "").strip(),
-                url=str(candidate.get("url") or "").strip(),
-                body=str(candidate.get("body") or ""),
-                files=candidate.get("files_changed") or [],
-                diff_text=str(candidate.get("diff_text") or ""),
-            )
-            raw_review = call_public_claude_cli(prompt, cwd=Path(repo_root))
-            review = _parse_public_review_json(raw_review)
-            decision = str(review.get("decision") or "skip").strip().lower()
-            review_status = _submit_public_pr_review(config, pr_number, decision, str(review.get("body") or ""))
-            artifact_dir = _write_public_review_artifacts(pr_number, candidate, review)
-            conn.execute(
-                "INSERT INTO evolution_log (cycle_number, dimension, proposal, classification, reasoning, status, files_changed, test_result) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (
-                    cycle_num,
-                    "public_core",
-                    f"Review PR #{pr_number}: {str(candidate.get('title') or '').strip()}",
-                    "public_review",
-                    str(review.get("summary") or "Peer PR validation").strip(),
-                    review_status,
-                    json.dumps(candidate.get("files_changed") or []),
-                    json.dumps(
-                        {
-                            "pr_url": candidate.get("url"),
-                            "decision": decision,
-                            "artifact_dir": str(artifact_dir),
-                        }
-                    ),
-                ),
-            )
-            conn.commit()
-            reviewed += 1
-
-        if reviewed:
-            objective["last_evolution"] = str(date.today())
-            objective["total_evolutions"] = cycle_num
-            objective.setdefault("history", []).insert(0, {
-                "cycle": cycle_num,
-                "date": str(date.today()),
-                "mode": "public_core_review",
-                "proposals": 0,
-                "auto_count": 0,
-                "auto_applied": 0,
-                "analysis": f"Reviewed {reviewed} peer public-evolution PR(s).",
-            })
-            objective["history"] = objective["history"][:12]
-            save_objective(objective)
-            mark_public_contribution_result(result=f"peer_reviewed:{reviewed}", config=config)
-        return reviewed
-    finally:
-        conn.close()
+    mark_public_contribution_result(result="retired:support_ticket_channel", config=config)
+    log("Public PR validation is retired; Evolution routes improvements through anonymized support tickets.")
+    return 0
 
 
 def _create_draft_pr(worktree_dir: Path, config: dict, branch_name: str, summary: dict) -> tuple[str, int | None]:
-    title = str(summary.get("title") or "chore: public evolution contribution").strip()
-    body_lines = [
-        summary.get("problem", "Problem: see diff."),
-        "",
-        "Summary:",
-        str(summary.get("summary") or "See diff."),
-        "",
-        "Tests:",
-    ]
-    tests = summary.get("tests") or []
-    if isinstance(tests, list) and tests:
-        body_lines.extend(f"- {item}" for item in tests)
-    else:
-        body_lines.append("- See CI / local validation")
-    risks = summary.get("risks") or []
-    if isinstance(risks, list) and risks:
-        body_lines.extend(["", "Risks:"])
-        body_lines.extend(f"- {item}" for item in risks)
-    body_lines.extend(["", "Source: automated public core evolution from an opt-in machine."])
-    body_file = worktree_dir / ".nexo-public-pr-body.md"
-    body_file.write_text("\n".join(body_lines) + "\n")
-    head = f"{config['github_user']}:{branch_name}"
-    result = _gh(
-        "pr",
-        "create",
-        "--repo",
-        config["upstream_repo"],
-        "--head",
-        head,
-        "--base",
-        "main",
-        "--title",
-        title,
-        "--body-file",
-        str(body_file),
-        "--draft",
-        cwd=worktree_dir,
-        timeout=120,
-    )
-    if result.returncode != 0:
-        raise RuntimeError(result.stderr.strip() or result.stdout.strip() or "gh pr create failed")
-    pr_url = (result.stdout or "").strip().splitlines()[-1].strip()
-    match = re.search(r"/pull/(\d+)", pr_url)
-    pr_number = int(match.group(1)) if match else None
-    return pr_url, pr_number
+    raise RuntimeError(PUBLIC_CONTRIBUTION_RETIRED_REASON)
 
 
 def run_public_contribution_cycle(*, objective: dict, cycle_num: int) -> None:
     config = load_public_contribution_config()
-    ready, reason, config = can_run_public_contribution(config)
-    if not ready:
-        if config.get("status") == STATUS_PAUSED_OPEN_PR:
-            log(f"Public core contribution paused: {reason}. Switching to peer PR validation.")
-            reviewed = run_public_pr_validation_cycle(objective=objective, cycle_num=cycle_num, config=config)
-            if reviewed:
-                log(f"Peer public PR validation complete: reviewed {reviewed} PR(s).")
-            return
-        log(f"Public core contribution paused: {reason}")
-        mark_public_contribution_result(result=f"skipped:{reason}", config=config)
-        return
-
-    if not verify_claude_cli():
-        log("Automation backend not available or not authenticated. Skipping public contribution run.")
-        mark_public_contribution_result(result="skipped:claude_cli_unavailable", config=config)
-        return
-
-    worktree_dir: Path | None = None
-    branch_name = ""
-    summary: dict = {}
     conn = sqlite3.connect(str(NEXO_DB), timeout=10)
     conn.row_factory = sqlite3.Row
-    queued_candidate: dict | None = None
     try:
-        pending_candidates = list_pending_public_port_candidates(conn, limit=1)
-        if pending_candidates:
-            queued_candidate = pending_candidates[0]
-        worktree_dir, branch_name = _prepare_public_worktree(config, title_hint="public-core")
-        _prime_public_git_identity(worktree_dir, config)
-        prompt = build_public_contribution_prompt(
-            repo_root=str(worktree_dir),
-            cycle_number=cycle_num,
-            queued_candidate=queued_candidate,
+        queued_candidates = list_pending_public_port_candidates(conn, limit=5)
+        result = _create_cycle_support_ticket(
+            conn,
+            cycle_num,
+            [],
+            "Legacy public contribution channel was retired and routed to support tickets.",
+            queued_candidates,
         )
-        raw_response = call_public_claude_cli(prompt, cwd=worktree_dir)
-        summary = _parse_summary_json(raw_response)
-        changed_files = _changed_public_files(worktree_dir)
-        ok, reason = _sanitize_public_diff(worktree_dir, changed_files)
-        if not ok:
-            raise RuntimeError(reason)
-
-        tests_run = _run_public_validation(worktree_dir, changed_files)
-        existing_tests = summary.get("tests")
-        summary["tests"] = existing_tests if isinstance(existing_tests, list) and existing_tests else tests_run
-        commit_title = str(summary.get("title") or "chore: public evolution contribution").strip()
-        duplicate = _public_pr_duplicate_candidate(config, title=commit_title, changed_files=changed_files)
-        if duplicate:
-            artifact_dir = _write_public_artifacts(
-                worktree_dir,
-                branch_name,
-                {
-                    **summary,
-                    "duplicate_of": duplicate,
-                    "tests": summary.get("tests", []),
-                    "changed_files": changed_files,
-                },
-            )
-            conn.execute(
-                "INSERT INTO evolution_log (cycle_number, dimension, proposal, classification, reasoning, status, files_changed, test_result) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (
-                    cycle_num,
-                    "public_core",
-                    commit_title,
-                    "draft_pr_dedup",
-                    f"Duplicate of open opt-in public PR #{duplicate.get('number')}: {duplicate.get('title')}",
-                    "skipped_duplicate_existing_pr",
-                    json.dumps(changed_files),
-                    json.dumps({"duplicate_of": duplicate, "artifact_dir": str(artifact_dir)}),
-                ),
-            )
-            conn.commit()
-            if queued_candidate:
-                update_public_port_candidate(
-                    conn,
-                    queued_candidate["id"],
-                    status="skipped_duplicate_existing_pr",
-                    metadata_patch={"duplicate_of": duplicate},
-                )
-                conn.commit()
-            mark_public_contribution_result(
-                result=f"skipped:duplicate_pr:{duplicate.get('number')}",
-                config=config,
-            )
-            log(
-                "Public core contribution deduplicated against existing opt-in PR "
-                f"#{duplicate.get('number')} ({duplicate.get('url')})."
-            )
-            return
-
-        add = _git(worktree_dir, "add", "--", *changed_files, timeout=60)
-        if add.returncode != 0:
-            raise RuntimeError(add.stderr.strip() or add.stdout.strip() or "git add failed")
-        commit = _git(worktree_dir, "commit", "-m", commit_title, timeout=120)
-        if commit.returncode != 0:
-            raise RuntimeError(commit.stderr.strip() or commit.stdout.strip() or "git commit failed")
-        push = _git(worktree_dir, "push", "fork", f"HEAD:refs/heads/{branch_name}", "--force-with-lease", timeout=180)
-        if push.returncode != 0:
-            raise RuntimeError(push.stderr.strip() or push.stdout.strip() or "git push failed")
-
-        pr_url, pr_number = _create_draft_pr(worktree_dir, config, branch_name, summary)
-        artifact_dir = _write_public_artifacts(worktree_dir, branch_name, summary)
-        config = mark_active_pr(pr_url=pr_url, pr_number=pr_number, branch=branch_name, config=config)
-
-        conn.execute(
-            "INSERT INTO evolution_log (cycle_number, dimension, proposal, classification, reasoning, status, files_changed, test_result) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                cycle_num,
-                "public_core",
-                commit_title,
-                "draft_pr",
-                summary.get("problem", "Public core contribution"),
-                "draft_pr_created",
-                json.dumps(changed_files),
-                json.dumps({"tests": summary.get("tests", []), "pr_url": pr_url, "artifact_dir": str(artifact_dir)}),
-            ),
-        )
-        conn.commit()
-        if queued_candidate:
-            update_public_port_candidate(
-                conn,
-                queued_candidate["id"],
-                status="draft_pr_created",
-                metadata_patch={
-                    "pr_url": pr_url,
-                    "pr_number": pr_number,
-                    "branch": branch_name,
-                    "ported_via_cycle": cycle_num,
-                },
-            )
-            conn.commit()
-
-        objective["last_evolution"] = str(date.today())
-        objective["total_evolutions"] = cycle_num
-        objective["total_proposals_made"] = objective.get("total_proposals_made", 0) + 1
+        if not queued_candidates:
+            log("Public contribution is retired; no queued support-ticket item was pending.")
+        objective["evolution_mode"] = DESKTOP_EVOLUTION_SUPPORT_MODE
         objective.setdefault("history", []).insert(0, {
             "cycle": cycle_num,
             "date": str(date.today()),
-            "mode": "public_core",
-            "proposals": 1,
+            "mode": DESKTOP_EVOLUTION_SUPPORT_MODE,
+            "proposals": len(queued_candidates),
             "auto_count": 0,
             "auto_applied": 0,
-            "analysis": (summary.get("summary") or commit_title)[:200],
-            "pr_url": pr_url,
+            "analysis": "Legacy public contribution channel retired; routed to support-ticket mode.",
         })
         objective["history"] = objective["history"][:12]
         save_objective(objective)
-        mark_public_contribution_result(result=f"draft_pr_created:{pr_url}", config=config)
-        log(f"Public core contribution complete: Draft PR created at {pr_url}")
+        mark_public_contribution_result(result="retired:support_ticket_channel", config=config)
+        if result.get("success"):
+            log("Public contribution queue routed to anonymized support tickets.")
     except Exception as exc:
         mark_public_contribution_result(result=f"failed:{exc}", config=config)
         raise
     finally:
         conn.close()
-        if worktree_dir is not None:
-            _remove_public_worktree(worktree_dir)
 
 
 # ── File safety validation ───────────────────────────────────────────────
@@ -1193,6 +838,56 @@ def _create_cycle_followup(conn: sqlite3.Connection, cycle_num: int,
         log(f"  WARN: Failed to create followup: {e}")
 
 
+def _create_cycle_support_ticket(
+    conn: sqlite3.Connection,
+    cycle_num: int,
+    items: list[dict],
+    analysis: str,
+    queued_candidates: list[dict] | None = None,
+) -> dict:
+    """Create one anonymized support ticket for product-team review."""
+    queued_candidates = queued_candidates or []
+    if not items and not queued_candidates:
+        return {"success": True, "skipped": True, "reason": "no_items"}
+
+    result = create_evolution_support_ticket(
+        cycle_num=cycle_num,
+        analysis=analysis,
+        proposals=items,
+        queued_candidates=queued_candidates,
+        dedupe_key=f"evolution-cycle:{cycle_num}",
+    )
+    status = "support_ticket_created" if result.get("success") else "support_ticket_failed"
+    payload = json.dumps(result, ensure_ascii=False, default=str)
+
+    for item in items:
+        log_id = item.get("log_id")
+        if not log_id:
+            continue
+        conn.execute(
+            "UPDATE evolution_log SET status = ?, test_result = ? WHERE id = ?",
+            (status, payload, int(log_id)),
+        )
+
+    for candidate in queued_candidates:
+        candidate_id = candidate.get("id")
+        if candidate_id is None:
+            continue
+        update_public_port_candidate(
+            conn,
+            int(candidate_id),
+            status=status,
+            metadata_patch={"support_ticket": result},
+        )
+
+    conn.commit()
+    if result.get("success"):
+        log(f"  Support ticket created for Evolution cycle #{cycle_num}")
+    else:
+        log(f"  WARN: Support ticket failed for Evolution cycle #{cycle_num}: {result.get('error') or result.get('response')}")
+    return result
+
+
 def _create_failure_followup(conn: sqlite3.Connection, cycle_num: int, log_id: int,
                              proposal: dict, result: dict):
     """Create an incident-style followup for a failed or blocked AUTO proposal."""
@@ -1357,18 +1052,34 @@ def run():
     log("=" * 60)
     log("NEXO Evolution cycle starting (standalone, v2 — real execution)")
 
-    if desktop_product_requested():
-        log(f"Evolution DISABLED: {DESKTOP_EVOLUTION_DISABLED_REASON}")
-        return
-
     # Check objective
     objective = load_objective()
     if not objective:
         log("ERROR: No evolution-objective.json found")
         sys.exit(1)
     if not objective.get("evolution_enabled", True):
-        log(f"Evolution DISABLED: {objective.get('disabled_reason', 'unknown')}")
-        return
+        disabled_reason = str(objective.get("disabled_reason") or "unknown")
+        legacy_desktop_disabled = (
+            objective.get("disabled_by") == "desktop_product"
+            or disabled_reason == DESKTOP_LEGACY_EVOLUTION_DISABLED_REASON
+        )
+        if desktop_product_requested() and legacy_desktop_disabled:
+            log("Desktop-managed legacy Evolution disable detected; re-enabling support-ticket mode.")
+            objective["evolution_enabled"] = True
+            objective.pop("disabled_reason", None)
+            objective.pop("disabled_by", None)
+            objective["evolution_mode"] = DESKTOP_EVOLUTION_SUPPORT_MODE
+            save_objective(objective)
+        else:
+            log(f"Evolution DISABLED: {disabled_reason}")
+            return
+
+    if desktop_product_requested():
+        if _normalize_mode(objective.get("evolution_mode", "auto")) != DESKTOP_EVOLUTION_SUPPORT_MODE:
+            log("Desktop-managed install: forcing Evolution support-ticket mode.")
+            objective["evolution_mode"] = DESKTOP_EVOLUTION_SUPPORT_MODE
+            objective["support_ticket_mode"] = True
+            save_objective(objective)
 
     # Circuit breaker: consecutive failures
     failures = get_consecutive_failures()
@@ -1381,14 +1092,8 @@ def run():
 
     public_config = load_public_contribution_config()
     if str(public_config.get("mode") or "").strip().lower() in {"draft_prs", "pending_auth"}:
-        cycle_num = objective.get("total_evolutions", 0) + 1
-        try:
-            run_public_contribution_cycle(objective=objective, cycle_num=cycle_num)
-            set_consecutive_failures(0)
-        except Exception as e:
-            log(f"Public core contribution failed: {e}")
-            set_consecutive_failures(failures + 1)
-        return
+        log("Legacy public contribution config detected; routing Evolution through anonymized support tickets.")
+        objective["evolution_mode"] = DESKTOP_EVOLUTION_SUPPORT_MODE
 
     # Dry-run restore test
     log("Running restore dry-run test...")
@@ -1495,6 +1200,14 @@ def run():
     conn.execute("PRAGMA busy_timeout=5000")
 
     followup_items = []
+    support_ticket_items = []
+    queued_support_candidates = []
+    if evolution_mode == DESKTOP_EVOLUTION_SUPPORT_MODE:
+        try:
+            queued_support_candidates = list_pending_public_port_candidates(conn, limit=5)
+        except Exception as exc:
+            log(f"  WARN: Failed to read public-port queue for support ticket routing: {exc}")
+            queued_support_candidates = []
 
     for p in proposals:
         classification = p.get("classification", "propose")
@@ -1503,22 +1216,29 @@ def run():
         reasoning = p.get("reasoning", "")
         scope = p.get("scope", "local")  # "public" or "local"
 
-        if evolution_mode == "review":
+        if evolution_mode in {"review", DESKTOP_EVOLUTION_SUPPORT_MODE}:
+            pending_status = "pending_review" if evolution_mode == "review" else "pending_support_ticket"
             log(f"  QUEUED [{scope}]: {action[:80]}")
-            conn.execute(
+            cur = conn.execute(
                 "INSERT INTO evolution_log (cycle_number, dimension, proposal, classification, "
                 "reasoning, status, proposal_payload) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (cycle_num, dimension, action, classification, reasoning, "pending_review",
+                (cycle_num, dimension, action, classification, reasoning, pending_status,
                  json.dumps(p, ensure_ascii=False))
             )
-            followup_items.append({
+            item = {
+                "log_id": cur.lastrowid,
                 "dimension": dimension,
                 "action": action,
                 "reasoning": reasoning,
                 "scope": scope,
                 "classification": classification,
-                "status": "pending_review",
-            })
+                "impact": p.get("impact"),
+                "status": pending_status,
+            }
+            if evolution_mode == "review":
+                followup_items.append(item)
+            else:
+                support_ticket_items.append(item)
 
         elif classification == "auto" and auto_count < max_auto:
             auto_count += 1
@@ -1580,6 +1300,14 @@ def run():
 
     if evolution_mode in {"review", "managed"} and followup_items:
         _create_cycle_followup(conn, cycle_num, followup_items, response.get("analysis", ""), evolution_mode)
+    if evolution_mode == DESKTOP_EVOLUTION_SUPPORT_MODE and (support_ticket_items or queued_support_candidates):
+        _create_cycle_support_ticket(
+            conn,
+            cycle_num,
+            support_ticket_items,
+            response.get("analysis", ""),
+            queued_support_candidates,
+        )
 
     # Update metrics
     scores = response.get("dimension_scores", {})

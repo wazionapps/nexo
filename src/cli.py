@@ -2917,7 +2917,7 @@ def _contributor_status(args):
         if payload["fork_repo"]:
             print(f"  Fork: {payload['fork_repo']}")
         if payload["active_pr_url"]:
-            print(f"  Active Draft PR: {payload['active_pr_url']}")
+            print(f"  Legacy PR URL: {payload['active_pr_url']}")
         if payload["cooldown_until"]:
             print(f"  Cooldown until: {payload['cooldown_until']}")
         if payload["last_result"]:
@@ -2928,10 +2928,6 @@ def _contributor_status(args):
 def _contributor_on(args):
     public_contribution = _load_public_contribution_support()
 
-    interactive = sys.stdin.isatty() and sys.stdout.isatty()
-    if not interactive:
-        print("Contributor mode requires an interactive terminal to confirm GitHub Draft PR consent.", file=sys.stderr)
-        return 1
     if not public_contribution["available"]:
         print(public_contribution["message"], file=sys.stderr)
         return 1
@@ -2946,7 +2942,7 @@ def _contributor_on(args):
         print(f"Contributor mode: {public_contribution['format_public_contribution_label'](config)}")
         if config.get("message"):
             print(config.get("message"))
-    return 0 if config.get("mode") == "draft_prs" else 1
+    return 1
 
 
 def _contributor_off(args):
@@ -3825,7 +3821,7 @@ Commands:
   nexo clients sync                                    Sync Claude/Codex shared-brain configs and bootstrap files
   nexo update                                          Update installed runtime
   nexo uninstall [--dry-run] [--delete-data]            Stop crons, remove runtime (keeps data)
-  nexo contributor status|on|off                       Public Draft PR contribution mode
+  nexo contributor status|on|off                       Retired public contribution mode
   nexo dashboard on|off|status                         Web dashboard control
 
 Run 'nexo <command> --help' for details.
@@ -4474,7 +4470,7 @@ def main():
     support_snapshot_parser.add_argument("--log-lines", type=int, default=80, help="How many recent log lines to include")
 
     # -- contributor --
-    contributor_parser = sub.add_parser("contributor", help="Public Draft PR contribution mode")
+    contributor_parser = sub.add_parser("contributor", help="Retired public contribution mode")
     contributor_parser.add_argument("action", choices=["status", "on", "off"], help="Manage contributor mode")
     contributor_parser.add_argument("--json", action="store_true", help="JSON output")
 

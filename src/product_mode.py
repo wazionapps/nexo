@@ -15,8 +15,9 @@ DESKTOP_PRODUCT_ENV = "NEXO_DESKTOP_MANAGED"
 ALLOW_CORE_WRITES_ENV = "NEXO_ALLOW_CORE_WRITES"
 PRODUCT_MODE_FILENAME = "product-mode.json"
 DESKTOP_PRODUCT_MODE = "desktop_closed_product"
-DESKTOP_DISABLED_FEATURES = ("evolution", "dashboard")
-DESKTOP_EVOLUTION_DISABLED_REASON = "Disabled by NEXO Desktop product contract"
+DESKTOP_DISABLED_FEATURES = ("dashboard",)
+DESKTOP_EVOLUTION_SUPPORT_MODE = "support_ticket"
+DESKTOP_LEGACY_EVOLUTION_DISABLED_REASON = "Disabled by NEXO Desktop product contract"
 
 
 def _now_iso() -> str:
@@ -132,8 +133,8 @@ def _default_objective_payload() -> dict[str, Any]:
     return {
         "objective": "Improve operational excellence and reduce repeated errors",
         "focus_areas": ["error_prevention", "proactivity", "memory_quality"],
-        "evolution_enabled": False,
-        "evolution_mode": "review",
+        "evolution_enabled": True,
+        "evolution_mode": DESKTOP_EVOLUTION_SUPPORT_MODE,
         "dimensions": {
             "episodic_memory": {"current": 0, "target": 90},
             "autonomy": {"current": 0, "target": 80},
@@ -174,20 +175,26 @@ def enforce_desktop_product_contract(*, source: str = "desktop") -> dict[str, An
 
     mode_payload = mark_desktop_product_managed(source=source)
     objective_path, objective = load_evolution_objective()
-    changed_objective = (
-        bool(objective.get("evolution_enabled", True))
-        or str(objective.get("disabled_reason") or "") != DESKTOP_EVOLUTION_DISABLED_REASON
-    )
+    previous = json.dumps(objective, sort_keys=True, ensure_ascii=False, default=str)
 
-    objective["evolution_enabled"] = False
-    objective["disabled_reason"] = DESKTOP_EVOLUTION_DISABLED_REASON
-    objective["disabled_by"] = "desktop_product"
+    legacy_desktop_disabled = (
+        objective.get("disabled_by") == "desktop_product"
+        or str(objective.get("disabled_reason") or "") == DESKTOP_LEGACY_EVOLUTION_DISABLED_REASON
+    )
+    if legacy_desktop_disabled or "evolution_enabled" not in objective:
+        objective["evolution_enabled"] = True
+    if legacy_desktop_disabled:
+        objective.pop("disabled_reason", None)
+        objective.pop("disabled_by", None)
+    objective["evolution_mode"] = DESKTOP_EVOLUTION_SUPPORT_MODE
     objective["desktop_managed"] = True
+    objective["support_ticket_mode"] = True
     if not objective.get("created_at"):
         objective["created_at"] = _now_iso()
 
     objective_path.parent.mkdir(parents=True, exist_ok=True)
     objective_path.write_text(json.dumps(objective, indent=2, ensure_ascii=False) + "\n")
+    changed_objective = previous != json.dumps(objective, sort_keys=True, ensure_ascii=False, default=str)
     return {
         "applied": True,
         "mode_path": str(product_mode_path()),

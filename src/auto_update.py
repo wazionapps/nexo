@@ -4408,7 +4408,7 @@ def _auto_update_check_locked() -> dict:
     try:
         desktop_contract = enforce_desktop_product_contract(source="auto_update")
         if desktop_contract.get("applied") and desktop_contract.get("changed_objective"):
-            _log("Desktop product contract enforced: evolution disabled")
+            _log("Desktop product contract enforced: evolution support-ticket mode")
     except Exception as e:
         _log(f"desktop product contract error: {e}")
 

@@ -118,8 +118,6 @@ def _dashboard_runtime_flags() -> dict:
                 if str(item).strip()
             ]
         desktop_managed = bool(desktop_product_requested())
-        if desktop_managed and "evolution" not in disabled:
-            disabled.append("evolution")
         flags["desktop_managed"] = desktop_managed
         flags["disabled_features"] = disabled
         flags["evolution_available"] = "evolution" not in disabled

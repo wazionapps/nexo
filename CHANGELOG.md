@@ -1,5 +1,15 @@
 # Changelog
 
+## [7.38.2] - 2026-06-27
+
+### Changed - Desktop-managed runtime unification
+
+- **Desktop-managed Evolution is active by default again and routes product improvements to anonymized support tickets.** Legacy public contribution modes such as `public`, `public_core`, `contributor`, `draft_prs`, and `pending_auth` now normalize to `support_ticket` instead of prompting for GitHub forks, branches, pushes, or Draft PRs.
+- **Support-ticket creation for Evolution and Deep Sleep passes through a privacy scrubber before leaving the local runtime.** Ticket bodies redact emails, URLs, local paths, bootstrap filenames, secret-looking values, tokens, raw examples, transcripts, database content, and operator/client-specific evidence.
+- **The retired public-contribution path is now compatibility-only.** Old queues are marked as routed/retired or converted to support-ticket review, while the CLI and installer no longer ask for GitHub contributor setup.
+- **Desktop product mode no longer disables Evolution.** Existing installs that previously carried `disabled_by=desktop_product` migrate back to `evolution_enabled=true` with `evolution_mode=support_ticket`, while Deep Sleep remains untouched.
+- **Release and correction closeout guardrails were tightened for the Desktop release path.** The runtime now requires durable learning capture after corrections and stronger evidence for release/campaign closeouts before they can be marked complete.
+
 ## [7.38.1] - 2026-06-26
 
 ### Fixed - Hook recovery and runtime safety follow-through

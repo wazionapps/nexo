@@ -1044,8 +1044,6 @@ def _cron_expectations() -> dict[str, dict]:
         cron_id = cron.get("id")
         if not cron_id or cron.get("keep_alive"):
             continue
-        if cron_id == "evolution" and _is_evolution_disabled():
-            continue
         if cron.get("run_at_load") and not cron.get("interval_seconds") and not cron.get("schedule"):
             continue
 

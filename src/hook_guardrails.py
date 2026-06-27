@@ -1516,7 +1516,7 @@ def _collect_automation_live_repo_blocks(
             severity="error",
             evidence=(
                 f"{tool_name} attempted on {filepath} from an automation session against the live NEXO repo. "
-                "Use an isolated checkout/worktree or the public contribution Draft PR flow instead."
+                "Use an isolated checkout/worktree or route the improvement through an anonymized support ticket."
             ),
             file_token=filepath,
         )
@@ -2650,7 +2650,7 @@ def format_pretool_block_message(result: dict) -> str:
         elif item.get("reason_code") == "automation_live_repo":
             lines.append(
                 f"- {file_note}: automation sessions cannot write to the live NEXO repo. "
-                "Use an isolated checkout/worktree or the public contribution Draft PR flow."
+                "Use an isolated checkout/worktree or route the improvement through an anonymized support ticket."
             )
         elif item.get("reason_code") == "runtime_core_protected":
             lines.append(

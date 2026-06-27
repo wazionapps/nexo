@@ -1,10 +1,8 @@
 from __future__ import annotations
-"""Public contribution preferences and GitHub PR workflow helpers.
+"""Retired public-contribution preferences.
 
-This module manages the opt-in "public core evolution" mode:
-- user consent and persisted config in schedule.json
-- GitHub auth/fork detection
-- active Draft PR pause/resume lifecycle
+Legacy configs are preserved only so updates can retire them safely and route
+Evolution improvements through anonymized support tickets.
 """
 
 import json
@@ -41,6 +39,9 @@ VALID_STATUSES = {
     STATUS_COOLDOWN,
     STATUS_OFF,
 }
+PUBLIC_CONTRIBUTION_RETIRED_MESSAGE = (
+    "Public Draft PR contribution is retired; Evolution routes anonymized support tickets instead."
+)
 
 # Path resolution moved to lazy functions (AUDITOR-V700-PASS2 §11, B10 item
 # 3). The previous module-level constants were evaluated at import time, so
@@ -276,8 +277,23 @@ def _parse_iso(ts: str | None) -> datetime | None:
 def format_public_contribution_label(config: dict | None = None) -> str:
     cfg = normalize_public_contribution_config(config)
     if cfg["mode"] == MODE_DRAFT_PRS:
-        return f"draft_prs ({cfg['status']})"
+        return "off (GitHub retired; support tickets active)"
     return cfg["mode"]
+
+
+def _retire_public_contribution_config(config: dict) -> dict:
+    config["enabled"] = False
+    config["mode"] = MODE_OFF
+    config["status"] = STATUS_OFF
+    config["github_user"] = ""
+    config["fork_repo"] = ""
+    config["active_pr_url"] = ""
+    config["active_pr_number"] = None
+    config["active_branch"] = ""
+    config["cooldown_until"] = ""
+    config["last_result"] = "retired:support_ticket_channel"
+    config["message"] = PUBLIC_CONTRIBUTION_RETIRED_MESSAGE
+    return config
 
 
 def prompt_for_public_contribution(
@@ -286,71 +302,16 @@ def prompt_for_public_contribution(
     input_fn=input,
     output_fn=print,
 ) -> dict:
-    output_fn("[NEXO] Public contribution mode is optional and opt-in.")
-    output_fn(
-        "[NEXO] If enabled, this machine may prepare core improvements in an isolated checkout "
-        "and open a Draft PR to the public NEXO repository."
-    )
-    output_fn("[NEXO] It never auto-merges, and it stays paused while that PR remains open.")
-    output_fn("[NEXO] It must never publish personal scripts, local runtime data, logs, prompts, or secrets.")
-
-    while True:
-        answer = str(
-            input_fn("[NEXO] Enable public contribution via Draft PRs on this machine? [y]es / [n]o / [l]ater: ")
-        ).strip().lower()
-        if answer in {"y", "yes"}:
-            auth = github_auth_status()
-            if not auth.get("ok"):
-                return {
-                    "mode": MODE_PENDING_AUTH,
-                    "status": STATUS_PENDING_AUTH,
-                    "enabled": False,
-                    "message": auth.get("message") or "GitHub authentication is missing.",
-                    "github_user": "",
-                    "fork_repo": "",
-                    "prompted": True,
-                }
-            fork = ensure_fork(auth.get("login", ""))
-            if not fork.get("ok"):
-                return {
-                    "mode": MODE_PENDING_AUTH,
-                    "status": STATUS_PENDING_AUTH,
-                    "enabled": False,
-                    "message": fork.get("message") or "Could not ensure a GitHub fork.",
-                    "github_user": auth.get("login", ""),
-                    "fork_repo": "",
-                    "prompted": True,
-                }
-            return {
-                "mode": MODE_DRAFT_PRS,
-                "status": STATUS_ACTIVE,
-                "enabled": True,
-                "message": "",
-                "github_user": auth.get("login", ""),
-                "fork_repo": fork.get("fork_repo", ""),
-                "prompted": True,
-            }
-        if answer in {"n", "no"}:
-            return {
-                "mode": MODE_OFF,
-                "status": STATUS_OFF,
-                "enabled": False,
-                "message": "",
-                "github_user": "",
-                "fork_repo": "",
-                "prompted": True,
-            }
-        if answer in {"l", "later", ""}:
-            return {
-                "mode": MODE_UNSET,
-                "status": STATUS_UNSET,
-                "enabled": False,
-                "message": "",
-                "github_user": "",
-                "fork_repo": "",
-                "prompted": True,
-            }
-        output_fn("[NEXO] Reply with yes, no, or later.")
+    output_fn(f"[NEXO] {PUBLIC_CONTRIBUTION_RETIRED_MESSAGE}")
+    return {
+        "mode": MODE_OFF,
+        "status": STATUS_OFF,
+        "enabled": False,
+        "message": PUBLIC_CONTRIBUTION_RETIRED_MESSAGE,
+        "github_user": "",
+        "fork_repo": "",
+        "prompted": True,
+    }
 
 
 def ensure_public_contribution_choice(
@@ -382,105 +343,26 @@ def ensure_public_contribution_choice(
         config = load_public_contribution_config()
         config["message"] = result.get("message", "")
     else:
-        config["message"] = ""
+        if config["mode"] in {MODE_DRAFT_PRS, MODE_PENDING_AUTH} or config.get("enabled"):
+            config = _retire_public_contribution_config(config)
+            save_public_contribution_config(config)
+        config["message"] = config.get("message", "")
     config["prompted"] = prompted
     return config
 
 
 def refresh_public_contribution_state(config: dict | None = None) -> dict:
     config = normalize_public_contribution_config(config or load_public_contribution_config())
-    if config["mode"] != MODE_DRAFT_PRS:
-        return config
-
-    if config.get("active_pr_number") and config.get("active_pr_url"):
-        try:
-            result = _gh(
-                "pr",
-                "view",
-                str(config["active_pr_number"]),
-                "--repo",
-                config["upstream_repo"],
-                "--json",
-                "state,isDraft,url,mergedAt,closed",
-                timeout=20,
-            )
-        except Exception as e:
-            config["last_result"] = f"pr_status_error:{e}"
-            save_public_contribution_config(config)
-            return config
-        if result.returncode == 0:
-            payload = json.loads(result.stdout or "{}")
-            if payload.get("state") == "OPEN" and payload.get("isDraft", False):
-                config["status"] = STATUS_PAUSED_OPEN_PR
-                save_public_contribution_config(config)
-                return config
-            resolution = "merged" if payload.get("mergedAt") else "closed"
-            config["active_pr_url"] = ""
-            config["active_pr_number"] = None
-            config["active_branch"] = ""
-            config["cooldown_until"] = ""
-            config["status"] = STATUS_ACTIVE
-            config["last_result"] = f"resolved_pr:{resolution}:{payload.get('url') or ''}".rstrip(":")
-            save_public_contribution_config(config)
-            return config
-        return _set_pending_auth(
-            config,
-            f"GitHub Draft PR status check failed: {(result.stderr or result.stdout).strip() or 'unknown gh error'}",
-        )
-
-    cooldown_until = _parse_iso(config.get("cooldown_until"))
-    if cooldown_until and cooldown_until > _utcnow():
-        # Legacy installs used a post-merge/close cooldown that blocked the next
-        # public contribution cycle even after maintainers resolved the Draft PR.
-        # Public contribution should pause only while the PR is still open.
-        config["cooldown_until"] = ""
-        config["status"] = STATUS_ACTIVE
+    if config["mode"] in {MODE_DRAFT_PRS, MODE_PENDING_AUTH} or config.get("enabled"):
+        config = _retire_public_contribution_config(config)
         save_public_contribution_config(config)
         return config
-
-    auth = github_auth_status()
-    if not auth.get("ok"):
-        return _set_pending_auth(
-            config,
-            auth.get("message") or "GitHub authentication is missing for public contribution.",
-        )
-    login = str(auth.get("login") or "").strip()
-    configured_login = str(config.get("github_user") or "").strip()
-    if configured_login and login and configured_login.lower() != login.lower():
-        return _set_pending_auth(
-            config,
-            f"GitHub login drift detected: configured {configured_login}, current {login}. Reconfirm public contribution credentials.",
-        )
-    if login and not configured_login:
-        config["github_user"] = login
-
-    if not str(config.get("fork_repo") or "").strip():
-        fork = ensure_fork(login)
-        if not fork.get("ok"):
-            return _set_pending_auth(
-                config,
-                fork.get("message") or "GitHub fork setup is missing for public contribution.",
-            )
-        config["fork_repo"] = str(fork.get("fork_repo") or "").strip()
-
-    if config["mode"] == MODE_PENDING_AUTH:
-        config["status"] = STATUS_PENDING_AUTH
-    else:
-        config["status"] = STATUS_ACTIVE
-    save_public_contribution_config(config)
     return config
 
 
 def can_run_public_contribution(config: dict | None = None) -> tuple[bool, str, dict]:
     config = refresh_public_contribution_state(config)
-    if config["mode"] == MODE_PENDING_AUTH or config["status"] == STATUS_PENDING_AUTH:
-        detail = str(config.get("message") or config.get("last_result") or "").strip()
-        return False, detail or "github authentication or fork setup is pending", config
-    if config["mode"] != MODE_DRAFT_PRS or not config.get("enabled"):
-        return False, "public contribution is disabled", config
-    if config["status"] == STATUS_PAUSED_OPEN_PR:
-        return False, "an active Draft PR is already open for this machine", config
-    return True, "", config
+    return False, PUBLIC_CONTRIBUTION_RETIRED_MESSAGE, config
 
 
 def mark_public_contribution_result(*, result: str, config: dict | None = None) -> dict:
@@ -493,25 +375,14 @@ def mark_public_contribution_result(*, result: str, config: dict | None = None) 
 
 def mark_active_pr(*, pr_url: str, pr_number: int | None, branch: str, config: dict | None = None) -> dict:
     config = normalize_public_contribution_config(config or load_public_contribution_config())
-    config["active_pr_url"] = pr_url
-    config["active_pr_number"] = pr_number
-    config["active_branch"] = branch
-    config["status"] = STATUS_PAUSED_OPEN_PR
+    config = _retire_public_contribution_config(config)
     config["last_run_at"] = _utcnow().isoformat()
-    config["last_result"] = "draft_pr_created"
     save_public_contribution_config(config)
     return config
 
 
 def disable_public_contribution() -> dict:
     config = load_public_contribution_config()
-    config.update({
-        "enabled": False,
-        "mode": MODE_OFF,
-        "status": STATUS_OFF,
-        "active_pr_url": "",
-        "active_pr_number": None,
-        "active_branch": "",
-    })
+    config = _retire_public_contribution_config(config)
     save_public_contribution_config(config)
     return config

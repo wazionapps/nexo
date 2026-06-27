@@ -64,7 +64,7 @@ def normalize_objective(obj: dict | None) -> dict:
     if "evolution_mode" in source:
         mode = str(source.get("evolution_mode") or "auto").strip().lower()
         if mode in {"public", "public_core", "contributor", "draft_prs"}:
-            mode = "public_core"
+            mode = "support_ticket"
     else:
         legacy_mode = str(source.get("review_mode") or "").strip().lower()
         if legacy_mode in {"manual", "review"}:
@@ -72,11 +72,11 @@ def normalize_objective(obj: dict | None) -> dict:
         elif legacy_mode in {"managed", "hybrid", "owner", "core"}:
             mode = "managed"
         elif legacy_mode in {"public", "public_core", "contributor", "draft_prs"}:
-            mode = "public_core"
+            mode = "support_ticket"
         else:
             mode = "auto"
 
-    if mode not in {"auto", "review", "managed", "public_core"}:
+    if mode not in {"auto", "review", "managed", "public_core", "support_ticket"}:
         mode = "auto"
 
     dimensions = source.get("dimensions")
@@ -301,10 +301,10 @@ def build_evolution_prompt(week_data: dict, objective: dict) -> str:
         mode_desc = f"owner-managed, max {max_auto} auto-applied changes with rollback and followups"
         safe_zones = "~/.nexo/personal/scripts/, ~/.nexo/personal/plugins/, ~/.nexo/personal/brain/, NEXO_CODE/src, repo bin/docs/templates/tests"
         immutable_files = "db.py, server.py, plugin_loader.py, storage_router.py, nexo-watchdog.sh, evolution_cycle.py, CLAUDE.md, AGENTS.md, personality.md, user-profile.md"
-    elif mode == "public_core":
-        mode_desc = "public core contribution via isolated checkout and Draft PR"
-        safe_zones = "isolated public repo checkout only"
-        immutable_files = "personal runtime, ~/.nexo/**, local DBs/logs, CLAUDE.md, AGENTS.md, user-profile.md"
+    elif mode in {"public_core", "support_ticket"}:
+        mode_desc = "support-ticket mode, no automatic code writes and no GitHub publishing"
+        safe_zones = "read-only analysis plus anonymized support-ticket creation"
+        immutable_files = "all local runtime data, personal files, local DBs/logs, prompts, secrets, CLAUDE.md, AGENTS.md, user-profile.md"
     else:
         mode_desc = f"public auto, max {max_auto} auto-applied changes in personal safe zones"
         safe_zones = "~/.nexo/personal/scripts/, ~/.nexo/personal/plugins/"
@@ -380,11 +380,7 @@ def build_public_pr_review_prompt(
     files: list[str],
     diff_text: str,
 ) -> str:
-    """Prompt for peer-reviewing another public evolution PR.
-
-    This is used only when this machine already has its own Draft PR open, so
-    Evolution can still add value without opening a second PR.
-    """
+    """Legacy prompt template kept for old artifacts; active Evolution no longer reviews PRs."""
 
     rendered_files = "\n".join(f"- {path}" for path in files[:40]) if files else "- (no file list provided)"
     trimmed_diff = (diff_text or "").strip()

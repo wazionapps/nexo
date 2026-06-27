@@ -23,7 +23,7 @@ def _reload_product_mode(monkeypatch, home: Path):
     return product_mode
 
 
-def test_enforce_desktop_product_contract_persists_marker_and_disables_evolution(tmp_path, monkeypatch):
+def test_enforce_desktop_product_contract_persists_marker_and_enables_support_ticket_evolution(tmp_path, monkeypatch):
     home = tmp_path / "nexo-home"
     (home / "brain").mkdir(parents=True, exist_ok=True)
     monkeypatch.setenv("NEXO_DESKTOP_MANAGED", "1")
@@ -34,12 +34,14 @@ def test_enforce_desktop_product_contract_persists_marker_and_disables_evolution
     assert report["applied"] is True
     mode_payload = json.loads(Path(report["mode_path"]).read_text())
     assert mode_payload["desktop_managed"] is True
-    assert "evolution" in mode_payload["disabled_features"]
+    assert "evolution" not in mode_payload["disabled_features"]
 
     objective = json.loads((home / "brain" / "evolution-objective.json").read_text())
-    assert objective["evolution_enabled"] is False
-    assert objective["disabled_reason"] == product_mode.DESKTOP_EVOLUTION_DISABLED_REASON
-    assert objective["disabled_by"] == "desktop_product"
+    assert objective["evolution_enabled"] is True
+    assert objective["evolution_mode"] == product_mode.DESKTOP_EVOLUTION_SUPPORT_MODE
+    assert objective["support_ticket_mode"] is True
+    assert "disabled_reason" not in objective
+    assert "disabled_by" not in objective
 
 
 def test_filter_blocked_crons_hides_desktop_managed_crons(tmp_path, monkeypatch):
@@ -58,7 +60,7 @@ def test_filter_blocked_crons_hides_desktop_managed_crons(tmp_path, monkeypatch)
     ]
     filtered = product_mode.filter_blocked_crons(crons)
 
-    assert [cron["id"] for cron in filtered] == ["deep-sleep"]
+    assert [cron["id"] for cron in filtered] == ["evolution", "deep-sleep"]
 
 
 def test_runtime_core_path_detection_is_scoped_to_install_core(tmp_path, monkeypatch):

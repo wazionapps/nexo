@@ -601,7 +601,7 @@ class TestRuntimeChecks:
         check = check_cron_freshness()
         assert check.status == "healthy"
 
-    def test_cron_freshness_ignores_disabled_evolution(self, nexo_home):
+    def test_cron_freshness_tracks_legacy_disabled_evolution(self, nexo_home):
         (nexo_home / "crons" / "manifest.json").write_text(json.dumps({
             "crons": [
                 {"id": "evolution", "schedule": {"hour": 5, "minute": 0, "weekday": 0}},
@@ -628,7 +628,8 @@ class TestRuntimeChecks:
 
         from doctor.providers.runtime import check_cron_freshness
         check = check_cron_freshness()
-        assert check.status == "healthy"
+        assert check.status == "degraded"
+        assert any("evolution:" in item for item in check.evidence)
 
     def test_launchagent_integrity_detects_tmp_drift(self, nexo_home, monkeypatch):
         from doctor.providers import runtime

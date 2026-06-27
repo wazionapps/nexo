@@ -144,7 +144,7 @@ def test_reports_launchagent_and_cron_spool_without_touching_real_agents(tmp_pat
     )
 
     missing = {item["cron_id"] for item in report["launchagents"] if item["status"] == "missing"}
-    assert missing == {"custom-report"}
+    assert missing == {"custom-report", "evolution"}
     spool_by_cron = {item["cron_id"]: item for item in report["cron_spool"]}
     assert spool_by_cron["followup-runner"]["files"] == 1
     assert spool_by_cron["custom-report"]["files"] == 1
@@ -152,7 +152,7 @@ def test_reports_launchagent_and_cron_spool_without_touching_real_agents(tmp_pat
     assert any(item["kind"] == "cron_spool" and item["key"] == "followup-runner" for item in report["findings"])
 
 
-def test_excludes_evolution_from_manifest_open_runs_launchagents_and_spool(tmp_path):
+def test_includes_evolution_in_manifest_open_runs_launchagents_and_spool(tmp_path):
     _write_manifest(tmp_path / "manifest.json")
     spool = tmp_path / "cron-spool"
     spool.mkdir()
@@ -169,11 +169,11 @@ def test_excludes_evolution_from_manifest_open_runs_launchagents_and_spool(tmp_p
 
     report = audit_automation(_config(tmp_path, launchagent_labels=frozenset({"com.nexo.evolution", "com.nexo.followup-runner"})))
 
-    assert "evolution" in report["summary"]["excluded_jobs"]
-    assert "evolution" not in {item["cron_id"] for item in report["jobs"]}
-    assert "evolution" not in {item["cron_id"] for item in report["open_runs"]}
-    assert "evolution" not in {item["cron_id"] for item in report["launchagents"]}
-    assert "evolution" not in {item["cron_id"] for item in report["cron_spool"]}
+    assert "evolution" not in report["summary"]["excluded_jobs"]
+    assert "evolution" in {item["cron_id"] for item in report["jobs"]}
+    assert "evolution" in {item["cron_id"] for item in report["open_runs"]}
+    assert "evolution" in {item["cron_id"] for item in report["launchagents"]}
+    assert "evolution" in {item["cron_id"] for item in report["cron_spool"]}
 
 
 def test_markdown_fragment_summarises_required_evidence(tmp_path):
@@ -189,7 +189,7 @@ def test_markdown_fragment_summarises_required_evidence(tmp_path):
     md = format_markdown(audit_automation(_config(tmp_path)))
 
     assert "Automation supervisor" in md
-    assert "Evolution excluded from cron reconciliation" in md
+    assert "Excluded jobs" in md
     assert "open_run:custom-report" in md
 
 
@@ -224,7 +224,7 @@ def test_evolution_policy_requires_inventory_in_standalone_mode(tmp_path, monkey
     assert any(item["kind"] == "evolution" for item in report["findings"])
 
 
-def test_evolution_policy_reports_disabled_by_desktop_product(tmp_path, monkeypatch):
+def test_evolution_policy_reports_missing_launchagent_even_when_desktop_product(tmp_path, monkeypatch):
     home = tmp_path / "nexo-home"
     (home / "config").mkdir(parents=True)
     (home / "config" / "product-mode.json").write_text(json.dumps({
@@ -239,8 +239,8 @@ def test_evolution_policy_reports_disabled_by_desktop_product(tmp_path, monkeypa
 
     report = audit_automation(_config(tmp_path, launchagent_labels=frozenset()))
 
-    assert report["evolution"]["status"] == "disabled_by_policy"
-    assert report["evolution"]["severity"] == "OK"
+    assert report["evolution"]["status"] == "enabled_but_not_loaded"
+    assert report["evolution"]["severity"] == "P1"
 
 
 def test_open_cron_rows_use_sqlite_readonly_uri(tmp_path, monkeypatch):

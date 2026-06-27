@@ -1952,7 +1952,7 @@ function writeDesktopProductMode(nexoHome) {
   fs.writeFileSync(target, JSON.stringify({
     desktop_managed: true,
     product_mode: "desktop_closed_product",
-    disabled_features: ["evolution"],
+    disabled_features: ["dashboard"],
     source: "desktop",
     created_at: createdAt,
     updated_at: new Date().toISOString(),
@@ -1991,10 +1991,12 @@ function ensureEvolutionObjectiveForCurrentProductMode(nexoHome) {
     };
   }
   if (desktopManaged) {
-    payload.evolution_enabled = false;
-    payload.disabled_reason = "Disabled by NEXO Desktop product contract";
-    payload.disabled_by = "desktop_product";
+    payload.evolution_enabled = true;
+    payload.evolution_mode = "support_ticket";
+    delete payload.disabled_reason;
+    delete payload.disabled_by;
     payload.desktop_managed = true;
+    payload.support_ticket_mode = true;
   }
   fs.writeFileSync(evoObjectivePath, JSON.stringify(payload, null, 2));
   return evoObjectivePath;
@@ -2802,77 +2804,28 @@ async function maybeConfigurePowerPolicy(schedule, useDefaults) {
 }
 
 function ghLogin() {
-  const login = run("gh api user --jq .login 2>/dev/null");
-  return (login || "").trim();
+  return "";
 }
 
 function ensureFork(login) {
-  if (!login) return { ok: false, message: "Missing GitHub login.", forkRepo: "" };
-  const forkRepo = `${login}/nexo`;
-  const existing = run(`gh repo view "${forkRepo}" --json nameWithOwner 2>/dev/null`);
-  if (existing) return { ok: true, message: "", forkRepo };
-  const created = run(`gh repo fork "${PUBLIC_CONTRIBUTION_UPSTREAM}" --clone=false --remote=false 2>/dev/null`);
-  if (created !== null) return { ok: true, message: "", forkRepo };
-  return { ok: false, message: `Could not ensure fork ${forkRepo}.`, forkRepo: "" };
+  return {
+    ok: false,
+    message: "Public GitHub contribution is retired; Evolution routes improvements through anonymized support tickets.",
+    forkRepo: "",
+  };
 }
 
 async function maybeConfigurePublicContribution(schedule, useDefaults) {
   const current = normalizePublicContributionConfig((schedule && schedule.public_contribution) || {});
-  if (current.mode && current.mode !== "unset") {
-    schedule.public_contribution = current;
-    fs.writeFileSync(resolveRuntimeSchedulePath(NEXO_HOME), JSON.stringify(schedule, null, 2));
-    return schedule;
-  }
-
-  if (useDefaults || !process.stdin.isTTY || !process.stdout.isTTY) {
-    schedule.public_contribution = current;
-    fs.writeFileSync(resolveRuntimeSchedulePath(NEXO_HOME), JSON.stringify(schedule, null, 2));
-    return schedule;
-  }
-
-  console.log("");
-  log("Optional public contribution mode:");
-  log("If enabled, this machine may prepare core NEXO improvements from an isolated checkout and open a Draft PR to the public repository.");
-  log("NEXO never auto-merges, and it pauses public evolution on this machine while that Draft PR stays open.");
-  log("Public contribution must never publish personal scripts, runtime data, local prompts, logs, or secrets.");
-  const answer = (await ask("  Enable public contribution via Draft PRs on this machine? [y/N/later]: ")).trim().toLowerCase();
-  if (answer === "y" || answer === "yes") {
-    const login = ghLogin();
-    if (!login) {
-      current.enabled = false;
-      current.mode = "pending_auth";
-      current.status = "pending_auth";
-      current.github_user = "";
-      current.fork_repo = "";
-      log("GitHub CLI authentication is missing. Contributor mode is pending until 'gh auth login' succeeds.");
-    } else {
-      const fork = ensureFork(login);
-      if (!fork.ok) {
-        current.enabled = false;
-        current.mode = "pending_auth";
-        current.status = "pending_auth";
-        current.github_user = login;
-        current.fork_repo = "";
-        log(fork.message || "Could not ensure a GitHub fork.");
-      } else {
-        current.enabled = true;
-        current.mode = "draft_prs";
-        current.status = "active";
-        current.github_user = login;
-        current.fork_repo = fork.forkRepo;
-      }
-    }
-  } else if (answer === "later" || answer === "l" || answer === "") {
-    current.enabled = false;
-    current.mode = "unset";
-    current.status = "unset";
-  } else {
-    current.enabled = false;
-    current.mode = "off";
-    current.status = "off";
-    current.github_user = "";
-    current.fork_repo = "";
-  }
+  current.enabled = false;
+  current.mode = "off";
+  current.status = "off";
+  current.github_user = "";
+  current.fork_repo = "";
+  current.active_pr_url = "";
+  current.active_pr_number = null;
+  current.active_branch = "";
+  current.last_result = "disabled:support_ticket_channel";
 
   schedule.public_contribution = current;
   fs.writeFileSync(resolveRuntimeSchedulePath(NEXO_HOME), JSON.stringify(schedule, null, 2));
@@ -4219,7 +4172,7 @@ async function runSetup() {
   writeDesktopProductMode(NEXO_HOME);
   const evoObjectivePath = ensureEvolutionObjectiveForCurrentProductMode(NEXO_HOME);
   if (String(process.env.NEXO_DESKTOP_MANAGED || "").trim() === "1") {
-    log("  Desktop product contract detected — evolution disabled.");
+    log("  Desktop product contract detected — evolution routes to anonymized support tickets.");
   } else if (fs.existsSync(evoObjectivePath)) {
     log("  Ensured evolution-objective.json in brain/");
   }

@@ -26,7 +26,7 @@ _NON_EDITABLE_REASONS: dict[str, str] = {
 }
 _CLI_ONLY_REASONS: dict[str, str] = {
     "evolution": (
-        "Configure from terminal only. Desktop-managed installs disable it automatically."
+        "Configure from terminal only. Desktop-managed installs route output through anonymized support tickets."
     ),
 }
 _INTERVAL_BOUNDS: dict[str, dict[str, int]] = {

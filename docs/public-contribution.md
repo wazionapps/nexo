@@ -1,11 +1,10 @@
 # Public Contribution
 
-NEXO has two contribution paths:
+NEXO has one public contribution path:
 
 1. **Normal human contribution**
-2. **Opt-in automated public-core evolution**
 
-The second path is intentionally constrained. It exists to create useful draft work without letting autonomous runs publish unsafe or personal data.
+Automated public-core Evolution via GitHub Draft PRs is retired. Evolution remains active, but Desktop-managed installs route improvement requests to anonymized NEXO support tickets instead of creating branches, pushes, PRs, or peer reviews.
 
 ## Human Contributions
 
@@ -16,30 +15,18 @@ Use the normal GitHub flow when you are contributing manually:
 - include parity/runtime symptoms, not only the final failure
 - prefer concrete artifacts over vague summaries
 
-## Opt-In Public-Core Evolution
+## Retired Automated Public-Core Evolution
 
-An install can opt into public contribution through Draft PRs.
+Installs can no longer opt into automated public contribution through Draft PRs.
 
-Rules:
+Current rules:
 
-- never auto-merge
-- never publish personal scripts, local runtime data, prompts, logs, or secrets
-- only touch the allowed public-core paths
-- stay paused only while its own Draft PR is still open
-- resume once maintainers merge or close that Draft PR
+- never create GitHub branches, pushes, Draft PRs, or automated peer reviews from Evolution
+- keep Evolution enabled by default for product improvement detection
+- route improvement requests to support-ticket mode
+- redact personal scripts, local runtime data, prompts, logs, URLs, emails, client details, and secrets before any support ticket is sent
 
-If the machine already has its own public Draft PR open, Evolution now reuses the cycle for **peer review** of other opt-in PRs instead of idling.
-
-Peer review mode can only:
-
-- leave a technical comment
-- approve a scoped PR
-
-Peer review mode can never:
-
-- merge
-- rebase
-- push to another contributor branch
+Legacy `draft_prs` or `pending_auth` settings are treated as retired inputs and migrated to support-ticket mode.
 
 ## Best Reports For NEXO
 
@@ -51,7 +38,7 @@ The best reports include:
 - client/backend involved: Claude Code, Codex, Claude Desktop
 - expected vs actual behavior
 - runtime doctor output
-- whether the issue is startup, parity, Deep Sleep, automation, hooks, or public contribution
+- whether the issue is startup, parity, Deep Sleep, automation, hooks, or support-ticket routing
 
 ## Files That Help New Contributors
 
