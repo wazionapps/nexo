@@ -1,5 +1,11 @@
 # Changelog
 
+## [7.38.4] - 2026-06-27
+
+### Added - Release closeout guardrails
+
+- **Full-scope closeout reminders are enforced before release/product tasks can be closed.** The runtime now reminds agents to mark each sub-objective `GREEN` only with direct evidence or `OPEN` with a concrete blocker, so root-cause and regression claims cannot be closed from circumstantial state alone.
+
 ## [7.38.3] - 2026-06-27
 
 ### Removed - Desktop-managed Evolution
