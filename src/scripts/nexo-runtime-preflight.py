@@ -2,8 +2,8 @@
 """
 NEXO Runtime Preflight
 
-Runs safe end-to-end smoke tests for Cortex and Evolution using a temporary
-workspace and a copied SQLite database. No external API calls are performed.
+Runs safe end-to-end smoke tests for the runtime using a temporary workspace
+and a copied SQLite database. No external API calls are performed.
 Results are written to NEXO_HOME/logs/runtime-preflight-summary.json.
 """
 
@@ -51,23 +51,12 @@ _script_dir = Path(__file__).resolve().parent
 _repo_src = _script_dir.parent  # src/scripts/ -> src/
 NEXO_CODE = _bootstrap_nexo_code(_repo_src)
 
-from paths import brain_dir, data_dir, logs_dir
+from paths import data_dir, logs_dir
 
 LOG_DIR = logs_dir()
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 SUMMARY_FILE = LOG_DIR / "runtime-preflight-summary.json"
 DB_FILE = data_dir() / "nexo.db"
-# Evolution config: NEXO_HOME/brain/ (canonical), NEXO_HOME/cortex/ (legacy fallback), NEXO_CODE (dev fallback)
-def _find_evolution_file(name: str) -> Path:
-    for candidate in [brain_dir() / name, NEXO_HOME / "cortex" / name, NEXO_CODE / name]:
-        if candidate.exists():
-            return candidate
-    return brain_dir() / name  # default canonical path
-
-CORTEX_OBJECTIVE = _find_evolution_file("evolution-objective.json")
-CORTEX_PROMPT = _find_evolution_file("evolution-prompt.md")
-
-
 def _load_module(name: str, path: Path):
     spec = importlib.util.spec_from_file_location(name, str(path))
     module = importlib.util.module_from_spec(spec)
@@ -82,83 +71,31 @@ def _write_summary(summary: dict):
 
 
 def _fake_cortex_response(model: str) -> str:
-    if "opus" in model:
-        payload = {
-            "analysis": "Smoke evolution run over temp workspace",
-            "proposals": [
-                {
-                    "dimension": "self_improvement",
-                    "classification": "propose",
-                    "action": "Add a regression smoke before live cycles",
-                    "reasoning": "Smoke run should stay side-effect free",
-                }
-            ],
-            "dimension_scores": {
-                "episodic_memory": 86,
-                "autonomy": 53,
-                "proactivity": 34,
-                "self_improvement": 30,
-                "agi": 6,
-            },
-            "score_evidence": {
-                "self_improvement": "Temp evolution smoke completed successfully",
-            },
-        }
-    else:
-        payload = {
-            "actions_taken": ["preflight perception completed"],
-            "signals_detected": 1,
-            "pending_questions": [],
-            "execute": [],
-            "next_interval_suggestion": 600,
-            "reflection_done": False,
-            "dmn_done": False,
-            "briefing_update": {
-                "actions_taken": ["perception smoke ok"],
-                "signals_active": [{"summary": "Smoke signal", "urgency": "INFO", "score": 10}],
-                "recommendations": ["keep runtime checks green"],
-                "pending_questions_unanswered": [],
-                "dmn_summary": "",
-            },
-            "working_memory": {
-                "current_threads": ["runtime preflight"],
-                "attention_focus": "runtime integrity",
-                "last_reasoning": "API mocked successfully",
-                "watching": ["state writes", "briefing writes"],
-                "momentum": "stable",
-            },
-            "error": None,
-        }
-    return json.dumps(payload, ensure_ascii=False)
-
-
-def _fake_runner_response() -> tuple[str, dict]:
     payload = {
-        "analysis": "Standalone evolution smoke over temp DB",
-        "patterns": [
-            {"type": "smoke", "description": "runner executed over temp workspace", "frequency": "once"}
-        ],
-        "proposals": [
-            {
-                "dimension": "self_improvement",
-                "classification": "propose",
-                "action": "Keep standalone evolution covered by preflight",
-                "reasoning": "Regression prevention",
-            }
-        ],
-        "dimension_scores": {
-            "episodic_memory": 87,
-            "autonomy": 54,
-            "proactivity": 35,
-            "self_improvement": 31,
-            "agi": 6,
+        "actions_taken": ["preflight perception completed"],
+        "signals_detected": 1,
+        "pending_questions": [],
+        "execute": [],
+        "next_interval_suggestion": 600,
+        "reflection_done": False,
+        "dmn_done": False,
+        "briefing_update": {
+            "actions_taken": ["perception smoke ok"],
+            "signals_active": [{"summary": "Smoke signal", "urgency": "INFO", "score": 10}],
+            "recommendations": ["keep runtime checks green"],
+            "pending_questions_unanswered": [],
+            "dmn_summary": "",
         },
-        "score_evidence": {
-            "self_improvement": "standalone runner smoke ok",
+        "working_memory": {
+            "current_threads": ["runtime preflight"],
+            "attention_focus": "runtime integrity",
+            "last_reasoning": "API mocked successfully",
+            "watching": ["state writes", "briefing writes"],
+            "momentum": "stable",
         },
+        "error": None,
     }
-    usage = {"input_tokens": 1234, "output_tokens": 432}
-    return json.dumps(payload, ensure_ascii=False), usage
+    return json.dumps(payload, ensure_ascii=False)
 
 
 def main() -> int:
@@ -196,42 +133,12 @@ def main() -> int:
         ]:
             directory.mkdir(parents=True, exist_ok=True)
 
-        temp_objective = temp_cortex_dir / "evolution-objective.json"
-        temp_prompt = temp_cortex_dir / "evolution-prompt.md"
-        if CORTEX_OBJECTIVE.exists():
-            shutil.copy2(CORTEX_OBJECTIVE, temp_objective)
-        else:
-            # Create a minimal objective so evolution smoke tests can proceed
-            temp_objective.write_text(json.dumps({"evolution_enabled": True, "dimensions": {}}, indent=2))
-        if CORTEX_PROMPT.exists():
-            shutil.copy2(CORTEX_PROMPT, temp_prompt)
         snapshot_restore = NEXO_CODE / "scripts" / "nexo-snapshot-restore.sh"
         if snapshot_restore.exists():
             shutil.copy2(snapshot_restore, temp_scripts_dir / "nexo-snapshot-restore.sh")
 
         temp_api_key = temp_root / "anthropic-api-key.txt"
         temp_api_key.write_text("smoke-test-key")
-
-        evolution_cycle = _load_module("evolution_cycle", NEXO_CODE / "evolution_cycle.py")
-        evolution_cycle.NEXO_DB = temp_db
-        evolution_cycle.NEXO_HOME = temp_root
-        evolution_cycle.SANDBOX_DIR = temp_sandbox_dir
-        evolution_cycle.SNAPSHOTS_DIR = temp_snapshots_dir
-        evolution_cycle.OBJECTIVE_FILE = temp_objective
-        evolution_cycle.PROMPT_FILE = temp_prompt
-        evolution_cycle.RESTORE_LOG = temp_logs_dir / "snapshot-restores.log"
-
-        week_data = evolution_cycle.get_week_data(str(temp_db))
-        prompt = evolution_cycle.build_evolution_prompt(week_data, evolution_cycle.load_objective())
-        restore_ok = evolution_cycle.dry_run_restore_test()
-        if not restore_ok:
-            raise RuntimeError("dry_run_restore_test failed")
-        summary["checks"]["evolution_cycle"] = {
-            "learnings": len(week_data.get("learnings", [])),
-            "decisions": len(week_data.get("decisions", [])),
-            "prompt_chars": len(prompt),
-            "restore_ok": restore_ok,
-        }
 
         cortex = _load_module("cortex_plugin", NEXO_CODE / "plugins" / "cortex.py")
         cortex.NEXO_DB = temp_db
@@ -270,19 +177,7 @@ def main() -> int:
             "tools_found": tool_names,
         }
 
-        # Evolution runner: component verification (not full execution — that needs CLI)
-        runner_path = NEXO_CODE / "scripts" / "nexo-evolution-run.py"
-        if runner_path.exists():
-            runner = _load_module("nexo_evolution_run", runner_path)
-            checks = {
-                "module_loads": True,
-                "has_run": hasattr(runner, 'run'),
-                "has_load_objective": hasattr(runner, 'load_objective'),
-                "has_get_week_data": hasattr(runner, 'get_week_data'),
-            }
-            summary["checks"]["standalone_runner"] = checks
-        else:
-            summary["checks"]["standalone_runner"] = {"status": "skip", "reason": "runner not found"}
+        summary["checks"]["evolution_removed"] = {"status": "pass", "tools_exposed": False}
 
         summary["ok"] = True
         _write_summary(summary)

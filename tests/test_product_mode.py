@@ -34,14 +34,33 @@ def test_enforce_desktop_product_contract_persists_marker_and_retires_evolution(
     assert report["applied"] is True
     mode_payload = json.loads(Path(report["mode_path"]).read_text())
     assert mode_payload["desktop_managed"] is True
-    assert "evolution" in mode_payload["disabled_features"]
+    assert mode_payload["disabled_features"] == ["dashboard"]
+    assert report["objective_path"] == ""
+    assert (home / "brain" / "evolution-objective.json").exists() is False
 
-    objective = json.loads((home / "brain" / "evolution-objective.json").read_text())
+
+def test_enforce_desktop_product_contract_marks_existing_evolution_objective_removed(tmp_path, monkeypatch):
+    home = tmp_path / "nexo-home"
+    (home / "brain").mkdir(parents=True, exist_ok=True)
+    objective_path = home / "brain" / "evolution-objective.json"
+    objective_path.write_text(json.dumps({
+        "evolution_enabled": True,
+        "evolution_mode": "managed",
+        "support_ticket_mode": True,
+    }))
+    monkeypatch.setenv("NEXO_DESKTOP_MANAGED", "1")
+    product_mode = _reload_product_mode(monkeypatch, home)
+
+    report = product_mode.enforce_desktop_product_contract(source="test")
+
+    assert report["changed_objective"] is True
+    objective = json.loads(objective_path.read_text())
     assert objective["evolution_enabled"] is False
     assert objective["evolution_mode"] == product_mode.DESKTOP_EVOLUTION_SUPPORT_MODE
     assert objective["support_ticket_mode"] is False
     assert objective["disabled_reason"] == product_mode.DESKTOP_EVOLUTION_RETIRED_REASON
     assert objective["disabled_by"] == "desktop_product"
+    assert objective["removed_at"]
 
 
 def test_filter_blocked_crons_hides_desktop_managed_crons(tmp_path, monkeypatch):

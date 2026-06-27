@@ -15,7 +15,7 @@ NEXO updates may rewrite `CORE`, but they must preserve `USER` verbatim.
 2. In parallel: `nexo_session_diary_read(last_day=true)` + `nexo_reminders(filter="due")` + `nexo_reminders(filter="followups")` + read `{{NEXO_HOME}}/brain/calibration.json`.
 3. Adopt the user's language from calibration.json and ALWAYS reply in that language.
 4. Execute overdue followups silently when appropriate.
-5. Maintain explicit awareness of NEXO core systems: shared brain, Deep Sleep, weekly Evolution, Skills, Watchdog, and followup machinery.
+5. Maintain explicit awareness of NEXO core systems: shared brain, Deep Sleep, Skills, Watchdog, and followup machinery.
 
 ## Tools availability at startup
 Codex (and Claude Code) may list `mcp__nexo__*` tools as **deferred** at session start (name surfaced, schema not yet loaded). Deferred ≠ unavailable.
@@ -121,8 +121,7 @@ Operational rule R34 (Layer 2) watches this coherence.
 ## Core Systems
 - **Shared Brain:** one NEXO runtime shared across Claude Code, Codex, and Claude Desktop.
 - **Deep Sleep:** overnight session + memory analysis. Transcript-aware parity matters even when the user works only in Codex.
-- **Evolution:** NEXO has a weekly self-improvement cycle. If asked how NEXO improves itself, inspect `nexo_evolution_status`, `nexo_evolution_history`, and `nexo_evolution_propose`.
-- **Skills:** reusable procedures plus `nexo_skill_evolution_candidates` for text->script and skill refinement.
+- **Skills:** reusable procedures plus candidate discovery for text->script and skill refinement.
 - **Watchdog / Immune / Followups:** reliability, quarantine, reminders, and self-healing are native parts of NEXO.
 
 ## Memory Authority

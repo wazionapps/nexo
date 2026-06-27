@@ -103,7 +103,7 @@ def _dashboard_runtime_flags() -> dict:
     flags = {
         "desktop_managed": False,
         "disabled_features": [],
-        "evolution_available": True,
+        "evolution_available": False,
     }
     try:
         from product_mode import desktop_product_requested, load_product_mode
@@ -120,7 +120,7 @@ def _dashboard_runtime_flags() -> dict:
         desktop_managed = bool(desktop_product_requested())
         flags["desktop_managed"] = desktop_managed
         flags["disabled_features"] = disabled
-        flags["evolution_available"] = "evolution" not in disabled
+        flags["evolution_available"] = False
     except Exception:
         pass
     return flags

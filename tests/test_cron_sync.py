@@ -252,7 +252,7 @@ def test_build_plist_uses_machine_staggered_weekly_schedule(tmp_path, monkeypatc
     schedule_file.parent.mkdir(parents=True, exist_ok=True)
     schedule_file.write_text('{"public_contribution":{"machine_id":"alpha-box"}}')
 
-    script = source_root / "scripts" / "nexo-evolution-run.py"
+    script = source_root / "scripts" / "nexo-weekly-maintenance.py"
     script.write_text("print('ok')\n")
     wrapper = source_root / "scripts" / "nexo-cron-wrapper.sh"
     wrapper.write_text("#!/bin/bash\nexit 0\n")
@@ -267,14 +267,14 @@ def test_build_plist_uses_machine_staggered_weekly_schedule(tmp_path, monkeypatc
 
     plist = cron_sync.build_plist(
         {
-            "id": "evolution",
-            "script": "scripts/nexo-evolution-run.py",
+            "id": "weekly-maintenance",
+            "script": "scripts/nexo-weekly-maintenance.py",
             "schedule_strategy": "machine_weekly_spread",
             "schedule": {"hour": 5, "minute": 0, "weekday": 0},
         }
     )
 
-    assert plist["StartCalendarInterval"] == {"Hour": 3, "Minute": 33, "Weekday": 3}
+    assert plist["StartCalendarInterval"] == {"Hour": 0, "Minute": 27, "Weekday": 1}
 
 
 def test_build_plist_supports_multiple_selected_weekdays(tmp_path, monkeypatch):
@@ -521,6 +521,21 @@ def test_cleanup_retired_core_files_removes_day_orchestrator_script(tmp_path, mo
     retired = runtime_root / "core" / "scripts" / "nexo-day-orchestrator.sh"
     retired.parent.mkdir(parents=True)
     retired.write_text("#!/bin/bash\nexit 0\n")
+
+    monkeypatch.setattr(cron_sync, "RUNTIME_ROOT", runtime_root)
+
+    cron_sync._cleanup_retired_core_files()
+
+    assert not retired.exists()
+
+
+def test_cleanup_retired_core_files_removes_legacy_evolution_runner(tmp_path, monkeypatch):
+    from crons import sync as cron_sync
+
+    runtime_root = tmp_path / "nexo-home"
+    retired = runtime_root / "core" / "scripts" / "nexo-evolution-run.py"
+    retired.parent.mkdir(parents=True)
+    retired.write_text("#!/usr/bin/env python3\n")
 
     monkeypatch.setattr(cron_sync, "RUNTIME_ROOT", runtime_root)
 

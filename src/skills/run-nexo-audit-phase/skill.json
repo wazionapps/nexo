@@ -1,7 +1,7 @@
 {
   "id": "SK-RUN-NEXO-AUDIT-PHASE",
   "name": "Run NEXO Audit Phase",
-  "description": "Workflow for running a NEXO audit phase with full autonomy and empirical verification. Covers the recurring pattern of deciding the evolution_apply scope and starting a batch of items without manual checkpoints.",
+  "description": "Workflow for running a NEXO audit phase with full autonomy and empirical verification. Covers the recurring pattern of starting a batch of audit items without manual checkpoints.",
   "level": "published",
   "mode": "guide",
   "source_kind": "core",
@@ -10,13 +10,11 @@
   "tags": [
     "nexo",
     "audit",
-    "evolution",
     "sandbox",
     "verification",
     "core"
   ],
   "trigger_patterns": [
-    "evolution_apply sandbox scope",
     "phase 2 item 1",
     "start empirical verification",
     "run nexo audit phase",
@@ -26,7 +24,7 @@
   "steps": [
     "Open the goal, workflow, and task before touching the audit; resolve the real repo/runtime, real DB, tests, and git status before interpreting the report.",
     "Set the autonomy rule: NEXO creates branches, PRs, merges, and periodic progress reports; do not ask Francisco for one-by-one checkpoints for mechanical work.",
-    "For `evolution_apply`, separate two planes: the sandbox materializes/applies accepted changes with snapshot/rollback; it is not a brake on the agent's autonomous work mode.",
+    "Treat any proposed code change as a normal reviewed implementation item; do not rely on removed background apply machinery.",
     "Launch empirical verification of ALL items in parallel: grep+read, real SQL/schema, AST/tests, logs. Start from the FP hypothesis until evidence says otherwise.",
     "Classify each item as `real_gap`, `near_fp`, or `fp`, and order only real items by blast radius/risk.",
     "If core must be touched, use an isolated worktree; for each real item: guard_check -> track -> branch -> implement -> adjacent tests -> PR -> auto-merge squash.",
@@ -35,7 +33,7 @@
   ],
   "gotchas": [
     "Do not ask Francisco for manual approval on every PR: learning #198 confirms full autonomy with transparency and periodic reports.",
-    "Do not duplicate the evolution sandbox elsewhere: accepted-change apply already reuses evolution_log + sandbox/snapshot/rollback.",
+    "Do not recreate the removed background apply machinery; use normal branches, tests, review evidence, and followups.",
     "The historical FP rate for this audit class is high; if there is no concrete evidence, the item is not touched."
   ],
   "params_schema": {

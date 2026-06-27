@@ -1441,6 +1441,7 @@ def _cleanup_retired_runtime_files():
     """Remove retired core files that should not survive updates."""
     retired = [
         paths.core_scripts_dir() / "nexo-day-orchestrator.sh",
+        paths.core_scripts_dir() / "nexo-evolution-run.py",
         paths.core_scripts_dir() / "heartbeat-enforcement.py",
         paths.core_scripts_dir() / "heartbeat-posttool.sh",
         paths.core_scripts_dir() / "heartbeat-user-msg.sh",
@@ -4382,46 +4383,28 @@ def _auto_update_check_locked() -> dict:
     except Exception as e:
         _log(f"File migration runner error: {e}")
 
-    # Backfill evolution-objective.json for existing installs
+    # Legacy cleanup: existing evolution-objective.json files are left as
+    # historical state, but the removed Evolution engine must stay disabled.
     try:
         evo_obj_path = paths.brain_dir() / "evolution-objective.json"
-        from evolution_cycle import normalize_objective
-        if not evo_obj_path.exists():
-            (paths.brain_dir()).mkdir(parents=True, exist_ok=True)
-            default_objective = {
-                "objective": "Improve operational excellence and reduce repeated errors",
-                "focus_areas": ["error_prevention", "proactivity", "memory_quality"],
-                "evolution_enabled": False,
-                "evolution_mode": DESKTOP_EVOLUTION_SUPPORT_MODE,
-                "disabled_by": "desktop_product",
-                "disabled_reason": DESKTOP_EVOLUTION_RETIRED_REASON,
-                "support_ticket_mode": False,
-                "dimensions": {
-                    "episodic_memory": {"current": 0, "target": 90},
-                    "autonomy": {"current": 0, "target": 80},
-                    "proactivity": {"current": 0, "target": 70},
-                    "self_improvement": {"current": 0, "target": 60},
-                    "agi": {"current": 0, "target": 20},
-                },
-                "total_evolutions": 0,
-                "consecutive_failures": 0,
-                "created_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
-            }
-            evo_obj_path.write_text(json.dumps(default_objective, indent=2))
-            _log("Backfilled retired evolution-objective.json for existing install")
-        else:
+        if evo_obj_path.exists():
             raw_objective = json.loads(evo_obj_path.read_text())
-            normalized = normalize_objective(raw_objective)
-            if normalized != raw_objective:
-                evo_obj_path.write_text(json.dumps(normalized, indent=2, ensure_ascii=False))
-                _log("Normalized legacy evolution-objective.json")
+            if isinstance(raw_objective, dict):
+                raw_objective["evolution_enabled"] = False
+                raw_objective["evolution_mode"] = DESKTOP_EVOLUTION_SUPPORT_MODE
+                raw_objective["disabled_by"] = "desktop_product"
+                raw_objective["disabled_reason"] = DESKTOP_EVOLUTION_RETIRED_REASON
+                raw_objective["support_ticket_mode"] = False
+                raw_objective["removed_at"] = raw_objective.get("removed_at") or time.strftime("%Y-%m-%dT%H:%M:%S")
+                evo_obj_path.write_text(json.dumps(raw_objective, indent=2, ensure_ascii=False) + "\n")
+                _log("Marked legacy evolution-objective.json as removed")
     except Exception as e:
-        _log(f"evolution-objective.json backfill error: {e}")
+        _log(f"legacy evolution cleanup error: {e}")
 
     try:
         desktop_contract = enforce_desktop_product_contract(source="auto_update")
         if desktop_contract.get("applied") and desktop_contract.get("changed_objective"):
-            _log("Desktop product contract enforced: Evolution retired")
+            _log("Desktop product contract enforced: legacy Evolution removed")
     except Exception as e:
         _log(f"desktop product contract error: {e}")
 

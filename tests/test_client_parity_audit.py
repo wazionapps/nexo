@@ -15,7 +15,6 @@ def test_agentic_jobs_route_through_shared_runner():
         "src/scripts/nexo-immune.py",
         "src/scripts/nexo-postmortem-consolidator.py",
         "src/scripts/nexo-daily-self-audit.py",
-        "src/scripts/nexo-evolution-run.py",
         "src/scripts/nexo-catchup.py",
         "src/scripts/deep-sleep/extract.py",
         "src/scripts/deep-sleep/synthesize.py",

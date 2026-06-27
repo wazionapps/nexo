@@ -1301,7 +1301,6 @@ function getCoreRuntimeFlatFiles(srcDir = path.join(__dirname, "..", "src")) {
     "storage_router.py",
     "claim_graph.py",
     "hnsw_index.py",
-    "evolution_cycle.py",
     "migrate_embeddings.py",
     "auto_close_sessions.py",
     "client_sync.py",
@@ -1638,8 +1637,6 @@ const ALL_PROCESSES = [
   { name: "deep-sleep", script: "nexo-deep-sleep.sh", interpreter: "bash", scriptDir: "scripts",
     type: "daily", defaultHour: 4, defaultMinute: 30, optional: "automation", purpose: "Deep sleep analysis" },
   // --- Weekly (day + time from schedule.json) ---
-  { name: "evolution", script: "nexo-evolution-run.py", interpreter: "python", scriptDir: "scripts",
-    type: "weekly", defaultDay: "sunday", defaultHour: 3, defaultMinute: 0, optional: "automation", purpose: "Self-evolution" },
   { name: "followup-hygiene", script: "nexo-followup-hygiene.py", interpreter: "python", scriptDir: "scripts",
     type: "weekly", defaultDay: "sunday", defaultHour: 5, defaultMinute: 0, purpose: "Cleanup stale followups" },
 ];
@@ -1929,7 +1926,6 @@ function getDefaultSchedule(timezone) {
       "self-audit": { hour: 7, minute: 0 },
       "sleep": { hour: 4, minute: 0 },
       "deep-sleep": { hour: 4, minute: 30 },
-      "evolution": { day: "sunday", hour: 3, minute: 0 },
       "followup-hygiene": { day: "sunday", hour: 5, minute: 0 },
     },
   };
@@ -1959,45 +1955,26 @@ function writeDesktopProductMode(nexoHome) {
   }, null, 2));
 }
 
-function ensureEvolutionObjectiveForCurrentProductMode(nexoHome) {
+function retireLegacyEvolutionObjective(nexoHome) {
   const brainDir = resolveRuntimeBrainDir(nexoHome);
-  fs.mkdirSync(brainDir, { recursive: true });
   const evoObjectivePath = path.join(brainDir, "evolution-objective.json");
-  const desktopManaged = isDesktopManagedInstall();
-  let payload = null;
-  if (fs.existsSync(evoObjectivePath)) {
-    try {
-      payload = JSON.parse(fs.readFileSync(evoObjectivePath, "utf8"));
-    } catch (_) {
-      payload = null;
-    }
+  if (!fs.existsSync(evoObjectivePath)) {
+    return "";
   }
-  if (!payload || typeof payload !== "object") {
-    payload = {
-      objective: "Improve operational excellence and reduce repeated errors",
-      focus_areas: ["error_prevention", "proactivity", "memory_quality"],
-      evolution_enabled: true,
-      evolution_mode: "auto",
-      dimensions: {
-        episodic_memory: { current: 0, target: 90 },
-        autonomy: { current: 0, target: 80 },
-        proactivity: { current: 0, target: 70 },
-        self_improvement: { current: 0, target: 60 },
-        agi: { current: 0, target: 20 },
-      },
-      total_evolutions: 0,
-      consecutive_failures: 0,
-      created_at: new Date().toISOString(),
-    };
+  let payload = {};
+  try {
+    payload = JSON.parse(fs.readFileSync(evoObjectivePath, "utf8"));
+  } catch (_) {
+    payload = {};
   }
-  if (desktopManaged) {
-    payload.evolution_enabled = true;
-    payload.evolution_mode = "support_ticket";
-    delete payload.disabled_reason;
-    delete payload.disabled_by;
-    payload.desktop_managed = true;
-    payload.support_ticket_mode = true;
-  }
+  if (!payload || typeof payload !== "object") payload = {};
+  payload.evolution_enabled = false;
+  payload.evolution_mode = "retired";
+  payload.disabled_by = "desktop_product";
+  payload.disabled_reason = "Evolution retired by NEXO Desktop product contract";
+  payload.desktop_managed = true;
+  payload.support_ticket_mode = false;
+  payload.removed_at = payload.removed_at || new Date().toISOString();
   fs.writeFileSync(evoObjectivePath, JSON.stringify(payload, null, 2));
   return evoObjectivePath;
 }
@@ -2193,7 +2170,7 @@ function clientSetupStrings(lang) {
     useCodexQ: "  Use Codex as an interactive client?",
     useDesktopQ: "  Connect Claude Desktop to the same brain?",
     defaultTerminalQ: "  Which client should `nexo chat` open by default?",
-    automationQ: "  Enable background automation? (sleep, deep-sleep, synthesis, self-audit, evolution, postmortem)",
+    automationQ: "  Enable background automation? (sleep, deep-sleep, synthesis, self-audit, postmortem)",
     automationBackendQ: "  Which backend should run that automation?",
     installClaudeQ: "  Claude Code is not installed. Install it now?",
     installCodexQ: "  Codex is not installed. Install it now?",
@@ -4170,11 +4147,11 @@ async function runSetup() {
   dirs.forEach((d) => fs.mkdirSync(d, { recursive: true }));
 
   writeDesktopProductMode(NEXO_HOME);
-  const evoObjectivePath = ensureEvolutionObjectiveForCurrentProductMode(NEXO_HOME);
+  const evoObjectivePath = retireLegacyEvolutionObjective(NEXO_HOME);
   if (String(process.env.NEXO_DESKTOP_MANAGED || "").trim() === "1") {
-    log("  Desktop product contract detected — evolution routes to anonymized support tickets.");
+    log("  Desktop product contract detected — legacy Evolution remains removed.");
   } else if (fs.existsSync(evoObjectivePath)) {
-    log("  Ensured evolution-objective.json in brain/");
+    log("  Marked legacy evolution-objective.json as removed.");
   }
 
   // Write version file for auto-update tracking

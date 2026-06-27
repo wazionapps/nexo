@@ -561,7 +561,7 @@ json_escape() {
 # The reaper closes that gap without bringing back the v5.8.1 bug:
 #   * Per-cron threshold via `stuck_after_seconds` in manifest.json.
 #   * Generous default (12h) so legitimate long jobs keep running.
-#   * Override deep-sleep to 8h, sleep/evolution to 4h — well above their
+#   * Override deep-sleep to 8h and sleep to 4h — well above their
 #     real worst-case so the v5.8.1 incident cannot repeat.
 #   * Reaper sends SIGTERM to the wrapper — its trap (line 187) closes the
 #     cron_runs row exit_code=143 and propagates to the child. Only after
@@ -1118,7 +1118,6 @@ fi
 # --- Immutable file integrity ---
 IMMUTABLE_STATUS="PASS"
 IMMUTABLE_DETAIL=""
-OBJECTIVE="$CORTEX_DIR/evolution-objective.json"
 if [ -f "$HASH_REGISTRY" ]; then
   TAMPERED=0
   while IFS='|' read -r filepath expected_hash; do
@@ -1139,36 +1138,9 @@ if [ -f "$HASH_REGISTRY" ]; then
     IMMUTABLE_STATUS="FAIL"
     IMMUTABLE_DETAIL="$TAMPERED immutable files tampered"
     TOTAL_FAIL=$((TOTAL_FAIL + 1))
-    if [ -f "$OBJECTIVE" ]; then
-      python3 -c "
-import json
-with open('$OBJECTIVE') as f: d = json.load(f)
-d['evolution_enabled'] = False
-d['disabled_reason'] = 'Immutable file tampered — watchdog disabled Evolution'
-with open('$OBJECTIVE', 'w') as f: json.dump(d, f, indent=2)
-" 2>/dev/null
-      log "DISABLED Evolution due to immutable file tampering"
-    fi
   else
     IMMUTABLE_DETAIL="All files intact"
     TOTAL_PASS=$((TOTAL_PASS + 1))
-    if [ -f "$OBJECTIVE" ]; then
-      python3 -c "
-import json
-from pathlib import Path
-obj = Path('$OBJECTIVE')
-try:
-    data = json.loads(obj.read_text())
-except Exception:
-    raise SystemExit(0)
-reason = data.get('disabled_reason', '') or ''
-if data.get('evolution_enabled') is False and 'watchdog disabled Evolution' in reason:
-    data['evolution_enabled'] = True
-    data.pop('disabled_reason', None)
-    obj.write_text(json.dumps(data, indent=2, ensure_ascii=False))
-    print('REENABLED')
-" 2>/dev/null | grep -q "REENABLED" && log "REENABLED Evolution after immutable integrity recovered"
-    fi
   fi
 else
   IMMUTABLE_DETAIL="No hash registry (skipped)"

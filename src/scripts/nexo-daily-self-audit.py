@@ -76,7 +76,6 @@ from core_prompts import render_core_prompt
 from cognitive_paths import audit_cognitive_db_paths, resolve_cognitive_db
 import db as nexo_db
 from learning_resolver import applies_overlap, looks_contradictory, resolve_learning_candidate
-from public_evolution_queue import queue_public_port_candidate
 
 try:
     from client_preferences import resolve_user_model as _resolve_user_model
@@ -786,14 +785,21 @@ def _queue_public_core_handoff(
     files_changed: list[str],
     metadata: dict | None = None,
 ) -> dict:
-    return queue_public_port_candidate(
+    followup_id = _ensure_followup(
         conn,
-        title=title,
-        reasoning=reasoning,
-        files_changed=files_changed,
-        source="self-audit",
-        metadata=metadata or {},
+        prefix="CORE",
+        description=f"Review product-core improvement: {title}",
+        verification="Review the self-audit product-core improvement, implement it through the normal code workflow with tests, or close it as invalid.",
+        reasoning=(
+            f"{reasoning}\n"
+            f"Files: {', '.join(files_changed[:12]) if files_changed else 'not supplied'}\n"
+            f"Metadata: {json.dumps(metadata or {}, ensure_ascii=False, default=str)[:1200]}"
+        ),
+        priority="medium",
+        internal=1,
+        owner="agent",
     )
+    return {"ok": bool(followup_id), "followup_id": followup_id, "queued": bool(followup_id)}
 
 
 TOPIC_STOPWORDS = {
@@ -2019,7 +2025,6 @@ def check_snapshot_sync():
     snapshot_golden = _snapshot_golden_dir()
     pairs = [
         (NEXO_CODE / "db" / "__init__.py", snapshot_golden / "db" / "__init__.py"),
-        (NEXO_CODE / "evolution_cycle.py", snapshot_golden / "evolution_cycle.py"),
     ]
     drift = [live.name for live, snap in pairs
              if not live.exists() or not snap.exists() or _sha256(live) != _sha256(snap)]
@@ -2493,7 +2498,6 @@ def _refresh_golden_snapshots_inline() -> dict:
     snapshot_golden = _snapshot_golden_dir()
     pairs = [
         (NEXO_CODE / "db" / "__init__.py", snapshot_golden / "db" / "__init__.py"),
-        (NEXO_CODE / "evolution_cycle.py", snapshot_golden / "evolution_cycle.py"),
     ]
     refreshed: list[str] = []
     for live, snap in pairs:

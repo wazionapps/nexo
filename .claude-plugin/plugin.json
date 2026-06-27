@@ -1,13 +1,13 @@
 {
   "name": "nexo-brain",
-  "version": "7.38.1",
-  "description": "Local cognitive runtime for Claude Code \u2014 persistent memory, overnight learning, doctor diagnostics, personal scripts, recovery-aware jobs, startup preflight, and optional dashboard/power helper.",
+  "version": "7.38.5",
+  "description": "Local NEXO runtime core for NEXO Desktop: memory, Deep Sleep, doctor diagnostics, personal scripts, recovery-aware jobs, startup preflight, and optional dashboard/power helper.",
   "author": {
-    "name": "NEXO Brain",
-    "email": "info@nexo-brain.com",
-    "url": "https://nexo-brain.com"
+    "name": "NEXO Cognitive S.L.",
+    "email": "info@nexo-desktop.com",
+    "url": "https://nexo-desktop.com"
   },
-  "homepage": "https://nexo-brain.com",
+  "homepage": "https://nexo-desktop.com",
   "repository": "https://github.com/wazionapps/nexo",
   "license": "AGPL-3.0",
   "keywords": [

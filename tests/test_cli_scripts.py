@@ -337,11 +337,11 @@ class TestRuntimeUpdate:
         for flat in [
             "server.py", "plugin_loader.py", "knowledge_graph.py", "kg_populate.py",
             "maintenance.py", "storage_router.py", "claim_graph.py", "hnsw_index.py",
-            "evolution_cycle.py", "migrate_embeddings.py", "auto_close_sessions.py",
+            "migrate_embeddings.py", "auto_close_sessions.py",
             "client_sync.py",
             "client_preferences.py",
     "paths.py", "agent_runner.py", "bootstrap_docs.py",
-            "hook_guardrails.py", "protocol_settings.py", "public_evolution_queue.py",
+            "hook_guardrails.py", "protocol_settings.py",
             "auto_update.py", "runtime_versioning.py", "tools_sessions.py", "tools_coordination.py",
             "tools_hot_context.py",
             "tools_reminders.py", "tools_reminders_crud.py", "tools_learnings.py",
@@ -380,7 +380,6 @@ class TestRuntimeUpdate:
         assert (runtime_home / "cron_recovery.py").read_text() == "x = 1\n"
         assert (runtime_home / "hook_guardrails.py").read_text() == "x = 1\n"
         assert (runtime_home / "protocol_settings.py").read_text() == "x = 1\n"
-        assert (runtime_home / "public_evolution_queue.py").read_text() == "x = 1\n"
         assert (runtime_home / "tools_hot_context.py").read_text() == "x = 1\n"
         assert data["scripts"] >= 1
 
@@ -463,7 +462,7 @@ class TestRuntimeUpdate:
         for flat in [
             "server.py", "plugin_loader.py", "knowledge_graph.py", "kg_populate.py",
             "maintenance.py", "storage_router.py", "claim_graph.py", "hnsw_index.py",
-            "evolution_cycle.py", "migrate_embeddings.py", "auto_close_sessions.py",
+            "migrate_embeddings.py", "auto_close_sessions.py",
             "client_sync.py", "client_preferences.py",
     "paths.py", "agent_runner.py", "bootstrap_docs.py", "auto_update.py", "runtime_versioning.py", "tools_sessions.py", "tools_coordination.py",
             "tools_hot_context.py",
@@ -562,7 +561,7 @@ class TestRuntimeUpdate:
         for flat in [
             "server.py", "plugin_loader.py", "knowledge_graph.py", "kg_populate.py",
             "maintenance.py", "storage_router.py", "claim_graph.py", "hnsw_index.py",
-            "evolution_cycle.py", "migrate_embeddings.py", "auto_close_sessions.py",
+            "migrate_embeddings.py", "auto_close_sessions.py",
             "client_sync.py", "client_preferences.py",
     "paths.py", "agent_runner.py", "bootstrap_docs.py", "auto_update.py", "runtime_versioning.py", "tools_sessions.py", "tools_coordination.py",
             "tools_hot_context.py",

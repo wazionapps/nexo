@@ -146,7 +146,9 @@ CRONTAB_BEGIN = "# >>> NEXO managed core crons >>>"
 CRONTAB_END = "# <<< NEXO managed core crons <<<"
 RETIRED_CORE_FILES = (
     Path("core") / "scripts" / "nexo-day-orchestrator.sh",
+    Path("core") / "scripts" / "nexo-evolution-run.py",
     Path("scripts") / "nexo-day-orchestrator.sh",
+    Path("scripts") / "nexo-evolution-run.py",
 )
 
 

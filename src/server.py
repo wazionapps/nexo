@@ -337,7 +337,6 @@ _ESSENTIAL_MCP_STARTUP_PLUGINS = (
     "doctor.py",
     "desktop_preferences.py",
     "episodic_memory.py",
-    "evolution.py",
     "lifecycle_events.py",
     "outcomes.py",
     "preferences.py",

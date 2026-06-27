@@ -1,9 +1,9 @@
 {
   "name": "nexo-brain",
-  "version": "7.38.4",
+  "version": "7.38.5",
   "mcpName": "io.github.wazionapps/nexo",
-  "description": "NEXO Brain — Shared brain for AI agents. Persistent memory, semantic RAG, natural forgetting, metacognitive guard, trust scoring, 150+ MCP tools. Works with Claude Code, Codex, Claude Desktop & any MCP client. 100% local, free.",
-  "homepage": "https://nexo-brain.com",
+  "description": "NEXO runtime core for NEXO Desktop. Provides local memory, automation, Deep Sleep, skills, watchdog, and MCP tooling for the Desktop product.",
+  "homepage": "https://nexo-desktop.com",
   "bin": {
     "nexo-brain": "bin/nexo-brain.js",
     "nexo": "bin/nexo.js",
@@ -49,10 +49,9 @@
     "personal-scripts",
     "script-registry",
     "claude-code-plugin",
-    "managed-evolution",
     "nexo-chat"
   ],
-  "author": "NEXO Brain <info@nexo-brain.com>",
+  "author": "NEXO Cognitive S.L. <info@nexo-desktop.com>",
   "license": "AGPL-3.0",
   "repository": {
     "type": "git",

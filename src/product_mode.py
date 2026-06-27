@@ -15,7 +15,8 @@ DESKTOP_PRODUCT_ENV = "NEXO_DESKTOP_MANAGED"
 ALLOW_CORE_WRITES_ENV = "NEXO_ALLOW_CORE_WRITES"
 PRODUCT_MODE_FILENAME = "product-mode.json"
 DESKTOP_PRODUCT_MODE = "desktop_closed_product"
-DESKTOP_DISABLED_FEATURES = ("dashboard", "evolution")
+DESKTOP_DISABLED_FEATURES = ("dashboard",)
+DESKTOP_REMOVED_CRONS = ("evolution",)
 DESKTOP_EVOLUTION_SUPPORT_MODE = "retired"
 DESKTOP_LEGACY_EVOLUTION_DISABLED_REASON = "Disabled by NEXO Desktop product contract"
 DESKTOP_EVOLUTION_RETIRED_REASON = "Evolution retired by NEXO Desktop product contract"
@@ -152,12 +153,7 @@ def _default_objective_payload() -> dict[str, Any]:
 
 
 def _normalize_objective(payload: dict[str, Any]) -> dict[str, Any]:
-    try:
-        from evolution_cycle import normalize_objective
-
-        return normalize_objective(payload)
-    except Exception:
-        return payload
+    return payload if isinstance(payload, dict) else {}
 
 
 def load_evolution_objective() -> tuple[Path, dict[str, Any]]:
@@ -177,25 +173,24 @@ def enforce_desktop_product_contract(*, source: str = "desktop") -> dict[str, An
         return {"applied": False, "reason": "desktop_not_requested"}
 
     mode_payload = mark_desktop_product_managed(source=source)
-    objective_path, objective = load_evolution_objective()
-    previous = json.dumps(objective, sort_keys=True, ensure_ascii=False, default=str)
-
-    objective["evolution_enabled"] = False
-    objective["disabled_by"] = "desktop_product"
-    objective["disabled_reason"] = DESKTOP_EVOLUTION_RETIRED_REASON
-    objective["evolution_mode"] = DESKTOP_EVOLUTION_SUPPORT_MODE
-    objective["desktop_managed"] = True
-    objective["support_ticket_mode"] = False
-    if not objective.get("created_at"):
-        objective["created_at"] = _now_iso()
-
-    objective_path.parent.mkdir(parents=True, exist_ok=True)
-    objective_path.write_text(json.dumps(objective, indent=2, ensure_ascii=False) + "\n")
-    changed_objective = previous != json.dumps(objective, sort_keys=True, ensure_ascii=False, default=str)
+    objective_path = paths.brain_dir() / "evolution-objective.json"
+    changed_objective = False
+    if objective_path.exists():
+        _, objective = load_evolution_objective()
+        previous = json.dumps(objective, sort_keys=True, ensure_ascii=False, default=str)
+        objective["evolution_enabled"] = False
+        objective["disabled_by"] = "desktop_product"
+        objective["disabled_reason"] = DESKTOP_EVOLUTION_RETIRED_REASON
+        objective["evolution_mode"] = DESKTOP_EVOLUTION_SUPPORT_MODE
+        objective["desktop_managed"] = True
+        objective["support_ticket_mode"] = False
+        objective["removed_at"] = objective.get("removed_at") or _now_iso()
+        objective_path.write_text(json.dumps(objective, indent=2, ensure_ascii=False) + "\n")
+        changed_objective = previous != json.dumps(objective, sort_keys=True, ensure_ascii=False, default=str)
     return {
         "applied": True,
         "mode_path": str(product_mode_path()),
-        "objective_path": str(objective_path),
+        "objective_path": str(objective_path) if objective_path.exists() else "",
         "changed_objective": changed_objective,
         "mode": mode_payload,
     }
@@ -203,7 +198,9 @@ def enforce_desktop_product_contract(*, source: str = "desktop") -> dict[str, An
 
 def is_cron_blocked(cron_id: str | None) -> bool:
     clean = str(cron_id or "").strip().lower()
-    return clean in DESKTOP_DISABLED_FEATURES and desktop_product_requested()
+    if not desktop_product_requested():
+        return False
+    return clean in DESKTOP_DISABLED_FEATURES or clean in DESKTOP_REMOVED_CRONS
 
 
 def filter_blocked_crons(crons: list[dict[str, Any]]) -> list[dict[str, Any]]:

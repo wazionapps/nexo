@@ -13,7 +13,7 @@ for `check_and_run_overdue`, `from maintenance`, `import maintenance` and
 `maintenance.check` produced zero hits during the 2026-04-11 audit. Each
 of those tasks actually runs from its own LaunchAgent via its own script
 in `src/scripts/` (e.g. `nexo-cognitive-decay.py`, `nexo-daily-self-audit
-.py`, `nexo-evolution-run.py`), not through this dispatcher. The
+.py`), not through this dispatcher. The
 `maintenance_schedule` table in SQLite is still populated by migrations
 (see `db/_schema.py::_m9_maintenance_schedule` and the drive_decay
 registration) but is effectively dead data: nothing reads it.
