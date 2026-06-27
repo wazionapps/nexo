@@ -1502,7 +1502,7 @@ def test_run_mechanical_autofixes_reports_protocol_debt_drain(self_audit_env, mo
     )
 
 
-def test_check_evolution_health_flags_legacy_desktop_product_disable(self_audit_env):
+def test_check_evolution_health_ignores_desktop_product_retirement(self_audit_env):
     module = _load_self_audit_module()
     module.findings.clear()
 
@@ -1517,13 +1517,7 @@ def test_check_evolution_health_flags_legacy_desktop_product_disable(self_audit_
 
     module.check_evolution_health()
 
-    assert any(
-        item["area"] == "evolution"
-        and item["severity"] == "WARN"
-        and "legacy Desktop disable state" in item["msg"]
-        for item in module.findings
-    )
     assert not any(
-        item["area"] == "evolution" and item["severity"] == "ERROR"
+        item["area"] == "evolution"
         for item in module.findings
     )

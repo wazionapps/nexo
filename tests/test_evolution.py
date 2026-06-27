@@ -125,7 +125,7 @@ class TestEvolutionObjective:
         assert "review_mode" not in objective
         assert "cycles_completed" not in objective
 
-    def test_load_objective_normalizes_public_contribution_alias_to_support_ticket(self, evolution_env, monkeypatch):
+    def test_load_objective_normalizes_public_contribution_alias_to_retired(self, evolution_env, monkeypatch):
         objective_file = evolution_env / "brain" / "evolution-objective.json"
         objective_file.write_text(json.dumps({
             "objective": "Improve public core reliability",
@@ -139,7 +139,7 @@ class TestEvolutionObjective:
         evolution_cycle, _ = _load_runner_module(monkeypatch, evolution_env)
         objective = evolution_cycle.load_objective()
 
-        assert objective["evolution_mode"] == "support_ticket"
+        assert objective["evolution_mode"] == "retired"
 
     def test_build_evolution_prompt_requests_dimension_scores_and_uses_objective_fallback(self, evolution_env, monkeypatch):
         objective_file = evolution_env / "brain" / "evolution-objective.json"
@@ -182,7 +182,7 @@ class TestEvolutionModes:
 
 
 class TestManagedExecution:
-    def test_failed_auto_proposal_rolls_back_and_creates_followup(self, evolution_env, monkeypatch):
+    def test_retired_runner_does_not_execute_or_create_followup(self, evolution_env, monkeypatch):
         objective_file = evolution_env / "brain" / "evolution-objective.json"
         objective_file.write_text(json.dumps({
             "objective": "Improve operational excellence and reduce repeated errors",
@@ -225,23 +225,17 @@ class TestManagedExecution:
         runner.run()
 
         conn = sqlite3.connect(str(evolution_env / "data" / "nexo.db"))
-        status, test_result = conn.execute(
-            "SELECT status, test_result FROM evolution_log ORDER BY id DESC LIMIT 1"
-        ).fetchone()
-        followup = conn.execute(
-            "SELECT id, description FROM followups ORDER BY created_at DESC LIMIT 1"
-        ).fetchone()
+        evolution_count = conn.execute("SELECT COUNT(*) FROM evolution_log").fetchone()[0]
+        followup_count = conn.execute("SELECT COUNT(*) FROM followups").fetchone()[0]
         conn.close()
 
-        assert status == "rolled_back"
-        assert "ROLLBACK" in test_result
-        assert followup[0].startswith("NF-EVO-L")
-        assert "Patch repair.py" in followup[1]
+        assert evolution_count == 0
+        assert followup_count == 0
         assert target_file.read_text() == "print('original')\n"
 
 
 class TestEvolutionStatus:
-    def test_status_falls_back_to_objective_when_metrics_are_missing(self, evolution_env, monkeypatch):
+    def test_status_reports_retirement_instead_of_objective_metrics(self, evolution_env, monkeypatch):
         objective_file = evolution_env / "brain" / "evolution-objective.json"
         objective_file.write_text(json.dumps({
             "objective": "Improve operational excellence and reduce repeated errors",
@@ -265,9 +259,9 @@ class TestEvolutionStatus:
 
         status = evolution_plugin.handle_evolution_status()
 
-        assert "objective fallback" in status
-        assert "Last evolution: 2026-04-12" in status
-        assert "41%" in status
+        assert "retired" in status
+        assert "Deep Sleep" in status
+        assert "41%" not in status
 
 
 class TestPublicContributionExecution:
@@ -309,7 +303,7 @@ class TestPublicContributionExecution:
         assert ok is False
         assert "private path" in reason
 
-    def test_run_routes_legacy_public_contribution_to_support_ticket(self, evolution_env, monkeypatch):
+    def test_run_is_retired_and_does_not_create_support_ticket(self, evolution_env, monkeypatch):
         objective_file = evolution_env / "brain" / "evolution-objective.json"
         objective_file.write_text(json.dumps({
             "objective": "Improve public core reliability",
@@ -366,17 +360,13 @@ class TestPublicContributionExecution:
 
         runner.run()
 
-        assert len(tickets) == 1
-        assert tickets[0]["cycle_num"] == 1
-        assert tickets[0]["proposals"][0]["action"] == "Create a sanitized support ticket instead of a Draft PR"
+        assert tickets == []
         conn = sqlite3.connect(str(evolution_env / "data" / "nexo.db"))
-        row = conn.execute(
-            "SELECT status FROM evolution_log ORDER BY id DESC LIMIT 1"
-        ).fetchone()
+        count = conn.execute("SELECT COUNT(*) FROM evolution_log").fetchone()[0]
         conn.close()
-        assert row[0] == "support_ticket_created"
+        assert count == 0
 
-    def test_public_contribution_cycle_routes_pending_queue_to_support_ticket(self, evolution_env, monkeypatch):
+    def test_public_contribution_cycle_marks_retired_without_support_ticket(self, evolution_env, monkeypatch):
         _, runner = _load_runner_module(monkeypatch, evolution_env)
         objective = {"history": [], "total_evolutions": 0}
         config = {"enabled": True, "mode": "draft_prs", "status": "active"}
@@ -415,10 +405,9 @@ class TestPublicContributionExecution:
 
         runner.run_public_contribution_cycle(objective=objective, cycle_num=4)
 
-        assert len(tickets) == 1
-        assert tickets[0]["queued_candidates"][0]["title"] == "Port self-audit managed guardrail fix"
-        assert marks == ["retired:support_ticket_channel"]
-        assert saved[-1]["history"][0]["mode"] == "support_ticket"
+        assert tickets == []
+        assert marks == ["retired:evolution_removed"]
+        assert saved[-1]["history"][0]["mode"] == "retired"
 
         conn = sqlite3.connect(str(evolution_env / "data" / "nexo.db"))
         row = conn.execute(
@@ -430,9 +419,7 @@ class TestPublicContributionExecution:
         ).fetchone()
         conn.close()
 
-        assert row[0] == "support_ticket_created"
-        payload = json.loads(row[1])
-        assert payload["support_ticket"]["client_message_id"] == "evolution-cycle:4"
+        assert row[0] == "pending_public_port"
 
     def test_public_contribution_cycle_without_queue_marks_retired_without_github(self, evolution_env, monkeypatch):
         _, runner = _load_runner_module(monkeypatch, evolution_env)
@@ -449,8 +436,8 @@ class TestPublicContributionExecution:
 
         runner.run_public_contribution_cycle(objective=objective, cycle_num=5)
 
-        assert marks == ["retired:support_ticket_channel"]
-        assert saved[-1]["history"][0]["mode"] == "support_ticket"
+        assert marks == ["retired:evolution_removed"]
+        assert saved[-1]["history"][0]["mode"] == "retired"
 
     def test_public_pr_validation_cycle_is_retired_without_github(self, evolution_env, monkeypatch):
         _, runner = _load_runner_module(monkeypatch, evolution_env)
@@ -463,7 +450,7 @@ class TestPublicContributionExecution:
         reviewed = runner.run_public_pr_validation_cycle(objective={"history": []}, cycle_num=5, config=config)
 
         assert reviewed == 0
-        assert marks == ["retired:support_ticket_channel"]
+        assert marks == ["retired:evolution_removed"]
 
 
 class TestApplyAcceptedProposals:

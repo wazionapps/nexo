@@ -277,7 +277,7 @@ def _parse_iso(ts: str | None) -> datetime | None:
 def format_public_contribution_label(config: dict | None = None) -> str:
     cfg = normalize_public_contribution_config(config)
     if cfg["mode"] == MODE_DRAFT_PRS:
-        return "off (GitHub retired; support tickets active)"
+        return "off (GitHub retired)"
     return cfg["mode"]
 
 
@@ -291,7 +291,7 @@ def _retire_public_contribution_config(config: dict) -> dict:
     config["active_pr_number"] = None
     config["active_branch"] = ""
     config["cooldown_until"] = ""
-    config["last_result"] = "retired:support_ticket_channel"
+    config["last_result"] = "retired:evolution_removed"
     config["message"] = PUBLIC_CONTRIBUTION_RETIRED_MESSAGE
     return config
 

@@ -1,5 +1,14 @@
 # Changelog
 
+## [7.38.3] - 2026-06-27
+
+### Removed - Desktop-managed Evolution
+
+- **Desktop-managed installs retire Evolution completely.** The runtime no longer schedules the weekly Evolution cron, ships the Evolution LaunchAgent template, creates Evolution support tickets, opens GitHub branches/PRs, or applies Evolution proposals.
+- **The old Evolution MCP tools are compatibility notices only.** Calls to `nexo_evolution_status`, `history`, `propose`, `approve`, or `reject` return a retirement message while Deep Sleep, Skills, Watchdog, followups, and normal support reports keep using their own systems.
+- **Update and monitoring paths now treat retired Evolution as healthy.** Auto-update backfills and enforces `evolution_enabled=false`, `evolution_mode=retired`, and `support_ticket_mode=false`; daily audit, dashboard, watchdog smoke, and automation supervisor no longer re-enable or warn on the expected retired state.
+- **Task closeout now rejects untracked open commitments.** A task cannot be closed as done while leaving a deferred deliverable, security blocker, or pending idea unless a dated followup with deliverable and verification criteria is linked.
+
 ## [7.38.2] - 2026-06-27
 
 ### Changed - Desktop-managed runtime unification

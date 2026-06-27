@@ -15,9 +15,10 @@ DESKTOP_PRODUCT_ENV = "NEXO_DESKTOP_MANAGED"
 ALLOW_CORE_WRITES_ENV = "NEXO_ALLOW_CORE_WRITES"
 PRODUCT_MODE_FILENAME = "product-mode.json"
 DESKTOP_PRODUCT_MODE = "desktop_closed_product"
-DESKTOP_DISABLED_FEATURES = ("dashboard",)
-DESKTOP_EVOLUTION_SUPPORT_MODE = "support_ticket"
+DESKTOP_DISABLED_FEATURES = ("dashboard", "evolution")
+DESKTOP_EVOLUTION_SUPPORT_MODE = "retired"
 DESKTOP_LEGACY_EVOLUTION_DISABLED_REASON = "Disabled by NEXO Desktop product contract"
+DESKTOP_EVOLUTION_RETIRED_REASON = "Evolution retired by NEXO Desktop product contract"
 
 
 def _now_iso() -> str:
@@ -133,8 +134,10 @@ def _default_objective_payload() -> dict[str, Any]:
     return {
         "objective": "Improve operational excellence and reduce repeated errors",
         "focus_areas": ["error_prevention", "proactivity", "memory_quality"],
-        "evolution_enabled": True,
+        "evolution_enabled": False,
         "evolution_mode": DESKTOP_EVOLUTION_SUPPORT_MODE,
+        "disabled_by": "desktop_product",
+        "disabled_reason": DESKTOP_EVOLUTION_RETIRED_REASON,
         "dimensions": {
             "episodic_memory": {"current": 0, "target": 90},
             "autonomy": {"current": 0, "target": 80},
@@ -177,18 +180,12 @@ def enforce_desktop_product_contract(*, source: str = "desktop") -> dict[str, An
     objective_path, objective = load_evolution_objective()
     previous = json.dumps(objective, sort_keys=True, ensure_ascii=False, default=str)
 
-    legacy_desktop_disabled = (
-        objective.get("disabled_by") == "desktop_product"
-        or str(objective.get("disabled_reason") or "") == DESKTOP_LEGACY_EVOLUTION_DISABLED_REASON
-    )
-    if legacy_desktop_disabled or "evolution_enabled" not in objective:
-        objective["evolution_enabled"] = True
-    if legacy_desktop_disabled:
-        objective.pop("disabled_reason", None)
-        objective.pop("disabled_by", None)
+    objective["evolution_enabled"] = False
+    objective["disabled_by"] = "desktop_product"
+    objective["disabled_reason"] = DESKTOP_EVOLUTION_RETIRED_REASON
     objective["evolution_mode"] = DESKTOP_EVOLUTION_SUPPORT_MODE
     objective["desktop_managed"] = True
-    objective["support_ticket_mode"] = True
+    objective["support_ticket_mode"] = False
     if not objective.get("created_at"):
         objective["created_at"] = _now_iso()
 

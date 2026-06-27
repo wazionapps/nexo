@@ -126,11 +126,14 @@ def main() -> int:
         obj = json.loads(objective.read_text())
         evolution_enabled = obj.get("evolution_enabled", True)
         if not evolution_enabled:
-            findings.append({
-                "severity": "WARN",
-                "area": "evolution",
-                "msg": f"disabled: {obj.get('disabled_reason', 'unknown')}",
-            })
+            reason = str(obj.get("disabled_reason", "unknown"))
+            disabled_by = str(obj.get("disabled_by") or "").strip().lower()
+            if disabled_by != "desktop_product" and "retired by NEXO Desktop product contract" not in reason:
+                findings.append({
+                    "severity": "WARN",
+                    "area": "evolution",
+                    "msg": f"disabled: {reason}",
+                })
 
     summary = {
         "timestamp": datetime.now().isoformat(),

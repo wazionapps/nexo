@@ -194,11 +194,14 @@ def check_evolution_status() -> list[dict]:
     if obj_file.exists():
         obj = json.loads(obj_file.read_text())
         if not obj.get("evolution_enabled", True):
-            alerts.append({
-                "type": "evolution_disabled",
-                "severity": "high",
-                "title": f"Evolution DISABLED: {obj.get('disabled_reason', 'unknown')}",
-            })
+            reason = str(obj.get("disabled_reason", "unknown"))
+            disabled_by = str(obj.get("disabled_by") or "").strip().lower()
+            if disabled_by != "desktop_product" and "retired by NEXO Desktop product contract" not in reason:
+                alerts.append({
+                    "type": "evolution_disabled",
+                    "severity": "high",
+                    "title": f"Evolution DISABLED: {reason}",
+                })
         if obj.get("consecutive_failures", 0) > 0:
             alerts.append({
                 "type": "evolution_failures",

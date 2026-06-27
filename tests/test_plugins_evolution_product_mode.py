@@ -26,7 +26,7 @@ def _reload_modules(monkeypatch, home: Path):
     return product_mode, evolution_plugin
 
 
-def test_plugins_evolution_surface_stays_available_when_desktop_managed(tmp_path, monkeypatch):
+def test_plugins_evolution_surface_is_retired_when_desktop_managed(tmp_path, monkeypatch):
     home = tmp_path / "nexo-home"
     (home / "config").mkdir(parents=True, exist_ok=True)
     (home / "brain").mkdir(parents=True, exist_ok=True)
@@ -54,15 +54,15 @@ def test_plugins_evolution_surface_stays_available_when_desktop_managed(tmp_path
     updates = []
     monkeypatch.setattr(evolution_plugin, "update_evolution_log_status", lambda *args, **kwargs: updates.append((args, kwargs)))
 
-    assert "EVOLUTION STATUS" in evolution_plugin.handle_evolution_status()
-    assert "EVOLUTION HISTORY" in evolution_plugin.handle_evolution_history()
-    assert evolution_plugin.handle_evolution_propose().startswith("Evolution cycle queued.")
-    assert evolution_plugin.handle_evolution_approve(1, "ok") == "Proposal #1 APPROVED. Will be applied in next Evolution cycle."
-    assert evolution_plugin.handle_evolution_reject(1, "no") == "Proposal #1 REJECTED. Reason: no"
-    assert len(updates) == 2
+    assert "retired" in evolution_plugin.handle_evolution_status()
+    assert "retired" in evolution_plugin.handle_evolution_history()
+    assert "retired" in evolution_plugin.handle_evolution_propose()
+    assert "retired" in evolution_plugin.handle_evolution_approve(1, "ok")
+    assert "retired" in evolution_plugin.handle_evolution_reject(1, "no")
+    assert updates == []
 
 
-def test_standalone_evolution_runner_forces_support_mode_when_desktop_managed(tmp_path, monkeypatch):
+def test_standalone_evolution_runner_is_retired_when_desktop_managed(tmp_path, monkeypatch):
     home = tmp_path / "nexo-home"
     (home / "config").mkdir(parents=True, exist_ok=True)
     (home / "brain").mkdir(parents=True, exist_ok=True)
@@ -105,5 +105,5 @@ def test_standalone_evolution_runner_forces_support_mode_when_desktop_managed(tm
 
     module.run()
 
-    assert any("Desktop-managed install: forcing Evolution support-ticket mode." in line for line in logs)
-    assert saved[0]["evolution_mode"] == "support_ticket"
+    assert any("Evolution cycle retired" in line for line in logs)
+    assert saved == []

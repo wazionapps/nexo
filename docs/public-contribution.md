@@ -4,7 +4,7 @@ NEXO has one public contribution path:
 
 1. **Normal human contribution**
 
-Automated public-core Evolution via GitHub Draft PRs is retired. Evolution remains active, but Desktop-managed installs route improvement requests to anonymized NEXO support tickets instead of creating branches, pushes, PRs, or peer reviews.
+Automated public-core Evolution via GitHub Draft PRs is retired. Desktop-managed installs no longer run Evolution cycles, create branches, push PRs, open peer reviews, or create Evolution support tickets.
 
 ## Human Contributions
 
@@ -22,11 +22,11 @@ Installs can no longer opt into automated public contribution through Draft PRs.
 Current rules:
 
 - never create GitHub branches, pushes, Draft PRs, or automated peer reviews from Evolution
-- keep Evolution enabled by default for product improvement detection
-- route improvement requests to support-ticket mode
-- redact personal scripts, local runtime data, prompts, logs, URLs, emails, client details, and secrets before any support ticket is sent
+- keep Deep Sleep, Skills, Watchdog, followups, and normal support-ticket reporting active through their own systems
+- keep Evolution disabled/retired by default in Desktop-managed installs
+- redact personal scripts, local runtime data, prompts, logs, URLs, emails, client details, and secrets before any non-Evolution support report is sent
 
-Legacy `draft_prs` or `pending_auth` settings are treated as retired inputs and migrated to support-ticket mode.
+Legacy `draft_prs`, `support_ticket`, or `pending_auth` settings are treated as retired inputs and do not create tickets, branches, or proposals.
 
 ## Best Reports For NEXO
 

@@ -63,20 +63,20 @@ def normalize_objective(obj: dict | None) -> dict:
 
     if "evolution_mode" in source:
         mode = str(source.get("evolution_mode") or "auto").strip().lower()
-        if mode in {"public", "public_core", "contributor", "draft_prs"}:
-            mode = "support_ticket"
+        if mode in {"public", "public_core", "contributor", "draft_prs", "support_ticket"}:
+            mode = "retired"
     else:
         legacy_mode = str(source.get("review_mode") or "").strip().lower()
         if legacy_mode in {"manual", "review"}:
             mode = "review"
         elif legacy_mode in {"managed", "hybrid", "owner", "core"}:
             mode = "managed"
-        elif legacy_mode in {"public", "public_core", "contributor", "draft_prs"}:
-            mode = "support_ticket"
+        elif legacy_mode in {"public", "public_core", "contributor", "draft_prs", "support_ticket"}:
+            mode = "retired"
         else:
             mode = "auto"
 
-    if mode not in {"auto", "review", "managed", "public_core", "support_ticket"}:
+    if mode not in {"auto", "review", "managed", "public_core", "support_ticket", "retired"}:
         mode = "auto"
 
     dimensions = source.get("dimensions")
@@ -301,9 +301,9 @@ def build_evolution_prompt(week_data: dict, objective: dict) -> str:
         mode_desc = f"owner-managed, max {max_auto} auto-applied changes with rollback and followups"
         safe_zones = "~/.nexo/personal/scripts/, ~/.nexo/personal/plugins/, ~/.nexo/personal/brain/, NEXO_CODE/src, repo bin/docs/templates/tests"
         immutable_files = "db.py, server.py, plugin_loader.py, storage_router.py, nexo-watchdog.sh, evolution_cycle.py, CLAUDE.md, AGENTS.md, personality.md, user-profile.md"
-    elif mode in {"public_core", "support_ticket"}:
-        mode_desc = "support-ticket mode, no automatic code writes and no GitHub publishing"
-        safe_zones = "read-only analysis plus anonymized support-ticket creation"
+    elif mode in {"public_core", "support_ticket", "retired"}:
+        mode_desc = "retired, no automatic code writes, support tickets, or GitHub publishing"
+        safe_zones = "read-only compatibility notice only"
         immutable_files = "all local runtime data, personal files, local DBs/logs, prompts, secrets, CLAUDE.md, AGENTS.md, user-profile.md"
     else:
         mode_desc = f"public auto, max {max_auto} auto-applied changes in personal safe zones"

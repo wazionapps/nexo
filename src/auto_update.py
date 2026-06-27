@@ -21,7 +21,12 @@ import time
 from pathlib import Path
 
 try:
-    from product_mode import desktop_product_requested, enforce_desktop_product_contract
+    from product_mode import (
+        DESKTOP_EVOLUTION_RETIRED_REASON,
+        DESKTOP_EVOLUTION_SUPPORT_MODE,
+        desktop_product_requested,
+        enforce_desktop_product_contract,
+    )
 except ModuleNotFoundError as exc:
     if getattr(exc, "name", "") != "product_mode":
         raise
@@ -30,7 +35,12 @@ except ModuleNotFoundError as exc:
         core_path = str(_core_runtime)
         if core_path not in sys.path:
             sys.path.insert(0, core_path)
-    from product_mode import desktop_product_requested, enforce_desktop_product_contract
+    from product_mode import (
+        DESKTOP_EVOLUTION_RETIRED_REASON,
+        DESKTOP_EVOLUTION_SUPPORT_MODE,
+        desktop_product_requested,
+        enforce_desktop_product_contract,
+    )
 from runtime_home import export_resolved_nexo_home, managed_nexo_home
 
 try:
@@ -4381,8 +4391,11 @@ def _auto_update_check_locked() -> dict:
             default_objective = {
                 "objective": "Improve operational excellence and reduce repeated errors",
                 "focus_areas": ["error_prevention", "proactivity", "memory_quality"],
-                "evolution_enabled": True,
-                "evolution_mode": "auto",
+                "evolution_enabled": False,
+                "evolution_mode": DESKTOP_EVOLUTION_SUPPORT_MODE,
+                "disabled_by": "desktop_product",
+                "disabled_reason": DESKTOP_EVOLUTION_RETIRED_REASON,
+                "support_ticket_mode": False,
                 "dimensions": {
                     "episodic_memory": {"current": 0, "target": 90},
                     "autonomy": {"current": 0, "target": 80},
@@ -4395,7 +4408,7 @@ def _auto_update_check_locked() -> dict:
                 "created_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
             }
             evo_obj_path.write_text(json.dumps(default_objective, indent=2))
-            _log("Backfilled evolution-objective.json for existing install")
+            _log("Backfilled retired evolution-objective.json for existing install")
         else:
             raw_objective = json.loads(evo_obj_path.read_text())
             normalized = normalize_objective(raw_objective)
@@ -4408,7 +4421,7 @@ def _auto_update_check_locked() -> dict:
     try:
         desktop_contract = enforce_desktop_product_contract(source="auto_update")
         if desktop_contract.get("applied") and desktop_contract.get("changed_objective"):
-            _log("Desktop product contract enforced: evolution support-ticket mode")
+            _log("Desktop product contract enforced: Evolution retired")
     except Exception as e:
         _log(f"desktop product contract error: {e}")
 

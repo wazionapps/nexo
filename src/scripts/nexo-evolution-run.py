@@ -126,8 +126,9 @@ def _normalize_mode(mode: str) -> str:
         "contributor": "support_ticket",
         "draft_prs": "support_ticket",
         "public_core": "support_ticket",
+        "support_ticket": "retired",
     }
-    return aliases.get(value, value if value in {"auto", "review", "managed", "public_core", "support_ticket"} else "auto")
+    return aliases.get(value, value if value in {"auto", "review", "managed", "public_core", "support_ticket", "retired"} else "auto")
 
 
 def _immutable_files_for_mode(mode: str) -> set[str]:
@@ -168,6 +169,7 @@ from evolution_cycle import (
     build_public_contribution_prompt, build_public_pr_review_prompt,
 )
 from product_mode import (
+    DESKTOP_EVOLUTION_RETIRED_REASON,
     DESKTOP_EVOLUTION_SUPPORT_MODE,
     DESKTOP_LEGACY_EVOLUTION_DISABLED_REASON,
     desktop_product_requested,
@@ -539,8 +541,8 @@ def _write_public_review_artifacts(pr_number: int, candidate: dict, review: dict
 
 def run_public_pr_validation_cycle(*, objective: dict, cycle_num: int, config: dict | None = None) -> int:
     config = config or load_public_contribution_config()
-    mark_public_contribution_result(result="retired:support_ticket_channel", config=config)
-    log("Public PR validation is retired; Evolution routes improvements through anonymized support tickets.")
+    mark_public_contribution_result(result="retired:evolution_removed", config=config)
+    log("Public PR validation is retired; Evolution no longer creates tickets, PRs, or proposals.")
     return 0
 
 
@@ -550,39 +552,22 @@ def _create_draft_pr(worktree_dir: Path, config: dict, branch_name: str, summary
 
 def run_public_contribution_cycle(*, objective: dict, cycle_num: int) -> None:
     config = load_public_contribution_config()
-    conn = sqlite3.connect(str(NEXO_DB), timeout=10)
-    conn.row_factory = sqlite3.Row
-    try:
-        queued_candidates = list_pending_public_port_candidates(conn, limit=5)
-        result = _create_cycle_support_ticket(
-            conn,
-            cycle_num,
-            [],
-            "Legacy public contribution channel was retired and routed to support tickets.",
-            queued_candidates,
-        )
-        if not queued_candidates:
-            log("Public contribution is retired; no queued support-ticket item was pending.")
-        objective["evolution_mode"] = DESKTOP_EVOLUTION_SUPPORT_MODE
-        objective.setdefault("history", []).insert(0, {
-            "cycle": cycle_num,
-            "date": str(date.today()),
-            "mode": DESKTOP_EVOLUTION_SUPPORT_MODE,
-            "proposals": len(queued_candidates),
-            "auto_count": 0,
-            "auto_applied": 0,
-            "analysis": "Legacy public contribution channel retired; routed to support-ticket mode.",
-        })
-        objective["history"] = objective["history"][:12]
-        save_objective(objective)
-        mark_public_contribution_result(result="retired:support_ticket_channel", config=config)
-        if result.get("success"):
-            log("Public contribution queue routed to anonymized support tickets.")
-    except Exception as exc:
-        mark_public_contribution_result(result=f"failed:{exc}", config=config)
-        raise
-    finally:
-        conn.close()
+    objective["evolution_mode"] = DESKTOP_EVOLUTION_SUPPORT_MODE
+    objective["evolution_enabled"] = False
+    objective["support_ticket_mode"] = False
+    objective.setdefault("history", []).insert(0, {
+        "cycle": cycle_num,
+        "date": str(date.today()),
+        "mode": DESKTOP_EVOLUTION_SUPPORT_MODE,
+        "proposals": 0,
+        "auto_count": 0,
+        "auto_applied": 0,
+        "analysis": "Legacy public contribution channel retired; Evolution removed.",
+    })
+    objective["history"] = objective["history"][:12]
+    save_objective(objective)
+    mark_public_contribution_result(result="retired:evolution_removed", config=config)
+    log("Public contribution is retired; no support tickets, PRs, or proposals were created.")
 
 
 # ── File safety validation ───────────────────────────────────────────────
@@ -1050,7 +1035,8 @@ def _apply_accepted_proposals(
 # ── Main run ─────────────────────────────────────────────────────────────
 def run():
     log("=" * 60)
-    log("NEXO Evolution cycle starting (standalone, v2 — real execution)")
+    log("NEXO Evolution cycle retired; no proposals, tickets, PRs, or code changes will be created.")
+    return
 
     # Check objective
     objective = load_objective()
@@ -1064,11 +1050,12 @@ def run():
             or disabled_reason == DESKTOP_LEGACY_EVOLUTION_DISABLED_REASON
         )
         if desktop_product_requested() and legacy_desktop_disabled:
-            log("Desktop-managed legacy Evolution disable detected; re-enabling support-ticket mode.")
-            objective["evolution_enabled"] = True
-            objective.pop("disabled_reason", None)
-            objective.pop("disabled_by", None)
+            log("Desktop-managed legacy Evolution disable detected; preserving retired mode.")
+            objective["evolution_enabled"] = False
+            objective["disabled_by"] = "desktop_product"
+            objective["disabled_reason"] = DESKTOP_EVOLUTION_RETIRED_REASON
             objective["evolution_mode"] = DESKTOP_EVOLUTION_SUPPORT_MODE
+            objective["support_ticket_mode"] = False
             save_objective(objective)
         else:
             log(f"Evolution DISABLED: {disabled_reason}")
@@ -1076,9 +1063,12 @@ def run():
 
     if desktop_product_requested():
         if _normalize_mode(objective.get("evolution_mode", "auto")) != DESKTOP_EVOLUTION_SUPPORT_MODE:
-            log("Desktop-managed install: forcing Evolution support-ticket mode.")
+            log("Desktop-managed install: forcing Evolution retired mode.")
             objective["evolution_mode"] = DESKTOP_EVOLUTION_SUPPORT_MODE
-            objective["support_ticket_mode"] = True
+            objective["evolution_enabled"] = False
+            objective["disabled_by"] = "desktop_product"
+            objective["disabled_reason"] = DESKTOP_EVOLUTION_RETIRED_REASON
+            objective["support_ticket_mode"] = False
             save_objective(objective)
 
     # Circuit breaker: consecutive failures

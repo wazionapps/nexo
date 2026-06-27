@@ -1,4 +1,4 @@
-"""Evolution plugin — NEXO self-improvement tools for interactive sessions."""
+"""Retired Evolution plugin kept as a compatibility surface."""
 
 import json
 import os
@@ -34,15 +34,19 @@ def _load_objective() -> dict:
     return raw if isinstance(raw, dict) else {}
 
 
-def _desktop_disabled_message() -> str:
-    return ""
+RETIRED_MESSAGE = (
+    "Evolution has been retired in NEXO Desktop. "
+    "Deep Sleep, Skills, Watchdog and support tickets continue to run through their own systems."
+)
+
+
+def _retired_message() -> str:
+    return RETIRED_MESSAGE
 
 
 def handle_evolution_status() -> str:
     """Show current NEXO dimension scores and recent trend."""
-    disabled = _desktop_disabled_message()
-    if disabled:
-        return disabled
+    return _retired_message()
     metrics = get_latest_metrics()
     objective = _load_objective()
     objective_dims = objective.get("dimensions", {}) if isinstance(objective.get("dimensions"), dict) else {}
@@ -90,9 +94,7 @@ def handle_evolution_history(limit: int = 10) -> str:
     Args:
         limit: Number of entries to return (default 10)
     """
-    disabled = _desktop_disabled_message()
-    if disabled:
-        return disabled
+    return _retired_message()
     history = get_evolution_history(limit)
     if not history:
         return "No evolution history."
@@ -121,9 +123,7 @@ def handle_evolution_propose() -> str:
     """Manually trigger an evolution analysis outside the weekly schedule.
     This sets a flag that the Cortex wrapper reads on the next cycle.
     """
-    disabled = _desktop_disabled_message()
-    if disabled:
-        return disabled
+    return _retired_message()
     import json
     from pathlib import Path
     nexo_home = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
@@ -151,9 +151,7 @@ def handle_evolution_approve(log_id: int, notes: str = '') -> str:
         log_id: Evolution log entry ID to approve
         notes: Optional notes from user
     """
-    disabled = _desktop_disabled_message()
-    if disabled:
-        return disabled
+    return _retired_message()
     update_evolution_log_status(log_id, "accepted",
                                 test_result=f"Approved by user. {notes}".strip())
     return f"Proposal #{log_id} APPROVED. Will be applied in next Evolution cycle."
@@ -166,9 +164,7 @@ def handle_evolution_reject(log_id: int, reason: str = '') -> str:
         log_id: Evolution log entry ID to reject
         reason: Why this proposal was rejected
     """
-    disabled = _desktop_disabled_message()
-    if disabled:
-        return disabled
+    return _retired_message()
     update_evolution_log_status(log_id, "rejected",
                                 test_result=f"Rejected: {reason}" if reason else "Rejected by user")
     return f"Proposal #{log_id} REJECTED. Reason: {reason or 'no reason given'}"
@@ -176,13 +172,13 @@ def handle_evolution_reject(log_id: int, reason: str = '') -> str:
 
 TOOLS = [
     (handle_evolution_status, "nexo_evolution_status",
-     "Show current NEXO dimension scores (episodic memory, autonomy, proactivity, self-improvement, AGI)"),
+     "Compatibility notice for the retired Evolution system"),
     (handle_evolution_history, "nexo_evolution_history",
-     "Show past evolution cycles, proposals, and their outcomes"),
+     "Compatibility notice for the retired Evolution system"),
     (handle_evolution_propose, "nexo_evolution_propose",
-     "Manually trigger an evolution analysis outside weekly schedule"),
+     "Compatibility notice for the retired Evolution system"),
     (handle_evolution_approve, "nexo_evolution_approve",
-     "Approve a pending Evolution proposal (user only)"),
+     "Compatibility notice for the retired Evolution system"),
     (handle_evolution_reject, "nexo_evolution_reject",
-     "Reject a pending Evolution proposal with reason"),
+     "Compatibility notice for the retired Evolution system"),
 ]

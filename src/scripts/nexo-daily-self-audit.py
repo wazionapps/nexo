@@ -1163,11 +1163,12 @@ def check_evolution_health():
         reason = str(obj.get("disabled_reason") or "unknown")
         disabled_by = str(obj.get("disabled_by") or "").strip().lower()
         try:
-            from product_mode import DESKTOP_LEGACY_EVOLUTION_DISABLED_REASON
+            from product_mode import DESKTOP_EVOLUTION_RETIRED_REASON, DESKTOP_LEGACY_EVOLUTION_DISABLED_REASON
         except Exception:
+            DESKTOP_EVOLUTION_RETIRED_REASON = "Evolution retired by NEXO Desktop product contract"
             DESKTOP_LEGACY_EVOLUTION_DISABLED_REASON = "Disabled by NEXO Desktop product contract"
-        if disabled_by == "desktop_product" or reason == DESKTOP_LEGACY_EVOLUTION_DISABLED_REASON:
-            finding("WARN", "evolution", "Evolution has legacy Desktop disable state; update should migrate it to support-ticket mode")
+        if disabled_by == "desktop_product" or reason in {DESKTOP_EVOLUTION_RETIRED_REASON, DESKTOP_LEGACY_EVOLUTION_DISABLED_REASON}:
+            return
         else:
             finding("ERROR", "evolution", f"Evolution DISABLED: {reason}")
 
