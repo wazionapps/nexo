@@ -1156,6 +1156,27 @@ _SCOPE_REQUIRED_MARKERS = {
     "surface": re.compile(r"\b(superficie|surface|api|ui|dominio|domain|web|public)\b", re.IGNORECASE),
     "deploy": re.compile(r"\b(deploy|despliegue|publicado|published|release|rama|branch|n/a)\b", re.IGNORECASE),
 }
+_FULL_SCOPE_PRODUCT_BACKEND_RE = re.compile(
+    r"\b("
+    r"producto/backend completo|backend completo|producto completo|alcance completo|"
+    r"full[- ]scope|hazlo todo|todo el alcance|end[- ]to[- ]end completo|e2e completo"
+    r")\b",
+    re.IGNORECASE,
+)
+_FULL_SCOPE_PRODUCT_CONTEXT_RE = re.compile(
+    r"\b(producto|backend|api|web|app|sistema|producci[oó]n|production|deploy|release)\b",
+    re.IGNORECASE,
+)
+_FULL_SCOPE_CHECKS = {
+    "local": re.compile(r"\b(local|entorno local|repo local)\s*[:=;-]", re.IGNORECASE),
+    "producción": re.compile(r"\b(producci[oó]n|prod|production|runtime)\s*[:=;-]", re.IGNORECASE),
+    "limpieza/legado": re.compile(r"\b(limpieza|cleanup|legado|legacy)\s*[:=;-]", re.IGNORECASE),
+    "migraciones": re.compile(r"\b(migraci[oó]n|migraciones|migration|migrations)\s*[:=;-]", re.IGNORECASE),
+    "cachés": re.compile(r"\b(cach[eé]s?|caches|cache)\s*[:=;-]", re.IGNORECASE),
+    "rutas visibles": re.compile(r"\b(rutas? visibles?|rutas? p[uú]blicas?|urls? p[uú]blicas?|public urls?)\s*[:=;-]", re.IGNORECASE),
+    "E2E": re.compile(r"\b(e2e|end[- ]to[- ]end|smoke e2e)\s*[:=;-]", re.IGNORECASE),
+    "pendientes/followups": re.compile(r"\b(pendientes?|followups?|seguimiento|no cerrado|no cerrados|nf-)\s*[:=;-]", re.IGNORECASE),
+}
 
 
 def _payload_scope_text(payload: dict) -> str:
@@ -1192,6 +1213,30 @@ def check_shared_scope_closeout(payload: dict) -> str | None:
         "Antes de seguir con este cambio compartido, deja fijado el alcance operativo: "
         "conversación afectada, tenant/tienda, idiomas, entorno, superficie pública y estado de deploy. "
         "Si algún campo no aplica, márcalo como N/A y continúa con evidencia."
+    )
+    return append_operator_language_contract(message)
+
+
+def check_full_scope_product_backend_closeout(payload: dict) -> str | None:
+    if not _is_task_close_tool(_tool_name(payload)):
+        return None
+    scope_text = _payload_scope_text(payload)
+    if not _FULL_SCOPE_PRODUCT_BACKEND_RE.search(scope_text):
+        return None
+    if not _FULL_SCOPE_PRODUCT_CONTEXT_RE.search(scope_text):
+        return None
+    missing = [
+        label
+        for label, pattern in _FULL_SCOPE_CHECKS.items()
+        if not pattern.search(scope_text)
+    ]
+    if not missing:
+        return None
+    message = (
+        "Cierre pendiente: esta tarea declara alcance completo de producto/backend. "
+        "Antes de cerrarla, incluye evidencia o excepción explícita para: local, producción, "
+        "limpieza/legado, migraciones, cachés, rutas visibles, E2E y pendientes/followups. "
+        f"Falta: {', '.join(missing)}."
     )
     return append_operator_language_contract(message)
 
@@ -1269,6 +1314,7 @@ def main() -> int:
         learning_capture_message = check_learning_capture_closeout(payload, sid)
         post_change_trace_message = check_post_change_trace_closeout(payload, sid)
         shared_scope_message = check_shared_scope_closeout(payload)
+        full_scope_message = check_full_scope_product_backend_closeout(payload)
         cascade_message = check_domain_error_cascade(payload, sid)
         support_second_ticket_message = check_support_ticket_second_failure_sweep(payload, sid)
         g1_message: str | None = None
@@ -1285,6 +1331,7 @@ def main() -> int:
             learning_capture_message,
             post_change_trace_message,
             shared_scope_message,
+            full_scope_message,
             cascade_message,
             support_second_ticket_message,
             g1_message,

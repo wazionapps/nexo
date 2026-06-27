@@ -656,3 +656,48 @@ def test_post_tool_use_accepts_shared_mutation_with_scope_checklist():
     )
 
     assert message is None
+
+
+def test_post_tool_use_warns_full_scope_product_backend_close_missing_checklist():
+    from hooks import post_tool_use
+
+    message = post_tool_use.check_full_scope_product_backend_closeout(
+        {
+            "tool_name": "nexo_task_close",
+            "tool_input": {
+                "summary": "Implementado producto/backend completo para el flujo de checkout.",
+                "evidence": "local: pytest tests/test_checkout.py OK. producción: HTTP 200.",
+            },
+        }
+    )
+
+    assert message is not None
+    assert "alcance completo de producto/backend" in message
+    assert "migraciones" in message
+    assert "rutas visibles" in message
+    assert "E2E" in message
+
+
+def test_post_tool_use_accepts_full_scope_product_backend_close_with_checklist():
+    from hooks import post_tool_use
+
+    message = post_tool_use.check_full_scope_product_backend_closeout(
+        {
+            "tool_name": "nexo_task_close",
+            "tool_input": {
+                "summary": "Implementado alcance completo de producto/backend para el flujo de checkout.",
+                "evidence": (
+                    "local: pytest tests/test_checkout.py OK; "
+                    "producción: curl endpoint live HTTP 200; "
+                    "limpieza: legacy route retirada; "
+                    "migraciones: alembic current OK; "
+                    "cachés: cache clear verificado; "
+                    "rutas visibles: /checkout y /admin/checkout HTTP 200; "
+                    "E2E: Playwright checkout smoke OK; "
+                    "pendientes: NF-CHECKOUT-WATCH creado para 24h."
+                ),
+            },
+        }
+    )
+
+    assert message is None
