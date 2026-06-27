@@ -1,0 +1,28 @@
+{
+  "id": "SK-GADS-CAMPAIGN-FROM-SHOPIFY",
+  "name": "Google Ads Campaign From Shopify Catalog",
+  "description": "Build Google Ads campaign drafts only from the real Shopify catalog, with complete collection listing, product-type classification, generated keywords/RSA/negatives, Final URL HTTP 200 validation, Google Ads validate_only, PAUSED upload, and post-mutation count verification before any activation.",
+  "level": "published",
+  "mode": "guide",
+  "source_kind": "core",
+  "execution_level": "none",
+  "approval_required": false,
+  "tags": [
+    "google-ads",
+    "shopify",
+    "recambios",
+    "campaign",
+    "catalog",
+    "validation",
+    "paused-first"
+  ],
+  "trigger_patterns": [
+    "Google Ads desde Shopify",
+    "campaña Google Ads catálogo Shopify",
+    "SK-GADS-CAMPAIGN-FROM-SHOPIFY",
+    "Recambios Google Ads productos Shopify",
+    "build campaign from Shopify catalog",
+    "campaign from Shopify catalog"
+  ],
+  "stable_after_uses": 5
+}
