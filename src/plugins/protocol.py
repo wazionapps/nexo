@@ -1889,6 +1889,30 @@ TIME_BOUND_COMMITMENT_RE = re.compile(
     r")",
     re.IGNORECASE | re.DOTALL,
 )
+OPEN_COMMITMENT_FOLLOWUP_RE = re.compile(
+    r"\b("
+    r"queda(?:n)?\s+pendiente(?:s)?(?:\s+de)?|"
+    r"lo\s+dejo\s+(?:pendiente|como\s+seguimiento|para\s+(?:despu[eé]s|m[aá]s\s+tarde))|"
+    r"lo\s+retomo\s+(?:m[aá]s\s+tarde|en\s+otra\s+sesi[oó]n)|"
+    r"lo\s+vemos\s+en\s+otra\s+sesi[oó]n|"
+    r"idea\s+aparcada|"
+    r"bloquead[oa]\s+por\s+(?:auth|autenticaci[oó]n|seguridad|security|credenciales?|permisos?)|"
+    r"seguridad\s+pendiente|"
+    r"pending\s+(?:followup|follow-up|security|credentials?|auth)|"
+    r"blocked\s+by\s+(?:auth|security|credentials?|permissions?)|"
+    r"defer(?:red)?\s+(?:idea|followup|follow-up)|"
+    r"follow(?:\s|-)?up\s+(?:later|pending|needed)"
+    r")\b",
+    re.IGNORECASE,
+)
+COMMITMENT_FOLLOWUP_DELIVERABLE_RE = re.compile(
+    r"\b("
+    r"implementar|crear|preparar|verificar|revisar|confirmar|resolver|enviar|"
+    r"entregable|deliverable|fix|hook|script|smoke|evidencia|evidence|"
+    r"implement|create|prepare|verify|review|confirm|resolve|send"
+    r")\b",
+    re.IGNORECASE,
+)
 FOLLOWUP_OR_REMINDER_REF_PATTERN = re.compile(r"\b(?:NF|R)-[A-Z0-9][A-Z0-9-]*\b", re.IGNORECASE)
 IRREVERSIBLE_ACTION_RE = re.compile(
     r"\b(publish\s+stable|publicar\s+stable|promocionar\s+stable|broadcast|enviar\s+a\s+clientes|cobrar|payment|force-push|revocar)\b",
@@ -2310,6 +2334,10 @@ def _has_time_bound_commitment(text: str) -> bool:
     return bool(TIME_BOUND_COMMITMENT_RE.search(str(text or "")))
 
 
+def _has_open_commitment_without_followup_signal(text: str) -> bool:
+    return bool(OPEN_COMMITMENT_FOLLOWUP_RE.search(str(text or "")))
+
+
 def _item_has_active_date(ref: str) -> bool:
     clean_ref = str(ref or "").strip().upper()
     if not clean_ref:
@@ -2323,6 +2351,42 @@ def _item_has_active_date(ref: str) -> bool:
     if str(row.get("status") or "").upper() == "DELETED":
         return False
     return bool(str(row.get("date") or "").strip())
+
+
+def _followup_has_commitment_payload(ref: str) -> bool:
+    clean_ref = str(ref or "").strip().upper()
+    if not clean_ref.startswith("NF-"):
+        return False
+    try:
+        row = get_followup(clean_ref)
+    except Exception:
+        row = None
+    if not row:
+        return False
+    if str(row.get("status") or "").upper() == "DELETED":
+        return False
+    description = str(row.get("description") or "").strip()
+    verification = str(row.get("verification") or "").strip()
+    date = str(row.get("date") or "").strip()
+    if not date or not description or not verification:
+        return False
+    return bool(COMMITMENT_FOLLOWUP_DELIVERABLE_RE.search(description))
+
+
+def _has_complete_followup_for_open_commitment(
+    created_followup_id: str,
+    provided_followup_id: str,
+    *parts: object,
+) -> bool:
+    if _followup_has_commitment_payload(created_followup_id):
+        return True
+    if _followup_has_commitment_payload(provided_followup_id):
+        return True
+    for part in parts:
+        for ref in FOLLOWUP_REF_PATTERN.findall(str(part or "")):
+            if _followup_has_commitment_payload(ref):
+                return True
+    return False
 
 
 def _has_dated_followup_for_time_bound_commitment(
@@ -3828,6 +3892,48 @@ def handle_task_close(
                 severity="warn",
                 evidence="followup_needed=true but no followup_description was supplied.",
                 debts=debts_created,
+            )
+
+    if clean_outcome == "done" and _has_open_commitment_without_followup_signal(closure_text):
+        if not _has_complete_followup_for_open_commitment(
+            created_followup_id,
+            followup_id,
+            followup_description,
+            evidence_refs,
+            outcome_notes,
+            result,
+            summary,
+            verification,
+            clean_evidence,
+            clean_change_summary,
+            clean_change_verify,
+        ):
+            debt = _ensure_open_debt(
+                task["session_id"],
+                task_id,
+                "open_commitment_without_complete_followup",
+                severity="error",
+                evidence=(
+                    "Task close attempted done while leaving a commitment, deferred idea, or security/auth blocker "
+                    f"without a followup carrying date, deliverable, and verification. Text: {closure_text[:240]!r}"
+                ),
+                debts=debts_created,
+            )
+            return json.dumps(
+                {
+                    "ok": False,
+                    "error": "Cannot close as done while an open commitment lacks a complete dated followup.",
+                    "hint": (
+                        "Create or link an NF followup with a concrete date, an actionable deliverable in the description, "
+                        "and verification/evidence criteria, then retry task_close."
+                    ),
+                    "task_id": task_id,
+                    "blocked_by": "open_commitment_followup_gate",
+                    "debt_id": debt.get("id"),
+                    "debt_type": "open_commitment_without_complete_followup",
+                },
+                ensure_ascii=False,
+                indent=2,
             )
 
     if clean_outcome == "done" and _has_time_bound_commitment(closure_text):

@@ -3095,3 +3095,74 @@ def test_task_close_accepts_time_bound_commitment_with_dated_followup():
     assert closed["followup_id"] == "NF-TEST-TIMEBOUND-COMMITMENT-48H"
     row = get_followup("NF-TEST-TIMEBOUND-COMMITMENT-48H")
     assert row["date"] == "2026-06-28"
+
+
+def test_task_close_blocks_open_commitment_without_complete_followup():
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    sid = _register_session("nexo-1666-2666")
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Cerrar turno con compromiso abierto",
+            task_type="execute",
+            area="nexo-ops",
+            plan='["verificar", "cerrar"]',
+            evidence_refs='["logs locales"]',
+            verification_step="confirmar que compromisos quedan trazados",
+        )
+    )
+
+    closed = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="done",
+            evidence="Validación local ejecutada con trazabilidad suficiente para cerrar el turno actual.",
+            summary="Queda pendiente de revisar el bloqueo de seguridad con evidencia antes de continuar.",
+        )
+    )
+
+    assert closed["ok"] is False
+    assert closed["blocked_by"] == "open_commitment_followup_gate"
+    assert closed["debt_type"] == "open_commitment_without_complete_followup"
+
+
+def test_task_close_accepts_open_commitment_with_complete_followup():
+    from db import get_followup
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    sid = _register_session("nexo-1667-2667")
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Cerrar turno con compromiso abierto trazado",
+            task_type="execute",
+            area="nexo-ops",
+            plan='["verificar", "crear seguimiento completo", "cerrar"]',
+            evidence_refs='["logs locales"]',
+            verification_step="confirmar que compromisos quedan trazados",
+        )
+    )
+
+    closed = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="done",
+            evidence="Validación local ejecutada con trazabilidad suficiente para cerrar el turno actual.",
+            summary="Queda pendiente de revisar el bloqueo de seguridad con evidencia antes de continuar.",
+            followup_needed=True,
+            followup_id="NF-TEST-OPEN-COMMITMENT-COMPLETE",
+            followup_description="Verificar el bloqueo de seguridad y preparar el entregable con evidencia.",
+            followup_date="2026-06-28",
+            followup_verification="Registrar causa, evidencia de verificación y decisión de continuidad.",
+            followup_reasoning="Creado por gate de cierre para compromiso abierto sin seguimiento previo.",
+        )
+    )
+
+    assert closed["ok"] is True
+    assert closed["followup_id"] == "NF-TEST-OPEN-COMMITMENT-COMPLETE"
+    row = get_followup("NF-TEST-OPEN-COMMITMENT-COMPLETE")
+    assert row["date"] == "2026-06-28"
+    assert row["verification"]
