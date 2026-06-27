@@ -6,6 +6,7 @@
   "mode": "execute",
   "source_kind": "core",
   "execution_level": "read-only",
+  "trust_score": 80,
   "approval_required": false,
   "tags": ["doctor", "diagnostics", "runtime"],
   "trigger_patterns": ["run doctor", "check runtime health", "diagnose nexo"],
