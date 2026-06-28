@@ -1,11 +1,4 @@
 User-agent: *
-Allow: /
+Disallow: /
 
-Sitemap: https://nexo-brain.com/sitemap.xml
-
-User-agent: GPTBot
-Allow: /
-User-agent: Claude-Web
-Allow: /
-User-agent: PerplexityBot
-Allow: /
+Sitemap: https://nexo-desktop.com/sitemap.xml
