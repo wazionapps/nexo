@@ -291,7 +291,7 @@ def _retire_public_contribution_config(config: dict) -> dict:
     config["active_pr_number"] = None
     config["active_branch"] = ""
     config["cooldown_until"] = ""
-    config["last_result"] = "retired:evolution_removed"
+    config["last_result"] = "retired:support_ticket_channel"
     config["message"] = PUBLIC_CONTRIBUTION_RETIRED_MESSAGE
     return config
 

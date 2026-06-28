@@ -40,9 +40,9 @@ def test_prompt_catalog_dir_exists_and_contains_automation_prompts():
     assert (core_prompts.PROMPTS_DIR / "email-monitor.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "enforcement-classifier-retry.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "enforcement-classifier-strict.md").is_file()
-    assert not (core_prompts.PROMPTS_DIR / "evolution-public-contribution.md").exists()
-    assert not (core_prompts.PROMPTS_DIR / "evolution-public-pr-review.md").exists()
-    assert not (core_prompts.PROMPTS_DIR / "evolution-weekly.md").exists()
+    assert (core_prompts.PROMPTS_DIR / "evolution-public-contribution.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "evolution-public-pr-review.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "evolution-weekly.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "followup-runner.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "followup-runner-operator-attention-context.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "followup-runner-operator-attention-question.md").is_file()
@@ -439,13 +439,45 @@ def test_render_core_prompt_supports_enforcer_and_startup_templates():
     assert "/Users/franciscoc/.nexo/runtime/logs/watchdog-repair-result.log" in watchdog
 
 
-def test_evolution_core_prompt_templates_are_retired():
-    for name in (
+def test_render_core_prompt_supports_evolution_templates():
+    weekly = core_prompts.render_core_prompt(
         "evolution-weekly",
+        learnings_this_week=4,
+        decisions_this_week=2,
+        changes_this_week=3,
+        diaries_this_week=5,
+        evolution_history=7,
+        current_scores_json='{"autonomy": 37}',
+        mode="managed",
+        mode_desc="owner-managed",
+        cycle_number=8,
+        nexo_db="/tmp/nexo.db",
+        week_cutoff_ts="12345",
+        safe_zones="src/, tests/",
+        immutable_files="server.py",
+    )
+    public_contrib = core_prompts.render_core_prompt(
         "evolution-public-contribution",
+        repo_root="/tmp/public-repo",
+        cycle_number=3,
+        queued_section="PRIORITY PUBLIC-PORT QUEUE ITEM",
+    )
+    public_review = core_prompts.render_core_prompt(
         "evolution-public-pr-review",
-    ):
-        assert not (core_prompts.PROMPTS_DIR / f"{name}.md").exists()
+        pr_number=42,
+        author="nexo-bot",
+        url="https://example.com/pr/42",
+        title="fix: runtime drift",
+        body="This closes a drift gap.",
+        rendered_files="- src/update.py",
+        trimmed_diff="diff --git a/x b/x",
+    )
+
+    assert "Current scores: {\"autonomy\": 37}" in weekly
+    assert "Cycle: #3" in public_contrib
+    assert "/tmp/public-repo" in public_contrib
+    assert "Number: #42" in public_review
+    assert "fix: runtime drift" in public_review
 
 
 def test_all_render_core_prompt_calls_point_to_existing_templates():

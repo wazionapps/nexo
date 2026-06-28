@@ -21,12 +21,8 @@ import time
 from pathlib import Path
 
 try:
-    from product_mode import (
-        DESKTOP_EVOLUTION_RETIRED_REASON,
-        DESKTOP_EVOLUTION_SUPPORT_MODE,
-        desktop_product_requested,
-        enforce_desktop_product_contract,
-    )
+    from product_mode import desktop_product_requested, enforce_desktop_product_contract
+    from product_mode import DESKTOP_EVOLUTION_SUPPORT_MODE
 except ModuleNotFoundError as exc:
     if getattr(exc, "name", "") != "product_mode":
         raise
@@ -35,12 +31,8 @@ except ModuleNotFoundError as exc:
         core_path = str(_core_runtime)
         if core_path not in sys.path:
             sys.path.insert(0, core_path)
-    from product_mode import (
-        DESKTOP_EVOLUTION_RETIRED_REASON,
-        DESKTOP_EVOLUTION_SUPPORT_MODE,
-        desktop_product_requested,
-        enforce_desktop_product_contract,
-    )
+    from product_mode import desktop_product_requested, enforce_desktop_product_contract
+    from product_mode import DESKTOP_EVOLUTION_SUPPORT_MODE
 from runtime_home import export_resolved_nexo_home, managed_nexo_home
 
 try:
@@ -1441,7 +1433,6 @@ def _cleanup_retired_runtime_files():
     """Remove retired core files that should not survive updates."""
     retired = [
         paths.core_scripts_dir() / "nexo-day-orchestrator.sh",
-        paths.core_scripts_dir() / "nexo-evolution-run.py",
         paths.core_scripts_dir() / "heartbeat-enforcement.py",
         paths.core_scripts_dir() / "heartbeat-posttool.sh",
         paths.core_scripts_dir() / "heartbeat-user-msg.sh",
@@ -4383,28 +4374,29 @@ def _auto_update_check_locked() -> dict:
     except Exception as e:
         _log(f"File migration runner error: {e}")
 
-    # Legacy cleanup: existing evolution-objective.json files are left as
-    # historical state, but the removed Evolution engine must stay disabled.
+    # Legacy cleanup: keep the objective but migrate old Desktop-disabled
+    # states back to the support-ticket-only Evolution mode.
     try:
         evo_obj_path = paths.brain_dir() / "evolution-objective.json"
         if evo_obj_path.exists():
             raw_objective = json.loads(evo_obj_path.read_text())
             if isinstance(raw_objective, dict):
-                raw_objective["evolution_enabled"] = False
+                raw_objective["evolution_enabled"] = True
                 raw_objective["evolution_mode"] = DESKTOP_EVOLUTION_SUPPORT_MODE
-                raw_objective["disabled_by"] = "desktop_product"
-                raw_objective["disabled_reason"] = DESKTOP_EVOLUTION_RETIRED_REASON
-                raw_objective["support_ticket_mode"] = False
-                raw_objective["removed_at"] = raw_objective.get("removed_at") or time.strftime("%Y-%m-%dT%H:%M:%S")
+                raw_objective["desktop_managed"] = True
+                raw_objective["support_ticket_mode"] = True
+                raw_objective.pop("disabled_by", None)
+                raw_objective.pop("disabled_reason", None)
+                raw_objective.pop("removed_at", None)
                 evo_obj_path.write_text(json.dumps(raw_objective, indent=2, ensure_ascii=False) + "\n")
-                _log("Marked legacy evolution-objective.json as removed")
+                _log("Migrated evolution-objective.json to support-ticket mode")
     except Exception as e:
         _log(f"legacy evolution cleanup error: {e}")
 
     try:
         desktop_contract = enforce_desktop_product_contract(source="auto_update")
         if desktop_contract.get("applied") and desktop_contract.get("changed_objective"):
-            _log("Desktop product contract enforced: legacy Evolution removed")
+            _log("Desktop product contract enforced: Evolution support-ticket mode")
     except Exception as e:
         _log(f"desktop product contract error: {e}")
 

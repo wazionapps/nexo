@@ -4,7 +4,7 @@ NEXO has one public contribution path:
 
 1. **Normal human contribution**
 
-Automated public-core Evolution via GitHub Draft PRs is retired. Desktop-managed installs no longer run Evolution cycles, create branches, push PRs, open peer reviews, or create Evolution support tickets.
+Automated public-core Evolution via GitHub Draft PRs is retired. Desktop-managed installs still run Evolution, but only in support-ticket mode: no branches, pushes, Draft PRs, peer reviews, transcripts, local databases, or raw private evidence leave the machine.
 
 ## Human Contributions
 
@@ -15,18 +15,18 @@ Use the normal GitHub flow when you are contributing manually:
 - include parity/runtime symptoms, not only the final failure
 - prefer concrete artifacts over vague summaries
 
-## Retired Automated Public-Core Evolution
+## Retired Automated GitHub Contribution
 
 Installs can no longer opt into automated public contribution through Draft PRs.
 
 Current rules:
 
 - never create GitHub branches, pushes, Draft PRs, or automated peer reviews from Evolution
-- keep Deep Sleep, Skills, Watchdog, followups, and normal support-ticket reporting active through their own systems
-- keep Evolution disabled/retired by default in Desktop-managed installs
-- redact personal scripts, local runtime data, prompts, logs, URLs, emails, client details, and secrets before any non-Evolution support report is sent
+- keep Deep Sleep, Skills, Watchdog, followups, Evolution, and normal support-ticket reporting active through their own systems
+- keep Evolution enabled by default in Desktop-managed installs with `evolution_mode=support_ticket`
+- redact personal scripts, local runtime data, prompts, logs, URLs, emails, client details, and secrets before any support report is sent
 
-Legacy `draft_prs`, `support_ticket`, or `pending_auth` settings are treated as retired inputs and do not create tickets, branches, or proposals.
+Legacy `draft_prs`, `public_core`, `contributor`, or `pending_auth` settings are normalized to support-ticket mode and do not create GitHub branches or PRs.
 
 ## Best Reports For NEXO
 

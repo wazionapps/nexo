@@ -112,7 +112,7 @@ def test_refresh_public_contribution_state_retires_legacy_paused_state(tmp_path,
     assert refreshed["active_pr_url"] == ""
     assert refreshed["active_pr_number"] is None
     assert refreshed["cooldown_until"] == ""
-    assert refreshed["last_result"] == "retired:evolution_removed"
+    assert refreshed["last_result"] == "retired:support_ticket_channel"
 
 
 def test_refresh_public_contribution_state_retires_legacy_cooldown(tmp_path, monkeypatch):
@@ -176,7 +176,7 @@ def test_refresh_public_contribution_state_does_not_query_auth_when_retiring(tmp
     ready, reason, refreshed_again = public_contribution.can_run_public_contribution(refreshed)
 
     assert refreshed["status"] == "off"
-    assert refreshed["last_result"] == "retired:evolution_removed"
+    assert refreshed["last_result"] == "retired:support_ticket_channel"
     assert ready is False
     assert "retired" in reason
     assert refreshed_again["status"] == "off"

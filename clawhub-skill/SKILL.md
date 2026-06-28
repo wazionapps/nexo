@@ -1,7 +1,7 @@
 ---
 name: nexo-brain
-description: Runtime core for NEXO Desktop. Provides local memory, Deep Sleep, skills, watchdog, and MCP tools for the desktop product.
-version: 7.38.6
+description: Runtime core for NEXO Desktop. Provides local memory, Deep Sleep, Evolution support-ticket mode, skills, watchdog, and MCP tools for the desktop product.
+version: 7.38.7
 metadata:
   openclaw:
     requires:
@@ -24,7 +24,7 @@ metadata:
 
 # NEXO Desktop Runtime Core
 
-This skill installs the runtime core used by NEXO Desktop. It provides local memory, Deep Sleep, skills, watchdog, followups, and MCP tools through the existing compatibility package.
+This skill installs the runtime core used by NEXO Desktop. It provides local memory, Deep Sleep, Evolution support-ticket mode, skills, watchdog, followups, and MCP tools through the existing compatibility package.
 
 ## Setup
 

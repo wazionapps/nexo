@@ -180,9 +180,7 @@ def test_runtime_post_sync_skips_classifier_on_ephemeral_runtime(monkeypatch, tm
 def test_desktop_managed_dependency_repair_requires_python_312_venv():
     text = (Path(__file__).resolve().parents[1] / "src" / "auto_update.py").read_text()
 
-    assert "desktop_product_requested" in text
-    assert "enforce_desktop_product_contract" in text
-    assert "DESKTOP_EVOLUTION_RETIRED_REASON" in text
+    assert "from product_mode import desktop_product_requested, enforce_desktop_product_contract" in text
     assert "def _managed_venv_python_supported(python_bin: Path | str) -> bool:" in text
     assert "return version[:2] == (3, 12)" in text
     assert "def _resolve_managed_venv_base_python() -> str:" in text

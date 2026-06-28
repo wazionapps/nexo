@@ -9,13 +9,15 @@ compatibility only; they are not a separate product line.
 
 ## Current contract
 
-- Version `7.38.6` is the current packaged-runtime line
+- Version `7.38.7` is the current packaged-runtime line
 - Public product: NEXO Desktop
 - Runtime role: local NEXO core bundled with Desktop
-- Active systems: local memory, Deep Sleep, Skills, Watchdog, followups,
-  doctor diagnostics, and MCP tooling
-- Removed system: Evolution background self-improvement loop and its legacy
-  tool surfaces
+- Active systems: local memory, Deep Sleep, Evolution support-ticket mode,
+  Skills, Watchdog, followups, doctor diagnostics, and MCP tooling
+- Evolution mode: enabled by default for Desktop-managed installs; it never
+  opens GitHub branches, pushes, PRs, transcripts, local databases, or raw
+  private evidence, and routes product-improvement requests through sanitized
+  support tickets
 - Distribution: Desktop installers and update manifests are published through
   the NEXO Desktop release channel
 

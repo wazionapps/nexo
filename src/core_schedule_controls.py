@@ -17,7 +17,6 @@ _TOGGLEABLE_AUTOMATIONS = frozenset({
     "morning-agent",
 })
 _EXCLUDED_HELPERS = frozenset({
-    "evolution",
     "prevent-sleep",
     "tcc-approve",
 })
@@ -25,7 +24,9 @@ _NON_EDITABLE_REASONS: dict[str, str] = {
     "catchup": "Runs only at login/wake catch-up; cadence is fixed by product design.",
     "dashboard": "Persistent KeepAlive surface; cadence does not apply.",
 }
-_CLI_ONLY_REASONS: dict[str, str] = {}
+_CLI_ONLY_REASONS: dict[str, str] = {
+    "evolution": "Weekly support-ticket-only improvement cycle; adjust cadence from the CLI when needed.",
+}
 _INTERVAL_BOUNDS: dict[str, dict[str, int]] = {
     "auto-close-sessions": {
         "minimum_interval_seconds": 5 * 60,

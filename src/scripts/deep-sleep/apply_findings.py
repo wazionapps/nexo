@@ -2424,10 +2424,13 @@ def apply_action(action: dict, run_id: str) -> dict:
         log_entry["status"] = "included_in_briefing"
 
     elif action_type == "code_change":
-        # Deep Sleep may identify code-change opportunities, but it must not
-        # execute or queue code changes in a removed background engine.
-        # Persist the proposal as an internal followup for the normal reviewed
-        # engineering workflow instead.
+        # Closes Fase 2 item 5: deep sleep can now hand a concrete code
+        # change to the evolution apply pipeline. We do NOT touch any source
+        # file directly here — that would bypass the sandbox/snapshot/rollback
+        # safety net that lives in nexo-evolution-run.py:execute_auto_proposal.
+        # Instead we persist the proposal to evolution_log with status=accepted
+        # and a proposal_payload, so the next evolution cycle picks it up via
+        # _apply_accepted_proposals (added in Fase 2 item 1, m38).
         result = apply_code_change_action(content, dedupe_key)
         log_entry["status"] = "applied" if result.get("success") else "error"
         log_entry["details"] = result
@@ -2440,19 +2443,25 @@ def apply_action(action: dict, run_id: str) -> dict:
 
 
 def apply_code_change_action(content: dict, dedupe_key: str) -> dict:
-    """Convert a Deep Sleep code-change finding into an internal followup.
+    """Stage a code_change finding into evolution_log for the next cycle.
 
     Required content keys:
-        dimension:  improvement dimension (reliability/safety/etc)
+        dimension:  evolution dimension (reliability/safety/etc)
         action:     short human-readable description of what to do
         reasoning:  why deep sleep proposed this change
         changes:    list of {file, operation, search?, content} entries
+                    matching nexo-evolution-run.py:apply_change semantics
 
     Optional:
         scope: 'local' | 'public' (default 'local')
         classification: 'propose' | 'auto' (default 'propose')
 
-    Returns: {success: bool, followup_id: str|None, reason: str|None}
+    Idempotent: if a row with the same dedupe_key already exists in
+    evolution_log (matched against proposal_payload extras.dedupe_key), the
+    function returns success without inserting a duplicate.
+
+    Returns: {success: bool, evolution_log_id: int|None, reason: str|None,
+              skipped_duplicate: bool}
     """
     if not isinstance(content, dict):
         return {"success": False, "reason": "content must be a dict"}
@@ -2490,46 +2499,60 @@ def apply_code_change_action(content: dict, dedupe_key: str) -> dict:
             "dedupe_key": dedupe_key,
         },
     }
-    changed_files = [
-        str(change.get("file") or "").strip()
-        for change in changes
-        if str(change.get("file") or "").strip()
-    ]
-    payload_json = json.dumps(payload, ensure_ascii=False, indent=2)
-    description = f"Review Deep Sleep code-change proposal: {action_text}"
-    reasoning_note = "\n".join(
-        [
-            "Deep Sleep detected a code-change opportunity. Evolution has been removed, so this proposal is stored for normal reviewed implementation instead of background execution.",
-            f"Dimension: {dimension}",
-            f"Scope: {scope}",
-            f"Classification: {classification}",
-            f"Files: {', '.join(changed_files[:8]) if changed_files else 'not supplied'}",
-            f"Reasoning: {reasoning or 'not supplied'}",
-            "Payload:",
-            payload_json[:6000],
-        ]
-    )
-    result = create_followup(
-        description=description,
-        date="",
-        reasoning_note=reasoning_note,
-        verification="Review the Deep Sleep payload, implement it through the normal code workflow with tests, or close it as invalid.",
-        priority=_normalize_followup_priority(content.get("priority", ""), content.get("impact", "")),
-        internal=1,
-        owner="agent",
-    )
-    if result.get("success"):
+    payload_json = json.dumps(payload, ensure_ascii=False)
+
+    try:
+        conn = sqlite3.connect(str(NEXO_DB), timeout=10)
+    except Exception as e:
+        return {"success": False, "reason": f"cannot open nexo.db: {e}"}
+
+    try:
+        # Idempotency: skip if any prior row already staged this dedupe_key.
+        existing = conn.execute(
+            "SELECT id FROM evolution_log "
+            "WHERE proposal_payload IS NOT NULL "
+            "  AND proposal_payload LIKE ? "
+            "ORDER BY id DESC LIMIT 1",
+            (f'%"dedupe_key": "{dedupe_key}"%',),
+        ).fetchone()
+        if existing:
+            return {
+                "success": True,
+                "skipped_duplicate": True,
+                "evolution_log_id": int(existing[0]),
+                "reason": "already staged in evolution_log",
+            }
+
+        cur = conn.execute(
+            "INSERT INTO evolution_log "
+            "(cycle_number, dimension, proposal, classification, reasoning, status, proposal_payload) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (
+                0,  # cycle_number 0 = staged from outside the regular cycle
+                dimension,
+                action_text,
+                classification,
+                reasoning or "deep sleep proposed code change",
+                "accepted",
+                payload_json,
+            ),
+        )
+        try:
+            conn.commit()
+        except Exception:
+            pass
         return {
             "success": True,
-            "followup_id": result.get("id"),
-            "outcome": "code_change_followup_created",
-            "evolution_log_id": None,
+            "skipped_duplicate": False,
+            "evolution_log_id": int(cur.lastrowid),
         }
-    return {
-        "success": False,
-        "reason": result.get("error") or "followup create failed",
-        "evolution_log_id": None,
-    }
+    except Exception as e:
+        return {"success": False, "reason": f"insert failed: {e}"}
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 
 def main():

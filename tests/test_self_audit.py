@@ -463,19 +463,19 @@ def test_check_learning_contradictions_supersedes_older_rule_inline(self_audit_e
         )"""
     )
     conn.execute(
-        """CREATE TABLE followups (
-            id TEXT PRIMARY KEY,
-            date TEXT,
-            description TEXT,
-            verification TEXT,
-            status TEXT,
-            recurrence TEXT,
-            created_at REAL,
-            updated_at REAL,
-            reasoning TEXT,
-            priority TEXT,
-            internal INTEGER,
-            owner TEXT
+        """CREATE TABLE evolution_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at TEXT DEFAULT (datetime('now')),
+            cycle_number INTEGER NOT NULL,
+            dimension TEXT NOT NULL,
+            proposal TEXT NOT NULL,
+            classification TEXT NOT NULL DEFAULT 'auto',
+            status TEXT DEFAULT 'pending',
+            files_changed TEXT,
+            snapshot_ref TEXT,
+            test_result TEXT,
+            impact INTEGER DEFAULT 0,
+            reasoning TEXT NOT NULL
         )"""
     )
     now_ts = datetime(2026, 4, 6, 8, 0, 0).timestamp()
@@ -499,14 +499,15 @@ def test_check_learning_contradictions_supersedes_older_rule_inline(self_audit_e
     conn = sqlite3.connect(str(self_audit_env / "data" / "nexo.db"))
     statuses = dict(conn.execute("SELECT id, status FROM learnings").fetchall())
     queued = conn.execute(
-        "SELECT description, status, reasoning FROM followups ORDER BY created_at DESC LIMIT 1"
+        "SELECT classification, status, files_changed FROM evolution_log ORDER BY id DESC LIMIT 1"
     ).fetchone()
     conn.close()
     assert statuses[1] == "superseded"
     assert statuses[2] == "active"
-    assert queued[0].startswith("Review product-core improvement:")
-    assert queued[1] == "PENDING"
-    assert "/repo/src/plugins/protocol.py" in queued[2]
+    assert queued[0] == "public_port_queue"
+    assert queued[1] == "pending_public_port"
+    assert "/repo/src/plugins/protocol.py" not in queued[2]
+    assert "src/plugins/protocol.py" in queued[2]
 
 
 def test_check_error_memory_loop_creates_prevention_learning_inline(self_audit_env):
@@ -542,19 +543,19 @@ def test_check_error_memory_loop_creates_prevention_learning_inline(self_audit_e
         )"""
     )
     conn.execute(
-        """CREATE TABLE followups (
-            id TEXT PRIMARY KEY,
-            date TEXT,
-            description TEXT,
-            verification TEXT,
-            status TEXT,
-            recurrence TEXT,
-            created_at REAL,
-            updated_at REAL,
-            reasoning TEXT,
-            priority TEXT,
-            internal INTEGER,
-            owner TEXT
+        """CREATE TABLE evolution_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at TEXT DEFAULT (datetime('now')),
+            cycle_number INTEGER NOT NULL,
+            dimension TEXT NOT NULL,
+            proposal TEXT NOT NULL,
+            classification TEXT NOT NULL DEFAULT 'auto',
+            status TEXT DEFAULT 'pending',
+            files_changed TEXT,
+            snapshot_ref TEXT,
+            test_result TEXT,
+            impact INTEGER DEFAULT 0,
+            reasoning TEXT NOT NULL
         )"""
     )
     conn.execute(
@@ -582,7 +583,7 @@ def test_check_error_memory_loop_creates_prevention_learning_inline(self_audit_e
         "SELECT COUNT(*) FROM protocol_tasks WHERE learning_id = (SELECT MAX(id) FROM learnings)"
     ).fetchone()[0]
     queued = conn.execute(
-        "SELECT description, status, reasoning FROM followups ORDER BY created_at DESC LIMIT 1"
+        "SELECT classification, status, files_changed FROM evolution_log ORDER BY id DESC LIMIT 1"
     ).fetchone()
     conn.close()
     assert learning[0] == "nexo"
@@ -590,8 +591,8 @@ def test_check_error_memory_loop_creates_prevention_learning_inline(self_audit_e
     assert learning[2] == "/repo/src/plugins/workflow.py"
     assert learning[3] == "high"
     assert linked_tasks == 2
-    assert queued[0].startswith("Review product-core improvement:")
-    assert queued[1] == "PENDING"
+    assert queued[0] == "public_port_queue"
+    assert queued[1] == "pending_public_port"
     assert "src/plugins/workflow.py" in queued[2]
 
 
@@ -1390,7 +1391,7 @@ def test_run_mechanical_autofixes_sanitizes_registry_and_refreshes_snapshots(sel
     module = _load_self_audit_module()
     module.findings[:] = [
         {"severity": "ERROR", "area": "watchdog", "msg": "mutable files still protected: CLAUDE.md, AGENTS.md"},
-        {"severity": "WARN", "area": "snapshots", "msg": "golden snapshot drift: __init__.py"},
+        {"severity": "WARN", "area": "snapshots", "msg": "golden snapshot drift: __init__.py, evolution_cycle.py"},
     ]
 
     scripts_dir = self_audit_env / "scripts"
@@ -1414,7 +1415,7 @@ def test_run_mechanical_autofixes_sanitizes_registry_and_refreshes_snapshots(sel
     assert not any(item["area"] == "watchdog" and "mutable files still protected" in item["msg"] for item in module.findings)
     assert not any(item["area"] == "snapshots" and "golden snapshot drift" in item["msg"] for item in module.findings)
     assert (
-        self_audit_env / "runtime" / "snapshots" / "golden" / "files" / "claude" / "db" / "__init__.py"
+        self_audit_env / "runtime" / "snapshots" / "golden" / "files" / "claude" / "evolution_cycle.py"
     ).is_file()
 
 
@@ -1501,7 +1502,7 @@ def test_run_mechanical_autofixes_reports_protocol_debt_drain(self_audit_env, mo
     )
 
 
-def test_check_evolution_health_ignores_desktop_product_retirement(self_audit_env):
+def test_check_evolution_health_flags_legacy_desktop_product_disable(self_audit_env):
     module = _load_self_audit_module()
     module.findings.clear()
 
@@ -1516,7 +1517,13 @@ def test_check_evolution_health_ignores_desktop_product_retirement(self_audit_en
 
     module.check_evolution_health()
 
-    assert not any(
+    assert any(
         item["area"] == "evolution"
+        and item["severity"] == "WARN"
+        and "legacy Desktop disable state" in item["msg"]
+        for item in module.findings
+    )
+    assert not any(
+        item["area"] == "evolution" and item["severity"] == "ERROR"
         for item in module.findings
     )

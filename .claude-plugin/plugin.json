@@ -1,7 +1,7 @@
 {
   "name": "nexo-brain",
-  "version": "7.38.6",
-  "description": "Local NEXO runtime core for NEXO Desktop: memory, Deep Sleep, doctor diagnostics, personal scripts, recovery-aware jobs, startup preflight, and optional dashboard/power helper.",
+  "version": "7.38.7",
+  "description": "Local NEXO runtime core for NEXO Desktop: memory, Deep Sleep, Evolution support-ticket mode, doctor diagnostics, personal scripts, recovery-aware jobs, startup preflight, and optional dashboard/power helper.",
   "author": {
     "name": "NEXO Cognitive S.L.",
     "email": "info@nexo-desktop.com",

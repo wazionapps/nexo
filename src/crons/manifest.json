@@ -146,6 +146,21 @@
       "run_on_wake": true
     },
     {
+      "id": "evolution",
+      "script": "scripts/nexo-evolution-run.py",
+      "schedule_strategy": "machine_weekly_spread",
+      "schedule": {"hour": 5, "minute": 0, "weekday": 0},
+      "description": "Weekly self-improvement cycle — propose and evaluate changes",
+      "core": true,
+      "optional": "automation",
+      "recovery_policy": "catchup",
+      "idempotent": true,
+      "max_catchup_age": 1209600,
+      "stuck_after_seconds": 14400,
+      "run_on_boot": true,
+      "run_on_wake": true
+    },
+    {
       "id": "followup-hygiene",
       "script": "scripts/nexo-followup-hygiene.py",
       "schedule": {"hour": 5, "minute": 0, "weekday": 0},

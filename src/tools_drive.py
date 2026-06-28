@@ -168,8 +168,8 @@ _AREA_CUES = {
         "nexo", "nexo brain", "desktop", "guardian", "mcp", "cognitive",
         "protocol", "enforcer", "shared brain",
     ),
-    "canaririural": (
-        "canarirural", "canari rural", "booking", "reserva", "hospedaje",
+    "hospitality": (
+        "hospitality", "booking", "reservation", "reserva", "hospedaje",
         "alojamiento", "guest", "property", "villa", "hotel",
     ),
     "seo": (
@@ -188,7 +188,7 @@ _AREA_LOCAL_LABELS = (
     ("Meta Ads campaigns for Facebook and Instagram, pixel, CAPI, creatives", "meta-ads"),
     ("WhatsApp automation and Wazion product operations", "wazion"),
     ("NEXO Brain, Desktop, Guardian, protocol, or MCP runtime work", "nexo"),
-    ("Hospitality reservations, lodging, villas, or Canarirural operations", "canaririural"),
+    ("Hospitality reservations, lodging, villas, or hotel operations", "hospitality"),
     ("SEO, Search Console, indexing, ranking, or organic search", "seo"),
     ("Email inbox, SMTP, IMAP, mailbox delivery, replies, or sender identity", "email"),
     ("None of the listed business areas", "none"),
@@ -479,7 +479,7 @@ def _legacy_keyword_area(text: str) -> str:
         "meta-ads": ["meta ads", "facebook", "instagram", "pixel", "capi"],
         "wazion": ["wazion", "whatsapp", "wa ", "baileys"],
         "nexo": ["nexo", "brain", "mcp", "cognitive"],
-        "canaririural": ["canarirural", "canari", "reserva", "hospedaje", "alojamiento", "propietario"],
+        "hospitality": ["hospitality", "booking", "reservation", "reserva", "hospedaje", "alojamiento", "propietario"],
         "seo": ["seo", "search console", "indexación", "ranking"],
         "email": ["email", "correo", "inbox", "smtp"],
     }

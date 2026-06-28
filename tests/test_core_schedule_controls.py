@@ -25,16 +25,19 @@ def test_list_core_schedules_excludes_toggleable_automations_and_helpers(tmp_pat
         {"id": "email-monitor", "script": "scripts/nexo-email-monitor.py", "interval_seconds": 60, "core": True},
         {"id": "prevent-sleep", "script": "scripts/nexo-prevent-sleep.sh", "keep_alive": True, "core": True},
         {"id": "dashboard", "script": "scripts/nexo-dashboard.sh", "keep_alive": True, "core": True},
+        {"id": "evolution", "script": "scripts/nexo-evolution-run.py", "schedule": {"hour": 5, "minute": 0, "weekday": 0}, "core": True},
     ])
     monkeypatch.setenv("NEXO_HOME", str(home))
 
     rows = core_schedule_controls.list_core_schedules()
     names = [row["name"] for row in rows]
 
-    assert names == ["watchdog", "dashboard"]
+    assert names == ["watchdog", "dashboard", "evolution"]
     assert rows[0]["desktop_editable"] is True
     assert rows[1]["desktop_editable"] is False
     assert rows[1]["cli_editable"] is False
+    assert rows[2]["desktop_editable"] is False
+    assert rows[2]["cli_editable"] is True
 
 
 def test_set_core_schedule_clamps_interval_and_persists_override(tmp_path, monkeypatch):

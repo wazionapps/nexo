@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.38.7] - 2026-06-28
+
+### Fixed - Desktop Evolution support-ticket mode
+
+- **Desktop-managed Evolution is active by default again in support-ticket mode.** Existing installs that were migrated to `evolution_enabled=false` now return to `evolution_enabled=true`, `evolution_mode=support_ticket`, and `support_ticket_mode=true`.
+- **Evolution no longer uses the retired GitHub contribution path.** The weekly runner, MCP status tools, cron manifest, LaunchAgent template, and runtime preflight are restored, but public branches, pushes, Draft PRs, transcripts, local databases, and raw private evidence are not sent.
+- **Evolution support tickets remain privacy-scrubbed.** Product-improvement proposals route through sanitized support tickets that redact paths, URLs, emails, bootstrap filenames, tokens, secret-looking values, and operator/client-specific evidence before leaving the local runtime.
+
 ## [7.38.6] - 2026-06-28
 
 ### Changed - Desktop runtime public release alignment

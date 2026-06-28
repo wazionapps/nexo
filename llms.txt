@@ -1,6 +1,6 @@
 # NEXO runtime core
 
-This repository contains the local runtime core that powers NEXO Desktop (v7.38.6).
+This repository contains the local runtime core that powers NEXO Desktop (v7.38.7).
 
 NEXO Desktop is the public product, installer, update channel, onboarding
 surface, settings UI, and support path. The local NEXO runtime provides memory,
@@ -18,14 +18,16 @@ compatibility. They are not a separate product line.
 
 ## Runtime Contract
 
-v7.38.6: Desktop runtime public release alignment. Public metadata, ClawHub, OpenClaw, and managed MCP release locks are aligned with NEXO Desktop while compatibility package names remain in place.
+v7.38.7: Desktop runtime public release alignment plus Evolution support-ticket mode. Public metadata, ClawHub, OpenClaw, and managed MCP release locks are aligned with NEXO Desktop while compatibility package names remain in place.
 
 - Public product: NEXO Desktop
 - Runtime role: local NEXO core bundled with Desktop
-- Active systems: local memory, Deep Sleep, Skills, Watchdog, followups,
-  diagnostics, and MCP tooling
-- Removed system: Evolution background self-improvement loop and its legacy
-  tool surfaces
+- Active systems: local memory, Deep Sleep, Evolution support-ticket mode,
+  Skills, Watchdog, followups, diagnostics, and MCP tooling
+- Evolution mode: enabled by default for Desktop-managed installs; it never
+  opens GitHub branches, pushes, PRs, transcripts, local databases, or raw
+  private evidence, and routes product-improvement requests through sanitized
+  support tickets
 
 For product information, billing, support, and installers, use
 https://nexo-desktop.com/.

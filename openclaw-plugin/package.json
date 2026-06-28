@@ -1,7 +1,7 @@
 {
   "name": "@wazionapps/openclaw-memory-nexo-brain",
-  "version": "7.38.6",
-  "description": "OpenClaw memory plugin powered by the NEXO Desktop runtime core: local memory, Deep Sleep, trust scoring, and guarded continuity.",
+  "version": "7.38.7",
+  "description": "OpenClaw memory plugin powered by the NEXO Desktop runtime core: local memory, Deep Sleep, Evolution support-ticket mode, trust scoring, and guarded continuity.",
   "type": "module",
   "main": "dist/index.js",
   "exports": "./dist/index.js",

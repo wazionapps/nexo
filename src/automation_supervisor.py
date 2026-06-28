@@ -388,30 +388,30 @@ def classify_evolution_policy(
                 break
     if not evolution_entry:
         return EvolutionPolicyClassification(
-            status="retired",
-            severity="OK",
-            reason="Evolution cron is retired; no LaunchAgent is required",
+            status="missing",
+            severity="P1",
+            reason="Evolution is enabled by product policy but missing from the cron manifest",
         )
     label = str(evolution_entry.get("launchagent_label") or "com.nexo.evolution")
     if launchagent_labels is None:
         return EvolutionPolicyClassification(
-            status="legacy_declared_inventory_unknown",
+            status="unknown",
             severity="P2",
-            reason="Legacy Evolution cron is declared, but LaunchAgent inventory was not supplied",
+            reason="Evolution is declared, but LaunchAgent inventory was not supplied",
             launchagent_label=label,
         )
     labels = {str(item) for item in launchagent_labels}
     if label in labels:
         return EvolutionPolicyClassification(
-            status="legacy_loaded",
-            severity="P1",
-            reason="Legacy Evolution cron and LaunchAgent are still loaded; update should retire them",
+            status="enabled_and_loaded",
+            severity="OK",
+            reason="Evolution is declared and loaded in the supplied inventory",
             launchagent_label=label,
         )
     return EvolutionPolicyClassification(
-        status="legacy_declared_not_loaded",
-        severity="P2",
-        reason="Legacy Evolution cron remains in the manifest but is not loaded",
+        status="enabled_but_not_loaded",
+        severity="P1",
+        reason="Evolution is declared but absent from the supplied inventory",
         launchagent_label=label,
     )
 

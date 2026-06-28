@@ -74,6 +74,7 @@ def test_long_running_scripts_do_not_redefine_claude_resolution():
         root / "nexo-synthesis.py",
         root / "nexo-daily-self-audit.py",
         root / "nexo-postmortem-consolidator.py",
+        root / "nexo-evolution-run.py",
     ]
     for target in targets:
         text = target.read_text(encoding="utf-8")

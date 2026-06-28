@@ -1555,7 +1555,7 @@ class HeadlessEnforcer:
             if "/.nexo/runtime/" in posix:
                 matches.append(path)
                 continue
-            if "vicshop" in posix or "canarirural" in posix:
+            if any(marker in posix for marker in ("/public_html/", "/htdocs/", "/wwwroot/")):
                 matches.append(path)
                 continue
             if "/nexo-desktop/" in posix and (

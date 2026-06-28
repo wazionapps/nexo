@@ -565,11 +565,11 @@ def test_write_morning_briefing_includes_top_impact_and_queue_changes(monkeypatc
     assert "+12.5 -> 64.0" in briefing
 
 
-# ── Fase 2 item 5: code_change action creates reviewed followup ──────────
+# ── Fase 2 item 5: code_change action stages into evolution_log ──────────
 
 
 def _seed_evolution_log_table(db_path: Path) -> None:
-    """Create legacy evolution_log plus followups schema for compatibility tests."""
+    """Create a minimal post-m38 evolution_log schema for the apply tests."""
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(db_path))
     conn.execute(
@@ -585,22 +585,11 @@ def _seed_evolution_log_table(db_path: Path) -> None:
         "impact INTEGER DEFAULT 0, reasoning TEXT NOT NULL, "
         "proposal_payload TEXT DEFAULT NULL)"
     )
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS followups ("
-        "id TEXT PRIMARY KEY, description TEXT, date TEXT, status TEXT, "
-        "verification TEXT, recurrence TEXT, created_at REAL, updated_at REAL, "
-        "reasoning TEXT, priority TEXT, internal INTEGER, owner TEXT)"
-    )
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS item_history ("
-        "id INTEGER PRIMARY KEY AUTOINCREMENT, item_type TEXT, item_id TEXT, "
-        "event_type TEXT, note TEXT, actor TEXT, metadata TEXT, created_at REAL)"
-    )
     conn.commit()
     conn.close()
 
 
-def test_apply_code_change_action_creates_internal_followup(monkeypatch, tmp_path):
+def test_apply_code_change_action_stages_into_evolution_log(monkeypatch, tmp_path):
     apply_mod = _load_apply_module(monkeypatch, tmp_path)
     db_path = Path(os.environ["NEXO_DB"])
     _seed_evolution_log_table(db_path)
@@ -622,27 +611,26 @@ def test_apply_code_change_action_creates_internal_followup(monkeypatch, tmp_pat
     result = apply_mod.apply_code_change_action(content, dedupe_key="ds-2026-04-11-api-retry")
 
     assert result["success"] is True
-    assert result["evolution_log_id"] is None
-    assert result["followup_id"].startswith("NF-DS-")
+    assert result.get("skipped_duplicate") is False
+    assert result["evolution_log_id"]
 
     conn = sqlite3.connect(str(db_path))
     row = conn.execute(
-        "SELECT description, status, verification, reasoning, internal, owner "
-        "FROM followups WHERE id = ?",
-        (result["followup_id"],),
+        "SELECT dimension, proposal, classification, status, proposal_payload "
+        "FROM evolution_log WHERE id = ?",
+        (result["evolution_log_id"],),
     ).fetchone()
-    evolution_count = conn.execute("SELECT COUNT(*) FROM evolution_log").fetchone()[0]
     conn.close()
 
     assert row is not None
-    assert row[0] == "Review Deep Sleep code-change proposal: Add retry to flaky API call"
-    assert row[1] == "PENDING"
-    assert "normal code workflow" in row[2]
-    assert "/tmp/repo/src/api.py" in row[3]
-    assert "ds-2026-04-11-api-retry" in row[3]
-    assert row[4] == 1
-    assert row[5] == "agent"
-    assert evolution_count == 0
+    assert row[0] == "reliability"
+    assert row[1] == "Add retry to flaky API call"
+    assert row[2] == "propose"
+    assert row[3] == "accepted"
+    payload = json.loads(row[4])
+    assert payload["changes"][0]["file"] == "/tmp/repo/src/api.py"
+    assert payload["extras"]["source"] == "deep_sleep"
+    assert payload["extras"]["dedupe_key"] == "ds-2026-04-11-api-retry"
 
 
 def test_apply_code_change_action_is_idempotent_by_dedupe_key(monkeypatch, tmp_path):
@@ -667,17 +655,15 @@ def test_apply_code_change_action_is_idempotent_by_dedupe_key(monkeypatch, tmp_p
     second = apply_mod.apply_code_change_action(content, dedupe_key="ds-quote-shell")
 
     assert first["success"] is True
+    assert first["skipped_duplicate"] is False
     assert second["success"] is True
-    assert second["outcome"] == "code_change_followup_created"
-    assert second["followup_id"] == first["followup_id"]
-    assert second["evolution_log_id"] is None
+    assert second["skipped_duplicate"] is True
+    assert second["evolution_log_id"] == first["evolution_log_id"]
 
     conn = sqlite3.connect(str(db_path))
-    count = conn.execute("SELECT COUNT(*) FROM followups").fetchone()[0]
-    evolution_count = conn.execute("SELECT COUNT(*) FROM evolution_log").fetchone()[0]
+    count = conn.execute("SELECT COUNT(*) FROM evolution_log").fetchone()[0]
     conn.close()
     assert count == 1
-    assert evolution_count == 0
 
 
 def test_apply_code_change_action_validates_required_fields(monkeypatch, tmp_path):
@@ -735,8 +721,7 @@ def test_apply_action_dispatches_code_change(monkeypatch, tmp_path):
     assert log_entry["status"] == "applied"
     assert log_entry["action_type"] == "code_change"
     assert log_entry["details"]["success"] is True
-    assert log_entry["details"]["followup_id"].startswith("NF-DS-")
-    assert log_entry["details"]["evolution_log_id"] is None
+    assert log_entry["details"]["evolution_log_id"]
 
 
 def test_apply_action_skips_code_change_when_action_class_not_auto_apply(monkeypatch, tmp_path):
