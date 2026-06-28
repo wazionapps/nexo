@@ -164,7 +164,10 @@ def test_sync_claude_code_preserves_existing_settings(tmp_path):
     bootstrap_text = bootstrap_path.read_text()
     assert "******CORE******" in bootstrap_text
     assert "******USER******" in bootstrap_text
-    assert "Evolution" in bootstrap_text
+    assert "Deep Sleep" in bootstrap_text
+    assert "Skills" in bootstrap_text
+    assert "Watchdog" in bootstrap_text
+    assert "followup" in bootstrap_text
 
 
 def test_resolve_operator_name_falls_back_to_neutral_default(tmp_path):

@@ -180,7 +180,7 @@ def _surface_version_markers(version: str) -> list[tuple[str, list[str]]]:
         ),
         (
             "sitemap.xml",
-            [f"https://nexo-brain.com/blog/nexo-{version_slug}/", "<loc>https://nexo-brain.com/features/</loc>"],
+            ["<loc>https://nexo-desktop.com/</loc>", "<loc>https://nexo-desktop.com/downloads/</loc>"],
         ),
     ]
 

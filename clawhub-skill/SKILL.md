@@ -1,14 +1,14 @@
 ---
 name: nexo-brain
-description: Cognitive memory system for AI agents — Atkinson-Shiffrin memory model, semantic RAG, trust scoring, and metacognitive error prevention. Gives your agent persistent memory that learns, forgets, and adapts.
-version: 7.38.1
+description: Runtime core for NEXO Desktop. Provides local memory, Deep Sleep, skills, watchdog, and MCP tools for the desktop product.
+version: 7.38.6
 metadata:
   openclaw:
     requires:
       bins:
         - python3
-    emoji: "🧠"
-    homepage: https://github.com/wazionapps/nexo
+    emoji: "N"
+    homepage: https://nexo-desktop.com
     os:
       - darwin
       - linux
@@ -19,24 +19,24 @@ metadata:
         bins:
           - nexo
           - nexo-brain
-        label: Install NEXO Brain (npm)
+        label: Install NEXO Desktop runtime core (npm)
 ---
 
-# NEXO Brain — Cognitive Memory for Your Agent
+# NEXO Desktop Runtime Core
 
-NEXO Brain gives your agent persistent memory modeled after human cognition. It remembers across sessions, learns from mistakes, naturally forgets what's irrelevant, and builds a trust-based relationship with you.
+This skill installs the runtime core used by NEXO Desktop. It provides local memory, Deep Sleep, skills, watchdog, followups, and MCP tools through the existing compatibility package.
 
 ## Setup
 
-If your OpenClaw client shows an install action for this skill, use that first. It installs the `nexo-brain` package via your configured Node package manager.
+If your OpenClaw client shows an install action for this skill, use that first. It installs the compatibility package used by the NEXO Desktop runtime via your configured Node package manager.
 
-If you are setting it up manually, install the cognitive engine:
+If you are setting it up manually, install the runtime core:
 
 ```bash
 npx nexo-brain
 ```
 
-After NEXO Brain is installed, add the MCP server to your OpenClaw config (`~/.openclaw/openclaw.json`):
+After the runtime is installed, add the MCP server to your OpenClaw config (`~/.openclaw/openclaw.json`):
 
 ```json
 {
@@ -58,26 +58,26 @@ Restart the gateway: `openclaw gateway restart`
 
 ## What You Get
 
-Key MCP capabilities include:
+Key runtime capabilities include:
 
-- **Cognitive Memory** — RAG-powered semantic search, trust scoring, sentiment detection, cognitive dissonance resolution
-- **Guard System** — Checks "have I made this mistake before?" before every code change
-- **Episodic Memory** — Change logs, decision logs with reasoning, session diaries for continuity
-- **Learnings** — Error patterns and prevention rules, searchable by category
-- **Session Management** — Startup, heartbeat, multi-session coordination
-- **Reminders & Followups** — Track user tasks and system verification tasks separately
-- **Entities & Preferences** — Remember people, services, URLs, and observed user preferences
-- **Backup & Evolution** — SQLite backup with retention, self-improvement proposals
+- **Local Memory** - semantic recall, trust scoring, sentiment detection, and continuity
+- **Guard System** - checks past mistakes before code changes
+- **Deep Sleep** - overnight consolidation, cleanup, and memory maintenance
+- **Learnings** - error patterns and prevention rules, searchable by category
+- **Session Management** - startup, heartbeat, and multi-session coordination
+- **Reminders & Followups** - tracks user tasks and system verification tasks separately
+- **Entities & Preferences** - remembers people, services, URLs, and observed user preferences
+- **Watchdog** - local reliability checks and recovery signals
 
 ## How Memory Works
 
-NEXO implements the Atkinson-Shiffrin memory model (1968):
+NEXO keeps local working memory and long-term memory on device:
 
-1. **Sensory Register** — Raw capture, 48h retention
-2. **Short-Term Memory** — 7-day half-life, promoted if used frequently
-3. **Long-Term Memory** — 60-day half-life, semantic search by meaning
+1. **Recent context** - short-lived session and task state
+2. **Working memory** - active preferences, entities, and decisions
+3. **Long-term memory** - semantic search by meaning with retention controls
 
-Memories naturally decay via Ebbinghaus forgetting curves. Accessing a memory reinforces it. Automated "sleep cycles" consolidate, prune, and merge memories.
+Deep Sleep consolidates, prunes, and merges memory so the runtime stays useful without sending private examples to public services.
 
 ## Key Tools
 
@@ -93,7 +93,7 @@ Memories naturally decay via Ebbinghaus forgetting curves. Accessing a memory re
 
 ## Privacy
 
-Everything stays local. Two SQLite databases in `~/.nexo/`. No telemetry, no cloud APIs. Vector search runs on CPU via fastembed.
+Everything stays local by default in `~/.nexo/`. Support and improvement tickets are anonymized: personal names, client data, examples, and private content are not sent.
 
 ## More Info
 

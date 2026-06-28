@@ -1,5 +1,5 @@
 /**
- * Tool definitions for the NEXO Brain OpenClaw memory plugin.
+ * Tool definitions for the NEXO Desktop runtime OpenClaw memory plugin.
  *
  * Exposes cognitive memory tools as native OpenClaw tools via TypeBox schemas.
  * Each tool maps to a NEXO MCP tool via the MCP bridge.

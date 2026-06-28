@@ -82,7 +82,9 @@ test("memory prompt section teaches recall and guard usage", () => {
   assert.match(body, /memory_recall/);
   assert.match(body, /memory_guard/);
   assert.match(body, /memory_store/);
-  assert.match(body, /Atkinson-Shiffrin/i);
+  assert.match(body, /NEXO Desktop Runtime Memory/i);
+  assert.match(body, /Deep Sleep/i);
+  assert.doesNotMatch(body, /NEXO Brain/i);
 });
 
 test("packaged manifest stays aligned with plugin entry", () => {

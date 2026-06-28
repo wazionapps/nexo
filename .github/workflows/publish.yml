@@ -150,10 +150,10 @@ jobs:
           publish_status=0
           npx clawhub@latest publish ./clawhub-skill \
             --slug nexo-brain \
-            --name "NEXO Brain" \
+            --name "NEXO Desktop Runtime" \
             --version ${GITHUB_REF_NAME#v} \
             --tags latest \
-            --changelog "Release ${GITHUB_REF_NAME}" \
+            --changelog "Release ${GITHUB_REF_NAME} - NEXO Desktop runtime core" \
             --no-input 2>&1 | tee "$publish_log" || publish_status=$?
           if [ "$publish_status" -ne 0 ]; then
             if grep -Fq "Version already exists" "$publish_log"; then

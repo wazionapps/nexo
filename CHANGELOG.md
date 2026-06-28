@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.38.6] - 2026-06-28
+
+### Changed - Desktop runtime public release alignment
+
+- **Public runtime package metadata now points to NEXO Desktop.** The compatibility package still uses the existing `nexo-brain` package and binary names so current installers and updaters keep working, but the published description, homepage, ClawHub skill, and OpenClaw plugin copy now frame it as the NEXO Desktop runtime core.
+- **Managed MCP provider locks are current again.** The release lock now pins `open-computer-use` and `desktop-commander` to the latest reviewed npm versions so the publish workflow can pass its pre-publish gate.
+- **The OpenClaw and ClawHub surfaces keep the privacy and Deep Sleep wording aligned with Desktop.** They describe local memory, Deep Sleep, Watchdog, support-ticket privacy, and runtime continuity without presenting the runtime core as a separate public product.
+
 ## [7.38.4] - 2026-06-27
 
 ### Added - Release closeout guardrails

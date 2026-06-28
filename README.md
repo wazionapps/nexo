@@ -9,6 +9,7 @@ compatibility only; they are not a separate product line.
 
 ## Current contract
 
+- Version `7.38.6` is the current packaged-runtime line
 - Public product: NEXO Desktop
 - Runtime role: local NEXO core bundled with Desktop
 - Active systems: local memory, Deep Sleep, Skills, Watchdog, followups,
@@ -20,3 +21,13 @@ compatibility only; they are not a separate product line.
 
 Use [nexo-desktop.com](https://nexo-desktop.com) for downloads, billing,
 support, and product information.
+
+## Client parity
+
+Release changes that touch bootstrap, session handling, Deep Sleep, client
+sync, or shared runtime claims must also keep `docs/client-parity-checklist.md`
+current.
+
+- Managed via bootstrap + Codex config `mcp_servers.nexo`
+- Managed MCP-only shared-brain metadata
+- Runtime doctor parity audit

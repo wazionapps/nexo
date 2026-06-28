@@ -1,22 +1,22 @@
 # @wazionapps/openclaw-memory-nexo-brain
 
-Native OpenClaw memory plugin powered by [NEXO Brain](https://github.com/wazionapps/nexo) — a cognitive memory system modeled after human cognition.
+Native OpenClaw memory plugin powered by the [NEXO Desktop runtime core](https://nexo-desktop.com).
 
 ## What It Does
 
-Replaces OpenClaw's default memory with a full cognitive architecture:
+Replaces OpenClaw's default memory with NEXO Desktop runtime services:
 
-- **Atkinson-Shiffrin Memory Model** — Sensory register → Short-term → Long-term, with natural decay
-- **Semantic RAG** — Finds memories by meaning, not keywords (fastembed, 384-dim vectors)
-- **Trust Scoring** — Calibrates verification rigor based on alignment history
-- **Guard System** — Checks past errors before every code change
-- **Cognitive Dissonance** — Detects conflicts between new instructions and established knowledge
-- **Session Continuity** — Resumes from where the last session left off via session diaries
+- **Local Memory** - semantic recall across working and long-term memory
+- **Deep Sleep** - overnight consolidation, cleanup, and memory maintenance
+- **Trust Scoring** - calibrates verification rigor based on alignment history
+- **Guard System** - checks past errors before code changes
+- **Conflict Detection** - detects conflicts between new instructions and established knowledge
+- **Session Continuity** - resumes from where the last session left off via session diaries
 
 ## Install
 
 ```bash
-# 1. Install NEXO Brain cognitive engine
+# 1. Install the NEXO Desktop runtime core compatibility package
 npx nexo-brain
 
 # 2. Install the OpenClaw plugin
@@ -77,7 +77,7 @@ OpenClaw Agent
     ↓ (tool calls)
 TypeScript Adapter (this plugin)
     ↓ (JSON-RPC over stdio)
-Python MCP Server (NEXO Brain)
+Python MCP Server (NEXO runtime core)
     ↓
 SQLite (nexo.db + cognitive.db)
     ↓
@@ -89,7 +89,7 @@ fastembed vectors (BAAI/bge-small-en-v1.5, CPU)
 - macOS (Linux planned)
 - Python 3 with fastembed
 - OpenClaw >= 2026.3.0
-- Run `npx nexo-brain` first to install the cognitive engine
+- Run `npx nexo-brain` first to install the runtime core
 
 ## License
 

@@ -1,6 +1,6 @@
 {
   "name": "nexo-brain",
-  "version": "7.38.5",
+  "version": "7.38.6",
   "mcpName": "io.github.wazionapps/nexo",
   "description": "NEXO runtime core for NEXO Desktop. Provides local memory, automation, Deep Sleep, skills, watchdog, and MCP tooling for the Desktop product.",
   "homepage": "https://nexo-desktop.com",

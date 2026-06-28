@@ -1,9 +1,9 @@
 /**
- * NEXO Brain — Native OpenClaw Memory Plugin
+ * NEXO Desktop Runtime - Native OpenClaw Memory Plugin
  *
- * Replaces OpenClaw's default memory system with NEXO's full cognitive architecture:
- * Atkinson-Shiffrin memory model, semantic RAG, trust scoring, guard system,
- * cognitive dissonance detection, and session continuity.
+ * Replaces OpenClaw's default memory system with NEXO Desktop runtime services:
+ * local memory, semantic recall, trust scoring, guard system, Deep Sleep,
+ * and session continuity.
  *
  * Architecture: TypeScript adapter -> MCP Bridge (stdio) -> Python NEXO server
  *
@@ -56,9 +56,9 @@ let sessionId: string | null = null;
 
 export default definePluginEntry({
   id: "memory-nexo-brain",
-  name: "NEXO Brain",
+  name: "NEXO Desktop Runtime",
   description:
-    "Cognitive memory system — Atkinson-Shiffrin model, semantic RAG, trust scoring, and metacognitive guard.",
+    "Local memory, Deep Sleep, semantic recall, trust scoring, and guarded continuity from the NEXO Desktop runtime core.",
   kind: "memory" as const,
 
   register(api: OpenClawPluginApi) {
@@ -89,10 +89,10 @@ export default definePluginEntry({
       }
 
       const lines = [
-        "## Cognitive Memory (NEXO Brain)",
+        "## NEXO Desktop Runtime Memory",
         "",
-        "You have access to a persistent cognitive memory system with Atkinson-Shiffrin memory model.",
-        "Memories decay naturally over time (Ebbinghaus curves). Frequently accessed memories get stronger.",
+        "You have access to persistent local memory from the NEXO Desktop runtime core.",
+        "Deep Sleep consolidates memory and maintains continuity between sessions.",
         "Semantic search finds memories by meaning, not just keywords.",
         "",
       ];
@@ -202,7 +202,7 @@ export default definePluginEntry({
           }
 
           api.logger.info(
-            `nexo-brain: injecting session diary + cognitive context`,
+            `nexo runtime: injecting session diary + memory context`,
           );
 
           return {
@@ -210,7 +210,7 @@ export default definePluginEntry({
           };
         } catch (err) {
           api.logger.warn(
-            `nexo-brain: auto-recall failed: ${err instanceof Error ? err.message : err}`,
+            `nexo runtime: auto-recall failed: ${err instanceof Error ? err.message : err}`,
           );
           return {};
         }
@@ -279,11 +279,11 @@ export default definePluginEntry({
       ({ program }) => {
         const nexo = program
           .command("nexo")
-          .description("NEXO Brain cognitive memory commands");
+          .description("NEXO Desktop runtime memory commands");
 
         nexo
           .command("status")
-          .description("Show NEXO Brain cognitive memory status")
+          .description("Show NEXO Desktop runtime memory status")
           .action(async () => {
             try {
               await bridge!.start();
@@ -368,14 +368,14 @@ export default definePluginEntry({
       id: "memory-nexo-brain",
       start: async () => {
         await bridge!.start();
-        api.logger.info("nexo-brain: cognitive engine started");
+        api.logger.info("nexo runtime: memory service started");
       },
       stop: async () => {
         await bridge!.stop();
-        api.logger.info("nexo-brain: cognitive engine stopped");
+        api.logger.info("nexo runtime: memory service stopped");
       },
     });
 
-    api.logger.info("nexo-brain: plugin registered successfully");
+    api.logger.info("nexo runtime: plugin registered successfully");
   },
 });

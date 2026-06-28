@@ -75,8 +75,8 @@ def _seed_public_surfaces(root: Path, version: str, *, include_well_known: bool 
         encoding="utf-8",
     )
     (root / "llms.txt").write_text(
-        f"> Open-source cognitive runtime with a shared brain (v{version}).\n\n"
-        f"v{version}: latest release summary\n",
+        f"> NEXO Desktop runtime core (v{version}).\n\n"
+        f"v{version}: latest Desktop runtime release summary\n",
         encoding="utf-8",
     )
     (root / "index.html").write_text(
@@ -113,16 +113,16 @@ def _seed_public_surfaces(root: Path, version: str, *, include_well_known: bool 
         encoding="utf-8",
     )
     (root / "sitemap.xml").write_text(
-        f"<loc>https://nexo-brain.com/features/</loc>\n"
-        f"https://nexo-brain.com/blog/nexo-{version_slug}/\n",
+        "<loc>https://nexo-desktop.com/</loc>\n"
+        "<loc>https://nexo-desktop.com/downloads/</loc>\n",
         encoding="utf-8",
     )
     if include_well_known:
         well_known = root / ".well-known"
         well_known.mkdir(exist_ok=True)
         (well_known / "llms.txt").write_text(
-            f"> Open-source cognitive runtime with a shared brain (v{version}).\n\n"
-            f"v{version}: latest release summary\n",
+            f"> NEXO Desktop runtime core (v{version}).\n\n"
+            f"v{version}: latest Desktop runtime release summary\n",
             encoding="utf-8",
         )
 

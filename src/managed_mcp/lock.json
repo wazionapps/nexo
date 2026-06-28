@@ -39,18 +39,18 @@
     "open-computer-use": {
       "source_type": "npm",
       "package": "open-computer-use",
-      "version": "0.1.53",
-      "integrity": "sha512-5qwCPl7Gm4Wk2i/wFkq2dVLN2SzNRQSJTd95zXdGF+u5ZsUXkFx1IFVdNbYelWOpc4fgy8Z8/gYrbacj/2chig==",
-      "tarball": "https://registry.npmjs.org/open-computer-use/-/open-computer-use-0.1.53.tgz",
+      "version": "0.1.54",
+      "integrity": "sha512-UFaKT9xcAQIUN6mcvdvtepHmh3kUs1fwSwL30sDha6+4IbT/Khn1sEGqRskmJSnU4XPGF6v7pdQ5oETQxQMNCw==",
+      "tarball": "https://registry.npmjs.org/open-computer-use/-/open-computer-use-0.1.54.tgz",
       "bin": "open-computer-use-mcp",
       "engines": {}
     },
     "desktop-commander": {
       "source_type": "npm",
       "package": "@wonderwhy-er/desktop-commander",
-      "version": "0.2.42",
-      "integrity": "sha512-ZgdBDihpaLfrzQQQGQCPmElYMx91oUXeVEWbxbygeUfq2aOZvHrcVMeuTGy9oMDp9vxjq6d/+ZGE0mQLJnAWkw==",
-      "tarball": "https://registry.npmjs.org/@wonderwhy-er/desktop-commander/-/desktop-commander-0.2.42.tgz",
+      "version": "0.2.43",
+      "integrity": "sha512-MFXMu+26p4xywjClqep3pDq9auAOENtYTnG/CYvfoz6fvrYnT/fWb8hfsRGUE7eXntIzmM2rXkGM7y1LwItQrA==",
+      "tarball": "https://registry.npmjs.org/@wonderwhy-er/desktop-commander/-/desktop-commander-0.2.43.tgz",
       "bin": "desktop-commander",
       "engines": {
         "node": ">=18.0.0"

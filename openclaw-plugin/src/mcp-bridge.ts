@@ -1,5 +1,5 @@
 /**
- * MCP Bridge — Communicates with the NEXO Brain MCP server via stdio JSON-RPC.
+ * MCP Bridge - communicates with the NEXO runtime MCP server via stdio JSON-RPC.
  *
  * Spawns the Python MCP server as a child process and sends/receives
  * JSON-RPC 2.0 messages over stdin/stdout.
@@ -82,7 +82,7 @@ export class McpBridge {
     await this.send("initialize", {
       protocolVersion: "2024-11-05",
       capabilities: {},
-      clientInfo: { name: "openclaw-memory-nexo-brain", version: "7.38.1" },
+      clientInfo: { name: "openclaw-memory-nexo-brain", version: "7.38.6" },
     });
 
     await this.send("notifications/initialized", {});
